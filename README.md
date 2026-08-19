@@ -90,6 +90,15 @@ VIIRS/MODIS near-real-time true colour and night lights, NISAR.
   Budget roughly 4 MB at z12, 16 MB at z13, 61 MB at z14, 229 MB at z15 for a 40 km box.
 - **Open on natural colour** (Filters, on by default) keeps the map from landing on a
   radar or night-lights scene just because it happens to be the newest.
+- **Time window** (Filters) takes either a preset — last 14/30/90 days, last year,
+  5 years, all time — or **Custom range…**, which reveals two date pickers for an
+  explicit start and end (say 2025-07-01 → 2025-07-31). Leave one side empty for an
+  open-ended range: only a start means "from then on", only an end means "up to then",
+  both empty is all time. Quick buttons cover this month, last month, year to date and
+  last calendar year. The active window shows on the Filters header even when collapsed.
+  A named range is applied everywhere — including the GIBS daily layers, which are
+  generated from the *end* of the range rather than today, and the *Fill surroundings*
+  mosaic, so neighbouring scenes come from the same era rather than from last week.
 - Sidebar panes collapse (click header), resize (drag bottom edge), and reorder
   (drag header). Layout persists. "Reset panel layout" in the footer.
 - Right-click any scene on the map to swap its source or date.

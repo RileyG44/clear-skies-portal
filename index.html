@@ -257,6 +257,21 @@ a:hover{text-decoration:underline}
 .fgrid label{color:var(--ink-3);font-size:11.5px;font-weight:500;white-space:nowrap;justify-self:start}
 .fgrid select{width:100%;padding:6px 9px;font-size:12px;border-radius:var(--radius-chip);
   background:var(--surface);box-shadow:none}
+/* ---- explicit date range ---- */
+.drow{display:flex;align-items:center;gap:6px;width:100%;min-width:0}
+.drow input[type=date]{flex:1 1 0;min-width:0;padding:6px 8px;font-size:12px;
+  border-radius:var(--radius-chip);background:var(--surface);color:var(--ink);
+  border:1px solid var(--line);color-scheme:dark;font-variant-numeric:tabular-nums}
+.drow input[type=date]:focus{outline:none;border-color:var(--accent)}
+.drow .sep{color:var(--ink-3);font-size:11px;flex:none}
+.drow.bad input[type=date]{border-color:var(--orange)}
+.dnote{grid-column:1/-1;font-size:10.5px;color:var(--ink-3);line-height:1.5;margin-top:-3px}
+.dnote.warn{color:var(--orange)}
+.dpre{grid-column:1/-1;display:flex;flex-wrap:wrap;gap:5px;margin-top:-1px}
+.dpre button{font-size:10.5px;padding:3px 8px;border-radius:var(--radius-chip);
+  background:var(--field);color:var(--ink-3);border:1px solid var(--line);cursor:pointer}
+.dpre button:hover{background:var(--hover-2);color:var(--ink)}
+.hide-row{display:none!important}
 .toggles{display:flex;flex-wrap:wrap;gap:6px;margin-top:11px;padding-top:11px;
   border-top:1px solid var(--line)}
 .terdl{margin-top:11px;padding-top:11px;border-top:1px solid var(--line)}
@@ -378,7 +393,22 @@ body.rowdrag{cursor:row-resize;user-select:none}
               <option value="365" selected>Last year</option>
               <option value="1825">Last 5 years</option>
               <option value="0">All time</option>
+              <option value="custom">Custom range…</option>
             </select>
+
+            <label for="dFrom" id="lb_drange" class="hide-row">Date range</label>
+            <div class="drow hide-row" id="drange">
+              <input type="date" id="dFrom" aria-label="Earliest date">
+              <span class="sep">&rarr;</span>
+              <input type="date" id="dTo" aria-label="Latest date">
+            </div>
+            <div class="dpre hide-row" id="dpre">
+              <button type="button" data-pre="thismonth">This month</button>
+              <button type="button" data-pre="lastmonth">Last month</button>
+              <button type="button" data-pre="ytd">Year to date</button>
+              <button type="button" data-pre="lastyear">Last calendar year</button>
+            </div>
+            <div class="dnote hide-row" id="dnote"></div>
 
             <label for="cloud">Max cloud</label>
             <select id="cloud">
@@ -820,15 +850,38 @@ function geolocate(){
   );
 }
 
-async function stacSearch(src, lat, lng, days, cloudMax){
+/* ------------------------------------------------------------- date window
+   One source of truth for "which dates are we asking for". Presets and an
+   explicit range produce the same shape, so every query goes down one path.
+   `stac` is an RFC 3339 interval for the STAC `datetime` parameter; null means
+   don't constrain. `mode` is "rel" (last N days), "abs" (named range) or "all". */
+const isoZ = d => d.toISOString().slice(0,19)+"Z";
+const ymd  = d => d.toISOString().slice(0,10);
+
+function relWindow(days){
+  if(!(days>0)) return {mode:"all", days:0, from:null, to:null, stac:null, label:"All time"};
+  const from=new Date(Date.now()-days*864e5);
+  return {mode:"rel", days, from, to:null, stac:isoZ(from)+"/..",
+          label: days===365?"Last year" : days===1825?"Last 5 years" : "Last "+days+" days"};
+}
+
+function dateWindow(){
+  if($("#days").value!=="custom") return relWindow(+$("#days").value);
+  const f=$("#dFrom").value, t=$("#dTo").value;
+  if(!f && !t) return relWindow(0);                      // empty range == all time
+  const from = f ? new Date(f+"T00:00:00Z") : null;
+  const to   = t ? new Date(t+"T23:59:59Z") : null;
+  return {mode:"abs", days:0, from, to,
+          stac:(from?isoZ(from):"..")+"/"+(to?isoZ(to):".."),
+          label:(f||"any")+" → "+(t||"any")};
+}
+
+async function stacSearch(src, lat, lng, win, cloudMax){
   const body={ collections:src.colls,
                intersects:{type:"Point",coordinates:[lng,lat]},
                limit:60,
                sortby:[{field:"properties.datetime",direction:"desc"}] };
-  if(days>0){
-    const since=new Date(Date.now()-days*864e5).toISOString().slice(0,19)+"Z";
-    body.datetime = since+"/..";
-  }
+  if(win.stac) body.datetime = win.stac;
   if(src.key==="nisar"){
     // CMR-STAC ignores sortby and returns oldest-first, so ask for a recent window only.
     // NISAR's public archive starts Oct 2025 (beta) / Jun 2026 (provisional).
@@ -836,7 +889,10 @@ async function stacSearch(src, lat, lng, days, cloudMax){
     const d=0.35;
     body.bbox=[lng-d, lat-d, lng+d, lat+d];
     body.limit=40;
-    body.datetime=new Date(Date.now()-Math.min(days>0?days:150,150)*864e5).toISOString().slice(0,19)+"Z/..";
+    // A named range is honoured as given; presets stay capped, because CMR-STAC
+    // returns oldest-first and would otherwise fill up with the earliest beta data.
+    body.datetime = win.mode==="abs" ? win.stac
+                                     : relWindow(Math.min(win.days>0?win.days:150,150)).stac;
   }
   const post=async (bd)=>{
     const r=await fetch(src.api,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(bd)});
@@ -846,8 +902,10 @@ async function stacSearch(src, lat, lng, days, cloudMax){
   // Static products (the DEM is stamped 2021) must bypass the date window or they
   // vanish whenever the user narrows it.
   const STATIC=["cop-dem-glo-30"];
-  const statics=src.colls.filter(c=>STATIC.includes(c));
-  body.collections=src.colls.filter(c=>!STATIC.includes(c));
+  // ...but a range the user typed means exactly that range, so in "abs" mode the
+  // static products stay in the dated query and drop out if they fall outside it.
+  const statics = win.mode==="abs" ? [] : src.colls.filter(c=>STATIC.includes(c));
+  body.collections = win.mode==="abs" ? src.colls : src.colls.filter(c=>!STATIC.includes(c));
 
   const jobs=[];
   if(body.collections.length) jobs.push(post(body));
@@ -893,8 +951,8 @@ function norm(f,src){
   };
 }
 
-function gibsItems(days){
-  const out=[], n=Math.min(days>0?days:3, 3);
+function gibsItems(win){
+  const out=[];
   const push=(g,ds)=>{
     const tms=g.tms||"GoogleMapsCompatible_Level9";
     const fmt=g.vis==="night"?"png":"jpg";
@@ -904,16 +962,32 @@ function gibsItems(days){
       tiles:{type:"xyz", url:`https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/${g.id}/default/${ds}/${tms}/{z}/{y}/{x}.${fmt}`},
       link:`https://worldview.earthdata.nasa.gov/?v=-180,-90,180,90&t=${ds}`, bbox:null, geom:null });
   };
+  // GIBS near-real-time layers are one tile set per day, generated client-side
+  // rather than searched, so the window has to be applied here. Anchor on the end
+  // of the window (not today) so a historical range returns imagery from that range.
+  const end   = Math.min(win.to ? +win.to : Date.now(), Date.now());
+  const start = win.from ? +win.from : -Infinity;
   for(const g of GIBS){
-    if(g.fixed){ push(g, g.fixed); continue }
-    for(let d=0; d<n; d++) push(g, new Date(Date.now()-d*864e5).toISOString().slice(0,10));
+    if(g.fixed){
+      // A fixed-date product is only out of scope when the user named a range.
+      if(win.mode==="abs"){
+        const t=+new Date(g.fixed+"T12:00:00Z");
+        if(t<start || t>end) continue;
+      }
+      push(g, g.fixed); continue;
+    }
+    for(let d=0; d<3; d++){
+      const t=end-d*864e5;
+      if(t<start) break;
+      push(g, new Date(t).toISOString().slice(0,10));
+    }
   }
   return out;
 }
 
 async function run(){
   if(!LOC) return;
-  const days=+$("#days").value, cloudMax=+$("#cloud").value;
+  const win=dateWindow(), cloudMax=+$("#cloud").value;
   ITEMS=[]; SEL=null; render();
   statusEl.innerHTML='<span class="spin"></span> Querying sources…';
   const chips={};
@@ -922,7 +996,7 @@ async function run(){
 
   const jobs=SOURCES.map(async s=>{
     try{
-      const r=await stacSearch(s,LOC.lat,LOC.lng,days,cloudMax);
+      const r=await stacSearch(s,LOC.lat,LOC.lng,win,cloudMax);
       chips[s.key]=`<span class="chip on" >${s.name.split(" ")[0]} ${r.length}</span>`; paint();
       return r;
     }catch(e){
@@ -932,7 +1006,7 @@ async function run(){
   });
   paint();
   const got=await Promise.all(jobs);
-  ITEMS=[].concat(...got, gibsItems(days));
+  ITEMS=[].concat(...got, gibsItems(win));
   const n=ITEMS.length;
   statusEl.innerHTML=Object.values(chips).join(" ")+` <span class="chip">${n} results</span>`;
   render();
@@ -1228,10 +1302,10 @@ function footprintKey(it){
   return it.id;
 }
 
-async function stacBbox(src, coll, bbox, days){
+async function stacBbox(src, coll, bbox, win){
   const body={collections:[coll], bbox, limit:80,
               sortby:[{field:"properties.datetime",direction:"desc"}]};
-  if(days>0) body.datetime=new Date(Date.now()-days*864e5).toISOString().slice(0,19)+"Z/..";
+  if(win && win.stac) body.datetime=win.stac;
   const r=await fetch(src.api,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)});
   if(!r.ok) throw new Error(src.name+" "+r.status);
   return ((await r.json()).features||[]).map(f=>norm(f,src)).filter(Boolean);
@@ -1261,7 +1335,10 @@ async function fillMosaic(primary, force){
 
   let found=[];
   try{
-    found=(await Promise.all(srcs.map(s=>stacBbox(s,primary.coll,bbox,540).catch(()=>[])))).flat();
+    // Neighbours normally need a wider net than the primary search, but a named
+    // range is era-specific: honour it so the mosaic doesn't mix in recent scenes.
+    const mw=dateWindow(), bw = mw.mode==="abs" ? mw : relWindow(540);
+    found=(await Promise.all(srcs.map(s=>stacBbox(s,primary.coll,bbox,bw).catch(()=>[])))).flat();
   }catch(e){}
   if(token!==mosToken) return;
 
@@ -1828,7 +1905,72 @@ $("#clr").onclick=()=>{ if(overlay){map.removeLayer(overlay);overlay=null}
 $("#sort").onchange=render;
 $("#viewable").onchange=render;
 $("#vis").onchange=()=>{ render(); autoSelect(); };
-$("#days").onchange=()=>LOC&&run();
+/* ---- date window UI ---------------------------------------------------- */
+let PREV_DAYS=365;                       // last preset used, to seed a custom range
+
+function syncDateUI(){
+  const custom = $("#days").value==="custom";
+  ["lb_drange","drange","dpre","dnote"].forEach(id=>
+    document.getElementById(id).classList.toggle("hide-row", !custom));
+
+  const w=dateWindow();
+  setCount("filters", w.label);          // visible on the header while Filters is collapsed
+
+  const note=$("#dnote"), f=$("#dFrom").value, t=$("#dTo").value;
+  if(!custom){ note.textContent=""; note.classList.remove("warn"); $("#drange").classList.remove("bad"); return true }
+
+  const bad = !!(f && t && f>t);
+  $("#drange").classList.toggle("bad", bad);
+  note.classList.toggle("warn", bad);
+  note.textContent = bad ? "Start date is after the end date — no results possible."
+    : (!f && !t) ? "Both empty searches all time. Fill one side only for an open-ended range."
+    : (!f) ? "Everything up to " + t + "."
+    : (!t) ? "Everything from " + f + " onwards."
+    : Math.round((new Date(t)-new Date(f))/864e5 + 1) + " days selected.";
+  return !bad;
+}
+
+function setRange(from, to){
+  $("#dFrom").value = from || "";
+  $("#dTo").value   = to   || "";
+  if(syncDateUI() && LOC) run();
+}
+
+$("#days").onchange=()=>{
+  const v=$("#days").value;
+  if(v==="custom"){
+    if(!$("#dFrom").value && !$("#dTo").value){
+      // Seed from the preset the user was just on, so the range is never blank.
+      const p=relWindow(PREV_DAYS);
+      $("#dFrom").value = p.from ? ymd(p.from) : "";
+      $("#dTo").value   = ymd(new Date());
+    }
+  }else PREV_DAYS=+v;
+  if(syncDateUI() && LOC) run();
+};
+["dFrom","dTo"].forEach(id=>
+  document.getElementById(id).addEventListener("change",()=>{ if(syncDateUI() && LOC) run() }));
+
+/* Quick presets for the ranges people actually ask for. */
+$("#dpre").addEventListener("click", e=>{
+  const b=e.target.closest("button[data-pre]"); if(!b) return;
+  const now=new Date(), Y=now.getUTCFullYear(), M=now.getUTCMonth();
+  const mk=(y,m,d)=>ymd(new Date(Date.UTC(y,m,d)));
+  const last=(y,m)=>new Date(Date.UTC(y,m+1,0)).getUTCDate();
+  switch(b.dataset.pre){
+    case "thismonth": return setRange(mk(Y,M,1), ymd(now));
+    case "lastmonth": {
+      const y = M===0?Y-1:Y, m = M===0?11:M-1;
+      return setRange(mk(y,m,1), mk(y,m,last(y,m)));
+    }
+    case "ytd":       return setRange(mk(Y,0,1), ymd(now));
+    case "lastyear":  return setRange(mk(Y-1,0,1), mk(Y-1,11,31));
+  }
+});
+
+// No imagery exists in the future; don't let the picker offer it.
+$("#dFrom").max = $("#dTo").max = ymd(new Date());
+syncDateUI();
 $("#cloud").onchange=()=>LOC&&run();
 
 async function doSearch(){
