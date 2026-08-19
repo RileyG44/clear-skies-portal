@@ -318,6 +318,20 @@ a:hover{text-decoration:underline}
 .pane[data-pane="summary"] .pane-b,
 .pane[data-pane="terrain"] .pane-b{padding:12px 18px 13px 16px}
 .pane[data-pane="passes"] .pane-b{padding:10px 18px 12px 16px}
+.pane[data-pane="overlays"] .pane-b{padding:12px 18px 13px 16px}
+/* ---- overlay toggles ---- */
+.ovlist{display:flex;flex-direction:column;gap:2px}
+.ovrow{display:flex;align-items:center;gap:8px;padding:4px 5px;border-radius:var(--radius-chip);cursor:pointer}
+.ovrow:hover{background:var(--hover-2)}
+.ovrow input{margin:0;flex:none;accent-color:var(--accent)}
+.ovrow .nm{font-size:11.5px;color:var(--ink-2);flex:1;min-width:0}
+.ovrow.on .nm{color:var(--ink);font-weight:600}
+.ovrow .sw{width:9px;height:9px;border-radius:2px;flex:none;opacity:.85}
+.ovrow .via{font-size:9.5px;color:var(--ink-3);flex:none}
+.ovfoot{margin-top:10px;padding-top:10px;border-top:1px solid var(--line);
+  display:grid;grid-template-columns:auto 1fr;gap:7px 10px;align-items:center}
+.ovfoot label{color:var(--ink-3);font-size:11.5px;font-weight:500}
+.ovnote{font-size:10.5px;color:var(--ink-3);line-height:1.55;margin-top:8px}
 .pane-rz{height:9px;margin-top:-2px;cursor:row-resize;flex:none;position:relative;z-index:3;touch-action:none}
 .pane-rz::after{content:"";position:absolute;left:50%;transform:translateX(-50%);top:3px;
   width:26px;height:2px;border-radius:1px;background:transparent;transition:background var(--dur)}
@@ -530,6 +544,23 @@ body.rowdrag{cursor:row-resize;user-select:none}
           <div id="terInfo" class="terinfo">Pick a layer to drape terrain over the map.</div>
         </div>
         <div class="pane-rz" title="Drag to resize"></div>
+      </section>
+
+      <section class="pane" data-pane="overlays">
+        <div class="pane-h">
+          <span class="grip" aria-hidden="true"></span>
+          <span class="pane-t">Labels &amp; overlays</span>
+          <span class="pane-n" id="n_overlays"></span>
+          <span class="pane-x">&#9662;</span>
+        </div>
+        <div class="pane-b">
+          <div class="ovlist" id="ovList"></div>
+          <div class="ovfoot">
+            <label for="ovOp">Opacity</label>
+            <input type="range" id="ovOp" min="10" max="100" value="90">
+          </div>
+          <div class="ovnote" id="ovNote"></div>
+        </div>
       </section>
 
       <section class="pane grow" data-pane="results">
@@ -1526,8 +1557,8 @@ syncChecks();
    the arrangement survives a reload. ------------------------------------- */
 const PANE_KEY="clearskies.panes.v1";
 const panesEl=document.getElementById("panes");
-const DEFAULT_ORDER=["filters","summary","passes","terrain","results"];
-const DEFAULT_STATE=()=>({order:[...DEFAULT_ORDER], min:{filters:true, terrain:true}, h:{}, grow:"results"});
+const DEFAULT_ORDER=["filters","summary","passes","terrain","overlays","results"];
+const DEFAULT_STATE=()=>({order:[...DEFAULT_ORDER], min:{filters:true, terrain:true, overlays:true}, h:{}, grow:"results"});
 let paneState=DEFAULT_STATE();
 
 function paneEl(name){ return panesEl.querySelector(`.pane[data-pane="${name}"]`) }
@@ -1937,6 +1968,118 @@ map.on("moveend", ()=>{
   clearTimeout(terTimer);
   terTimer=setTimeout(()=>{ refreshTerrainCoverage(false); warmPreview() }, 700);
 });
+
+/* ================================================= labels & reference overlays
+   Drawn on top of the imagery, each independently toggleable. Everything here
+   is keyless and sends CORS, so these go direct rather than through the proxy —
+   the exception is anything that does not, which is routed and noted below.
+
+   Deliberately NOT OpenStreetMap's own tiles: their tile-usage policy forbids
+   it and the server answers 418. CARTO (OSM-derived, and explicitly for this
+   use) and Esri's free reference layers are the correct substitutes.          */
+const OVERLAYS = [
+  { id:"roads", name:"Roads & streets", via:"Esri", sw:"#e0a060", z:520,
+    url:"https://services.arcgisonline.com/ArcGIS/rest/services/Reference/World_Transportation/MapServer/tile/{z}/{y}/{x}",
+    attr:"Esri, HERE, Garmin", maxZoom:19 },
+
+  { id:"places", name:"Cities & boundaries", via:"Esri", sw:"#9fb4d0", z:530,
+    url:"https://services.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}",
+    attr:"Esri", maxZoom:19 },
+
+  { id:"labels", name:"Place labels", via:"CARTO", sw:"#d8dee8", z:540,
+    url:"https://{s}.basemaps.cartocdn.com/dark_only_labels/{z}/{x}/{y}{r}.png",
+    sub:"abcd", attr:"CARTO, OpenStreetMap contributors", maxZoom:20 },
+
+  { id:"water", name:"Rivers & lakes", via:"USGS NHD", sw:"#5aa9e6", z:510,
+    url:"https://basemap.nationalmap.gov/arcgis/rest/services/USGSHydroCached/MapServer/tile/{z}/{y}/{x}",
+    attr:"USGS The National Map — NHD", maxZoom:19 },
+
+  /* GNIS is a dynamic MapServer rather than cached tiles, so each tile is an
+     export request for its own bbox. Layer 5 is Landforms, which is where
+     summits, ridges, gaps and glaciers live; layer 3 is Populated Places. */
+  { id:"peaks", name:"Peaks & landforms", via:"USGS GNIS", sw:"#c9a227", z:550,
+    dynamic:"https://carto.nationalmap.gov/arcgis/rest/services/geonames/MapServer/export",
+    layers:"5", attr:"USGS GNIS", minZoom:10, maxZoom:19 },
+
+  { id:"gnames", name:"Named places (GNIS)", via:"USGS GNIS", sw:"#b0894f", z:545,
+    dynamic:"https://carto.nationalmap.gov/arcgis/rest/services/geonames/MapServer/export",
+    layers:"3", attr:"USGS GNIS", minZoom:9, maxZoom:19 },
+];
+
+/* An ArcGIS dynamic MapServer drawn as slippy tiles: one export per tile, in
+   the tile's own mercator bbox. */
+const ExportLayer = L.TileLayer.extend({
+  getTileUrl(c){
+    const b=tileMerc(c).join(",");
+    return `${this.options.endpoint}?bbox=${b}&bboxSR=3857&imageSR=3857`
+         + `&size=256,256&format=png32&transparent=true&dpi=96&f=image`
+         + `&layers=show:${this.options.layers}`;
+  }
+});
+
+const OV_KEY="clearskies.overlays.v1";
+let ovOn={}, ovLayers={};
+
+function ovLoad(){
+  try{ const s=JSON.parse(localStorage.getItem(OV_KEY)); if(s&&s.on) ovOn=s.on;
+       if(s&&s.op!=null) $("#ovOp").value=s.op; }catch(e){}
+}
+function ovSave(){
+  try{ localStorage.setItem(OV_KEY, JSON.stringify({on:ovOn, op:+$("#ovOp").value})) }catch(e){}
+}
+
+function ovBuild(o){
+  const op=+$("#ovOp").value/100;
+  const common={opacity:op, zIndex:o.z, attribution:o.attr, pane:"overlayPane",
+                maxZoom:o.maxZoom||19, minZoom:o.minZoom||0, crossOrigin:true,
+                updateWhenZooming:false, keepBuffer:2};
+  return o.dynamic
+    ? new ExportLayer("",{...common, endpoint:o.dynamic, layers:o.layers})
+    : L.tileLayer(o.url, {...common, subdomains:o.sub||"abc"});
+}
+
+function ovApply(){
+  for(const o of OVERLAYS){
+    const want=!!ovOn[o.id];
+    if(want && !ovLayers[o.id]) ovLayers[o.id]=ovBuild(o).addTo(map);
+    else if(!want && ovLayers[o.id]){ map.removeLayer(ovLayers[o.id]); delete ovLayers[o.id] }
+  }
+  const n=Object.keys(ovLayers).length;
+  setCount("overlays", n ? n+" on" : "");
+  document.querySelectorAll("#ovList .ovrow").forEach(r=>
+    r.classList.toggle("on", !!ovOn[r.dataset.id]));
+  const zoom=map.getZoom();
+  const hidden=OVERLAYS.filter(o=>ovOn[o.id] && o.minZoom && zoom<o.minZoom);
+  $("#ovNote").innerHTML = hidden.length
+    ? `<span class="warn">${hidden.map(o=>esc(o.name)).join(", ")}</span> need zoom `
+      + `${Math.max(...hidden.map(o=>o.minZoom))}+ &mdash; currently z${zoom}.`
+    : (n ? "Drawn over the imagery. Drag the opacity slider if labels compete with the scene."
+         : "Nothing on. These draw over whatever imagery is selected.");
+}
+
+function ovRender(){
+  $("#ovList").innerHTML = OVERLAYS.map(o=>
+    `<label class="ovrow" data-id="${o.id}">
+       <input type="checkbox" id="ov_${o.id}"${ovOn[o.id]?" checked":""}>
+       <span class="sw" style="background:${o.sw}"></span>
+       <span class="nm">${esc(o.name)}</span>
+       <span class="via">${esc(o.via)}</span>
+     </label>`).join("");
+  OVERLAYS.forEach(o=>{
+    $("#ov_"+o.id).addEventListener("change", e=>{
+      ovOn[o.id]=e.target.checked; ovSave(); ovApply();
+    });
+  });
+}
+
+$("#ovOp").addEventListener("input", ()=>{
+  const v=+$("#ovOp").value/100;
+  Object.values(ovLayers).forEach(l=>l.setOpacity(v));
+});
+$("#ovOp").addEventListener("change", ovSave);
+map.on("zoomend", ()=>{ if(Object.keys(ovLayers).length) ovApply() });
+
+ovLoad(); ovRender(); ovApply();
 
 /* ---------------- pre-cache the current area (works offline afterwards) --- */
 let warmPoll=null;

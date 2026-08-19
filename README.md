@@ -95,6 +95,24 @@ VIIRS/MODIS near-real-time true colour and night lights, NISAR.
 some resolving finer than 1 m — then USGS 1 m, then 3DEP. 3DEP always draws
 underneath, so a project edge never reads as a hole.
 
+## Labels & overlays
+
+Reference layers drawn over whatever imagery is selected, each independently
+toggleable, with a shared opacity slider. All keyless.
+
+| Overlay | Source |
+|---|---|
+| Roads & streets | Esri World Transportation |
+| Cities & boundaries | Esri World Boundaries and Places |
+| Place labels | CARTO (OSM-derived) |
+| Rivers & lakes | USGS National Hydrography Dataset |
+| Peaks & landforms | USGS GNIS — summits, ridges, gaps, glaciers (zoom 10+) |
+| Named places | USGS GNIS populated places (zoom 9+) |
+
+Not OpenStreetMap's own tiles: their tile-usage policy forbids this use and the
+server answers HTTP 418. CARTO and Esri's free reference layers are the correct
+substitutes.
+
 ## Things worth knowing
 
 - **Download this view** (Terrain pane) pre-downloads terrain tiles for the current

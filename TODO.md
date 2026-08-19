@@ -13,6 +13,14 @@ Last updated: 2026-08-19
 
 ## Done
 
+- [x] **Labels & reference overlays** (2026-08-19) — new *Labels & overlays* pane: roads/streets (Esri World Transportation), cities & boundaries (Esri World Boundaries and Places), place labels (CARTO), rivers & lakes (USGS NHD `USGSHydroCached`), and peaks/landforms plus named places from **USGS GNIS**. Each toggles independently, shared opacity slider, state persists in `localStorage`.
+  - GNIS is a dynamic MapServer rather than cached tiles, so `ExportLayer` issues one `export` per slippy tile in the tile's own mercator bbox — the same shape as the existing WA DNR layer. Layer 5 is Landforms, which is where summits, ridges, gaps and cleavers live; verified over Rainier returning Liberty Cap, Point Success, Cadaver Gap, Kautz Chute, Puyallup Cleaver.
+  - Everything here is keyless and sends CORS, so these go direct rather than through the proxy.
+  - **Not** OpenStreetMap's own tiles — their tile-usage policy forbids it and the server answers 418. CARTO (OSM-derived, intended for this) and Esri's free reference layers are the substitutes.
+  - Layers with a useful minimum zoom (GNIS 9–10) say so in the pane rather than silently drawing nothing.
+  - Verified: all six load 16/16 tiles at z13 over Rainier.
+  - *Testing note:* `map.setView(...,z)` does not commit in the headless pane — no rAF fires when the pane is not compositing, so Leaflet's zoom animation never completes. Tests must pass `{animate:false}`. Not an app bug.
+
 - [x] **Open on Sentinel-2 / Landsat, not HLS** (2026-08-19) — the auto-pick kept landing on *HLS S30*, which renders dark and muddy. Two separate causes, both fixed.
   - *Why HLS looks wrong.* Planetary Computer's HLS tilejson asks titiler for raw `B04/B03/B02` with `color_formula=gamma RGB 2.7` and **no `rescale`**. HLS surface reflectance is int16 scaled by 10000 and land sits around 500–3000, so with no stretch it renders dark. Sentinel-2 by contrast ships a ready-made 8-bit `visual` asset. `tuneTileUrl()` now supplies `rescale=0,3000` with a softer gamma for `hls2-*`, so HLS is usable when picked rather than merely demoted.
   - *Why it was picked at all.* Both products carry the same acquisition to the minute, so the cloud tiers tied and ordering decided it. `bestPhoto` now tries `sentinel-2-l2a`, `landsat-c2-l2` and `naip` first and only falls back to HLS/ASTER if none covers the point; `newestOf` breaks date ties on the finer GSD (10 m over 30 m).
