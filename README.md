@@ -11,8 +11,11 @@ node server.js
 
 Then open **http://localhost:8765**
 
-Node 18+ is all you need — no `npm install`, no dependencies.
+Node 22+ is all you need — no `npm install`, no dependencies.
 Leave the terminal open; it's the server *and* the cache.
+
+*(The code itself uses nothing newer than Node 18 APIs; 22 is simply the oldest
+release line still getting security updates.)*
 
 You can also open `index.html` straight from disk, but two things break that way:
 the WA DNR lidar layers (they need the proxy) and the locate button (browsers only
@@ -21,7 +24,7 @@ grant geolocation on `https://` or `localhost`).
 ## Run it in a Codespace
 
 Press **`.`** on the GitHub repo page, or *Code → Codespaces → Create codespace*.
-`.devcontainer/devcontainer.json` provisions Node 22 and Python 3.12, installs the
+`.devcontainer/devcontainer.json` provisions Node 24 and Python 3.14, installs the
 Python requirements, starts the server, and forwards port **8765** — the preview opens
 by itself. The container sets `HOST=0.0.0.0` so the forwarded port reaches the server;
 locally it still binds to `127.0.0.1` only.
@@ -55,7 +58,7 @@ confirm `/api/health` answers.
 | `trailcheck.py` | Standalone: snow line from Sentinel-2 NDSI + fire + SNOTEL |
 | `snowline.py` | Earlier snow-line-only version |
 | `probe.py` | Tiny script that reports scene freshness at a few test points |
-| `.devcontainer/` | Codespaces / Dev Containers setup — Node 22, Python 3.12, port 8765 |
+| `.devcontainer/` | Codespaces / Dev Containers setup — Node 24, Python 3.14, port 8765 |
 | `.github/workflows/ci.yml` | Syntax checks, `sources.json` validation, server smoke test |
 | `requirements.txt` | Python deps for the three scripts |
 
