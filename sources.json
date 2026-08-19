@@ -1,0 +1,439 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "version": "1.0.0",
+  "generated": "2026-08-18",
+  "description": "Machine-readable registry of free/open satellite imagery sources for the Real Time Satellite Imagery Portal. license_tier: 1=free commercial OK, 2=free non-commercial or gated, 3=do not build on.",
+  "sources": [
+    {
+      "id": "sentinel-2",
+      "name": "Copernicus Sentinel-2 MSI",
+      "tier": "A",
+      "type": "optical",
+      "resolution_m": 10,
+      "revisit_days": 2.5,
+      "latency_hours": 24,
+      "coverage": "global-land",
+      "license": "Copernicus free full and open",
+      "license_tier": 1,
+      "attribution": "Contains modified Copernicus Sentinel data",
+      "endpoints": {
+        "stac": "https://stac.dataspace.copernicus.eu/v1",
+        "odata": "https://catalogue.dataspace.copernicus.eu/odata/v1",
+        "stac_aws": "https://earth-search.aws.element84.com/v1",
+        "sentinel_hub": "https://sh.dataspace.copernicus.eu/api/v1/process",
+        "s3": "s3://eodata/Sentinel-2"
+      },
+      "auth": "oauth2 (CDSE) | none (Earth Search)",
+      "priority": 1
+    },
+    {
+      "id": "sentinel-1",
+      "name": "Copernicus Sentinel-1 C-band SAR",
+      "tier": "A",
+      "type": "sar",
+      "resolution_m": 10,
+      "revisit_days": 6,
+      "latency_hours": 3,
+      "coverage": "global",
+      "all_weather": true,
+      "license": "Copernicus free full and open",
+      "license_tier": 1,
+      "endpoints": {
+        "stac": "https://stac.dataspace.copernicus.eu/v1",
+        "asf_search": "https://api.daac.asf.alaska.edu/services/search/param",
+        "stac_aws": "https://earth-search.aws.element84.com/v1"
+      },
+      "auth": "oauth2 | earthdata-login",
+      "notes": "S1D open data since 2026-04-17. Final 1C/1D 6-day config from early July 2026.",
+      "priority": 2
+    },
+    {
+      "id": "landsat-89",
+      "name": "Landsat 8/9 OLI-TIRS",
+      "tier": "A",
+      "type": "optical+thermal",
+      "resolution_m": 30,
+      "resolution_pan_m": 15,
+      "revisit_days": 8,
+      "latency_hours": 6,
+      "coverage": "global-land",
+      "license": "US public domain",
+      "license_tier": 1,
+      "endpoints": {
+        "stac": "https://landsatlook.usgs.gov/stac-server",
+        "m2m": "https://m2m.cr.usgs.gov/api/api/json/stable",
+        "s3": "s3://usgs-landsat (requester-pays)"
+      },
+      "auth": "none (stac) | ers-account (m2m)",
+      "priority": 3
+    },
+    {
+      "id": "sentinel-3",
+      "name": "Copernicus Sentinel-3 OLCI/SLSTR",
+      "tier": "A", "type": "optical+thermal", "resolution_m": 300,
+      "revisit_days": 1, "latency_hours": 3, "coverage": "global",
+      "license": "Copernicus free full and open", "license_tier": 1,
+      "endpoints": {"stac": "https://stac.dataspace.copernicus.eu/v1"},
+      "auth": "oauth2", "priority": 6
+    },
+    {
+      "id": "viirs-nrt",
+      "name": "VIIRS NRT (NOAA-20/21, SNPP) via LANCE/GIBS",
+      "tier": "A", "type": "optical", "resolution_m": 375,
+      "revisit_days": 0.5, "latency_hours": 3, "coverage": "global",
+      "license": "US public domain", "license_tier": 1,
+      "endpoints": {
+        "gibs_wmts": "https://gibs.earthdata.nasa.gov/wmts/epsg3857/nrt",
+        "cmr": "https://cmr.earthdata.nasa.gov/search",
+        "firms": "https://firms.modaps.eosdis.nasa.gov/api"
+      },
+      "auth": "none (gibs) | earthdata-login (download)",
+      "notes": "FIRMS ultra-real-time fire detections ~60s latency.",
+      "priority": 5
+    },
+    {
+      "id": "modis-nrt",
+      "name": "MODIS Terra/Aqua NRT",
+      "tier": "A", "type": "optical", "resolution_m": 250,
+      "revisit_days": 0.5, "latency_hours": 3, "coverage": "global",
+      "license": "US public domain", "license_tier": 1,
+      "endpoints": {"gibs_wmts": "https://gibs.earthdata.nasa.gov/wmts/epsg3857/nrt"},
+      "auth": "none", "priority": 8
+    },
+    {
+      "id": "cbers-4a",
+      "name": "CBERS-4A WPM (INPE/CAST)",
+      "tier": "A", "type": "optical", "resolution_m": 2,
+      "resolution_ms_m": 8, "revisit_days": 31, "latency_hours": 48,
+      "coverage": "americas-africa-china",
+      "license": "free/open (INPE)", "license_tier": 1,
+      "endpoints": {"stac": "https://data.inpe.br/bdc/stac/v1", "s3": "s3://cbers-pds"},
+      "auth": "none", "priority": 7
+    },
+    {
+      "id": "amazonia-1",
+      "name": "Amazonia-1 WFI (INPE)",
+      "tier": "A", "type": "optical", "resolution_m": 64,
+      "revisit_days": 5, "coverage": "south-america+",
+      "license": "free/open (INPE)", "license_tier": 1,
+      "endpoints": {"s3": "s3://amazonia-pds"}, "auth": "none", "priority": 14
+    },
+
+    {
+      "id": "goes-19",
+      "name": "GOES-19 ABI (GOES-East)",
+      "tier": "B", "type": "geostationary-optical",
+      "resolution_m": 500, "cadence_minutes": 10, "mesoscale_cadence_seconds": 30,
+      "latency_minutes": 5, "coverage": "americas-atlantic",
+      "license": "US public domain", "license_tier": 1,
+      "endpoints": {"s3": "s3://noaa-goes19", "gcs": "gs://gcp-public-data-goes-19"},
+      "auth": "none", "priority": 4
+    },
+    {
+      "id": "goes-18",
+      "name": "GOES-18 ABI (GOES-West)",
+      "tier": "B", "type": "geostationary-optical",
+      "resolution_m": 500, "cadence_minutes": 10, "latency_minutes": 5,
+      "coverage": "pacific-west-americas",
+      "license": "US public domain", "license_tier": 1,
+      "endpoints": {"s3": "s3://noaa-goes18"}, "auth": "none", "priority": 4
+    },
+    {
+      "id": "himawari-9",
+      "name": "Himawari-9 AHI (JMA)",
+      "tier": "B", "type": "geostationary-optical",
+      "resolution_m": 500, "cadence_minutes": 10, "latency_minutes": 10,
+      "coverage": "east-asia-oceania",
+      "license": "free (JMA/NOAA redistribution)", "license_tier": 1,
+      "endpoints": {"s3": "s3://noaa-himawari9"}, "auth": "none", "priority": 4
+    },
+    {
+      "id": "meteosat-12",
+      "name": "Meteosat-12 / MTG-I1 FCI",
+      "tier": "B", "type": "geostationary-optical",
+      "resolution_m": 500, "cadence_minutes": 10, "coverage": "europe-africa",
+      "license": "EUMETSAT open", "license_tier": 1,
+      "endpoints": {"api": "https://api.eumetsat.int/data"},
+      "auth": "free-registration", "priority": 4
+    },
+    {
+      "id": "gk-2a", "name": "GEO-KOMPSAT-2A AMI (KMA)",
+      "tier": "B", "type": "geostationary-optical", "resolution_m": 500,
+      "cadence_minutes": 10, "coverage": "east-asia",
+      "license": "free with registration", "license_tier": 2,
+      "endpoints": {"portal": "https://nmsc.kma.go.kr"}, "auth": "free-registration", "priority": 12
+    },
+    {
+      "id": "fy-4b", "name": "Fengyun-4B AGRI (CMA)",
+      "tier": "B", "type": "geostationary-optical", "resolution_m": 500,
+      "cadence_minutes": 15, "coverage": "asia-pacific",
+      "license": "free with registration", "license_tier": 2,
+      "endpoints": {"portal": "https://satellite.nsmc.org.cn"}, "auth": "free-registration", "priority": 13
+    },
+    {
+      "id": "insat-3d", "name": "INSAT-3D/3DR/3DS (ISRO)",
+      "tier": "B", "type": "geostationary-optical", "resolution_m": 1000,
+      "cadence_minutes": 15, "coverage": "indian-ocean",
+      "license": "free with registration", "license_tier": 2,
+      "endpoints": {"portal": "https://mosdac.gov.in"}, "auth": "free-registration", "priority": 13
+    },
+    {
+      "id": "gmgsi", "name": "NOAA Global Mosaic of Geostationary Satellite Imagery",
+      "tier": "B", "type": "geostationary-mosaic", "resolution_m": 4000,
+      "cadence_minutes": 60, "coverage": "global",
+      "license": "US public domain", "license_tier": 1,
+      "endpoints": {"s3": "s3://noaa-gmgsi-pds"}, "auth": "none",
+      "notes": "Single global fallback for the live layer.", "priority": 9
+    },
+
+    {
+      "id": "vantor-maxar-open",
+      "name": "Vantor (Maxar) Open Data Program",
+      "tier": "C", "type": "optical-vhr", "resolution_m": 0.3,
+      "cadence": "disaster-activation", "coverage": "episodic-global",
+      "license": "CC-BY-NC-4.0", "license_tier": 2,
+      "commercial_use": false,
+      "endpoints": {"s3": "s3://maxar-opendata", "stac": "s3://maxar-opendata/events/catalog.json"},
+      "auth": "none", "priority": 10,
+      "warning": "NON-COMMERCIAL license. Gate behind a flag."
+    },
+    {
+      "id": "umbra-open",
+      "name": "Umbra SAR Open Data",
+      "tier": "C", "type": "sar-vhr", "resolution_m": 0.25,
+      "cadence": "weekly at ~20 sites", "coverage": "1000+ point locations",
+      "license": "CC-BY-4.0", "license_tier": 1, "commercial_use": true,
+      "endpoints": {"s3": "s3://umbra-open-data-catalog", "browser": "https://open-data.umbra.space/browse/"},
+      "auth": "none", "priority": 10,
+      "notes": "Best commercially-usable free sub-metre source available."
+    },
+    {
+      "id": "iceye-open", "name": "ICEYE Open Data Initiative",
+      "tier": "C", "type": "sar-vhr", "resolution_m": 1,
+      "coverage": "episodic (flood/disaster)",
+      "license": "open, no registration", "license_tier": 1,
+      "endpoints": {"portal": "https://www.iceye.com/open-data-initiative"},
+      "auth": "none", "priority": 11
+    },
+    {
+      "id": "capella-open", "name": "Capella Space SAR Open Dataset",
+      "tier": "C", "type": "sar-vhr", "resolution_m": 0.5,
+      "coverage": "sample set",
+      "license": "open (see dataset terms)", "license_tier": 1,
+      "endpoints": {"aws": "https://registry.opendata.aws/capella_opendata/"},
+      "auth": "none", "priority": 11
+    },
+    {
+      "id": "wyvern-open", "name": "Wyvern Open Data (hyperspectral)",
+      "tier": "C", "type": "hyperspectral", "resolution_m": 5.3, "bands": 110,
+      "license": "CC-BY-4.0", "license_tier": 1,
+      "endpoints": {"portal": "https://opendata.wyvern.space"}, "auth": "none", "priority": 15
+    },
+    {
+      "id": "satellogic-earthview", "name": "Satellogic EarthView",
+      "tier": "C", "type": "optical-vhr", "resolution_m": 1,
+      "license": "open (ML dataset)", "license_tier": 1,
+      "endpoints": {"s3": "s3://satellogic-earthview", "hf": "https://huggingface.co/datasets/satellogic/EarthView"},
+      "auth": "none", "priority": 16,
+      "notes": "Chipped ML dataset, not full scenes. Training use, not display."
+    },
+    {
+      "id": "esa-tpm", "name": "ESA Third Party Missions / Copernicus Contributing Missions",
+      "tier": "C", "type": "optical-vhr", "resolution_m": 0.3,
+      "coverage": "global archive (Pleiades, SPOT, WorldView, KOMPSAT, Deimos, RapidEye, IRS...)",
+      "license": "free-of-charge, application-gated, restricted redistribution", "license_tier": 2,
+      "endpoints": {"portal": "http://tpm-ds.eo.esa.int/", "esa": "https://earth.esa.int/eogateway/missions/third-party-missions"},
+      "auth": "approved-user-application", "priority": 17,
+      "warning": "Redistribution restricted. Benchmarking use only unless licensed."
+    },
+
+    {
+      "id": "naip", "name": "NAIP (USDA aerial, USA)",
+      "tier": "D", "type": "aerial", "resolution_m": 0.6,
+      "revisit_days": 730, "coverage": "conus",
+      "license": "US public domain", "license_tier": 1,
+      "endpoints": {"stac": "https://earth-search.aws.element84.com/v1", "s3": "s3://naip-source (requester-pays)"},
+      "auth": "none", "priority": 10
+    },
+    {
+      "id": "pdok-luchtfoto", "name": "PDOK Luchtfoto (Netherlands)",
+      "tier": "D", "type": "aerial", "resolution_m": 0.08, "revisit_days": 365,
+      "coverage": "netherlands", "license": "CC-BY / public task", "license_tier": 1,
+      "endpoints": {"wmts": "https://service.pdok.nl/hwh/luchtfotorgb/wmts/v1_0"},
+      "auth": "none", "priority": 10
+    },
+    {
+      "id": "ign-bdortho", "name": "IGN BD ORTHO (France)",
+      "tier": "D", "type": "aerial", "resolution_m": 0.2, "revisit_days": 1095,
+      "coverage": "france", "license": "open licence (Etalab)", "license_tier": 1,
+      "endpoints": {"wmts": "https://data.geopf.fr/wmts"}, "auth": "none", "priority": 10
+    },
+    {
+      "id": "swisstopo-swissimage", "name": "SWISSIMAGE (Switzerland)",
+      "tier": "D", "type": "aerial", "resolution_m": 0.1, "revisit_days": 1095,
+      "coverage": "switzerland", "license": "swisstopo open", "license_tier": 1,
+      "endpoints": {"stac": "https://data.geo.admin.ch/api/stac/v0.9"}, "auth": "none", "priority": 10
+    },
+    {
+      "id": "linz-nz-imagery", "name": "LINZ / NZ Imagery",
+      "tier": "D", "type": "aerial+satellite", "resolution_m": 0.1,
+      "coverage": "new-zealand", "license": "CC-BY 4.0 (NZ open licence)", "license_tier": 1,
+      "endpoints": {"s3": "s3://nz-imagery", "stac": "s3://nz-imagery/catalog.json"},
+      "auth": "none", "priority": 10
+    },
+    {
+      "id": "kartverket", "name": "Kartverket / Norge i bilder (Norway)",
+      "tier": "D", "type": "aerial", "resolution_m": 0.1,
+      "coverage": "norway", "license": "open", "license_tier": 1,
+      "endpoints": {"portal": "https://www.kartverket.no/en/api-and-data"}, "auth": "none/free-key", "priority": 12
+    },
+    {
+      "id": "gsi-japan", "name": "GSI Tiles (Japan)",
+      "tier": "D", "type": "aerial", "resolution_m": 0.2,
+      "coverage": "japan", "license": "GSI open (attribution)", "license_tier": 1,
+      "endpoints": {"tiles": "https://cyberjapandata.gsi.go.jp/xyz/seamlessphoto/{z}/{x}/{y}.jpg"},
+      "auth": "none", "priority": 12
+    },
+    {
+      "id": "openaerialmap", "name": "OpenAerialMap",
+      "tier": "D", "type": "aerial-drone", "resolution_m": 0.05,
+      "coverage": "sparse-global", "license": "CC-BY / CC0 / ODbL (per image)", "license_tier": 1,
+      "endpoints": {"api": "https://api.openaerialmap.org", "s3": "s3://oin-hotosm"},
+      "auth": "none", "priority": 13
+    },
+
+    {
+      "id": "gibs", "name": "NASA GIBS rendered tiles",
+      "tier": "F", "type": "tile-service", "coverage": "global",
+      "license": "US public domain", "license_tier": 1,
+      "endpoints": {
+        "wmts_3857": "https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/{layer}/default/{time}/{tms}/{z}/{y}/{x}.{fmt}",
+        "wmts_4326": "https://gibs.earthdata.nasa.gov/wmts/epsg4326/best",
+        "wmts_nrt": "https://gibs.earthdata.nasa.gov/wmts/epsg3857/nrt",
+        "wms": "https://gibs.earthdata.nasa.gov/wms/epsg3857/best/wms.cgi"
+      },
+      "auth": "none", "projections": [4326, 3857, 3413, 3031],
+      "priority": 2, "notes": "1000+ layers, no auth, no key. Fastest path to a working NRT basemap."
+    },
+    {
+      "id": "eox-cloudless", "name": "EOX Sentinel-2 cloudless",
+      "tier": "F", "type": "tile-service", "resolution_m": 10,
+      "coverage": "global", "license": "CC-BY-NC-SA (demo); commercial needs EOX agreement", "license_tier": 2,
+      "endpoints": {"wmts": "https://tiles.maps.eox.at/wmts"}, "auth": "none", "priority": 12
+    },
+    {
+      "id": "esri-world-imagery", "name": "Esri World Imagery + Wayback",
+      "tier": "F", "type": "tile-service", "coverage": "global",
+      "license": "Esri ToS - no bulk caching/redistribution", "license_tier": 3,
+      "endpoints": {"rest": "https://services.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer"},
+      "auth": "key-for-most-uses", "priority": 20,
+      "warning": "ToS restricts caching and redistribution. Display-only at best."
+    },
+
+    {
+      "id": "cdse", "name": "Copernicus Data Space Ecosystem (aggregator)",
+      "tier": "E", "type": "catalog+processing",
+      "license_tier": 1, "auth": "oauth2 (free account)",
+      "endpoints": {
+        "stac": "https://stac.dataspace.copernicus.eu/v1",
+        "odata": "https://catalogue.dataspace.copernicus.eu/odata/v1",
+        "opensearch": "https://catalogue.dataspace.copernicus.eu/resto/api/collections",
+        "sentinel_hub": "https://sh.dataspace.copernicus.eu/api/v1",
+        "openeo": "https://openeo.dataspace.copernicus.eu",
+        "s3": "https://eodata.dataspace.copernicus.eu",
+        "token": "https://identity.dataspace.copernicus.eu/auth/realms/CDSE/protocol/openid-connect/token"
+      },
+      "quotas": {
+        "api_requests_per_month": "10000-50000",
+        "processing_units_per_month": 10000,
+        "openeo_credits_per_month": 10000,
+        "sentinel_hub_req_per_min": 300,
+        "sentinel_hub_pu_per_min": 300,
+        "s3_odata_req_per_min": 2000,
+        "openeo_req_per_min": 12,
+        "transfer_tb_per_30d": 12,
+        "concurrent_s3_connections": 4,
+        "bandwidth_mbps_per_connection": 20,
+        "token_validity_minutes": 10
+      },
+      "priority": 1
+    },
+    {
+      "id": "earth-search", "name": "Element 84 Earth Search v1 (aggregator)",
+      "tier": "E", "type": "catalog", "auth": "none", "license_tier": 1,
+      "endpoints": {"stac": "https://earth-search.aws.element84.com/v1"},
+      "collections": ["sentinel-2-l1c", "sentinel-2-l2a", "sentinel-2-c1-l2a", "sentinel-1-grd", "landsat-c2-l2", "naip", "cop-dem-glo-30", "cop-dem-glo-90"],
+      "priority": 1,
+      "warning": "Best-effort, no SLA. Prototype here, do not depend on it in production."
+    },
+    {
+      "id": "planetary-computer", "name": "Microsoft Planetary Computer (aggregator)",
+      "tier": "E", "type": "catalog", "auth": "none + asset signing", "license_tier": 1,
+      "endpoints": {"stac": "https://planetarycomputer.microsoft.com/api/stac/v1", "sas": "https://planetarycomputer.microsoft.com/api/sas/v1/token"},
+      "priority": 3,
+      "warning": "Verify long-term commitment to the free public tier; MSFT is steering toward Planetary Computer Pro."
+    },
+    {
+      "id": "cmr", "name": "NASA CMR / CMR-STAC (aggregator)",
+      "tier": "E", "type": "catalog", "auth": "earthdata-login for downloads", "license_tier": 1,
+      "endpoints": {"cmr": "https://cmr.earthdata.nasa.gov/search", "stac": "https://cmr.earthdata.nasa.gov/stac"},
+      "priority": 4
+    },
+    {
+      "id": "asf", "name": "ASF DAAC / Vertex (SAR aggregator)",
+      "tier": "E", "type": "catalog", "auth": "earthdata-login", "license_tier": 1,
+      "endpoints": {"search": "https://api.daac.asf.alaska.edu/services/search/param", "vertex": "https://search.asf.alaska.edu"},
+      "priority": 4
+    },
+    {
+      "id": "usgs-m2m", "name": "USGS Machine-to-Machine API",
+      "tier": "E", "type": "catalog", "auth": "ers-account", "license_tier": 1,
+      "endpoints": {"m2m": "https://m2m.cr.usgs.gov/api/api/json/stable"}, "priority": 5
+    },
+    {
+      "id": "de-africa", "name": "Digital Earth Africa",
+      "tier": "E", "type": "catalog+ows", "auth": "none", "license_tier": 1,
+      "endpoints": {"stac": "https://explorer.digitalearth.africa/stac", "ows": "https://ows.digitalearth.africa/"},
+      "priority": 8
+    },
+    {
+      "id": "de-australia", "name": "Digital Earth Australia",
+      "tier": "E", "type": "catalog+ows", "auth": "none", "license_tier": 1,
+      "endpoints": {"stac": "https://explorer.dea.ga.gov.au/stac", "ows": "https://ows.dea.ga.gov.au/"},
+      "priority": 8
+    },
+    {
+      "id": "brazil-data-cube", "name": "Brazil Data Cube (INPE)",
+      "tier": "E", "type": "catalog", "auth": "free-token", "license_tier": 1,
+      "endpoints": {"stac": "https://data.inpe.br/bdc/stac/v1"}, "priority": 9
+    },
+    {
+      "id": "aws-odr", "name": "AWS Registry of Open Data",
+      "tier": "E", "type": "directory", "auth": "none", "license_tier": 1,
+      "endpoints": {"registry": "https://registry.opendata.aws/", "yaml": "https://github.com/awslabs/open-data-registry"},
+      "priority": 6, "notes": "55+ satellite imagery datasets. Watch requester-pays egress."
+    },
+    {
+      "id": "stac-index", "name": "STAC Index",
+      "tier": "E", "type": "directory", "auth": "none", "license_tier": 1,
+      "endpoints": {"web": "https://stacindex.org/catalogs", "mirror": "https://github.com/opengeos/stac-index-catalogs"},
+      "priority": 6, "notes": "Crawler seed list for auto-discovering new STAC catalogs."
+    },
+    {
+      "id": "gee", "name": "Google Earth Engine",
+      "tier": "E", "type": "catalog+processing", "auth": "google-account",
+      "license": "free noncommercial only; commercial requires paid GCP license", "license_tier": 2,
+      "endpoints": {"api": "https://earthengine.googleapis.com"},
+      "priority": 20,
+      "warning": "Do not put on the portal serving path for a commercial product."
+    }
+  ],
+  "discontinued": [
+    {
+      "id": "planet-nicfi",
+      "name": "Planet NICFI Satellite Data Program",
+      "status": "ENDED",
+      "detail": "Contract expired early 2025; free Level 0/1 access phased out from April 2025; Norway cancelled next-phase procurement September 2025. Paid replacement: Planet Tropical Forest Observatory. Many 'free imagery' listicles still list this incorrectly."
+    }
+  ]
+}

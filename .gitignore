@@ -1,0 +1,33 @@
+# Local tile/query cache — rebuilt on demand, ~27 MB and growing
+.cache/
+
+# Node
+node_modules/
+npm-debug.log*
+yarn-error.log*
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+*.egg-info/
+
+# Script output
+*.tif
+*.tiff
+out/
+
+# Environment / secrets
+.env
+.env.local
+
+# Editors & OS
+.vscode/*
+!.vscode/extensions.json
+!.vscode/launch.json
+.idea/
+Thumbs.db
+Desktop.ini
+.DS_Store

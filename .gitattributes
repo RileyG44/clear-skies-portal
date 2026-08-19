@@ -1,0 +1,13 @@
+# Normalise to LF in the repository; Git restores CRLF on Windows checkouts.
+* text=auto
+
+*.py   text eol=lf
+*.js   text eol=lf
+*.json text eol=lf
+*.yml  text eol=lf
+*.md   text eol=lf
+*.html text eol=lf
+
+*.png binary
+*.jpg binary
+*.tif binary

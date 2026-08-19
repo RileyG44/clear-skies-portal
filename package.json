@@ -1,0 +1,26 @@
+{
+  "name": "clear-skies-portal",
+  "version": "1.0.0",
+  "description": "Finds the most recent satellite imagery for any location on Earth, plus lidar terrain. All sources free, no API key.",
+  "private": true,
+  "license": "MIT",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js",
+    "check": "node --check server.js"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "keywords": [
+    "satellite",
+    "imagery",
+    "sentinel-2",
+    "landsat",
+    "lidar",
+    "3dep",
+    "leaflet",
+    "stac"
+  ]
+}
