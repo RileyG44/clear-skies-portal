@@ -11,6 +11,24 @@ Last updated: 2026-08-19
 
 ## P0 — Next up
 
+- [ ] **USGS S3 1 m DEMs as a terrain source** — *specced, not started.* Prefer them over WA DNR where they cover, and render terrain locally from elevation instead of scraping rendered PNGs. Rationale and endpoint research: `lidar-research.md` Addendum 2. Each step below is independently shippable.
+  1. **`GET /api/usgs/cover?bbox=`** — lat/lon → UTM cell → candidate projects → tile URLs with sizes, via cached S3 `list-type=2` listings.
+  2. **Range-based COG reader** in `server.js`. The tiles are already internally tiled, so this is header parse + IFD walk + range-read — not a full reprojecting tile cutter. Prefer pure JS to preserve the zero-dependency property; if a dependency becomes unavoidable, say so and justify it.
+  3. **Render hillshade from elevation** server-side, cached as PNG under the existing `.cache/` scheme. Reuse `DEP_RULE` style names so the client needs no change.
+  4. **Rewire download** to fetch DEM tiles by range with resume, replacing the PNG scrape where covered. Use `ETag`/`Last-Modified` for staleness; keep the catalogue-diff path for WA-DNR-only areas.
+  5. **Source selector** gains "USGS 1 m (offline-capable)". `Best available` keeps preferring WA DNR where it is genuinely finer than 1 m.
+
+  **Acceptance:** Rainier at z16 renders hillshade from a locally cached DEM tile *with the network off*; an interrupted download resumes rather than restarting; an `ETag` change is detected and surfaced; `node --check server.js` passes; the app loads with no console errors; `node server.js` still needs no `npm install`.
+
+  **Gotchas already paid for — do not rediscover:**
+  - **Two live filename conventions.** `USGS_1M_<zone>_x##y##_<PROJECT>.tif` (newer) and `USGS_one_meter_x##y##_<PROJECT>.tif` (older, e.g. WA_MtBaker_2015, WA_Olympic_Peninsula_2013). Guessing wrong yields a *false negative* — this produced a wrong "Mt Baker has no coverage" answer. List a project's `TIFF/` prefix once, cache the cell set, then look up. Never construct filenames blind.
+  - **UTM zones.** Western WA is zone 10, eastern WA zone 11. `x`/`y` are 10 km cell indices — `x53` = 530000 m E, `y524` = 5240000 m N.
+  - **Coverage is real but not total** (HEAD-verified): Rainier/Paradise `10 x59y518` yes · Snoqualmie `10 x61y525` yes · Adams `10 x61y511` yes · Baker `10 x58y540` yes (old naming) · **Hurricane Ridge `10 x46y531` no** — absent from all six Olympic projects.
+  - **WA DNR catalogue has typos** in `dataset_name` (`Point Cluod`, `DTM Hillsahde`) — normalise or they fall through a `switch`.
+  - **`/query` reports whole-project bytes** for every project intersecting the box, not clipped sizes, so regional totals overstate a drawn-box download.
+
+  **Constraints:** don't remove the `WARM_SPAN` bound or the tile guards; don't add a build step or npm dependency without flagging it first; don't scrape `/download` in a loop (53 TiB, no documented rate limit or stated terms — throttle, set a real `User-Agent`, and ask DNR's lidar manager before anything public-facing); don't use OSM tiles as a basemap (policy violation, returns HTTP 418 — CARTO is correct).
+
 - [ ] **CDSE Sentinel Hub instance** — *in progress (you).* Register at dataspace.copernicus.eu → Sentinel Hub dashboard at `shapps.dataspace.copernicus.eu/dashboard` → Configuration Utility → create a configuration → add layers (`S1-VV`, `S2-TRUE`, `S2-NDSI`, `LS-TRUE`) → send me the instance ID. Wires in as `https://sh.dataspace.copernicus.eu/ogc/wmts/<INSTANCE_ID>`, no OAuth needed for tiles. Unlocks Sentinel-1 rendering and arbitrary band math (1 PU per 512×512 tile, 10k/month free — use as a specialist layer, not the default).
 
 ## Done

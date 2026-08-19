@@ -31,6 +31,3 @@ out/
 Thumbs.db
 Desktop.ini
 .DS_Store
-
-# staging area for files the agent cannot delete directly
-_to_delete/

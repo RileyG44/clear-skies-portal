@@ -84,10 +84,22 @@ VIIRS/MODIS near-real-time true colour and night lights, NISAR.
 
 ## Things worth knowing
 
-- **Cache this area** (Terrain pane) pre-downloads tiles for the current view.
-  WA DNR is slow cold — around 19 s for a 20-tile view — and instant once cached.
-  A cached area also works with **no network at all**, which is the point at a trailhead.
-  Budget roughly 4 MB at z12, 16 MB at z13, 61 MB at z14, 229 MB at z15 for a 40 km box.
+- **Download this view** (Terrain pane) pre-downloads terrain tiles for the current
+  view, so the area then works with **no network at all** — the point at a trailhead.
+  WA DNR is slow cold (around 19 s for a 20-tile view) and instant once cached.
+  - *Depth*: **Native lidar** (z18, 0.41 m/px) is the default and matches roughly what
+    the sharper projects actually resolve; **Maximum** (z19, 0.20 m/px) and the old
+    **Screen +2** are also there. Only the finest three zoom levels are fetched —
+    coarser ones are cheap and already cached from browsing.
+  - *Extent*: this view, +50% margin, or +a full screen of margin.
+  - The estimate is shown before you commit — e.g. `z14–18 · 0.41 m/px · 4,957 tiles ·
+    ~89 MB`. Above 8,000 tiles it asks to confirm; above 40,000 it declines and names
+    the zoom that would fit.
+  - *Staleness*: the DNR portal sends no `ETag`, `Last-Modified` or `Accept-Ranges`, so
+    there is nothing to validate against. Each download instead records the catalogue as
+    it stood in `.cache/areas/<id>.json`; a new `dataset_id` means a new flight and a
+    changed byte count means a re-issue. Washington flies about ten new projects a year,
+    so this is checked once per session, not on every pan.
 - **Open on natural colour** (Filters, on by default) keeps the map from landing on a
   radar or night-lights scene just because it happens to be the newest.
 - **Time window** (Filters) takes either a preset — last 14/30/90 days, last year,
@@ -114,8 +126,10 @@ python3 trailcheck.py --gpx myroute.gpx
 
 ## Stop the server
 
+Match on the port, not the command line — the process is just `node server.js`,
+with `satportal` only as its working directory, so filtering on the path finds nothing.
+
 ```powershell
-Get-CimInstance Win32_Process -Filter "Name='node.exe'" |
-  Where-Object { $_.CommandLine -like "*satportal*" } |
-  ForEach-Object { Stop-Process -Id $_.ProcessId -Force }
+Get-NetTCPConnection -LocalPort 8765 -State Listen |
+  ForEach-Object { Stop-Process -Id $_.OwningProcess -Force }
 ```
