@@ -1150,12 +1150,24 @@ async function select(i){
 
 /* ------------------------------------------------- side panel: resize + collapse */
 const sideEl=$("#side"), dragEl=$("#drag");
-let SIDE_W=430, dragging=false;
+let SIDE_W=430, dragging=false, dragLeft0=0;
 
-function applySide(){ sideEl.style.width=SIDE_W+"px"; map.invalidateSize({pan:false}) }
+const mapLeft=()=>map.getContainer().getBoundingClientRect().left;
+
+/* Leaflet pins its tiles to the container's top-left corner. When the panel
+   closes, that corner jumps SIDE_W to the left and the whole map appears to be
+   dragged along with it. Re-panning by the same delta leaves the ground where
+   it was on screen, so the panel uncovers map instead of moving it. */
+function reflowMap(fromLeft){
+  map.invalidateSize({pan:false, animate:false});
+  const dx=mapLeft()-fromLeft;
+  if(dx) map.panBy([dx,0],{animate:false});
+}
+
+function applySide(){ const l0=mapLeft(); sideEl.style.width=SIDE_W+"px"; reflowMap(l0) }
 
 dragEl.addEventListener("mousedown", e=>{
-  e.preventDefault(); dragging=true;
+  e.preventDefault(); dragging=true; dragLeft0=mapLeft();
   dragEl.classList.add("act"); document.body.classList.add("dragging");
 });
 window.addEventListener("mousemove", e=>{
@@ -1166,16 +1178,23 @@ window.addEventListener("mousemove", e=>{
 window.addEventListener("mouseup", ()=>{
   if(!dragging) return;
   dragging=false; dragEl.classList.remove("act"); document.body.classList.remove("dragging");
-  applySide();
+  reflowMap(dragLeft0);          // compensate the whole drag, not just the last step
 });
 dragEl.addEventListener("dblclick", ()=>{ SIDE_W=430; applySide() });
 
 function setCollapsed(on){
+  const l0=mapLeft();
   document.body.classList.toggle("collapsed", on);
   $("#sideToggle").title = (on?"Show panel":"Collapse panel")+" (Ctrl+B)";
-  setTimeout(()=>map.invalidateSize({pan:false}), 30);
+  reflowMap(l0);                 // synchronous: no 30ms flash of the shifted view
 }
 $("#sideToggle").onclick=()=>setCollapsed(!document.body.classList.contains("collapsed"));
+
+/* The toggle button sits inside #map, so without this its click also reaches
+   Leaflet as a map click -> setLoc() + run(), which re-searches at the button's
+   own coordinates and throws away the scene the user had chosen. */
+L.DomEvent.disableClickPropagation($("#sideToggle"));
+L.DomEvent.disableScrollPropagation($("#sideToggle"));
 window.addEventListener("keydown", e=>{
   if((e.ctrlKey||e.metaKey) && (e.key==="b"||e.key==="B")){
     e.preventDefault(); setCollapsed(!document.body.classList.contains("collapsed"));
