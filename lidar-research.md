@@ -281,3 +281,99 @@ but it also states no terms at all — it directs questions to the lidar manager
 offline use this is not a constraint. Before anything public-facing or before hammering
 `/download` in a loop, ask them directly; a 53 TiB archive with no documented rate limit is an
 invitation to be inconsiderate by accident. Throttle and identify via User-Agent regardless.
+
+---
+
+# Addendum 2 — the other sources the DNR page points to (19 August 2026)
+
+The pointer is on [DNR's lidar page](https://dnr.wa.gov/washington-geological-survey/publications-and-data/lidar),
+not the portal's help page. It names four alternates. Two were already covered here;
+**two were not, and one of them changes the design.**
+
+| Source | Status |
+|---|---|
+| [USGS National Map Viewer](https://apps.nationalmap.gov/viewer/) | already our main render source (§1) |
+| [OpenTopography](https://portal.opentopography.org/datasets) | already catalogued (§4) — 15 WA point-cloud datasets |
+| [NOAA Data Access Viewer](https://coast.noaa.gov/dataviewer/) | **new — see below** |
+| [Puget Sound Lidar Consortium](http://pugetsoundlidar.ess.washington.edu/) | root responds, `/lidardata/index.html` 404s. Oldest source, largely superseded; its projects appear in the WA DNR portal. Not pursued. |
+
+## The finding: both federal sources publish to public S3 with real HTTP semantics
+
+This is the thing WA DNR's portal cannot do.
+
+| Property | WA DNR `/download` | USGS `prd-tnm` S3 |
+|---|---|---|
+| `Content-Length` | **absent** | present |
+| `Accept-Ranges` | **absent** — no resume | `bytes`, HTTP 206 verified |
+| `ETag` | **absent** | MD5 present |
+| `Last-Modified` | **absent** | present |
+| Internally tiled (COG) | n/a — serves rendered PNG | **yes** (TIFF tags 322/323) |
+| Throughput | ~15 tiles/min, 504s under load | full bandwidth |
+| What you get | pre-rendered hillshade PNG | **the actual 1 m elevation raster** |
+
+The staleness machinery I built this morning exists *only* because WA DNR ships no
+validators. Against USGS, `ETag` / `Last-Modified` answers it directly — the catalogue-diff
+hack becomes unnecessary for anything sourced this way.
+
+## USGS 3DEP staged 1 m DEMs — Washington
+
+`https://prd-tnm.s3.amazonaws.com/StagedProducts/Elevation/1m/Projects/<PROJECT>/TIFF/`
+
+**25 Washington projects · 2,797 tiles · 519 GiB for the entire state.** Against 53 TiB for
+the WA DNR archive, or 872 GiB for its hillshades alone. Individual tiles run 3.5–356 MiB.
+
+Tiles are **10 km UTM cells and the filename encodes the cell**, so lat/lon → file is
+arithmetic, with no catalogue call at all. One wrinkle: there are **two live naming
+conventions**, and guessing the wrong one yields a false negative (this cost me a wrong
+"no coverage" answer on Mt Baker before I checked):
+
+```
+USGS_1M_<zone>_x##y##_<PROJECT>.tif      newer  (WA_KingCounty_2021_B21, WA_CentralWildfire_D22)
+USGS_one_meter_x##y##_<PROJECT>.tif      older  (WA_MtBaker_2015, WA_Olympic_Peninsula_2013)
+```
+
+Eastern Washington projects are **UTM zone 11** (`WA_NorthEast_B22`); western are zone 10.
+Safest is to list a project's TIFF prefix once and cache its cell set, rather than construct
+filenames blind.
+
+### Coverage spot-checks
+
+| Location | UTM cell | 1 m DEM |
+|---|---|---|
+| Rainier / Paradise | 10 x59y518 | **yes** — WA_CentralWildfire_D22 (200 MiB) |
+| Rainier summit | 10 x59y518 | **yes** — same tile |
+| Snoqualmie Pass | 10 x61y525 | yes — two projects overlap |
+| Mt Adams | 10 x61y511 | yes — WA_Mount_Adams_LiDAR_2016_D16 |
+| Mt Baker | 10 x58y540 | yes — WA_MtBaker_2015 (old naming) |
+| Hurricane Ridge | 10 x46y531 | **no** — absent from all six Olympic projects |
+
+**This corrects §3 above.** That section reported "Rainier Paradise → no EPT coverage" and
+concluded national parks are missing federally. True of the *point-cloud* bucket; **not** true
+of the 1 m DEM product, which does cover Rainier. The Olympic interior is still a real gap.
+
+## NOAA coastal lidar — complementary, not redundant
+
+`https://noaa-nos-coastal-lidar-pds.s3.amazonaws.com/dem/<PROJECT>/`
+
+518 DEM projects nationally, **23 in Washington**, and they are a *different* set from USGS:
+Asotin, Chelan, Entiat, Methow, Hood Canal, San Juan, Nooksack, Tieton, Olympic Forest,
+Willapa. `WA_Olym_For_DEM_2017_9512` is worth testing against the Hurricane Ridge gap.
+
+Neither bucket sets CORS, so both still need the existing proxy — no change there.
+
+## What this means for the app
+
+The download feature shipped this morning scrapes rendered PNG tiles from a slow, unvalidated
+service. It works, but it is the weakest available path. The better one:
+
+1. **Fetch the 1 m DEM tile(s) for the view from S3.** One or two files, tens to hundreds of
+   MiB, resumable, ETag-checked. Minutes, not the ~5.5 hours a 5,000-tile scrape takes.
+2. **Render locally from elevation** — hillshade, slope, contours at *any* zoom, with no
+   upsampling artefacts, because we hold the actual raster rather than someone's PNG of it.
+3. Keep WA DNR for the places it genuinely wins: it has 345 projects to USGS's 25, and some
+   resolve finer than 1 m (Rainier 2007 measured below 0.53 m/px).
+
+Cost is the same GeoTIFF-reading subsystem flagged in Addendum 1 — but the case for it is much
+stronger now that the source is fast, resumable, self-validating and already cloud-optimised.
+Reading a COG's internal tiles by range request is far less work than a full reprojecting
+tile-cutter, since these are already tiled.

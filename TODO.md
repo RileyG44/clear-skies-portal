@@ -67,6 +67,8 @@ Last updated: 2026-08-19
 
 ## P1 — High value, ready to build [proposed]
 
+- [ ] **Source lidar from USGS S3 instead of scraping WA DNR.** *(researched 2026-08-19, see `lidar-research.md` Addendum 2.)* `prd-tnm.s3.amazonaws.com` publishes 3DEP staged **1 m DEM GeoTIFFs** — 25 Washington projects, 2,797 tiles, **519 GiB statewide** against 53 TiB for the WA DNR archive. They are **COGs** with `Accept-Ranges`, `Content-Length`, `ETag` and `Last-Modified`, all four of which WA DNR omits. That single change fixes resume, fixes progress reporting, and makes the catalogue-diff staleness check redundant for anything sourced this way. Tiles are 10 km UTM cells addressable straight from lat/lon (mind the **two** filename conventions and that eastern WA is zone 11). Verified covering Rainier, Snoqualmie, Adams and Baker; Olympic interior is a real gap. NOAA's `noaa-nos-coastal-lidar-pds` adds 23 more WA projects on a complementary footprint. Keep WA DNR for its 345 projects and its sub-metre outliers.
+
 - [ ] **Per-project resolution probe.** *Native lidar* currently targets a fixed z18, which clears every project measured so far — but *Rainier 2007* still had detail below 0.53 m/px, so a sharper project would be under-sampled and we would not know. A one-off octave-residual probe per project (one 2048px render, analysed locally) could set the ceiling per project instead of globally, and cache the answer in the manifest.
 - [ ] **Resume interrupted downloads.** A stopped job writes no manifest, so the tiles it did fetch are cached but unrecorded. Should record partial coverage and offer to continue.
 
