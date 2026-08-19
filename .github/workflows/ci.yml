@@ -1,0 +1,40 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Syntax-check server.js
+        run: node --check server.js
+
+      - name: Syntax-check Python scripts
+        run: python -m compileall -q trailcheck.py snowline.py probe.py
+
+      - name: Validate sources.json
+        run: python -c "import json; json.load(open('sources.json')); print('sources.json parses')"
+
+      - name: Smoke-test the server
+        run: |
+          node server.js &
+          for i in $(seq 1 20); do
+            curl -sf http://127.0.0.1:8765/api/health && break
+            sleep 0.5
+          done
+          curl -sf http://127.0.0.1:8765/api/health | tee /dev/stderr | grep -q '"ok":true'
+          curl -sfI http://127.0.0.1:8765/ | head -1
