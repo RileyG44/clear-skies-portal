@@ -509,14 +509,22 @@ body.rowdrag{cursor:row-resize;user-select:none}
           </div>
           <div class="terdl">
             <div class="row" style="gap:6px;align-items:center">
-              <button class="ghost" id="terWarm" style="flex:1">Cache this area</button>
-              <select id="terDepth" title="How far to zoom in when caching" style="width:88px;padding:6px 7px;font-size:11.5px">
-                <option value="1">+1 zoom</option>
-                <option value="2" selected>+2 zooms</option>
-                <option value="3">+3 zooms</option>
+              <button class="ghost" id="terWarm" style="flex:1">Download this view</button>
+              <select id="terDepth" title="How far in to download. Native matches the lidar\u2019s own resolution." style="width:104px;padding:6px 7px;font-size:11.5px">
+                <option value="screen">Screen +2</option>
+                <option value="native" selected>Native lidar</option>
+                <option value="max">Maximum</option>
+              </select>
+            </div>
+            <div class="row" style="gap:6px;align-items:center;margin-top:5px">
+              <select id="terExtent" title="How much ground to cover" style="flex:1;padding:6px 7px;font-size:11.5px">
+                <option value="view" selected>This view</option>
+                <option value="pad50">View + 50% margin</option>
+                <option value="pad100">View + full screen margin</option>
               </select>
             </div>
             <div id="terWarmMsg" class="warmmsg"></div>
+            <div id="terStale" class="warmmsg" style="display:none"></div>
           </div>
           <div id="terInfo" class="terinfo">Pick a layer to drape terrain over the map.</div>
         </div>
@@ -1843,7 +1851,7 @@ $("#terOp").oninput=()=>{ const v=+$("#terOp").value/100;
 map.on("moveend", ()=>{
   if(!PROXY || $("#terStyle").value==="off") return;
   clearTimeout(terTimer);
-  terTimer=setTimeout(()=>refreshTerrainCoverage(false), 700);
+  terTimer=setTimeout(()=>{ refreshTerrainCoverage(false); warmPreview() }, 700);
 });
 
 /* ---------------- pre-cache the current area (works offline afterwards) --- */
@@ -1861,19 +1869,99 @@ function warmTileEstimate(b, z0, z1){
   return n;
 }
 
+/* Ground resolution of a web-mercator tile pixel, in metres, at a latitude.
+   Native WA DNR lidar measured 2026-08-19: Rainier Wali 2022 resolves to
+   ~1.07 m/px, Rainier 2007 to better than 0.53 m/px. z18 (0.41 m/px at 47N)
+   clears both; z19 leaves headroom. The old +2/z17 cap sat at 0.82 m/px and
+   was quietly throwing away detail on the sharper projects.               */
+const MPP = (z,lat)=> 156543.03392 * Math.cos(lat*Math.PI/180) / Math.pow(2,z);
+const Z_CEIL = {screen:null, native:18, max:19};
+
+const WARM_SPAN=3;      /* how many levels above the target to also keep */
+function warmPlan(){
+  let b=map.getBounds();
+  const pad={view:0, pad50:0.25, pad100:0.5}[$("#terExtent").value] || 0;
+  if(pad>0) b=b.pad(pad);
+  const zNow=map.getZoom(), mode=$("#terDepth").value;
+  const z1=Math.min(20, Z_CEIL[mode] ? Math.max(zNow, Z_CEIL[mode]) : zNow+2);
+  /* Only the finest few levels are worth downloading: they are where the
+     detail is, and coarser ones are cheap and usually already cached from
+     browsing. Without this, "Native" from a zoomed-out view planned
+     millions of tiles and always tripped the guard.                      */
+  const z0=Math.max(1, Math.min(zNow, z1-WARM_SPAN));
+  const lat=map.getCenter().lat;
+  return {b, z0, z1, zNow, mpp:MPP(z1,lat), tiles:warmTileEstimate(b,z0,z1)};
+}
+/* Coarsest zoom whose view still fits under the tile budget at this target. */
+function warmNeedZoom(plan){
+  for(let z=plan.zNow; z<=20; z++){
+    const b=map.getBounds().pad({view:0,pad50:0.25,pad100:0.5}[$("#terExtent").value]||0);
+    const scale=Math.pow(4, z-plan.zNow);
+    if(plan.tiles/scale<=WARM_MAX) return z;
+  }
+  return null;
+}
+const TILE_BYTES = 18000;               // measured average across z13-z19
+function warmPreview(){
+  const el=$("#terWarmMsg"); if(!el || warmPoll) return;
+  if(!PROXY || $("#terStyle").value==="off") return;
+  const p=warmPlan();
+  const size=fmtMB(p.tiles*TILE_BYTES);
+  el.innerHTML=`z${p.z0}\u2013${p.z1} \u00b7 ${p.mpp.toFixed(2)} m/px \u00b7 `
+    + `${p.tiles.toLocaleString()} tiles \u00b7 ~${size}`
+    + (p.tiles>WARM_WARN ? ` <span class="warn">\u2014 large</span>` : "");
+}
+const WARM_WARN=8000, WARM_MAX=40000;
+
+/* ---- cached areas: has the lidar catalogue moved since we downloaded? --- */
+async function checkStaleAreas(){
+  const el=$("#terStale"); if(!el || !PROXY) return;
+  let areas=[];
+  try{ areas=await (await fetch("/api/warm/check")).json() }catch(e){ return }
+  if(!Array.isArray(areas) || !areas.length){ el.style.display="none"; return }
+  const stale=areas.filter(a=>a.stale);
+  if(!stale.length){
+    el.style.display="block";
+    el.innerHTML=`<span class="ok">${areas.length} area${areas.length>1?"s":""} downloaded</span>`
+      + ` &middot; up to date`;
+    return;
+  }
+  const lines=stale.slice(0,3).map(a=>{
+    const bits=[];
+    if(a.added.length)   bits.push(`${a.added.length} new`);
+    if(a.changed.length) bits.push(`${a.changed.length} re-issued`);
+    const who=(a.added[0]||a.changed[0]||{}).project_name || "";
+    return `&middot; <b>${a.label}</b> \u2014 ${bits.join(", ")}${who?` (${who})`:""}`;
+  }).join("<br>");
+  el.style.display="block";
+  el.innerHTML=`<span class="warn">New lidar available.</span><br>${lines}`
+    + `<br><a href="#" id="terRedl" style="color:var(--accent)">Download the updates</a>`;
+  const a=$("#terRedl");
+  if(a) a.onclick=(e)=>{ e.preventDefault(); $("#terWarm").click() };
+}
+
 $("#terWarm").onclick=async ()=>{
   const msg=$("#terWarmMsg");
   if(!PROXY){ msg.innerHTML='<span class="warn">Needs the local server (server.js).</span>'; return }
   const style=$("#terStyle").value;
   if(style==="off"){ msg.textContent="Pick a terrain layer first."; return }
-  const b=map.getBounds(), z0=map.getZoom(), z1=Math.min(17, z0 + (+$("#terDepth").value));
-  const est=warmTileEstimate(b,z0,z1);
-  if(est>6000){ msg.innerHTML=`<span class="warn">${est.toLocaleString()} tiles is too many.</span> Zoom in or reduce the depth.`; return }
+  const plan=warmPlan(), b=plan.b, z0=plan.z0, z1=plan.z1, est=plan.tiles;
+  if(est>WARM_MAX){
+    const need=warmNeedZoom(plan);
+    msg.innerHTML=`<span class="warn">${est.toLocaleString()} tiles is too many</span> at `
+      + `${plan.mpp.toFixed(2)} m/px. `
+      + (need ? `Zoom to about z${need} and try again` : `Zoom in further`)
+      + `, shrink the margin, or drop to Screen +2.`; return }
+  if(est>WARM_WARN && !confirm(
+      `${est.toLocaleString()} tiles at ${plan.mpp.toFixed(2)} m/px, roughly `
+      + `${fmtMB(est*TILE_BYTES)} on disk.\n\nWA DNR is slow cold, so this may take a while. Continue?`))
+    return;
   const pick=chooseTerrain(style);
   const body={bbox:[b.getWest(),b.getSouth(),b.getEast(),b.getNorth()], z0, z1,
               rule:DEP_RULE[style]||DEP_RULE.hs,
+              label:(pick.proj&&pick.proj.name) ? pick.proj.name : `z${z0}-${z1}`,
               layers: pick.src==="wadnr" && pick.proj ? String(pick.proj.dtm||"") : ""};
-  msg.innerHTML=`<span class="spin"></span> starting &mdash; ${est.toLocaleString()} tiles`;
+  msg.innerHTML=`<span class="spin"></span> starting &mdash; ${est.toLocaleString()} tiles at ${plan.mpp.toFixed(2)} m/px`;
   try{ await fetch("/api/warm",{method:"POST",body:JSON.stringify(body)}) }
   catch(e){ msg.textContent="Could not start."; return }
   clearInterval(warmPoll);
@@ -1885,10 +1973,17 @@ $("#terWarm").onclick=async ()=>{
         + `${s.done.toLocaleString()} / ${s.total.toLocaleString()} tiles &middot; ${fmtMB(s.bytes)}`;
     }else{
       clearInterval(warmPoll); warmPoll=null;
-      msg.innerHTML=`<span class="ok">Area cached.</span> ${s.done.toLocaleString()} tiles &middot; ${fmtMB(s.bytes)} on disk &mdash; this area now loads instantly and works with no network.`;
+      msg.innerHTML=`<span class="ok">Downloaded.</span> ${s.done.toLocaleString()} tiles &middot; ${fmtMB(s.bytes)} on disk &mdash; this area now loads instantly and works with no network.`;
+      checkStaleAreas();
     }
   }, 900);
 };
+
+["#terDepth","#terExtent","#terStyle","#terSrc"].forEach(id=>{
+  const el=$(id); if(el) el.addEventListener("change", warmPreview);
+});
+map.on("zoomend", warmPreview);
+setTimeout(()=>{ warmPreview(); checkStaleAreas() }, 1200);
 
 /* ---------------------------------------------------------------- events */
 $("#op").oninput=e=>{

@@ -158,3 +158,126 @@ EPT index            https://raw.githubusercontent.com/hobuinc/usgs-lidar/master
 EPT dataset          https://s3-us-west-2.amazonaws.com/usgs-lidar-public/<name>/ept.json
 OpenTopography       https://portal.opentopography.org/API/otCatalog?productFormat=PointCloud&minx=&miny=&maxx=&maxy=&outputFormat=json
 ```
+
+---
+
+# Addendum — bulk download & offline lidar (19 August 2026)
+
+**Question asked:** can we download all the lidar once, use local files when present, and
+notify the user when they go stale?
+
+**Short answer:** downloading is real and works. "All of it" is **53 TiB**. The useful
+subset is **872 GiB**, and the *genuinely* useful subset is a few GiB. Staleness detection
+is easy; using the downloaded files is the hard part, and not for the reason you'd expect.
+
+## What the portal actually publishes
+
+`GET /download?ids=<dataset_id>` — whole project · `GET /download?geojson=<geom>` — custom clip.
+Both verified live. Returns `application/zip`, `Content-Disposition: attachment; filename="custom_download.zip"`.
+
+The [portal help page](https://lidarportal.dnr.wa.gov/help.html) confirms both paths: pick a point
+for project-level data, or draw a rectangle for "only the data you need."
+
+**Three headers are missing, and their absence drives the whole design:**
+
+| Header | Present? | Consequence |
+|---|---|---|
+| `Content-Length` | **no** | no progress bar, no size preflight from the download itself |
+| `Accept-Ranges` | **no** | **no resume.** A dropped 40 GB download restarts at zero |
+| `ETag` / `Last-Modified` | **no** | cannot cheaply ask "has this changed?" |
+
+Sizes must come from `/query` (which reports `bytes` and `files` per dataset), not from the
+download response. Staleness must come from the same place.
+
+## The size of "everything" — statewide query, 2026-08-19
+
+Full-state polygon (-124.9,45.5 → -116.9,49.05), 59 s, **1,847 datasets across 345 projects,
+891,869 files, 52.98 TiB.**
+
+| Product | Datasets | Files | Size | Used by the app? |
+|---|---|---|---|---|
+| **Point Cloud** | 273 | 454,538 | **43.38 TiB** | **no** — nothing in the stack draws points |
+| DTM | 345 | 124,328 | 3.98 TiB | no — source for hillshade, not rendered |
+| DSM | 275 | 122,182 | 3.66 TiB | no |
+| DSM Hillshade | 275 | 94,352 | 1.09 TiB | no |
+| **DTM Hillshade** | 344 | 95,635 | **0.85 TiB** | **yes — this is the layer we render** |
+| Metadata | 333 | 336 | ~0 | incidentally |
+
+**82% of the archive is point clouds the app cannot draw.** Excluding them takes 53 TiB → 9.6 TiB.
+Taking only the bare-earth hillshade we actually render takes it to **872 GiB**.
+
+Hillshade distribution is brutally skewed: median project **192 MiB**, smallest 0.5 MiB,
+largest **92.4 GiB**. A naive "download all hillshades" queue would spend most of its life
+on one file, with no resume if it drops.
+
+## Realistic regional subsets (live query, hillshade column is the one that matters)
+
+| Area | Datasets | Everything | Hillshade only |
+|---|---|---|---|
+| Rainier NP box (25×22 km) | 26 | 267 GiB | **10.4 GiB** |
+| Central Cascades (150×110 km) | 425 | 5,710 GiB | **163 GiB** |
+| King County | 439 | 4,749 GiB | **129 GiB** |
+| Olympic Peninsula | 273 | 6,142 GiB | **180 GiB** |
+
+Note these are *whole-project* sizes for every project intersecting the box — a project
+clipped by one corner still reports its full size. The `?geojson=` clip download returns only
+the overlapping tiles, so real figures for a drawn box are lower.
+
+## The hard part: downloaded files are not renderable tiles
+
+This is the trap. The download is a ZIP of **GeoTIFF rasters in state-plane projection**.
+The app renders WA lidar by calling the ArcGIS MapServer `/export` endpoint, which returns
+**PNG tiles in EPSG:3857**. Those are not the same thing.
+
+Pointing the app at local files therefore means adding to `server.js`:
+
+1. a GeoTIFF reader (`geotiff.js` pure-JS, or GDAL via binary dependency — the latter breaks
+   the current "Node 18+, no `npm install`" property, which is worth protecting)
+2. reprojection from state plane to Web Mercator
+3. a tile cutter, windowing the right pixels per z/x/y
+4. a spatial index over the unzipped files so a tile request finds its raster
+
+That is a real subsystem, and it duplicates work the MapServer already does correctly.
+
+**The cheap path already exists.** `Cache this area` writes *rendered PNG tiles* into `.cache/`
+and a cached area already works with no network at all. Same user-visible outcome — local
+files, offline, instant — for a fraction of the build. It just needs scope (multi-zoom,
+whole-region, resumable), a manifest, and the staleness check below.
+
+Tile-cache sizing measured earlier, 40 km box: 4 MB at z12, 16 MB at z13, 61 MB at z14,
+229 MB at z15. A hiking season's worth of terrain is **single-digit GB**, not 872.
+
+## Staleness detection — the easy part
+
+No HTTP validators, so diff the catalog instead. `POST /query` over the cached region returns
+`dataset_id`, `project_name`, `dataset_name`, `files`, `bytes`. Store that manifest at
+download time; re-query on a schedule and compare:
+
+- **new `dataset_id`** → new project flown over the area → offer the addition
+- **changed `bytes`/`files` for a known id** → project re-issued → offer a refresh
+- **unchanged** → silent, mark the manifest checked
+
+The `/query` response for a regional box is a few KB and already cached by the proxy with a
+metadata TTL, so this is nearly free. Cadence should be monthly at most — see below.
+
+**How fast does it actually go stale?** Projects by flight year: 2021: 6, 2022: 20, 2023: 10,
+2024: 11, 2025: 8. Roughly **ten new projects a year statewide**, so any given region changes
+on a multi-year cadence. A weekly check would be noise; monthly or on-demand is right.
+
+## Catalog data-quality notes
+
+Three `dataset_name` values are misspelled in the portal's own catalog and must be normalized
+or they'll fall through a `switch`:
+
+- `Point Cluod` (1 dataset, 443 files, 0.02 TiB)
+- `DTM Hillsahde` (1 dataset, 55 files)
+- one project carries a DTM with no matching DTM Hillshade (345 vs 344)
+
+## Licensing
+
+WA DNR lidar is state public data, published under [DNR's open data program](https://www.dnr.wa.gov/opendata).
+The help page states no rate limit, no bulk-access restriction, and no attribution requirement,
+but it also states no terms at all — it directs questions to the lidar manager. For personal
+offline use this is not a constraint. Before anything public-facing or before hammering
+`/download` in a loop, ask them directly; a 53 TiB archive with no documented rate limit is an
+invitation to be inconsiderate by accident. Throttle and identify via User-Agent regardless.

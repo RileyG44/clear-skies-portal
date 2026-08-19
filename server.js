@@ -13,7 +13,9 @@ const ROOT  = __dirname;
 const PORT  = Number(process.env.PORT || 8765);
 const HOST  = process.env.HOST || "127.0.0.1";   // 0.0.0.0 in a devcontainer/Codespace
 const CACHE = path.join(ROOT, ".cache");
+const AREAS = path.join(CACHE, "areas");   // one manifest per downloaded area
 fs.mkdirSync(CACHE, {recursive:true});
+fs.mkdirSync(AREAS, {recursive:true});
 
 const MIME = {".html":"text/html; charset=utf-8",".js":"text/javascript",".css":"text/css",
   ".json":"application/json",".png":"image/png",".jpg":"image/jpeg",".jpeg":"image/jpeg",
@@ -94,6 +96,56 @@ const TRANSPARENT = Buffer.from(
 const send = (res, status, type, body, extra={}) =>
   res.writeHead(status, {"Content-Type":type, "Access-Control-Allow-Origin":"*", ...extra}).end(body);
 
+/* -------------------------------------------------- area manifests
+   A downloaded area records which WA DNR datasets covered it at the
+   time. The portal sends no ETag/Last-Modified, so staleness is found
+   by re-querying the catalogue and diffing ids / byte counts.        */
+function bboxPoly(b){                       // [w,s,e,n] -> GeoJSON Polygon
+  const [w,s,e,n]=b;
+  return {type:"Polygon",coordinates:[[[w,s],[e,s],[e,n],[w,n],[w,s]]]};
+}
+async function waQuery(bbox){
+  const gj   = JSON.stringify(bboxPoly(bbox));
+  const form = "geojson=" + encodeURIComponent(gj);
+  const r = await cached(key("wadnr:query:"+gj), TTL_META, ()=>upstream({
+    host:WADNR_HOST, path:"/query", method:"POST",
+    headers:{"Content-Type":"application/x-www-form-urlencoded",
+             "Content-Length":Buffer.byteLength(form),
+             "User-Agent":"clear-skies-portal"}}, form));
+  try{ const j=JSON.parse(r.body.toString()); return Array.isArray(j)?j:[] }catch(e){ return [] }
+}
+const dsFingerprint = rows => rows.map(d=>({
+  dataset_id:d.dataset_id, project_name:d.project_name,
+  dataset_name:d.dataset_name, files:d.files, bytes:d.bytes}));
+
+function areaList(){
+  try{
+    return fs.readdirSync(AREAS).filter(f=>f.endsWith(".json")).map(f=>{
+      try{ return JSON.parse(fs.readFileSync(path.join(AREAS,f),"utf8")) }catch(e){ return null }
+    }).filter(Boolean).sort((a,b)=>(b.created||0)-(a.created||0));
+  }catch(e){ return [] }
+}
+function areaSave(a){
+  try{ fs.writeFileSync(path.join(AREAS, a.id+".json"), JSON.stringify(a,null,1)) }catch(e){}
+}
+/* Compare a stored manifest against the catalogue as it stands now. */
+async function areaCheck(a){
+  const now = await waQuery(a.bbox);
+  if(!now.length) return {...a, checkFailed:true};
+  const was = new Map((a.datasets||[]).map(d=>[d.dataset_id,d]));
+  const added=[], changed=[];
+  for(const d of now){
+    const p = was.get(d.dataset_id);
+    if(!p) added.push({project_name:d.project_name, dataset_name:d.dataset_name, bytes:d.bytes});
+    else if(p.bytes!==d.bytes || p.files!==d.files)
+      changed.push({project_name:d.project_name, dataset_name:d.dataset_name,
+                    was:p.bytes, now:d.bytes});
+  }
+  const out = {...a, checked:Date.now(), added, changed, stale:!!(added.length||changed.length)};
+  areaSave(out);
+  return out;
+}
+
 /* ------------------------------------------------------------ pre-cache */
 const warm = {running:false, stop:false, total:0, done:0, ok:0, bytes:0, label:""};
 const warmState = () => ({running:warm.running, total:warm.total, done:warm.done,
@@ -112,7 +164,7 @@ function mercBbox(z,x,y){
 }
 
 async function startWarm(job){
-  const bbox = job.bbox, z0 = Math.max(1,job.z0|0), z1 = Math.min(17,job.z1|0);
+  const bbox = job.bbox, z0 = Math.max(1,job.z0|0), z1 = Math.min(20,job.z1|0);
   const layers = String(job.layers||"").replace(/[^\d,]/g,"");
   const rule = String(job.rule||"Hillshade Gray");
   const tiles=[];
@@ -150,7 +202,22 @@ async function startWarm(job){
     }
   };
   await Promise.all(Array.from({length:5}, worker));
-  warm.running=false; warm.stop=false;
+  warm.running=false;
+  /* record what was downloaded, and the catalogue state it matched */
+  if(!warm.stop && warm.ok){
+    try{
+      const rows = await waQuery(bbox);
+      areaSave({
+        id: key(JSON.stringify([bbox,z0,z1,rule,layers])).slice(0,12),
+        label: job.label || `z${z0}-${z1}`,
+        bbox, z0, z1, rule, layers,
+        tiles: warm.total, ok: warm.ok, bytes: warm.bytes,
+        created: Date.now(), checked: Date.now(),
+        datasets: dsFingerprint(rows), stale:false, added:[], changed:[]
+      });
+    }catch(e){}
+  }
+  warm.stop=false;
 }
 
 const server = http.createServer(async (req,res)=>{
@@ -258,6 +325,17 @@ const server = http.createServer(async (req,res)=>{
     }
     if(p === "/api/warm/status")
       return send(res,200,"application/json",Buffer.from(JSON.stringify(warmState())));
+    if(p === "/api/warm/areas")
+      return send(res,200,"application/json",Buffer.from(JSON.stringify(areaList())));
+
+    if(p === "/api/warm/check"){
+      const want = u.searchParams.get("id");
+      const list = areaList().filter(a=>!want || a.id===want);
+      const out=[];
+      for(const a of list){ try{ out.push(await areaCheck(a)) }catch(e){ out.push({...a,checkFailed:true}) } }
+      return send(res,200,"application/json",Buffer.from(JSON.stringify(out)));
+    }
+
     if(p === "/api/warm/stop"){ warm.stop=true; return send(res,200,"application/json",Buffer.from(JSON.stringify(warmState()))); }
 
     if(p === "/api/health"){

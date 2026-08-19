@@ -5,7 +5,7 @@
 **How to use:** say *"check the TODO"* or *"next item from the TODO"* and I'll read this file instead of us re-deriving it in conversation. Say *"add X to the TODO"* or *"mark X done"* and I'll edit it in place.
 
 Priorities below marked **[proposed]** are my suggestion, not your decision — reorder freely.
-Last updated: 2026-08-18
+Last updated: 2026-08-19
 
 ---
 
@@ -14,6 +14,15 @@ Last updated: 2026-08-18
 - [ ] **CDSE Sentinel Hub instance** — *in progress (you).* Register at dataspace.copernicus.eu → Sentinel Hub dashboard at `shapps.dataspace.copernicus.eu/dashboard` → Configuration Utility → create a configuration → add layers (`S1-VV`, `S2-TRUE`, `S2-NDSI`, `LS-TRUE`) → send me the instance ID. Wires in as `https://sh.dataspace.copernicus.eu/ogc/wmts/<INSTANCE_ID>`, no OAuth needed for tiles. Unlocks Sentinel-1 rendering and arbitrary band math (1 PU per 512×512 tile, 10k/month free — use as a specialist layer, not the default).
 
 ## Done
+
+- [x] **Download this view — offline lidar at native resolution, with staleness notices** (2026-08-19) — the old *Cache this area* was hard-capped at `Math.min(17, …)`, i.e. **0.82 ground m/px at 47°N**. Measured against the portal that day, that was quietly discarding real detail: an octave-residual test on a fixed 1,600 m box shows *Rainier Wali 2022* carrying genuine structure to ~1.07 m/px (≈1 m native, so z17 was fine) but *Rainier 2007* still resolving below **0.53 m/px**, which z17 cannot represent. The service declares `minScale: 0, maxScale: 0` on all 620 raster layers, so it will happily upsample forever and no metadata tells you where the real data stops — it has to be measured.
+  - Ceiling raised to **z20** server-side. New **Native lidar** target (z18, 0.41 m/px) is the default, with **Maximum** (z19, 0.20 m/px) and the old **Screen +2** still available.
+  - Only the finest `WARM_SPAN=3` levels are fetched. Without that bound, "Native" from a zoomed-out view planned **4.85 million tiles (87 GB)** and tripped the guard every time — coarse levels are cheap and already cached from browsing anyway.
+  - Live estimate before you commit: `z14–18 · 0.41 m/px · 4,957 tiles · ~89 MB`. Confirm above 8,000 tiles, refused above 40,000 — and the refusal now names the zoom that *would* fit rather than just saying no.
+  - Extent selector: **This view** (default), **+50% margin**, **+full screen margin**.
+  - **Staleness.** The portal sends no `ETag`, no `Last-Modified` and no `Accept-Ranges`, so there is nothing to validate against and no resume. Instead each download writes `.cache/areas/<id>.json` recording the WA DNR catalogue as it stood — `dataset_id`, `files`, `bytes` per dataset. `GET /api/warm/check` re-queries and diffs: a new `dataset_id` means a new flight, a changed byte count means a re-issue. Verified both paths against the live catalogue. The manifest baseline is deliberately **not** advanced on check — only a fresh download clears the flag, because the tiles on disk still match the old data.
+  - Cadence: WA flies ~10 new projects a year statewide (2022: 20, 2023: 10, 2024: 11, 2025: 8), so a region changes on a multi-year rhythm. Checked once per session, not per pan.
+  - Verified headless: no page errors, tile planning coherent from z11 to z17, and the manifest/diff cycle exercised end-to-end against the live portal.
 
 - [x] **Explicit date ranges, and one date path for every source** (2026-08-19) — the time window was a `days` integer counted back from *now*, threaded separately into `stacSearch`, `gibsItems` and `stacBbox`, so "imagery from July 2025" was not expressible at all.
   - New **Custom range…** option in the Time window select reveals two date pickers. Either side may be left empty for an open-ended range (`from/..`, `../to`), both empty falls back to all time. Quick buttons: this month, last month, year to date, last calendar year. Inverted ranges are flagged and **do not fire a search**. Future dates are blocked at the picker.
@@ -57,6 +66,9 @@ Last updated: 2026-08-18
 ---
 
 ## P1 — High value, ready to build [proposed]
+
+- [ ] **Per-project resolution probe.** *Native lidar* currently targets a fixed z18, which clears every project measured so far — but *Rainier 2007* still had detail below 0.53 m/px, so a sharper project would be under-sampled and we would not know. A one-off octave-residual probe per project (one 2048px render, analysed locally) could set the ceiling per project instead of globally, and cache the answer in the manifest.
+- [ ] **Resume interrupted downloads.** A stopped job writes no manifest, so the tiles it did fetch are cached but unrecorded. Should record partial coverage and offer to continue.
 
 
 - [ ] **Deep-link / shareable URL state.** Encode lat/lon, zoom, filters and selected scene in the hash so a view can be bookmarked or reopened. Also enables browser back/forward between scenes. Small, and everything else benefits from it.
