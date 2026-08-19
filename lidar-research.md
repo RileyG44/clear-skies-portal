@@ -377,3 +377,71 @@ Cost is the same GeoTIFF-reading subsystem flagged in Addendum 1 — but the cas
 stronger now that the source is fast, resumable, self-validating and already cloud-optimised.
 Reading a COG's internal tiles by range request is far less work than a full reprojecting
 tile-cutter, since these are already tiled.
+
+
+---
+
+# Addendum 3 — building it, and two corrections to Addendum 2 (2026-08-19)
+
+Implemented as `cog.js` + `usgs.js`. Both corrections below were found by
+measuring against the live bucket, not by reasoning about it.
+
+## The cell naming rule was off by one in northing
+
+Cell `x##y##` has its **west edge at `x*10000` and its NORTH edge at `y*10000`**,
+with a 6 px margin — a tile reports its origin as `(x*10000-6, y*10000+6)`.
+Verified against the tiepoints of both filename conventions, in two projects,
+both giving exactly `dE -6, dN +6`.
+
+Addendum 2 used `floor()` on the northing, which names the cell one 10 km step
+**south** of the point. Every coverage claim in that table was therefore checked
+against the wrong tile. The correct rule is `y = ceil(N/10000)`.
+
+## Corrected coverage
+
+| Location | cell | Addendum 2 said | actually |
+|---|---|---|---|
+| Rainier summit / Paradise | `10 x59y519` | yes | **no — genuine gap** |
+| Snoqualmie Pass | `10 x61y526` | yes | yes, two projects overlap |
+| Mt Adams | `10 x61y512` | yes | yes |
+| Mt Baker | `10 x58y541` | yes | yes (old naming) |
+| Hurricane Ridge | `10 x46y532` | **no** | **yes — WA_DNR_3DEP_Processing_2019_D20** |
+
+**Mount Rainier National Park has no federal 1 m DEM.** Coverage stops hard at
+`y518`; the whole `x58–60, y519–521` block is absent, and the only `y519+` data
+nearby is `x61–62` (EasternCascades), east of the park. This is worth stating
+plainly because Rainier is the app's own test location — and it is the clearest
+argument for keeping WA DNR: 345 projects to USGS's 25.
+
+Statewide totals also came in lower than Addendum 2 estimated:
+**2,548 tiles / 474 GiB** across 25 projects, against the claimed 2,797 / 519 GiB.
+Five `WA_Olympic_Peninsula_*` prefixes exist with zero `.tif` files in them.
+
+## What the files actually are
+
+Classic little-endian TIFF (not BigTIFF), one float32 band, `NODATA -999999`,
+NAD83 UTM (EPSG:269xx). Uniformly **LZW (compression 5)**, and the full-resolution
+level uses the **floating-point predictor (3)**; overview levels often use
+predictor 1. Node's zlib has no LZW, so both the decoder and the predictor are
+hand-written in `cog.js` — about 90 lines, and the reason no dependency was needed.
+
+Tile size is **not constant** and must be read per level: `WA_MtBaker_2015` is
+256 px at level 0 and 128 px below it, while `WA_CentralWildfire_D22` is 512 px
+throughout. Every file carries a 6-level pyramid, so a z14 view reads ~20 tiles
+from an overview rather than touching full resolution.
+
+Two things worth knowing when reimplementing:
+
+- **TIFF LZW is not GIF LZW.** Codes pack MSB-first and the width grows one code
+  *early* (at 511, not 512). Get it wrong and the first few hundred bytes decode
+  correctly before turning to noise.
+- **Predictor 3 is two operations, in order:** undo the horizontal byte
+  differencing, *then* de-interleave the byte planes (all high bytes, then all
+  second bytes, ...). libtiff calls this `fpAcc`.
+
+## Verified
+
+Mt Baker summit reads **3282.6 m** from an 8 m overview against a published
+3286 m — an 11 ft difference, consistent with an overview smoothing a peak.
+UTM round-trip error is 0.0002 m. A warmed tile re-renders **byte-identically
+with the network severed at the https layer and zero calls attempted**.

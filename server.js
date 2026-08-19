@@ -8,6 +8,7 @@ const fs    = require("fs");
 const path  = require("path");
 const crypto= require("crypto");
 const zlib  = require("zlib");
+const usgs  = require("./usgs.js");
 
 const ROOT  = __dirname;
 const PORT  = Number(process.env.PORT || 8765);
@@ -15,6 +16,7 @@ const HOST  = process.env.HOST || "127.0.0.1";   // 0.0.0.0 in a devcontainer/Co
 const CACHE = path.join(ROOT, ".cache");
 const AREAS = path.join(CACHE, "areas");   // one manifest per downloaded area
 fs.mkdirSync(CACHE, {recursive:true});
+usgs.init(CACHE);
 fs.mkdirSync(AREAS, {recursive:true});
 
 const MIME = {".html":"text/html; charset=utf-8",".js":"text/javascript",".css":"text/css",
@@ -337,6 +339,104 @@ const server = http.createServer(async (req,res)=>{
     }
 
     if(p === "/api/warm/stop"){ warm.stop=true; return send(res,200,"application/json",Buffer.from(JSON.stringify(warmState()))); }
+
+    /* ---- USGS 3DEP 1 m DEM: does this point have federal lidar coverage? ---- */
+    if(p === "/api/usgs/cover"){
+      const latS=u.searchParams.get("lat"), lonS=u.searchParams.get("lon");
+      const lat=+latS, lon=+lonS;
+      // Note the null check: +null is 0 and isFinite(0) is true, so a missing
+      // parameter would otherwise be answered for a point in the Gulf of Guinea.
+      if(latS===null||lonS===null||!isFinite(lat)||!isFinite(lon)||Math.abs(lat)>90||Math.abs(lon)>180)
+        return send(res,400,"application/json",Buffer.from(JSON.stringify({error:"lat and lon required"})));
+      const r=await usgs.findCells(lon,lat);
+      return send(res,200,"application/json",Buffer.from(JSON.stringify(r)),
+                  {"Cache-Control":"max-age=3600"});
+    }
+
+    /* Rebuild the S3 project index. Cheap to serve, ~20 s to build, 30-day TTL. */
+    if(p === "/api/usgs/index"){
+      const force = u.searchParams.get("force")==="1";
+      const idx=await usgs.buildIndex(["WA_"], force);
+      const projects=Object.keys(idx.projects).map(k=>({
+        project:k, zone:idx.projects[k].zone, year:usgs.projectYear(k),
+        tiles:Object.keys(idx.projects[k].cells).length,
+        bytes:Object.values(idx.projects[k].cells).reduce((a,c)=>a+(c.size||0),0)}));
+      projects.sort((a,b)=>b.year-a.year);
+      return send(res,200,"application/json",Buffer.from(JSON.stringify({
+        built:idx.built, projects,
+        totals:{projects:projects.length,
+                tiles:projects.reduce((a,p2)=>a+p2.tiles,0),
+                bytes:projects.reduce((a,p2)=>a+p2.bytes,0)}})));
+    }
+
+    /* Terrain rendered here from elevation: /api/usgs/tile/<style>/<z>/<x>/<y>.png */
+    if(p.startsWith("/api/usgs/tile/")){
+      const m=p.match(/^\/api\/usgs\/tile\/([a-z0-9]+)\/(\d+)\/(\d+)\/(\d+)\.png$/);
+      if(!m) return send(res,400,"text/plain",Buffer.from("bad tile path"));
+      const [,style,zs,xs,ys]=m;
+      const z=+zs, x=+xs, y=+ys;
+      if(z<0||z>22) return send(res,400,"text/plain",Buffer.from("bad zoom"));
+      const ck=key(`usgs:${style}:${z}/${x}/${y}`);
+      const hit=cacheGet(ck, TTL_TILE);
+      if(hit) return send(res,hit.status,hit.type,hit.body,{"X-Cache":"hit"});
+      let out=null;
+      try{ out=await usgs.renderTile(style,z,x,y,256) }
+      catch(e){ return send(res,500,"text/plain",Buffer.from(String(e.message||e))) }
+      if(!out){                       // no federal coverage here — caller falls back
+        cachePut(ck,204,"image/png",Buffer.alloc(0));
+        return send(res,204,"image/png",Buffer.alloc(0),{"X-Coverage":"none"});
+      }
+      cachePut(ck,200,"image/png",out.png);
+      return send(res,200,"image/png",out.png,
+        {"X-Coverage":String(out.meta.coverage), "X-Ground-Res":String(out.meta.groundRes),
+         "X-Sources":out.meta.sources.map(s2=>s2.project+"@"+s2.res+"m").join(","), "X-Cache":"miss"});
+    }
+
+    /* Freshness, the way WA DNR cannot do it: HEAD and compare ETag. */
+    if(p === "/api/usgs/check" && req.method === "POST"){
+      const chunks=[]; for await (const c of req) chunks.push(c);
+      let entries=[]; try{ entries=JSON.parse(Buffer.concat(chunks).toString()||"[]") }catch(e){}
+      const out=await usgs.checkFresh(entries);
+      return send(res,200,"application/json",Buffer.from(JSON.stringify(out)));
+    }
+
+    /* ---- USGS 1 m: download an area, resumable ---- */
+    if(p === "/api/usgs/warm" && req.method === "POST"){
+      const chunks=[]; for await (const c of req) chunks.push(c);
+      const job=JSON.parse(Buffer.concat(chunks).toString()||"{}");
+      const st=usgs.warmState();
+      if(st.running) return send(res,409,"application/json",Buffer.from(JSON.stringify({error:"already running",...st})));
+      /* Share the server's disk cache so a stopped job resumes: tiles already
+         rendered are counted as skipped rather than fetched again. */
+      const tileCache={
+        get:(style,z,x,y)=>{ const h=cacheGet(key(`usgs:${style}:${z}/${x}/${y}`),TTL_TILE);
+                             return h && h.status===200 && h.body.length ? h.body : null },
+        put:(style,z,x,y,buf)=>cachePut(key(`usgs:${style}:${z}/${x}/${y}`),200,"image/png",buf)
+      };
+      usgs.startWarm(job, tileCache);
+      return send(res,200,"application/json",Buffer.from(JSON.stringify(usgs.warmState())));
+    }
+    if(p === "/api/usgs/warm/status")
+      return send(res,200,"application/json",Buffer.from(JSON.stringify(usgs.warmState())));
+    if(p === "/api/usgs/warm/stop")
+      return send(res,200,"application/json",Buffer.from(JSON.stringify(usgs.stopWarm())));
+    if(p === "/api/usgs/areas")
+      return send(res,200,"application/json",Buffer.from(JSON.stringify(usgs.areaList())));
+    if(p === "/api/usgs/areas/check"){
+      const want=u.searchParams.get("id");
+      const list=usgs.areaList().filter(a=>!want||a.id===want);
+      const out=[];
+      for(const a of list){ try{ out.push(await usgs.areaCheck(a)) }catch(e){ out.push({...a,checkFailed:true}) } }
+      return send(res,200,"application/json",Buffer.from(JSON.stringify(out)));
+    }
+    if(p === "/api/usgs/plan"){
+      const bbox=(u.searchParams.get("bbox")||"").split(",").map(Number);
+      const z0=+u.searchParams.get("z0"), z1=+u.searchParams.get("z1");
+      if(bbox.length!==4||bbox.some(v=>!isFinite(v))||!isFinite(z0)||!isFinite(z1))
+        return send(res,400,"application/json",Buffer.from('{"error":"bbox,z0,z1 required"}'));
+      const n=usgs.planTiles(bbox,Math.max(1,z0),Math.min(20,z1)).length;
+      return send(res,200,"application/json",Buffer.from(JSON.stringify({tiles:n})));
+    }
 
     if(p === "/api/health"){
       let n=0; try{ n=fs.readdirSync(CACHE).filter(f=>!f.endsWith(".meta")).length }catch(e){}

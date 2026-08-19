@@ -503,6 +503,7 @@ body.rowdrag{cursor:row-resize;user-select:none}
               <option value="auto" selected>Best available</option>
               <option value="3dep">USGS 3DEP (national)</option>
               <option value="wadnr">WA DNR lidar</option>
+              <option value="usgs1m">USGS 1 m (offline-capable)</option>
             </select>
             <label for="terOp">Opacity</label>
             <input type="range" id="terOp" min="10" max="100" value="70">
@@ -1670,6 +1671,14 @@ const DepLayer = L.TileLayer.extend({
          + `&format=png&transparent=true&f=image&renderingRule=${rr}`;
   }
 });
+/* USGS 3DEP 1 m DEMs, rendered from elevation by the local server. Unlike the
+   two scraped sources this returns the real raster, so any style works at any
+   zoom; 204 means no federal coverage for that tile and the layer underneath
+   shows through. Needs server.js — the S3 bucket sets no CORS header. */
+const UsgsLayer = L.TileLayer.extend({
+  getTileUrl(c){ return `/api/usgs/tile/${this.options.style}/${c.z}/${c.x}/${c.y}.png` }
+});
+
 /* Layer count barely changes how long WA DNR takes per tile, but it changes
    coverage a lot (measured: 1 layer 13%, 2 layers 42%, 4 layers 60% of a
    20-tile view filled), so ask for as many projects as plausibly overlap. */
@@ -1757,9 +1766,17 @@ function chooseTerrain(style){
   const want=$("#terSrc").value;
   const ids=waIds();
   const waOK = PROXY && ids.length && WADNR_OK.has(style);
+  const u1OK = PROXY && usgsCover && usgsCover.hits && usgsCover.hits.length;
   if(want==="3dep")  return {src:"3dep"};
   if(want==="wadnr") return waOK ? {src:"wadnr", ids, projs:waProjects()} : {src:"3dep", forced:true};
-  return waOK ? {src:"wadnr", ids, projs:waProjects()} : {src:"3dep"};   // "best available"
+  if(want==="usgs1m") return u1OK ? {src:"usgs1m", cover:usgsCover} : {src:"3dep", forced:true};
+  /* Best available. WA DNR still wins where it has data: it carries 345
+     projects to USGS's 25, and some resolve finer than 1 m. USGS 1 m is the
+     next choice because it is the only source that can draw slope, aspect and
+     contours from real elevation — and the only one that survives offline. */
+  if(waOK) return {src:"wadnr", ids, projs:waProjects()};
+  if(u1OK) return {src:"usgs1m", cover:usgsCover};
+  return {src:"3dep"};
 }
 
 function clearTerrain(){
@@ -1776,7 +1793,8 @@ function applyTerrain(force){
   // Rebuilding a tile layer throws away every tile it has already loaded, which
   // is why panning used to blank the map. Only rebuild when the actual choice
   // changes; otherwise leave Leaflet alone and let it reuse its tiles.
-  const sig=[style, pick.src, (pick.ids||[]).join(","), $("#terSrc").value].join("|");
+  const sig=[style, pick.src, (pick.ids||[]).join(","), $("#terSrc").value,
+             pick.src==="usgs1m" ? (usgsCover&&usgsCover.cell)||"" : ""].join("|");
   if(!force && sig===terSig && terLayer){ paintTerrainInfo(pick); return }
   terSig=sig;
   clearTerrain();
@@ -1787,6 +1805,13 @@ function applyTerrain(force){
       maxZoom:17, zIndex:310, attribution:"USGS 3DEP"}).addTo(map);
     terLayer=new WaLayer("",{ids:pick.ids, ...TILE_OPTS, opacity:op, maxZoom:19,
       zIndex:320, attribution:"WA DNR lidar"}).addTo(map);
+  }else if(pick.src==="usgs1m"){
+    // 3DEP underneath again: the 1 m tiles stop at the project edge, and a
+    // 204 there would otherwise leave a hole rather than a coarser hillshade.
+    terBase=new DepLayer("",{rule:DEP_RULE[style]||DEP_RULE.hs, ...TILE_OPTS, opacity:op,
+      maxZoom:17, zIndex:310, attribution:"USGS 3DEP"}).addTo(map);
+    terLayer=new UsgsLayer("",{style, ...TILE_OPTS, opacity:op, maxZoom:20,
+      zIndex:320, attribution:"USGS 3DEP 1 m lidar"}).addTo(map);
   }else{
     terLayer=new DepLayer("",{rule:DEP_RULE[style]||DEP_RULE.hs, ...TILE_OPTS, opacity:op,
       maxZoom:17, zIndex:320, attribution:"USGS 3DEP"}).addTo(map);
@@ -1813,10 +1838,26 @@ function paintTerrainInfo(pick){
           + `<span class="yr">${yrs.length ? (Math.min(...yrs)===Math.max(...yrs) ? yrs[0] : Math.min(...yrs)+"\u2013"+Math.max(...yrs)) : ""}</span></div>`
           + `<div><b>${n} project${n>1?"s":""}</b> composited, bare-earth hillshade at native`
           + ` resolution, over 3DEP so nothing is left blank</div>`;
+  }else if(pick.src==="usgs1m"){
+    const h=(pick.cover&&pick.cover.hits)||[];
+    const yrs=h.map(x=>x.year).filter(Boolean);
+    html += `<div class="row2"><span>Rendering from <span class="src">USGS 1 m lidar</span></span>`
+          + `<span class="yr">${yrs.length?Math.max(...yrs):""}</span></div>`
+          + `<div>Elevation read straight from the DEM and shaded here, so this style`
+          + ` draws at any zoom with no upsampling. Cell <b>${esc((pick.cover&&pick.cover.cell)||"")}</b>`
+          + ` &middot; zone ${(pick.cover&&pick.cover.zone)||""}</div>`
+          + h.slice(0,3).map(x=>`<div class="row2"><span>${esc(x.project)}</span>`
+              + `<span class="yr">${(x.size/1048576).toFixed(0)} MiB</span></div>`).join("");
   }else{
     html += `<div>Rendering from <span class="src">USGS 3DEP</span>`
-          + (pick.forced ? ' <span class="warn">(no WA DNR hillshade for this style or area)</span>' : "")
+          + (pick.forced ? ' <span class="warn">(no lidar for this style or area)</span>' : "")
           + ` &middot; ~1 m where lidar exists</div>`;
+  }
+  if(PROXY && usgsCover && pick.src!=="usgs1m"){
+    html += usgsCover.hits && usgsCover.hits.length
+      ? `<div style="margin-top:7px">USGS <b>1 m DEM</b> also covers this view`
+        + ` (${esc(usgsCover.cell)}) &mdash; pick <i>USGS 1 m</i> for slope, aspect and contours from real elevation.</div>`
+      : `<div style="margin-top:7px">No federal 1 m DEM for this cell (${esc(usgsCover.cell||"")}).</div>`;
   }
   if(waCover && waCover.length){
     html += `<div style="margin-top:7px"><b>Lidar flown here</b></div>`
@@ -1832,15 +1873,31 @@ function paintTerrainInfo(pick){
 
 /* refresh coverage when the view or location changes, then re-pick the source */
 let coverBounds=null;
+/* Federal 1 m coverage for the centre of the view. One 10 km cell answers for
+   the whole screen at any usable zoom, so this is re-asked only when the centre
+   leaves the cell that was last looked up. */
+let usgsCover=null, usgsCell=null;
+async function usgsCoverage(){
+  const c=map.getCenter();
+  try{
+    const r=await fetch(`/api/usgs/cover?lat=${c.lat.toFixed(5)}&lon=${c.lng.toFixed(5)}`);
+    if(!r.ok) return null;
+    const j=await r.json();
+    usgsCell=j.cell;
+    return j;
+  }catch(e){ return null }
+}
+
 async function refreshTerrainCoverage(force){
-  if(!PROXY){ waCover=null; paintTerrainInfo(); return }
+  if(!PROXY){ waCover=null; usgsCover=null; paintTerrainInfo(); return }
   const b=map.getBounds();
   // the previous answer still holds anywhere inside the box we last asked about
   if(!force && coverBounds && coverBounds.contains(b)){ applyTerrain(); return }
   try{
-    waCover=await waCoverage();
+    const [wa,u1]=await Promise.all([waCoverage(), usgsCoverage()]);
+    waCover=wa; usgsCover=u1;
     coverBounds=b.pad(0.6);            // remember a generous margin
-  }catch(e){ waCover=null; coverBounds=null }
+  }catch(e){ waCover=null; usgsCover=null; coverBounds=null }
   applyTerrain();
 }
 

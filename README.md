@@ -58,6 +58,9 @@ confirm `/api/health` answers.
 | `trailcheck.py` | Standalone: snow line from Sentinel-2 NDSI + fire + SNOTEL |
 | `snowline.py` | Earlier snow-line-only version |
 | `probe.py` | Tiny script that reports scene freshness at a few test points |
+| `cog.js` | COG/GeoTIFF reader — TIFF LZW + floating-point predictor, geodesy. No dependencies |
+| `usgs.js` | USGS 3DEP 1 m DEM source: S3 index, range reads, terrain rendering, PNG encoder |
+| `test-cog.js` | Offline checks: LZW, predictor, geodesy, cell maths, PNG. `node test-cog.js` |
 | `.devcontainer/` | Codespaces / Dev Containers setup — Node 24, Python 3.14, port 8765 |
 | `.github/workflows/ci.yml` | Syntax checks, `sources.json` validation, server smoke test |
 | `requirements.txt` | Python deps for the three scripts |
@@ -80,7 +83,17 @@ VIIRS/MODIS near-real-time true colour and night lights, NISAR.
   resolution. Every project covering the view composites together, newest first,
   with 3DEP underneath so nothing is left blank.
 
-*Best available* picks WA DNR where it exists and 3DEP everywhere else.
+- **USGS 1 m (offline-capable)** — 3DEP's staged 1 m DEMs, read straight off S3
+  as Cloud-Optimised GeoTIFFs. This is the only source that hands over *elevation*
+  rather than a picture of it, so hillshade, slope, aspect and contours are all
+  computed locally, at any zoom, with no upsampling artefacts — and it is the only
+  one that survives with the network off. 25 Washington projects, ~2,548 tiles,
+  ~474 GiB (against 53 TiB for the WA DNR archive). Coverage is real but partial:
+  **Mount Rainier National Park is a genuine gap**, which is why WA DNR stays.
+
+*Best available* prefers WA DNR where it has data — 345 projects to USGS's 25, and
+some resolving finer than 1 m — then USGS 1 m, then 3DEP. 3DEP always draws
+underneath, so a project edge never reads as a hole.
 
 ## Things worth knowing
 
@@ -100,6 +113,11 @@ VIIRS/MODIS near-real-time true colour and night lights, NISAR.
     it stood in `.cache/areas/<id>.json`; a new `dataset_id` means a new flight and a
     changed byte count means a re-issue. Washington flies about ten new projects a year,
     so this is checked once per session, not on every pan.
+- **Offline terrain.** With *USGS 1 m* selected, **Download this view** fetches the
+  DEM byte ranges behind the view. Stopping and restarting resumes — rendered tiles
+  and the ranges behind them are both cached, so a restart skips what already
+  arrived. Because these objects carry `ETag` and `Last-Modified` (which the WA DNR
+  portal omits entirely), staleness is a HEAD request rather than a catalogue diff.
 - **Open on natural colour** (Filters, on by default) keeps the map from landing on a
   radar or night-lights scene just because it happens to be the newest.
 - **Time window** (Filters) takes either a preset — last 14/30/90 days, last year,
