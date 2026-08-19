@@ -13,6 +13,11 @@ Last updated: 2026-08-19
 
 ## Done
 
+- [x] **Open on Sentinel-2 / Landsat, not HLS** (2026-08-19) — the auto-pick kept landing on *HLS S30*, which renders dark and muddy. Two separate causes, both fixed.
+  - *Why HLS looks wrong.* Planetary Computer's HLS tilejson asks titiler for raw `B04/B03/B02` with `color_formula=gamma RGB 2.7` and **no `rescale`**. HLS surface reflectance is int16 scaled by 10000 and land sits around 500–3000, so with no stretch it renders dark. Sentinel-2 by contrast ships a ready-made 8-bit `visual` asset. `tuneTileUrl()` now supplies `rescale=0,3000` with a softer gamma for `hls2-*`, so HLS is usable when picked rather than merely demoted.
+  - *Why it was picked at all.* Both products carry the same acquisition to the minute, so the cloud tiers tied and ordering decided it. `bestPhoto` now tries `sentinel-2-l2a`, `landsat-c2-l2` and `naip` first and only falls back to HLS/ASTER if none covers the point; `newestOf` breaks date ties on the finer GSD (10 m over 30 m).
+  - Verified at Rainier: now opens **Sentinel-2 L2A, 10 m, 4.3% cloud, 2026-08-17** where it previously opened HLS S30 at 30 m; selecting HLS deliberately gets the rescale and 16 tiles load.
+
 - [x] **USGS S3 1 m DEMs as a terrain source** (2026-08-19) — terrain is now computed here from real elevation instead of scraping someone's rendered PNG. New `cog.js` (format) and `usgs.js` (data + rendering); still **zero npm dependencies**, which took writing a TIFF LZW decoder and the floating-point predictor by hand since Node's zlib has neither.
   - **`GET /api/usgs/cover?lat=&lon=`** — point → UTM zone → 10 km cell → covering projects, newest first, from a cached S3 listing per project (30-day TTL). Filenames are never constructed: both live conventions are indexed from the real listing, which is what avoids the false negatives.
   - **`GET /api/usgs/tile/<style>/<z>/<x>/<y>.png`** — range-reads the COG, picks the overview matching the request, and renders. All nine styles work, including slope, aspect and contours that WA DNR cannot serve at all. `204` means no federal coverage and the layer underneath shows through.

@@ -1109,18 +1109,32 @@ function summarise(pool){
    view you get on a maps app. Explicitly not radar, not night lights, not
    false-colour or infrared, none of which read as a picture of the ground. */
 const isPhoto = it => !!it.tiles && it.vis==="rgb" && it.kind!=="Night";
-const newestOf = arr => arr.slice().sort((a,b)=>new Date(b.date)-new Date(a.date))[0];
+/* Ties on date go to the finer product. Sentinel-2 and HLS often carry the
+   same acquisition to the minute, and 10 m beats 30 m. */
+const newestOf = arr => arr.slice().sort((a,b)=>
+  (new Date(b.date)-new Date(a.date)) || ((a.gsd??1e9)-(b.gsd??1e9)))[0];
+
+/* Collections that ship a ready-made true-colour composite. HLS is nominally
+   true colour too, but it is 30 m band maths that the provider renders with a
+   gamma curve and no rescale, so it lands dark and muddy beside Sentinel-2's
+   `visual` asset. Open on something that looks like the ground. */
+const NATIVE_RGB = new Set(["sentinel-2-l2a","landsat-c2-l2","naip"]);
 
 /* newest daylight true-colour scene, preferring sharp and clear */
 function bestPhoto(pool){
   const photo = pool.filter(isPhoto);
   if(!photo.length) return null;
-  const sharp = photo.filter(x=>(x.gsd??1e9)<=60);      // real imagery, not a 375 m weather layer
-  return newestOf(sharp.filter(x=>x.cloud!=null && x.cloud<20))
-      || newestOf(sharp.filter(x=>x.cloud==null || x.cloud<50))
-      || newestOf(sharp)
-      || newestOf(photo.filter(x=>x.cloud==null || x.cloud<50))   // coarse but still true colour
-      || newestOf(photo);
+  const tiers = set => {
+    const sharp = set.filter(x=>(x.gsd??1e9)<=60);      // real imagery, not a 375 m weather layer
+    return newestOf(sharp.filter(x=>x.cloud!=null && x.cloud<20))
+        || newestOf(sharp.filter(x=>x.cloud==null || x.cloud<50))
+        || newestOf(sharp)
+        || newestOf(set.filter(x=>x.cloud==null || x.cloud<50))   // coarse but still true colour
+        || newestOf(set);
+  };
+  // Sentinel-2 / Landsat / NAIP first, and only fall back to the rest — HLS,
+  // ASTER — when none of them covers this point in the window.
+  return tiers(photo.filter(x=>NATIVE_RGB.has(x.coll))) || tiers(photo);
 }
 
 function autoSelect(){
@@ -1220,6 +1234,7 @@ async function select(i){
       url=tj.tiles[0];
     }catch(e){ $("#ctlName").textContent+="  (tile error)"; return; }
   }
+  url=tuneTileUrl(url, it);
   overlay=L.tileLayer(url,{opacity:+$("#op").value/100, maxZoom:19, zIndex:400,
     attribution:it.src}).addTo(map);
   if(it.bbox && it.srcKey!=="gibs"){
@@ -1293,12 +1308,24 @@ let CAND={};             // footprintKey -> [candidate items]
 let mosTimer=null;
 const tjCache=new Map();
 
+/* Planetary Computer's HLS tilejson asks titiler for raw B04/B03/B02 with a
+   gamma curve and no `rescale`. HLS surface reflectance is int16 scaled by
+   10000 and land sits around 500-3000, so with no stretch the scene comes back
+   dark and muddy. Supply the stretch the provider omits. */
+function tuneTileUrl(url, it){
+  if(!url || !/^hls2-/.test(it.coll||"") || /[?&]rescale=/.test(url)) return url;
+  const softer = encodeURIComponent("gamma RGB 1.4, saturation 1.3");
+  return (/[?&]color_formula=/.test(url)
+            ? url.replace(/([?&]color_formula=)[^&]*/, "$1"+softer)
+            : url) + "&rescale=0,3000";
+}
+
 async function tileUrl(it){
   if(!it.tiles) return null;
-  if(it.tiles.type!=="tilejson") return it.tiles.url;
+  if(it.tiles.type!=="tilejson") return tuneTileUrl(it.tiles.url, it);
   if(tjCache.has(it.tiles.url)) return tjCache.get(it.tiles.url);
   const tj=await (await fetch(it.tiles.url)).json();
-  const u=tj.tiles[0]; tjCache.set(it.tiles.url,u); return u;
+  const u=tuneTileUrl(tj.tiles[0], it); tjCache.set(it.tiles.url,u); return u;
 }
 
 /* a stable id for "the same patch of ground" across dates and providers */
