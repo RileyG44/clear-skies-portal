@@ -13,6 +13,13 @@ Last updated: 2026-08-19
 
 ## Done
 
+- [x] **Geologic map overlays** (2026-08-19) — two of them, in a *Geology* group in the overlays pane.
+  - **Macrostrat** bedrock geology (`tiles.macrostrat.org/carto`). Sends **no CORS**, so it routes through a new `GET /api/geo/macrostrat/{z}/{x}/{y}.png` with a 30-day disk cache — bedrock is not news. Verified over Rainier: the glacier system reads as a white radial against the surrounding units, correctly georeferenced.
+  - **USGS SGMC** (State Geologic Map Compilation, `mrdata.usgs.gov` WMTS). Sends CORS, so it goes direct. Note the axis order is `{z}/{y}/{x}`.
+  - Both carry their own default opacity (55%) because they are opaque polygon fills rather than line work; the shared slider scales rather than overrides them.
+  - A layer needing the proxy is disabled with a reason rather than silently failing when `server.js` is not running.
+  - Verified: 20/20 tiles each at z12 over Rainier; proxy MISS then HIT; bad path returns 400.
+
 - [x] **Labels & reference overlays** (2026-08-19) — new *Labels & overlays* pane: roads/streets (Esri World Transportation), cities & boundaries (Esri World Boundaries and Places), place labels (CARTO), rivers & lakes (USGS NHD `USGSHydroCached`), and peaks/landforms plus named places from **USGS GNIS**. Each toggles independently, shared opacity slider, state persists in `localStorage`.
   - GNIS is a dynamic MapServer rather than cached tiles, so `ExportLayer` issues one `export` per slippy tile in the tile's own mercator bbox — the same shape as the existing WA DNR layer. Layer 5 is Landforms, which is where summits, ridges, gaps and cleavers live; verified over Rainier returning Liberty Cap, Point Success, Cadaver Gap, Kautz Chute, Puyallup Cleaver.
   - Everything here is keyless and sends CORS, so these go direct rather than through the proxy.

@@ -331,6 +331,9 @@ a:hover{text-decoration:underline}
 .ovfoot{margin-top:10px;padding-top:10px;border-top:1px solid var(--line);
   display:grid;grid-template-columns:auto 1fr;gap:7px 10px;align-items:center}
 .ovfoot label{color:var(--ink-3);font-size:11.5px;font-weight:500}
+.ovgrp{font-size:9.5px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;
+  color:var(--ink-3);margin:9px 0 2px;padding-top:8px;border-top:1px solid var(--line)}
+.ovrow.dead{opacity:.45;cursor:not-allowed}
 .ovnote{font-size:10.5px;color:var(--ink-3);line-height:1.55;margin-top:8px}
 .pane-rz{height:9px;margin-top:-2px;cursor:row-resize;flex:none;position:relative;z-index:3;touch-action:none}
 .pane-rz::after{content:"";position:absolute;left:50%;transform:translateX(-50%);top:3px;
@@ -2004,6 +2007,16 @@ const OVERLAYS = [
   { id:"gnames", name:"Named places (GNIS)", via:"USGS GNIS", sw:"#b0894f", z:545,
     dynamic:"https://carto.nationalmap.gov/arcgis/rest/services/geonames/MapServer/export",
     layers:"3", attr:"USGS GNIS", minZoom:9, maxZoom:19 },
+
+  /* Geology sits under the labels but over the imagery, and wants its own
+     opacity in practice — it is an opaque polygon fill, not a line drawing. */
+  { id:"geology", name:"Bedrock geology", via:"Macrostrat", sw:"#c98f6a", z:470, group:"Geology",
+    url:"/api/geo/macrostrat/{z}/{x}/{y}.png", needsProxy:true,
+    attr:"Macrostrat — macrostrat.org", maxZoom:16, defaultOpacity:55 },
+
+  { id:"sgmc", name:"State geologic map (SGMC)", via:"USGS", sw:"#b06a5a", z:465, group:"Geology",
+    url:"https://mrdata.usgs.gov/mapcache/wmts/1.0.0/sgmc/default/GoogleMapsCompatible/{z}/{y}/{x}.png",
+    attr:"USGS Mineral Resources — State Geologic Map Compilation", maxZoom:14, defaultOpacity:55 },
 ];
 
 /* An ArcGIS dynamic MapServer drawn as slippy tiles: one export per tile, in
@@ -2028,9 +2041,10 @@ function ovSave(){
   try{ localStorage.setItem(OV_KEY, JSON.stringify({on:ovOn, op:+$("#ovOp").value})) }catch(e){}
 }
 
+const ovOpacity = o => (o.defaultOpacity!=null ? o.defaultOpacity : +$("#ovOp").value)/100;
+
 function ovBuild(o){
-  const op=+$("#ovOp").value/100;
-  const common={opacity:op, zIndex:o.z, attribution:o.attr, pane:"overlayPane",
+  const common={opacity:ovOpacity(o), zIndex:o.z, attribution:o.attr, pane:"overlayPane",
                 maxZoom:o.maxZoom||19, minZoom:o.minZoom||0, crossOrigin:true,
                 updateWhenZooming:false, keepBuffer:2};
   return o.dynamic
@@ -2040,7 +2054,8 @@ function ovBuild(o){
 
 function ovApply(){
   for(const o of OVERLAYS){
-    const want=!!ovOn[o.id];
+    // A proxied layer cannot work from file:// — the upstream sends no CORS.
+    const want=!!ovOn[o.id] && !(o.needsProxy && !PROXY);
     if(want && !ovLayers[o.id]) ovLayers[o.id]=ovBuild(o).addTo(map);
     else if(!want && ovLayers[o.id]){ map.removeLayer(ovLayers[o.id]); delete ovLayers[o.id] }
   }
@@ -2058,13 +2073,19 @@ function ovApply(){
 }
 
 function ovRender(){
-  $("#ovList").innerHTML = OVERLAYS.map(o=>
-    `<label class="ovrow" data-id="${o.id}">
-       <input type="checkbox" id="ov_${o.id}"${ovOn[o.id]?" checked":""}>
+  let last=null;
+  $("#ovList").innerHTML = OVERLAYS.map(o=>{
+    const head = o.group && o.group!==last ? `<div class="ovgrp">${esc(o.group)}</div>` : "";
+    last = o.group || last;
+    const dead = o.needsProxy && !PROXY;
+    return head + `<label class="ovrow${dead?" dead":""}" data-id="${o.id}"`
+       + (dead?' title="Needs the local server (server.js)"':"") + `>
+       <input type="checkbox" id="ov_${o.id}"${ovOn[o.id]&&!dead?" checked":""}${dead?" disabled":""}>
        <span class="sw" style="background:${o.sw}"></span>
        <span class="nm">${esc(o.name)}</span>
        <span class="via">${esc(o.via)}</span>
-     </label>`).join("");
+     </label>`;
+  }).join("");
   OVERLAYS.forEach(o=>{
     $("#ov_"+o.id).addEventListener("change", e=>{
       ovOn[o.id]=e.target.checked; ovSave(); ovApply();
@@ -2074,7 +2095,12 @@ function ovRender(){
 
 $("#ovOp").addEventListener("input", ()=>{
   const v=+$("#ovOp").value/100;
-  Object.values(ovLayers).forEach(l=>l.setOpacity(v));
+  // Geology carries its own default because it is an opaque fill rather than
+  // a line drawing; the shared slider scales it rather than overriding it.
+  for(const o of OVERLAYS){
+    const l=ovLayers[o.id]; if(!l) continue;
+    l.setOpacity(o.defaultOpacity!=null ? v*(o.defaultOpacity/100)/0.9 : v);
+  }
 });
 $("#ovOp").addEventListener("change", ovSave);
 map.on("zoomend", ()=>{ if(Object.keys(ovLayers).length) ovApply() });

@@ -108,10 +108,17 @@ toggleable, with a shared opacity slider. All keyless.
 | Rivers & lakes | USGS National Hydrography Dataset |
 | Peaks & landforms | USGS GNIS — summits, ridges, gaps, glaciers (zoom 10+) |
 | Named places | USGS GNIS populated places (zoom 9+) |
+| **Bedrock geology** | Macrostrat (proxied — sends no CORS; zoom ≤16) |
+| **State geologic map** | USGS SGMC via Mineral Resources (zoom ≤14) |
 
 Not OpenStreetMap's own tiles: their tile-usage policy forbids this use and the
 server answers HTTP 418. CARTO and Esri's free reference layers are the correct
 substitutes.
+
+The two geology layers carry their own default opacity (55%) because they are
+opaque polygon fills rather than line work; the shared slider scales them
+instead of overriding. Macrostrat sends no CORS header, so it routes through
+`/api/geo/macrostrat/...` and is cached for 30 days — bedrock is not news.
 
 ## Things worth knowing
 

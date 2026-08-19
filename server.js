@@ -438,6 +438,29 @@ const server = http.createServer(async (req,res)=>{
       return send(res,200,"application/json",Buffer.from(JSON.stringify({tiles:n})));
     }
 
+    /* ---- geologic map tiles (Macrostrat sends no CORS, so it is proxied) ---- */
+    if(p.startsWith("/api/geo/")){
+      const m=p.match(/^\/api\/geo\/(macrostrat)\/(\d+)\/(\d+)\/(\d+)\.png$/);
+      if(!m) return send(res,400,"text/plain",Buffer.from("bad geo tile path"));
+      const [,which,z,x,y]=m;
+      const host="tiles.macrostrat.org", pth=`/carto/${z}/${x}/${y}.png`;
+      const k=key("geo:"+which+":"+pth);
+      const hit=cacheGet(k, TTL_TILE);          // bedrock geology is not news
+      if(hit) return send(res,200,hit.type,hit.body,
+                          {"X-Cache":"HIT","Cache-Control":"public, max-age=2592000"});
+      await slot();
+      let r=null;
+      try{ r=await upstream({host, path:pth, method:"GET",
+                             headers:{"User-Agent":"clear-skies-portal"}, __timeout:TILE_MS}) }
+      catch(e){ r=null } finally { release() }
+      if(r && r.status===200 && r.body.length>100){
+        cachePut(k,200,r.type||"image/png",r.body);
+        return send(res,200,r.type||"image/png",r.body,
+                    {"X-Cache":"MISS","Cache-Control":"public, max-age=2592000"});
+      }
+      return send(res,200,"image/png",TRANSPARENT,{"X-Cache":"EMPTY"});
+    }
+
     if(p === "/api/health"){
       let n=0; try{ n=fs.readdirSync(CACHE).filter(f=>!f.endsWith(".meta")).length }catch(e){}
       return send(res,200,"application/json",Buffer.from(JSON.stringify({ok:true,cached:n,inflight})));
