@@ -363,7 +363,13 @@ a:hover{text-decoration:underline}
 .pane-h:hover .grip{opacity:.85}
 .pane-b{flex:1;min-height:0;overflow-y:auto;overscroll-behavior:contain}
 /* an un-sized, non-growing pane must never crowd out the growing one */
-.pane:not(.grow):not(.sized) > .pane-b{max-height:28vh;max-height:28dvh}
+/* No max-height here any more. Capping each section at 28vh gave it its own
+   scrollbar, which is the sliver problem in a second guise: on a phone in the
+   browser, where the visible viewport is short, 28dvh is ~174px and FILTERS
+   needs 277px, so a third of it was simply unreachable. Every pane this
+   applied to has bounded content — the longest is overlays at ~500px — and
+   the unbounded scene list is .grow, which this selector already excluded.
+   Sections now show in full and #panes scrolls, which is the whole point. */
 .pane[data-pane="filters"] .pane-b,
 .pane[data-pane="summary"] .pane-b,
 .pane[data-pane="terrain"] .pane-b{padding:12px 18px 13px 16px}
@@ -427,6 +433,14 @@ body.rowdrag{cursor:row-resize;user-select:none}
     left:calc(10px + env(safe-area-inset-left));
   }
   #sideToggle svg{width:20px;height:20px}
+
+  /* The footer was taking 246px of a 620px panel — 40% of it — leaving the
+     panes 185px to scroll in. The server box explains itself through its
+     placeholder and status dot, and the map keeps its own attribution
+     control, so the prose goes and the panes get the room back. */
+  #srvBox .hint{display:none}
+  .foot > div:last-child{display:none}          /* sources prose; map still credits them */
+  #srvBox{margin-bottom:6px}
   /* while the sheet is open the button sits just clear of its edge */
   body:not(.collapsed) #sideToggle{
     left:calc(var(--sheet-w) + 8px + env(safe-area-inset-left));
