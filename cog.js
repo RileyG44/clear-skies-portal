@@ -98,13 +98,27 @@ function undoPredictor2(buf, width, rows, spp, bps){      // plain horizontal di
 /* --------------------------------------------------------------- TIFF parse */
 const TSIZE={1:1,2:1,3:2,4:4,5:8,6:1,7:1,8:2,9:4,10:8,11:4,12:8,16:8,17:8,18:8};
 
-function parseTiff(b){
-  const le = b.toString("ascii",0,2)==="II";
-  const u16=o=>le?b.readUInt16LE(o):b.readUInt16BE(o);
-  const u32=o=>le?b.readUInt32LE(o):b.readUInt32BE(o);
-  const u64=o=>Number(le?b.readBigUInt64LE(o):b.readBigUInt64BE(o));
-  const f64=o=>le?b.readDoubleLE(o):b.readDoubleBE(o);
-  const ver=u16(2), big=ver===43;
+/* b may be a slice of the file rather than its beginning: `base` is the file
+   offset of b[0], and `head` carries the first bytes so the byte order and the
+   IFD pointer can still be read. A COG puts its directory at the front; plenty
+   of USGS 1 m products are ordinary TIFFs with the directory at the end, and
+   those are only readable if offsets are resolved against the whole file
+   rather than against the buffer we happen to hold. Reads outside what we
+   hold return 0 rather than throwing, so a short fetch degrades instead of
+   exploding. */
+function parseTiff(b, base=0, head=null){
+  const H = (base>0 && head) ? head : b;
+  const le = H.toString("ascii",0,2)==="II";
+  const buf = o => (base>0 && o < H.length) ? H : b;
+  const at  = o => (base>0 && o < H.length) ? o : o - base;
+  const fits= (o,n)=>{ const x=buf(o), i=at(o); return i>=0 && i+n<=x.length };
+  const u8 =o=>fits(o,1)?buf(o)[at(o)]:0;
+  const u16=o=>fits(o,2)?(le?buf(o).readUInt16LE(at(o)):buf(o).readUInt16BE(at(o))):0;
+  const u32=o=>fits(o,4)?(le?buf(o).readUInt32LE(at(o)):buf(o).readUInt32BE(at(o))):0;
+  const u64=o=>fits(o,8)?Number(le?buf(o).readBigUInt64LE(at(o)):buf(o).readBigUInt64BE(at(o))):0;
+  const f64=o=>fits(o,8)?(le?buf(o).readDoubleLE(at(o)):buf(o).readDoubleBE(at(o))):0;
+  const f32=o=>fits(o,4)?(le?buf(o).readFloatLE(at(o)):buf(o).readFloatBE(at(o))):0;
+  const ver=u16(2), big=ver===43;   // read from head when b is a tail slice
   if(ver!==42 && ver!==43) throw new Error("not a TIFF (version "+ver+")");
 
   const readEntries=(ifd)=>{
@@ -130,9 +144,9 @@ function parseTiff(b){
       else if(t.typ===4) a.push(u32(o+j*4));
       else if(t.typ===16) a.push(u64(o+j*8));
       else if(t.typ===12) a.push(f64(o+j*8));
-      else if(t.typ===11) a.push(le?b.readFloatLE(o+j*4):b.readFloatBE(o+j*4));
-      else if(t.typ===2) a.push(String.fromCharCode(b[o+j]));
-      else a.push(b[o+j]);
+      else if(t.typ===11) a.push(f32(o+j*4));
+      else if(t.typ===2) a.push(String.fromCharCode(u8(o+j)));
+      else a.push(u8(o+j));
     }
     return a;
   };
@@ -140,7 +154,7 @@ function parseTiff(b){
 
   const levels=[]; let ifd = big?u64(8):u32(4), guard=0, geo=null;
   while(ifd && guard++<16){
-    if(ifd+2 > b.length) break;
+    if(!fits(ifd,2)) break;                          // absolute, not buffer-relative
     const {tags,nextIfd}=readEntries(ifd);
     const lv={
       w:one(tags[256]), h:one(tags[257]),
@@ -149,7 +163,20 @@ function parseTiff(b){
       bps:one(tags[258],32), spp:one(tags[277],1), sf:one(tags[339],1),
       offsets: vals(tags[324]), counts: vals(tags[325])
     };
-    if(!lv.tw) break;                                 // stripped, not tiled — not a COG
+    /* Not every 1 m product is a tiled COG. A fair number — WA_ColumbiaValley,
+       CA_YosemiteNP and others — are written as strips, and those were simply
+       unreadable: the whole project vanished from the map with no message. A
+       strip is a tile as wide as the image, so it maps onto the machinery
+       below unchanged. Random access costs more (a strip spans the full
+       width), but that beats having no data at all. */
+    if(!lv.tw && tags[273]){
+      lv.tw = lv.w;
+      lv.th = one(tags[278], lv.h);                   // RowsPerStrip
+      lv.offsets = vals(tags[273]);                   // StripOffsets
+      lv.counts  = vals(tags[279]);                   // StripByteCounts
+      lv.stripped = true;
+    }
+    if(!lv.tw || !lv.offsets.length) break;
     levels.push(lv);
     if(!geo){
       const gk=vals(tags[34735]);
@@ -165,7 +192,7 @@ function parseTiff(b){
     }
     ifd=nextIfd;
   }
-  if(!levels.length) throw new Error("no tiled IFD found");
+  if(!levels.length) throw new Error("no readable IFD found (neither tiles nor strips)");
   return {le, big, levels, geo};
 }
 
