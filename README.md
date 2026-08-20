@@ -110,6 +110,9 @@ toggleable, with a shared opacity slider. All keyless.
 | Named places | USGS GNIS populated places (zoom 9+) |
 | **Bedrock geology** | Macrostrat (proxied — sends no CORS; zoom ≤16) |
 | **State geologic map** | USGS SGMC via Mineral Resources (zoom ≤14) |
+| **Snow depth (today)** | NOAA NOHRSC SNODAS (proxied; zoom ≤14) |
+| **Snow water equivalent** | NOAA NOHRSC SNODAS (proxied; zoom ≤14) |
+| **Snow cover** | NASA GIBS MODIS Terra NDSI (zoom ≤8) |
 
 Not OpenStreetMap's own tiles: their tile-usage policy forbids this use and the
 server answers HTTP 418. CARTO and Esri's free reference layers are the correct
@@ -119,6 +122,13 @@ The two geology layers carry their own default opacity (55%) because they are
 opaque polygon fills rather than line work; the shared slider scales them
 instead of overriding. Macrostrat sends no CORS header, so it routes through
 `/api/geo/macrostrat/...` and is cached for 30 days — bedrock is not news.
+
+Snow depth and SWE are NOHRSC's SNODAS assimilation — *current conditions* for
+all of CONUS, re-run daily, so there is no cloud problem and no revisit gap.
+MODIS NDSI is the satellite view beside it, which has both but sees the whole
+world. NOHRSC sends no CORS either, so it routes through `/api/snow` with a
+six-hour cache. A layer outside its zoom range says so, since drawing nothing
+is otherwise indistinguishable from "there is no snow here".
 
 ## Things worth knowing
 

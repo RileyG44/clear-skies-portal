@@ -30,6 +30,7 @@ const TTL_MISS   = 10*60*1000;        // remember failures briefly so we stop ha
 const TILE_MS    = 18000;             // WA DNR is slow; 3DEP shows underneath meanwhile
 const TTL_META   = 7*24*3600*1000;
 const TTL_FIRMS  = 20*60*1000;
+const TTL_SNOW   = 6*3600*1000;       // SNODAS is re-run daily
 
 /* ------------------------------------------------------------------ cache */
 const key = s => crypto.createHash("sha1").update(s).digest("hex");
@@ -457,6 +458,33 @@ const server = http.createServer(async (req,res)=>{
         cachePut(k,200,r.type||"image/png",r.body);
         return send(res,200,r.type||"image/png",r.body,
                     {"X-Cache":"MISS","Cache-Control":"public, max-age=2592000"});
+      }
+      return send(res,200,"image/png",TRANSPARENT,{"X-Cache":"EMPTY"});
+    }
+
+    /* ---- current snow analysis (NOHRSC sends no CORS, so it is proxied) ----
+       SNODAS is re-run daily, so this caches for six hours rather than the
+       90 days a bedrock or lidar tile gets. */
+    if(p === "/api/snow"){
+      const bbox=u.searchParams.get("bbox")||"";
+      const layer=u.searchParams.get("layer")||"3";
+      if(!/^[-\d.,]+$/.test(bbox)) return send(res,400,"application/json",Buffer.from('{"error":"bad bbox"}'));
+      if(!["3","7"].includes(layer))                 // 3 = snow depth, 7 = SWE
+        return send(res,400,"application/json",Buffer.from('{"error":"bad layer"}'));
+      const pth="/raster/rest/services/snow/NOHRSC_Snow_Analysis/MapServer/export"
+              + `?bbox=${bbox}&bboxSR=3857&imageSR=3857&size=256,256`
+              + `&format=png32&transparent=true&f=image&layers=show:${layer}`;
+      const k=key("snow:"+pth);
+      const hit=cacheGet(k, TTL_SNOW);
+      if(hit) return send(res,200,hit.type,hit.body,{"X-Cache":"HIT","Cache-Control":"public, max-age=21600"});
+      await slot();
+      let r=null;
+      try{ r=await upstream({host:"mapservices.weather.noaa.gov", path:pth, method:"GET",
+                             headers:{"User-Agent":"clear-skies-portal"}, __timeout:TILE_MS}) }
+      catch(e){ r=null } finally { release() }
+      if(r && r.status===200 && r.body.length>100){
+        cachePut(k,200,r.type||"image/png",r.body);
+        return send(res,200,r.type||"image/png",r.body,{"X-Cache":"MISS","Cache-Control":"public, max-age=21600"});
       }
       return send(res,200,"image/png",TRANSPARENT,{"X-Cache":"EMPTY"});
     }

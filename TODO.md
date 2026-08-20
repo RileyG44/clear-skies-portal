@@ -13,6 +13,13 @@ Last updated: 2026-08-19
 
 ## Done
 
+- [x] **Current snow overlays** (2026-08-19) — a *Snow* group in the overlays pane.
+  - **Snow depth** and **snow water equivalent** from NOAA **NOHRSC SNODAS** (layers 3 and 7 of the Snow Analysis MapServer). This is a daily assimilation for all of CONUS, i.e. *current conditions* rather than a satellite pass, so it has neither a cloud problem nor a revisit gap. No CORS, so it routes through a new `GET /api/snow?bbox=&layer=` with a **6-hour** cache (SNODAS is re-run daily) and a two-value layer whitelist.
+  - **Snow cover** from NASA GIBS MODIS Terra NDSI, direct. GIBS publishes on a lag, so the overlay steps back a day and says which date it is showing.
+  - Sanity-checked against the season: on 2026-08-19 the depth layer draws a single blob on Rainier's glaciers and nothing else in the Cascades, correctly placed — which is exactly right for mid-August, and a good sign the layer is live rather than stale.
+  - Overlays outside their zoom range now say so in **both** directions — MODIS NDSI only tiles to z8, and drawing nothing is otherwise indistinguishable from "there is no snow here".
+  - Verified: depth and SWE 12/12 tiles at z11, MODIS 15/15 at z6, proxy MISS then HIT, bad bbox and bad layer both 400.
+
 - [x] **Geologic map overlays** (2026-08-19) — two of them, in a *Geology* group in the overlays pane.
   - **Macrostrat** bedrock geology (`tiles.macrostrat.org/carto`). Sends **no CORS**, so it routes through a new `GET /api/geo/macrostrat/{z}/{x}/{y}.png` with a 30-day disk cache — bedrock is not news. Verified over Rainier: the glacier system reads as a white radial against the surrounding units, correctly georeferenced.
   - **USGS SGMC** (State Geologic Map Compilation, `mrdata.usgs.gov` WMTS). Sends CORS, so it goes direct. Note the axis order is `{z}/{y}/{x}`.

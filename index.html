@@ -2017,7 +2017,36 @@ const OVERLAYS = [
   { id:"sgmc", name:"State geologic map (SGMC)", via:"USGS", sw:"#b06a5a", z:465, group:"Geology",
     url:"https://mrdata.usgs.gov/mapcache/wmts/1.0.0/sgmc/default/GoogleMapsCompatible/{z}/{y}/{x}.png",
     attr:"USGS Mineral Resources — State Geologic Map Compilation", maxZoom:14, defaultOpacity:55 },
+
+  /* Snow. NOHRSC runs the SNODAS assimilation daily for the whole of CONUS, so
+     this is current conditions rather than a satellite pass — it has no cloud
+     problem and no revisit gap. MODIS NDSI is the satellite view alongside it,
+     which does have both but sees the whole world. */
+  { id:"snowdepth", name:"Snow depth (today)", via:"NOHRSC", sw:"#7fc4ff", z:480, group:"Snow",
+    snow:"3", needsProxy:true, attr:"NOAA NOHRSC SNODAS", maxZoom:14, defaultOpacity:70 },
+
+  { id:"swe", name:"Snow water equivalent", via:"NOHRSC", sw:"#4f8fd0", z:479, group:"Snow",
+    snow:"7", needsProxy:true, attr:"NOAA NOHRSC SNODAS", maxZoom:14, defaultOpacity:70 },
+
+  { id:"snowcover", name:"Snow cover (MODIS)", via:"NASA GIBS", sw:"#cfe9ff", z:478, group:"Snow",
+    gibs:"MODIS_Terra_NDSI_Snow_Cover", attr:"NASA GIBS — MODIS Terra NDSI",
+    maxZoom:8, defaultOpacity:65 },
 ];
+
+/* GIBS publishes on a lag, so an overlay asking for "today" can be empty for
+   hours. Step back a day, which is reliably there. */
+function gibsDay(back){
+  return new Date(Date.now()-(back==null?1:back)*864e5).toISOString().slice(0,10);
+}
+
+/* The NOHRSC export, routed through the proxy because the service sends no
+   CORS header. Same one-export-per-tile shape as the GNIS layer. */
+const SnowLayer = L.TileLayer.extend({
+  getTileUrl(c){
+    const b=tileMerc(c).join(",");
+    return `/api/snow?bbox=${b}&layer=${this.options.snow}`;
+  }
+});
 
 /* An ArcGIS dynamic MapServer drawn as slippy tiles: one export per tile, in
    the tile's own mercator bbox. */
@@ -2047,9 +2076,12 @@ function ovBuild(o){
   const common={opacity:ovOpacity(o), zIndex:o.z, attribution:o.attr, pane:"overlayPane",
                 maxZoom:o.maxZoom||19, minZoom:o.minZoom||0, crossOrigin:true,
                 updateWhenZooming:false, keepBuffer:2};
-  return o.dynamic
-    ? new ExportLayer("",{...common, endpoint:o.dynamic, layers:o.layers})
-    : L.tileLayer(o.url, {...common, subdomains:o.sub||"abc"});
+  if(o.dynamic) return new ExportLayer("",{...common, endpoint:o.dynamic, layers:o.layers});
+  if(o.snow)    return new SnowLayer("",{...common, snow:o.snow});
+  if(o.gibs)    return L.tileLayer(
+      `https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/${o.gibs}/default/${gibsDay()}`
+      + `/GoogleMapsCompatible_Level8/{z}/{y}/{x}.png`, common);
+  return L.tileLayer(o.url, {...common, subdomains:o.sub||"abc"});
 }
 
 function ovApply(){
@@ -2063,12 +2095,20 @@ function ovApply(){
   setCount("overlays", n ? n+" on" : "");
   document.querySelectorAll("#ovList .ovrow").forEach(r=>
     r.classList.toggle("on", !!ovOn[r.dataset.id]));
+  /* A layer outside its zoom range draws nothing, which is indistinguishable
+     from "there is no snow here" unless it says so. */
   const zoom=map.getZoom();
-  const hidden=OVERLAYS.filter(o=>ovOn[o.id] && o.minZoom && zoom<o.minZoom);
-  $("#ovNote").innerHTML = hidden.length
-    ? `<span class="warn">${hidden.map(o=>esc(o.name)).join(", ")}</span> need zoom `
-      + `${Math.max(...hidden.map(o=>o.minZoom))}+ &mdash; currently z${zoom}.`
-    : (n ? "Drawn over the imagery. Drag the opacity slider if labels compete with the scene."
+  const tooFar =OVERLAYS.filter(o=>ovOn[o.id] && o.minZoom && zoom<o.minZoom);
+  const tooNear=OVERLAYS.filter(o=>ovOn[o.id] && o.maxZoom && zoom>o.maxZoom);
+  $("#ovNote").innerHTML = (tooFar.length||tooNear.length)
+    ? [ tooFar.length ? `<span class="warn">${tooFar.map(o=>esc(o.name)).join(", ")}</span> need zoom `
+                        + `${Math.max(...tooFar.map(o=>o.minZoom))}+` : "",
+        tooNear.length ? `<span class="warn">${tooNear.map(o=>esc(o.name)).join(", ")}</span> only draw to zoom `
+                        + `${Math.min(...tooNear.map(o=>o.maxZoom))}` : ""
+      ].filter(Boolean).join(" &middot; ") + ` &mdash; currently z${zoom}.`
+    : (ovOn.snowcover && ovLayers.snowcover
+         ? `Snow cover is the MODIS pass for <b>${gibsDay()}</b> — GIBS publishes on a lag, so it steps back a day. Depth and SWE are today's SNODAS run.`
+       : n ? "Drawn over the imagery. Drag the opacity slider if labels compete with the scene."
          : "Nothing on. These draw over whatever imagery is selected.");
 }
 
