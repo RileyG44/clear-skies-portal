@@ -18,10 +18,11 @@ const cog   = require("./cog.js");
 
 const S3_HOST = "prd-tnm.s3.amazonaws.com";
 const S3_BASE = "StagedProducts/Elevation/1m/Projects/";
-/* Two live filename conventions. Guessing between them yields a false negative,
-   so filenames are never constructed — a project's TIFF/ prefix is listed once
-   and the cell set cached. The older form carries no UTM zone. */
-const TIF_RE = /^USGS_(?:1M_(\d+)|one_meter)_x(\d+)y(\d+)_(.+)\.tif$/;
+/* Three live filename conventions: USGS_1M_<zone>_x..y.., USGS_1m_x..y..
+   and USGS_one_meter_x..y... Guessing between them yields a false negative, so
+   filenames are never constructed — a project's TIFF/ prefix is listed once and
+   the cell set cached. Only the first form carries a UTM zone. */
+const TIF_RE = /^USGS_(?:1[Mm]_(?:(\d+)_)?|one_meter_)x(\d+)y(\d+)_(.+)\.tif$/;
 
 const INDEX_TTL = 30*24*3600*1000;      // the archive changes on a yearly rhythm
 const CELL_M    = 10000;                // 10 km UTM cells
