@@ -404,6 +404,23 @@ const server = http.createServer(async (req,res)=>{
          "X-Sources":out.meta.sources.map(s2=>s2.project+"@"+s2.res+"m").join(","), "X-Cache":"miss"});
     }
 
+    /* Landform fabric over the current view: orientation and strength of the
+       grain in a chosen wavelength band, its relief, whether the slopes are
+       capped at a granular angle of repose, and which way the steep faces
+       look. Band-limiting is the point — without it the ridge-and-valley grain
+       of ordinary dissected topography swamps whatever fine lineation is being
+       asked about. */
+    if(p === "/api/usgs/fabric"){
+      const bs=(u.searchParams.get("bbox")||"").split(",").map(Number);
+      if(bs.length!==4 || bs.some(v=>!isFinite(v)))
+        return send(res,400,"application/json",Buffer.from('{"error":"bbox=w,s,e,n in degrees"}'));
+      const opt={ n:+u.searchParams.get("n")||0,
+                  lo:+u.searchParams.get("lo")||0, hi:+u.searchParams.get("hi")||0 };
+      let out; try{ out=await usgs.fabric(bs,opt) }
+      catch(e){ return send(res,500,"application/json",Buffer.from(JSON.stringify({error:String(e.message||e)}))) }
+      return send(res,200,"application/json",Buffer.from(JSON.stringify(out)),{"Cache-Control":"no-store"});
+    }
+
     /* Freshness, the way WA DNR cannot do it: HEAD and compare ETag. */
     if(p === "/api/usgs/check" && req.method === "POST"){
       const chunks=[]; for await (const c of req) chunks.push(c);

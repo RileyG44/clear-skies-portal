@@ -375,6 +375,15 @@ a:hover{text-decoration:underline}
 .pane[data-pane="terrain"] .pane-b{padding:12px 18px 13px 16px}
 .pane[data-pane="passes"] .pane-b{padding:10px 18px 12px 16px}
 .pane[data-pane="overlays"] .pane-b{padding:12px 18px 13px 16px}
+/* ---- landform fabric readout ---- */
+.fabbox{margin-top:10px;padding-top:10px;border-top:1px solid var(--line)}
+.fabout{margin-top:8px;font-size:11.5px;line-height:1.5;color:var(--ink-2)}
+.fabout .fr{display:flex;justify-content:space-between;gap:10px;padding:1px 0}
+.fabout .fk{color:var(--ink-3)}
+.fabout .fv{font-variant-numeric:tabular-nums;color:var(--ink)}
+.fabout .note{margin-top:6px;padding-top:6px;border-top:1px solid var(--line);color:var(--ink-3);font-size:11px}
+.fabout .warn{color:oklch(72% .16 55)}
+
 /* ---- overlay toggles ---- */
 .ovlist{display:flex;flex-direction:column;gap:2px}
 .ovrow{display:flex;align-items:center;gap:8px;padding:4px 5px;border-radius:var(--radius-chip);cursor:pointer}
@@ -628,6 +637,18 @@ body.rowdrag{cursor:row-resize;user-select:none}
             </div>
             <div id="terWarmMsg" class="warmmsg"></div>
             <div id="terStale" class="warmmsg" style="display:none"></div>
+          </div>
+          <div class="fabbox">
+            <div class="row" style="gap:6px;align-items:center">
+              <button class="ghost" id="fabRun" style="flex:1">Measure landform fabric</button>
+              <select id="fabBand" title="Which wavelength band to isolate. Narrower bands separate fine lineation from ordinary ridge-and-valley grain."
+                      style="width:104px;padding:6px 7px;font-size:11.5px">
+                <option value="20,120">20&ndash;120 m</option>
+                <option value="50,300" selected>50&ndash;300 m</option>
+                <option value="150,800">150&ndash;800 m</option>
+              </select>
+            </div>
+            <div id="fabOut" class="fabout"></div>
           </div>
           <div id="terInfo" class="terinfo">Pick a layer to drape terrain over the map.</div>
         </div>
@@ -2573,6 +2594,46 @@ function paintServerBox(){
   el.addEventListener("change", apply);
   el.addEventListener("input", ()=>{ clearTimeout(t); t=setTimeout(apply, 900) });
 })();
+
+/* Numbers for what an aspect map only suggests. Everything here is measured
+   over the current view; the band matters, because unbanded "fabric" is mostly
+   the drainage grain of ordinary topography. */
+const fabOut=()=>document.getElementById("fabOut");
+function fabRow(k,v,cls){ return `<div class="fr"><span class="fk">${k}</span><span class="fv ${cls||""}">${v}</span></div>` }
+async function runFabric(){
+  const el=fabOut(); if(!el) return;
+  if(!PROXY){ el.innerHTML='<span class="warn">Needs the lidar server.</span>'; return }
+  const b=map.getBounds();
+  const [lo,hi]=$("#fabBand").value.split(",");
+  el.innerHTML='<span class="spin"></span> measuring\u2026';
+  let j;
+  try{
+    const r=await fetch(api(`/api/usgs/fabric?bbox=${b.getWest().toFixed(5)},${b.getSouth().toFixed(5)},${b.getEast().toFixed(5)},${b.getNorth().toFixed(5)}&lo=${lo}&hi=${hi}`));
+    j=await r.json();
+  }catch(e){ el.innerHTML='<span class="warn">Measurement failed.</span>'; return }
+  if(!j.ok){ el.innerHTML=`<span class="warn">${j.reason||"no result"}</span>`; return }
+  const g=j.grain, sl=j.slope, tr=j.transport;
+  const strength = g.anisotropyPct>=6 ? "strong" : g.anisotropyPct>=3 ? "moderate" : "weak";
+  /* Loose granular material cannot stand past its angle of repose, so a hard
+     ceiling near 34 deg says sand where anything cohesive would show scarps. */
+  const capped = sl.pctOver36 < 0.05;
+  let note = capped
+    ? `Slopes stop at ${sl.max}\u00b0 with ${sl.pctOver36}% steeper than 36\u00b0 \u2014 an angle-of-repose ceiling, as loose granular material gives.`
+    : `${sl.pctOver36}% of slopes exceed 36\u00b0 (max ${sl.max}\u00b0) \u2014 steeper than loose material holds, so cohesive ground, rock or cut faces.`;
+  if(tr.concentration < 0.35) note += " Steep faces point every which way, so the direction below is not well determined.";
+  el.innerHTML =
+    fabRow("Grain trend", g.trendDeg+"\u00b0 / "+((g.trendDeg+180)%360)+"\u00b0")
+  + fabRow("Anisotropy", g.anisotropyPct+"% ("+strength+", isotropic "+g.isotropicPct+"%)")
+  + fabRow("Grain relief", g.amplitudeRms+" m RMS in "+j.band[0]+"\u2013"+j.band[1]+" m")
+  + fabRow("Local relief", j.elevation.relief+" m")
+  + fabRow("Slope p50 / p95 / max", sl.p50+"\u00b0 / "+sl.p95+"\u00b0 / "+sl.max+"\u00b0")
+  + fabRow("Steeper than 36\u00b0", sl.pctOver36+"%", capped?"":"warn")
+  + fabRow("Steep faces toward", (tr.steepFaceAzimuth==null?"\u2014":tr.steepFaceAzimuth+"\u00b0")+"  (R "+tr.concentration+")")
+  + fabRow("Across-grain skew", tr.asymmetrySkew)
+  + fabRow("Sampled at", j.res+" m \u00b7 "+Math.round(j.covered*100)+"% covered")
+  + `<div class="note">${note}<br>Source: ${j.sources.join(", ")}</div>`;
+}
+document.getElementById("fabRun").onclick=runFabric;
 
 if("serviceWorker" in navigator && (location.protocol==="https:" || location.hostname==="localhost"))
   addEventListener("load",()=>navigator.serviceWorker.register("sw.js").catch(()=>{}));

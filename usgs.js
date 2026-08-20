@@ -180,9 +180,9 @@ function saveZones(){
   try{ fs.writeFileSync(zonesPath(), JSON.stringify(Object.fromEntries(ZONES))) }catch(e){}
 }
 
-async function resolveCellZone(proj, file){
+async function resolveCellZone(proj, file, size){
   try{
-    const t=await openCog(`${S3_BASE}${proj}/TIFF/${file}`);
+    const t=await openCog(`${S3_BASE}${proj}/TIFF/${file}`, size);
     return zoneOfEpsg(t.geo && t.geo.epsg);
   }catch(e){ return null }
 }
@@ -206,7 +206,7 @@ async function cellCandidates(idx, cell, zone){
     if(z==null){
       const k=`${p}/${cell}`;
       if(ZONES.has(k)) z=ZONES.get(k);
-      else { z=await resolveCellZone(p,c.f); ZONES.set(k,z); dirty=true; }
+      else { z=await resolveCellZone(p,c.f,c.size); ZONES.set(k,z); dirty=true; }
       if(z!=null && z!==zone) continue;              // same cell name, different zone
     }
     out.push({project:p, cell, zone:z||zone, file:c.f, size:c.size, year:projectYear(p)});
@@ -247,14 +247,33 @@ async function fetchRange(key, a, b){
 
 /* -------------------------------------------------------------- COG access */
 const HDR_BYTES = 262144;                 // IFD chain + tile tables live up front
+const TAIL_BYTES = 1<<20;                 // when the directory is at the end instead
 const headers = new Map();                // key -> parsed tiff
 const decoded = new Map();                // key|lvl|idx -> Float32Array (LRU)
 const DECODE_MAX = 48;
 
-async function openCog(key){
+/* A COG writes its directory first, so the head of the file is enough. Many
+   USGS 1 m products are ordinary TIFFs whose directory sits at the end — for
+   WA_ColumbiaValley the first IFD is at byte 328,958,768 of a 329 MB file — and
+   reading only the head found nothing, so the project silently had no data.
+   Read the head, and if the directory is somewhere else, go and get it. The
+   tail holding the directory and its offset tables is small: ~14 KB there. */
+async function openCog(key, size){
   if(headers.has(key)) return headers.get(key);
   const {buf}=await fetchRange(key, 0, HDR_BYTES-1);
-  const t=cog.parseTiff(buf);
+  let t=null;
+  try{ t=cog.parseTiff(buf) }catch(e){ t=null }
+  if(!t || !t.levels.length){
+    const le = buf.toString("ascii",0,2)==="II";
+    const ver = le?buf.readUInt16LE(2):buf.readUInt16BE(2);
+    const ifd = ver===43 ? Number(le?buf.readBigUInt64LE(8):buf.readBigUInt64BE(8))
+                         : (le?buf.readUInt32LE(4):buf.readUInt32BE(4));
+    if(!(ifd>=HDR_BYTES)) throw new Error("no readable IFD found");
+    const end = size ? size-1 : ifd + TAIL_BYTES - 1;
+    const {buf:tail}=await fetchRange(key, ifd, end);
+    t=cog.parseTiff(tail, ifd, buf.slice(0, 64));
+    if(!t.levels.length) throw new Error("no readable IFD found at "+ifd);
+  }
   headers.set(key,t);
   return t;
 }
@@ -374,7 +393,7 @@ async function sampleGrid(z,x,y,size){
     let got=0;
     for(const s of group){
       const key=tileKey(s);
-      let t; try{ t=await openCog(key) }catch(e){ continue }
+      let t; try{ t=await openCog(key, s.size) }catch(e){ continue }
       if(t.geo.epsg && t.geo.epsg!==26900+zone && t.geo.epsg!==32600+zone) continue;
       const base=t.geo.scale[0]||1;
       let lvl=0;
@@ -717,6 +736,155 @@ module.exports.areaCheck=areaCheck;
 module.exports.planTiles=planTiles;
 module.exports.sourcesForArea=sourcesForArea;
 
-module.exports = Object.assign(module.exports, { init, buildIndex, getIndex, findCells, cellOf, cellBounds, projectYear, scopeList,
+
+/* ------------------------------------------------------------------ fabric
+   Landform fabric over an arbitrary box, band-limited so that ridge-and-valley
+   grain cannot masquerade as fine lineation. Answers, numerically, the things
+   an aspect map only hints at: which way the grain runs, how strongly, how
+   much relief it carries, whether the slopes are capped at a granular angle of
+   repose, and whether the steep faces consistently look one way.            */
+function boxBlur(g, n, r){
+  if(r<1) return g.slice();
+  const tmp=new Float64Array(n*n), out=new Float64Array(n*n);
+  for(let y=0;y<n;y++){
+    let s=0,c=0;
+    for(let x=-r;x<=r;x++){ const v=g[y*n+Math.min(n-1,Math.max(0,x))]; if(isFinite(v)){s+=v;c++} }
+    for(let x=0;x<n;x++){
+      tmp[y*n+x]=c?s/c:NaN;
+      const out_=Math.max(0,x-r), in_=Math.min(n-1,x+r+1);
+      const vo=g[y*n+out_], vi=g[y*n+in_];
+      if(isFinite(vo)){s-=vo;c--} if(isFinite(vi)){s+=vi;c++}
+    }
+  }
+  for(let x=0;x<n;x++){
+    let s=0,c=0;
+    for(let y=-r;y<=r;y++){ const v=tmp[Math.min(n-1,Math.max(0,y))*n+x]; if(isFinite(v)){s+=v;c++} }
+    for(let y=0;y<n;y++){
+      out[y*n+x]=c?s/c:NaN;
+      const out_=Math.max(0,y-r), in_=Math.min(n-1,y+r+1);
+      const vo=tmp[out_*n+x], vi=tmp[in_*n+x];
+      if(isFinite(vo)){s-=vo;c--} if(isFinite(vi)){s+=vi;c++}
+    }
+  }
+  return out;
+}
+
+async function sampleUTMGrid(minE, minN, res, n, zone){
+  const idx=await getIndex();
+  const cells=new Set(), step=Math.max(1,Math.floor(n/10));
+  for(let a=0;a<=n;a+=step) for(let b=0;b<=n;b+=step) cells.add(cellOf(minE+a*res, minN+b*res));
+  const opened=[];
+  for(const cell of cells){
+    let cands=[]; try{ cands=await cellCandidates(idx, cell, zone) }catch(e){}
+    for(const s of cands.slice(0,3)){
+      const key=tileKey(s);
+      if(opened.some(o=>o.key===key)) break;
+      let t; try{ t=await openCog(key, s.size) }catch(e){ continue }
+      if(t.geo.epsg && t.geo.epsg!==26900+zone && t.geo.epsg!==32600+zone) continue;
+      let lvl=0; const base=t.geo.scale[0]||1;
+      for(let i=0;i<t.levels.length;i++){ if(base*Math.pow(2,i)<=res) lvl=i; else break }
+      opened.push({key,t,lvl,res:base*Math.pow(2,lvl),ox:t.geo.tie[3],oy:t.geo.tie[4],
+                   nodata:t.geo.nodata, project:s.project, tiles:new Map()});
+      break;
+    }
+  }
+  if(!opened.length) return null;
+  const grid=new Float64Array(n*n).fill(NaN);
+  for(const o of opened){
+    const L=o.t.levels[o.lvl];
+    for(let j=0;j<n;j++) for(let i=0;i<n;i++){
+      const k=j*n+i; if(isFinite(grid[k])) continue;
+      const px=Math.round((minE+i*res-o.ox)/o.res), py=Math.round((o.oy-(minN+j*res))/o.res);
+      if(px<0||py<0||px>=L.w||py>=L.h) continue;
+      const tx=Math.floor(px/L.tw), ty=Math.floor(py/L.th), ck=tx+","+ty;
+      if(!o.tiles.has(ck)){ try{ o.tiles.set(ck, await cogTile(o.key,o.t,o.lvl,tx,ty)) }catch(e){ o.tiles.set(ck,null) } }
+      const a=o.tiles.get(ck); if(!a) continue;
+      const v=a[(py%L.th)*L.tw+(px%L.tw)];
+      if(v==null||v<-1e5||(o.nodata!=null&&v===o.nodata)) continue;
+      grid[k]=v;
+    }
+  }
+  return {grid, sources:[...new Set(opened.map(o=>o.project))], res};
+}
+
+async function fabric(bbox, opt){
+  const [w,s,e,nLat]=bbox.map(Number);
+  const zone=cog.utmZone((w+e)/2);
+  const cs=[[w,s],[e,s],[w,nLat],[e,nLat]].map(([x,y])=>cog.lonLatToUTM(x,y,zone));
+  const minE=Math.min(...cs.map(p=>p.e)), maxE=Math.max(...cs.map(p=>p.e));
+  const minN=Math.min(...cs.map(p=>p.n)), maxN=Math.max(...cs.map(p=>p.n));
+  const n=Math.max(48,Math.min(320,(opt.n|0)||192));
+  const res=Math.max((maxE-minE)/n,(maxN-minN)/n,1);
+  const lo=Math.max(2*res,(opt.lo||50)), hi=Math.max(lo*1.5,(opt.hi||300));
+
+  const got=await sampleUTMGrid(minE,minN,res,n,zone);
+  if(!got) return {ok:false, reason:"no 1 m coverage in this view", zone};
+  const {grid,sources}=got;
+  const valid=[...grid].filter(isFinite);
+  if(valid.length < n*n*0.25) return {ok:false, reason:"coverage too patchy here", zone,
+                                      covered:+(valid.length/(n*n)).toFixed(2), sources};
+
+  // band-limit: subtract the broad surface, keep what is coarser than the noise floor
+  const broad=boxBlur(grid,n,Math.round(hi/res/2));
+  const fine =boxBlur(grid,n,Math.max(0,Math.round(lo/res/2)));
+  const band=new Float64Array(n*n);
+  for(let i=0;i<n*n;i++) band[i]=(isFinite(grid[i])&&isFinite(broad[i])&&isFinite(fine[i]))?fine[i]-broad[i]:NaN;
+
+  // orientation of the band-limited grain
+  const bins=new Float64Array(180);
+  for(let j=1;j<n-1;j++) for(let i=1;i<n-1;i++){
+    const a=band[j*n+i-1],b=band[j*n+i+1],c=band[(j-1)*n+i],d=band[(j+1)*n+i];
+    if(![a,b,c,d].every(isFinite)) continue;
+    const dx=(b-a)/(2*res), dy=(d-c)/(2*res), m=Math.hypot(dx,dy);
+    if(m<1e-4) continue;
+    let ang=Math.atan2(dy,dx)*180/Math.PI; ang=((ang%180)+180)%180;
+    bins[Math.floor(ang)]+=m;
+  }
+  const tot=[...bins].reduce((x,y)=>x+y,0)||1;
+  let bi=0; bins.forEach((v,i)=>{ if(v>bins[bi]) bi=i });
+  const aniso=(bins[bi]+bins[(bi+1)%180]+bins[(bi+179)%180])/tot*100;
+  const trend=((90-((bi+90)%180))%180+180)%180;          // compass bearing of the crests
+
+  const bv=[...band].filter(isFinite);
+  const amp=Math.sqrt(bv.reduce((x,v)=>x+v*v,0)/bv.length);
+
+  // slope statistics on the real surface: is there an angle-of-repose ceiling?
+  const degs=[], across=[], faceX=[], faceY=[];
+  const th=bi*Math.PI/180, ux=Math.cos(th), uy=Math.sin(th);
+  for(let j=1;j<n-1;j++) for(let i=1;i<n-1;i++){
+    const a=grid[j*n+i-1],b=grid[j*n+i+1],c=grid[(j-1)*n+i],d=grid[(j+1)*n+i];
+    if(![a,b,c,d].every(isFinite)) continue;
+    const dx=(b-a)/(2*res), dy=(d-c)/(2*res);
+    const deg=Math.atan(Math.hypot(dx,dy))*180/Math.PI;
+    degs.push(deg);
+    const ba=band[j*n+i-1],bb=band[j*n+i+1],bc=band[(j-1)*n+i],bd=band[(j+1)*n+i];
+    if([ba,bb,bc,bd].every(isFinite)) across.push(((bb-ba)/(2*res))*ux+((bd-bc)/(2*res))*uy);
+    if(deg>=20){ const m=Math.hypot(dx,dy); faceX.push(-dx/m); faceY.push(-dy/m) }
+  }
+  degs.sort((x,y)=>x-y);
+  const P=q=>+degs[Math.floor(q*(degs.length-1))].toFixed(1);
+  const mA=across.reduce((x,v)=>x+v,0)/(across.length||1);
+  const sA=Math.sqrt(across.reduce((x,v)=>x+(v-mA)**2,0)/(across.length||1))||1;
+  const skew=+(across.reduce((x,v)=>x+((v-mA)/sA)**3,0)/(across.length||1)).toFixed(3);
+  let fx=0,fy=0; faceX.forEach((v,i)=>{fx+=v;fy+=faceY[i]});
+  const R=faceX.length?Math.hypot(fx,fy)/faceX.length:0;
+  const faceAz=faceX.length?((90-Math.atan2(fy,fx)*180/Math.PI)%360+360)%360:null;
+
+  return {
+    ok:true, zone, res:+res.toFixed(2), n, band:[+lo.toFixed(0),+hi.toFixed(0)], sources,
+    covered:+(valid.length/(n*n)).toFixed(2),
+    elevation:{min:+Math.min(...valid).toFixed(1), max:+Math.max(...valid).toFixed(1),
+               relief:+(Math.max(...valid)-Math.min(...valid)).toFixed(1)},
+    grain:{trendDeg:+trend.toFixed(0), anisotropyPct:+aniso.toFixed(1), isotropicPct:1.7,
+           amplitudeRms:+amp.toFixed(2)},
+    slope:{p50:P(.5), p90:P(.9), p95:P(.95), p99:P(.99), max:+degs[degs.length-1].toFixed(1),
+           pct28to35:+(degs.filter(d=>d>=28&&d<=35).length/degs.length*100).toFixed(2),
+           pctOver36:+(degs.filter(d=>d>36).length/degs.length*100).toFixed(3)},
+    transport:{steepFaceAzimuth: faceAz==null?null:+faceAz.toFixed(0),
+               concentration:+R.toFixed(2), asymmetrySkew:skew}
+  };
+}
+
+module.exports = Object.assign(module.exports, { init, buildIndex, getIndex, findCells, cellOf, cellBounds, projectYear, scopeList, fabric,
                    openCog, cogTile, fetchRange, renderTile, sampleGrid, encodePNG,
                    checkFresh, tileKey, tileUrl, s3head, S3_BASE });
