@@ -2,7 +2,13 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#0b0f14">
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icon-180.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Clear Skies">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <title>Clear Skies — Portal</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -66,6 +72,25 @@ body{
       position:relative;flex-shrink:0}
 body.collapsed #side{display:none}
 #map{flex:1;position:relative;background:var(--page)}
+
+/* ---- phones ------------------------------------------------------------
+   #side is a 430px flex item with a 280px floor, which on a 375px screen
+   leaves the map exactly no room. Below 760px it stops being a column and
+   becomes a sheet sliding over a full-bleed map, so the map is the page and
+   the controls are summoned over it. */
+@media (max-width:760px){
+  #app{position:relative}
+  #map{position:absolute;inset:0;flex:none;width:100%;height:100%}
+  #side{position:absolute;top:0;bottom:0;left:0;z-index:1200;
+        width:min(85vw,400px);min-width:0;max-width:none;
+        padding-top:env(safe-area-inset-top);
+        box-shadow:0 0 40px rgba(0,0,0,.55)}
+  #sideToggle{z-index:1300;top:calc(12px + env(safe-area-inset-top))}
+  /* park the toggle just clear of the sheet while it is open */
+  body:not(.collapsed) #sideToggle{left:calc(min(85vw,400px) + 8px)}
+  #drag{display:none}                        /* drag-to-resize is a mouse idea */
+  .leaflet-control-zoom{margin-bottom:calc(18px + env(safe-area-inset-bottom))}
+}
 
 /* ---- resize handle ---- */
 #drag{position:absolute;right:-4px;top:0;width:9px;height:100%;cursor:col-resize;z-index:1400}
@@ -1276,6 +1301,8 @@ async function select(i){
     const b=L.latLngBounds([it.bbox[1],it.bbox[0]],[it.bbox[3],it.bbox[2]]);
     if(!map.getBounds().intersects(b)) map.fitBounds(b);
   }
+  // On a phone the sheet covers the map, so a scene would load out of sight.
+  if(MOBILE.matches) document.body.classList.add("collapsed");
   if($("#mosaic").checked) fillMosaic(it);
   else { const s=$("#mosStat"); if(s) s.textContent="" }
 }
@@ -1730,6 +1757,7 @@ showPane("summary", false); showPane("passes", false);
               CORS, and 962 layers in one service, so it goes through the
               local proxy and is restricted to the exact project layers that
               cover the view.                                              */
+const MOBILE = matchMedia("(max-width:760px)");
 const MERC_R = 20037508.342789244;
 /* keepBuffer holds tiles just outside the viewport so a short pan doesn't
    discard and re-fetch them; the transparent errorTileUrl stops a failed
@@ -2417,6 +2445,13 @@ $("#go").onclick=doSearch;
 $("#loc").onclick=geolocate;
 $("#q").addEventListener("input",acInput);
 $("#q").addEventListener("keydown",acKey);
+/* Installed to the home screen the app runs without browser chrome, so the
+   worker is what keeps it opening when the Mac is asleep or off-network.
+   Registration needs a secure context: it takes over https:// and localhost,
+   and is simply skipped on a plain-http LAN address. */
+if("serviceWorker" in navigator && (location.protocol==="https:" || location.hostname==="localhost"))
+  addEventListener("load",()=>navigator.serviceWorker.register("sw.js").catch(()=>{}));
+
 $("#q").addEventListener("focus",()=>{ if(acList.length && $("#q").value.trim().length>=3) acRender() });
 $("#q").addEventListener("blur",()=>setTimeout(acHide,120));
 document.addEventListener("click",e=>{ if(!e.target.closest("#iw")) acHide() });
