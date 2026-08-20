@@ -325,9 +325,17 @@ a:hover{text-decoration:underline}
 
 /* ---- pane system ---- */
 #panes{flex:1;display:flex;flex-direction:column;overflow-y:auto;min-height:0}
-.pane{display:flex;flex-direction:column;flex:0 1 auto;min-height:0;position:relative;
+/* flex-shrink stays 0. With it at 1 the panes were allowed to compress to
+   nothing to make the column fit, so opening NEXT OVERPASS and OVERVIEW
+   together squeezed every pane into a sliver with its own scrollbar instead
+   of pushing the ones below it down. Panes now keep their natural height and
+   #panes scrolls, which is what a stack of collapsible sections should do. */
+.pane{display:flex;flex-direction:column;flex:0 0 auto;position:relative;
   border-bottom:1px solid var(--line);background:var(--canvas);
   transition:opacity .12s var(--ease-out)}
+/* The one exception: the scene list is unbounded (250+ results), so it keeps
+   flex-shrink and absorbs whatever space is left, scrolling inside itself.
+   Every other pane is a collapsible section and keeps its natural height. */
 .pane.grow{flex:1 1 0;min-height:240px}
 .pane.sized{flex:0 0 auto}
 .pane-h,.pane-rz{flex:none}
