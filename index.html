@@ -650,6 +650,21 @@ body.rowdrag{cursor:row-resize;user-select:none}
             </div>
             <div id="fabOut" class="fabout"></div>
           </div>
+          <div class="fabbox">
+            <label class="check" id="lb_elevSh" style="margin-bottom:7px">
+              <input type="checkbox" id="elevSh"> Shade at or below elevation
+            </label>
+            <div class="row" style="gap:6px;align-items:center">
+              <input type="number" id="elevVal" value="500" step="10" style="flex:1;padding:6px 7px;font-size:12px">
+              <select id="elevUnit" style="width:74px;padding:6px 7px;font-size:11.5px">
+                <option value="m" selected>metres</option>
+                <option value="ft">feet</option>
+                <option value="yd">yards</option>
+              </select>
+            </div>
+            <input type="range" id="elevSlide" min="0" max="4500" step="1" value="500" style="width:100%;margin-top:7px">
+            <div id="elevOut" class="fabout"></div>
+          </div>
           <div id="terInfo" class="terinfo">Pick a layer to drape terrain over the map.</div>
         </div>
         <div class="pane-rz" title="Drag to resize"></div>
@@ -1515,11 +1530,38 @@ function clearMosaic(){
   NEIGH=[];
 }
 
+/* Whether the mosaic is live. It used to be tied to the checkbox alone, so a
+   fill started from the button never refreshed when the map moved: you got
+   whatever happened to be adjacent at the moment you pressed it and bare
+   basemap everywhere you panned afterwards. */
+let MOSAIC_ON=false;
+const MOSAIC_MAX=12;          // each scene is a tile layer competing for the same sockets
+
+/* The viewport as a coarse grid, so "is the view actually filled?" is a
+   countable question rather than a guess from bounding-box overlap. */
+function coverGrid(vb, G){
+  return {w:vb.getWest(), s:vb.getSouth(), e:vb.getEast(), n:vb.getNorth(),
+          G, cells:new Uint8Array(G*G)};
+}
+function cellsGained(cov, bbox, mark){
+  if(!bbox) return 0;
+  const [w,s,e,n]=bbox, dx=(cov.e-cov.w)/cov.G, dy=(cov.n-cov.s)/cov.G;
+  let gain=0;
+  for(let j=0;j<cov.G;j++) for(let i=0;i<cov.G;i++){
+    const k=j*cov.G+i; if(cov.cells[k]) continue;
+    const cx=cov.w+(i+0.5)*dx, cy=cov.s+(j+0.5)*dy;
+    if(cx>=w&&cx<=e&&cy>=s&&cy<=n){ gain++; if(mark) cov.cells[k]=1 }
+  }
+  return gain;
+}
+const coveredFrac = cov => cov.cells.reduce((a,b)=>a+b,0)/(cov.G*cov.G);
+
 let mosToken=0;
 async function fillMosaic(primary, force){
   const token=++mosToken;
   const stat=$("#mosStat");
-  if((!force && !$("#mosaic").checked) || !primary || !primary.tiles || primary.srcKey==="gibs"){
+  if(force) MOSAIC_ON=true;
+  if(!MOSAIC_ON || !primary || !primary.tiles || primary.srcKey==="gibs"){
     clearMosaic();
     if(stat) stat.textContent = primary && primary.srcKey==="gibs"
       ? "Global layer \u2014 already covers the whole view." : "";
@@ -1551,14 +1593,29 @@ async function fillMosaic(primary, force){
   for(const k of keys)
     CAND[k].sort((a,b)=> Math.abs(+new Date(a.date)-t0)-Math.abs(+new Date(b.date)-t0)
                        || (a.cloud??50)-(b.cloud??50));
-  /* Prefer the footprints that actually fill the visible gap, and ignore the
-     ones only grazing it — each one is a tile layer, and every extra layer
-     competes for the same handful of browser connections. */
+  /* Fill the view, rather than collecting whatever overlaps it. Ranking by
+     overlap and taking the top N says nothing about whether the result covers
+     anything: two scenes can both score highly and sit on top of each other,
+     leaving the same hole. Mark off what the primary already covers, then
+     repeatedly take whichever candidate closes the most of what is still open,
+     and stop once the view is full or the next one would barely help. */
   const vb=map.getBounds();
-  const ranked=keys.map(k=>[k, viewOverlap(CAND[k][0], vb)])
-                   .filter(([,ov])=>ov>0.0008)
-                   .sort((p1,p2)=>p2[1]-p1[1]);
-  const use=ranked.slice(0,14).map(([k])=>k);
+  const cov=coverGrid(vb, 24);
+  cellsGained(cov, primary.bbox, true);
+  const pool=keys.filter(k=>CAND[k][0] && CAND[k][0].bbox);
+  const use=[];
+  while(use.length < MOSAIC_MAX && coveredFrac(cov) < 0.995){
+    let best=null, bestGain=0;
+    for(const k of pool){
+      if(use.includes(k)) continue;
+      const g=cellsGained(cov, CAND[k][0].bbox, false);
+      if(g>bestGain){ bestGain=g; best=k }
+    }
+    if(!best || bestGain < cov.G*cov.G*0.004) break;   // under 0.4% of the view
+    cellsGained(cov, CAND[best][0].bbox, true);
+    use.push(best);
+  }
+  const filled=Math.round(coveredFrac(cov)*100);
 
   /* Swap by difference. Clearing first meant every pan and every zoom threw the
      whole mosaic away, showed bare basemap for as long as the STAC search took,
@@ -1571,12 +1628,13 @@ async function fillMosaic(primary, force){
     if(keep && idOf(keep)===idOf(nb.item)) want.delete(nb.key);   // already on screen
     else { map.removeLayer(nb.layer); NEIGH=NEIGH.filter(x=>x!==nb) }
   }
-  const results=await Promise.all([...want].map(([k,it])=>addNeighbour(k, it, token)));
+  await Promise.all([...want].map(([k,it])=>addNeighbour(k, it, token)));
   if(token!==mosToken) return;                       // a newer fill superseded this one
   const n=NEIGH.length;
   if(stat) stat.textContent = n
-    ? `${n} surrounding scene${n>1?"s":""} filled \u2014 right-click one to change it.`
-    : "No matching neighbouring scenes in view.";
+    ? `${n} scene${n>1?"s":""} \u00b7 ${filled}% of view covered \u2014 right-click one to swap it.`
+    : (filled>=99 ? "Primary scene already covers the view."
+                  : "No neighbouring scenes available for the gaps.");
 }
 
 async function addNeighbour(key, it, token){
@@ -1685,10 +1743,15 @@ map.on("contextmenu", e=>{
 });
 
 /* refill when the view changes */
+/* Pan and zoom change which scenes the view needs, so the mosaic is recomputed
+   against the new bounds: what is still on screen stays untouched, what left is
+   dropped, and only the newly exposed ground is fetched. Previously this only
+   ran for the checkbox, so a fill started from the button never followed the
+   map. */
 map.on("moveend", ()=>{
-  if(!$("#mosaic").checked || SEL==null) return;   // one-shot fills are not re-run on pan
+  if(!MOSAIC_ON || SEL==null) return;
   clearTimeout(mosTimer);
-  mosTimer=setTimeout(()=>fillMosaic(ITEMS[SEL]), 900);
+  mosTimer=setTimeout(()=>fillMosaic(ITEMS[SEL]), 450);
 });
 
 /* checked toggles get the tinted "on" treatment */
@@ -2464,10 +2527,16 @@ $("#op").oninput=e=>{
   if(overlay) overlay.setOpacity(v);
   NEIGH.forEach(n=>n.layer.setOpacity(v));
 };
-$("#mosaic").onchange=()=>{ if($("#mosaic").checked && SEL!=null) fillMosaic(ITEMS[SEL]); else clearMosaic() };
+$("#mosaic").onchange=()=>{
+  MOSAIC_ON=$("#mosaic").checked;
+  if(MOSAIC_ON && SEL!=null) fillMosaic(ITEMS[SEL]);
+  else { clearMosaic(); const s2=$("#mosStat"); if(s2) s2.textContent="" }
+};
 $("#fillNow").onclick=()=>{ if(SEL!=null) fillMosaic(ITEMS[SEL], true) };
+
 $("#clr").onclick=()=>{ if(overlay){map.removeLayer(overlay);overlay=null}
                         if(footprint){map.removeLayer(footprint);footprint=null}
+                        MOSAIC_ON=false; $("#mosaic").checked=false;
                         clearMosaic(); hideMenu();
                         $("#ctl").classList.add("hide"); SEL=null; render() };
 $("#sort").onchange=render;
@@ -2595,6 +2664,92 @@ function paintServerBox(){
   el.addEventListener("input", ()=>{ clearTimeout(t); t=setTimeout(apply, 900) });
 })();
 
+/* Everything at or below a chosen height, shaded. The tiles carry elevation
+   rather than a picture of it, so moving the slider repaints from data already
+   in memory instead of refetching a differently-thresholded tile per step —
+   which is what makes it keep up with the slider. */
+const ElevLayer = L.GridLayer.extend({
+  initialize:function(opts){ L.setOptions(this,opts); this._store=new Map();
+    this.on("tileunload", e=>{ this._store.delete(this._k(e.coords)) }); },
+  _k:function(c){ return c.z+"/"+c.x+"/"+c.y },
+  createTile:function(coords, done){
+    const sz=this.getTileSize(), cv=document.createElement("canvas");
+    cv.width=sz.x; cv.height=sz.y;
+    const self=this, img=new Image();
+    img.crossOrigin="anonymous";                 // server sends ACAO:*, needed to read pixels
+    img.onload=function(){
+      const off=document.createElement("canvas"); off.width=sz.x; off.height=sz.y;
+      const oc=off.getContext("2d",{willReadFrequently:true});
+      oc.drawImage(img,0,0);
+      let d=null; try{ d=oc.getImageData(0,0,sz.x,sz.y).data }catch(e){ d=null }
+      let elev=null;
+      if(d){
+        elev=new Float32Array(sz.x*sz.y);
+        for(let i=0;i<elev.length;i++)
+          elev[i]= d[i*4+3] ? (d[i*4]*256 + d[i*4+1] + d[i*4+2]/256) - 32768 : NaN;
+      }
+      self._store.set(self._k(coords), {cv, elev});
+      self._paint(cv, elev);
+      done(null, cv);
+    };
+    img.onerror=function(){ self._store.set(self._k(coords),{cv,elev:null}); done(null,cv) };
+    img.src = api(`/api/usgs/elev/${coords.z}/${coords.x}/${coords.y}.png`);
+    return cv;
+  },
+  _paint:function(cv, elev){
+    const ctx=cv.getContext("2d"), w=cv.width, h=cv.height;
+    const im=ctx.createImageData(w,h);
+    if(elev){
+      const lvl=this.options.level, a=this.options.alpha;
+      for(let i=0;i<w*h;i++){
+        const v=elev[i];
+        /* A dark wash is invisible on a dark basemap. Blue reads at a glance and
+           suits the question being asked: everything under a given height. */
+        if(v===v && v<=lvl){ im.data[i*4]=54; im.data[i*4+1]=126; im.data[i*4+2]=214; im.data[i*4+3]=a }
+      }
+    }
+    ctx.putImageData(im,0,0);
+  },
+  setLevel:function(v){                          // no refetch: repaint what is held
+    this.options.level=v;
+    this._store.forEach(t=>this._paint(t.cv, t.elev));
+  }
+});
+
+const ELEV_UNIT={m:1, ft:0.3048, yd:0.9144};
+let elevLayer=null;
+function elevMetres(){ return (+$("#elevVal").value||0) * ELEV_UNIT[$("#elevUnit").value] }
+function paintElevOut(){
+  const o=$("#elevOut"); if(!o) return;
+  const m=elevMetres();
+  o.textContent = $("#elevSh").checked
+    ? `Shading everything at or below ${Math.round(m)} m (${Math.round(m/0.3048)} ft).`
+    : "";
+}
+function syncElevFromSlider(){
+  const m=+$("#elevSlide").value;
+  const u=ELEV_UNIT[$("#elevUnit").value];
+  $("#elevVal").value = Math.round(m/u);
+  applyElev();
+}
+function syncElevFromBox(){
+  const m=elevMetres();
+  $("#elevSlide").value = Math.max(0, Math.min(4500, Math.round(m)));
+  applyElev();
+}
+function applyElev(){
+  paintElevOut();
+  const on=$("#elevSh").checked;
+  if(!on){ if(elevLayer){ map.removeLayer(elevLayer); elevLayer=null } return }
+  if(!PROXY){ const o=$("#elevOut"); if(o) o.innerHTML='<span class="warn">Needs the lidar server.</span>'; return }
+  const m=elevMetres();
+  if(!elevLayer){
+    elevLayer=new ElevLayer({level:m, alpha:130, maxZoom:20, zIndex:350,
+                             keepBuffer:2, updateWhenZooming:false});
+    elevLayer.addTo(map);
+  } else elevLayer.setLevel(m);
+}
+
 /* Numbers for what an aspect map only suggests. Everything here is measured
    over the current view; the band matters, because unbanded "fabric" is mostly
    the drainage grain of ordinary topography. */
@@ -2634,6 +2789,14 @@ async function runFabric(){
   + `<div class="note">${note}<br>Source: ${j.sources.join(", ")}</div>`;
 }
 document.getElementById("fabRun").onclick=runFabric;
+$("#elevSh").addEventListener("change", applyElev);
+$("#elevSlide").addEventListener("input", syncElevFromSlider);
+$("#elevVal").addEventListener("input", syncElevFromBox);
+$("#elevUnit").addEventListener("change", ()=>{        // keep the height, restate the number
+  const m=+$("#elevSlide").value;
+  $("#elevVal").value=Math.round(m/ELEV_UNIT[$("#elevUnit").value]);
+  applyElev();
+});
 
 if("serviceWorker" in navigator && (location.protocol==="https:" || location.hostname==="localhost"))
   addEventListener("load",()=>navigator.serviceWorker.register("sw.js").catch(()=>{}));
