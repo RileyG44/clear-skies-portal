@@ -298,7 +298,13 @@ const server = http.createServer(async (req,res)=>{
       try{ r=await upstream({host:"elevation.nationalmap.gov", path:dp, method:"GET",
                              headers:{"User-Agent":"clear-skies-portal"}, __timeout:TILE_MS}) }
       catch(e){ r=null } finally { release() }
-      if(r && r.status===200 && r.body.length>100){
+      /* ArcGIS answers 200 with a JSON error body when a request upsets it, and
+         this used to cache anything over 100 bytes without looking at what it
+         was. A bad answer then stuck around for TTL_TILE — 90 days — which is
+         how one wrong tile becomes permanent. Check it is really a PNG. */
+      const png = r && r.body.length>8 && r.body[0]===0x89 && r.body[1]===0x50
+                                      && r.body[2]===0x4E && r.body[3]===0x47;
+      if(r && r.status===200 && r.body.length>100 && /image/.test(r.type||"") && png){
         cachePut(k,200,r.type,r.body);
         return send(res,200,r.type,r.body,{"X-Cache":"MISS","Cache-Control":"public, max-age=604800"});
       }
