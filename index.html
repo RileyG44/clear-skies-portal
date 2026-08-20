@@ -1477,8 +1477,23 @@ const tjCache=new Map();
    gamma curve and no `rescale`. HLS surface reflectance is int16 scaled by
    10000 and land sits around 500-3000, so with no stretch the scene comes back
    dark and muddy. Supply the stretch the provider omits. */
+/* Sentinel-2 reaches us two ways for the same collection id. AWS Earth Search
+   offers a "visual" asset — TCI, already 8-bit natural colour, which is what
+   the primary scene usually is. The Planetary Computer's tiler instead serves
+   the raw bands, and asked for B04/B03/B02 with no colour formula it stretches
+   each scene by itself: one comes back near-black, the next violet, the next
+   olive. That is the mosaic going strange colours and staying black, and it
+   only showed on neighbours because the primary came from the other provider.
+   Give the raw-band request the natural-colour formula the Planetary Computer
+   documents for this collection. Not a rescale as well — with both, the tile
+   blows out to white. */
+const MPC_NATURAL = "gamma RGB 3.2 saturation 0.8 sigmoidal RGB 25 0.35";
 function tuneTileUrl(url, it){
-  if(!url || !/^hls2-/.test(it.coll||"") || /[?&]rescale=/.test(url)) return url;
+  if(!url) return url;
+  if(/planetarycomputer\.microsoft\.com/.test(url) && /[?&]assets=B\d/i.test(url)
+     && !/[?&]color_formula=/.test(url))
+    url += "&color_formula=" + encodeURIComponent(MPC_NATURAL);
+  if(!/^hls2-/.test(it.coll||"") || /[?&]rescale=/.test(url)) return url;
   const softer = encodeURIComponent("gamma RGB 1.4, saturation 1.3");
   return (/[?&]color_formula=/.test(url)
             ? url.replace(/([?&]color_formula=)[^&]*/, "$1"+softer)
@@ -1590,8 +1605,13 @@ async function fillMosaic(primary, force){
 
   const keys=Object.keys(CAND).filter(k=>k!==pk);
   // nearest-in-date, then least cloud
+  /* Same provider first. Two providers serving one collection render it
+     differently enough that a mixed mosaic looks broken even when every tile
+     is correct for its own source. */
+  const psrc=primary.srcKey;
   for(const k of keys)
-    CAND[k].sort((a,b)=> Math.abs(+new Date(a.date)-t0)-Math.abs(+new Date(b.date)-t0)
+    CAND[k].sort((a,b)=> (a.srcKey===psrc?0:1)-(b.srcKey===psrc?0:1)
+                       || Math.abs(+new Date(a.date)-t0)-Math.abs(+new Date(b.date)-t0)
                        || (a.cloud??50)-(b.cloud??50));
   /* Fill the view, rather than collecting whatever overlaps it. Ranking by
      overlap and taking the top N says nothing about whether the result covers
