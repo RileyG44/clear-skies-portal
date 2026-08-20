@@ -1886,7 +1886,18 @@ const WaLayer = L.TileLayer.extend({
    — and server.js already answers with Access-Control-Allow-Origin: *, so the
    cross-origin call is allowed. Everything that does not need the proxy keeps
    working regardless of what this is set to. */
-let API = (localStorage.getItem("cspServer") || "").replace(/\/+$/,"");
+/* A bare "my-mac.tail1234.ts.net" is not a URL: concatenated onto "/api/health"
+   it becomes a path relative to this page, quietly 404s, and reports as
+   "unreachable" while looking perfectly correct in the box. Give it a scheme. */
+function normaliseBase(v){
+  v = String(v||"").trim().replace(/\/+$/,"");
+  if(!v) return "";
+  // Follow the page: https for the hosted app (an https page cannot call an
+  // http server anyway), http when server.js is serving this page itself.
+  if(!/^https?:\/\//i.test(v)) v = (location.protocol==="http:" ? "http://" : "https://") + v;
+  return v;
+}
+let API = normaliseBase(localStorage.getItem("cspServer") || "");
 const api = p => API + p;
 
 let terLayer=null, terBase=null, PROXY=false, WA_LAYERS=null, waCover=null, terTimer=null;
@@ -2524,15 +2535,21 @@ function paintServerBox(){
   const dot=$("#srvDot"), st=$("#srvState");
   if(!dot) return;
   dot.className = "dot " + (PROXY ? "on" : "off");
-  st.textContent = PROXY ? (API ? "connected" : "connected (this page)")
-                         : (API ? "unreachable" : "not configured");
+  if(PROXY){ st.textContent = API ? "connected" : "connected (this page)"; return }
+  if(!API){ st.textContent = "not configured"; return }
+  // A browser will not let an https page call an http server, and the failure
+  // is indistinguishable from the server being down unless we say so.
+  st.textContent = (location.protocol==="https:" && /^http:\/\//i.test(API))
+    ? "blocked \u2014 needs https"
+    : "unreachable";
 }
 (function initServerBox(){
   const el=$("#srvUrl"); if(!el) return;
   el.value=API;
   let t=null;
   const apply=()=>{
-    const v=el.value.trim().replace(/\/+$/,"");
+    const v=normaliseBase(el.value);
+    if(v!==el.value) el.value=v;              // show what it was understood as
     if(v===API) return;
     API=v;
     if(v) localStorage.setItem("cspServer", v); else localStorage.removeItem("cspServer");
