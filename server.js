@@ -421,6 +421,25 @@ const server = http.createServer(async (req,res)=>{
       return send(res,200,"application/json",Buffer.from(JSON.stringify(out)),{"Cache-Control":"no-store"});
     }
 
+    /* Elevation, encoded rather than drawn, so a threshold can be moved in the
+       browser without a round trip per step. */
+    if(p.startsWith("/api/usgs/elev/")){
+      const m=p.match(/^\/api\/usgs\/elev\/(\d+)\/(\d+)\/(\d+)\.png$/);
+      if(!m) return send(res,400,"text/plain",Buffer.from("bad tile path"));
+      const z=+m[1], x=+m[2], y=+m[3];
+      if(z<0||z>22) return send(res,400,"text/plain",Buffer.from("bad zoom"));
+      const ck=key(`usgselev:${z}/${x}/${y}`);
+      const hit=cacheGet(ck, TTL_TILE);
+      if(hit) return send(res,hit.status,hit.type,hit.body,{"X-Cache":"hit"});
+      let out=null;
+      try{ out=await usgs.elevTile(z,x,y,256) }
+      catch(e){ return send(res,500,"text/plain",Buffer.from(String(e.message||e))) }
+      if(!out){ cachePut(ck,204,"image/png",Buffer.alloc(0));
+                return send(res,204,"image/png",Buffer.alloc(0),{"X-Coverage":"none"}) }
+      cachePut(ck,200,"image/png",out.png);
+      return send(res,200,"image/png",out.png,{"X-Coverage":String(out.coverage),"X-Cache":"miss"});
+    }
+
     /* Freshness, the way WA DNR cannot do it: HEAD and compare ETag. */
     if(p === "/api/usgs/check" && req.method === "POST"){
       const chunks=[]; for await (const c of req) chunks.push(c);

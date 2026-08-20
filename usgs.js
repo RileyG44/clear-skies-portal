@@ -576,6 +576,27 @@ function render(style, S){
   return encodePNG(out,size,size);
 }
 
+/* Elevation as a picture, so the browser can threshold it without asking again.
+   Terrarium encoding: (R*256 + G + B/256) - 32768, which holds a centimetre of
+   precision over the whole range. The tile carries no threshold, so it caches
+   once and a slider can move over it freely. */
+async function elevTile(z,x,y,size){
+  const S=await sampleGrid(z,x,y,size||256);
+  if(!S) return null;
+  const {grid,n}=S; const w=size||256;
+  const out=Buffer.alloc(w*w*4);
+  for(let yy=0;yy<w;yy++) for(let xx=0;xx<w;xx++){
+    const v=grid[(yy+1)*n+(xx+1)], o=(yy*w+xx)*4;
+    if(v===NODATA){ out[o+3]=0; continue }
+    const t=Math.max(0, Math.min(65535.99, v+32768));
+    out[o]=Math.floor(t/256)&255;
+    out[o+1]=Math.floor(t)&255;
+    out[o+2]=Math.floor((t-Math.floor(t))*256)&255;
+    out[o+3]=255;
+  }
+  return {png:encodePNG(out,w,w), coverage:+S.coverage.toFixed(3)};
+}
+
 async function renderTile(style,z,x,y,size){
   const S=await sampleGrid(z,x,y,size||256);
   if(!S) return null;
@@ -885,6 +906,6 @@ async function fabric(bbox, opt){
   };
 }
 
-module.exports = Object.assign(module.exports, { init, buildIndex, getIndex, findCells, cellOf, cellBounds, projectYear, scopeList, fabric,
+module.exports = Object.assign(module.exports, { init, buildIndex, getIndex, findCells, cellOf, cellBounds, projectYear, scopeList, fabric, elevTile,
                    openCog, cogTile, fetchRange, renderTile, sampleGrid, encodePNG,
                    checkFresh, tileKey, tileUrl, s3head, S3_BASE });
