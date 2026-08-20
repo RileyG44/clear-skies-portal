@@ -31,3 +31,7 @@ out/
 Thumbs.db
 Desktop.ini
 .DS_Store
+
+# Electron build output
+dist/
+build/icon-1024.png

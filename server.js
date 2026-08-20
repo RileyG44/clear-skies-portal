@@ -13,7 +13,7 @@ const usgs  = require("./usgs.js");
 const ROOT  = __dirname;
 const PORT  = Number(process.env.PORT || 8765);
 const HOST  = process.env.HOST || "127.0.0.1";   // 0.0.0.0 in a devcontainer/Codespace
-const CACHE = path.join(ROOT, ".cache");
+const CACHE = process.env.CSP_CACHE_DIR || path.join(ROOT, ".cache");   // packaged app redirects this outside the bundle
 const AREAS = path.join(CACHE, "areas");   // one manifest per downloaded area
 fs.mkdirSync(CACHE, {recursive:true});
 usgs.init(CACHE);
