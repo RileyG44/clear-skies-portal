@@ -92,6 +92,19 @@ body.collapsed #side{display:none}
   .leaflet-control-zoom{margin-bottom:calc(18px + env(safe-area-inset-bottom))}
 }
 
+/* ---- lidar server box ---- */
+#srvBox{margin-bottom:10px}
+#srvBox label{display:flex;align-items:center;gap:6px;font-size:11px;letter-spacing:.04em;
+              text-transform:uppercase;color:var(--dim);margin-bottom:5px}
+#srvBox .dot{width:7px;height:7px;border-radius:50%;background:var(--dim);flex:none}
+#srvBox .dot.on{background:oklch(72% .17 145)}
+#srvBox .dot.off{background:oklch(64% .18 25)}
+#srvState{text-transform:none;letter-spacing:0}
+#srvUrl{width:100%;padding:7px 9px;border-radius:7px;border:1px solid var(--line);
+        background:var(--page);color:var(--ink);font:inherit;font-size:12px}
+#srvUrl:focus{outline:none;border-color:var(--accent)}
+#srvBox .hint{margin-top:5px;font-size:11px;line-height:1.45;color:var(--dim)}
+
 /* ---- resize handle ---- */
 #drag{position:absolute;right:-4px;top:0;width:9px;height:100%;cursor:col-resize;z-index:1400}
 #drag::after{content:"";position:absolute;left:4px;top:0;width:1px;height:100%;
@@ -605,6 +618,14 @@ body.rowdrag{cursor:row-resize;user-select:none}
     </div>
 
     <div class="foot">
+      <div id="srvBox">
+        <label for="srvUrl">Lidar server <span id="srvDot" class="dot"></span><span id="srvState"></span></label>
+        <input id="srvUrl" type="url" inputmode="url" autocapitalize="off" autocorrect="off" spellcheck="false"
+               placeholder="https://your-mac.tailnet.ts.net">
+        <div class="hint">Leave empty when this page is served by server.js. Point it at a reachable
+        copy to get 1&nbsp;m lidar, WA&nbsp;DNR and fire overlays here. Imagery and national terrain
+        need no server.</div>
+      </div>
       <button class="linkbtn" id="resetPanes" title="Restore default order, sizes and collapse state">Reset panel layout</button>
       <div style="margin-top:6px">Sources: Copernicus Data Space &middot; Microsoft Planetary Computer &middot; AWS Earth Search &middot; NASA GIBS &middot; NISAR.
       All free, no API key. Place search by Photon (OpenStreetMap). Basemap by CARTO.</div>
@@ -1792,7 +1813,7 @@ const DepLayer = L.TileLayer.extend({
     const b=tileMerc(c).join(",");
     // through the local server when it's there, so tiles are cached on disk and
     // a pre-cached area keeps working with no network at all
-    if(PROXY) return `/api/3dep?bbox=${b}&rule=${encodeURIComponent(this.options.rule)}`;
+    if(PROXY) return `${API}/api/3dep?bbox=${b}&rule=${encodeURIComponent(this.options.rule)}`;
     const rr=encodeURIComponent(JSON.stringify({rasterFunction:this.options.rule}));
     return `${DEP_URL}?bbox=${b}&bboxSR=3857&imageSR=3857&size=256,256`
          + `&format=png&transparent=true&f=image&renderingRule=${rr}`;
@@ -1803,7 +1824,7 @@ const DepLayer = L.TileLayer.extend({
    zoom; 204 means no federal coverage for that tile and the layer underneath
    shows through. Needs server.js — the S3 bucket sets no CORS header. */
 const UsgsLayer = L.TileLayer.extend({
-  getTileUrl(c){ return `/api/usgs/tile/${this.options.style}/${c.z}/${c.x}/${c.y}.png` }
+  getTileUrl(c){ return `${API}/api/usgs/tile/${this.options.style}/${c.z}/${c.x}/${c.y}.png` }
 });
 
 /* Layer count barely changes how long WA DNR takes per tile, but it changes
@@ -1822,21 +1843,35 @@ const WaLayer = L.TileLayer.extend({
       return !e || !(e[2]<b[0] || e[0]>b[2] || e[3]<b[1] || e[1]>b[3]);
     }).slice(0, WA_PER_TILE);
     const ids=(hit.length?hit:all.slice(0,WA_PER_TILE)).join(",");
-    return `/api/wadnr/export?bbox=${b.join(",")}&size=256,256&layers=${ids}`;
+    return `${API}/api/wadnr/export?bbox=${b.join(",")}&size=256,256&layers=${ids}`;
   }
 });
+
+/* Where server.js lives. Empty means "same origin as this page", which is the
+   case when the Mac serves the page itself. Hosted elsewhere (GitHub Pages, the
+   home screen app) it can point at a reachable copy — a Tailscale address, say
+   — and server.js already answers with Access-Control-Allow-Origin: *, so the
+   cross-origin call is allowed. Everything that does not need the proxy keeps
+   working regardless of what this is set to. */
+let API = (localStorage.getItem("cspServer") || "").replace(/\/+$/,"");
+const api = p => API + p;
 
 let terLayer=null, terBase=null, PROXY=false, WA_LAYERS=null, waCover=null, terTimer=null;
 
 /* is the local proxy there? without it, WA DNR simply isn't reachable */
-fetch("/api/health").then(r=>r.ok?r.json():null).then(j=>{ PROXY=!!(j&&j.ok); paintTerrainInfo() })
-                    .catch(()=>{ PROXY=false; paintTerrainInfo() });
+function probeServer(){
+  return fetch(api("/api/health")).then(r=>r.ok?r.json():null)
+    .then(j=>{ PROXY=!!(j&&j.ok) })
+    .catch(()=>{ PROXY=false })
+    .then(()=>{ paintServerBox(); paintTerrainInfo(); return PROXY });
+}
+probeServer();
 
 /* MapServer layer tree, fetched once: raster layers are named "<datasetId>h" */
 let WA_EXTENT={};                     // layerId -> [xmin,ymin,xmax,ymax] in EPSG:3857
 async function waLayerIndex(){
   if(WA_LAYERS) return WA_LAYERS;
-  const j=await (await fetch("/api/wadnr/layers")).json();
+  const j=await (await fetch(api("/api/wadnr/layers"))).json();
   WA_LAYERS={}; WA_EXTENT={};
   for(const l of (j.layers||[])){
     const m=/^(\d+)h$/.exec(l.name||"");
@@ -1854,7 +1889,7 @@ async function waCoverage(){
   const b=map.getBounds();
   const gj={type:"Polygon",coordinates:[[[b.getWest(),b.getSouth()],[b.getEast(),b.getSouth()],
             [b.getEast(),b.getNorth()],[b.getWest(),b.getNorth()],[b.getWest(),b.getSouth()]]]};
-  const r=await fetch("/api/wadnr/query",{method:"POST",body:JSON.stringify(gj)});
+  const r=await fetch(api("/api/wadnr/query"),{method:"POST",body:JSON.stringify(gj)});
   if(!r.ok) return null;
   const rows=await r.json();
   if(!Array.isArray(rows) || !rows.length) return null;
@@ -2007,7 +2042,7 @@ let usgsCover=null, usgsCell=null;
 async function usgsCoverage(){
   const c=map.getCenter();
   try{
-    const r=await fetch(`/api/usgs/cover?lat=${c.lat.toFixed(5)}&lon=${c.lng.toFixed(5)}`);
+    const r=await fetch(`${API}/api/usgs/cover?lat=${c.lat.toFixed(5)}&lon=${c.lng.toFixed(5)}`);
     if(!r.ok) return null;
     const j=await r.json();
     usgsCell=j.cell;
@@ -2077,7 +2112,7 @@ const OVERLAYS = [
   /* Geology sits under the labels but over the imagery, and wants its own
      opacity in practice — it is an opaque polygon fill, not a line drawing. */
   { id:"geology", name:"Bedrock geology", via:"Macrostrat", sw:"#c98f6a", z:470, group:"Geology",
-    url:"/api/geo/macrostrat/{z}/{x}/{y}.png", needsProxy:true,
+    url:API+"/api/geo/macrostrat/{z}/{x}/{y}.png", needsProxy:true,
     attr:"Macrostrat — macrostrat.org", maxZoom:16, defaultOpacity:55 },
 
   { id:"sgmc", name:"State geologic map (SGMC)", via:"USGS", sw:"#b06a5a", z:465, group:"Geology",
@@ -2110,7 +2145,7 @@ function gibsDay(back){
 const SnowLayer = L.TileLayer.extend({
   getTileUrl(c){
     const b=tileMerc(c).join(",");
-    return `/api/snow?bbox=${b}&layer=${this.options.snow}`;
+    return `${API}/api/snow?bbox=${b}&layer=${this.options.snow}`;
   }
 });
 
@@ -2276,7 +2311,7 @@ const WARM_WARN=8000, WARM_MAX=40000;
 async function checkStaleAreas(){
   const el=$("#terStale"); if(!el || !PROXY) return;
   let areas=[];
-  try{ areas=await (await fetch("/api/warm/check")).json() }catch(e){ return }
+  try{ areas=await (await fetch(api("/api/warm/check"))).json() }catch(e){ return }
   if(!Array.isArray(areas) || !areas.length){ el.style.display="none"; return }
   const stale=areas.filter(a=>a.stale);
   if(!stale.length){
@@ -2321,11 +2356,11 @@ $("#terWarm").onclick=async ()=>{
               label:(pick.proj&&pick.proj.name) ? pick.proj.name : `z${z0}-${z1}`,
               layers: pick.src==="wadnr" && pick.proj ? String(pick.proj.dtm||"") : ""};
   msg.innerHTML=`<span class="spin"></span> starting &mdash; ${est.toLocaleString()} tiles at ${plan.mpp.toFixed(2)} m/px`;
-  try{ await fetch("/api/warm",{method:"POST",body:JSON.stringify(body)}) }
+  try{ await fetch(api("/api/warm"),{method:"POST",body:JSON.stringify(body)}) }
   catch(e){ msg.textContent="Could not start."; return }
   clearInterval(warmPoll);
   warmPoll=setInterval(async ()=>{
-    let s; try{ s=await (await fetch("/api/warm/status")).json() }catch(e){ return }
+    let s; try{ s=await (await fetch(api("/api/warm/status"))).json() }catch(e){ return }
     const pct = s.total ? Math.round(100*s.done/s.total) : 0;
     if(s.running){
       msg.innerHTML=`<div class="bar"><i style="width:${pct}%"></i></div>`
@@ -2449,6 +2484,32 @@ $("#q").addEventListener("keydown",acKey);
    worker is what keeps it opening when the Mac is asleep or off-network.
    Registration needs a secure context: it takes over https:// and localhost,
    and is simply skipped on a plain-http LAN address. */
+/* The address is remembered, so the installed app keeps its server across
+   launches. A page served by server.js itself needs none of this and shows the
+   field already connected. */
+function paintServerBox(){
+  const dot=$("#srvDot"), st=$("#srvState");
+  if(!dot) return;
+  dot.className = "dot " + (PROXY ? "on" : "off");
+  st.textContent = PROXY ? (API ? "connected" : "connected (this page)")
+                         : (API ? "unreachable" : "not configured");
+}
+(function initServerBox(){
+  const el=$("#srvUrl"); if(!el) return;
+  el.value=API;
+  let t=null;
+  const apply=()=>{
+    const v=el.value.trim().replace(/\/+$/,"");
+    if(v===API) return;
+    API=v;
+    if(v) localStorage.setItem("cspServer", v); else localStorage.removeItem("cspServer");
+    $("#srvState").textContent="checking\u2026";
+    probeServer().then(()=>{ if(PROXY) refreshTerrain() });
+  };
+  el.addEventListener("change", apply);
+  el.addEventListener("input", ()=>{ clearTimeout(t); t=setTimeout(apply, 900) });
+})();
+
 if("serviceWorker" in navigator && (location.protocol==="https:" || location.hostname==="localhost"))
   addEventListener("load",()=>navigator.serviceWorker.register("sw.js").catch(()=>{}));
 
