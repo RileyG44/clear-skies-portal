@@ -1269,8 +1269,8 @@ async function select(i){
     }catch(e){ $("#ctlName").textContent+="  (tile error)"; return; }
   }
   url=tuneTileUrl(url, it);
-  overlay=L.tileLayer(url,{opacity:+$("#op").value/100, maxZoom:19, zIndex:400,
-    attribution:it.src}).addTo(map);
+  overlay=L.tileLayer(url,{...IMG_TILE_OPTS, opacity:+$("#op").value/100, maxZoom:19,
+    zIndex:400, attribution:it.src}).addTo(map);
   if(it.bbox && it.srcKey!=="gibs"){
     // keep current view unless the item is off-screen
     const b=L.latLngBounds([it.bbox[1],it.bbox[0]],[it.bbox[3],it.bbox[2]]);
@@ -1363,6 +1363,19 @@ async function tileUrl(it){
 }
 
 /* a stable id for "the same patch of ground" across dates and providers */
+/* Fraction of the visible map a scene's footprint covers. Neighbours were
+   taken in whatever order Object.keys produced and then cut to a fixed count,
+   so the scene filling the gap you were looking at could be dropped in favour
+   of one barely clipping the corner. */
+function viewOverlap(it, vb){
+  if(!it || !it.bbox) return 0;
+  const [w,s,e,n]=it.bbox;
+  const iw=Math.max(0, Math.min(e,vb.getEast())  - Math.max(w,vb.getWest()));
+  const ih=Math.max(0, Math.min(n,vb.getNorth()) - Math.max(s,vb.getSouth()));
+  const va=(vb.getEast()-vb.getWest())*(vb.getNorth()-vb.getSouth());
+  return va>0 ? (iw*ih)/va : 0;
+}
+
 function footprintKey(it){
   const p=it.props||{};
   if(p["grid:code"])          return String(p["grid:code"]).replace(/^MGRS-/,"MGRS-");
@@ -1389,9 +1402,9 @@ function clearMosaic(){
 let mosToken=0;
 async function fillMosaic(primary, force){
   const token=++mosToken;
-  clearMosaic();
   const stat=$("#mosStat");
   if((!force && !$("#mosaic").checked) || !primary || !primary.tiles || primary.srcKey==="gibs"){
+    clearMosaic();
     if(stat) stat.textContent = primary && primary.srcKey==="gibs"
       ? "Global layer \u2014 already covers the whole view." : "";
     return;
@@ -1422,10 +1435,29 @@ async function fillMosaic(primary, force){
   for(const k of keys)
     CAND[k].sort((a,b)=> Math.abs(+new Date(a.date)-t0)-Math.abs(+new Date(b.date)-t0)
                        || (a.cloud??50)-(b.cloud??50));
-  const use=keys.slice(0,14);
-  const results=await Promise.all(use.map(k=>addNeighbour(k, CAND[k][0], token)));
+  /* Prefer the footprints that actually fill the visible gap, and ignore the
+     ones only grazing it — each one is a tile layer, and every extra layer
+     competes for the same handful of browser connections. */
+  const vb=map.getBounds();
+  const ranked=keys.map(k=>[k, viewOverlap(CAND[k][0], vb)])
+                   .filter(([,ov])=>ov>0.0008)
+                   .sort((p1,p2)=>p2[1]-p1[1]);
+  const use=ranked.slice(0,14).map(([k])=>k);
+
+  /* Swap by difference. Clearing first meant every pan and every zoom threw the
+     whole mosaic away, showed bare basemap for as long as the STAC search took,
+     then re-downloaded every tile of every scene. Layers that are still wanted
+     now stay exactly where they are. */
+  const want=new Map(use.map(k=>[k, CAND[k][0]]));
+  const idOf=it=>it && (it.id || (it.tiles&&it.tiles.url) || "");
+  for(const nb of NEIGH.slice()){
+    const keep=want.get(nb.key);
+    if(keep && idOf(keep)===idOf(nb.item)) want.delete(nb.key);   // already on screen
+    else { map.removeLayer(nb.layer); NEIGH=NEIGH.filter(x=>x!==nb) }
+  }
+  const results=await Promise.all([...want].map(([k,it])=>addNeighbour(k, it, token)));
   if(token!==mosToken) return;                       // a newer fill superseded this one
-  const n=results.filter(Boolean).length;
+  const n=NEIGH.length;
   if(stat) stat.textContent = n
     ? `${n} surrounding scene${n>1?"s":""} filled \u2014 right-click one to change it.`
     : "No matching neighbouring scenes in view.";
@@ -1435,7 +1467,8 @@ async function addNeighbour(key, it, token){
   try{
     const url=await tileUrl(it); if(!url) return false;
     if(token!=null && token!==mosToken) return false;
-    const layer=L.tileLayer(url,{opacity:+$("#op").value/100, maxZoom:19, zIndex:200, className:"nb"}).addTo(map);
+    const layer=L.tileLayer(url,{...IMG_TILE_OPTS, opacity:+$("#op").value/100,
+                                 maxZoom:19, zIndex:200, className:"nb"}).addTo(map);
     NEIGH.push({key, item:it, layer});
     return true;
   }catch(e){ return false }
@@ -1704,6 +1737,11 @@ const MERC_R = 20037508.342789244;
 const TILE_OPTS = { keepBuffer:4, updateWhenZooming:false, updateWhenIdle:false,
   crossOrigin:true,
   errorTileUrl:"data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=" };
+/* Scene imagery comes from third-party tilers (titiler.xyz among them) that
+   send no Access-Control-Allow-Origin. Asking for crossOrigin there blocks the
+   tile outright, so imagery takes the same buffering and error handling as the
+   local layers but not that flag. */
+const IMG_TILE_OPTS = {...TILE_OPTS, crossOrigin:false};
 const DEP_URL = "https://elevation.nationalmap.gov/arcgis/rest/services/3DEPElevation/ImageServer/exportImage";
 const DEP_RULE = { hs:"Hillshade Gray", hsmulti:"Hillshade Multidirectional",
                    tint:"Hillshade Elevation Tinted", slope:"Slope Map", aspect:"Aspect Map",
