@@ -357,7 +357,12 @@ const server = http.createServer(async (req,res)=>{
     /* Rebuild the S3 project index. Cheap to serve, ~20 s to build, 30-day TTL. */
     if(p === "/api/usgs/index"){
       const force = u.searchParams.get("force")==="1";
-      const idx=await usgs.buildIndex(["WA_"], force);
+      // ?states=WA_,OR_ narrows the build; omitted, it follows CSP_USGS_STATES
+      // (default: the whole archive).
+      const sp = u.searchParams.get("states");
+      const states = sp ? sp.split(",").map(x=>x.trim()).filter(Boolean)
+                          .map(x=>x.endsWith("_")?x:x+"_") : null;
+      const idx=await usgs.buildIndex(states, force);
       const projects=Object.keys(idx.projects).map(k=>({
         project:k, zone:idx.projects[k].zone, year:usgs.projectYear(k),
         tiles:Object.keys(idx.projects[k].cells).length,

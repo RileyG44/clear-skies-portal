@@ -25,6 +25,11 @@ const S3_BASE = "StagedProducts/Elevation/1m/Projects/";
 const TIF_RE = /^USGS_(?:1[Mm]_(?:(\d+)_)?|one_meter_)x(\d+)y(\d+)_(.+)\.tif$/;
 
 const INDEX_TTL = 30*24*3600*1000;      // the archive changes on a yearly rhythm
+/* Which projects to index. "ALL" is every project in the archive (964 of them
+   across 51 states); a comma-separated list of state prefixes keeps the index
+   small and the first build quick — CSP_USGS_STATES=WA_,OR_,ID_ */
+const SCOPE = (process.env.CSP_USGS_STATES || "ALL").trim();
+const INDEX_CONCURRENCY = 12;           // S3 listing is latency-bound, not rate-limited
 const CELL_M    = 10000;                // 10 km UTM cells
 
 let CACHE_DIR = null;
@@ -57,11 +62,33 @@ const s3head = pathname => new Promise((res,rej)=>{
    a wrong "Mt Baker has no coverage" answer. */
 let INDEX = null;
 
+function scopeList(){
+  if(/^all$/i.test(SCOPE)) return [""];            // empty prefix lists the lot
+  return SCOPE.split(",").map(x=>x.trim()).filter(Boolean)
+              .map(x=>x.endsWith("_") ? x : x+"_");
+}
+
+/* Run fn over items n at a time. The whole-archive build is ~1000 sequential
+   round trips otherwise, which is minutes of doing nothing but waiting. */
+async function pool(items, n, fn){
+  let i=0;
+  await Promise.all(Array.from({length:Math.min(n,items.length)}, async()=>{
+    while(i<items.length) await fn(items[i++]);
+  }));
+}
+
 async function listProjects(prefix){
-  const xml=(await s3(`/?list-type=2&prefix=${S3_BASE}${prefix}&delimiter=/&max-keys=1000`)).body.toString();
-  return [...xml.matchAll(/<Prefix>([^<]+)<\/Prefix>/g)]
-    .map(m=>m[1].split("/").filter(Boolean).pop())
-    .filter(p=>p && p!==prefix.replace(/\/$/,""));
+  const out=[]; let tok="";
+  do{
+    const url=`/?list-type=2&prefix=${S3_BASE}${prefix}&delimiter=/&max-keys=1000`
+            + (tok?`&continuation-token=${encodeURIComponent(tok)}`:"");
+    const xml=(await s3(url)).body.toString();
+    out.push(...[...xml.matchAll(/<Prefix>([^<]+)<\/Prefix>/g)]
+      .map(m=>m[1].split("/").filter(Boolean).pop())
+      .filter(p=>p && p!==prefix.replace(/\/$/,"")));
+    const t=xml.match(/<NextContinuationToken>([^<]+)</); tok=t?t[1]:"";
+  }while(tok);
+  return out;
 }
 
 async function listProjectTiles(proj){
@@ -94,19 +121,25 @@ async function buildIndex(states, force){
     }catch(e){}
   }
   if(INDEX && !force) return INDEX;
-  const out={built:Date.now(), projects:{}};
-  for(const st of (states||["WA_"])){
-    const projs=await listProjects(st);
-    for(const p of projs){
+  const out={built:Date.now(), scope:(states||scopeList()).join(",")||"ALL", projects:{}};
+  const names=[];
+  for(const st of (states||scopeList())) names.push(...await listProjects(st));
+  const uniq=[...new Set(names)].filter(Boolean);
+  let done=0, failed=0;
+  await pool(uniq, INDEX_CONCURRENCY, async p=>{
+    try{
       const {cells,zone}=await listProjectTiles(p);
       if(Object.keys(cells).length) out.projects[p]={zone, cells};
-    }
-  }
+    }catch(e){ failed++ }                 // one unreachable project must not sink the build
+    if(++done % 100 === 0 || done===uniq.length)
+      console.log(`  usgs index: ${done}/${uniq.length} projects` + (failed?` (${failed} failed)`:""));
+  });
+  out.failed=failed;
   INDEX=out;
   try{ fs.writeFileSync(f, JSON.stringify(out)) }catch(e){}
   return out;
 }
-async function getIndex(){ return INDEX || buildIndex(["WA_"]) }
+async function getIndex(){ return INDEX || buildIndex(null) }
 
 /* A project's flight year, for preferring newer data. The name is the only
    place it appears; several carry two (2019_D20 = flown 2019, delivered 2020). */
@@ -123,10 +156,64 @@ function projectYear(name){
    (origin comes back as x*10000-6, y*10000+6). Using floor() on the northing
    instead of ceil() puts you one 10 km cell too far south. */
 const cellOf = (e,n) => `x${Math.floor(e/CELL_M)}y${Math.ceil(n/CELL_M)}`;
+
+/* UTM zone from a projected EPSG code: WGS84 north is 326xx, NAD83 is 269xx. */
+const zoneOfEpsg = e => (e>=32601&&e<=32660) ? e-32600
+                      : (e>=26901&&e<=26923) ? e-26900 : null;
+
+/* A cell key is only unique inside its UTM zone, so x59y519 in Washington and
+   x59y519 in Maine are different places with the same name. Two thirds of the
+   archive names files without a zone, and plenty of projects straddle a zone
+   boundary, so the zone is read per cell out of the GeoTIFF that claims it.
+   That header is the one renderTile needs anyway, and both it and the answer
+   are cached, so it is paid once. A file we cannot parse stays unknown and is
+   left in — renderTile's own EPSG check is the backstop for those. */
+const ZONES = new Map();                  // "project/cell" -> zone | null, on demand
+let ZONES_LOADED = false;
+function zonesPath(){ return path.join(CACHE_DIR,"usgs","zones.json") }
+function loadZones(){
+  if(ZONES_LOADED) return; ZONES_LOADED=true;
+  try{ const o=JSON.parse(fs.readFileSync(zonesPath(),"utf8"));
+       for(const k in o) ZONES.set(k, o[k]); }catch(e){}
+}
+function saveZones(){
+  try{ fs.writeFileSync(zonesPath(), JSON.stringify(Object.fromEntries(ZONES))) }catch(e){}
+}
+
+async function resolveCellZone(proj, file){
+  try{
+    const t=await openCog(`${S3_BASE}${proj}/TIFF/${file}`);
+    return zoneOfEpsg(t.geo && t.geo.epsg);
+  }catch(e){ return null }
+}
 function cellBounds(cell){
   const m=cell.match(/x(\d+)y(\d+)/);
   const x=+m[1], y=+m[2];
   return {w:x*CELL_M, e:(x+1)*CELL_M, n:y*CELL_M, s:(y-1)*CELL_M};
+}
+
+/* Projects holding this cell in this zone, newest first. The point lookup and
+   the renderer both go through here, so they cannot disagree about coverage. */
+async function cellCandidates(idx, cell, zone){
+  loadZones();
+  const out=[]; let dirty=false;
+  for(const p in idx.projects){
+    const pr=idx.projects[p];
+    if(pr.zone && pr.zone!==zone) continue;          // known zone must match
+    const c=pr.cells[cell];
+    if(!c) continue;
+    let z=pr.zone;
+    if(z==null){
+      const k=`${p}/${cell}`;
+      if(ZONES.has(k)) z=ZONES.get(k);
+      else { z=await resolveCellZone(p,c.f); ZONES.set(k,z); dirty=true; }
+      if(z!=null && z!==zone) continue;              // same cell name, different zone
+    }
+    out.push({project:p, cell, zone:z||zone, file:c.f, size:c.size, year:projectYear(p)});
+  }
+  if(dirty) saveZones();
+  out.sort((a,b)=>b.year-a.year || b.size-a.size);
+  return out;
 }
 
 /* Which projects hold the cell containing this point, newest first. */
@@ -135,14 +222,7 @@ async function findCells(lon, lat){
   const zone=cog.utmZone(lon);
   const u=cog.lonLatToUTM(lon,lat,zone);
   const cell=cellOf(u.e,u.n);
-  const hits=[];
-  for(const p in idx.projects){
-    const pr=idx.projects[p];
-    if(pr.zone && pr.zone!==zone) continue;          // known zone must match
-    const c=pr.cells[cell];
-    if(c) hits.push({project:p, cell, zone:pr.zone||zone, file:c.f, size:c.size, year:projectYear(p)});
-  }
-  hits.sort((a,b)=>b.year-a.year || b.size-a.size);
+  const hits=await cellCandidates(idx, cell, zone);
   return {zone, easting:u.e, northing:u.n, cell, hits};
 }
 
@@ -275,15 +355,8 @@ async function sampleGrid(z,x,y,size){
   const idx=await getIndex();
   const srcs=[];
   for(const cell of cells){
-    const cands=[];
-    for(const p in idx.projects){
-      const pr=idx.projects[p];
-      if(pr.zone && pr.zone!==zone) continue;
-      const c=pr.cells[cell];
-      if(c) cands.push({project:p, cell, file:c.f, size:c.size, year:projectYear(p)});
-    }
-    cands.sort((q,w)=>w.year-q.year || w.size-q.size);
-    if(cands[0]) srcs.push(cands[0]);
+    const cands=await cellCandidates(idx, cell, zone);
+    if(cands.length) srcs.push(cands);              // fallbacks kept, best first
   }
   if(!srcs.length) return null;
 
@@ -292,17 +365,26 @@ async function sampleGrid(z,x,y,size){
      that follows shows up as a cross-hatch once the hillshade takes gradients
      of it. Downsampling is safe; upsampling is not. */
   const opened=[];
-  for(const s of srcs){
-    const key=tileKey(s);
-    let t; try{ t=await openCog(key) }catch(e){ continue }
-    if(t.geo.epsg && t.geo.epsg!==26900+zone && t.geo.epsg!==32600+zone) continue;
-    const base=t.geo.scale[0]||1;
-    let lvl=0;
-    for(let i=0;i<t.levels.length;i++){
-      if(base*Math.pow(2,i) <= groundRes) lvl=i; else break;
+  const PER_CELL = 3;
+  for(const group of srcs){
+    /* Newest first, but the winner may be in the wrong projection, not be a
+       tiled COG at all, or simply be nodata here — a 10 km cell is a bounding
+       box, not a promise of data. Keep a couple of fallbacks so the sampler
+       below can fall through to them. */
+    let got=0;
+    for(const s of group){
+      const key=tileKey(s);
+      let t; try{ t=await openCog(key) }catch(e){ continue }
+      if(t.geo.epsg && t.geo.epsg!==26900+zone && t.geo.epsg!==32600+zone) continue;
+      const base=t.geo.scale[0]||1;
+      let lvl=0;
+      for(let i=0;i<t.levels.length;i++){
+        if(base*Math.pow(2,i) <= groundRes) lvl=i; else break;
+      }
+      opened.push({s,key,t,lvl,res:base*Math.pow(2,lvl),
+                   ox:t.geo.tie[3], oy:t.geo.tie[4], nodata:t.geo.nodata, tiles:new Map()});
+      if(++got>=PER_CELL) break;
     }
-    opened.push({s,key,t,lvl,res:base*Math.pow(2,lvl),
-                 ox:t.geo.tie[3], oy:t.geo.tie[4], nodata:t.geo.nodata, tiles:new Map()});
   }
   if(!opened.length) return null;
 
@@ -635,6 +717,6 @@ module.exports.areaCheck=areaCheck;
 module.exports.planTiles=planTiles;
 module.exports.sourcesForArea=sourcesForArea;
 
-module.exports = Object.assign(module.exports, { init, buildIndex, getIndex, findCells, cellOf, cellBounds, projectYear,
+module.exports = Object.assign(module.exports, { init, buildIndex, getIndex, findCells, cellOf, cellBounds, projectYear, scopeList,
                    openCog, cogTile, fetchRange, renderTile, sampleGrid, encodePNG,
                    checkFresh, tileKey, tileUrl, s3head, S3_BASE });
