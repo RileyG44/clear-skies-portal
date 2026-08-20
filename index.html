@@ -79,15 +79,13 @@ body.collapsed #side{display:none}
    becomes a sheet sliding over a full-bleed map, so the map is the page and
    the controls are summoned over it. */
 @media (max-width:760px){
+  :root{--sheet-w:min(82vw,380px)}           /* leaves room for the toggle beside it */
   #app{position:relative}
   #map{position:absolute;inset:0;flex:none;width:100%;height:100%}
   #side{position:absolute;top:0;bottom:0;left:0;z-index:1200;
-        width:min(85vw,400px);min-width:0;max-width:none;
+        width:var(--sheet-w);min-width:0;max-width:none;
         padding-top:env(safe-area-inset-top);
         box-shadow:0 0 40px rgba(0,0,0,.55)}
-  #sideToggle{z-index:1300;top:calc(12px + env(safe-area-inset-top))}
-  /* park the toggle just clear of the sheet while it is open */
-  body:not(.collapsed) #sideToggle{left:calc(min(85vw,400px) + 8px)}
   #drag{display:none}                        /* drag-to-resize is a mouse idea */
   .leaflet-control-zoom{margin-bottom:calc(18px + env(safe-area-inset-bottom))}
 }
@@ -399,6 +397,27 @@ body.rowdrag{cursor:row-resize;user-select:none}
 .leaflet-tooltip{background:var(--tooltip-bg);border:1px solid var(--line);color:var(--ink);
   box-shadow:var(--shadow-raised);font-size:11px;border-radius:var(--radius-chip)}
 .leaflet-tooltip-top:before{border-top-color:var(--line)}
+
+/* ---- phone: the panel toggle ------------------------------------------
+   #sideToggle is declared further down this sheet than the phone block near
+   the top, and at equal specificity the later declaration wins — so the
+   phone sizing has to live here, at the end, or it silently does nothing.
+   It was doing nothing: the button stayed 32px at top:12px, which on a
+   notched iPhone in standalone mode is underneath the status bar, leaving
+   no way to reopen the panel once selecting a scene had closed it. */
+@media (max-width:760px){
+  #sideToggle{
+    width:44px;height:44px;                  /* iOS minimum touch target */
+    z-index:1300;
+    top:calc(10px + env(safe-area-inset-top));
+    left:calc(10px + env(safe-area-inset-left));
+  }
+  #sideToggle svg{width:20px;height:20px}
+  /* while the sheet is open the button sits just clear of its edge */
+  body:not(.collapsed) #sideToggle{
+    left:calc(var(--sheet-w) + 8px + env(safe-area-inset-left));
+  }
+}
 </style>
 </head>
 <body>
