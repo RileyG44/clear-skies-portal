@@ -3,7 +3,11 @@
    single 3 MB elevation read would blow the origin's storage budget for no
    benefit. This exists so the app opens when the network (or the Mac) is
    unreachable, rather than showing a browser error page. */
-const SHELL = "clear-skies-shell-v1";
+/* Bump this on every deploy. activate() deletes every cache whose name does
+   not match, so a new name is what actually evicts the old shell. With a fixed
+   name there was no way to invalidate anything: an installed copy could serve
+   a months-old page for ever and look like the features had never shipped. */
+const SHELL = "clear-skies-shell-2026-08-20b";
 const ASSETS = ["./", "./index.html", "./manifest.json",
                 "./icon-180.png", "./icon-192.png", "./icon-512.png"];
 
@@ -26,7 +30,10 @@ self.addEventListener("fetch", e => {
 
   // Navigation: fresh when we can reach the server, cached shell when we cannot.
   if (req.mode === "navigate"){
-    e.respondWith(fetch(req)
+    /* cache:"reload" so this bypasses the HTTP cache as well. Pages serves the
+       page with its own max-age, and without this the worker could fetch
+       "fresh" and still be handed a stale copy by the browser cache. */
+    e.respondWith(fetch(req, {cache:"reload"})
       .then(r => { const c=r.clone(); caches.open(SHELL).then(x=>x.put("./index.html", c)); return r })
       .catch(() => caches.match("./index.html")));
     return;
