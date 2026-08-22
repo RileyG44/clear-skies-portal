@@ -52,9 +52,11 @@ new vm.Script(read("mosaic-core.js"),{filename:"mosaic-core.js"});
 const versionSandbox={};
 vm.runInNewContext(read("version.js"),versionSandbox,{filename:"version.js"});
 assert.match(versionSandbox.CSP_BUILD,/^\d{4}-\d{2}-\d{2}[a-z]$/,"build version must be date plus revision letter");
-assert(index.includes('<script src="version.js"></script>'),"index must load the shared build version");
+assert(index.includes(`<script src="version.js?build=${versionSandbox.CSP_BUILD}"></script>`),
+       "page must cache-bust and load the shared build version");
 assert(index.includes('<script src="mosaic-core.js"></script>'),"index must load the tested mosaic core");
-assert(read("sw.js").includes('importScripts("./version.js")'),"service worker must load the shared build version");
+assert(read("sw.js").includes(`const CSP_BUILD = "${versionSandbox.CSP_BUILD}";`),
+       "service worker cache namespace must use the page build version");
 assert(index.includes('register("sw.js",{updateViaCache:"none"})'),
        "service-worker imports must bypass stale HTTP cache during update checks");
 assert(index.includes('id="snapshot"'),"map snapshot control must be present");

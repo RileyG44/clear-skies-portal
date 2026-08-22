@@ -3,14 +3,13 @@
    single 3 MB elevation read would blow the origin's storage budget for no
    benefit. This exists so the app opens when the network (or the Mac) is
    unreachable, rather than showing a browser error page. */
-/* Bump this on every deploy. activate() deletes every cache whose name does
-   not match, so a new name is what actually evicts the old shell. With a fixed
-   name there was no way to invalidate anything: an installed copy could serve
-   a months-old page for ever and look like the features had never shipped. */
-importScripts("./version.js");
-const SHELL = `clear-skies-shell-${globalThis.CSP_BUILD}`;
+/* Bump this on every deploy. Keeping the build literal here, plus a versioned
+   page-script URL, prevents an older worker from serving a stale version.js
+   while a newer HTML shell is already live. */
+const CSP_BUILD = "2026-08-22g";
+const SHELL = `clear-skies-shell-${CSP_BUILD}`;
 const ASSETS = ["./", "./index.html", "./manifest.json", "./mosaic-core.js",
-                "./version.js", "./icon-180.png", "./icon-192.png", "./icon-512.png"];
+                `./version.js?build=${CSP_BUILD}`, "./icon-180.png", "./icon-192.png", "./icon-512.png"];
 
 self.addEventListener("install", e => {
   e.waitUntil(caches.open(SHELL).then(c => c.addAll(ASSETS)).then(() => self.skipWaiting()));
