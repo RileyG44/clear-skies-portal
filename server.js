@@ -22,7 +22,7 @@ fs.mkdirSync(AREAS, {recursive:true});
 const MIME = {".html":"text/html; charset=utf-8",".js":"text/javascript",".css":"text/css",
   ".json":"application/json",".png":"image/png",".jpg":"image/jpeg",".jpeg":"image/jpeg",
   ".svg":"image/svg+xml",".md":"text/markdown; charset=utf-8",".txt":"text/plain; charset=utf-8"};
-const PUBLIC_FILES = new Set(["index.html","version.js","sw.js","manifest.json",
+const PUBLIC_FILES = new Set(["index.html","version.js","mosaic-core.js","sw.js","manifest.json",
   "icon-180.png","icon-192.png","icon-512.png"]);
 
 const WADNR_HOST = "lidarportal.dnr.wa.gov";

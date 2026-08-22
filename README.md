@@ -79,7 +79,9 @@ confirm `/api/health` answers.
 | File | What it is |
 |---|---|
 | `index.html` | The whole app — one self-contained file, Leaflet inlined |
+| `mosaic-core.js` | Tested footprint geometry, antimeridian, identity, coverage and imagery LOD helpers |
 | `server.js` | Local terrain engine: static files, validated proxying, request coalescing, retries and disk cache |
+| `SOL_HIGH_IMPLEMENTATION_HANDOFF.md` | Detailed implementation plan for the remaining lidar, landscape, geology, sidebar, persistence and imagery work |
 | `test-server.js` | Offline black-box checks for CORS, request limits, traversal protection and server health |
 | `version.js` | One build identifier shared by the page and service worker cache |
 | `TODO.md` | Work queue. Say "check the TODO" to a fresh Claude session and it picks up from there |

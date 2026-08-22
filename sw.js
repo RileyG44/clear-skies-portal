@@ -9,7 +9,7 @@
    a months-old page for ever and look like the features had never shipped. */
 importScripts("./version.js");
 const SHELL = `clear-skies-shell-${globalThis.CSP_BUILD}`;
-const ASSETS = ["./", "./index.html", "./manifest.json",
+const ASSETS = ["./", "./index.html", "./manifest.json", "./mosaic-core.js",
                 "./version.js", "./icon-180.png", "./icon-192.png", "./icon-512.png"];
 
 self.addEventListener("install", e => {
