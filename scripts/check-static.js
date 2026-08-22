@@ -55,6 +55,8 @@ assert.match(versionSandbox.CSP_BUILD,/^\d{4}-\d{2}-\d{2}[a-z]$/,"build version 
 assert(index.includes('<script src="version.js"></script>'),"index must load the shared build version");
 assert(index.includes('<script src="mosaic-core.js"></script>'),"index must load the tested mosaic core");
 assert(read("sw.js").includes('importScripts("./version.js")'),"service worker must load the shared build version");
+assert(read(".github/workflows/ci.yml").includes("index.html mosaic-core.js version.js"),
+       "Pages artifact must include mosaic-core.js beside index.html");
 
 const manifest=JSON.parse(read("manifest.json"));
 const sources=JSON.parse(read("sources.json"));

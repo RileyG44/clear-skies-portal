@@ -3,7 +3,7 @@
 Date: 2026-08-22  
 Target repository: `RileyG44/clear-skies-portal`  
 Target branch: `main`  
-Starting release: build `2026-08-22c` (the commit containing this document)
+Starting release: build `2026-08-22d` (the commit containing this document)
 
 ## Operating instruction
 
@@ -11,7 +11,7 @@ Read this entire document, `README.md`, `TODO.md`, `lidar-research.md`, and the 
 
 The product goal is a fast research-grade imagery, lidar, terrain, landscape, and geology viewer. “Working” means the visible live workflow is reliable, not merely that code compiles. Preserve the last good rendered frame/layer while replacements load; empty, failed, or unavailable data must be transparent and explained, never black.
 
-## What release 2026-08-22c already ships
+## What release 2026-08-22d already ships
 
 Do not reimplement these items:
 
