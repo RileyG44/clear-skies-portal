@@ -74,6 +74,13 @@ place to declare `engines`, nothing more. CI (`.github/workflows/ci.yml`) syntax
 `server.js` and the Python scripts, validates `sources.json`, and boots the server to
 confirm `/api/health` answers.
 
+## Save a map snapshot
+
+Use the camera button beside the map-panel toggle. Choose **This Tab** in the browser's
+capture prompt and the portal downloads a PNG of the live map viewport, including its
+currently rendered imagery, terrain, and overlays. Browsers without tab capture open
+their print dialog instead, where the same viewport can be saved as a PDF.
+
 ## What's in the box
 
 | File | What it is |

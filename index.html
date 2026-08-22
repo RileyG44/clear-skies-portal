@@ -46,6 +46,13 @@
   --red:oklch(66.6% .18 21.433);
   --red-tint:oklch(66.6% .18 21.433/.14);
   --tooltip-bg:oklch(18.2% .004 264.459);
+  --glass-side:oklch(23.1% .004 264.487/.82);
+  --glass-pane:oklch(23.1% .004 264.487/.76);
+  --glass-head:oklch(20.9% .004 264.477/.66);
+  --glass-control:oklch(26% .006 271.191/.78);
+  --glass-card:oklch(23.1% .004 264.487/.78);
+  --glass-line:oklch(100% 0 0/.12);
+  --side-w:430px;
 
   --radius-card:10px; --radius-control:8px; --radius-chip:6px;
   --shadow-btn:0 0 0 1px oklch(100% 0 0/.1),0 1px 2px oklch(0% 0 0/.3);
@@ -73,24 +80,22 @@ body{
   -webkit-font-smoothing:antialiased; overflow:hidden;
   font-feature-settings:"cv05" 1,"ss01" 1;
 }
-#app{display:flex;height:100vh;height:100dvh}
-#side{width:430px;min-width:280px;max-width:860px;background:var(--canvas);
-      border-right:1px solid var(--line);display:flex;flex-direction:column;
-      position:relative;flex-shrink:0}
+#app{position:relative;height:100vh;height:100dvh}
+#side{width:430px;min-width:280px;max-width:860px;background:var(--glass-side);
+      border-right:1px solid var(--glass-line);display:flex;flex-direction:column;
+      position:absolute;inset:0 auto 0 0;z-index:1200;flex-shrink:0;
+      backdrop-filter:blur(24px) saturate(1.28);-webkit-backdrop-filter:blur(24px) saturate(1.28);
+      box-shadow:12px 0 32px oklch(0% 0 0/.18)}
 body.collapsed #side{display:none}
-#map{flex:1;position:relative;background:var(--page)}
+#map{position:absolute;inset:0;width:100%;height:100%;background:var(--page)}
 .leaflet-container img.leaflet-tile{mix-blend-mode:normal}
 .leaflet-container:not(.leaflet-pan-anim):not(.leaflet-zoom-anim) .leaflet-tile{transition:opacity .16s linear}
 
 /* ---- phones ------------------------------------------------------------
-   #side is a 430px flex item with a 280px floor, which on a 375px screen
-   leaves the map exactly no room. Below 760px it stops being a column and
-   becomes a sheet sliding over a full-bleed map, so the map is the page and
-   the controls are summoned over it. */
+   The desktop panel already overlays the full-bleed map. On a phone it narrows
+   to a sheet so a large, reachable slice of the map remains beside the panel. */
 @media (max-width:760px){
   :root{--sheet-w:min(82vw,380px)}           /* leaves room for the toggle beside it */
-  #app{position:relative}
-  #map{position:absolute;inset:0;flex:none;width:100%;height:100%}
   #side{position:absolute;top:0;bottom:0;left:0;z-index:1200;
         width:var(--sheet-w);min-width:0;max-width:none;
         padding-top:env(safe-area-inset-top);
@@ -122,17 +127,17 @@ body.dragging{cursor:col-resize;user-select:none}
 body.dragging #map{pointer-events:none}
 
 /* ---- header ---- */
-header{padding:16px 18px 13px 16px;border-bottom:1px solid var(--line)}
+header{padding:16px 18px 13px 16px;border-bottom:1px solid var(--glass-line);background:var(--glass-head)}
 h1{font-size:15px;font-weight:600;letter-spacing:-.015em}
 h1 span{color:var(--accent-ink)}
 .sub{color:var(--ink-3);font-size:11.5px;margin-top:3px;letter-spacing:-.005em}
 
 /* ---- controls ---- */
-.searchbox{padding:12px 18px 13px 16px;border-bottom:1px solid var(--line);position:relative}
+.searchbox{padding:12px 18px 13px 16px;border-bottom:1px solid var(--glass-line);position:relative;background:oklch(23.1% .004 264.487/.34)}
 .row{display:flex;gap:6px}
 #iw{position:relative;flex:1;min-width:0}
 input[type=text],select{
-  font:inherit;background:var(--field);color:var(--ink);
+  font:inherit;background:var(--glass-control);color:var(--ink);
   border:1px solid var(--line-strong);border-radius:var(--radius-control);
   padding:8px 11px;outline:none;box-shadow:var(--shadow-inset-field);
   transition:border-color var(--dur) var(--ease-out),box-shadow var(--dur) var(--ease-out);
@@ -147,7 +152,7 @@ button:active{transform:translateY(.5px)}
 #go{background:var(--accent);border:none;color:oklch(17% .02 254);font-weight:600;
     padding:8px 15px;box-shadow:var(--shadow-btn);white-space:nowrap;letter-spacing:-.005em}
 #go:hover{background:var(--accent-ink)}
-.iconbtn{background:var(--surface);border:1px solid var(--line-strong);color:var(--ink-2);
+.iconbtn{background:var(--glass-control);border:1px solid var(--line-strong);color:var(--ink-2);
   padding:8px 9px;min-width:36px;display:flex;align-items:center;justify-content:center;
   box-shadow:var(--shadow-btn)}
 .iconbtn:hover{color:var(--accent-ink);border-color:var(--accent);background:var(--hover)}
@@ -155,7 +160,7 @@ button:active{transform:translateY(.5px)}
 .iconbtn svg{width:15px;height:15px;display:block}
 .iconbtn.busy svg{animation:pulse 1s ease-in-out infinite}
 @keyframes pulse{50%{opacity:.35}}
-.ghost{background:var(--surface);border:1px solid var(--line-strong);color:var(--ink);
+.ghost{background:var(--glass-control);border:1px solid var(--line-strong);color:var(--ink);
        padding:7px 12px;font-weight:500;box-shadow:var(--shadow-btn)}
 .ghost:hover{background:var(--hover)}
 
@@ -169,9 +174,9 @@ button:active{transform:translateY(.5px)}
 .check.fire input{accent-color:var(--red)}
 
 /* ---- status chips ---- */
-#status{padding:9px 18px 9px 16px;font-size:11px;color:var(--ink-3);border-bottom:1px solid var(--line);
-        min-height:36px;display:flex;align-items:center;gap:6px;flex-wrap:wrap}
-.chip{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius-chip);
+#status{padding:9px 18px 9px 16px;font-size:11px;color:var(--ink-3);border-bottom:1px solid var(--glass-line);
+        min-height:36px;display:flex;align-items:center;gap:6px;flex-wrap:wrap;background:oklch(23.1% .004 264.487/.28)}
+.chip{background:var(--glass-control);border:1px solid var(--line);border-radius:var(--radius-chip);
       padding:2px 8px;font-size:10.5px;font-weight:500;color:var(--ink-2);letter-spacing:-.005em}
 .chip.on{background:var(--green-tint);border-color:transparent;color:var(--green)}
 .chip.err{background:var(--red-tint);border-color:transparent;color:var(--red)}
@@ -227,7 +232,7 @@ button:active{transform:translateY(.5px)}
   overflow:hidden;text-overflow:ellipsis}
 .dt{color:var(--accent-ink);font-size:11.5px;margin-top:2px;font-variant-numeric:tabular-nums;font-weight:500}
 .tags{margin-top:5px;display:flex;gap:4px;flex-wrap:wrap}
-.tag{font-size:10px;font-weight:500;background:var(--surface);border-radius:var(--radius-chip);
+.tag{font-size:10px;font-weight:500;background:var(--glass-control);border-radius:var(--radius-chip);
   padding:1.5px 6px;color:var(--ink-3);box-shadow:0 0 0 1px var(--line)}
 .tag.fresh{background:var(--green-tint);color:var(--green);box-shadow:none}
 .tag.cloud{background:var(--orange-tint);color:var(--orange);box-shadow:none}
@@ -235,10 +240,10 @@ button:active{transform:translateY(.5px)}
 .empty{padding:40px 22px;text-align:center;color:var(--ink-3);font-size:12px;line-height:1.8}
 
 /* ---- autocomplete ---- */
-#ac{position:absolute;left:0;right:0;top:calc(100% + 5px);background:var(--surface);
+#ac{position:absolute;left:0;right:0;top:calc(100% + 5px);background:var(--glass-card);
   border-radius:var(--radius-card);box-shadow:var(--shadow-overlay);z-index:1200;
   overflow:hidden;max-height:300px;overflow-y:auto;
-  animation:pop .12s var(--ease-out-strong)}
+  animation:pop .12s var(--ease-out-strong);backdrop-filter:blur(18px) saturate(1.2);-webkit-backdrop-filter:blur(18px) saturate(1.2)}
 @keyframes pop{from{opacity:0;transform:translateY(-4px)}}
 #ac .r{padding:8px 12px;cursor:pointer;border-bottom:1px solid var(--line)}
 #ac .r:last-child{border-bottom:none}
@@ -249,15 +254,26 @@ button:active{transform:translateY(.5px)}
 #ac .note{padding:10px 12px;color:var(--ink-3);font-size:11px}
 
 /* ---- floating map UI ---- */
-#sideToggle{position:absolute;left:12px;top:12px;z-index:1100;width:32px;height:32px;padding:0;
-  border-radius:var(--radius-control);background:oklch(26% .006 271.191/.92);
-  border:none;color:var(--ink-2);display:flex;align-items:center;justify-content:center;
-  backdrop-filter:blur(12px);box-shadow:var(--shadow-raised)}
-#sideToggle:hover{color:var(--accent-ink);background:oklch(31.8% .007 274.747/.95)}
-#sideToggle svg{width:16px;height:16px}
+#sideToggle,#snapshot{position:absolute;left:12px;z-index:1300;width:32px;height:32px;padding:0;
+  border-radius:var(--radius-control);background:oklch(26% .006 271.191/.76);
+  border:1px solid var(--glass-line);color:var(--ink-2);display:flex;align-items:center;justify-content:center;
+  backdrop-filter:blur(16px) saturate(1.25);-webkit-backdrop-filter:blur(16px) saturate(1.25);box-shadow:var(--shadow-raised)}
+#sideToggle{top:12px}
+#snapshot{top:52px}
+body:not(.collapsed) #sideToggle,body:not(.collapsed) #snapshot{left:calc(var(--side-w) + 12px)}
+#sideToggle:hover,#snapshot:hover{color:var(--accent-ink);background:oklch(31.8% .007 274.747/.88)}
+#sideToggle:disabled,#snapshot:disabled{opacity:.62;cursor:progress}
+#sideToggle svg,#snapshot svg{width:16px;height:16px}
+#snapshotStatus{position:absolute;left:calc(var(--side-w) + 52px);top:52px;z-index:1300;max-width:min(330px,calc(100vw - var(--side-w) - 72px));
+  padding:7px 9px;border:1px solid var(--glass-line);border-radius:var(--radius-chip);background:var(--glass-card);color:var(--ink-2);
+  font-size:11px;line-height:1.35;box-shadow:var(--shadow-raised);backdrop-filter:blur(16px) saturate(1.2);-webkit-backdrop-filter:blur(16px) saturate(1.2)}
+#snapshotStatus:empty{display:none}
+body.collapsed #snapshotStatus{left:52px;max-width:calc(100vw - 64px)}
+body.snapshotting #side,body.snapshotting #sideToggle,body.snapshotting #snapshot,body.snapshotting #snapshotStatus,
+body.snapshotting #ctl,body.snapshotting #menu,body.snapshotting #blk,body.snapshotting .leaflet-control{visibility:hidden!important}
 #ctl{position:absolute;right:12px;top:12px;z-index:1000;
-  background:oklch(23.1% .004 264.487/.92);backdrop-filter:blur(16px);
-  border-radius:var(--radius-card);box-shadow:var(--shadow-overlay);padding:11px 13px;width:276px}
+  background:var(--glass-card);backdrop-filter:blur(22px) saturate(1.3);-webkit-backdrop-filter:blur(22px) saturate(1.3);
+  border:1px solid var(--glass-line);border-radius:var(--radius-card);box-shadow:var(--shadow-overlay);padding:11px 13px;width:276px}
 #ctlHead{display:flex;align-items:flex-start;gap:9px;cursor:pointer}
 #ctlHead .grow{flex:1;min-width:0}
 #ctlCar{color:var(--ink-3);font-size:11px;line-height:1;padding-top:3px;
@@ -276,9 +292,9 @@ a{color:var(--accent-ink);text-decoration:none}
 a:hover{text-decoration:underline}
 
 /* ---- context menu ---- */
-#menu{position:absolute;z-index:1600;background:var(--surface);border-radius:var(--radius-card);
+#menu{position:absolute;z-index:1600;background:var(--glass-card);border:1px solid var(--glass-line);border-radius:var(--radius-card);
   box-shadow:var(--shadow-overlay);min-width:274px;max-width:340px;max-height:346px;
-  overflow-y:auto;font-size:12px;animation:pop .12s var(--ease-out-strong)}
+  overflow-y:auto;font-size:12px;animation:pop .12s var(--ease-out-strong);backdrop-filter:blur(20px) saturate(1.2);-webkit-backdrop-filter:blur(20px) saturate(1.2)}
 #menu .h{padding:8px 12px;border-bottom:1px solid var(--line);color:var(--ink-3);font-size:9.5px;
   text-transform:uppercase;letter-spacing:.08em;font-weight:600;position:sticky;top:0;background:var(--surface)}
 #menu .m{padding:7px 12px;cursor:pointer;border-bottom:1px solid var(--line);position:relative}
@@ -290,13 +306,13 @@ a:hover{text-decoration:underline}
 #menu .m .b{color:var(--ink-3);font-size:10.5px;margin-top:1.5px}
 
 /* ---- misc ---- */
-.foot{padding:11px 18px 11px 16px;border-top:1px solid var(--line);font-size:10px;color:var(--ink-3);line-height:1.6}
+.foot{padding:11px 18px 11px 16px;border-top:1px solid var(--glass-line);font-size:10px;color:var(--ink-3);line-height:1.6;background:oklch(23.1% .004 264.487/.42)}
 .hide{display:none}
 .spin{display:inline-block;width:10px;height:10px;border:2px solid var(--line-strong);
   border-top-color:var(--accent);border-radius:50%;animation:s .7s linear infinite}
 @keyframes s{to{transform:rotate(360deg)}}
 #blk{position:absolute;left:50%;top:56px;transform:translateX(-50%);z-index:900;max-width:520px;
-  background:oklch(23.1% .004 264.487/.97);backdrop-filter:blur(12px);border-radius:var(--radius-card);
+  background:var(--glass-card);backdrop-filter:blur(18px) saturate(1.2);-webkit-backdrop-filter:blur(18px) saturate(1.2);border-radius:var(--radius-card);
   box-shadow:var(--shadow-overlay),inset 3px 0 0 var(--red);padding:13px 16px;font-size:12px;line-height:1.65}
 #blk b{color:var(--red)}
 #blk code{background:var(--page);padding:1.5px 5px;border-radius:4px;font-size:11px;
@@ -306,11 +322,11 @@ a:hover{text-decoration:underline}
 .fgrid{display:grid;grid-template-columns:auto 1fr;gap:7px 10px;align-items:center}
 .fgrid label{color:var(--ink-3);font-size:11.5px;font-weight:500;white-space:nowrap;justify-self:start}
 .fgrid select{width:100%;padding:6px 9px;font-size:12px;border-radius:var(--radius-chip);
-  background:var(--surface);box-shadow:none}
+  background:var(--glass-control);box-shadow:none}
 /* ---- explicit date range ---- */
 .drow{display:flex;align-items:center;gap:6px;width:100%;min-width:0}
 .drow input[type=date]{flex:1 1 0;min-width:0;padding:6px 8px;font-size:12px;
-  border-radius:var(--radius-chip);background:var(--surface);color:var(--ink);
+  border-radius:var(--radius-chip);background:var(--glass-control);color:var(--ink);
   border:1px solid var(--line);color-scheme:dark;font-variant-numeric:tabular-nums}
 .drow input[type=date]:focus{outline:none;border-color:var(--accent)}
 .drow .sep{color:var(--ink-3);font-size:11px;flex:none}
@@ -345,7 +361,7 @@ a:hover{text-decoration:underline}
    of pushing the ones below it down. Panes now keep their natural height and
    #panes scrolls, which is what a stack of collapsible sections should do. */
 .pane{display:flex;flex-direction:column;flex:0 0 auto;position:relative;
-  border-bottom:1px solid var(--line);background:var(--canvas);
+  border-bottom:1px solid var(--glass-line);background:var(--glass-pane);
   transition:opacity .12s var(--ease-out)}
 /* The one exception: the scene list is unbounded (250+ results), so it keeps
    flex-shrink and absorbs whatever space is left, scrolling inside itself.
@@ -354,7 +370,7 @@ a:hover{text-decoration:underline}
 .pane.sized{flex:0 0 auto}
 .pane-h,.pane-rz{flex:none}
 .pane-h{display:flex;align-items:center;gap:7px;padding:8px 18px 8px 16px;cursor:grab;user-select:none;
-  background:var(--page);border-bottom:1px solid var(--line);position:relative;
+  background:var(--glass-head);border-bottom:1px solid var(--glass-line);position:relative;
   transition:background var(--dur) var(--ease-out)}
 .pane-h:hover{background:var(--inset)}
 .pane-h:active{cursor:grabbing}
@@ -422,14 +438,14 @@ body.rowdrag{cursor:row-resize;user-select:none}
 #results{height:100%}
 
 .leaflet-container{background:var(--page)}
-.leaflet-control-zoom a{background:oklch(26% .006 271.191/.92)!important;color:var(--ink-2)!important;
-  border-color:var(--line)!important;backdrop-filter:blur(12px)}
+.leaflet-control-zoom a{background:oklch(26% .006 271.191/.76)!important;color:var(--ink-2)!important;
+  border-color:var(--glass-line)!important;backdrop-filter:blur(16px) saturate(1.25);-webkit-backdrop-filter:blur(16px) saturate(1.25)}
 .leaflet-control-zoom a:hover{background:var(--hover-2)!important;color:var(--ink)!important}
 .leaflet-popup-content-wrapper,.leaflet-popup-tip{background:var(--surface);color:var(--ink);
   box-shadow:var(--shadow-overlay);border-radius:var(--radius-control)}
 .leaflet-popup-content{font-size:12px;line-height:1.55;margin:10px 13px}
-.leaflet-control-attribution{background:oklch(20.9% .004 264.477/.8)!important;color:var(--ink-3)!important;
-  font-size:9.5px!important;backdrop-filter:blur(8px)}
+.leaflet-control-attribution{background:oklch(20.9% .004 264.477/.62)!important;color:var(--ink-3)!important;
+  font-size:9.5px!important;backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px)}
 .leaflet-control-attribution a{color:var(--ink-2)!important}
 .leaflet-tooltip{background:var(--tooltip-bg);border:1px solid var(--line);color:var(--ink);
   box-shadow:var(--shadow-raised);font-size:11px;border-radius:var(--radius-chip)}
@@ -443,13 +459,15 @@ body.rowdrag{cursor:row-resize;user-select:none}
    notched iPhone in standalone mode is underneath the status bar, leaving
    no way to reopen the panel once selecting a scene had closed it. */
 @media (max-width:760px){
-  #sideToggle{
+  #sideToggle,#snapshot{
     width:44px;height:44px;                  /* iOS minimum touch target */
     z-index:1300;
-    top:calc(10px + env(safe-area-inset-top));
     left:calc(10px + env(safe-area-inset-left));
   }
-  #sideToggle svg{width:20px;height:20px}
+  #sideToggle{top:calc(10px + env(safe-area-inset-top))}
+  #snapshot{top:calc(62px + env(safe-area-inset-top))}
+  #sideToggle svg,#snapshot svg{width:20px;height:20px}
+  #snapshotStatus{left:calc(62px + env(safe-area-inset-left));top:calc(62px + env(safe-area-inset-top));max-width:calc(100vw - 74px - env(safe-area-inset-left))}
 
   /* The footer was taking 246px of a 620px panel — 40% of it — leaving the
      panes 185px to scroll in. The server box explains itself through its
@@ -459,9 +477,17 @@ body.rowdrag{cursor:row-resize;user-select:none}
   .foot > div:last-child{display:none}          /* sources prose; map still credits them */
   #srvBox{margin-bottom:6px}
   /* while the sheet is open the button sits just clear of its edge */
-  body:not(.collapsed) #sideToggle{
+  body:not(.collapsed) #sideToggle,body:not(.collapsed) #snapshot{
     left:calc(var(--sheet-w) + 8px + env(safe-area-inset-left));
   }
+  body:not(.collapsed) #snapshotStatus{left:calc(var(--sheet-w) + 60px + env(safe-area-inset-left));max-width:calc(100vw - var(--sheet-w) - 72px - env(safe-area-inset-left))}
+}
+
+@media print{
+  @page{margin:0}
+  body.print-map #side,body.print-map #sideToggle,body.print-map #snapshot,body.print-map #snapshotStatus,
+  body.print-map #ctl,body.print-map #menu,body.print-map #blk,body.print-map .leaflet-control{display:none!important}
+  body.print-map #app,body.print-map #map{position:fixed!important;inset:0!important;width:100%!important;height:100%!important}
 }
 </style>
 </head>
@@ -731,6 +757,12 @@ body.rowdrag{cursor:row-resize;user-select:none}
         <rect x="3" y="4" width="18" height="16" rx="2"/><line x1="9.5" y1="4" x2="9.5" y2="20"/>
       </svg>
     </button>
+    <button id="snapshot" title="Save the current map viewport" aria-label="Save current map viewport as an image">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <path d="M4 7.5h3l1.35-2h7.3L17 7.5h3A1.5 1.5 0 0 1 21.5 9v9.5A1.5 1.5 0 0 1 20 20H4A1.5 1.5 0 0 1 2.5 18.5V9A1.5 1.5 0 0 1 4 7.5Z"/><circle cx="12" cy="13.5" r="3.5"/>
+      </svg>
+    </button>
+    <div id="snapshotStatus" role="status" aria-live="polite"></div>
   </div>
 </div>
 
@@ -1577,43 +1609,36 @@ async function select(i){
 
 /* ------------------------------------------------- side panel: resize + collapse */
 const sideEl=$("#side"), dragEl=$("#drag");
-let SIDE_W=430, dragging=false, dragLeft0=0;
+let SIDE_W=430, dragging=false;
 
-const mapLeft=()=>map.getContainer().getBoundingClientRect().left;
-
-/* Leaflet pins its tiles to the container's top-left corner. When the panel
-   closes, that corner jumps SIDE_W to the left and the whole map appears to be
-   dragged along with it. Re-panning by the same delta leaves the ground where
-   it was on screen, so the panel uncovers map instead of moving it. */
-function reflowMap(fromLeft){
-  map.invalidateSize({pan:false, animate:false});
-  const dx=mapLeft()-fromLeft;
-  if(dx) map.panBy([dx,0],{animate:false});
-}
-
-function applySide(){ const l0=mapLeft(); sideEl.style.width=SIDE_W+"px"; reflowMap(l0) }
+/* The side panel overlays a full-bleed map. Apart from allowing the map to
+   shine through the panel, this keeps the map's viewport stable while the
+   panel is resized or hidden: no compensating pan and no tile jump. */
+function syncSideWidth(){ document.documentElement.style.setProperty("--side-w",SIDE_W+"px") }
+function reflowMap(){ map.invalidateSize({pan:false, animate:false}) }
+function applySide(){ sideEl.style.width=SIDE_W+"px"; syncSideWidth(); reflowMap() }
 
 dragEl.addEventListener("mousedown", e=>{
-  e.preventDefault(); dragging=true; dragLeft0=mapLeft();
+  e.preventDefault(); dragging=true;
   dragEl.classList.add("act"); document.body.classList.add("dragging");
 });
 window.addEventListener("mousemove", e=>{
   if(!dragging) return;
   SIDE_W=Math.max(260, Math.min(820, e.clientX));
   sideEl.style.width=SIDE_W+"px";
+  syncSideWidth();
 });
 window.addEventListener("mouseup", ()=>{
   if(!dragging) return;
   dragging=false; dragEl.classList.remove("act"); document.body.classList.remove("dragging");
-  reflowMap(dragLeft0);          // compensate the whole drag, not just the last step
+  reflowMap();
 });
 dragEl.addEventListener("dblclick", ()=>{ SIDE_W=430; applySide() });
 
 function setCollapsed(on){
-  const l0=mapLeft();
   document.body.classList.toggle("collapsed", on);
   $("#sideToggle").title = (on?"Show panel":"Collapse panel")+" (Ctrl+B)";
-  reflowMap(l0);                 // synchronous: no 30ms flash of the shifted view
+  reflowMap();
 }
 $("#sideToggle").onclick=()=>setCollapsed(!document.body.classList.contains("collapsed"));
 
@@ -1630,6 +1655,87 @@ window.addEventListener("keydown", e=>{
 
 /* overlay control panel collapse */
 $("#ctlHead").onclick=()=>$("#ctl").classList.toggle("min");
+
+/* ----------------------------------------------------------- map snapshot */
+const snapshotEl=$("#snapshot"), snapshotStatusEl=$("#snapshotStatus");
+let snapshotStatusTimer=null;
+function setSnapshotStatus(text,timeout=5000){
+  snapshotStatusEl.textContent=text;
+  clearTimeout(snapshotStatusTimer);
+  if(timeout) snapshotStatusTimer=setTimeout(()=>{ snapshotStatusEl.textContent="" },timeout);
+}
+function snapshotFilename(){
+  return "clear-skies-"+new Date().toISOString().replace(/[-:]/g,"").replace(/\.\d{3}Z$/,"Z")+".png";
+}
+function saveBlob(blob,name){
+  const link=document.createElement("a"), href=URL.createObjectURL(blob);
+  link.href=href; link.download=name; link.style.display="none";
+  document.body.append(link); link.click(); link.remove();
+  setTimeout(()=>URL.revokeObjectURL(href),1000);
+}
+function waitForCapturedFrame(video){
+  if("requestVideoFrameCallback" in HTMLVideoElement.prototype)
+    return new Promise(resolve=>video.requestVideoFrameCallback(()=>resolve()));
+  return new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)));
+}
+function printMapSnapshot(){
+  document.body.classList.add("print-map");
+  const done=()=>document.body.classList.remove("print-map");
+  window.addEventListener("afterprint",done,{once:true});
+  setSnapshotStatus("Opening the print dialog — save as PDF to keep this map view.",7000);
+  window.print();
+  setTimeout(done,2000);
+}
+async function saveMapSnapshot(){
+  if(!navigator.mediaDevices?.getDisplayMedia){ printMapSnapshot(); return }
+  let stream=null;
+  snapshotEl.disabled=true;
+  try{
+    setSnapshotStatus("Choose “This Tab” in the capture picker…",0);
+    stream=await navigator.mediaDevices.getDisplayMedia({
+      video:{displaySurface:"browser"},audio:false,preferCurrentTab:true,
+      selfBrowserSurface:"include",surfaceSwitching:"exclude",systemAudio:"exclude",monitorTypeSurfaces:"exclude"
+    });
+    const track=stream.getVideoTracks()[0];
+    if(!track) throw new Error("No video surface was selected.");
+    const settings=track.getSettings?.()||{};
+    if(settings.displaySurface&&settings.displaySurface!=="browser")
+      throw new Error("Choose “This Tab” for an exact map-only image.");
+    const video=document.createElement("video");
+    video.muted=true; video.playsInline=true; video.srcObject=stream;
+    await new Promise((resolve,reject)=>{
+      video.onloadedmetadata=resolve;
+      video.onerror=()=>reject(new Error("The selected surface could not be read."));
+    });
+    await video.play();
+    document.body.classList.add("snapshotting");
+    await waitForCapturedFrame(video);
+    const rect=$("#map").getBoundingClientRect();
+    const scaleX=video.videoWidth/window.innerWidth, scaleY=video.videoHeight/window.innerHeight;
+    const sx=Math.max(0,Math.round(rect.left*scaleX)), sy=Math.max(0,Math.round(rect.top*scaleY));
+    const sw=Math.min(video.videoWidth-sx,Math.max(1,Math.round(rect.width*scaleX)));
+    const sh=Math.min(video.videoHeight-sy,Math.max(1,Math.round(rect.height*scaleY)));
+    const canvas=document.createElement("canvas");
+    canvas.width=sw; canvas.height=sh;
+    canvas.getContext("2d").drawImage(video,sx,sy,sw,sh,0,0,sw,sh);
+    const blob=await new Promise(resolve=>canvas.toBlob(resolve,"image/png"));
+    if(!blob) throw new Error("The browser could not encode the image.");
+    saveBlob(blob,snapshotFilename());
+    setSnapshotStatus("Snapshot saved as PNG.");
+  }catch(error){
+    const message=error?.name==="NotAllowedError"||error?.name==="AbortError"
+      ? "Snapshot cancelled. Choose “This Tab” to save the map."
+      : error?.message||"Snapshot could not be saved.";
+    setSnapshotStatus(message,7000);
+  }finally{
+    document.body.classList.remove("snapshotting");
+    stream?.getTracks().forEach(track=>track.stop());
+    snapshotEl.disabled=false;
+  }
+}
+snapshotEl.onclick=saveMapSnapshot;
+L.DomEvent.disableClickPropagation(snapshotEl);
+L.DomEvent.disableScrollPropagation(snapshotEl);
 
 /* ------------------------------------------------- surrounding-scene mosaic */
 let NEIGH=[];            // [{key, item, layer}]

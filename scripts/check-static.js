@@ -57,6 +57,9 @@ assert(index.includes('<script src="mosaic-core.js"></script>'),"index must load
 assert(read("sw.js").includes('importScripts("./version.js")'),"service worker must load the shared build version");
 assert(index.includes('register("sw.js",{updateViaCache:"none"})'),
        "service-worker imports must bypass stale HTTP cache during update checks");
+assert(index.includes('id="snapshot"'),"map snapshot control must be present");
+assert(index.includes('getDisplayMedia'),"map snapshot control must use browser surface capture");
+assert(index.includes('body.print-map'),"map snapshot control must have a print fallback");
 assert(read(".github/workflows/ci.yml").includes("index.html mosaic-core.js version.js"),
        "Pages artifact must include mosaic-core.js beside index.html");
 
