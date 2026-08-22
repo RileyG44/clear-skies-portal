@@ -5,13 +5,22 @@
 **How to use:** say *"check the TODO"* or *"next item from the TODO"* and I'll read this file instead of us re-deriving it in conversation. Say *"add X to the TODO"* or *"mark X done"* and I'll edit it in place.
 
 Priorities below marked **[proposed]** are my suggestion, not your decision — reorder freely.
-Last updated: 2026-08-19
+Last updated: 2026-08-22
 
 ---
 
 ## P0 — Next up
 
 ## Done
+
+- [x] **Rendering and infrastructure reliability pass** (2026-08-22) — direct-first
+  national 3DEP with cached-engine fallback; bounded retries and progressive layer
+  swaps; stable mosaic selection with cancellation and provider/date fallback;
+  normal tile blending (removes the additive shading artefact); WA request shaping;
+  regional raw-DEM startup; coalesced/atomic caches; strict request validation and
+  CORS; static-file allowlisting; shared service-worker build version; black-box
+  integration tests; current Node/Electron tooling; packaged Electron runtime in
+  ASAR; and CI-gated GitHub Pages deployments.
 
 - [x] **Current snow overlays** (2026-08-19) — a *Snow* group in the overlays pane.
   - **Snow depth** and **snow water equivalent** from NOAA **NOHRSC SNODAS** (layers 3 and 7 of the Snow Analysis MapServer). This is a daily assimilation for all of CONUS, i.e. *current conditions* rather than a satellite pass, so it has neither a cloud problem nor a revisit gap. No CORS, so it routes through a new `GET /api/snow?bbox=&layer=` with a **6-hour** cache (SNODAS is re-run daily) and a two-value layer whitelist.
@@ -136,7 +145,8 @@ Last updated: 2026-08-19
   2. Free MAP_KEY from `https://firms.modaps.eosdis.nasa.gov/api/map_key/` for the global area API, still proxied.
   Note: the current NIFC/WFIGS fire layer already covers the US with official perimeters and containment %, which is better for trip planning. FIRMS adds global coverage and much lower latency.
 - [ ] **Self-host or replace titiler.xyz.** Earth Search COG rendering currently depends on a public demo tiler with no SLA. Fine personally; would rate-limit under load.
-- [ ] **Offline / cached tiles** for a planned trip area.
+- [x] **Offline / cached tiles** for a planned trip area. *(Done via Download this
+  view for WA DNR, 3DEP fallback, and raw USGS 1 m DEMs.)*
 - [ ] **Sentinel-2 cloud masking** using the SCL band, so partially-cloudy scenes can still be used where clear.
 
 ---

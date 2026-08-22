@@ -8,7 +8,12 @@ const path = require("path");
 const http = require("http");
 const net  = require("net");
 
-const SERVER = path.join(__dirname, "..", "server.js");
+/* Keep the Electron shell in ASAR (tamper-resistant and faster to load), while
+   the forked zero-dependency server and its static assets live in Resources.
+   child_process cannot execute an entry point buried inside an ASAR archive. */
+const SERVER = app.isPackaged
+  ? path.join(process.resourcesPath,"app","server.js")
+  : path.join(__dirname,"..","server.js");
 const HOST   = "127.0.0.1";
 
 let child = null;
@@ -67,6 +72,11 @@ function waitForServer(p, timeoutMs = 20000){
 }
 
 function createWindow(){
+  const internalOrigin = `http://${HOST}:${port}`;
+  const isInternal = value => {
+    try{ return new URL(value).origin === internalOrigin }
+    catch(e){ return false }
+  };
   win = new BrowserWindow({
     width: 1400, height: 900, minWidth: 900, minHeight: 600,
     backgroundColor: "#0b0f14",
@@ -75,13 +85,13 @@ function createWindow(){
     webPreferences: {contextIsolation: true, nodeIntegration: false},
   });
 
-  win.loadURL(`http://${HOST}:${port}/`);
+  win.loadURL(`${internalOrigin}/`);
   win.on("closed", () => { win = null; });
 
   // Anything that is not our own server opens in the real browser,
   // so attribution links don't strand the user inside the app.
   const external = url => {
-    if (url.startsWith(`http://${HOST}:${port}`)) return false;
+    if (isInternal(url)) return false;
     shell.openExternal(url);
     return true;
   };
@@ -100,7 +110,9 @@ if (!app.requestSingleInstanceLock()){
     // The locate button needs geolocation; grant it only to our own origin.
     session.defaultSession.setPermissionRequestHandler((wc, permission, cb) => {
       const origin = `http://${HOST}:${port}`;
-      cb(permission === "geolocation" && wc.getURL().startsWith(origin));
+      let internal=false;
+      try{ internal=new URL(wc.getURL()).origin===origin }catch(e){}
+      cb(permission === "geolocation" && internal);
     });
 
     try {

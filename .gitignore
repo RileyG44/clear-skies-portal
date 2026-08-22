@@ -18,6 +18,8 @@ venv/
 *.tif
 *.tiff
 out/
+output/
+.playwright-cli/
 
 # Environment / secrets
 .env

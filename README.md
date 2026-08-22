@@ -11,7 +11,7 @@ node server.js
 
 Then open **http://localhost:8765**
 
-Node 22+ is all you need — no `npm install`, no dependencies.
+Node 22.12+ is all you need — no `npm install` and no runtime dependencies.
 Leave the terminal open; it's the server *and* the cache.
 
 *(The code itself uses nothing newer than Node 18 APIs; 22 is simply the oldest
@@ -31,11 +31,41 @@ locally it still binds to `127.0.0.1` only.
 
 The same file works in VS Code locally via *Dev Containers: Reopen in Container*.
 
+## Hosted page and the terrain engine
+
+The [GitHub Pages app](https://rileyg44.github.io/clear-skies-portal/) draws
+CORS-enabled satellite imagery, basemaps, and national 3DEP directly from their
+providers. It does not host a compute backend.
+
+That direct-first rule also applies locally: national 3DEP avoids an unnecessary
+proxy hop, then automatically falls back to the terrain engine if the provider
+fails or a cached tile is needed offline. Existing imagery/terrain stays visible
+until a replacement has rendered, so a slow source cannot blank the map.
+
+`server.js` is the optional local terrain engine. It is required for providers
+that do not allow browser requests (WA DNR, Macrostrat, and SNODAS), for rendering
+raw USGS 1 m DEMs, and for resumable offline-area downloads. When the page itself
+comes from `server.js` or Electron, it connects automatically.
+
+Raw 1 m DEM discovery defaults to Washington so a fresh launch indexes tens of
+projects instead of the entire national archive. National rendered 3DEP still works
+everywhere. Set `CSP_USGS_STATES=ALL` before starting the engine for nationwide raw
+1 m discovery, or use a regional list such as `CSP_USGS_STATES=WA_,OR_,ID_`.
+
+Tailscale is **not required** for normal local or desktop use. It is only a secure
+bridge when the hosted Pages app on another device needs to reach the terrain
+engine running on your Mac. `tailscale serve --bg 8765` is sufficient;
+paste its HTTPS URL into *Terrain engine*. Cross-origin access defaults to this
+repository's GitHub Pages origin. Add other trusted origins explicitly with a
+comma-separated `CSP_CORS_ORIGINS` environment variable.
+
 ## Develop it
 
 ```
 npm start          # same as `node server.js`
-npm run check      # syntax-check the server
+npm run check      # syntax-check JS plus static assets and source catalog
+npm test           # terrain unit tests plus black-box server tests
+npm run verify     # all checks, tests, and dependency audit
 pip install -r requirements.txt
 ```
 
@@ -49,7 +79,9 @@ confirm `/api/health` answers.
 | File | What it is |
 |---|---|
 | `index.html` | The whole app — one self-contained file, Leaflet inlined |
-| `server.js` | Local server: static files + caching proxy for WA DNR lidar and NASA FIRMS |
+| `server.js` | Local terrain engine: static files, validated proxying, request coalescing, retries and disk cache |
+| `test-server.js` | Offline black-box checks for CORS, request limits, traversal protection and server health |
+| `version.js` | One build identifier shared by the page and service worker cache |
 | `TODO.md` | Work queue. Say "check the TODO" to a fresh Claude session and it picks up from there |
 | `source-catalog.md` | ~50 free imagery sources with endpoints, licences, resolutions |
 | `sources.json` | Machine-readable version of the catalog |
@@ -134,7 +166,9 @@ is otherwise indistinguishable from "there is no snow here".
 
 - **Download this view** (Terrain pane) pre-downloads terrain tiles for the current
   view, so the area then works with **no network at all** — the point at a trailhead.
-  WA DNR is slow cold (around 19 s for a 20-tile view) and instant once cached.
+  WA DNR generates uncached composites slowly; the engine deliberately limits
+  concurrency so it finishes them instead of overwhelming ArcGIS. Tiles appear
+  progressively over the always-visible 3DEP fallback and are instant once cached.
   - *Depth*: **Native lidar** (z18, 0.41 m/px) is the default and matches roughly what
     the sharper projects actually resolve; **Maximum** (z19, 0.20 m/px) and the old
     **Screen +2** are also there. Only the finest three zoom levels are fetched —

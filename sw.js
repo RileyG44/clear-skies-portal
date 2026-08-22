@@ -7,9 +7,10 @@
    not match, so a new name is what actually evicts the old shell. With a fixed
    name there was no way to invalidate anything: an installed copy could serve
    a months-old page for ever and look like the features had never shipped. */
-const SHELL = "clear-skies-shell-2026-08-20b";
+importScripts("./version.js");
+const SHELL = `clear-skies-shell-${globalThis.CSP_BUILD}`;
 const ASSETS = ["./", "./index.html", "./manifest.json",
-                "./icon-180.png", "./icon-192.png", "./icon-512.png"];
+                "./version.js", "./icon-180.png", "./icon-192.png", "./icon-512.png"];
 
 self.addEventListener("install", e => {
   e.waitUntil(caches.open(SHELL).then(c => c.addAll(ASSETS)).then(() => self.skipWaiting()));

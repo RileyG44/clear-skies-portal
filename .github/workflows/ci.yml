@@ -1,4 +1,4 @@
-name: CI
+name: CI and Pages
 
 on:
   push:
@@ -6,7 +6,7 @@ on:
   pull_request:
   workflow_dispatch:
 
-# Least privilege: this workflow only ever reads the tree.
+# Least privilege by default; the deploy job receives Pages permissions only.
 permissions:
   contents: read
 
@@ -29,32 +29,40 @@ jobs:
         with:
           python-version: '3.14'
 
-      - name: Syntax-check the server and its modules
-        run: |
-          node --check server.js
-          node --check cog.js
-          node --check usgs.js
+      - name: Validate the lockfile
+        run: npm ci --ignore-scripts
 
-      - name: Confirm there are still no dependencies
-        run: |
-          test ! -d node_modules
-          node -e "const p=require('./package.json'); if(p.dependencies||p.devDependencies) throw new Error('a dependency crept in'); console.log('zero deps')"
-
-      - name: Unit-check the COG decoder against known values
-        run: node test-cog.js
+      - name: Check, test, and audit
+        run: npm run verify
 
       - name: Syntax-check Python scripts
         run: python -m compileall -q trailcheck.py snowline.py probe.py
 
-      - name: Validate sources.json
-        run: python -c "import json; json.load(open('sources.json')); print('sources.json parses')"
+  deploy:
+    if: github.event_name != 'pull_request'
+    needs: check
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v7
 
-      - name: Smoke-test the server
+      - uses: actions/configure-pages@v6
+
+      - name: Assemble the static site
         run: |
-          node server.js &
-          for i in $(seq 1 20); do
-            curl -sf http://127.0.0.1:8765/api/health && break
-            sleep 0.5
-          done
-          curl -sf http://127.0.0.1:8765/api/health | tee /dev/stderr | grep -q '"ok":true'
-          curl -sfI http://127.0.0.1:8765/ | head -1
+          mkdir _site
+          cp index.html version.js sw.js manifest.json icon-180.png icon-192.png icon-512.png .nojekyll _site/
+
+      - uses: actions/upload-pages-artifact@v5
+        with:
+          path: _site
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v5

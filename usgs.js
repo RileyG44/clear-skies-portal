@@ -25,12 +25,15 @@ const S3_BASE = "StagedProducts/Elevation/1m/Projects/";
 const TIF_RE = /^USGS_(?:1[Mm]_(?:(\d+)_)?|one_meter_)x(\d+)y(\d+)_(.+)\.tif$/;
 
 const INDEX_TTL = 30*24*3600*1000;      // the archive changes on a yearly rhythm
-/* Which projects to index. "ALL" is every project in the archive (964 of them
-   across 51 states); a comma-separated list of state prefixes keeps the index
-   small and the first build quick — CSP_USGS_STATES=WA_,OR_,ID_ */
-const SCOPE = (process.env.CSP_USGS_STATES || "ALL").trim();
+/* Which projects to index. The portal's project-specific source is WA DNR, so
+   raw 1 m DEM discovery defaults to Washington too. This avoids nearly 1,000
+   S3 catalogue round-trips on a fresh install. National rendered 3DEP remains
+   available everywhere; set CSP_USGS_STATES=ALL (or a comma-separated regional
+   list such as WA_,OR_,ID_) when raw 1 m coverage outside Washington is needed. */
+const SCOPE = (process.env.CSP_USGS_STATES || "WA_").trim();
 const INDEX_CONCURRENCY = 12;           // S3 listing is latency-bound, not rate-limited
 const CELL_M    = 10000;                // 10 km UTM cells
+const MAX_S3_BODY = 32*1024*1024;
 
 let CACHE_DIR = null;
 function init(dir){ CACHE_DIR = dir; try{ fs.mkdirSync(path.join(dir,"usgs"),{recursive:true}) }catch(e){} }
@@ -41,7 +44,14 @@ function s3(pathname, headers){
     const req=https.request({host:S3_HOST, path:pathname, method:"GET",
       headers:Object.assign({"User-Agent":"ClearSkiesPortal/1.0 (local personal use)"},headers||{})},
       r=>{
-        const b=[]; r.on("data",d=>b.push(d));
+        const b=[]; let n=0, failed=false;
+        r.on("data",d=>{
+          if(failed) return;
+          n+=d.length;
+          if(n>MAX_S3_BODY){ failed=true; r.destroy(new Error("S3 response too large")); return }
+          b.push(d);
+        });
+        r.on("error",rej);
         r.on("end",()=>res({status:r.statusCode, headers:r.headers, body:Buffer.concat(b)}));
       });
     req.on("error",rej);
@@ -61,6 +71,13 @@ const s3head = pathname => new Promise((res,rej)=>{
    free; the alternative is a HEAD per guessed filename, which is what produced
    a wrong "Mt Baker has no coverage" answer. */
 let INDEX = null;
+let INDEX_PENDING = null;
+
+function atomicJson(file, value){
+  const tmp=`${file}.${process.pid}.${Date.now()}.tmp`;
+  try{ fs.writeFileSync(tmp,JSON.stringify(value)); fs.renameSync(tmp,file) }
+  catch(e){ try{ fs.unlinkSync(tmp) }catch(_){} }
+}
 
 function scopeList(){
   if(/^all$/i.test(SCOPE)) return [""];            // empty prefix lists the lot
@@ -82,7 +99,9 @@ async function listProjects(prefix){
   do{
     const url=`/?list-type=2&prefix=${S3_BASE}${prefix}&delimiter=/&max-keys=1000`
             + (tok?`&continuation-token=${encodeURIComponent(tok)}`:"");
-    const xml=(await s3(url)).body.toString();
+    const r=await s3(url);
+    if(r.status!==200) throw new Error(`S3 project listing ${r.status}`);
+    const xml=r.body.toString();
     out.push(...[...xml.matchAll(/<Prefix>([^<]+)<\/Prefix>/g)]
       .map(m=>m[1].split("/").filter(Boolean).pop())
       .filter(p=>p && p!==prefix.replace(/\/$/,"")));
@@ -96,7 +115,9 @@ async function listProjectTiles(proj){
   do{
     const url=`/?list-type=2&prefix=${S3_BASE}${proj}/TIFF/&max-keys=1000`
             + (tok?`&continuation-token=${encodeURIComponent(tok)}`:"");
-    const xml=(await s3(url)).body.toString();
+    const r=await s3(url);
+    if(r.status!==200) throw new Error(`S3 tile listing ${r.status}`);
+    const xml=r.body.toString();
     const keys=[...xml.matchAll(/<Key>([^<]+)<\/Key>/g)].map(m=>m[1]);
     const sizes=[...xml.matchAll(/<Size>(\d+)<\/Size>/g)].map(m=>+m[1]);
     keys.forEach((k,i)=>{
@@ -113,6 +134,14 @@ async function listProjectTiles(proj){
 function indexPath(){ return path.join(CACHE_DIR,"usgs","index.json") }
 
 async function buildIndex(states, force){
+  if(INDEX_PENDING && !force) return INDEX_PENDING;
+  const work=buildIndexNow(states,force);
+  if(force) return work;
+  INDEX_PENDING=work;
+  try{ return await work } finally { INDEX_PENDING=null }
+}
+
+async function buildIndexNow(states, force){
   const f=indexPath();
   if(!force){
     try{
@@ -136,7 +165,7 @@ async function buildIndex(states, force){
   });
   out.failed=failed;
   INDEX=out;
-  try{ fs.writeFileSync(f, JSON.stringify(out)) }catch(e){}
+  atomicJson(f,out);
   return out;
 }
 async function getIndex(){ return INDEX || buildIndex(null) }
@@ -177,7 +206,7 @@ function loadZones(){
        for(const k in o) ZONES.set(k, o[k]); }catch(e){}
 }
 function saveZones(){
-  try{ fs.writeFileSync(zonesPath(), JSON.stringify(Object.fromEntries(ZONES))) }catch(e){}
+  atomicJson(zonesPath(),Object.fromEntries(ZONES));
 }
 
 async function resolveCellZone(proj, file, size){
@@ -236,13 +265,21 @@ function rangePath(key, a, b){
   const h=require("crypto").createHash("sha1").update(key+":"+a+"-"+b).digest("hex");
   return path.join(CACHE_DIR,"usgs",h);
 }
+const RANGE_PENDING = new Map();
 async function fetchRange(key, a, b){
   const f=rangePath(key,a,b);
   try{ const buf=fs.readFileSync(f); if(buf.length===b-a+1) return {buf, cached:true} }catch(e){}
-  const r=await s3("/"+key,{Range:`bytes=${a}-${b}`});
-  if(r.status!==206 && r.status!==200) throw new Error("range "+r.status);
-  try{ fs.writeFileSync(f, r.body) }catch(e){}
-  return {buf:r.body, cached:false};
+  if(RANGE_PENDING.has(f)) return RANGE_PENDING.get(f);
+  const work=(async()=>{
+    const r=await s3("/"+key,{Range:`bytes=${a}-${b}`});
+    if(r.status!==206 && r.status!==200) throw new Error("range "+r.status);
+    const tmp=`${f}.${process.pid}.${Date.now()}.tmp`;
+    try{ fs.writeFileSync(tmp,r.body); fs.renameSync(tmp,f) }
+    catch(e){ try{ fs.unlinkSync(tmp) }catch(_){} }
+    return {buf:r.body, cached:false};
+  })();
+  RANGE_PENDING.set(f,work);
+  try{ return await work } finally { RANGE_PENDING.delete(f) }
 }
 
 /* -------------------------------------------------------------- COG access */
