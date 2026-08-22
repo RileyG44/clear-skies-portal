@@ -3307,7 +3307,7 @@ $("#elevUnit").addEventListener("change", ()=>{        // keep the height, resta
 });
 
 if("serviceWorker" in navigator && (location.protocol==="https:" || location.hostname==="localhost"))
-  addEventListener("load",()=>navigator.serviceWorker.register("sw.js").catch(()=>{}));
+  addEventListener("load",()=>navigator.serviceWorker.register("sw.js",{updateViaCache:"none"}).catch(()=>{}));
 
 $("#q").addEventListener("focus",()=>{ if(acList.length && $("#q").value.trim().length>=3) acRender() });
 $("#q").addEventListener("blur",()=>setTimeout(acHide,120));
