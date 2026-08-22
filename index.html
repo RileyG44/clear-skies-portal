@@ -2166,6 +2166,13 @@ let probeToken=0, waLayersPromise=null, terrainQueryToken=0;
 /* is the local proxy there? without it, WA DNR simply isn't reachable */
 function probeServer(){
   const token=++probeToken, base=API, controller=new AbortController();
+  /* GitHub Pages is intentionally static. With no configured engine URL there
+     is nothing to probe, and asking github.io for /api/health only creates a
+     misleading 404 in an otherwise healthy production session. A Tailscale or
+     other explicit URL is still probed; locally served pages keep auto-detect. */
+  if(!base&&/\.github\.io$/i.test(location.hostname)){
+    PROXY=false; paintServerBox(); paintTerrainInfo(); return Promise.resolve(false);
+  }
   const timer=setTimeout(()=>controller.abort(),4500);
   return fetch(base+"/api/health",{signal:controller.signal}).then(r=>r.ok?r.json():null)
     .then(j=>{ if(token===probeToken&&base===API) PROXY=!!(j&&j.ok) })
