@@ -158,8 +158,9 @@ VIIRS/MODIS near-real-time true colour and night lights, NISAR.
   the private engine is unavailable. This single-source-per-pixel design avoids
   the dark or reddish cast caused by stacking independently coloured elevation
   tiles. The chosen height is white, lower ground grades red, and higher ground
-  grades blue; controls default to feet and include a saved shader-strength
-  control so the basemap remains legible. Recolouring runs in one shared
+  grades blue; controls default to feet, accept any custom colour span, and
+  include a saved shader-strength control so the basemap remains legible.
+  Recolouring runs in one shared
   WebGL2 GPU context, with an allocation-free CPU fallback, so moving the
   threshold never refetches terrain and does not create a context per tile.
 
@@ -168,7 +169,8 @@ some resolving finer than 1 m — then USGS 1 m, then 3DEP. Only one styled terr
 product is painted at a time; at close zooms its last native tile is enlarged
 through z28 rather than disappearing or fetching nonexistent detail.
 The light CARTO basemap is the default so translucent geology colours remain
-readable; the dark basemap remains an automatic network fallback.
+readable. A saved sun/moon control switches only the basemap between light and
+dark; the sidebar, controls, imagery and analysis layers do not change.
 
 ## Labels & overlays
 
@@ -235,10 +237,13 @@ is otherwise indistinguishable from "there is no snow here".
   multidirectional relief, tint, slope, aspect, contours, and landscape fabric
   analysis run in a priority-aware worker pool instead of blocking the server's
   request loop. Interactive tiles outrank offline downloads; abandoned viewport
-  work is cancelled; timed-out workers are replaced. The default uses four
-  workers on an 8-core M2 and three low-priority lanes while warming. Set
-  `CSP_TERRAIN_WORKERS` (1–6) and per-worker `CSP_S3_INFLIGHT` (1–12) only for
-  measured tuning. Cached results remain the fastest path.
+  work is cancelled; timed-out workers are replaced. The dedicated Mac service
+  uses six workers on this 8-core M2, four concurrent S3 range reads per worker,
+  and four low-priority warming lanes. Manual launches still auto-size more
+  conservatively. `CSP_TERRAIN_WORKERS` supports 1–8 and per-worker
+  `CSP_S3_INFLIGHT` supports 1–12. Rendered tiles and every downloaded COG byte
+  range persist on the SSD; writes pause before free space drops below 8 GiB,
+  while uncached content continues to render normally.
 - **Open on natural colour** (Filters, on by default) keeps the map from landing on a
   radar or night-lights scene just because it happens to be the newest.
 - **Time window** (Filters) takes either a preset — last 14/30/90 days, last year,

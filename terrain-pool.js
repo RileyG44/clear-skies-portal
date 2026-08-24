@@ -16,7 +16,7 @@ class TerrainPool {
   constructor({cacheDir,size,maxQueue=40,workerFile=path.join(__dirname,"terrain-worker.js")}={}){
     const available=typeof os.availableParallelism==="function" ? os.availableParallelism() : os.cpus().length;
     const configured=Number(process.env.CSP_TERRAIN_WORKERS||size||0);
-    this.size=Math.max(1,Math.min(6,Number.isInteger(configured)&&configured>0 ? configured : Math.min(4,Math.max(2,available-2))));
+    this.size=Math.max(1,Math.min(8,Number.isInteger(configured)&&configured>0 ? configured : Math.min(4,Math.max(2,available-2))));
     this.cacheDir=cacheDir;
     this.maxQueue=maxQueue;
     this.workerFile=workerFile;
@@ -145,4 +145,3 @@ class TerrainPool {
 }
 
 module.exports={TerrainPool,TerrainPoolError};
-

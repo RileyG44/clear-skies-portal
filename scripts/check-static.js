@@ -68,6 +68,7 @@ assert(index.includes('id="srvConnect"'),"terrain engine needs an explicit conne
 assert(index.includes('id="srvCopyLink"'),"terrain engine needs a private setup-link control");
 assert(index.includes('takeSharedServerBase'),"private setup links must be consumed from URL fragments");
 assert(index.includes('id="elevSpan"'),"elevation spectrum needs a configurable colour span");
+assert(index.includes('list="elevSpanPresets"'),"elevation span must accept custom feet values with presets");
 assert(index.includes('endpoint:"/api/elev"'),"elevation spectrum must use one adaptive server layer");
 assert(!index.includes('elevRawLayer'),"elevation spectrum must not double-paint national and raw colour tiles");
 assert(index.includes('fallbackNativeZoom:15'),"browser elevation fallback must stretch its last native tile");
@@ -76,6 +77,8 @@ assert(index.includes('maxZoom:VIEW_MAX,maxNativeZoom:19'),"lidar must stretch n
 assert(index.indexOf('basemaps.cartocdn.com/light_all')<index.indexOf('basemaps.cartocdn.com/dark_all'),
        "the readable light basemap must precede the dark fallback");
 assert(index.includes('background:#dbe6eb'),"out-of-world space must not flash black at global zooms");
+assert(index.includes('id="mapTheme"'),"map-only light and dark basemap control must be present");
+assert(index.includes('clearskies.mapTheme.v1'),"map theme choice must persist between sessions");
 assert(index.includes('<option value="ft" selected>feet</option>'),"elevation must default to feet");
 assert(index.includes('id="elevAlpha"'),"elevation spectrum needs a user-controlled shader strength");
 assert(index.includes('(0.15+0.85*t)'),"neutral elevation shading must not darken the whole basemap");
@@ -94,6 +97,11 @@ for(const script of ["scripts/launch-terrain-engine.sh","scripts/install-mac-ser
   const source=read(script);
   assert.match(source,/127\.0\.0\.1/,`${script} must keep the engine loopback-only`);
 }
+const launchAgent=read("scripts/com.rileyg44.clear-skies-portal.plist");
+assert(launchAgent.includes('<key>CSP_TERRAIN_WORKERS</key>')&&launchAgent.includes('<string>6</string>'),
+       "the dedicated M2 service must run six terrain workers");
+assert(launchAgent.includes('<string>Interactive</string>'),"the dedicated terrain service must receive interactive scheduling");
+assert(read("server.js").includes("cacheDisk:cacheDiskStats()"),"health must expose cache disk safety");
 const watchdog=read("scripts/launch-terrain-engine.sh");
 assert(watchdog.includes("MAX_HEALTH_MISSES"),"watchdog must restart an unresponsive HTTP coordinator");
 assert(!watchdog.includes("engine_busy"),"high CPU must not conceal a dead HTTP coordinator");

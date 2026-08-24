@@ -39,14 +39,16 @@ const MAX_BODY   = 256*1024;
 const MAX_UPSTREAM_BODY = 32*1024*1024;
 const MAX_WARM_TILES = 40000;
 const MAX_RENDER_QUEUE = 40;
+const CACHE_MIN_FREE_GIB=Math.max(0,Number(process.env.CSP_CACHE_MIN_FREE_GB)||8);
+const CACHE_MIN_FREE_BYTES=CACHE_MIN_FREE_GIB*1024*1024*1024;
 const TERRAIN_STYLES = new Set(["hs","hsmulti","tint","slope","aspect","c2","c5","c10","c25"]);
 const DEP_RULES = new Set(["Hillshade Gray","Hillshade Multidirectional","Hillshade Elevation Tinted",
   "Slope Map","Aspect Map","Preset 2ft Contour Interval","Preset 5ft Contour Interval",
   "Preset 10ft Contour Interval","Contour Smoothed 25"]);
 const HTTPS_AGENT = new https.Agent({keepAlive:true,maxSockets:10,maxFreeSockets:5,timeout:30000});
 /* CPU-heavy COG decoding and every derived terrain product live outside the
-   request loop. On an 8-core M2 the default is four workers, leaving headroom
-   for macOS, the browser and the lightweight HTTP/cache coordinator. */
+   request loop. The managed, dedicated M2 install requests six workers; the
+   pool still auto-sizes conservatively for ordinary manual launches. */
 const terrainPool=new TerrainPool({cacheDir:CACHE,maxQueue:MAX_RENDER_QUEUE});
 
 const CORS_ORIGINS = new Set(["https://rileyg44.github.io"]);
@@ -115,6 +117,13 @@ function cacheEntryCount(){
     .filter(entry=>entry.isFile()&&!entry.name.endsWith(".meta")).length }
   catch(e){ return 0 }
 }
+function cacheDiskStats(extraBytes=0){
+  try{
+    const stat=fs.statfsSync(CACHE), free=Number(stat.bavail)*Number(stat.bsize);
+    return {freeGiB:+(free/1073741824).toFixed(2),minFreeGiB:CACHE_MIN_FREE_GIB,
+            writable:free-extraBytes>=CACHE_MIN_FREE_BYTES};
+  }catch(e){ return {freeGiB:null,minFreeGiB:CACHE_MIN_FREE_GIB,writable:true} }
+}
 let cacheCount=cacheEntryCount();
 function cacheGet(k, ttl){
   const f = path.join(CACHE, k);
@@ -126,6 +135,7 @@ function cacheGet(k, ttl){
   }catch(e){ return null }
 }
 function cachePut(k, status, type, body){
+  if(!cacheDiskStats((body&&body.length||0)+4096).writable) return false;
   const target=path.join(CACHE,k), suffix=`.tmp-${process.pid}-${crypto.randomBytes(4).toString("hex")}`;
   const bodyTmp=target+suffix, metaTmp=target+".meta"+suffix;
   const isNew=!fs.existsSync(target);
@@ -135,10 +145,12 @@ function cachePut(k, status, type, body){
     fs.renameSync(bodyTmp,target);
     fs.renameSync(metaTmp,target+".meta");
     if(isNew) cacheCount++;
+    return true;
   }catch(e){
     try{ fs.unlinkSync(bodyTmp) }catch(e2){}
     try{ fs.unlinkSync(metaTmp) }catch(e2){}
   }
+  return false;
 }
 function atomicWriteJson(target,value){
   const tmp=`${target}.tmp-${process.pid}-${crypto.randomBytes(4).toString("hex")}`;
@@ -513,7 +525,7 @@ async function startUsgsWarm(job){
       usgsWarm.done++;
     }
   };
-  await Promise.all(Array.from({length:Math.min(3,terrainPool.size)},lane));
+  await Promise.all(Array.from({length:Math.max(3,terrainPool.size-2)},lane));
   usgsWarm.running=false;
   if(!usgsWarm.stop&&(usgsWarm.ok||usgsWarm.skipped)){
     try{ await usgs.finalizeWarm(job,usedKeys,usgsWarm) }catch(error){ usgsWarm.error=String(error.message||error) }
@@ -962,6 +974,7 @@ const server = http.createServer(async (req,res)=>{
       return send(res,200,"application/json",Buffer.from(JSON.stringify({
         ok:true, cached:cacheCount, inflight, queued:queue.length,
         rendering:terrain.active, renderQueued:terrain.queued, terrain,
+        cacheDisk:cacheDiskStats(),
         nationalCircuit:{failures:depCircuit.failures,coolingDown:Date.now()<depCircuit.openUntil,
                          retryInSec:Math.max(0,Math.ceil((depCircuit.openUntil-Date.now())/1000))},
         uptimeSec:Math.floor((Date.now()-STARTED)/1000)

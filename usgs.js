@@ -37,10 +37,9 @@ const MAX_S3_BODY = 32*1024*1024;
 /* Range reads are latency-bound. Reusing TLS sockets avoids a handshake per
    COG block, while the shared gate prevents a rapid pan from overwhelming S3
    or saturating the browser-facing Node event loop. */
-/* This module is loaded once per terrain worker. Four M2 workers at four range
-   reads each preserve the previous aggregate concurrency without exploding to
-   64 competing downloads. Override only when the upstream/network is known to
-   tolerate it. */
+/* This module is loaded once per terrain worker. The dedicated M2 service uses
+   six workers and four range reads each: enough parallel network work to keep
+   the CPU fed without producing an unbounded request storm. */
 const S3_MAX_INFLIGHT = Math.max(1,Math.min(12,Number(process.env.CSP_S3_INFLIGHT)||4));
 const S3_AGENT = new https.Agent({keepAlive:true,maxSockets:S3_MAX_INFLIGHT+2,
                                   maxFreeSockets:S3_MAX_INFLIGHT,timeout:30000});
@@ -58,6 +57,13 @@ function releaseS3Slot(){
 
 let CACHE_DIR = null;
 function init(dir){ CACHE_DIR = dir; try{ fs.mkdirSync(path.join(dir,"usgs"),{recursive:true}) }catch(e){} }
+const CACHE_MIN_FREE_BYTES=Math.max(0,Number(process.env.CSP_CACHE_MIN_FREE_GB)||8)*1024*1024*1024;
+function cacheWritable(extraBytes=0){
+  try{
+    const stat=fs.statfsSync(CACHE_DIR), free=Number(stat.bavail)*Number(stat.bsize);
+    return free-extraBytes>=CACHE_MIN_FREE_BYTES;
+  }catch(e){ return true }
+}
 
 /* ------------------------------------------------------------------- http */
 function s3Request(pathname, headers){
@@ -302,9 +308,11 @@ async function fetchRange(key, a, b){
   const work=(async()=>{
     const r=await s3("/"+key,{Range:`bytes=${a}-${b}`});
     if(r.status!==206 && r.status!==200) throw new Error("range "+r.status);
-    const tmp=`${f}.${process.pid}.${Date.now()}.tmp`;
-    try{ fs.writeFileSync(tmp,r.body); fs.renameSync(tmp,f) }
-    catch(e){ try{ fs.unlinkSync(tmp) }catch(_){} }
+    if(cacheWritable(r.body.length+4096)){
+      const tmp=`${f}.${process.pid}.${Date.now()}.tmp`;
+      try{ fs.writeFileSync(tmp,r.body); fs.renameSync(tmp,f) }
+      catch(e){ try{ fs.unlinkSync(tmp) }catch(_){} }
+    }
     return {buf:r.body, cached:false};
   })();
   RANGE_PENDING.set(f,work);

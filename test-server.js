@@ -59,6 +59,8 @@ async function main(){
     assert(Number.isInteger(healthBody.renderQueued)&&healthBody.renderQueued>=0,"health must report queued terrain renders");
     assert.equal(healthBody.terrain.workers,1,"health must report the configured terrain worker pool");
     assert.equal(healthBody.terrain.active,0,"fresh terrain workers must be idle");
+    assert(Number.isFinite(healthBody.cacheDisk.freeGiB),"health must report free cache-disk capacity");
+    assert.equal(typeof healthBody.cacheDisk.writable,"boolean","health must report whether persistent caching is safe");
     assert.equal(healthBody.nationalCircuit.coolingDown,false,"fresh fallback circuit must be closed");
     assert.equal(health.headers["cache-control"],"no-store","health must never be served stale");
 
