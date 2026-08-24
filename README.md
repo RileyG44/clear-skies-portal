@@ -141,7 +141,8 @@ VIIRS/MODIS near-real-time true colour and night lights, NISAR.
   hillshade, elevation-tinted, slope, aspect, and 2/5/10/25 ft contours.
 - **WA DNR lidar** — Washington's own bare-earth hillshades at native project
   resolution. Every project covering the view composites together, newest first,
-  with 3DEP underneath so nothing is left blank.
+  as one terrain image. The ordinary basemap remains visible through genuine
+  no-data instead of stacking two coloured terrain products.
 
 - **USGS 1 m (offline-capable)** — 3DEP's staged 1 m DEMs, read straight off S3
   as Cloud-Optimised GeoTIFFs. This is the only source that hands over *elevation*
@@ -152,17 +153,22 @@ VIIRS/MODIS near-real-time true colour and night lights, NISAR.
   **Mount Rainier National Park is a genuine gap**, which is why WA DNR stays.
 
 - **Elevation spectrum** — the geology overlay reads real elevation values, not
-  a pre-coloured image. It uses raw USGS 1 m lidar where that archive covers a
-  tile, then automatically falls back to the national 3DEP Float32 elevation
-  service and finally browser-direct AWS Terrain Tiles if the private engine or
-  national service is unavailable. The chosen height is white, lower ground
-  grades red, and higher ground grades blue. Recolouring runs in one shared
+  a pre-coloured image. One adaptive layer uses raw USGS 1 m lidar for close
+  views, national 3DEP at broad scales, and browser-direct AWS Terrain Tiles if
+  the private engine is unavailable. This single-source-per-pixel design avoids
+  the dark or reddish cast caused by stacking independently coloured elevation
+  tiles. The chosen height is white, lower ground grades red, and higher ground
+  grades blue; controls default to feet and include a saved shader-strength
+  control so the basemap remains legible. Recolouring runs in one shared
   WebGL2 GPU context, with an allocation-free CPU fallback, so moving the
   threshold never refetches terrain and does not create a context per tile.
 
 *Best available* prefers WA DNR where it has data — 345 projects to USGS's 25, and
-some resolving finer than 1 m — then USGS 1 m, then 3DEP. 3DEP always draws
-underneath, so a project edge never reads as a hole.
+some resolving finer than 1 m — then USGS 1 m, then 3DEP. Only one styled terrain
+product is painted at a time; at close zooms its last native tile is enlarged
+through z28 rather than disappearing or fetching nonexistent detail.
+The light CARTO basemap is the default so translucent geology colours remain
+readable; the dark basemap remains an automatic network fallback.
 
 ## Labels & overlays
 
@@ -206,12 +212,12 @@ is otherwise indistinguishable from "there is no snow here".
   WA DNR generates uncached composites slowly; the engine deliberately limits
   concurrency so it finishes them instead of overwhelming ArcGIS. Tiles appear
   progressively over the always-visible 3DEP fallback and are instant once cached.
-  - *Depth*: **Native lidar** (z18, 0.41 m/px) is the default and matches roughly what
-    the sharper projects actually resolve; **Maximum** (z19, 0.20 m/px) and the old
+  - *Depth*: **Native lidar** (z18, 1.35 ft/px) is the default and matches roughly what
+    the sharper projects actually resolve; **Maximum** (z19, 0.66 ft/px) and the old
     **Screen +2** are also there. Only the finest three zoom levels are fetched —
     coarser ones are cheap and already cached from browsing.
   - *Extent*: this view, +50% margin, or +a full screen of margin.
-  - The estimate is shown before you commit — e.g. `z14–18 · 0.41 m/px · 4,957 tiles ·
+  - The estimate is shown before you commit — e.g. `z14–18 · 1.35 ft/px · 4,957 tiles ·
     ~89 MB`. Above 8,000 tiles it asks to confirm; above 40,000 it declines and names
     the zoom that would fit.
   - *Staleness*: the DNR portal sends no `ETag`, `Last-Modified` or `Accept-Ranges`, so

@@ -786,7 +786,7 @@ const server = http.createServer(async (req,res)=>{
       const z=+m[1], x=+m[2], y=+m[3], limit=Math.pow(2,z);
       if(z<0||z>22||x<0||y<0||x>=limit||y>=limit)
         return send(res,400,"text/plain",Buffer.from("bad tile coordinates"));
-      const ck=key(`elevation-v2:${z}/${x}/${y}`);
+      const ck=key(`elevation-v3:${z}/${x}/${y}`);
       const hit=cacheGet(ck,TTL_TILE);
       if(hit) return hit.status===204
         ? send(res,200,"image/png",TRANSPARENT,{"X-Cache":"hit","X-Coverage":"none","X-Elevation-Source":"none","Cache-Control":"public, max-age=604800, immutable"})
@@ -794,7 +794,10 @@ const server = http.createServer(async (req,res)=>{
       let out=null;
       try{
         let raw=null;
-        try{ raw=await terrainTask(`raw-elevation:${ck}`,"raw-elevation",{z,x,y,size:256},
+        /* A one-metre COG cannot add information to a continental/region-scale
+           tile. Skip that expensive path below z13 and use the national DEM;
+           close views still receive the newest raw project data. */
+        if(z>=13) try{ raw=await terrainTask(`raw-elevation:${ck}`,"raw-elevation",{z,x,y,size:256},
           {priority:55,timeoutMs:30000},client.signal) }catch(e){ if(terrainAborted(e)) throw e }
         if(raw) out={...raw,source:"usgs-1m"};
         else{

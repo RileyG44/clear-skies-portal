@@ -68,18 +68,26 @@ assert(index.includes('id="srvConnect"'),"terrain engine needs an explicit conne
 assert(index.includes('id="srvCopyLink"'),"terrain engine needs a private setup-link control");
 assert(index.includes('takeSharedServerBase'),"private setup links must be consumed from URL fragments");
 assert(index.includes('id="elevSpan"'),"elevation spectrum needs a configurable colour span");
-assert(index.includes('/api/elev/'),"elevation spectrum must use the seamless elevation endpoint");
-assert(index.includes('endpoint:"/api/elev/national"'),"elevation spectrum must paint national elevation before lidar refinement");
-assert(index.includes('endpoint:"/api/usgs/elev"'),"elevation spectrum must refine the national baseline with raw lidar");
-assert(index.includes('minZoom:13'),"raw lidar spectrum refinement must wait for close inspection zooms");
-assert(index.includes('National USGS 3DEP elevation'),"elevation spectrum must disclose its national fallback");
+assert(index.includes('endpoint:"/api/elev"'),"elevation spectrum must use one adaptive server layer");
+assert(!index.includes('elevRawLayer'),"elevation spectrum must not double-paint national and raw colour tiles");
+assert(index.includes('fallbackNativeZoom:15'),"browser elevation fallback must stretch its last native tile");
+assert(index.includes('const VIEW_MAX=28'),"the map must support deep visual overzoom");
+assert(index.includes('maxZoom:VIEW_MAX,maxNativeZoom:19'),"lidar must stretch native detail instead of going black");
+assert(index.indexOf('basemaps.cartocdn.com/light_all')<index.indexOf('basemaps.cartocdn.com/dark_all'),
+       "the readable light basemap must precede the dark fallback");
+assert(index.includes('background:#dbe6eb'),"out-of-world space must not flash black at global zooms");
+assert(index.includes('<option value="ft" selected>feet</option>'),"elevation must default to feet");
+assert(index.includes('id="elevAlpha"'),"elevation spectrum needs a user-controlled shader strength");
+assert(index.includes('(0.15+0.85*t)'),"neutral elevation shading must not darken the whole basemap");
 assert(index.includes('class ElevationGpuRenderer'),"elevation recolouring must use the shared WebGL2 renderer");
 assert(index.includes('elevation-tiles-prod/terrarium'),"elevation must have a browser-direct national fallback");
 const elevSandbox={};
 vm.runInNewContext(`${namedFunction(index,"elevRampRgb")}; center=elevRampRgb(500,500,300); lower=elevRampRgb(200,500,300); upper=elevRampRgb(800,500,300);`,elevSandbox,{filename:"index.html#elevation-spectrum-test"});
-assert.deepEqual(Array.from(elevSandbox.center),[247,247,242],"reference elevation must be white");
+assert.deepEqual(Array.from(elevSandbox.center),[255,255,250],"reference elevation must be white");
 assert(elevSandbox.lower[0]>elevSandbox.lower[2],"lower elevations must trend red");
 assert(elevSandbox.upper[2]>elevSandbox.upper[0],"higher elevations must trend blue");
+const server=read("server.js");
+assert(server.includes('if(z>=13) try{ raw=await terrainTask'),"raw lidar elevation must be reserved for useful close zooms");
 assert(read(".github/workflows/ci.yml").includes("index.html mosaic-core.js version.js"),
        "Pages artifact must include mosaic-core.js beside index.html");
 for(const script of ["scripts/launch-terrain-engine.sh","scripts/install-mac-service.sh"]){
