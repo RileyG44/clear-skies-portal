@@ -69,11 +69,20 @@ assert(index.includes('id="srvCopyLink"'),"terrain engine needs a private setup-
 assert(index.includes('takeSharedServerBase'),"private setup links must be consumed from URL fragments");
 assert(index.includes('id="elevSpan"'),"elevation spectrum needs a configurable colour span");
 assert(index.includes('list="elevSpanPresets"'),"elevation span must accept custom feet values with presets");
-assert(index.includes('endpoint:"/api/elev"'),"elevation spectrum must use one adaptive server layer");
+assert(index.includes('nationalEndpoint:"/api/elev/national",rawEndpoint:"/api/usgs/elev"'),
+       "elevation spectrum must progressively refine one shader layer");
 assert(!index.includes('elevRawLayer'),"elevation spectrum must not double-paint national and raw colour tiles");
+assert(index.includes('if(raw[i]===raw[i]) merged[i]=raw[i]'),
+       "raw lidar must refine valid pixels without erasing the national baseline");
 assert(index.includes('fallbackNativeZoom:15'),"browser elevation fallback must stretch its last native tile");
 assert(index.includes('const VIEW_MAX=28'),"the map must support deep visual overzoom");
 assert(index.includes('maxZoom:VIEW_MAX,maxNativeZoom:19'),"lidar must stretch native detail instead of going black");
+assert(index.includes('rawNative==null||rawNative==="" ? NaN : Number(rawNative)'),
+       "missing imagery native zoom must derive from GSD instead of collapsing to z0");
+const imageryZoomSandbox={};
+vm.runInNewContext(`${namedFunction(index,"imageryNativeZoom")}; missing=imageryNativeZoom({nativeMax:null,gsd:30}); explicit=imageryNativeZoom({nativeMax:9,gsd:10});`,imageryZoomSandbox,{filename:"index.html#imagery-native-zoom-test"});
+assert.equal(imageryZoomSandbox.missing,13,"30 m imagery without nativeMax must derive z13 from GSD");
+assert.equal(imageryZoomSandbox.explicit,9,"an explicit imagery native zoom must win over GSD");
 assert(index.indexOf('basemaps.cartocdn.com/light_all')<index.indexOf('basemaps.cartocdn.com/dark_all'),
        "the readable light basemap must precede the dark fallback");
 assert(index.includes('background:#dbe6eb'),"out-of-world space must not flash black at global zooms");
