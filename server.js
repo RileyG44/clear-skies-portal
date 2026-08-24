@@ -41,7 +41,7 @@ const MAX_WARM_TILES = 40000;
 /* Raw COG decoding and Float32 TIFF conversion are CPU-heavy. Keep a viewport
    from launching dozens at once: a short queue is much faster than saturating
    Node's single event loop, and leaves health checks responsive. */
-const MAX_RENDER_INFLIGHT = 2;
+const MAX_RENDER_INFLIGHT = 3;
 const MAX_RENDER_QUEUE = 48;
 const TERRAIN_STYLES = new Set(["hs","hsmulti","tint","slope","aspect","c2","c5","c10","c25"]);
 const DEP_RULES = new Set(["Hillshade Gray","Hillshade Multidirectional","Hillshade Elevation Tinted",
@@ -660,6 +660,32 @@ const server = http.createServer(async (req,res)=>{
         {"X-Coverage":String(out.meta.coverage), "X-Ground-Res":String(out.meta.groundRes),
          "X-Sources":out.meta.sources.map(s2=>s2.project+"@"+s2.res+"m").join(","), "X-Cache":"miss",
          "Cache-Control":"public, max-age=604800, immutable"});
+    }
+
+    /* Fast baseline for the elevation spectrum. National Float32 elevation
+       renders first; the raw 1 m layer below this handler refines it without
+       leaving the viewport empty while a large COG is opening. */
+    if(p.startsWith("/api/elev/national/")){
+      const m=p.match(/^\/api\/elev\/national\/(\d+)\/(\d+)\/(\d+)\.png$/);
+      if(!m) return send(res,400,"text/plain",Buffer.from("bad national elevation tile path"));
+      const z=+m[1], x=+m[2], y=+m[3], limit=Math.pow(2,z);
+      if(z<0||z>22||x<0||y<0||x>=limit||y>=limit)
+        return send(res,400,"text/plain",Buffer.from("bad tile coordinates"));
+      const ck=key(`elevation-national-v1:${z}/${x}/${y}`);
+      const hit=cacheGet(ck,TTL_TILE);
+      if(hit) return hit.status===204
+        ? send(res,200,"image/png",TRANSPARENT,{"X-Cache":"hit","X-Coverage":"none","X-Elevation-Source":"none","Cache-Control":"public, max-age=604800, immutable"})
+        : send(res,hit.status,hit.type,hit.body,{"X-Cache":"hit","X-Elevation-Source":"3dep","Cache-Control":"public, max-age=604800, immutable"});
+      let out=null;
+      try{ out=await coalesce(`elevation-national:${ck}`,()=>scheduledRender(()=>nationalElevationTile(z,x,y,256))) }
+      catch(e){ return send(res,503,"image/png",TRANSPARENT,{"X-Cache":"BUSY","X-Elevation-Source":"pending","Cache-Control":"no-store","Retry-After":"3"}) }
+      if(!out){
+        cachePut(ck,204,"image/png",Buffer.alloc(0));
+        return send(res,200,"image/png",TRANSPARENT,{"X-Coverage":"none","X-Elevation-Source":"none","Cache-Control":"public, max-age=604800, immutable"});
+      }
+      cachePut(ck,200,"image/png",out.png);
+      return send(res,200,"image/png",out.png,{"X-Coverage":String(out.coverage),"X-Elevation-Source":"3dep",
+        "X-Cache":"miss","Cache-Control":"public, max-age=604800, immutable"});
     }
 
     /* Elevation values for the browser spectrum. Prefer raw 1 m lidar, but
