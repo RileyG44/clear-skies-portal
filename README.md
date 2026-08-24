@@ -151,6 +151,12 @@ VIIRS/MODIS near-real-time true colour and night lights, NISAR.
   ~474 GiB (against 53 TiB for the WA DNR archive). Coverage is real but partial:
   **Mount Rainier National Park is a genuine gap**, which is why WA DNR stays.
 
+- **Elevation spectrum** — the geology overlay reads real elevation values, not
+  a pre-coloured image. It uses raw USGS 1 m lidar where that archive covers a
+  tile, then automatically falls back to the national 3DEP Float32 elevation
+  service. The chosen height is white, lower ground grades red, and higher
+  ground grades blue; the panel states which source is serving the current view.
+
 *Best available* prefers WA DNR where it has data — 345 projects to USGS's 25, and
 some resolving finer than 1 m — then USGS 1 m, then 3DEP. 3DEP always draws
 underneath, so a project edge never reads as a hole.

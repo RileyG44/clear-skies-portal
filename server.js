@@ -8,6 +8,7 @@ const fs    = require("fs");
 const path  = require("path");
 const crypto= require("crypto");
 const zlib  = require("zlib");
+const cog   = require("./cog.js");
 const usgs  = require("./usgs.js");
 
 const ROOT  = __dirname;
@@ -28,6 +29,7 @@ const PUBLIC_FILES = new Set(["index.html","version.js","mosaic-core.js","sw.js"
 
 const WADNR_HOST = "lidarportal.dnr.wa.gov";
 const WADNR_MAP  = "/arcgis/rest/services/lidar/wadnr_hillshade/MapServer";
+const DEP_HOST   = "elevation.nationalmap.gov";
 const TTL_TILE   = 90*24*3600*1000;   // lidar hillshade never changes
 const TILE_MS    = 30000;             // WA DNR is slow; 3DEP shows underneath meanwhile
 const TTL_META   = 7*24*3600*1000;
@@ -36,6 +38,11 @@ const TTL_SNOW   = 6*3600*1000;       // SNODAS is re-run daily
 const MAX_BODY   = 256*1024;
 const MAX_UPSTREAM_BODY = 32*1024*1024;
 const MAX_WARM_TILES = 40000;
+/* Raw COG decoding and Float32 TIFF conversion are CPU-heavy. Keep a viewport
+   from launching dozens at once: a short queue is much faster than saturating
+   Node's single event loop, and leaves health checks responsive. */
+const MAX_RENDER_INFLIGHT = 2;
+const MAX_RENDER_QUEUE = 48;
 const TERRAIN_STYLES = new Set(["hs","hsmulti","tint","slope","aspect","c2","c5","c10","c25"]);
 const DEP_RULES = new Set(["Hillshade Gray","Hillshade Multidirectional","Hillshade Elevation Tinted",
   "Slope Map","Aspect Map","Preset 2ft Contour Interval","Preset 5ft Contour Interval",
@@ -182,12 +189,25 @@ function upstream(opts, postBody){
    concurrent jobs complete sooner in practice while 3DEP remains visible. */
 const MAX_INFLIGHT = 4;
 let inflight = 0; const queue = [];
+let renderInflight = 0; const renderQueue = [];
 const pending = new Map();
 function slot(){
   if(inflight < MAX_INFLIGHT){ inflight++; return Promise.resolve() }
   return new Promise(r=>queue.push(r)).then(()=>{ inflight++ });
 }
 function release(){ inflight--; const n=queue.shift(); if(n) n() }
+
+function renderSlot(){
+  if(renderInflight < MAX_RENDER_INFLIGHT){ renderInflight++; return Promise.resolve() }
+  if(renderQueue.length >= MAX_RENDER_QUEUE)
+    return Promise.reject(new HttpError(503,"terrain renderer is busy"));
+  return new Promise(resolve=>renderQueue.push(resolve)).then(()=>{ renderInflight++ });
+}
+function releaseRender(){ renderInflight--; const next=renderQueue.shift(); if(next) next() }
+async function scheduledRender(fn){
+  await renderSlot();
+  try{ return await fn() }finally{ releaseRender() }
+}
 
 function coalesce(id,fn){
   if(pending.has(id)) return pending.get(id);
@@ -222,6 +242,9 @@ const TRANSPARENT = Buffer.from(
  "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=","base64");
 const isPng = body => Buffer.isBuffer(body)&&body.length>8&&body[0]===0x89&&body[1]===0x50&&
   body[2]===0x4e&&body[3]===0x47&&body[4]===0x0d&&body[5]===0x0a&&body[6]===0x1a&&body[7]===0x0a;
+const isTiff = body => Buffer.isBuffer(body)&&body.length>8&&
+  ((body[0]===0x49&&body[1]===0x49&&body[2]===0x2a&&body[3]===0x00) ||
+   (body[0]===0x4d&&body[1]===0x4d&&body[2]===0x00&&body[3]===0x2a));
 
 /* ------------------------------------------------------------------ app */
 function send(res, status, type, body, extra={}){
@@ -298,6 +321,49 @@ function mercBbox(z,x,y){
   const R=20037508.342789244, N=Math.pow(2,z), sp=2*R/N;
   const x0=-R+x*sp, y1=R-y*sp;
   return `${x0},${y1-sp},${x0+sp},${y1}`;
+}
+
+/* The raw USGS 1 m archive is deliberately selective. For a spectrum overlay
+   that works everywhere in the United States, fall back to the national 3DEP
+   ImageServer's native Float32 export, then pack it in the same Terrarium
+   format used by raw lidar. This preserves one client-side shader for both
+   sources instead of baking a colour ramp on the server. */
+function terrariumFromTiff(body){
+  const t=cog.parseTiff(body), L=t.levels&&t.levels[0];
+  if(!L||!L.w||!L.h||!L.tw||!L.th||!L.offsets.length) return null;
+  const out=Buffer.alloc(L.w*L.h*4);
+  const cols=Math.ceil(L.w/L.tw);
+  let covered=0;
+  for(let i=0;i<L.offsets.length;i++){
+    const off=Number(L.offsets[i]), count=Number(L.counts[i]);
+    if(!Number.isSafeInteger(off)||!Number.isSafeInteger(count)||off<0||count<=0||off+count>body.length) continue;
+    let tile; try{ tile=cog.decodeTile(body.subarray(off,off+count),L) }catch(e){ continue }
+    const tx=i%cols, ty=Math.floor(i/cols), x0=tx*L.tw, y0=ty*L.th;
+    const xmax=Math.min(L.w,x0+L.tw), ymax=Math.min(L.h,y0+L.th);
+    for(let y=y0;y<ymax;y++) for(let x=x0;x<xmax;x++){
+      const v=tile[(y-y0)*L.tw+(x-x0)];
+      // 3DEP uses Float32; reject its fill values and any impossible land DEM.
+      if(!Number.isFinite(v)||v<-2000||v>10000) continue;
+      const packed=Math.max(0,Math.min(65535.996,v+32768));
+      const whole=Math.floor(packed), o=(y*L.w+x)*4;
+      out[o]=whole>>8; out[o+1]=whole&255; out[o+2]=Math.floor((packed-whole)*256); out[o+3]=255;
+      covered++;
+    }
+  }
+  return covered ? {png:usgs.encodePNG(out,L.w,L.h),coverage:+(covered/(L.w*L.h)).toFixed(3)} : null;
+}
+
+async function nationalElevationTile(z,x,y,size){
+  const bbox=mercBbox(z,x,y);
+  const req=`/arcgis/rest/services/3DEPElevation/ImageServer/exportImage`
+    + `?bbox=${bbox}&bboxSR=3857&imageSR=3857&size=${size},${size}&format=tiff&f=image`;
+  const r=await upstream({host:DEP_HOST,path:req,method:"GET",
+    headers:{"User-Agent":"clear-skies-portal"},__timeout:TILE_MS});
+  // A temporary ImageServer failure must remain retryable, never become a
+  // 90-day cached transparent tile. A valid all-nodata TIFF is the only
+  // legitimate no-coverage result.
+  if(r.status!==200||!isTiff(r.body)) throw new Error("3DEP elevation export failed");
+  return terrariumFromTiff(r.body);
 }
 
 function validateWarmJob(value, source){
@@ -583,8 +649,8 @@ const server = http.createServer(async (req,res)=>{
       let out=null;
       /* Several Leaflet tiles can ask for the same raw-COG render while a
          pan/zoom is settling. Share that expensive range-read/PNG job. */
-      try{ out=await coalesce(`usgs-render:${ck}`,()=>usgs.renderTile(style,z,x,y,256)) }
-      catch(e){ return send(res,500,"text/plain",Buffer.from(String(e.message||e))) }
+      try{ out=await coalesce(`usgs-render:${ck}`,()=>scheduledRender(()=>usgs.renderTile(style,z,x,y,256))) }
+      catch(e){ return send(res,503,"image/png",TRANSPARENT,{"X-Cache":"BUSY","Cache-Control":"no-store","Retry-After":"3"}) }
       if(!out){                       // no federal coverage here — caller falls back
         cachePut(ck,204,"image/png",Buffer.alloc(0));
         return send(res,200,"image/png",TRANSPARENT,{"X-Coverage":"none","Cache-Control":"public, max-age=604800, immutable"});
@@ -594,6 +660,40 @@ const server = http.createServer(async (req,res)=>{
         {"X-Coverage":String(out.meta.coverage), "X-Ground-Res":String(out.meta.groundRes),
          "X-Sources":out.meta.sources.map(s2=>s2.project+"@"+s2.res+"m").join(","), "X-Cache":"miss",
          "Cache-Control":"public, max-age=604800, immutable"});
+    }
+
+    /* Elevation values for the browser spectrum. Prefer raw 1 m lidar, but
+       make the feature continuous by falling back to national 3DEP Float32
+       pixels when the staged lidar catalogue has a real gap. */
+    if(p.startsWith("/api/elev/")){
+      const m=p.match(/^\/api\/elev\/(\d+)\/(\d+)\/(\d+)\.png$/);
+      if(!m) return send(res,400,"text/plain",Buffer.from("bad elevation tile path"));
+      const z=+m[1], x=+m[2], y=+m[3], limit=Math.pow(2,z);
+      if(z<0||z>22||x<0||y<0||x>=limit||y>=limit)
+        return send(res,400,"text/plain",Buffer.from("bad tile coordinates"));
+      const ck=key(`elevation-v2:${z}/${x}/${y}`);
+      const hit=cacheGet(ck,TTL_TILE);
+      if(hit) return hit.status===204
+        ? send(res,200,"image/png",TRANSPARENT,{"X-Cache":"hit","X-Coverage":"none","X-Elevation-Source":"none","Cache-Control":"public, max-age=604800, immutable"})
+        : send(res,hit.status,hit.type,hit.body,{"X-Cache":"hit","X-Elevation-Source":"cached","Cache-Control":"public, max-age=604800, immutable"});
+      let out=null;
+      try{
+        out=await coalesce(`elevation:${ck}`,()=>scheduledRender(async()=>{
+          let raw=null; try{ raw=await usgs.elevTile(z,x,y,256) }catch(e){}
+          if(raw) return {...raw,source:"usgs-1m"};
+          const national=await nationalElevationTile(z,x,y,256);
+          return national ? {...national,source:"3dep"} : null;
+        }));
+      }catch(e){
+        return send(res,503,"image/png",TRANSPARENT,{"X-Cache":"BUSY","X-Elevation-Source":"pending","Cache-Control":"no-store","Retry-After":"3"});
+      }
+      if(!out){
+        cachePut(ck,204,"image/png",Buffer.alloc(0));
+        return send(res,200,"image/png",TRANSPARENT,{"X-Coverage":"none","X-Elevation-Source":"none","Cache-Control":"public, max-age=604800, immutable"});
+      }
+      cachePut(ck,200,"image/png",out.png);
+      return send(res,200,"image/png",out.png,{"X-Coverage":String(out.coverage),"X-Elevation-Source":out.source,
+        "X-Cache":"miss","Cache-Control":"public, max-age=604800, immutable"});
     }
 
     /* Landform fabric over the current view: orientation and strength of the
@@ -628,8 +728,8 @@ const server = http.createServer(async (req,res)=>{
         ? send(res,200,"image/png",TRANSPARENT,{"X-Cache":"hit","X-Coverage":"none","Cache-Control":"public, max-age=604800, immutable"})
         : send(res,hit.status,hit.type,hit.body,{"X-Cache":"hit","Cache-Control":"public, max-age=604800, immutable"});
       let out=null;
-      try{ out=await coalesce(`usgs-elev:${ck}`,()=>usgs.elevTile(z,x,y,256)) }
-      catch(e){ return send(res,500,"text/plain",Buffer.from(String(e.message||e))) }
+      try{ out=await coalesce(`usgs-elev:${ck}`,()=>scheduledRender(()=>usgs.elevTile(z,x,y,256))) }
+      catch(e){ return send(res,503,"image/png",TRANSPARENT,{"X-Cache":"BUSY","Cache-Control":"no-store","Retry-After":"3"}) }
       if(!out){ cachePut(ck,204,"image/png",Buffer.alloc(0));
                 return send(res,200,"image/png",TRANSPARENT,{"X-Coverage":"none","Cache-Control":"public, max-age=604800, immutable"}) }
       cachePut(ck,200,"image/png",out.png);
@@ -736,6 +836,7 @@ const server = http.createServer(async (req,res)=>{
     if(p === "/api/health"){
       return send(res,200,"application/json",Buffer.from(JSON.stringify({
         ok:true, cached:cacheCount, inflight, queued:queue.length,
+        rendering:renderInflight, renderQueued:renderQueue.length,
         uptimeSec:Math.floor((Date.now()-STARTED)/1000)
       })),{"Cache-Control":"no-store"});
     }

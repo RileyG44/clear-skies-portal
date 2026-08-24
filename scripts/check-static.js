@@ -62,10 +62,13 @@ assert(index.includes('register("sw.js",{updateViaCache:"none"})'),
 assert(index.includes('id="snapshot"'),"map snapshot control must be present");
 assert(index.includes('getDisplayMedia'),"map snapshot control must use browser surface capture");
 assert(index.includes('body.print-map'),"map snapshot control must have a print fallback");
+assert(index.includes('setView([47.1301,-119.2781], 9)'),"Moses Lake must remain the default terrain test view");
 assert(index.includes('id="srvConnect"'),"terrain engine needs an explicit connect control");
 assert(index.includes('id="srvCopyLink"'),"terrain engine needs a private setup-link control");
 assert(index.includes('takeSharedServerBase'),"private setup links must be consumed from URL fragments");
 assert(index.includes('id="elevSpan"'),"elevation spectrum needs a configurable colour span");
+assert(index.includes('/api/elev/'),"elevation spectrum must use the seamless elevation endpoint");
+assert(index.includes('National USGS 3DEP elevation'),"elevation spectrum must disclose its national fallback");
 const elevSandbox={};
 vm.runInNewContext(`${namedFunction(index,"elevRampRgb")}; center=elevRampRgb(500,500,300); lower=elevRampRgb(200,500,300); upper=elevRampRgb(800,500,300);`,elevSandbox,{filename:"index.html#elevation-spectrum-test"});
 assert.deepEqual(Array.from(elevSandbox.center),[247,247,242],"reference elevation must be white");
@@ -77,6 +80,9 @@ for(const script of ["scripts/launch-terrain-engine.sh","scripts/install-mac-ser
   const source=read(script);
   assert.match(source,/127\.0\.0\.1/,`${script} must keep the engine loopback-only`);
 }
+const watchdog=read("scripts/launch-terrain-engine.sh");
+assert(watchdog.includes("MAX_IDLE_MISSES"),"watchdog must distinguish a busy renderer from an idle dead engine");
+assert(watchdog.includes("deferred its health restart"),"watchdog must not restart a busy terrain renderer");
 
 const manifest=JSON.parse(read("manifest.json"));
 const sources=JSON.parse(read("sources.json"));

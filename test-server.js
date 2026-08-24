@@ -55,6 +55,8 @@ async function main(){
     assert.equal(healthBody.ok,true);
     assert(Number.isInteger(healthBody.cached)&&healthBody.cached>=0,"health must report the cached tile count");
     assert(Number.isFinite(healthBody.uptimeSec)&&healthBody.uptimeSec>=0,"health must report process uptime");
+    assert(Number.isInteger(healthBody.rendering)&&healthBody.rendering>=0,"health must report active terrain renders");
+    assert(Number.isInteger(healthBody.renderQueued)&&healthBody.renderQueued>=0,"health must report queued terrain renders");
     assert.equal(health.headers["cache-control"],"no-store","health must never be served stale");
 
     const page=await request(port,"/");
@@ -84,6 +86,7 @@ async function main(){
     assert.equal(hugeBody.status,413);
 
     assert.equal((await request(port,"/api/warm/stop")).status,405);
+    assert.equal((await request(port,"/api/elev/not-a-tile")).status,400);
     assert.equal((await request(port,"/api/usgs/tile/notastyle/1/0/0.png")).status,400);
     assert.equal((await request(port,"/.git/config")).status,404);
     assert.equal((await request(port,"/package.json")).status,404);

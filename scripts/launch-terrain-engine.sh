@@ -14,6 +14,9 @@ ENGINE_PORT=${CSP_ENGINE_PORT:-8765}
 ENGINE_CACHE=${CSP_CACHE_DIR:-"$REPO_ROOT/.cache"}
 NODE_BIN=${CSP_NODE_BIN:-}
 ENGINE_PID=""
+CHECK_INTERVAL=${CSP_HEALTH_INTERVAL:-20}
+CHECK_TIMEOUT=${CSP_HEALTH_TIMEOUT:-8}
+MAX_IDLE_MISSES=${CSP_MAX_IDLE_HEALTH_MISSES:-5}
 
 valid_node(){
   [[ -x "$1" ]] || return 1
@@ -38,18 +41,31 @@ stop_engine(){
 }
 trap stop_engine INT TERM HUP
 
+engine_busy(){
+  local cpu
+  cpu=$(ps -o %cpu= -p "$ENGINE_PID" 2>/dev/null | tr -d ' ')
+  [[ "$cpu" == <->(|.<->) ]] || return 1
+  (( ${cpu%.*} >= 5 ))
+}
+
 while true; do
   HOST=127.0.0.1 PORT="$ENGINE_PORT" CSP_CACHE_DIR="$ENGINE_CACHE" "$NODE_BIN" "$REPO_ROOT/server.js" &
   ENGINE_PID=$!
-  misses=0
+  idle_misses=0
   while kill -0 "$ENGINE_PID" 2>/dev/null; do
-    sleep 8
-    if curl --fail --silent --show-error --max-time 3 "http://127.0.0.1:${ENGINE_PORT}/api/health" >/dev/null 2>&1; then
-      misses=0
+    sleep "$CHECK_INTERVAL"
+    if curl --fail --silent --show-error --max-time "$CHECK_TIMEOUT" "http://127.0.0.1:${ENGINE_PORT}/api/health" >/dev/null 2>&1; then
+      idle_misses=0
+    elif engine_busy; then
+      # Raster decompression can occupy Node's event loop for a few seconds.
+      # A busy process is making progress, not dead; never turn that load into
+      # a self-inflicted restart loop.
+      idle_misses=0
+      print -u2 "Terrain engine is busy; deferred its health restart."
     else
-      ((misses++))
-      if (( misses >= 2 )); then
-        print -u2 "Terrain engine health check failed twice; restarting it."
+      ((idle_misses++))
+      if (( idle_misses >= MAX_IDLE_MISSES )); then
+        print -u2 "Terrain engine was idle and unreachable ${idle_misses} times; restarting it."
         kill -TERM "$ENGINE_PID" 2>/dev/null || true
       fi
     fi
