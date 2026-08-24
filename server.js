@@ -26,8 +26,8 @@ fs.mkdirSync(AREAS, {recursive:true});
 const MIME = {".html":"text/html; charset=utf-8",".js":"text/javascript",".css":"text/css",
   ".json":"application/json",".png":"image/png",".jpg":"image/jpeg",".jpeg":"image/jpeg",
   ".svg":"image/svg+xml",".md":"text/markdown; charset=utf-8",".txt":"text/plain; charset=utf-8"};
-const PUBLIC_FILES = new Set(["index.html","version.js","mosaic-core.js","terrain-core.js",
-  "elevation-bands.js","elevation-tile-core.js","glacial-research-core.js","research-analysis.js","research-worker.js","sw.js","manifest.json",
+const PUBLIC_FILES = new Set(["index.html","version.js","mosaic-core.js","terrain-core.js","terrain-raster.js",
+  "elevation-bands.js","elevation-tile-core.js","wa-archaeology.js","glacial-research-core.js","research-analysis.js","research-worker.js","sw.js","manifest.json",
   "icon-180.png","icon-192.png","icon-512.png"]);
 
 const WADNR_HOST = "lidarportal.dnr.wa.gov";
@@ -54,6 +54,7 @@ const TERRAIN_RENDER_VERSION = "terrain-v2";
 const CACHE_MIN_FREE_GIB=Math.max(0,Number(process.env.CSP_CACHE_MIN_FREE_GB)||8);
 const CACHE_MIN_FREE_BYTES=CACHE_MIN_FREE_GIB*1024*1024*1024;
 const TERRAIN_STYLES = new Set(["hs","hsmulti","tint","slope","aspect","c2","c5","c10","c25"]);
+const TERRAIN_DOWNLOAD_STYLES = new Set([...TERRAIN_STYLES,"northness"]);
 const DEP_RULES = new Set(["Hillshade Gray","Hillshade Multidirectional","Hillshade Elevation Tinted",
   "Slope Map","Aspect Map","Preset 2ft Contour Interval","Preset 5ft Contour Interval",
   "Preset 10ft Contour Interval","Contour Smoothed 25"]);
@@ -77,7 +78,9 @@ const SNAPSHOT_IMAGE_HOSTS = new Set([
   "gis.dnr.wa.gov",
   WADNR_HOST,
   "tiles.macrostrat.org",
-  "mapservices.weather.noaa.gov"
+  "mapservices.weather.noaa.gov",
+  "earthquake.usgs.gov",
+  "tiles.arcgis.com"
 ]);
 /* CPU-heavy COG decoding and every derived terrain product live outside the
    request loop. The managed, dedicated M2 install requests six workers; the
@@ -660,8 +663,8 @@ function validateWarmJob(value, source){
   const label=String(value.label||`z${z0}-${z1}`).replace(/[\u0000-\u001f\u007f]/g,"").slice(0,120);
   if(source==="usgs"){
     const style=String(value.style||"hs");
-    if(!TERRAIN_STYLES.has(style)) throw new HttpError(400,"unsupported terrain style");
-    return {bbox,z0,z1,style,label,total};
+    if(!TERRAIN_DOWNLOAD_STYLES.has(style)) throw new HttpError(400,"unsupported terrain style");
+    return {bbox,z0,z1,style,label,total,raw:value.raw!==false};
   }
   const rule=String(value.rule||"Hillshade Gray");
   if(!DEP_RULES.has(rule)) throw new HttpError(400,"unsupported 3DEP rendering rule");
@@ -746,23 +749,46 @@ async function startUsgsWarm(job){
   const lane=async()=>{
     while(tiles.length&&!usgsWarm.stop){
       const t=tiles.pop(); if(!t) break;
-      const ck=key(`${TERRAIN_RENDER_VERSION}:${job.style}:${t.z}/${t.x}/${t.y}`);
+      const nationalKey=key(`elevation-national-v1:${t.z}/${t.x}/${t.y}`);
+      const rawKey=key(`usgselev:${t.z}/${t.x}/${t.y}`);
+      const controller=new AbortController();usgsWarm.controllers.add(controller);
+      let fetched=false,available=false,tileBytes=0;
       try{
-        const hit=cacheGet(ck,TTL_TILE);
-        if(hit&&hit.status===200&&hit.body.length){ usgsWarm.skipped++; usgsWarm.bytes+=hit.body.length }
-        else{
-          const controller=new AbortController(); usgsWarm.controllers.add(controller);
-          let out;
-          try{ out=await terrainPool.run("raw-terrain",{style:job.style,...t,size:256},
-            {priority:5,timeoutMs:45000,signal:controller.signal}) }
-          finally{ usgsWarm.controllers.delete(controller) }
-          if(out){
-            cachePut(ck,200,"image/png",out.png); usgsWarm.ok++; usgsWarm.bytes+=out.png.length;
-            for(const source of out.meta.sources||[]) if(source.key) usedKeys.add(source.key);
+        const loadNational=async()=>{
+          const hit=cacheGet(nationalKey,TTL_TILE);
+          if(hit){available=true;tileBytes+=hit.body.length;return}
+          const body=await nationalElevationTiff(t.z,t.x,t.y,256,controller.signal);
+          const out=await terrainPool.run("terrarium-tiff",{body},
+            {priority:5,timeoutMs:15000,signal:controller.signal});
+          fetched=true;available=true;
+          if(out){cachePut(nationalKey,200,"image/png",out.png);tileBytes+=out.png.length}
+          else cachePut(nationalKey,204,"image/png",Buffer.alloc(0));
+        };
+        const loadRaw=async()=>{
+          const hit=cacheGet(rawKey,TTL_TILE);
+          if(hit){available=true;tileBytes+=hit.body.length;return}
+          const out=await terrainPool.run("raw-elevation",{...t,size:256},
+            {priority:5,timeoutMs:45000,signal:controller.signal});
+          fetched=true;available=true;
+          if(out){cachePut(rawKey,200,"image/png",out.png);tileBytes+=out.png.length}
+          else cachePut(rawKey,204,"image/png",Buffer.alloc(0));
+        };
+        const work=[loadNational()];
+        if(job.raw&&t.z>=13) work.push(loadRaw());
+        const outcomes=await Promise.allSettled(work);
+        for(const outcome of outcomes) if(outcome.status==="rejected"&&outcome.reason&&outcome.reason.code!=="ABORT_ERR")
+          usgsWarm.error=String(outcome.reason.message||outcome.reason);
+        if(available){
+          usgsWarm.bytes+=tileBytes;
+          if(fetched) usgsWarm.ok++;else usgsWarm.skipped++;
+        }else if(outcomes.every(outcome=>outcome.status==="rejected")){
+          const reason=outcomes[0].reason;
+          if(reason&&reason.code!=="ABORT_ERR") usgsWarm.error=String(reason.message||reason);
           }
-        }
       }catch(error){
         if(error&&error.code!=="ABORT_ERR") usgsWarm.error=String(error.message||error);
+      }finally{
+        usgsWarm.controllers.delete(controller);
       }
       usgsWarm.done++;
     }
@@ -1232,7 +1258,9 @@ const server = http.createServer(async (req,res)=>{
       return send(res,200,"application/json",Buffer.from(JSON.stringify({tiles:n})));
     }
 
-    /* ---- geologic map tiles (Macrostrat sends no CORS, so it is proxied) ---- */
+    /* ---- optional warm-cache path for Macrostrat geology tiles ------------
+       Current browsers can load these directly with CORS. Retain the exact,
+       bounded route for installed/offline clients and older saved builds. */
     if(p.startsWith("/api/geo/")){
       const m=p.match(/^\/api\/geo\/(macrostrat)\/(\d+)\/(\d+)\/(\d+)\.png$/);
       if(!m) return send(res,400,"text/plain",Buffer.from("bad geo tile path"));

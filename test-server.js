@@ -36,7 +36,9 @@ async function snapshotUrlValidationChecks(){
       "gis.dnr.wa.gov",
       "lidarportal.dnr.wa.gov",
       "tiles.macrostrat.org",
-      "mapservices.weather.noaa.gov"
+      "mapservices.weather.noaa.gov",
+      "earthquake.usgs.gov",
+      "tiles.arcgis.com"
     ];
     for(const hostname of exactHosts)
       assert.equal(validateSnapshotImageUrl(`https://${hostname}/tile.png`).hostname,hostname);

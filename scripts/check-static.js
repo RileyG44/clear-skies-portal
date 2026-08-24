@@ -50,8 +50,10 @@ assert.equal(normSandbox.normalized.nativeMax,null,"ordinary STAC scenes default
 new vm.Script(read("sw.js"),{filename:"sw.js"});
 new vm.Script(read("mosaic-core.js"),{filename:"mosaic-core.js"});
 new vm.Script(read("terrain-core.js"),{filename:"terrain-core.js"});
+new vm.Script(read("terrain-raster.js"),{filename:"terrain-raster.js"});
 new vm.Script(read("elevation-bands.js"),{filename:"elevation-bands.js"});
 new vm.Script(read("elevation-tile-core.js"),{filename:"elevation-tile-core.js"});
+new vm.Script(read("wa-archaeology.js"),{filename:"wa-archaeology.js"});
 new vm.Script(read("glacial-research-core.js"),{filename:"glacial-research-core.js"});
 new vm.Script(read("research-analysis.js"),{filename:"research-analysis.js"});
 const versionSandbox={};
@@ -60,8 +62,11 @@ assert.match(versionSandbox.CSP_BUILD,/^\d{4}-\d{2}-\d{2}[a-z]$/,"build version 
 assert(index.includes(`<script src="version.js?build=${versionSandbox.CSP_BUILD}"></script>`),
        "page must cache-bust and load the shared build version");
 assert(index.includes('<script src="mosaic-core.js"></script>'),"index must load the tested mosaic core");
+assert(index.includes('<script src="terrain-core.js"></script>')&&index.includes('<script src="terrain-raster.js"></script>'),
+       "index must load tested terrain primitives and the deterministic display rasterizer");
 assert(index.includes('<script src="elevation-bands.js"></script>'),"index must load the tested elevation-band core");
 assert(index.includes('<script src="elevation-tile-core.js"></script>'),"index must decode packed elevation before resampling");
+assert(index.includes('<script src="wa-archaeology.js"></script>'),"index must load the public-safe archaeology index");
 assert(index.includes('<script src="glacial-research-core.js"></script>'),"index must load geomorphology primitives");
 assert(index.includes('<script src="research-analysis.js"></script>'),"index must load the shared analysis dispatcher");
 assert(read("sw.js").includes(`const CSP_BUILD = "${versionSandbox.CSP_BUILD}";`),
@@ -89,16 +94,23 @@ assert(index.includes('maxZoom:VIEW_MAX,maxNativeZoom:17'),
        "one-metre lidar must stretch its honest native detail beyond z17 instead of oversampling or going black");
 assert(index.includes('const WADNR_OK = new Set(["hs"])'),
        "WA DNR routing must not substitute plain hillshade for analytical terrain styles");
-assert(index.includes('const CompositeTerrainLayer = L.GridLayer.extend'),
+assert(index.includes('const CompositeTerrainLayer = L.GridLayer.extend')&&index.includes('const AnalyticTerrainLayer=ElevLayer.extend'),
        "terrain refinement must composite into one tile instead of stacking darkening layers");
+assert(index.includes('class TerrainGpuRenderer')&&index.includes('dataset.cspRenderer="webgl2"'),
+       "hillshade, slope, and aspect must use one shared WebGL2 terrain renderer when available");
+assert(index.includes('rawEndpoint:null')&&index.includes('refineOverview:true'),
+       "national analytical terrain must progressively refine a complete browser baseline without requesting raw lidar");
 assert(index.includes('const softError=response.headers.get("X-CSP-Error")'),
        "soft upstream tile failures must retry without painting a permanent empty tile");
 assert(index.includes('zIndex:440')&&index.includes('zIndex:450'),
        "analytical terrain and elevation shaders must render above primary imagery");
 assert(index.includes('ElevationTileCore.decodeTerrarium')&&index.includes('ElevationTileCore.resampleElevation'),
        "packed Terrarium bytes must be decoded before floating-point resampling");
-assert(index.includes('const nationalPromise=coords.z>=13')&&index.includes('if(coords.z<13&&baseline)'),
-       "overview elevation must paint browser-direct data without duplicate server decoding");
+assert(index.includes('const nationalPromise=(coords.z>=13||self.options.refineOverview)')&&
+       index.includes('if(coords.z<13&&baseline&&!self.options.refineOverview)'),
+       "overview elevation must support either immediate browser-only paint or explicit national refinement");
+assert(index.includes('panesEl.addEventListener("wheel"')&&index.includes('canScroll(body,delta)'),
+       "wheel and trackpad input over an open submenu must scroll its content before chaining to the pane stack");
 assert(index.includes('rawNative==null||rawNative==="" ? NaN : Number(rawNative)'),
        "missing imagery native zoom must derive from GSD instead of collapsing to z0");
 const imageryZoomSandbox={};
@@ -143,6 +155,36 @@ assert.match(index,/id:"wafaults"[\s\S]{0,500}Earthquakes_and_Faults\/MapServer\
        "WA active faults must use official WGS Quaternary layer 12");
 assert.match(index,/id:"wavents"[\s\S]{0,500}Volcanic_Vents\/MapServer\/export[\s\S]{0,160}layers:"0"/,
        "WA volcanic vents must use official WGS layer 0");
+assert.match(index,/id:"geology"[\s\S]{0,320}https:\/\/tiles\.macrostrat\.org\/carto\/\{z\}\/\{x\}\/\{y\}\.png/,
+       "Macrostrat geology must load browser-direct without depending on the M2");
+const macrostratOverlay=index.match(/\{ id:"geology"[\s\S]*?\},/)[0];
+assert(!macrostratOverlay.includes("needsProxy"),"Macrostrat must remain available while the private server is offline");
+assert.match(index,/id:"usfaults"[\s\S]{0,500}haz\/Qfaults\/MapServer\/export[\s\S]{0,160}layers:"21,22"/,
+       "national Quaternary faults must use the USGS database and fault-area layers");
+assert.match(index,/id:"plateboundaries"[\s\S]{0,500}eq\/map_plateboundaries\/MapServer\/export[\s\S]{0,160}layers:"0,1"/,
+       "tectonic context must include USGS plates and microplates");
+assert.match(index,/id:"vs30"[\s\S]{0,500}eq\/vs30_mosaic\/MapServer\/export[\s\S]{0,320}not lithology/,
+       "Vs30 must be clearly labeled as a site-condition proxy rather than geology");
+assert.match(index,/id:"earthquakes"[\s\S]{0,420}all_week\.geojson[\s\S]{0,200}pointKind:"quake"[\s\S]{0,100}geoTtl:5\*60\*1000/,
+       "earthquakes must use the bounded seven-day USGS feed with a five-minute refresh cadence");
+assert.match(index,/id:"volcanostatus"[\s\S]{0,420}volcanoApi\/geojson[\s\S]{0,200}pointKind:"volcano"[\s\S]{0,100}geoTtl:15\*60\*1000/,
+       "volcano status must use the live USGS VSC feed with a bounded refresh cadence");
+assert.match(index,/id:"waarchaeology"[\s\S]{0,420}CSPWaArchaeology\?\.featureCollection\(\)[\s\S]{0,160}pointKind:"archaeology"/,
+       "Washington archaeology must use the validated bundled research index");
+assert(index.includes('p.precision==="estimated"')&&read("wa-archaeology.js").includes('"Estimated research waypoint"'),
+       "archaeology markers must visually and textually distinguish estimated locations");
+assert(index.includes('id="coordCopy"')&&index.includes('id="coordOpen"')&&
+       index.includes("https://www.google.com/maps/search/?api=1")&&index.includes("https://earth.google.com/web/search/"),
+       "the search row must copy a selected coordinate and offer cross-platform Google Maps and Earth links");
+assert(index.includes("child.bindTooltip(ovPointTooltip")&&index.includes('className:"csp-point-tip"'),
+       "interactive point overlays must reveal concise labels on hover while retaining full click popups");
+assert(index.includes('cache:o.geoTtl?"no-cache":"force-cache"')&&index.includes("retaining the last successful data"),
+       "live GeoJSON feeds must refresh without discarding a successful canvas layer on failure");
+assert(index.includes("const ovPointCanvas=L.canvas({padding:.5})"),
+       "large point feeds must share Leaflet's canvas renderer instead of creating thousands of SVG nodes");
+assert(index.includes("https://macrostrat.org/api/v2/geologic_units/map")&&
+       index.includes("const GEOLOGY_IDENTIFY_MAX=128")&&index.includes("Surface map compilations overlap"),
+       "point geology identification must be browser-direct, bounded, and retain its interpretation caveat");
 for(const caveat of ["reference linework, not present-day ice","not flood depth, timing, frequency",
                      "Interpretive EWU/IAFI reconstruction","not volcanic hazard zones"])
   assert(index.includes(caveat),`research overlay must retain its interpretation caveat: ${caveat}`);
@@ -172,13 +214,15 @@ assert(server.includes('p==="/api/terrain/analyze"&&req.method==="POST"')&&serve
        "viewport DEM analysis must be validated and transferred off the Node event loop");
 assert(server.includes('"gis.dnr.wa.gov"'),
        "the screenshot image proxy must allow the exact WGS raster host used by research overlays");
+assert(server.includes('"earthquake.usgs.gov"')&&server.includes('"tiles.arcgis.com"'),
+       "the snapshot helper must allow only the exact new USGS raster hosts");
 assert(server.includes("const TTL_SNOW   = 2*3600*1000"),
        "the M2 snow cache must not hide most of NOAA's four daily updates");
-for(const asset of ["mosaic-core.js","terrain-core.js","elevation-bands.js","elevation-tile-core.js",
+for(const asset of ["mosaic-core.js","terrain-core.js","terrain-raster.js","elevation-bands.js","elevation-tile-core.js","wa-archaeology.js",
                     "glacial-research-core.js","research-analysis.js","research-worker.js"])
   assert(read(".github/workflows/ci.yml").includes(asset),`Pages artifact must include ${asset}`);
 const installer=read("scripts/install-mac-service.sh");
-for(const asset of ["terrain-core.js","elevation-bands.js","elevation-tile-core.js",
+for(const asset of ["terrain-core.js","terrain-raster.js","elevation-bands.js","elevation-tile-core.js","wa-archaeology.js",
                     "glacial-research-core.js","research-analysis.js","research-worker.js"])
   assert(installer.includes(asset),`installed M2 runtime must include ${asset}`);
 for(const script of ["scripts/launch-terrain-engine.sh","scripts/install-mac-service.sh"]){
