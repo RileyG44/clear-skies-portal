@@ -70,6 +70,7 @@ assert(index.includes('id="elevSpan"'),"elevation spectrum needs a configurable 
 assert(index.includes('/api/elev/'),"elevation spectrum must use the seamless elevation endpoint");
 assert(index.includes('endpoint:"/api/elev/national"'),"elevation spectrum must paint national elevation before lidar refinement");
 assert(index.includes('endpoint:"/api/usgs/elev"'),"elevation spectrum must refine the national baseline with raw lidar");
+assert(index.includes('minZoom:13'),"raw lidar spectrum refinement must wait for close inspection zooms");
 assert(index.includes('National USGS 3DEP elevation'),"elevation spectrum must disclose its national fallback");
 const elevSandbox={};
 vm.runInNewContext(`${namedFunction(index,"elevRampRgb")}; center=elevRampRgb(500,500,300); lower=elevRampRgb(200,500,300); upper=elevRampRgb(800,500,300);`,elevSandbox,{filename:"index.html#elevation-spectrum-test"});
