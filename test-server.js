@@ -37,7 +37,7 @@ async function main(){
   const port=await freePort();
   const child=spawn(process.execPath,["server.js"],{
     cwd:root,
-    env:{...process.env,PORT:String(port),HOST:"127.0.0.1",CSP_CACHE_DIR:cache},
+    env:{...process.env,PORT:String(port),HOST:"127.0.0.1",CSP_CACHE_DIR:cache,CSP_TERRAIN_WORKERS:"1"},
     stdio:["ignore","pipe","pipe"]
   });
   let logs="";
@@ -57,6 +57,9 @@ async function main(){
     assert(Number.isFinite(healthBody.uptimeSec)&&healthBody.uptimeSec>=0,"health must report process uptime");
     assert(Number.isInteger(healthBody.rendering)&&healthBody.rendering>=0,"health must report active terrain renders");
     assert(Number.isInteger(healthBody.renderQueued)&&healthBody.renderQueued>=0,"health must report queued terrain renders");
+    assert.equal(healthBody.terrain.workers,1,"health must report the configured terrain worker pool");
+    assert.equal(healthBody.terrain.active,0,"fresh terrain workers must be idle");
+    assert.equal(healthBody.nationalCircuit.coolingDown,false,"fresh fallback circuit must be closed");
     assert.equal(health.headers["cache-control"],"no-store","health must never be served stale");
 
     const page=await request(port,"/");

@@ -73,6 +73,8 @@ assert(index.includes('endpoint:"/api/elev/national"'),"elevation spectrum must 
 assert(index.includes('endpoint:"/api/usgs/elev"'),"elevation spectrum must refine the national baseline with raw lidar");
 assert(index.includes('minZoom:13'),"raw lidar spectrum refinement must wait for close inspection zooms");
 assert(index.includes('National USGS 3DEP elevation'),"elevation spectrum must disclose its national fallback");
+assert(index.includes('class ElevationGpuRenderer'),"elevation recolouring must use the shared WebGL2 renderer");
+assert(index.includes('elevation-tiles-prod/terrarium'),"elevation must have a browser-direct national fallback");
 const elevSandbox={};
 vm.runInNewContext(`${namedFunction(index,"elevRampRgb")}; center=elevRampRgb(500,500,300); lower=elevRampRgb(200,500,300); upper=elevRampRgb(800,500,300);`,elevSandbox,{filename:"index.html#elevation-spectrum-test"});
 assert.deepEqual(Array.from(elevSandbox.center),[247,247,242],"reference elevation must be white");
@@ -85,8 +87,10 @@ for(const script of ["scripts/launch-terrain-engine.sh","scripts/install-mac-ser
   assert.match(source,/127\.0\.0\.1/,`${script} must keep the engine loopback-only`);
 }
 const watchdog=read("scripts/launch-terrain-engine.sh");
-assert(watchdog.includes("MAX_IDLE_MISSES"),"watchdog must distinguish a busy renderer from an idle dead engine");
-assert(watchdog.includes("deferred its health restart"),"watchdog must not restart a busy terrain renderer");
+assert(watchdog.includes("MAX_HEALTH_MISSES"),"watchdog must restart an unresponsive HTTP coordinator");
+assert(!watchdog.includes("engine_busy"),"high CPU must not conceal a dead HTTP coordinator");
+for(const file of ["terrain-pool.js","terrain-worker.js"])
+  assert(fs.existsSync(path.join(root,file)),`missing terrain runtime: ${file}`);
 
 const manifest=JSON.parse(read("manifest.json"));
 const sources=JSON.parse(read("sources.json"));

@@ -8,8 +8,8 @@ const fs    = require("fs");
 const path  = require("path");
 const crypto= require("crypto");
 const zlib  = require("zlib");
-const cog   = require("./cog.js");
 const usgs  = require("./usgs.js");
+const {TerrainPool,TerrainPoolError}=require("./terrain-pool.js");
 
 const ROOT  = __dirname;
 const PORT  = Number(process.env.PORT || 8765);
@@ -38,16 +38,16 @@ const TTL_SNOW   = 6*3600*1000;       // SNODAS is re-run daily
 const MAX_BODY   = 256*1024;
 const MAX_UPSTREAM_BODY = 32*1024*1024;
 const MAX_WARM_TILES = 40000;
-/* Raw COG decoding and Float32 TIFF conversion are CPU-heavy. Keep a viewport
-   from launching dozens at once: a short queue is much faster than saturating
-   Node's single event loop, and leaves health checks responsive. */
-const MAX_RENDER_INFLIGHT = 3;
-const MAX_RENDER_QUEUE = 48;
+const MAX_RENDER_QUEUE = 40;
 const TERRAIN_STYLES = new Set(["hs","hsmulti","tint","slope","aspect","c2","c5","c10","c25"]);
 const DEP_RULES = new Set(["Hillshade Gray","Hillshade Multidirectional","Hillshade Elevation Tinted",
   "Slope Map","Aspect Map","Preset 2ft Contour Interval","Preset 5ft Contour Interval",
   "Preset 10ft Contour Interval","Contour Smoothed 25"]);
 const HTTPS_AGENT = new https.Agent({keepAlive:true,maxSockets:10,maxFreeSockets:5,timeout:30000});
+/* CPU-heavy COG decoding and every derived terrain product live outside the
+   request loop. On an 8-core M2 the default is four workers, leaving headroom
+   for macOS, the browser and the lightweight HTTP/cache coordinator. */
+const terrainPool=new TerrainPool({cacheDir:CACHE,maxQueue:MAX_RENDER_QUEUE});
 
 const CORS_ORIGINS = new Set(["https://rileyg44.github.io"]);
 for(const value of String(process.env.CSP_CORS_ORIGINS||"").split(",")){
@@ -149,7 +149,10 @@ function atomicWriteJson(target,value){
 /* ------------------------------------------------------------- upstream */
 function upstream(opts, postBody){
   return new Promise((resolve, reject)=>{
-    const req = https.request({...opts,agent:opts.agent||HTTPS_AGENT}, res=>{
+    const {__timeout,signal,...requestOptions}=opts;
+    let done=false;
+    const finish=(fn,value)=>{ if(done) return; done=true; if(signal) signal.removeEventListener("abort",onAbort); fn(value) };
+    const req = https.request({...requestOptions,agent:opts.agent||HTTPS_AGENT}, res=>{
       const chunks=[]; let size=0, settled=false;
       let stream=res;
       const enc=(res.headers["content-encoding"]||"").toLowerCase();
@@ -161,7 +164,7 @@ function upstream(opts, postBody){
         if(size>MAX_UPSTREAM_BODY){
           settled=true;
           const err=new Error(`upstream body exceeds ${MAX_UPSTREAM_BODY} bytes`);
-          reject(err);
+          finish(reject,err);
           stream.destroy(err);
           return;
         }
@@ -170,14 +173,19 @@ function upstream(opts, postBody){
       stream.on("end",()=>{
         if(settled) return;
         settled=true;
-        resolve({status:res.statusCode,
+        finish(resolve,{status:res.statusCode,
           type:res.headers["content-type"]||"application/octet-stream",
           body:Buffer.concat(chunks)});
       });
-      stream.on("error",err=>{ if(!settled){ settled=true; reject(err) } });
+      stream.on("error",err=>{ if(!settled){ settled=true; finish(reject,err) } });
     });
-    req.on("error",reject);
-    req.setTimeout(opts.__timeout || 45000, ()=>req.destroy(new Error("upstream timeout")));
+    const onAbort=()=>req.destroy(new TerrainPoolError("upstream request cancelled","ABORT_ERR"));
+    req.on("error",error=>finish(reject,error));
+    req.setTimeout(__timeout || 45000, ()=>req.destroy(new Error("upstream timeout")));
+    if(signal){
+      if(signal.aborted) return onAbort();
+      signal.addEventListener("abort",onAbort,{once:true});
+    }
     if(postBody) req.write(postBody);
     req.end();
   });
@@ -189,7 +197,6 @@ function upstream(opts, postBody){
    concurrent jobs complete sooner in practice while 3DEP remains visible. */
 const MAX_INFLIGHT = 4;
 let inflight = 0; const queue = [];
-let renderInflight = 0; const renderQueue = [];
 const pending = new Map();
 function slot(){
   if(inflight < MAX_INFLIGHT){ inflight++; return Promise.resolve() }
@@ -197,24 +204,53 @@ function slot(){
 }
 function release(){ inflight--; const n=queue.shift(); if(n) n() }
 
-function renderSlot(){
-  if(renderInflight < MAX_RENDER_INFLIGHT){ renderInflight++; return Promise.resolve() }
-  if(renderQueue.length >= MAX_RENDER_QUEUE)
-    return Promise.reject(new HttpError(503,"terrain renderer is busy"));
-  return new Promise(resolve=>renderQueue.push(resolve)).then(()=>{ renderInflight++ });
-}
-function releaseRender(){ renderInflight--; const next=renderQueue.shift(); if(next) next() }
-async function scheduledRender(fn){
-  await renderSlot();
-  try{ return await fn() }finally{ releaseRender() }
-}
-
 function coalesce(id,fn){
   if(pending.has(id)) return pending.get(id);
   const task=Promise.resolve().then(fn).finally(()=>pending.delete(id));
   pending.set(id,task);
   return task;
 }
+
+/* Coalesce identical terrain jobs while still letting each browser cancel its
+   own wait. When the final viewer leaves or unloads a tile, its worker is
+   stopped and replaced instead of burning minutes on an obsolete viewport. */
+const terrainPending=new Map();
+function terrainTask(jobKey,action,args,options,signal){
+  if(signal&&signal.aborted) return Promise.reject(new TerrainPoolError("terrain request cancelled","ABORT_ERR"));
+  let entry=terrainPending.get(jobKey);
+  if(!entry){
+    entry={controller:new AbortController(),waiters:new Set(),promise:null};
+    terrainPending.set(jobKey,entry);
+    entry.promise=terrainPool.run(action,args,{...options,signal:entry.controller.signal})
+      .finally(()=>terrainPending.delete(jobKey));
+  }
+  const waiter={}; entry.waiters.add(waiter);
+  return new Promise((resolve,reject)=>{
+    let settled=false;
+    const cleanup=()=>{
+      if(settled) return; settled=true;
+      entry.waiters.delete(waiter);
+      if(signal) signal.removeEventListener("abort",onAbort);
+    };
+    const onAbort=()=>{
+      cleanup();
+      if(!entry.waiters.size) entry.controller.abort();
+      reject(new TerrainPoolError("terrain request cancelled","ABORT_ERR"));
+    };
+    if(signal) signal.addEventListener("abort",onAbort,{once:true});
+    entry.promise.then(value=>{ cleanup(); resolve(value) },error=>{ cleanup(); reject(error) });
+  });
+}
+
+function terrainClient(req,res){
+  const controller=new AbortController();
+  const abort=()=>{ if(!res.writableEnded) controller.abort() };
+  req.once("aborted",abort);
+  res.once("close",abort);
+  return {signal:controller.signal,dispose(){ req.off("aborted",abort); res.off("close",abort) }};
+}
+
+const terrainAborted=error=>error&&error.code==="ABORT_ERR";
 
 async function cached(k, ttl, fn){
   const hit = cacheGet(k, ttl);
@@ -248,6 +284,7 @@ const isTiff = body => Buffer.isBuffer(body)&&body.length>8&&
 
 /* ------------------------------------------------------------------ app */
 function send(res, status, type, body, extra={}){
+  if(res.destroyed||res.writableEnded) return;
   const origin=allowedOrigin(res.req);
   const headers={"Content-Type":type,"X-Content-Type-Options":"nosniff",...extra};
   if(origin){ headers["Access-Control-Allow-Origin"]=origin; headers.Vary="Origin" }
@@ -328,42 +365,29 @@ function mercBbox(z,x,y){
    ImageServer's native Float32 export, then pack it in the same Terrarium
    format used by raw lidar. This preserves one client-side shader for both
    sources instead of baking a colour ramp on the server. */
-function terrariumFromTiff(body){
-  const t=cog.parseTiff(body), L=t.levels&&t.levels[0];
-  if(!L||!L.w||!L.h||!L.tw||!L.th||!L.offsets.length) return null;
-  const out=Buffer.alloc(L.w*L.h*4);
-  const cols=Math.ceil(L.w/L.tw);
-  let covered=0;
-  for(let i=0;i<L.offsets.length;i++){
-    const off=Number(L.offsets[i]), count=Number(L.counts[i]);
-    if(!Number.isSafeInteger(off)||!Number.isSafeInteger(count)||off<0||count<=0||off+count>body.length) continue;
-    let tile; try{ tile=cog.decodeTile(body.subarray(off,off+count),L) }catch(e){ continue }
-    const tx=i%cols, ty=Math.floor(i/cols), x0=tx*L.tw, y0=ty*L.th;
-    const xmax=Math.min(L.w,x0+L.tw), ymax=Math.min(L.h,y0+L.th);
-    for(let y=y0;y<ymax;y++) for(let x=x0;x<xmax;x++){
-      const v=tile[(y-y0)*L.tw+(x-x0)];
-      // 3DEP uses Float32; reject its fill values and any impossible land DEM.
-      if(!Number.isFinite(v)||v<-2000||v>10000) continue;
-      const packed=Math.max(0,Math.min(65535.996,v+32768));
-      const whole=Math.floor(packed), o=(y*L.w+x)*4;
-      out[o]=whole>>8; out[o+1]=whole&255; out[o+2]=Math.floor((packed-whole)*256); out[o+3]=255;
-      covered++;
-    }
-  }
-  return covered ? {png:usgs.encodePNG(out,L.w,L.h),coverage:+(covered/(L.w*L.h)).toFixed(3)} : null;
+const depCircuit={failures:0,openUntil:0};
+function depFailed(){
+  depCircuit.failures++;
+  if(depCircuit.failures>=2) depCircuit.openUntil=Date.now()+Math.min(120000,15000*Math.pow(2,depCircuit.failures-2));
 }
+function depSucceeded(){ depCircuit.failures=0; depCircuit.openUntil=0 }
 
-async function nationalElevationTile(z,x,y,size){
+async function nationalElevationTiff(z,x,y,size,signal){
+  if(Date.now()<depCircuit.openUntil) throw new TerrainPoolError("3DEP circuit is cooling down","CIRCUIT_OPEN");
   const bbox=mercBbox(z,x,y);
-  const req=`/arcgis/rest/services/3DEPElevation/ImageServer/exportImage`
+  const requestPath=`/arcgis/rest/services/3DEPElevation/ImageServer/exportImage`
     + `?bbox=${bbox}&bboxSR=3857&imageSR=3857&size=${size},${size}&format=tiff&f=image`;
-  const r=await upstream({host:DEP_HOST,path:req,method:"GET",
-    headers:{"User-Agent":"clear-skies-portal"},__timeout:TILE_MS});
-  // A temporary ImageServer failure must remain retryable, never become a
-  // 90-day cached transparent tile. A valid all-nodata TIFF is the only
-  // legitimate no-coverage result.
-  if(r.status!==200||!isTiff(r.body)) throw new Error("3DEP elevation export failed");
-  return terrariumFromTiff(r.body);
+  await slot();
+  try{
+    const r=await upstream({host:DEP_HOST,path:requestPath,method:"GET",signal,
+      headers:{"User-Agent":"clear-skies-portal"},__timeout:18000});
+    if(r.status!==200||!isTiff(r.body)) throw new Error("3DEP elevation export failed");
+    depSucceeded();
+    return r.body;
+  }catch(error){
+    if(!terrainAborted(error)) depFailed();
+    throw error;
+  }finally{ release() }
 }
 
 function validateWarmJob(value, source){
@@ -450,7 +474,61 @@ async function startWarm(job){
   warm.stop=false;
 }
 
+/* Raw-COG offline downloads share the M2 worker pool with interactive tiles.
+   Three low-priority lanes keep the chip busy while preserving one worker and
+   priority queue headroom for a pan, shader tile, or analysis request. */
+const usgsWarm={running:false,stop:false,total:0,done:0,ok:0,skipped:0,bytes:0,label:"",error:"",controllers:new Set()};
+const usgsWarmState=()=>({running:usgsWarm.running,total:usgsWarm.total,done:usgsWarm.done,ok:usgsWarm.ok,
+  skipped:usgsWarm.skipped,bytes:usgsWarm.bytes,label:usgsWarm.label,error:usgsWarm.error});
+async function startUsgsWarm(job){
+  const tiles=[];
+  for(let z=job.z0;z<=job.z1;z++){
+    const r=tileRange(job.bbox,z);
+    for(let x=r.x0;x<=r.x1;x++) for(let y=r.y0;y<=r.y1;y++) tiles.push({z,x,y});
+  }
+  Object.assign(usgsWarm,{running:true,stop:false,total:tiles.length,done:0,ok:0,skipped:0,bytes:0,
+    label:`z${job.z0}-${job.z1} ${job.style}`,error:""});
+  const usedKeys=new Set();
+  const lane=async()=>{
+    while(tiles.length&&!usgsWarm.stop){
+      const t=tiles.pop(); if(!t) break;
+      const ck=key(`usgs:${job.style}:${t.z}/${t.x}/${t.y}`);
+      try{
+        const hit=cacheGet(ck,TTL_TILE);
+        if(hit&&hit.status===200&&hit.body.length){ usgsWarm.skipped++; usgsWarm.bytes+=hit.body.length }
+        else{
+          const controller=new AbortController(); usgsWarm.controllers.add(controller);
+          let out;
+          try{ out=await terrainPool.run("raw-terrain",{style:job.style,...t,size:256},
+            {priority:5,timeoutMs:45000,signal:controller.signal}) }
+          finally{ usgsWarm.controllers.delete(controller) }
+          if(out){
+            cachePut(ck,200,"image/png",out.png); usgsWarm.ok++; usgsWarm.bytes+=out.png.length;
+            for(const source of out.meta.sources||[]) if(source.key) usedKeys.add(source.key);
+          }
+        }
+      }catch(error){
+        if(error&&error.code!=="ABORT_ERR") usgsWarm.error=String(error.message||error);
+      }
+      usgsWarm.done++;
+    }
+  };
+  await Promise.all(Array.from({length:Math.min(3,terrainPool.size)},lane));
+  usgsWarm.running=false;
+  if(!usgsWarm.stop&&(usgsWarm.ok||usgsWarm.skipped)){
+    try{ await usgs.finalizeWarm(job,usedKeys,usgsWarm) }catch(error){ usgsWarm.error=String(error.message||error) }
+  }
+  usgsWarm.stop=false; usgsWarm.controllers.clear();
+}
+
+function stopUsgsWarm(){
+  usgsWarm.stop=true;
+  for(const controller of usgsWarm.controllers) controller.abort();
+  return usgsWarmState();
+}
+
 const server = http.createServer(async (req,res)=>{
+  const client=terrainClient(req,res);
   try{
     const u = new URL(req.url, "http://localhost");
     let p;
@@ -649,8 +727,12 @@ const server = http.createServer(async (req,res)=>{
       let out=null;
       /* Several Leaflet tiles can ask for the same raw-COG render while a
          pan/zoom is settling. Share that expensive range-read/PNG job. */
-      try{ out=await coalesce(`usgs-render:${ck}`,()=>scheduledRender(()=>usgs.renderTile(style,z,x,y,256))) }
-      catch(e){ return send(res,503,"image/png",TRANSPARENT,{"X-Cache":"BUSY","Cache-Control":"no-store","Retry-After":"3"}) }
+      try{ out=await terrainTask(`raw-terrain:${ck}`,"raw-terrain",{style,z,x,y,size:256},
+          {priority:40,timeoutMs:30000},client.signal) }
+      catch(e){
+        if(terrainAborted(e)) return;
+        return send(res,503,"image/png",TRANSPARENT,{"X-Cache":"BUSY","Cache-Control":"no-store","Retry-After":"2"});
+      }
       if(!out){                       // no federal coverage here — caller falls back
         cachePut(ck,204,"image/png",Buffer.alloc(0));
         return send(res,200,"image/png",TRANSPARENT,{"X-Coverage":"none","Cache-Control":"public, max-age=604800, immutable"});
@@ -677,8 +759,15 @@ const server = http.createServer(async (req,res)=>{
         ? send(res,200,"image/png",TRANSPARENT,{"X-Cache":"hit","X-Coverage":"none","X-Elevation-Source":"none","Cache-Control":"public, max-age=604800, immutable"})
         : send(res,hit.status,hit.type,hit.body,{"X-Cache":"hit","X-Elevation-Source":"3dep","Cache-Control":"public, max-age=604800, immutable"});
       let out=null;
-      try{ out=await coalesce(`elevation-national:${ck}`,()=>scheduledRender(()=>nationalElevationTile(z,x,y,256))) }
-      catch(e){ return send(res,503,"image/png",TRANSPARENT,{"X-Cache":"BUSY","X-Elevation-Source":"pending","Cache-Control":"no-store","Retry-After":"3"}) }
+      try{
+        const body=await nationalElevationTiff(z,x,y,256,client.signal);
+        out=await terrainTask(`national-decode:${ck}`,"terrarium-tiff",{body},
+          {priority:100,timeoutMs:8000},client.signal);
+      }catch(e){
+        if(terrainAborted(e)) return;
+        return send(res,503,"image/png",TRANSPARENT,{"X-Cache":"BUSY","X-Elevation-Source":"fallback",
+          "Cache-Control":"no-store","Retry-After":String(e&&e.code==="CIRCUIT_OPEN"?15:2)});
+      }
       if(!out){
         cachePut(ck,204,"image/png",Buffer.alloc(0));
         return send(res,200,"image/png",TRANSPARENT,{"X-Coverage":"none","X-Elevation-Source":"none","Cache-Control":"public, max-age=604800, immutable"});
@@ -704,14 +793,19 @@ const server = http.createServer(async (req,res)=>{
         : send(res,hit.status,hit.type,hit.body,{"X-Cache":"hit","X-Elevation-Source":"cached","Cache-Control":"public, max-age=604800, immutable"});
       let out=null;
       try{
-        out=await coalesce(`elevation:${ck}`,()=>scheduledRender(async()=>{
-          let raw=null; try{ raw=await usgs.elevTile(z,x,y,256) }catch(e){}
-          if(raw) return {...raw,source:"usgs-1m"};
-          const national=await nationalElevationTile(z,x,y,256);
-          return national ? {...national,source:"3dep"} : null;
-        }));
+        let raw=null;
+        try{ raw=await terrainTask(`raw-elevation:${ck}`,"raw-elevation",{z,x,y,size:256},
+          {priority:55,timeoutMs:30000},client.signal) }catch(e){ if(terrainAborted(e)) throw e }
+        if(raw) out={...raw,source:"usgs-1m"};
+        else{
+          const body=await nationalElevationTiff(z,x,y,256,client.signal);
+          const national=await terrainTask(`national-decode:${ck}`,"terrarium-tiff",{body},
+            {priority:100,timeoutMs:8000},client.signal);
+          out=national ? {...national,source:"3dep"} : null;
+        }
       }catch(e){
-        return send(res,503,"image/png",TRANSPARENT,{"X-Cache":"BUSY","X-Elevation-Source":"pending","Cache-Control":"no-store","Retry-After":"3"});
+        if(terrainAborted(e)) return;
+        return send(res,503,"image/png",TRANSPARENT,{"X-Cache":"BUSY","X-Elevation-Source":"fallback","Cache-Control":"no-store","Retry-After":"2"});
       }
       if(!out){
         cachePut(ck,204,"image/png",Buffer.alloc(0));
@@ -734,8 +828,12 @@ const server = http.createServer(async (req,res)=>{
         return send(res,400,"application/json",Buffer.from('{"error":"bbox=w,s,e,n in degrees"}'));
       const opt={ n:+u.searchParams.get("n")||0,
                   lo:+u.searchParams.get("lo")||0, hi:+u.searchParams.get("hi")||0 };
-      let out; try{ out=await usgs.fabric(bs,opt) }
-      catch(e){ return send(res,500,"application/json",Buffer.from(JSON.stringify({error:String(e.message||e)}))) }
+      let out; try{ out=await terrainTask(`fabric:${key(JSON.stringify([bs,opt]))}`,"fabric",{bbox:bs,options:opt},
+        {priority:20,timeoutMs:45000},client.signal) }
+      catch(e){
+        if(terrainAborted(e)) return;
+        return send(res,503,"application/json",Buffer.from(JSON.stringify({error:String(e.message||e)})));
+      }
       return send(res,200,"application/json",Buffer.from(JSON.stringify(out)),{"Cache-Control":"no-store"});
     }
 
@@ -754,8 +852,12 @@ const server = http.createServer(async (req,res)=>{
         ? send(res,200,"image/png",TRANSPARENT,{"X-Cache":"hit","X-Coverage":"none","Cache-Control":"public, max-age=604800, immutable"})
         : send(res,hit.status,hit.type,hit.body,{"X-Cache":"hit","Cache-Control":"public, max-age=604800, immutable"});
       let out=null;
-      try{ out=await coalesce(`usgs-elev:${ck}`,()=>scheduledRender(()=>usgs.elevTile(z,x,y,256))) }
-      catch(e){ return send(res,503,"image/png",TRANSPARENT,{"X-Cache":"BUSY","Cache-Control":"no-store","Retry-After":"3"}) }
+      try{ out=await terrainTask(`raw-elevation:${ck}`,"raw-elevation",{z,x,y,size:256},
+          {priority:55,timeoutMs:30000},client.signal) }
+      catch(e){
+        if(terrainAborted(e)) return;
+        return send(res,503,"image/png",TRANSPARENT,{"X-Cache":"BUSY","Cache-Control":"no-store","Retry-After":"2"});
+      }
       if(!out){ cachePut(ck,204,"image/png",Buffer.alloc(0));
                 return send(res,200,"image/png",TRANSPARENT,{"X-Coverage":"none","Cache-Control":"public, max-age=604800, immutable"}) }
       cachePut(ck,200,"image/png",out.png);
@@ -774,22 +876,15 @@ const server = http.createServer(async (req,res)=>{
     /* ---- USGS 1 m: download an area, resumable ---- */
     if(p === "/api/usgs/warm" && req.method === "POST"){
       const job=validateWarmJob(await readJson(req,{}),"usgs");
-      const st=usgs.warmState();
+      const st=usgsWarmState();
       if(st.running) return send(res,409,"application/json",Buffer.from(JSON.stringify({error:"already running",...st})));
-      /* Share the server's disk cache so a stopped job resumes: tiles already
-         rendered are counted as skipped rather than fetched again. */
-      const tileCache={
-        get:(style,z,x,y)=>{ const h=cacheGet(key(`usgs:${style}:${z}/${x}/${y}`),TTL_TILE);
-                             return h && h.status===200 && h.body.length ? h.body : null },
-        put:(style,z,x,y,buf)=>cachePut(key(`usgs:${style}:${z}/${x}/${y}`),200,"image/png",buf)
-      };
-      usgs.startWarm(job, tileCache).catch(err=>console.error(err));
-      return send(res,200,"application/json",Buffer.from(JSON.stringify(usgs.warmState())));
+      startUsgsWarm(job).catch(err=>{ usgsWarm.running=false; usgsWarm.error=String(err.message||err); console.error(err) });
+      return send(res,200,"application/json",Buffer.from(JSON.stringify(usgsWarmState())));
     }
     if(p === "/api/usgs/warm/status")
-      return send(res,200,"application/json",Buffer.from(JSON.stringify(usgs.warmState())));
+      return send(res,200,"application/json",Buffer.from(JSON.stringify(usgsWarmState())));
     if(p === "/api/usgs/warm/stop" && req.method === "POST")
-      return send(res,200,"application/json",Buffer.from(JSON.stringify(usgs.stopWarm())));
+      return send(res,200,"application/json",Buffer.from(JSON.stringify(stopUsgsWarm())));
     if(p === "/api/usgs/areas")
       return send(res,200,"application/json",Buffer.from(JSON.stringify(usgs.areaList())));
     if(p === "/api/usgs/areas/check"){
@@ -860,9 +955,12 @@ const server = http.createServer(async (req,res)=>{
     }
 
     if(p === "/api/health"){
+      const terrain=terrainPool.stats();
       return send(res,200,"application/json",Buffer.from(JSON.stringify({
         ok:true, cached:cacheCount, inflight, queued:queue.length,
-        rendering:renderInflight, renderQueued:renderQueue.length,
+        rendering:terrain.active, renderQueued:terrain.queued, terrain,
+        nationalCircuit:{failures:depCircuit.failures,coolingDown:Date.now()<depCircuit.openUntil,
+                         retryInSec:Math.max(0,Math.ceil((depCircuit.openUntil-Date.now())/1000))},
         uptimeSec:Math.floor((Date.now()-STARTED)/1000)
       })),{"Cache-Control":"no-store"});
     }
@@ -885,6 +983,8 @@ const server = http.createServer(async (req,res)=>{
     if(status>=500) console.error(err);
     if(!res.headersSent) send(res,status,"application/json",jsonBody({error:String(err.message||err)}));
     else res.end();
+  }finally{
+    client.dispose();
   }
 });
 

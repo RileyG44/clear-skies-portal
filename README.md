@@ -154,8 +154,11 @@ VIIRS/MODIS near-real-time true colour and night lights, NISAR.
 - **Elevation spectrum** — the geology overlay reads real elevation values, not
   a pre-coloured image. It uses raw USGS 1 m lidar where that archive covers a
   tile, then automatically falls back to the national 3DEP Float32 elevation
-  service. The chosen height is white, lower ground grades red, and higher
-  ground grades blue; the panel states which source is serving the current view.
+  service and finally browser-direct AWS Terrain Tiles if the private engine or
+  national service is unavailable. The chosen height is white, lower ground
+  grades red, and higher ground grades blue. Recolouring runs in one shared
+  WebGL2 GPU context, with an allocation-free CPU fallback, so moving the
+  threshold never refetches terrain and does not create a context per tile.
 
 *Best available* prefers WA DNR where it has data — 345 projects to USGS's 25, and
 some resolving finer than 1 m — then USGS 1 m, then 3DEP. 3DEP always draws
@@ -221,6 +224,15 @@ is otherwise indistinguishable from "there is no snow here".
   and the ranges behind them are both cached, so a restart skips what already
   arrived. Because these objects carry `ETag` and `Last-Modified` (which the WA DNR
   portal omits entirely), staleness is a HEAD request rather than a catalogue diff.
+- **M2 terrain engine.** COG range fetching uses persistent, bounded HTTP
+  connections. TIFF decoding, reprojection, elevation encoding, hillshade,
+  multidirectional relief, tint, slope, aspect, contours, and landscape fabric
+  analysis run in a priority-aware worker pool instead of blocking the server's
+  request loop. Interactive tiles outrank offline downloads; abandoned viewport
+  work is cancelled; timed-out workers are replaced. The default uses four
+  workers on an 8-core M2 and three low-priority lanes while warming. Set
+  `CSP_TERRAIN_WORKERS` (1–6) and per-worker `CSP_S3_INFLIGHT` (1–12) only for
+  measured tuning. Cached results remain the fastest path.
 - **Open on natural colour** (Filters, on by default) keeps the map from landing on a
   radar or night-lights scene just because it happens to be the newest.
 - **Time window** (Filters) takes either a preset — last 14/30/90 days, last year,

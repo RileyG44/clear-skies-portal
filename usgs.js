@@ -37,8 +37,13 @@ const MAX_S3_BODY = 32*1024*1024;
 /* Range reads are latency-bound. Reusing TLS sockets avoids a handshake per
    COG block, while the shared gate prevents a rapid pan from overwhelming S3
    or saturating the browser-facing Node event loop. */
-const S3_AGENT = new https.Agent({keepAlive:true,maxSockets:24,maxFreeSockets:12,timeout:30000});
-const S3_MAX_INFLIGHT = 16;
+/* This module is loaded once per terrain worker. Four M2 workers at four range
+   reads each preserve the previous aggregate concurrency without exploding to
+   64 competing downloads. Override only when the upstream/network is known to
+   tolerate it. */
+const S3_MAX_INFLIGHT = Math.max(1,Math.min(12,Number(process.env.CSP_S3_INFLIGHT)||4));
+const S3_AGENT = new https.Agent({keepAlive:true,maxSockets:S3_MAX_INFLIGHT+2,
+                                  maxFreeSockets:S3_MAX_INFLIGHT,timeout:30000});
 let s3Inflight=0;
 const s3Queue=[];
 function takeS3Slot(){
@@ -403,7 +408,7 @@ const NODATA = Math.fround(-1e30);
 /* Sample a (w+2)x(h+2) elevation grid covering one slippy tile, with a one
    pixel skirt so the hillshade kernel has neighbours at the tile edge — this
    is what stops seams appearing between adjacent tiles. */
-async function sampleGrid(z,x,y,size){
+async function sampleGrid(z,x,y,size,options={}){
   const b=cog.tileBoundsMerc(z,x,y);
   const n=size+2;
   const grid=new Float32Array(n*n).fill(NODATA);
@@ -445,7 +450,7 @@ async function sampleGrid(z,x,y,size){
      that follows shows up as a cross-hatch once the hillshade takes gradients
      of it. Downsampling is safe; upsampling is not. */
   const opened=[];
-  const PER_CELL = 3;
+  const PER_CELL = Math.max(1,Math.min(3,Number(options.maxSources)||3));
   for(const group of srcs){
     /* Newest first, but the winner may be in the wrong projection, not be a
        tiled COG at all, or simply be nodata here — a 10 km cell is a bounding
@@ -642,7 +647,10 @@ function render(style, S){
    precision over the whole range. The tile carries no threshold, so it caches
    once and a slider can move over it freely. */
 async function elevTile(z,x,y,size){
-  const S=await sampleGrid(z,x,y,size||256);
+  /* The national baseline remains underneath this refinement, so opening the
+     newest valid COG is enough. Avoiding two speculative fallback COGs cuts
+     cold raw-lidar work dramatically without turning a gap into a black tile. */
+  const S=await sampleGrid(z,x,y,size||256,{maxSources:1});
   if(!S) return null;
   const {grid,n}=S; const w=size||256;
   const out=Buffer.alloc(w*w*4);
@@ -659,7 +667,7 @@ async function elevTile(z,x,y,size){
 }
 
 async function renderTile(style,z,x,y,size){
-  const S=await sampleGrid(z,x,y,size||256);
+  const S=await sampleGrid(z,x,y,size||256,{maxSources:1});
   if(!S) return null;
   return {png:render(style,S), meta:{coverage:+S.coverage.toFixed(3), groundRes:+S.groundRes.toFixed(2),
                                      sources:S.sources}};
@@ -748,6 +756,26 @@ async function sourcesForArea(bbox){
   return [...keys.keys()];
 }
 
+async function finalizeWarm(job,usedKeys,stats){
+  const {bbox,z0,z1,style}=job;
+  const sources=[];
+  let keys;
+  try{ keys=await sourcesForArea(bbox) }catch(e){ keys=[...(usedKeys||[])] }
+  for(const k of new Set([...keys,...(usedKeys||[])])){
+    try{
+      const h=await s3head("/"+k);
+      sources.push({key:k,etag:(h.headers.etag||"").replace(/"/g,""),
+                    size:+(h.headers["content-length"]||0),lastModified:h.headers["last-modified"]||null});
+    }catch(e){ sources.push({key:k}) }
+  }
+  areaSave({
+    id:require("crypto").createHash("sha1").update(JSON.stringify([bbox,z0,z1,style])).digest("hex").slice(0,12),
+    source:"usgs1m",label:job.label||`z${z0}-${z1}`,bbox,z0,z1,style,
+    tiles:stats.total,ok:stats.ok,skipped:stats.skipped,bytes:stats.bytes,
+    created:Date.now(),checked:Date.now(),sources,stale:false,changed:[]
+  });
+}
+
 async function startWarm(job, tileCache){
   const bbox=job.bbox, z0=Math.max(1,job.z0|0), z1=Math.min(20,job.z1|0);
   const style=String(job.style||"hs");
@@ -776,25 +804,7 @@ async function startWarm(job, tileCache){
   await Promise.all(Array.from({length:4}, worker));
   warm.running=false;
   if(!warm.stop && (warm.ok||warm.skipped)){
-    const sources=[];
-    let keys;
-    try{ keys=await sourcesForArea(bbox) }catch(e){ keys=[...usedKeys] }
-    for(const k of new Set([...keys, ...usedKeys])){
-      try{
-        const h=await s3head("/"+k);
-        sources.push({key:k, etag:(h.headers.etag||"").replace(/"/g,""),
-                      size:+(h.headers["content-length"]||0),
-                      lastModified:h.headers["last-modified"]||null});
-      }catch(e){ sources.push({key:k}) }
-    }
-    areaSave({
-      id: require("crypto").createHash("sha1")
-            .update(JSON.stringify([bbox,z0,z1,style])).digest("hex").slice(0,12),
-      source:"usgs1m", label: job.label || `z${z0}-${z1}`,
-      bbox, z0, z1, style, tiles:warm.total, ok:warm.ok, skipped:warm.skipped,
-      bytes:warm.bytes, created:Date.now(), checked:Date.now(),
-      sources, stale:false, changed:[]
-    });
+    await finalizeWarm(job,usedKeys,warm);
   }
   warm.stop=false;
 }
@@ -813,6 +823,7 @@ async function areaCheck(a){
 module.exports.warmState=warmState;
 module.exports.startWarm=startWarm;
 module.exports.stopWarm=stopWarm;
+module.exports.finalizeWarm=finalizeWarm;
 module.exports.areaList=areaList;
 module.exports.areaCheck=areaCheck;
 module.exports.planTiles=planTiles;
