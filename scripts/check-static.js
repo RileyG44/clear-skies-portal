@@ -165,10 +165,22 @@ assert.match(index,/id:"plateboundaries"[\s\S]{0,500}eq\/map_plateboundaries\/Ma
        "tectonic context must include USGS plates and microplates");
 assert.match(index,/id:"vs30"[\s\S]{0,500}eq\/vs30_mosaic\/MapServer\/export[\s\S]{0,320}not lithology/,
        "Vs30 must be clearly labeled as a site-condition proxy rather than geology");
-assert.match(index,/id:"earthquakes"[\s\S]{0,420}all_week\.geojson[\s\S]{0,200}pointKind:"quake"[\s\S]{0,100}geoTtl:5\*60\*1000/,
-       "earthquakes must use the bounded seven-day USGS feed with a five-minute refresh cadence");
-assert.match(index,/id:"volcanostatus"[\s\S]{0,420}volcanoApi\/geojson[\s\S]{0,200}pointKind:"volcano"[\s\S]{0,100}geoTtl:15\*60\*1000/,
-       "volcano status must use the live USGS VSC feed with a bounded refresh cadence");
+assert.match(index,/id:"weatheralerts"[\s\S]{0,260}geoLoader:loadNwsWeatherAlerts[\s\S]{0,120}geoTtl:5\*60\*1000/,
+       "weather hazards must use the filtered NOAA loader with a five-minute refresh cadence");
+assert.match(index,/id:"earthquakes"[\s\S]{0,240}geoLoader:loadEarthquakeAlerts[\s\S]{0,120}pointKind:"quake"[\s\S]{0,100}geoTtl:5\*60\*1000/,
+       "earthquakes must use the filterable USGS loader with a five-minute refresh cadence");
+assert.match(index,/id:"volcanostatus"[\s\S]{0,240}geoLoader:loadVolcanoAlerts[\s\S]{0,120}pointKind:"volcano"[\s\S]{0,100}geoTtl:15\*60\*1000/,
+       "volcano status must use the filterable USGS VSC loader with a bounded refresh cadence");
+assert(index.includes("WWA/watch_warn_adv/MapServer/1/query")&&index.includes('maxAllowableOffset:alertPrefs.viewport?"0.001":"0.02"'),
+       "NWS polygons must use NOAA's live service with view-aware geometry simplification");
+assert(index.includes("while(alertRawCache.size>24)")&&index.includes("nwsCoverage?.contains(map.getBounds())"),
+       "live-alert geometry must keep a bounded cache and reuse its buffered NOAA coverage while panning");
+assert(index.includes("all_${age}.geojson")&&index.includes("volcanoApi/geojson"),
+       "alert loaders must retain the official USGS earthquake and volcano feeds");
+assert(index.includes('data-pane="alerts"')&&index.includes('id="alertNwsSeverity"')&&
+       index.includes('id="alertQuakeAge"')&&index.includes('id="alertQuakeMag"')&&
+       index.includes('aria-live="polite"')&&index.includes("clearskies.alerts.v1")&&index.includes("initAlerts();"),
+       "the dedicated live-alert centre and its filter preferences must be present and initialized");
 assert.match(index,/id:"waarchaeology"[\s\S]{0,420}CSPWaArchaeology\?\.featureCollection\(\)[\s\S]{0,160}pointKind:"archaeology"/,
        "Washington archaeology must use the validated bundled research index");
 assert(index.includes('p.precision==="estimated"')&&read("wa-archaeology.js").includes('"Estimated research waypoint"'),
@@ -176,7 +188,7 @@ assert(index.includes('p.precision==="estimated"')&&read("wa-archaeology.js").in
 assert(index.includes('id="coordCopy"')&&index.includes('id="coordOpen"')&&
        index.includes("https://www.google.com/maps/search/?api=1")&&index.includes("https://earth.google.com/web/search/"),
        "the search row must copy a selected coordinate and offer cross-platform Google Maps and Earth links");
-assert(index.includes("child.bindTooltip(ovPointTooltip")&&index.includes('className:"csp-point-tip"'),
+assert(index.includes("child.bindTooltip(tooltip")&&index.includes('className:"csp-point-tip"'),
        "interactive point overlays must reveal concise labels on hover while retaining full click popups");
 assert(index.includes('cache:o.geoTtl?"no-cache":"force-cache"')&&index.includes("retaining the last successful data"),
        "live GeoJSON feeds must refresh without discarding a successful canvas layer on failure");
