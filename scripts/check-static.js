@@ -62,8 +62,21 @@ assert(index.includes('register("sw.js",{updateViaCache:"none"})'),
 assert(index.includes('id="snapshot"'),"map snapshot control must be present");
 assert(index.includes('getDisplayMedia'),"map snapshot control must use browser surface capture");
 assert(index.includes('body.print-map'),"map snapshot control must have a print fallback");
+assert(index.includes('id="srvConnect"'),"terrain engine needs an explicit connect control");
+assert(index.includes('id="srvCopyLink"'),"terrain engine needs a private setup-link control");
+assert(index.includes('takeSharedServerBase'),"private setup links must be consumed from URL fragments");
+assert(index.includes('id="elevSpan"'),"elevation spectrum needs a configurable colour span");
+const elevSandbox={};
+vm.runInNewContext(`${namedFunction(index,"elevRampRgb")}; center=elevRampRgb(500,500,300); lower=elevRampRgb(200,500,300); upper=elevRampRgb(800,500,300);`,elevSandbox,{filename:"index.html#elevation-spectrum-test"});
+assert.deepEqual(Array.from(elevSandbox.center),[247,247,242],"reference elevation must be white");
+assert(elevSandbox.lower[0]>elevSandbox.lower[2],"lower elevations must trend red");
+assert(elevSandbox.upper[2]>elevSandbox.upper[0],"higher elevations must trend blue");
 assert(read(".github/workflows/ci.yml").includes("index.html mosaic-core.js version.js"),
        "Pages artifact must include mosaic-core.js beside index.html");
+for(const script of ["scripts/launch-terrain-engine.sh","scripts/install-mac-service.sh"]){
+  const source=read(script);
+  assert.match(source,/127\.0\.0\.1/,`${script} must keep the engine loopback-only`);
+}
 
 const manifest=JSON.parse(read("manifest.json"));
 const sources=JSON.parse(read("sources.json"));

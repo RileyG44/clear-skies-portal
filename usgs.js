@@ -34,15 +34,31 @@ const SCOPE = (process.env.CSP_USGS_STATES || "WA_").trim();
 const INDEX_CONCURRENCY = 12;           // S3 listing is latency-bound, not rate-limited
 const CELL_M    = 10000;                // 10 km UTM cells
 const MAX_S3_BODY = 32*1024*1024;
+/* Range reads are latency-bound. Reusing TLS sockets avoids a handshake per
+   COG block, while the shared gate prevents a rapid pan from overwhelming S3
+   or saturating the browser-facing Node event loop. */
+const S3_AGENT = new https.Agent({keepAlive:true,maxSockets:24,maxFreeSockets:12,timeout:30000});
+const S3_MAX_INFLIGHT = 16;
+let s3Inflight=0;
+const s3Queue=[];
+function takeS3Slot(){
+  if(s3Inflight<S3_MAX_INFLIGHT){ s3Inflight++; return Promise.resolve() }
+  return new Promise(resolve=>s3Queue.push(resolve)).then(()=>{ s3Inflight++ });
+}
+function releaseS3Slot(){
+  s3Inflight--;
+  const next=s3Queue.shift();
+  if(next) next();
+}
 
 let CACHE_DIR = null;
 function init(dir){ CACHE_DIR = dir; try{ fs.mkdirSync(path.join(dir,"usgs"),{recursive:true}) }catch(e){} }
 
 /* ------------------------------------------------------------------- http */
-function s3(pathname, headers){
+function s3Request(pathname, headers){
   return new Promise((res,rej)=>{
     const req=https.request({host:S3_HOST, path:pathname, method:"GET",
-      headers:Object.assign({"User-Agent":"ClearSkiesPortal/1.0 (local personal use)"},headers||{})},
+      agent:S3_AGENT, headers:Object.assign({"User-Agent":"ClearSkiesPortal/1.0 (local personal use)"},headers||{})},
       r=>{
         const b=[]; let n=0, failed=false;
         r.on("data",d=>{
@@ -59,12 +75,20 @@ function s3(pathname, headers){
     req.end();
   });
 }
-const s3head = pathname => new Promise((res,rej)=>{
-  const req=https.request({host:S3_HOST,path:pathname,method:"HEAD"},r=>{
+async function s3(pathname,headers){
+  await takeS3Slot();
+  try{ return await s3Request(pathname,headers) }finally{ releaseS3Slot() }
+}
+function s3HeadRequest(pathname){ return new Promise((res,rej)=>{
+  const req=https.request({host:S3_HOST,path:pathname,method:"HEAD",agent:S3_AGENT},r=>{
     r.resume(); r.on("end",()=>res({status:r.statusCode,headers:r.headers}));
   });
   req.on("error",rej); req.setTimeout(20000,()=>req.destroy(new Error("timeout"))); req.end();
-});
+}); }
+async function s3head(pathname){
+  await takeS3Slot();
+  try{ return await s3HeadRequest(pathname) }finally{ releaseS3Slot() }
+}
 
 /* -------------------------------------------------------- project catalogue
    One listing per project, cached on disk. 25 listings is ~20 s cold and then

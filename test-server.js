@@ -51,7 +51,11 @@ async function main(){
       await new Promise(resolve=>setTimeout(resolve,100));
     }
     assert.equal(health&&health.status,200,`server failed to start\n${logs}`);
-    assert.equal(JSON.parse(health.body).ok,true);
+    const healthBody=JSON.parse(health.body);
+    assert.equal(healthBody.ok,true);
+    assert(Number.isInteger(healthBody.cached)&&healthBody.cached>=0,"health must report the cached tile count");
+    assert(Number.isFinite(healthBody.uptimeSec)&&healthBody.uptimeSec>=0,"health must report process uptime");
+    assert.equal(health.headers["cache-control"],"no-store","health must never be served stale");
 
     const page=await request(port,"/");
     assert.equal(page.status,200);

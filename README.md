@@ -54,10 +54,28 @@ everywhere. Set `CSP_USGS_STATES=ALL` before starting the engine for nationwide 
 
 Tailscale is **not required** for normal local or desktop use. It is only a secure
 bridge when the hosted Pages app on another device needs to reach the terrain
-engine running on your Mac. `tailscale serve --bg 8765` is sufficient;
-paste its HTTPS URL into *Terrain engine*. Cross-origin access defaults to this
-repository's GitHub Pages origin. Add other trusted origins explicitly with a
-comma-separated `CSP_CORS_ORIGINS` environment variable.
+engine running on your Mac. On macOS, run this once from the checkout:
+
+```
+scripts/install-mac-service.sh
+tailscale serve --bg 8765
+```
+
+The installer keeps the engine alive as your user, restarts it after a failed
+health check, stores its runtime and cache under `~/Library/Application Support/
+ClearSkiesPortal`, and binds it only to `127.0.0.1`. Tailscale Serve is therefore
+the sole network bridge and remains tailnet-authenticated; do not use Funnel for
+this private analysis service. Check the bridge with `tailscale serve status`.
+
+On the hosted page, paste the shown Tailscale HTTPS URL in *Secure terrain engine*
+and choose **Connect**. **Copy private setup link** gives another signed-in
+Tailscale device a one-time `#engine=` setup link: the fragment is not sent to
+GitHub Pages, and the page only saves the engine after validating it. The browser
+cannot safely start software on a different Mac, so the installed local service
+provides the practical one-click behaviour by starting and self-healing before any
+device connects. Cross-origin access defaults to this repository's GitHub Pages
+origin. Add other trusted origins explicitly with a comma-separated
+`CSP_CORS_ORIGINS` environment variable.
 
 ## Develop it
 
@@ -88,6 +106,7 @@ their print dialog instead, where the same viewport can be saved as a PDF.
 | `index.html` | The whole app — one self-contained file, Leaflet inlined |
 | `mosaic-core.js` | Tested footprint geometry, antimeridian, identity, coverage and imagery LOD helpers |
 | `server.js` | Local terrain engine: static files, validated proxying, request coalescing, retries and disk cache |
+| `scripts/install-mac-service.sh` | Installs a loopback-only, self-healing macOS terrain-engine service |
 | `SOL_HIGH_IMPLEMENTATION_HANDOFF.md` | Detailed implementation plan for the remaining lidar, landscape, geology, sidebar, persistence and imagery work |
 | `test-server.js` | Offline black-box checks for CORS, request limits, traversal protection and server health |
 | `version.js` | One build identifier shared by the page and service worker cache |

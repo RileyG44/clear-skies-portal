@@ -15,6 +15,7 @@ const PORT  = Number(process.env.PORT || 8765);
 const HOST  = process.env.HOST || "127.0.0.1";   // 0.0.0.0 in a devcontainer/Codespace
 const CACHE = process.env.CSP_CACHE_DIR || path.join(ROOT, ".cache");   // packaged app redirects this outside the bundle
 const AREAS = path.join(CACHE, "areas");   // one manifest per downloaded area
+const STARTED = Date.now();
 fs.mkdirSync(CACHE, {recursive:true});
 usgs.init(CACHE);
 fs.mkdirSync(AREAS, {recursive:true});
@@ -102,6 +103,12 @@ function validMercBbox(value){
 
 /* ------------------------------------------------------------------ cache */
 const key = s => crypto.createHash("sha1").update(s).digest("hex");
+function cacheEntryCount(){
+  try{ return fs.readdirSync(CACHE,{withFileTypes:true})
+    .filter(entry=>entry.isFile()&&!entry.name.endsWith(".meta")).length }
+  catch(e){ return 0 }
+}
+let cacheCount=cacheEntryCount();
 function cacheGet(k, ttl){
   const f = path.join(CACHE, k);
   try{
@@ -114,11 +121,13 @@ function cacheGet(k, ttl){
 function cachePut(k, status, type, body){
   const target=path.join(CACHE,k), suffix=`.tmp-${process.pid}-${crypto.randomBytes(4).toString("hex")}`;
   const bodyTmp=target+suffix, metaTmp=target+".meta"+suffix;
+  const isNew=!fs.existsSync(target);
   try{
     fs.writeFileSync(bodyTmp, body);
     fs.writeFileSync(metaTmp, JSON.stringify({status,type}));
     fs.renameSync(bodyTmp,target);
     fs.renameSync(metaTmp,target+".meta");
+    if(isNew) cacheCount++;
   }catch(e){
     try{ fs.unlinkSync(bodyTmp) }catch(e2){}
     try{ fs.unlinkSync(metaTmp) }catch(e2){}
@@ -569,19 +578,22 @@ const server = http.createServer(async (req,res)=>{
       const ck=key(`usgs:${style}:${z}/${x}/${y}`);
       const hit=cacheGet(ck, TTL_TILE);
       if(hit) return hit.status===204
-        ? send(res,200,"image/png",TRANSPARENT,{"X-Cache":"hit","X-Coverage":"none"})
-        : send(res,hit.status,hit.type,hit.body,{"X-Cache":"hit"});
+        ? send(res,200,"image/png",TRANSPARENT,{"X-Cache":"hit","X-Coverage":"none","Cache-Control":"public, max-age=604800, immutable"})
+        : send(res,hit.status,hit.type,hit.body,{"X-Cache":"hit","Cache-Control":"public, max-age=604800, immutable"});
       let out=null;
-      try{ out=await usgs.renderTile(style,z,x,y,256) }
+      /* Several Leaflet tiles can ask for the same raw-COG render while a
+         pan/zoom is settling. Share that expensive range-read/PNG job. */
+      try{ out=await coalesce(`usgs-render:${ck}`,()=>usgs.renderTile(style,z,x,y,256)) }
       catch(e){ return send(res,500,"text/plain",Buffer.from(String(e.message||e))) }
       if(!out){                       // no federal coverage here — caller falls back
         cachePut(ck,204,"image/png",Buffer.alloc(0));
-        return send(res,200,"image/png",TRANSPARENT,{"X-Coverage":"none"});
+        return send(res,200,"image/png",TRANSPARENT,{"X-Coverage":"none","Cache-Control":"public, max-age=604800, immutable"});
       }
       cachePut(ck,200,"image/png",out.png);
       return send(res,200,"image/png",out.png,
         {"X-Coverage":String(out.meta.coverage), "X-Ground-Res":String(out.meta.groundRes),
-         "X-Sources":out.meta.sources.map(s2=>s2.project+"@"+s2.res+"m").join(","), "X-Cache":"miss"});
+         "X-Sources":out.meta.sources.map(s2=>s2.project+"@"+s2.res+"m").join(","), "X-Cache":"miss",
+         "Cache-Control":"public, max-age=604800, immutable"});
     }
 
     /* Landform fabric over the current view: orientation and strength of the
@@ -613,15 +625,16 @@ const server = http.createServer(async (req,res)=>{
       const ck=key(`usgselev:${z}/${x}/${y}`);
       const hit=cacheGet(ck, TTL_TILE);
       if(hit) return hit.status===204
-        ? send(res,200,"image/png",TRANSPARENT,{"X-Cache":"hit","X-Coverage":"none"})
-        : send(res,hit.status,hit.type,hit.body,{"X-Cache":"hit"});
+        ? send(res,200,"image/png",TRANSPARENT,{"X-Cache":"hit","X-Coverage":"none","Cache-Control":"public, max-age=604800, immutable"})
+        : send(res,hit.status,hit.type,hit.body,{"X-Cache":"hit","Cache-Control":"public, max-age=604800, immutable"});
       let out=null;
-      try{ out=await usgs.elevTile(z,x,y,256) }
+      try{ out=await coalesce(`usgs-elev:${ck}`,()=>usgs.elevTile(z,x,y,256)) }
       catch(e){ return send(res,500,"text/plain",Buffer.from(String(e.message||e))) }
       if(!out){ cachePut(ck,204,"image/png",Buffer.alloc(0));
-                return send(res,200,"image/png",TRANSPARENT,{"X-Coverage":"none"}) }
+                return send(res,200,"image/png",TRANSPARENT,{"X-Coverage":"none","Cache-Control":"public, max-age=604800, immutable"}) }
       cachePut(ck,200,"image/png",out.png);
-      return send(res,200,"image/png",out.png,{"X-Coverage":String(out.coverage),"X-Cache":"miss"});
+      return send(res,200,"image/png",out.png,{"X-Coverage":String(out.coverage),"X-Cache":"miss",
+                                                  "Cache-Control":"public, max-age=604800, immutable"});
     }
 
     /* Freshness, the way WA DNR cannot do it: HEAD and compare ETag. */
@@ -721,8 +734,10 @@ const server = http.createServer(async (req,res)=>{
     }
 
     if(p === "/api/health"){
-      let n=0; try{ n=fs.readdirSync(CACHE).filter(f=>!f.endsWith(".meta")).length }catch(e){}
-      return send(res,200,"application/json",Buffer.from(JSON.stringify({ok:true,cached:n,inflight})));
+      return send(res,200,"application/json",Buffer.from(JSON.stringify({
+        ok:true, cached:cacheCount, inflight, queued:queue.length,
+        uptimeSec:Math.floor((Date.now()-STARTED)/1000)
+      })),{"Cache-Control":"no-store"});
     }
 
     /* ---- static ---- */
