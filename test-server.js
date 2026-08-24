@@ -7,9 +7,78 @@ const net = require("net");
 const os = require("os");
 const path = require("path");
 const {spawn} = require("child_process");
+const researchAnalysis=require("./research-analysis.js");
 
 const root=__dirname;
 const cache=fs.mkdtempSync(path.join(os.tmpdir(),"clear-skies-test-"));
+process.env.CSP_CACHE_DIR=cache;
+process.env.CSP_TERRAIN_WORKERS="1";
+const {
+  validateSnapshotImageUrl,
+  resolveSnapshotImageRedirect,
+  closeServerResources
+}=require("./server.js");
+
+async function snapshotUrlValidationChecks(){
+  try{
+    const exactHosts=[
+      "planetarycomputer.microsoft.com",
+      "titiler.xyz",
+      "gibs.earthdata.nasa.gov",
+      "basemaps.cartocdn.com",
+      "elevation.nationalmap.gov",
+      "s3.amazonaws.com",
+      "prd-tnm.s3.amazonaws.com",
+      "services.arcgisonline.com",
+      "basemap.nationalmap.gov",
+      "carto.nationalmap.gov",
+      "mrdata.usgs.gov",
+      "gis.dnr.wa.gov",
+      "lidarportal.dnr.wa.gov",
+      "tiles.macrostrat.org",
+      "mapservices.weather.noaa.gov"
+    ];
+    for(const hostname of exactHosts)
+      assert.equal(validateSnapshotImageUrl(`https://${hostname}/tile.png`).hostname,hostname);
+    assert.equal(validateSnapshotImageUrl("https://a.basemaps.cartocdn.com/tile.png").hostname,
+      "a.basemaps.cartocdn.com","CARTO's vendor-controlled shard must be allowed");
+    assert.equal(validateSnapshotImageUrl("https://gibs.earthdata.nasa.gov:443/tile.png#ignored").href,
+      "https://gibs.earthdata.nasa.gov/tile.png","default port and fragment must canonicalize");
+
+    const denied=[
+      [null,400,/required/],
+      ["not a URL",400,/invalid/],
+      ["http://gibs.earthdata.nasa.gov/tile.png",400,/HTTPS/],
+      ["ftp://gibs.earthdata.nasa.gov/tile.png",400,/HTTPS/],
+      ["https://user:secret@gibs.earthdata.nasa.gov/tile.png",400,/credentials/],
+      ["https://gibs.earthdata.nasa.gov:444/tile.png",400,/port 443/],
+      ["https://127.0.0.1/tile.png",403,/literal or private/],
+      ["https://[::1]/tile.png",403,/literal or private/],
+      ["https://localhost/tile.png",403,/literal or private/],
+      ["https://server.internal/tile.png",403,/literal or private/],
+      ["https://evil.example/tile.png",403,/not allowed/],
+      ["https://gibs.earthdata.nasa.gov.evil.example/tile.png",403,/not allowed/],
+      ["https://basemaps.cartocdn.com.evil.example/tile.png",403,/not allowed/],
+      ["https://evilbasemaps.cartocdn.com/tile.png",403,/not allowed/],
+      ["https://bucket.s3.amazonaws.com/tile.png",403,/not allowed/],
+      ["https://gibs.earthdata.nasa.gov/"+"x".repeat(8200),400,/exceeds/]
+    ];
+    for(const [value,status,message] of denied){
+      assert.throws(()=>validateSnapshotImageUrl(value),error=>
+        error&&error.status===status&&message.test(error.message),String(value));
+    }
+
+    const current=validateSnapshotImageUrl("https://gibs.earthdata.nasa.gov/a/tile.png");
+    assert.equal(resolveSnapshotImageRedirect(current,"../next.jpeg").href,
+      "https://gibs.earthdata.nasa.gov/next.jpeg");
+    assert.throws(()=>resolveSnapshotImageRedirect(current,"https://evil.example/tile.png"),
+      error=>error&&error.status===403,"redirects must be allowlisted again");
+    assert.throws(()=>resolveSnapshotImageRedirect(current,"http://gibs.earthdata.nasa.gov/tile.png"),
+      error=>error&&error.status===400,"redirects must remain HTTPS");
+  }finally{
+    await closeServerResources();
+  }
+}
 
 const freePort=()=>new Promise((resolve,reject)=>{
   const server=net.createServer();
@@ -34,6 +103,7 @@ function request(port,pathname,{method="GET",headers={},body=null}={}){
 }
 
 async function main(){
+  await snapshotUrlValidationChecks();
   const port=await freePort();
   const child=spawn(process.execPath,["server.js"],{
     cwd:root,
@@ -61,6 +131,13 @@ async function main(){
     assert.equal(healthBody.terrain.active,0,"fresh terrain workers must be idle");
     assert(Number.isFinite(healthBody.cacheDisk.freeGiB),"health must report free cache-disk capacity");
     assert.equal(typeof healthBody.cacheDisk.writable,"boolean","health must report whether persistent caching is safe");
+    assert(Number.isInteger(healthBody.memoryCache.entries)&&healthBody.memoryCache.entries>=0,
+      "health must report the in-memory tile cache entry count");
+    assert.equal(healthBody.memoryCache.entryLimit,32768,
+      "the in-memory tile cache needs a bounded default entry count");
+    assert.equal(healthBody.memoryCache.limitMiB,256,
+      "the in-memory tile cache needs the M2 service default capacity");
+    assert.equal(healthBody.analysisCache.entries,0,"fresh analysis cache must be empty");
     assert.equal(healthBody.nationalCircuit.coolingDown,false,"fresh fallback circuit must be closed");
     assert.equal(health.headers["cache-control"],"no-store","health must never be served stale");
 
@@ -69,17 +146,119 @@ async function main(){
     assert.match(page.headers["content-type"],/^text\/html/);
     assert.equal(page.headers["x-content-type-options"],"nosniff");
 
+    const badSnowBbox=await request(port,"/api/snow?bbox=bad&layer=3");
+    assert.equal(badSnowBbox.status,400,"snow exports must reject malformed Web Mercator bounds");
+    const badSnowLayer=await request(port,
+      "/api/snow?bbox=-13619243,5792092,-13462700,5948635&layer=99");
+    assert.equal(badSnowLayer.status,400,"snow exports must whitelist depth and SWE only");
+
     const preflight=await request(port,"/api/health",{
       method:"OPTIONS",headers:{Origin:"https://rileyg44.github.io","Access-Control-Request-Method":"GET"}
     });
     assert.equal(preflight.status,204);
     assert.equal(preflight.headers["access-control-allow-origin"],"https://rileyg44.github.io");
 
+    const analysisQuery="/api/terrain/analyze?product=residual&scale=fine&width=25&height=21&resolution=2";
+    const analysisGrid=Float32Array.from({length:25*21},(_,index)=>{
+      const x=index%25-12,y=Math.floor(index/25)-10;
+      return 150+0.3*x*x+0.04*y;
+    });
+    const analysisUpload=Buffer.from(analysisGrid.buffer,analysisGrid.byteOffset,analysisGrid.byteLength);
+    const analysisHeaders={"Content-Type":"application/octet-stream",Origin:"https://rileyg44.github.io"};
+    const firstAnalysis=await request(port,analysisQuery,{method:"POST",headers:analysisHeaders,body:analysisUpload});
+    assert.equal(firstAnalysis.status,200,firstAnalysis.body.toString());
+    assert.equal(firstAnalysis.headers["content-type"],"application/vnd.clearskies.terrain-analysis");
+    assert.equal(firstAnalysis.headers["x-csp-analysis-engine"],"m2-worker-thread");
+    assert.equal(firstAnalysis.headers["x-cache"],"MISS");
+    assert.equal(firstAnalysis.headers["access-control-allow-origin"],"https://rileyg44.github.io");
+    const analysisResult=researchAnalysis.decodeResult(firstAnalysis.body);
+    assert.equal(analysisResult.width,25);
+    assert.equal(analysisResult.height,21);
+    assert.equal(analysisResult.label,"Multi-scale residual anomaly");
+    assert.equal(analysisResult.data.length,25*21);
+    assert(analysisResult.data.some(Number.isFinite));
+
+    const cachedAnalysis=await request(port,analysisQuery,{method:"POST",headers:analysisHeaders,body:analysisUpload});
+    assert.equal(cachedAnalysis.status,200);
+    assert.equal(cachedAnalysis.headers["x-cache"],"HIT","identical DEM analysis must reuse the bounded memory result");
+    assert.deepEqual(cachedAnalysis.body,firstAnalysis.body);
+
+    const coalescedWidth=128,coalescedHeight=128;
+    const coalescedGrid=Float32Array.from({length:coalescedWidth*coalescedHeight},(_,index)=>
+      300+20*Math.sin((index%coalescedWidth)/9)+10*Math.cos(Math.floor(index/coalescedWidth)/13));
+    const coalescedBody=Buffer.from(coalescedGrid.buffer);
+    const coalescedQuery=`/api/terrain/analyze?product=lrm&scale=broad&width=${coalescedWidth}&height=${coalescedHeight}&resolution=3`;
+    const completedBefore=JSON.parse((await request(port,"/api/health")).body).terrain.completed;
+    const coalescedResponses=await Promise.all([
+      request(port,coalescedQuery,{method:"POST",headers:{"Content-Type":"application/octet-stream"},body:coalescedBody}),
+      request(port,coalescedQuery,{method:"POST",headers:{"Content-Type":"application/octet-stream"},body:coalescedBody})
+    ]);
+    assert(coalescedResponses.every(response=>response.status===200));
+    const completedAfter=JSON.parse((await request(port,"/api/health")).body).terrain.completed;
+    assert.equal(completedAfter,completedBefore+1,"identical concurrent analysis uploads must share one worker job");
+
+    const analysisGet=await request(port,analysisQuery);
+    assert.equal(analysisGet.status,405);
+    assert.equal(analysisGet.headers.allow,"POST");
+    const wrongAnalysisType=await request(port,analysisQuery,{method:"POST",body:analysisUpload});
+    assert.equal(wrongAnalysisType.status,415);
+    const badAnalysisProduct=await request(port,
+      "/api/terrain/analyze?product=made-up&scale=fine&width=25&height=21&resolution=2",
+      {method:"POST",headers:{"Content-Type":"application/octet-stream"},body:analysisUpload});
+    assert.equal(badAnalysisProduct.status,400);
+    const badAnalysisScale=await request(port,
+      "/api/terrain/analyze?product=lrm&scale=continental&width=25&height=21&resolution=2",
+      {method:"POST",headers:{"Content-Type":"application/octet-stream"},body:analysisUpload});
+    assert.equal(badAnalysisScale.status,400);
+    const badAnalysisDimensions=await request(port,
+      "/api/terrain/analyze?product=lrm&scale=fine&width=1025&height=3&resolution=2",
+      {method:"POST",headers:{"Content-Type":"application/octet-stream"},body:analysisUpload});
+    assert.equal(badAnalysisDimensions.status,400);
+    const shortAnalysis=await request(port,
+      "/api/terrain/analyze?product=lrm&scale=fine&width=3&height=3&resolution=2",
+      {method:"POST",headers:{"Content-Type":"application/octet-stream"},body:Buffer.alloc(4)});
+    assert.equal(shortAnalysis.status,400);
+    const oversizedAnalysis=await request(port,
+      "/api/terrain/analyze?product=lrm&scale=fine&width=1024&height=512&resolution=2",
+      {method:"POST",headers:{"Content-Type":"application/octet-stream"},
+       body:Buffer.alloc(researchAnalysis.LIMITS.maxCells*4+4)});
+    assert.equal(oversizedAnalysis.status,413);
+    const implausibleGrid=new Float32Array(25).fill(100);implausibleGrid[0]=200000;
+    const implausibleAnalysis=await request(port,
+      "/api/terrain/analyze?product=lrm&scale=fine&width=5&height=5&resolution=2",
+      {method:"POST",headers:{"Content-Type":"application/octet-stream"},
+       body:Buffer.from(implausibleGrid.buffer)});
+    assert.equal(implausibleAnalysis.status,422);
+    assert.match(JSON.parse(implausibleAnalysis.body).error,/implausible/);
+
+    const healthAfterAnalysis=JSON.parse((await request(port,"/api/health")).body);
+    assert(healthAfterAnalysis.analysisCache.entries>=1,"health must expose the bounded analysis cache");
+    assert.equal(healthAfterAnalysis.analysisCache.limitMiB,64);
+    assert.equal(healthAfterAnalysis.terrain.restarted,0,"ordinary analysis must keep the M2 worker warm");
+
     const blocked=await request(port,"/api/warm",{
       method:"POST",headers:{Origin:"https://evil.example"},body:"{}"
     });
     assert.equal(blocked.status,403);
     assert.equal(blocked.headers["access-control-allow-origin"],undefined);
+
+    const missingSnapshot=await request(port,"/api/snapshot/image",{
+      headers:{Origin:"https://rileyg44.github.io"}
+    });
+    assert.equal(missingSnapshot.status,400);
+    assert.match(JSON.parse(missingSnapshot.body).error,/URL is required/);
+    assert.equal(missingSnapshot.headers["access-control-allow-origin"],"https://rileyg44.github.io");
+    const insecureSnapshot=await request(port,"/api/snapshot/image?url="+
+      encodeURIComponent("http://gibs.earthdata.nasa.gov/tile.png"));
+    assert.equal(insecureSnapshot.status,400);
+    assert.match(JSON.parse(insecureSnapshot.body).error,/HTTPS/);
+    const disallowedSnapshot=await request(port,"/api/snapshot/image?url="+
+      encodeURIComponent("https://evil.example/tile.png"));
+    assert.equal(disallowedSnapshot.status,403);
+    assert.match(JSON.parse(disallowedSnapshot.body).error,/not allowed/);
+    const postSnapshot=await request(port,"/api/snapshot/image",{method:"POST"});
+    assert.equal(postSnapshot.status,405);
+    assert.equal(postSnapshot.headers.allow,"GET");
 
     const invalidJson=await request(port,"/api/warm",{method:"POST",body:"{"});
     assert.equal(invalidJson.status,400);

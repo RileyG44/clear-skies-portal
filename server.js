@@ -7,9 +7,11 @@ const https = require("https");
 const fs    = require("fs");
 const path  = require("path");
 const crypto= require("crypto");
+const net   = require("net");
 const zlib  = require("zlib");
 const usgs  = require("./usgs.js");
 const {TerrainPool,TerrainPoolError}=require("./terrain-pool.js");
+const researchAnalysis=require("./research-analysis.js");
 
 const ROOT  = __dirname;
 const PORT  = Number(process.env.PORT || 8765);
@@ -25,7 +27,7 @@ const MIME = {".html":"text/html; charset=utf-8",".js":"text/javascript",".css":
   ".json":"application/json",".png":"image/png",".jpg":"image/jpeg",".jpeg":"image/jpeg",
   ".svg":"image/svg+xml",".md":"text/markdown; charset=utf-8",".txt":"text/plain; charset=utf-8"};
 const PUBLIC_FILES = new Set(["index.html","version.js","mosaic-core.js","terrain-core.js",
-  "elevation-bands.js","elevation-tile-core.js","sw.js","manifest.json",
+  "elevation-bands.js","elevation-tile-core.js","glacial-research-core.js","research-analysis.js","research-worker.js","sw.js","manifest.json",
   "icon-180.png","icon-192.png","icon-512.png"]);
 
 const WADNR_HOST = "lidarportal.dnr.wa.gov";
@@ -35,11 +37,19 @@ const TTL_TILE   = 90*24*3600*1000;   // lidar hillshade never changes
 const TILE_MS    = 30000;             // WA DNR is slow; 3DEP shows underneath meanwhile
 const TTL_META   = 7*24*3600*1000;
 const TTL_FIRMS  = 20*60*1000;
-const TTL_SNOW   = 6*3600*1000;       // SNODAS is re-run daily
+const TTL_SNOW   = 2*3600*1000;       // NOHRSC publishes four analyses per day
+const TTL_SNAPSHOT = 24*3600*1000;
 const MAX_BODY   = 256*1024;
 const MAX_UPSTREAM_BODY = 32*1024*1024;
+const MAX_SNAPSHOT_URL = 8192;
+const MAX_SNAPSHOT_IMAGE = 16*1024*1024;
+const MAX_SNAPSHOT_REDIRECTS = 3;
 const MAX_WARM_TILES = 40000;
 const MAX_RENDER_QUEUE = 40;
+const MAX_ANALYSIS_BODY = researchAnalysis.LIMITS.maxCells*4;
+const ANALYSIS_CACHE_LIMIT = Math.max(8,Math.min(256,Number(process.env.CSP_ANALYSIS_CACHE_MB)||64))*1024*1024;
+const ANALYSIS_CACHE_TTL = 10*60*1000;
+const ANALYSIS_MIME = "application/vnd.clearskies.terrain-analysis";
 const TERRAIN_RENDER_VERSION = "terrain-v2";
 const CACHE_MIN_FREE_GIB=Math.max(0,Number(process.env.CSP_CACHE_MIN_FREE_GB)||8);
 const CACHE_MIN_FREE_BYTES=CACHE_MIN_FREE_GIB*1024*1024*1024;
@@ -48,10 +58,50 @@ const DEP_RULES = new Set(["Hillshade Gray","Hillshade Multidirectional","Hillsh
   "Slope Map","Aspect Map","Preset 2ft Contour Interval","Preset 5ft Contour Interval",
   "Preset 10ft Contour Interval","Contour Smoothed 25"]);
 const HTTPS_AGENT = new https.Agent({keepAlive:true,maxSockets:10,maxFreeSockets:5,timeout:30000});
+/* These are the raster providers rendered by the portal today. Keep this list
+   exact: the screenshot helper must never become a general-purpose proxy.
+   CARTO is the sole suffix exception because Leaflet deliberately replaces
+   {s} with vendor-controlled a/b/c/d subdomains. */
+const SNAPSHOT_IMAGE_HOSTS = new Set([
+  "planetarycomputer.microsoft.com",
+  "titiler.xyz",
+  "gibs.earthdata.nasa.gov",
+  "basemaps.cartocdn.com",
+  "elevation.nationalmap.gov",
+  "s3.amazonaws.com",
+  "prd-tnm.s3.amazonaws.com",
+  "services.arcgisonline.com",
+  "basemap.nationalmap.gov",
+  "carto.nationalmap.gov",
+  "mrdata.usgs.gov",
+  "gis.dnr.wa.gov",
+  WADNR_HOST,
+  "tiles.macrostrat.org",
+  "mapservices.weather.noaa.gov"
+]);
 /* CPU-heavy COG decoding and every derived terrain product live outside the
    request loop. The managed, dedicated M2 install requests six workers; the
    pool still auto-sizes conservatively for ordinary manual launches. */
 const terrainPool=new TerrainPool({cacheDir:CACHE,maxQueue:MAX_RENDER_QUEUE});
+
+/* Analysis frames are cheap to regenerate and tied to the exact uploaded DEM,
+   so keep only a short, bounded memory LRU. They do not belong in the long-
+   lived terrain tile cache. */
+const analysisCache=new Map();let analysisCacheBytes=0;
+function analysisCacheGet(cacheKey){
+  const entry=analysisCache.get(cacheKey);if(!entry) return null;
+  if(Date.now()-entry.at>ANALYSIS_CACHE_TTL){analysisCache.delete(cacheKey);analysisCacheBytes-=entry.body.length;return null}
+  analysisCache.delete(cacheKey);analysisCache.set(cacheKey,entry);return entry.body;
+}
+function analysisCachePut(cacheKey,body){
+  if(!Buffer.isBuffer(body)||body.length>ANALYSIS_CACHE_LIMIT) return;
+  const previous=analysisCache.get(cacheKey);if(previous) analysisCacheBytes-=previous.body.length;
+  analysisCache.delete(cacheKey);analysisCache.set(cacheKey,{body,at:Date.now()});analysisCacheBytes+=body.length;
+  while(analysisCacheBytes>ANALYSIS_CACHE_LIMIT&&analysisCache.size){
+    const oldest=analysisCache.keys().next().value,entry=analysisCache.get(oldest);
+    analysisCache.delete(oldest);analysisCacheBytes-=entry.body.length;
+  }
+}
 
 const CORS_ORIGINS = new Set(["https://rileyg44.github.io"]);
 for(const value of String(process.env.CSP_CORS_ORIGINS||"").split(",")){
@@ -60,6 +110,45 @@ for(const value of String(process.env.CSP_CORS_ORIGINS||"").split(",")){
 
 class HttpError extends Error {
   constructor(status, message){ super(message); this.status=status }
+}
+
+function validateSnapshotImageUrl(value){
+  if(typeof value!=="string"||!value.trim())
+    throw new HttpError(400,"snapshot image URL is required");
+  if(Buffer.byteLength(value,"utf8")>MAX_SNAPSHOT_URL)
+    throw new HttpError(400,`snapshot image URL exceeds ${MAX_SNAPSHOT_URL} bytes`);
+  let target;
+  try{ target=new URL(value) }
+  catch(e){ throw new HttpError(400,"snapshot image URL is invalid") }
+  if(target.protocol!=="https:")
+    throw new HttpError(400,"snapshot image URL must use HTTPS");
+  if(target.username||target.password)
+    throw new HttpError(400,"snapshot image URL must not contain credentials");
+  if(target.port&&target.port!=="443")
+    throw new HttpError(400,"snapshot image URL must use port 443");
+
+  const rawHost=target.hostname.toLowerCase();
+  const ipHost=rawHost.startsWith("[")&&rawHost.endsWith("]") ? rawHost.slice(1,-1) : rawHost;
+  const hostname=ipHost.replace(/\.$/,"");
+  if(net.isIP(hostname)||hostname==="localhost"||hostname.endsWith(".localhost")||
+     hostname.endsWith(".local")||hostname.endsWith(".internal")||hostname.endsWith(".home.arpa"))
+    throw new HttpError(403,"snapshot image URL must not use a literal or private host");
+  const cartoShard=hostname.endsWith(".basemaps.cartocdn.com");
+  if(!SNAPSHOT_IMAGE_HOSTS.has(hostname)&&!cartoShard)
+    throw new HttpError(403,"snapshot image host is not allowed");
+
+  target.hostname=hostname;
+  target.hash="";
+  return target;
+}
+
+function resolveSnapshotImageRedirect(current,location){
+  if(typeof location!=="string"||!location.trim())
+    throw new HttpError(502,"snapshot image upstream sent a redirect without a location");
+  let next;
+  try{ next=new URL(location,current) }
+  catch(e){ throw new HttpError(502,"snapshot image upstream sent an invalid redirect") }
+  return validateSnapshotImageUrl(next.href);
 }
 
 function allowedOrigin(req){
@@ -127,17 +216,43 @@ function cacheDiskStats(extraBytes=0){
   }catch(e){ return {freeGiB:null,minFreeGiB:CACHE_MIN_FREE_GIB,writable:true} }
 }
 let cacheCount=cacheEntryCount();
+const CACHE_MEMORY_LIMIT=Math.max(32,Math.min(1024,Number(process.env.CSP_MEMORY_CACHE_MB)||256))*1024*1024;
+const CACHE_MEMORY_ENTRY_LIMIT=Math.max(1024,Math.min(65536,Number(process.env.CSP_MEMORY_CACHE_ENTRIES)||32768));
+const cacheMemory=new Map();let cacheMemoryBytes=0;
+function memoryCachePut(k,value,at=Date.now()){
+  const body=value&&value.body;if(!Buffer.isBuffer(body)||body.length>16*1024*1024) return;
+  /* Negative-coverage entries have an empty body. Charge a small floor and
+     cap entry count as well as bytes so millions of zero-byte misses cannot
+     turn the nominally bounded Map into an unbounded metadata cache. */
+  const charge=Math.max(256,body.length),previous=cacheMemory.get(k);
+  if(previous) cacheMemoryBytes-=previous.charge;
+  cacheMemory.delete(k);cacheMemory.set(k,{...value,at,charge});cacheMemoryBytes+=charge;
+  while((cacheMemoryBytes>CACHE_MEMORY_LIMIT||cacheMemory.size>CACHE_MEMORY_ENTRY_LIMIT)&&cacheMemory.size){
+    const oldest=cacheMemory.keys().next().value,entry=cacheMemory.get(oldest);cacheMemory.delete(oldest);cacheMemoryBytes-=entry.charge;
+  }
+}
+function memoryCacheGet(k,ttl){
+  const value=cacheMemory.get(k);if(!value) return null;
+  if(Date.now()-value.at>ttl){cacheMemory.delete(k);cacheMemoryBytes-=value.charge;return null}
+  cacheMemory.delete(k);cacheMemory.set(k,value);
+  return {body:value.body,type:value.type,status:value.status};
+}
 function cacheGet(k, ttl){
+  const warm=memoryCacheGet(k,ttl);if(warm) return warm;
   const f = path.join(CACHE, k);
   try{
     const st = fs.statSync(f);
     if(Date.now() - st.mtimeMs > ttl) return null;
     const raw = JSON.parse(fs.readFileSync(f + ".meta", "utf8"));
-    return {body: fs.readFileSync(f), type: raw.type, status: raw.status};
+    const value={body: fs.readFileSync(f), type: raw.type, status: raw.status};memoryCachePut(k,value,st.mtimeMs);return value;
   }catch(e){ return null }
 }
 function cachePut(k, status, type, body){
-  if(!cacheDiskStats((body&&body.length||0)+4096).writable) return false;
+  /* RAM stays useful even when the disk has reached its safety reserve. The
+     previous ordering disabled both caches exactly when storage pressure made
+     memory hits most valuable. */
+  memoryCachePut(k,{status,type,body});
+  if(!cacheDiskStats((body&&body.length||0)+4096).writable) return true;
   const target=path.join(CACHE,k), suffix=`.tmp-${process.pid}-${crypto.randomBytes(4).toString("hex")}`;
   const bodyTmp=target+suffix, metaTmp=target+".meta"+suffix;
   const isNew=!fs.existsSync(target);
@@ -163,7 +278,7 @@ function atomicWriteJson(target,value){
 /* ------------------------------------------------------------- upstream */
 function upstream(opts, postBody){
   return new Promise((resolve, reject)=>{
-    const {__timeout,signal,...requestOptions}=opts;
+    const {__timeout,__maxBody=MAX_UPSTREAM_BODY,signal,...requestOptions}=opts;
     let done=false;
     const finish=(fn,value)=>{ if(done) return; done=true; if(signal) signal.removeEventListener("abort",onAbort); fn(value) };
     const req = https.request({...requestOptions,agent:opts.agent||HTTPS_AGENT}, res=>{
@@ -175,11 +290,13 @@ function upstream(opts, postBody){
       else if(enc==="br") stream=res.pipe(zlib.createBrotliDecompress());
       stream.on("data",c=>{
         size+=c.length;
-        if(size>MAX_UPSTREAM_BODY){
+        if(size>__maxBody){
           settled=true;
-          const err=new Error(`upstream body exceeds ${MAX_UPSTREAM_BODY} bytes`);
+          const err=new Error(`upstream body exceeds ${__maxBody} bytes`);
+          err.code="UPSTREAM_TOO_LARGE";
           finish(reject,err);
           stream.destroy(err);
+          if(stream!==res) res.destroy();
           return;
         }
         chunks.push(c);
@@ -189,6 +306,7 @@ function upstream(opts, postBody){
         settled=true;
         finish(resolve,{status:res.statusCode,
           type:res.headers["content-type"]||"application/octet-stream",
+          headers:res.headers,
           body:Buffer.concat(chunks)});
       });
       stream.on("error",err=>{ if(!settled){ settled=true; finish(reject,err) } });
@@ -242,17 +360,19 @@ function coalesce(id,fn){
   return task;
 }
 
-/* Coalesce identical terrain jobs while still letting each browser cancel its
-   own wait. When the final viewer leaves or unloads a tile, its worker is
-   stopped and replaced instead of burning minutes on an obsolete viewport. */
+/* Coalesce identical terrain jobs while letting extra viewers cancel their
+   own waits. If the final viewer leaves, queued work is discarded but an
+   already-running render finishes and is cached instead of killing a warm
+   M2 worker and repeating the same COG reads after the next pan. */
 const terrainPending=new Map();
 function terrainTask(jobKey,action,args,options,signal){
   if(signal&&signal.aborted) return Promise.reject(new TerrainPoolError("terrain request cancelled","ABORT_ERR"));
   let entry=terrainPending.get(jobKey);
   if(!entry){
+    const finishOnAbort=!options||options.finishOnAbort!==false;
     entry={controller:new AbortController(),waiters:new Set(),promise:null};
     terrainPending.set(jobKey,entry);
-    entry.promise=terrainPool.run(action,args,{...options,signal:entry.controller.signal})
+    entry.promise=terrainPool.run(action,args,{...options,signal:entry.controller.signal,finishOnAbort})
       .finally(()=>terrainPending.delete(jobKey));
   }
   const waiter={}; entry.waiters.add(waiter);
@@ -264,9 +384,12 @@ function terrainTask(jobKey,action,args,options,signal){
       if(signal) signal.removeEventListener("abort",onAbort);
     };
     const onAbort=()=>{
-      cleanup();
-      if(!entry.waiters.size) entry.controller.abort();
-      reject(new TerrainPoolError("terrain request cancelled","ABORT_ERR"));
+      /* If another viewer is waiting, only this response can leave. For the
+         final viewer, signal the pool: queued work is discarded, while an
+         active render is allowed to finish so this route can cache it. */
+      if(entry.waiters.size>1){ cleanup();reject(new TerrainPoolError("terrain request cancelled","ABORT_ERR"));return }
+      if(signal) signal.removeEventListener("abort",onAbort);
+      entry.controller.abort();
     };
     if(signal) signal.addEventListener("abort",onAbort,{once:true});
     entry.promise.then(value=>{ cleanup(); resolve(value) },error=>{ cleanup(); reject(error) });
@@ -343,6 +466,61 @@ const isPng = body => Buffer.isBuffer(body)&&body.length>8&&body[0]===0x89&&body
 const isTiff = body => Buffer.isBuffer(body)&&body.length>8&&
   ((body[0]===0x49&&body[1]===0x49&&body[2]===0x2a&&body[3]===0x00) ||
    (body[0]===0x4d&&body[1]===0x4d&&body[2]===0x00&&body[3]===0x2a));
+const isJpeg = body => Buffer.isBuffer(body)&&body.length>3&&
+  body[0]===0xff&&body[1]===0xd8&&body[2]===0xff;
+const isWebp = body => Buffer.isBuffer(body)&&body.length>=12&&
+  body.toString("ascii",0,4)==="RIFF"&&body.toString("ascii",8,12)==="WEBP";
+const SNAPSHOT_IMAGE_TYPES = new Map([
+  ["image/png",isPng],
+  ["image/jpeg",isJpeg],
+  ["image/webp",isWebp]
+]);
+const SNAPSHOT_REDIRECT_STATUSES = new Set([301,302,303,307,308]);
+
+async function fetchSnapshotImage(initial){
+  let target=validateSnapshotImageUrl(initial instanceof URL ? initial.href : initial);
+  const visited=new Set();
+  for(let redirects=0;;redirects++){
+    if(visited.has(target.href))
+      throw new HttpError(502,"snapshot image upstream redirect loop");
+    visited.add(target.href);
+    let result;
+    try{
+      result=await upstream({
+        hostname:target.hostname,
+        port:443,
+        path:target.pathname+target.search,
+        method:"GET",
+        __timeout:TILE_MS,
+        __maxBody:MAX_SNAPSHOT_IMAGE,
+        headers:{
+          "User-Agent":"clear-skies-portal",
+          "Accept":"image/png,image/jpeg,image/webp",
+          "Accept-Encoding":"gzip, deflate, br"
+        }
+      });
+    }catch(error){
+      if(error&&error.code==="UPSTREAM_TOO_LARGE")
+        throw new HttpError(502,`snapshot image exceeds ${MAX_SNAPSHOT_IMAGE} bytes`);
+      throw new HttpError(502,`snapshot image upstream request failed: ${String(error&&error.message||error)}`);
+    }
+    if(SNAPSHOT_REDIRECT_STATUSES.has(result.status)){
+      if(redirects>=MAX_SNAPSHOT_REDIRECTS)
+        throw new HttpError(502,"snapshot image upstream sent too many redirects");
+      target=resolveSnapshotImageRedirect(target,result.headers&&result.headers.location);
+      continue;
+    }
+    if(result.status!==200)
+      throw new HttpError(502,`snapshot image upstream returned HTTP ${result.status}`);
+    const type=String(result.type||"").split(";",1)[0].trim().toLowerCase();
+    const matches=SNAPSHOT_IMAGE_TYPES.get(type);
+    if(!matches)
+      throw new HttpError(415,"snapshot image upstream did not return PNG, JPEG, or WebP");
+    if(!matches(result.body))
+      throw new HttpError(502,`snapshot image upstream returned invalid ${type} data`);
+    return {status:200,type,body:result.body};
+  }
+}
 
 /* ------------------------------------------------------------------ app */
 function send(res, status, type, body, extra={}){
@@ -354,6 +532,20 @@ function send(res, status, type, body, extra={}){
 }
 
 const jsonBody = value => Buffer.from(JSON.stringify(value));
+
+function validateAnalysisParams(searchParams){
+  const product=searchParams.get("product")||"",scale=searchParams.get("scale")||"";
+  const width=Number(searchParams.get("width")),height=Number(searchParams.get("height"));
+  const resolution=Number(searchParams.get("resolution")),limits=researchAnalysis.LIMITS;
+  if(!researchAnalysis.PRODUCTS.includes(product)) throw new HttpError(400,"unknown terrain analysis product");
+  if(!Object.hasOwn(researchAnalysis.SCALES,scale)) throw new HttpError(400,"unknown terrain analysis scale");
+  if(!Number.isInteger(width)||width<3||width>limits.maxWidth||
+     !Number.isInteger(height)||height<3||height>limits.maxHeight||width*height>limits.maxCells)
+    throw new HttpError(400,"terrain analysis dimensions are outside the safe bounds");
+  if(!Number.isFinite(resolution)||resolution<limits.minResolution||resolution>limits.maxResolution)
+    throw new HttpError(400,"terrain analysis resolution is outside the safe bounds");
+  return {product,scale,width,height,resolution,bytes:width*height*4};
+}
 
 /* -------------------------------------------------- area manifests
    A downloaded area records which WA DNR datasets covered it at the
@@ -605,10 +797,60 @@ const server = http.createServer(async (req,res)=>{
         "Access-Control-Allow-Headers":"Content-Type",
         "Access-Control-Max-Age":"86400"
       });
-    const postOnly=new Set(["/api/wadnr/query","/api/warm","/api/warm/stop",
+    const postOnly=new Set(["/api/terrain/analyze","/api/wadnr/query","/api/warm","/api/warm/stop",
       "/api/usgs/check","/api/usgs/warm","/api/usgs/warm/stop"]);
     if(postOnly.has(p)&&req.method!=="POST")
       return send(res,405,"application/json",jsonBody({error:"method not allowed"}),{"Allow":"POST"});
+
+    /* ---- bounded M2 offload for viewport DEM surface analysis ---- */
+    if(p==="/api/terrain/analyze"&&req.method==="POST"){
+      const type=String(req.headers["content-type"]||"").split(";",1)[0].trim().toLowerCase();
+      if(type!=="application/octet-stream") throw new HttpError(415,"terrain analysis body must be application/octet-stream Float32 data");
+      const params=validateAnalysisParams(u.searchParams);
+      const declared=req.headers["content-length"];
+      if(declared!==undefined&&(!/^\d+$/.test(String(declared))||Number(declared)!==params.bytes))
+        throw new HttpError(400,"terrain analysis content length does not match its dimensions");
+      const upload=await readBody(req,MAX_ANALYSIS_BODY);
+      if(upload.length!==params.bytes) throw new HttpError(400,"terrain analysis payload length does not match its dimensions");
+      const digest=crypto.createHash("sha256").update(upload).digest("hex");
+      const analysisKey=`research-v1:${params.product}:${params.scale}:${params.width}x${params.height}:${params.resolution}:${digest}`;
+      const hit=analysisCacheGet(analysisKey);
+      if(hit) return send(res,200,ANALYSIS_MIME,hit,{"X-Cache":"HIT","X-CSP-Analysis-Engine":"m2-worker-thread","Cache-Control":"no-store"});
+
+      /* Buffer pools are not safe to detach. Copy once into an exact backing
+         store, then transfer ownership into a worker instead of cloning the
+         DEM through the worker_threads serializer. */
+      const bytes=new Uint8Array(params.bytes);bytes.set(upload);
+      const grid=new Float32Array(bytes.buffer);
+      let encoded;
+      try{
+        encoded=await terrainTask(analysisKey,"research-analysis",{...params,grid},
+          {priority:65,timeoutMs:45000,transferList:[grid.buffer]},client.signal);
+      }catch(error){
+        if(terrainAborted(error)) return;
+        if(error&&error.code==="WORKER_TASK") throw new HttpError(422,String(error.message||"invalid terrain analysis payload"));
+        return send(res,503,"application/json",jsonBody({error:"terrain analysis engine is busy"}),
+          {"Retry-After":"2","Cache-Control":"no-store"});
+      }
+      let frame;
+      try{ researchAnalysis.decodeResult(encoded);frame=Buffer.from(encoded) }
+      catch(error){ throw new HttpError(500,"terrain analysis worker returned an invalid frame") }
+      analysisCachePut(analysisKey,frame);
+      return send(res,200,ANALYSIS_MIME,frame,{"X-Cache":"MISS","X-CSP-Analysis-Engine":"m2-worker-thread","Cache-Control":"no-store"});
+    }
+
+    /* ---- safe raster proxy for cross-origin map snapshots ---- */
+    if(p==="/api/snapshot/image"&&req.method!=="GET")
+      return send(res,405,"application/json",jsonBody({error:"method not allowed"}),{"Allow":"GET"});
+    if(p==="/api/snapshot/image"){
+      const target=validateSnapshotImageUrl(u.searchParams.get("url"));
+      const result=await cached(key("snapshot:image:v1:"+target.href),TTL_SNAPSHOT,
+        ()=>fetchSnapshotImage(target));
+      return send(res,200,result.type,result.body,{
+        "X-Cache":result.hit?"HIT":"MISS",
+        "Cache-Control":"public, max-age=86400"
+      });
+    }
 
     /* ---- WA DNR: which lidar projects cover this polygon? ---- */
     if(p === "/api/wadnr/query" && req.method === "POST"){
@@ -915,7 +1157,7 @@ const server = http.createServer(async (req,res)=>{
       const opt={ n:+u.searchParams.get("n")||0,
                   lo:+u.searchParams.get("lo")||0, hi:+u.searchParams.get("hi")||0 };
       let out; try{ out=await terrainTask(`fabric:${key(JSON.stringify([bs,opt]))}`,"fabric",{bbox:bs,options:opt},
-        {priority:20,timeoutMs:45000},client.signal) }
+        {priority:20,timeoutMs:45000,finishOnAbort:false},client.signal) }
       catch(e){
         if(terrainAborted(e)) return;
         return send(res,503,"application/json",Buffer.from(JSON.stringify({error:String(e.message||e)})));
@@ -1013,9 +1255,11 @@ const server = http.createServer(async (req,res)=>{
                   {"X-Cache":"ERROR","X-CSP-Error":"upstream","Cache-Control":"no-store","Retry-After":"2"});
     }
 
-    /* ---- current snow analysis (NOHRSC sends no CORS, so it is proxied) ----
-       SNODAS is re-run daily, so this caches for six hours rather than the
-       90 days a bedrock or lidar tile gets. */
+    /* ---- current snow analysis --------------------------------------------
+       The browser can now use NOHRSC directly, but this route remains the
+       preferred warm M2 cache and a resilient fallback. NOHRSC refreshes four
+       times per day, so two hours keeps the cache useful without hiding a new
+       analysis for most of an update cycle. */
     if(p === "/api/snow"){
       const bbox=u.searchParams.get("bbox")||"";
       const layer=u.searchParams.get("layer")||"3";
@@ -1027,14 +1271,14 @@ const server = http.createServer(async (req,res)=>{
               + `&format=png32&transparent=true&f=image&layers=show:${layer}`;
       const k=key("snow:"+pth);
       const hit=cacheGet(k, TTL_SNOW);
-      if(hit) return send(res,200,hit.type,hit.body,{"X-Cache":"HIT","Cache-Control":"public, max-age=21600"});
+      if(hit) return send(res,200,hit.type,hit.body,{"X-Cache":"HIT","Cache-Control":"public, max-age=3600"});
       let r=null;
       try{ r=await limitedUpstream(k,{host:"mapservices.weather.noaa.gov", path:pth, method:"GET",
                                      headers:{"User-Agent":"clear-skies-portal"}, __timeout:TILE_MS},null,client.signal) }
       catch(e){ if(terrainAborted(e)) return; r=null }
       if(r && r.status===200 && isPng(r.body)){
         cachePut(k,200,"image/png",r.body);
-        return send(res,200,"image/png",r.body,{"X-Cache":"MISS","Cache-Control":"public, max-age=21600"});
+        return send(res,200,"image/png",r.body,{"X-Cache":"MISS","Cache-Control":"public, max-age=3600"});
       }
       return send(res,204,"image/png",Buffer.alloc(0),
                   {"X-Cache":"ERROR","X-CSP-Error":"upstream","Cache-Control":"no-store","Retry-After":"2"});
@@ -1045,6 +1289,9 @@ const server = http.createServer(async (req,res)=>{
       return send(res,200,"application/json",Buffer.from(JSON.stringify({
         ok:true, cached:cacheCount, inflight, queued:queue.length, terrainRenderVersion:TERRAIN_RENDER_VERSION,
         rendering:terrain.active, renderQueued:terrain.queued, terrain,
+        memoryCache:{entries:cacheMemory.size,entryLimit:CACHE_MEMORY_ENTRY_LIMIT,
+          MiB:+(cacheMemoryBytes/1048576).toFixed(1),limitMiB:CACHE_MEMORY_LIMIT/1048576},
+        analysisCache:{entries:analysisCache.size,MiB:+(analysisCacheBytes/1048576).toFixed(1),limitMiB:ANALYSIS_CACHE_LIMIT/1048576},
         cacheDisk:cacheDiskStats(),
         nationalCircuit:{failures:depCircuit.failures,coolingDown:Date.now()<depCircuit.openUntil,
                          retryInSec:Math.max(0,Math.ceil((depCircuit.openUntil-Date.now())/1000))},
@@ -1075,8 +1322,16 @@ const server = http.createServer(async (req,res)=>{
   }
 });
 
-server.listen(PORT,HOST,()=>{
-  console.log(`Clear Skies Portal  ->  http://localhost:${PORT}`);
-  console.log(`  serving ${ROOT}`);
-  console.log(`  cache   ${CACHE}`);
-});
+if(require.main===module){
+  server.listen(PORT,HOST,()=>{
+    console.log(`Clear Skies Portal  ->  http://localhost:${PORT}`);
+    console.log(`  serving ${ROOT}`);
+    console.log(`  cache   ${CACHE}`);
+  });
+}
+
+module.exports={
+  validateSnapshotImageUrl,
+  resolveSnapshotImageRedirect,
+  closeServerResources:()=>terrainPool.close()
+};

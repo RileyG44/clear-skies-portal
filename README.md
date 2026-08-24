@@ -185,10 +185,16 @@ toggleable, with a shared opacity slider. All keyless.
 | Rivers & lakes | USGS National Hydrography Dataset |
 | Peaks & landforms | USGS GNIS — summits, ridges, gaps, glaciers (zoom 10+) |
 | Named places | USGS GNIS populated places (zoom 9+) |
+| **Continental ice limits** | Washington Geological Survey 1:250k layer 0 |
+| **Ice Age flood affected area** | WGS-hosted regional reference polygon |
+| **Pleistocene lakes** | EWU / Ice Age Floods Institute reconstruction |
 | **Bedrock geology** | Macrostrat (proxied — sends no CORS; zoom ≤16) |
 | **State geologic map** | USGS SGMC via Mineral Resources (zoom ≤14) |
-| **Snow depth (today)** | NOAA NOHRSC SNODAS (proxied; zoom ≤14) |
-| **Snow water equivalent** | NOAA NOHRSC SNODAS (proxied; zoom ≤14) |
+| **WA surface geology** | Washington Geological Survey 1:100k WA GeMS |
+| **WA Quaternary active faults** | Washington Geological Survey DDS-1 |
+| **WA volcanic vents** | Washington Geological Survey vent locations |
+| **Snow depth (current)** | NOAA NOHRSC National Snow Analysis (M2 cache + direct fallback; zoom ≤14) |
+| **Snow water equivalent** | NOAA NOHRSC National Snow Analysis (M2 cache + direct fallback; zoom ≤14) |
 | **Snow cover** | NASA GIBS MODIS Terra NDSI (zoom ≤8) |
 
 Not OpenStreetMap's own tiles: their tile-usage policy forbids this use and the
@@ -200,12 +206,14 @@ opaque polygon fills rather than line work; the shared slider scales them
 instead of overriding. Macrostrat sends no CORS header, so it routes through
 `/api/geo/macrostrat/...` and is cached for 30 days — bedrock is not news.
 
-Snow depth and SWE are NOHRSC's SNODAS assimilation — *current conditions* for
-all of CONUS, re-run daily, so there is no cloud problem and no revisit gap.
-MODIS NDSI is the satellite view beside it, which has both but sees the whole
-world. NOHRSC sends no CORS either, so it routes through `/api/snow` with a
-six-hour cache. A layer outside its zoom range says so, since drawing nothing
-is otherwise indistinguishable from "there is no snow here".
+Snow depth and SWE are NOHRSC's modeled National Snow Analysis — *current
+conditions* in inches for CONUS at about 1 km resolution, refreshed four times
+per day. A connected M2 serves its two-hour warm cache first; if it is absent,
+the browser uses NOAA's CORS-enabled export directly. MODIS NDSI is the
+satellite view beside it. Current GIBS searches deliberately start with the last
+completed UTC day, rather than advertising today's still-partial global mosaic.
+A layer outside its native zoom range says that it is enlarged instead of
+silently turning blank.
 
 ## Things worth knowing
 
@@ -253,7 +261,8 @@ is otherwise indistinguishable from "there is no snow here".
   both empty is all time. Quick buttons cover this month, last month, year to date and
   last calendar year. The active window shows on the Filters header even when collapsed.
   A named range is applied everywhere — including the GIBS daily layers, which are
-  generated from the *end* of the range rather than today, and the *Fill surroundings*
+  generated from the *end* of the range (or the last completed UTC day for a current
+  search) rather than an incomplete live day, and the *Fill surroundings*
   mosaic, so neighbouring scenes come from the same era rather than from last week.
 - Sidebar panes collapse (click header), resize (drag bottom edge), and reorder
   (drag header). Layout persists. "Reset panel layout" in the footer.

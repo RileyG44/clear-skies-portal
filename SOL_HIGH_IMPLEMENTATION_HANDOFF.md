@@ -1,9 +1,9 @@
 # Clear Skies Portal — implementation handoff for GPT-5.6 Sol (high)
 
-Date: 2026-08-23
+Date: 2026-08-24
 Target repository: `RileyG44/clear-skies-portal`  
 Target branch: `main`  
-Starting release: build `2026-08-23f` (the terrain correctness and reliability checkpoint)
+Starting release: build `2026-08-24h` (the interaction, resilient rendering, M2-analysis, and glacial-research checkpoint)
 
 ## Operating instruction
 
@@ -51,6 +51,56 @@ Verified release acceptance evidence:
 - Terrain rendered at zoom 2 and stretched at zoom 24 with a complete image and no black terminal state.
 - A 390×844 mobile viewport used the full height for both map and sidebar with zero document overflow.
 - Clean-browser console checks were error-free; the six-worker health check ended with zero queued work and zero worker restarts in the fresh run.
+
+## What release 2026-08-24h adds
+
+This release completes the immediate production repair and adds a first research-grade geomorphology foundation. Treat these paths as the new baseline.
+
+### Interaction and mobile shell
+
+- Sidebar pane reordering is now a pointer-driven card interaction with an exact-height placeholder, cursor-following clipped preview, FLIP motion for displaced panes, edge auto-scroll, document-boundary drop handling, selection suppression, cancellation restoration, `Alt+Arrow` keyboard ordering, an ARIA live region, and persisted order. The disclosure chevron is a separate control. Do not restore the old DOM-swap-only drag implementation.
+- Pane expand/collapse, sidebar collapse, and floating map controls use spring-like platform motion and respect `prefers-reduced-motion`. Search input, location, and Search buttons now share one exact height: 36 px desktop and 44 pt on touch layouts.
+- The map shell follows `VisualViewport` height/offset. On phones the sidebar itself is inset between `safe-area-inset-top` and `safe-area-inset-bottom`, rather than drawing its interactive surface under the Dynamic Island or home indicator. The map remains full bleed behind those safe regions.
+- Displayed on map is a pointer-draggable, persisted floating panel. Its collapsed state is the reorderable map/info button in the dock; clearing a scene removes both. Position persistence is normalized to viewport size and reclamped around the sidebar and safe areas.
+- Right-click now works with and without a selected scene. It performs reverse visible-layer hit testing, offers same-footprint acquisition swaps, Search here, Copy coordinates, Research here, Fill Surroundings, and neighbor removal. Long press remains available through Leaflet and `Shift+F10` opens the same menu at map center.
+- The map-tool dock remains reorderable with cursor-following motion. The secure terrain-engine UI is no longer buried in the lidar pane.
+- Snapshot behavior is explicit. Desktop capture reports the exact downloaded filename. Platforms without display capture (including iOS) compose visible Leaflet image, canvas, and SVG layers in DOM/z-order; cross-origin provider images use a strictly allowlisted server proxy; delivery prefers the native share sheet and explains Save Image/Save to Files, otherwise it uses browser Downloads.
+
+### Imagery, mosaics, and no-black rendering
+
+- Both Fill Surroundings entry points were reverified: the button follows the final viewport as a one-shot operation and the checkbox continuously recomputes after pan. The selected acquisition and same-dataset matching scenes covered 100% of the Moses Lake viewport in the acceptance run.
+- Current NASA GIBS searches start on the last completed UTC day. Do not reintroduce the current in-progress day: its global tiles legitimately return 404 while passes are still arriving, which previously made nearly every newest GIBS item fail as “imagery was too incomplete.” Historical windows remain anchored on their exact selected end date. Completed-day VIIRS rendered cleanly in-browser and stretched its z9 native tiles through deeper view zooms.
+- Active fires retain their existing vector layer while a buffered 70% halo is valid. Move/resize events inside that halo do zero network work; leaving it starts one debounced, abortable background replacement, and the old layer is removed only after at least one authoritative feed succeeds. Perimeters and incidents fetch concurrently with a ten-minute freshness window and a 2,000-feature viewport cap.
+- NOHRSC snow depth and SWE now prefer the M2's warm cache but fall back to the same authoritative MapServer directly from the browser using current CORS. They remain usable when Tailscale/the Mac is offline. The server cache is two hours (NOAA publishes four analyses daily), browser cache control is one hour, units are explicitly inches, and the UI states the roughly 1 km modeled-data limitation. MODIS snow cover uses the last completed GIBS day and overzooms its last native level instead of disappearing.
+- A replacement terrain layer stays at zero opacity until at least 90% of its current, content-bearing tiles are ready. A canvas whose baseline and detail sources both fail is an error, never a successful empty tile. The previous healthy layer remains visible when replacement readiness fails.
+- Analytical lidar and imagery stop generating fictitious detail above their honest native levels. Raw/WA composite terrain uses native z17 and imagery/provider-specific maxima; Leaflet stretches that last good raster through viewer z28. It can become blurry, but it does not request a nonexistent level or intentionally turn black.
+- Every static mix-blend/filter path that could darken or wash out overlapping terrain was removed. Lidar presentation is per scientific style and persisted: contrast, color/saturation, and brightness update an existing layer in one frame without network work. Aspect defaults to 120% contrast, 110% saturation, and 108% brightness, and remains adjustable.
+- Map basemap theme remains independently light/dark; UI glass and analytical layer colors are unaffected.
+
+### Terrain engine and M2 use
+
+- The M2 launch service remains loopback-only behind Tailscale Serve, self-starting through launchd with six long-lived terrain workers and four bounded S3 range fetches. Six is intentional for the four-performance/four-efficiency-core M2 Air; raising it before range coalescing increases contention and memory pressure.
+- Disconnecting or zooming away no longer kills a worker that is already rendering a raw terrain tile. Queued stale work cancels, but active work finishes into cache (`finishOnAbort`) so the next phone/browser request becomes warm. Tests verify worker retention and cancellation semantics.
+- A 256 MiB in-process response LRU now sits in front of the persistent disk cache, avoiding synchronous cold-file reads for hot terrain/elevation tiles. Health telemetry reports entry count, usage, and limit.
+- Heavy viewport morphology can adaptively move from a constrained/mobile browser to `POST /api/terrain/analyze`. The protocol is an exact raw Float32 upload and a compact binary Float32 response—no JSON/base64 inflation. It validates product, scale, dimensions, resolution, content type/length, cell count, and plausible elevations; caps requests at 524,288 cells/2 MiB; transfers ownership into the existing worker pool; coalesces identical jobs; and caches results in a bounded 64 MiB/ten-minute memory LRU.
+- Mobile, large-grid, and low-core clients prefer the connected M2. Any server, decode, or network failure falls back to the browser Web Worker, and the result panel states which engine ran. A measured 640×640 broad residual job took 581.8 ms cold including transfer and 4.9 ms from cache; health still answered in 6.4 ms during the cold job.
+- Keep live threshold/color elevation shading in browser WebGL2: it is already GPU-accelerated and repaints cached Float32 data without a network round trip. Fetch/range/decode/PNG/morphology work belongs in the M2 worker pool when profitable. Do not add a claimed GPU server path unless a measured Metal/WebGPU helper with a CPU fallback actually beats this split.
+
+### Research tools
+
+- Elevation spectrum, independent above/below elevation highlighting, landform fabric, and new surface-analysis controls now live in their own Research tools pane rather than Terrain · lidar.
+- `glacial-research-core.js` is a pure Node/browser module with explicit cell size, units, row axis, no-data, and edge-policy metadata. It supplies local relief model, TPI, TRI, multi-scale residual anomalies, aspect northness/eastness, finite-difference curvature, hypsometry, a glacial-margin morphology screen, and a flood-channel morphology screen.
+- `research-analysis.js` is the single dispatcher/protocol used by browser and Node so server and fallback results cannot drift. `research-worker.js` keeps fallback math off the map thread.
+- Glacial/flood screens are explicitly observational candidate layers, not probabilities, diagnoses, mapped boundaries, or substitutes for field and geologic evidence. Preserve the confounder and corroboration cautions in every UI/export path.
+- Surface analysis assembles the best cached elevation covering the visible map, bounds/downsamples it to a controlled grid, reports effective feet-per-pixel and scale, renders a georeferenced image overlay, and can be cleared independently.
+- Primary-source PNW reference overlays now include WGS continental ice limits (1:250k layer 0), WGS-hosted Ice Age flood affected area, EWU/IAFI reconstructed Pleistocene lakes, WGS 1:100k WA GeMS map units, WGS Quaternary active faults, and WGS volcanic vents. Hosted polygons request simplified GeoJSON once and retain a bounded in-session promise cache; official WGS raster exports stay browser-direct. Every interpretive/regional dataset carries an explicit scientific caveat in the visible layer note.
+
+### Verification added in this release
+
+- Static parsing/asset assertions include the new modules and honest native-zoom rules.
+- Tests cover every new terrain-research product, units/no-data/metadata, browser/Node parity, binary framing, offload policy, endpoint CORS and method/content validation, malformed and over-limit bodies, worker transfer, coalescing, cache hits, cancellation retention, and snapshot proxy SSRF/image validation.
+- Real-browser acceptance covered pane drag/drop and persistence, text-selection suppression, mouse and keyboard context menus, draggable/collapsed scene controls, Moses Lake search, both fill modes after pan, research rendering, per-style aspect appearance, extreme zoom stretching, mobile 430×932 layout/overflow, equal 44-point search controls, and a clean error/warning console.
+- Additional acceptance after the fire/snow/GIBS repair loaded 145 fire vectors, preserved all 145 through panel resize and keyboard pan, loaded 24/24 snow-depth and 24/24 SWE tiles, loaded completed-day MODIS snow-cover tiles dated 2026-08-23, returned 237 Moses Lake scenes with AWS Sentinel-2 auto-selected, and rendered a manually selected completed-day VIIRS GIBS scene without the incomplete-image rejection.
 
 ### Highest-priority work after this checkpoint
 

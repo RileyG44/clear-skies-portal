@@ -18,6 +18,15 @@ async function main(){
     assert.deepEqual(await high,{value:"high"});
     assert.deepEqual(await low,{value:"low"});
 
+    const transferred=new Float32Array([1.25,2.5,5]);
+    const transferResult=await pool.run("echo",{grid:transferred},{transferList:[transferred.buffer]});
+    assert.equal(transferred.buffer.byteLength,0,"large analysis grids transfer without a main-thread clone");
+    assert.deepEqual(Array.from(transferResult.grid),[1.25,2.5,5]);
+    const detached=new ArrayBuffer(8);structuredClone(detached,{transfer:[detached]});
+    await rejectsCode(pool.run("echo",{badTransfer:true},{transferList:[detached]}),"TRANSFER_ERROR");
+    assert.equal(pool.stats().restarted,0,"a caller transfer error must not restart a healthy worker");
+    assert.deepEqual(await pool.run("echo",{afterTransferError:true}),{afterTransferError:true});
+
     pool.maxQueue=2;
     const pressure=pool.run("delay",{ms:80,value:"pressure"});
     const queuedOne=pool.run("echo",{queued:1});
@@ -36,6 +45,11 @@ async function main(){
     await new Promise(resolve=>setTimeout(resolve,80));
     assert.deepEqual(await pool.run("echo",{recovered:true}),{recovered:true});
     assert.equal(pool.stats().restarted,0,"a cancelled job that finishes during grace keeps its warm worker");
+
+    const cacheController=new AbortController();
+    const cacheable=pool.run("delay",{ms:70,value:"cacheable"},{timeoutMs:1000,signal:cacheController.signal,finishOnAbort:true});
+    setTimeout(()=>cacheController.abort(),15);
+    assert.equal(await cacheable,"cacheable","active cacheable work finishes after its client leaves");
     await rejectsCode(pool.run("spin",{ms:250},{timeoutMs:20}),"TIMEOUT");
     await new Promise(resolve=>setTimeout(resolve,80));
     assert.deepEqual(await pool.run("echo",{afterTimeout:true}),{afterTimeout:true});

@@ -6,6 +6,7 @@
 const {parentPort, workerData} = require("worker_threads");
 const cog = require("./cog.js");
 const usgs = require("./usgs.js");
+const researchAnalysis = require("./research-analysis.js");
 
 usgs.init(workerData.cacheDir);
 
@@ -39,6 +40,7 @@ async function execute(action,args){
   if(action==="raw-terrain") return usgs.renderTile(args.style,args.z,args.x,args.y,args.size||256);
   if(action==="fabric") return usgs.fabric(args.bbox,args.options||{});
   if(action==="terrarium-tiff") return terrariumFromTiff(args.body);
+  if(action==="research-analysis") return researchAnalysis.encodeResult(researchAnalysis.run(args));
   throw new Error(`unknown terrain action: ${action}`);
 }
 
@@ -46,9 +48,8 @@ parentPort.on("message",async message=>{
   const {id,action,args}=message;
   try{
     const result=await execute(action,args||{});
-    parentPort.postMessage({id,ok:true,result});
+    parentPort.postMessage({id,ok:true,result},result instanceof ArrayBuffer?[result]:[]);
   }catch(error){
     parentPort.postMessage({id,ok:false,error:String(error&&error.message||error)});
   }
 });
-

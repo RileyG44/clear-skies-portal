@@ -53,12 +53,13 @@ class TerrainPool {
     if(slot.job) this._retire(slot,new TerrainPoolError(String(error&&error.message||error),"WORKER_ERROR"),"failed");
   }
 
-  run(action,args,{priority=0,timeoutMs=30000,signal}={}){
+  run(action,args,{priority=0,timeoutMs=30000,signal,finishOnAbort=false,transferList=[]}={}){
     if(this.closed) return Promise.reject(new TerrainPoolError("terrain pool is closed","CLOSED"));
     if(signal&&signal.aborted) return Promise.reject(abortError());
     if(this.queue.length>=this.maxQueue) return Promise.reject(new TerrainPoolError("terrain queue is full","QUEUE_FULL"));
     return new Promise((resolve,reject)=>{
-      const job={id:this.nextId++,sequence:this.sequence++,action,args,priority,timeoutMs,
+      if(!Array.isArray(transferList)) return reject(new TypeError("transferList must be an array"));
+      const job={id:this.nextId++,sequence:this.sequence++,action,args,priority,timeoutMs,finishOnAbort,transferList,
         signal,resolve,reject,started:0,timer:null,onAbort:null,settled:false};
       job.onAbort=()=>this._cancel(job);
       if(signal) signal.addEventListener("abort",job.onAbort,{once:true});
@@ -81,7 +82,16 @@ class TerrainPool {
       if(!job) continue;
       slot.job=job; job.started=Date.now();
       job.timer=setTimeout(()=>this._retire(slot,new TerrainPoolError("terrain render timed out","TIMEOUT"),"timedOut"),job.timeoutMs);
-      slot.worker.postMessage({id:job.id,action:job.action,args:job.args});
+      try{
+        if(job.transferList.some(value=>value instanceof ArrayBuffer&&value.byteLength===0))
+          throw new TypeError("transferList contains a detached ArrayBuffer");
+        slot.worker.postMessage({id:job.id,action:job.action,args:job.args},job.transferList);
+      }
+      catch(error){
+        slot.job=null;clearTimeout(job.timer);
+        this._rejectJob(job,new TerrainPoolError(String(error&&error.message||error),"TRANSFER_ERROR"),"failed");
+        this._drain();
+      }
     }
   }
 
@@ -109,6 +119,11 @@ class TerrainPool {
     if(queued>=0){ this.queue.splice(queued,1); this._rejectJob(job,abortError(),"cancelled"); return }
     const slot=this.slots.find(value=>value.job===job);
     if(slot){
+      /* Visible terrain routes opt into finishing an already-started render.
+         The HTTP viewer may have zoomed away, but completing preserves the
+         worker's decoded COG state and lets the route commit the result to the
+         shared disk cache. Queued work still cancels immediately above. */
+      if(job.finishOnAbort){ this.metrics.cancelled++;this._detach(job);return }
       /* Most COG jobs are already holding useful decoded blocks or range reads
          when a pan unloads their browser tile. Give them a short grace period
          to finish and keep the warm worker state. Only a genuinely stale job
