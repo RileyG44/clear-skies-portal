@@ -1,9 +1,9 @@
 # Clear Skies Portal — implementation handoff for GPT-5.6 Sol (high)
 
-Date: 2026-08-22  
+Date: 2026-08-23
 Target repository: `RileyG44/clear-skies-portal`  
 Target branch: `main`  
-Starting release: build `2026-08-22e` (the commit containing this document)
+Starting release: build `2026-08-23f` (the terrain correctness and reliability checkpoint)
 
 ## Operating instruction
 
@@ -26,6 +26,43 @@ Do not reimplement these items:
 - `test-mosaic.js` covers polygon-vs-bbox behavior, holes, disjoint MGRS patches, cross-provider product identity, dateline containment/coverage, bbox splitting, and LOD math. `scripts/check-static.js` executes a normal STAC feature through `norm()` to catch runtime scope mistakes.
 
 Known boundary: a true same-collection multiresolution overview service does not yet exist. MODIS fills coarse/gap context only and must always be labeled as such. The long-term same-dataset strategy is specified below.
+
+## What release 2026-08-23f adds
+
+Treat these as tested foundations; extend them rather than reintroducing older rendering paths.
+
+- `terrain-core.js` is now the shared, Node-testable terrain math module. It implements Horn gradients, slope in degrees/percent, true compass downslope aspect (north 0°, east 90°), flat masking, single-direction hillshade, and the Mark/GDAL four-direction multidirectional method. `usgs.js` uses it.
+- `elevation-tile-core.js` decodes packed Terrarium RGB into Float32 elevation before crop/resampling. This is mandatory: interpolating packed bytes produced false roughly 128 m steps at byte carries. Masked bilinear interpolation renormalizes valid neighbors rather than choosing an arbitrary corner.
+- `elevation-bands.js` supplies canonical-metre, testable below/above/between band logic with independent colors, opacity, feather, and outline. The current UI exposes simultaneous above and below bands in feet by default and persists them in `clearskies.terrain.v2`.
+- Elevation spectrum and bands share one elevation tile layer and one WebGL2 shader, with a tested CPU fallback. Threshold/color/opacity changes repaint cached Float32 tiles without refetching. At zooms below 13, browser-direct Terrarium data produces the complete first frame and deliberately avoids duplicate Mac decoding. At zoom 13 and closer, national 3DEP and raw 1 m data progressively refine that same tile canvas.
+- National terrain is always present as a baseline; WA DNR or raw USGS data refines valid pixels in the same `CompositeTerrainLayer` canvas. Do not stack two translucent full terrain layers. Analytical terrain is z-index 440 and elevation shading 450, above primary imagery 400.
+- Terrain replacement is viewport-atomic: the old layer remains visible while the new layer preloads, then swaps after completion or at least 90% current-tile readiness. Deep zoom stretches the last native tile instead of requesting nonexistent detail or showing black.
+- WA DNR is used only for its published DTM hillshade (`hs`). Slope, aspect, tint, multidirectional shade, and contours require actual elevation. DSM is never substituted for bare-earth DTM.
+- Raw COG candidates are opened and sorted by measured native resolution first, with acquisition recency as a tie-breaker. Server cache keys use `terrain-v2`, so corrected renders cannot collide with legacy cached pixels.
+- The terrain worker pool retains warm M2 workers when an aborted job exits within a two-second grace period. The dedicated service runs six workers. Rapid pan/zoom/style changes now remove abandoned upstream requests from the four-request remote-service semaphore immediately; the regression test dropped a 47-request stale queue to zero.
+- Transient proxy tile failures return a quiet 204 plus `X-CSP-Error: upstream`; browser clients still retry with bounded exponential backoff. Optional WA coverage timeouts degrade to national terrain rather than a visible 500.
+- Automated coverage now includes synthetic plane cardinal-aspect tests, flat/no-data behavior, multidirectional lighting, terrain renderer pixels, elevation-band boundaries, packed-elevation resampling, worker cancellation/timeout/queue pressure, static integration assertions, and server integration.
+
+Verified release acceptance evidence:
+
+- Moses Lake search returned 237 current scenes and opened a complete Landsat natural-color view; both Fill Surroundings entry points completed and continuous fill recomputed after pan.
+- At zoom 17, imagery and multidirectional terrain both completed every requested visible tile; the replacement was no longer pending and the layer order was imagery 400, terrain 440.
+- Overview elevation shading produced 30 stored tiles in about 2.5 seconds with zero server elevation requests. Changing its color produced zero additional tile requests.
+- Terrain rendered at zoom 2 and stretched at zoom 24 with a complete image and no black terminal state.
+- A 390×844 mobile viewport used the full height for both map and sidebar with zero document overflow.
+- Clean-browser console checks were error-free; the six-worker health check ended with zero queued work and zero worker restarts in the fresh run.
+
+### Highest-priority work after this checkpoint
+
+1. Replace raster contour presets with real Float32-derived, edge-stitched contour geometry (marching squares with one-tile halos, stable labels, and export). Preserve the current presets as a temporary compatibility option until parity is proven.
+2. Make raw-USGS sampling deterministic across UTM zone/project boundaries. Split requests by zone, sample every intersecting source in a measured-resolution order, and test seams/nodata with synthetic fixtures.
+3. Add bounded cache maintenance. The current disk cache has a minimum-free-space write guard but no age/size LRU. Implement an indexed manifest, atomic eviction, pinned downloaded areas, user-visible usage, and a safe repair command.
+4. Continue Phase 2.1 below toward one shared decoded DEM store/worker. Do not replace the fast overview path until a measured browser-direct LERC implementation is faster and equally reliable.
+5. Implement the raw EPT 3D lidar workspace and measurement suite in Phase 2.4. This is the major missing capability between the current excellent 2D derived raster viewer and the requested full lidar research workstation.
+6. Complete centralized durable state and the remaining scene-group reordering work. Existing terrain, pane, overlay, map-theme, tool-dock, and server preferences already persist in separate versioned keys; migration must preserve all of them.
+7. Run a longer mixed-layer soak (at least 30 minutes on the M2 service and Safari/iOS) with automated pan/zoom/style churn, heap snapshots, server queue/worker telemetry, WebGL context-loss injection, offline transitions, and recovery assertions.
+
+Performance boundary: the Mac server is optimized for parallel CPU COG decode/render and persistent disk caching. Browser elevation recoloring uses WebGL2. There is no honest general-purpose Node GPU path in this release; do not claim GPU acceleration for COG fetching, PNG encoding, or server-side derivatives without a measured Metal/WebGPU implementation and CPU fallback.
 
 ## Current architecture and important anchors
 

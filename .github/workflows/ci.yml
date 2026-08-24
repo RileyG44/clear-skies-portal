@@ -57,7 +57,7 @@ jobs:
       - name: Assemble the static site
         run: |
           mkdir _site
-          cp index.html mosaic-core.js version.js sw.js manifest.json icon-180.png icon-192.png icon-512.png .nojekyll _site/
+          cp index.html mosaic-core.js terrain-core.js elevation-bands.js elevation-tile-core.js version.js sw.js manifest.json icon-180.png icon-192.png icon-512.png .nojekyll _site/
 
       - uses: actions/upload-pages-artifact@v5
         with:

@@ -24,7 +24,8 @@ fs.mkdirSync(AREAS, {recursive:true});
 const MIME = {".html":"text/html; charset=utf-8",".js":"text/javascript",".css":"text/css",
   ".json":"application/json",".png":"image/png",".jpg":"image/jpeg",".jpeg":"image/jpeg",
   ".svg":"image/svg+xml",".md":"text/markdown; charset=utf-8",".txt":"text/plain; charset=utf-8"};
-const PUBLIC_FILES = new Set(["index.html","version.js","mosaic-core.js","sw.js","manifest.json",
+const PUBLIC_FILES = new Set(["index.html","version.js","mosaic-core.js","terrain-core.js",
+  "elevation-bands.js","elevation-tile-core.js","sw.js","manifest.json",
   "icon-180.png","icon-192.png","icon-512.png"]);
 
 const WADNR_HOST = "lidarportal.dnr.wa.gov";
@@ -39,6 +40,7 @@ const MAX_BODY   = 256*1024;
 const MAX_UPSTREAM_BODY = 32*1024*1024;
 const MAX_WARM_TILES = 40000;
 const MAX_RENDER_QUEUE = 40;
+const TERRAIN_RENDER_VERSION = "terrain-v2";
 const CACHE_MIN_FREE_GIB=Math.max(0,Number(process.env.CSP_CACHE_MIN_FREE_GB)||8);
 const CACHE_MIN_FREE_BYTES=CACHE_MIN_FREE_GIB*1024*1024*1024;
 const TERRAIN_STYLES = new Set(["hs","hsmulti","tint","slope","aspect","c2","c5","c10","c25"]);
@@ -210,11 +212,28 @@ function upstream(opts, postBody){
 const MAX_INFLIGHT = 4;
 let inflight = 0; const queue = [];
 const pending = new Map();
-function slot(){
-  if(inflight < MAX_INFLIGHT){ inflight++; return Promise.resolve() }
-  return new Promise(r=>queue.push(r)).then(()=>{ inflight++ });
+function slot(signal){
+  if(signal&&signal.aborted)
+    return Promise.reject(new TerrainPoolError("upstream request cancelled","ABORT_ERR"));
+  return new Promise((resolve,reject)=>{
+    let settled=false;
+    const waiter={grant:null};
+    const cleanup=()=>{ if(signal) signal.removeEventListener("abort",onAbort) };
+    const onAbort=()=>{
+      if(settled) return;
+      settled=true; cleanup();
+      const index=queue.indexOf(waiter); if(index>=0) queue.splice(index,1);
+      reject(new TerrainPoolError("upstream request cancelled","ABORT_ERR"));
+    };
+    waiter.grant=()=>{
+      if(settled) return;
+      settled=true; cleanup(); inflight++; resolve();
+    };
+    if(signal) signal.addEventListener("abort",onAbort,{once:true});
+    if(inflight < MAX_INFLIGHT) waiter.grant(); else queue.push(waiter);
+  });
 }
-function release(){ inflight--; const n=queue.shift(); if(n) n() }
+function release(){ inflight=Math.max(0,inflight-1); const n=queue.shift(); if(n) n.grant() }
 
 function coalesce(id,fn){
   if(pending.has(id)) return pending.get(id);
@@ -279,10 +298,41 @@ async function cached(k, ttl, fn){
   });
 }
 
-function limitedUpstream(id,opts,body){
-  return coalesce("upstream:"+id,async()=>{
-    await slot();
-    try{ return await upstream(opts,body) }finally{ release() }
+/* A rapid pan, zoom, or style change can abandon dozens of remote image
+   requests. Keep identical requests shared, but remove cancelled waiters from
+   the concurrency queue and abort the upstream as soon as the last viewer has
+   left. Otherwise obsolete tiles sit ahead of the current viewport for up to
+   TILE_MS each and make a healthy server look frozen. */
+const limitedPending=new Map();
+function limitedUpstream(id,opts,body,signal){
+  if(signal&&signal.aborted)
+    return Promise.reject(new TerrainPoolError("upstream request cancelled","ABORT_ERR"));
+  const taskKey="upstream:"+id;
+  let entry=limitedPending.get(taskKey);
+  if(entry&&entry.controller.signal.aborted){ limitedPending.delete(taskKey); entry=null }
+  if(!entry){
+    entry={controller:new AbortController(),waiters:new Set(),promise:null};
+    limitedPending.set(taskKey,entry);
+    entry.promise=(async()=>{
+      await slot(entry.controller.signal);
+      try{ return await upstream({...opts,signal:entry.controller.signal},body) }
+      finally{ release() }
+    })().finally(()=>limitedPending.delete(taskKey));
+  }
+  const waiter={}; entry.waiters.add(waiter);
+  return new Promise((resolve,reject)=>{
+    let settled=false;
+    const cleanup=()=>{
+      if(settled) return; settled=true; entry.waiters.delete(waiter);
+      if(signal) signal.removeEventListener("abort",onAbort);
+    };
+    const onAbort=()=>{
+      cleanup();
+      if(!entry.waiters.size) entry.controller.abort();
+      reject(new TerrainPoolError("upstream request cancelled","ABORT_ERR"));
+    };
+    if(signal) signal.addEventListener("abort",onAbort,{once:true});
+    entry.promise.then(value=>{ cleanup(); resolve(value) },error=>{ cleanup(); reject(error) });
   });
 }
 
@@ -389,7 +439,7 @@ async function nationalElevationTiff(z,x,y,size,signal){
   const bbox=mercBbox(z,x,y);
   const requestPath=`/arcgis/rest/services/3DEPElevation/ImageServer/exportImage`
     + `?bbox=${bbox}&bboxSR=3857&imageSR=3857&size=${size},${size}&format=tiff&f=image`;
-  await slot();
+  await slot(signal);
   try{
     const r=await upstream({host:DEP_HOST,path:requestPath,method:"GET",signal,
       headers:{"User-Agent":"clear-skies-portal"},__timeout:18000});
@@ -504,7 +554,7 @@ async function startUsgsWarm(job){
   const lane=async()=>{
     while(tiles.length&&!usgsWarm.stop){
       const t=tiles.pop(); if(!t) break;
-      const ck=key(`usgs:${job.style}:${t.z}/${t.x}/${t.y}`);
+      const ck=key(`${TERRAIN_RENDER_VERSION}:${job.style}:${t.z}/${t.x}/${t.y}`);
       try{
         const hit=cacheGet(ck,TTL_TILE);
         if(hit&&hit.status===200&&hit.body.length){ usgsWarm.skipped++; usgsWarm.bytes+=hit.body.length }
@@ -569,20 +619,41 @@ const server = http.createServer(async (req,res)=>{
         throw new HttpError(400,"GeoJSON Polygon required");
       const form = "geojson=" + encodeURIComponent(geojson);
       const k = key("wadnr:query:"+geojson);
-      const r = await cached(k, TTL_META, ()=>upstream({
-        host:WADNR_HOST, path:"/query", method:"POST",
-        headers:{"Content-Type":"application/x-www-form-urlencoded",
-                 "Content-Length":Buffer.byteLength(form),
-                 "User-Agent":"clear-skies-portal"}}, form));
-      return send(res, r.status, r.type, r.body, {"X-Cache": r.hit?"HIT":"MISS"});
+      const hit=cacheGet(k,TTL_META);
+      if(hit) return send(res,200,hit.type,hit.body,{"X-Cache":"HIT"});
+      let r=null;
+      try{
+        r=await limitedUpstream(k,{host:WADNR_HOST,path:"/query",method:"POST",__timeout:10000,
+          headers:{"Content-Type":"application/x-www-form-urlencoded",
+                   "Content-Length":Buffer.byteLength(form),
+                   "User-Agent":"clear-skies-portal"}},form,client.signal);
+      }catch(error){ if(terrainAborted(error)) return }
+      if(r&&r.status===200&&r.body.length){
+        cachePut(k,200,r.type,r.body);
+        return send(res,200,r.type,r.body,{"X-Cache":"MISS"});
+      }
+      /* WA coverage discovery is an optional refinement. A portal timeout is
+         equivalent to "no WA source right now" and must leave the national
+         terrain path usable rather than surfacing a noisy 500 in the map. */
+      return send(res,200,"application/json",Buffer.from("[]"),
+                  {"X-Cache":"ERROR","Cache-Control":"no-store"});
     }
 
     /* ---- WA DNR: layer tree (project name -> raster layer ids) ---- */
     if(p === "/api/wadnr/layers"){
-      const r = await cached(key("wadnr:layers"), TTL_META, ()=>upstream({
-        host:WADNR_HOST, path:WADNR_MAP+"/layers?f=json", method:"GET",
-        headers:{"User-Agent":"clear-skies-portal","Accept-Encoding":"gzip"}}));
-      return send(res, r.status, r.type, r.body, {"X-Cache": r.hit?"HIT":"MISS"});
+      const k=key("wadnr:layers"),hit=cacheGet(k,TTL_META);
+      if(hit) return send(res,200,hit.type,hit.body,{"X-Cache":"HIT"});
+      let r=null;
+      try{
+        r=await limitedUpstream(k,{host:WADNR_HOST,path:WADNR_MAP+"/layers?f=json",method:"GET",__timeout:10000,
+          headers:{"User-Agent":"clear-skies-portal","Accept-Encoding":"gzip"}},null,client.signal);
+      }catch(error){ if(terrainAborted(error)) return }
+      if(r&&r.status===200&&r.body.length){
+        cachePut(k,200,r.type,r.body);
+        return send(res,200,r.type,r.body,{"X-Cache":"MISS"});
+      }
+      return send(res,200,"application/json",Buffer.from('{"layers":[]}'),
+                  {"X-Cache":"ERROR","Cache-Control":"no-store"});
     }
 
     /* ---- WA DNR: hillshade image for a bbox, restricted to given layers ---- */
@@ -604,8 +675,8 @@ const server = http.createServer(async (req,res)=>{
       let r=null;
       try{
         r = await limitedUpstream(k,{host:WADNR_HOST, path:WADNR_MAP+"/export"+qp, method:"GET",
-                                    headers:{"User-Agent":"clear-skies-portal"}, __timeout:TILE_MS});
-      }catch(e){ r=null }
+                                    headers:{"User-Agent":"clear-skies-portal"}, __timeout:TILE_MS},null,client.signal);
+      }catch(e){ if(terrainAborted(e)) return; r=null }
       if(r && r.status===200 && isPng(r.body)){
         cachePut(k, 200, "image/png", r.body);
         return send(res,200,"image/png",r.body,{"X-Cache":"MISS","Cache-Control":"public, max-age=604800"});
@@ -614,8 +685,8 @@ const server = http.createServer(async (req,res)=>{
          a successful transparent image made the browser stop retrying and the
          map appeared to give up. Preserve the error so the resilient tile
          client can back off and retry it. */
-      return send(res,502,"image/png",TRANSPARENT,
-                  {"X-Cache":"ERROR","Cache-Control":"no-store","Retry-After":"2"});
+      return send(res,204,"image/png",Buffer.alloc(0),
+                  {"X-Cache":"ERROR","X-CSP-Error":"upstream","Cache-Control":"no-store","Retry-After":"2"});
     }
 
     /* ---- 3DEP terrain tiles (cached, so warmed areas work offline) ---- */
@@ -632,8 +703,8 @@ const server = http.createServer(async (req,res)=>{
       if(hit) return send(res,200,hit.type,hit.body,{"X-Cache":"HIT","Cache-Control":"public, max-age=604800"});
       let r=null;
       try{ r=await limitedUpstream(k,{host:"elevation.nationalmap.gov", path:dp, method:"GET",
-                                     headers:{"User-Agent":"clear-skies-portal"}, __timeout:TILE_MS}) }
-      catch(e){ r=null }
+                                     headers:{"User-Agent":"clear-skies-portal"}, __timeout:TILE_MS},null,client.signal) }
+      catch(e){ if(terrainAborted(e)) return; r=null }
       /* ArcGIS answers 200 with a JSON error body when a request upsets it, and
          this used to cache anything over 100 bytes without looking at what it
          was. A bad answer then stuck around for TTL_TILE — 90 days — which is
@@ -642,8 +713,8 @@ const server = http.createServer(async (req,res)=>{
         cachePut(k,200,r.type,r.body);
         return send(res,200,r.type,r.body,{"X-Cache":"MISS","Cache-Control":"public, max-age=604800"});
       }
-      return send(res,502,"image/png",TRANSPARENT,
-                  {"X-Cache":"ERROR","Cache-Control":"no-store","Retry-After":"2"});
+      return send(res,204,"image/png",Buffer.alloc(0),
+                  {"X-Cache":"ERROR","X-CSP-Error":"upstream","Cache-Control":"no-store","Retry-After":"2"});
     }
 
     /* ---- NASA FIRMS: 24 h active-fire hotspots (no CORS upstream) ---- */
@@ -731,7 +802,7 @@ const server = http.createServer(async (req,res)=>{
       const limit=Math.pow(2,z);
       if(z<0||z>22||x<0||y<0||x>=limit||y>=limit||!TERRAIN_STYLES.has(style))
         return send(res,400,"text/plain",Buffer.from("bad tile coordinates or style"));
-      const ck=key(`usgs:${style}:${z}/${x}/${y}`);
+      const ck=key(`${TERRAIN_RENDER_VERSION}:${style}:${z}/${x}/${y}`);
       const hit=cacheGet(ck, TTL_TILE);
       if(hit) return hit.status===204
         ? send(res,200,"image/png",TRANSPARENT,{"X-Cache":"hit","X-Coverage":"none","Cache-Control":"public, max-age=604800, immutable"})
@@ -931,15 +1002,15 @@ const server = http.createServer(async (req,res)=>{
                           {"X-Cache":"HIT","Cache-Control":"public, max-age=2592000"});
       let r=null;
       try{ r=await limitedUpstream(k,{host, path:pth, method:"GET",
-                                     headers:{"User-Agent":"clear-skies-portal"}, __timeout:TILE_MS}) }
-      catch(e){ r=null }
+                                     headers:{"User-Agent":"clear-skies-portal"}, __timeout:TILE_MS},null,client.signal) }
+      catch(e){ if(terrainAborted(e)) return; r=null }
       if(r && r.status===200 && isPng(r.body)){
         cachePut(k,200,"image/png",r.body);
         return send(res,200,"image/png",r.body,
                     {"X-Cache":"MISS","Cache-Control":"public, max-age=2592000"});
       }
-      return send(res,502,"image/png",TRANSPARENT,
-                  {"X-Cache":"ERROR","Cache-Control":"no-store","Retry-After":"2"});
+      return send(res,204,"image/png",Buffer.alloc(0),
+                  {"X-Cache":"ERROR","X-CSP-Error":"upstream","Cache-Control":"no-store","Retry-After":"2"});
     }
 
     /* ---- current snow analysis (NOHRSC sends no CORS, so it is proxied) ----
@@ -959,20 +1030,20 @@ const server = http.createServer(async (req,res)=>{
       if(hit) return send(res,200,hit.type,hit.body,{"X-Cache":"HIT","Cache-Control":"public, max-age=21600"});
       let r=null;
       try{ r=await limitedUpstream(k,{host:"mapservices.weather.noaa.gov", path:pth, method:"GET",
-                                     headers:{"User-Agent":"clear-skies-portal"}, __timeout:TILE_MS}) }
-      catch(e){ r=null }
+                                     headers:{"User-Agent":"clear-skies-portal"}, __timeout:TILE_MS},null,client.signal) }
+      catch(e){ if(terrainAborted(e)) return; r=null }
       if(r && r.status===200 && isPng(r.body)){
         cachePut(k,200,"image/png",r.body);
         return send(res,200,"image/png",r.body,{"X-Cache":"MISS","Cache-Control":"public, max-age=21600"});
       }
-      return send(res,502,"image/png",TRANSPARENT,
-                  {"X-Cache":"ERROR","Cache-Control":"no-store","Retry-After":"2"});
+      return send(res,204,"image/png",Buffer.alloc(0),
+                  {"X-Cache":"ERROR","X-CSP-Error":"upstream","Cache-Control":"no-store","Retry-After":"2"});
     }
 
     if(p === "/api/health"){
       const terrain=terrainPool.stats();
       return send(res,200,"application/json",Buffer.from(JSON.stringify({
-        ok:true, cached:cacheCount, inflight, queued:queue.length,
+        ok:true, cached:cacheCount, inflight, queued:queue.length, terrainRenderVersion:TERRAIN_RENDER_VERSION,
         rendering:terrain.active, renderQueued:terrain.queued, terrain,
         cacheDisk:cacheDiskStats(),
         nationalCircuit:{failures:depCircuit.failures,coolingDown:Date.now()<depCircuit.openUntil,

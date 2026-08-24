@@ -15,6 +15,7 @@ const fs    = require("fs");
 const path  = require("path");
 const zlib  = require("zlib");
 const cog   = require("./cog.js");
+const terrain = require("./terrain-core.js");
 
 const S3_HOST = "prd-tnm.s3.amazonaws.com";
 const S3_BASE = "StagedProducts/Elevation/1m/Projects/";
@@ -460,23 +461,26 @@ async function sampleGrid(z,x,y,size,options={}){
   const opened=[];
   const PER_CELL = Math.max(1,Math.min(3,Number(options.maxSources)||3));
   for(const group of srcs){
-    /* Newest first, but the winner may be in the wrong projection, not be a
-       tiled COG at all, or simply be nodata here — a 10 km cell is a bounding
-       box, not a promise of data. Keep a couple of fallbacks so the sampler
-       below can fall through to them. */
-    let got=0;
-    for(const s of group){
+    /* Quality first: a newer 2 m/5 m DEM must not silently replace an older
+       0.5 m/1 m lidar surface. Open only small headers, reject incompatible
+       projections, then rank by true native pixel size with recency as the
+       tie-breaker. The header cache makes this free after first discovery. */
+    const available=[];
+    for(const s of group.slice(0,8)){
       const key=tileKey(s);
       let t; try{ t=await openCog(key, s.size) }catch(e){ continue }
       if(t.geo.epsg && t.geo.epsg!==26900+zone && t.geo.epsg!==32600+zone) continue;
       const base=t.geo.scale[0]||1;
+      available.push({s,key,t,base});
+    }
+    available.sort((a,b)=>a.base-b.base || b.s.year-a.s.year || b.s.size-a.s.size);
+    for(const {s,key,t,base} of available.slice(0,PER_CELL)){
       let lvl=0;
       for(let i=0;i<t.levels.length;i++){
         if(base*Math.pow(2,i) <= groundRes) lvl=i; else break;
       }
       opened.push({s,key,t,lvl,res:base*Math.pow(2,lvl),
                    ox:t.geo.tie[3], oy:t.geo.tie[4], nodata:t.geo.nodata, tiles:new Map()});
-      if(++got>=PER_CELL) break;
     }
   }
   if(!opened.length) return null;
@@ -511,11 +515,10 @@ async function sampleGrid(z,x,y,size,options={}){
     const x0=Math.floor(fx), y0=Math.floor(fy);
     const dx=fx-x0, dy=fy-y0;
     const v00=at(o,x0,y0), v10=at(o,x0+1,y0), v01=at(o,x0,y0+1), v11=at(o,x0+1,y0+1);
-    if(Number.isNaN(v00)||Number.isNaN(v10)||Number.isNaN(v01)||Number.isNaN(v11)){
-      const f=[v00,v10,v01,v11].find(v=>!Number.isNaN(v));   // edge of coverage
-      return f===undefined ? NaN : f;
-    }
-    return v00*(1-dx)*(1-dy) + v10*dx*(1-dy) + v01*(1-dx)*dy + v11*dx*dy;
+    const samples=[[v00,(1-dx)*(1-dy)],[v10,dx*(1-dy)],[v01,(1-dx)*dy],[v11,dx*dy]];
+    let sum=0,weight=0;
+    for(const [value,w] of samples) if(w>0&&!Number.isNaN(value)){ sum+=value*w;weight+=w }
+    return weight>0 ? sum/weight : NaN;
   };
 
   let filled=0;
@@ -555,36 +558,31 @@ function gradient(g,n,i,j,res){
 }
 
 const D2R=Math.PI/180;
-function shade(dzdx,dzdy,azDeg,altDeg,zf){
-  const slope=Math.atan(zf*Math.hypot(dzdx,dzdy));
-  const aspect=Math.atan2(dzdy,-dzdx);
-  const az=(90-azDeg)*D2R, alt=altDeg*D2R;
-  const v=Math.sin(alt)*Math.cos(slope) + Math.cos(alt)*Math.sin(slope)*Math.cos(az-aspect);
-  return Math.max(0,Math.min(1,v));
-}
-
-const TINT=[[0,[ 60,102, 70]],[300,[ 96,132, 78]],[800,[150,158, 96]],
-            [1400,[186,158,110]],[2000,[176,140,120]],[2600,[200,200,204]],
-            [3400,[238,242,248]],[4500,[255,255,255]]];
-function tintOf(v){
-  if(v<=TINT[0][0]) return TINT[0][1];
-  for(let i=1;i<TINT.length;i++){
-    if(v<=TINT[i][0]){
-      const [v0,c0]=TINT[i-1], [v1,c1]=TINT[i];
-      const f=(v-v0)/(v1-v0);
-      return [0,1,2].map(k=>Math.round(c0[k]+(c1[k]-c0[k])*f));
-    }
-  }
-  return TINT[TINT.length-1][1];
-}
+/* Lighting objects are compiled once, outside the 65,536-pixel tile loop.
+   A small ambient term keeps legitimate back-slopes readable rather than
+   turning them into apparent black/no-data holes. */
+const SHADE_315=terrain.createHillshade({azimuth:315,altitude:45,ambient:0.12});
+const SHADE_MULTI=terrain.createMultidirectionalHillshade({altitude:45,ambient:0.12});
+const TINT_OF=terrain.createElevationColorizer("topographic",{space:"linear-rgb"});
+const SLOPE_OF=terrain.createElevationColorizer([
+  [0,"#f2f4ee"],[5,"#b1d28b"],[15,"#f6da6f"],[30,"#f09649"],
+  [45,"#d54650"],[60,"#762c69"],[90,"#321948"]
+]);
+/* A cyclic, cardinally meaningful aspect palette: cool north, green east,
+   warm south, violet west.  Values below half a degree are displayed as
+   undefined rather than amplifying sub-accuracy DEM noise into colored speckle. */
+const ASPECT_OF=terrain.createElevationColorizer([
+  [0,"#4d78c8"],[45,"#3ba5b0"],[90,"#57a765"],[135,"#c9ad4f"],
+  [180,"#d96b52"],[225,"#c45b82"],[270,"#8d65bb"],[315,"#5e77c5"],[360,"#4d78c8"]
+]);
+const ASPECT_FLAT_GRADE=Math.tan(0.5*D2R);
 
 const CONTOUR_FT = { c2:2, c5:5, c10:10, c25:25 };
 const MIN_CONTOUR_PX = 3;     // closer than this and adjacent lines merge
 
-function render(style, S){
+function renderRgba(style, S){
   const {grid,n,size,groundRes}=S;
   const out=Buffer.alloc(size*size*4);
-  const zf=1;
   for(let y=0;y<size;y++) for(let x=0;x<size;x++){
     const i=y+1, j=x+1;
     const v=grid[i*n+j];
@@ -623,31 +621,28 @@ function render(style, S){
     if(!gr){ out[o+3]=0; continue }
 
     if(style==="slope"){
-      const deg=Math.atan(Math.hypot(gr.dzdx,gr.dzdy))/D2R;
-      const t=Math.max(0,Math.min(1,deg/60));
-      r=Math.round(40+215*t); g=Math.round(180-150*t); b=Math.round(90-60*t);
+      const c=SLOPE_OF(Math.atan(Math.hypot(gr.dzdx,gr.dzdy))/D2R);
+      [r,g,b]=c;
     }else if(style==="aspect"){
-      let asp=Math.atan2(gr.dzdy,-gr.dzdx)/D2R; if(asp<0) asp+=360;
-      const h=asp/360, s=0.55, l=0.55;
-      const q=l<0.5?l*(1+s):l+s-l*s, p=2*l-q;
-      const hk=[h+1/3,h,h-1/3].map(t=>{ t=(t+1)%1;
-        return t<1/6?p+(q-p)*6*t : t<0.5?q : t<2/3?p+(q-p)*(2/3-t)*6 : p; });
-      [r,g,b]=hk.map(c=>Math.round(c*255));
+      const asp=terrain.aspectDegrees(gr,{flatThreshold:ASPECT_FLAT_GRADE});
+      if(asp===null){ out[o+3]=0; continue }
+      const c=ASPECT_OF(asp); [r,g,b]=c;
     }else if(style==="hsmulti"){
-      // four luminaires, weighted as in the standard multi-directional recipe
-      const w=[0.25,0.25,0.25,0.25], az=[315,45,135,225];
-      let s=0; for(let q=0;q<4;q++) s+=w[q]*shade(gr.dzdx,gr.dzdy,az[q],45,zf);
-      const g8=Math.round(Math.max(0,Math.min(1,s*1.15))*255); r=g=b=g8;
+      const g8=Math.round(SHADE_MULTI(gr.dzdx,gr.dzdy)*255); r=g=b=g8;
     }else if(style==="tint"){
-      const s=shade(gr.dzdx,gr.dzdy,315,45,zf);
-      const c=tintOf(v); const m=0.45+0.55*s;
+      const s=SHADE_315(gr.dzdx,gr.dzdy);
+      const c=TINT_OF(v); const m=0.42+0.58*s;
       r=Math.round(c[0]*m); g=Math.round(c[1]*m); b=Math.round(c[2]*m);
     }else{                                            // hs
-      const g8=Math.round(shade(gr.dzdx,gr.dzdy,315,45,zf)*255); r=g=b=g8;
+      const g8=Math.round(SHADE_315(gr.dzdx,gr.dzdy)*255); r=g=b=g8;
     }
     out[o]=r; out[o+1]=g; out[o+2]=b; out[o+3]=a;
   }
-  return encodePNG(out,size,size);
+  return out;
+}
+
+function render(style,S){
+  return encodePNG(renderRgba(style,S),S.size,S.size);
 }
 
 /* Elevation as a picture, so the browser can threshold it without asking again.
@@ -987,5 +982,5 @@ async function fabric(bbox, opt){
 }
 
 module.exports = Object.assign(module.exports, { init, buildIndex, getIndex, findCells, cellOf, cellBounds, projectYear, scopeList, fabric, elevTile,
-                   openCog, cogTile, fetchRange, renderTile, sampleGrid, encodePNG,
+                   openCog, cogTile, fetchRange, renderTile, sampleGrid, encodePNG, renderRgba,
                    checkFresh, tileKey, tileUrl, s3head, S3_BASE });

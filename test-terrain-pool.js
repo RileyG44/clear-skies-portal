@@ -18,6 +18,16 @@ async function main(){
     assert.deepEqual(await high,{value:"high"});
     assert.deepEqual(await low,{value:"low"});
 
+    pool.maxQueue=2;
+    const pressure=pool.run("delay",{ms:80,value:"pressure"});
+    const queuedOne=pool.run("echo",{queued:1});
+    const queuedTwo=pool.run("echo",{queued:2});
+    await rejectsCode(pool.run("echo",{overflow:true}),"QUEUE_FULL");
+    assert.equal(await pressure,"pressure");
+    assert.deepEqual(await queuedOne,{queued:1});
+    assert.deepEqual(await queuedTwo,{queued:2});
+    pool.maxQueue=8;
+
     const controller=new AbortController();
     const running=pool.run("spin",{ms:250},{timeoutMs:1000,signal:controller.signal});
     setTimeout(()=>controller.abort(),20);
@@ -25,6 +35,7 @@ async function main(){
 
     await new Promise(resolve=>setTimeout(resolve,80));
     assert.deepEqual(await pool.run("echo",{recovered:true}),{recovered:true});
+    assert.equal(pool.stats().restarted,0,"a cancelled job that finishes during grace keeps its warm worker");
     await rejectsCode(pool.run("spin",{ms:250},{timeoutMs:20}),"TIMEOUT");
     await new Promise(resolve=>setTimeout(resolve,80));
     assert.deepEqual(await pool.run("echo",{afterTimeout:true}),{afterTimeout:true});
@@ -39,4 +50,3 @@ async function main(){
 }
 
 main().catch(error=>{ console.error(error); process.exitCode=1 });
-

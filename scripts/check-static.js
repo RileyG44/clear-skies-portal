@@ -49,12 +49,17 @@ assert.equal(normSandbox.normalized.nativeMax,null,"ordinary STAC scenes default
 
 new vm.Script(read("sw.js"),{filename:"sw.js"});
 new vm.Script(read("mosaic-core.js"),{filename:"mosaic-core.js"});
+new vm.Script(read("terrain-core.js"),{filename:"terrain-core.js"});
+new vm.Script(read("elevation-bands.js"),{filename:"elevation-bands.js"});
+new vm.Script(read("elevation-tile-core.js"),{filename:"elevation-tile-core.js"});
 const versionSandbox={};
 vm.runInNewContext(read("version.js"),versionSandbox,{filename:"version.js"});
 assert.match(versionSandbox.CSP_BUILD,/^\d{4}-\d{2}-\d{2}[a-z]$/,"build version must be date plus revision letter");
 assert(index.includes(`<script src="version.js?build=${versionSandbox.CSP_BUILD}"></script>`),
        "page must cache-bust and load the shared build version");
 assert(index.includes('<script src="mosaic-core.js"></script>'),"index must load the tested mosaic core");
+assert(index.includes('<script src="elevation-bands.js"></script>'),"index must load the tested elevation-band core");
+assert(index.includes('<script src="elevation-tile-core.js"></script>'),"index must decode packed elevation before resampling");
 assert(read("sw.js").includes(`const CSP_BUILD = "${versionSandbox.CSP_BUILD}";`),
        "service worker cache namespace must use the page build version");
 assert(index.includes('register("sw.js",{updateViaCache:"none"})'),
@@ -77,6 +82,18 @@ assert(index.includes('if(raw[i]===raw[i]) merged[i]=raw[i]'),
 assert(index.includes('fallbackNativeZoom:15'),"browser elevation fallback must stretch its last native tile");
 assert(index.includes('const VIEW_MAX=28'),"the map must support deep visual overzoom");
 assert(index.includes('maxZoom:VIEW_MAX,maxNativeZoom:19'),"lidar must stretch native detail instead of going black");
+assert(index.includes('const WADNR_OK = new Set(["hs"])'),
+       "WA DNR routing must not substitute plain hillshade for analytical terrain styles");
+assert(index.includes('const CompositeTerrainLayer = L.GridLayer.extend'),
+       "terrain refinement must composite into one tile instead of stacking darkening layers");
+assert(index.includes('const softError=response.headers.get("X-CSP-Error")'),
+       "soft upstream tile failures must retry without painting a permanent empty tile");
+assert(index.includes('zIndex:440')&&index.includes('zIndex:450'),
+       "analytical terrain and elevation shaders must render above primary imagery");
+assert(index.includes('ElevationTileCore.decodeTerrarium')&&index.includes('ElevationTileCore.resampleElevation'),
+       "packed Terrarium bytes must be decoded before floating-point resampling");
+assert(index.includes('const nationalPromise=coords.z>=13')&&index.includes('if(coords.z<13&&baseline)'),
+       "overview elevation must paint browser-direct data without duplicate server decoding");
 assert(index.includes('rawNative==null||rawNative==="" ? NaN : Number(rawNative)'),
        "missing imagery native zoom must derive from GSD instead of collapsing to z0");
 const imageryZoomSandbox={};
@@ -100,8 +117,17 @@ assert(elevSandbox.lower[0]>elevSandbox.lower[2],"lower elevations must trend re
 assert(elevSandbox.upper[2]>elevSandbox.upper[0],"higher elevations must trend blue");
 const server=read("server.js");
 assert(server.includes('if(z>=13) try{ raw=await terrainTask'),"raw lidar elevation must be reserved for useful close zooms");
-assert(read(".github/workflows/ci.yml").includes("index.html mosaic-core.js version.js"),
-       "Pages artifact must include mosaic-core.js beside index.html");
+assert(server.includes('const TERRAIN_RENDER_VERSION = "terrain-v2"'),
+       "corrected terrain renders must use a new server-cache namespace");
+assert(server.includes('function slot(signal)')&&server.includes('queue.splice(index,1)'),
+       "abandoned viewport requests must leave the upstream concurrency queue immediately");
+assert(server.includes('"X-CSP-Error":"upstream"'),
+       "transient tile failures must remain retryable without noisy broken-image responses");
+for(const asset of ["mosaic-core.js","terrain-core.js","elevation-bands.js","elevation-tile-core.js"])
+  assert(read(".github/workflows/ci.yml").includes(asset),`Pages artifact must include ${asset}`);
+const installer=read("scripts/install-mac-service.sh");
+for(const asset of ["terrain-core.js","elevation-bands.js","elevation-tile-core.js"])
+  assert(installer.includes(asset),`installed M2 runtime must include ${asset}`);
 for(const script of ["scripts/launch-terrain-engine.sh","scripts/install-mac-service.sh"]){
   const source=read(script);
   assert.match(source,/127\.0\.0\.1/,`${script} must keep the engine loopback-only`);

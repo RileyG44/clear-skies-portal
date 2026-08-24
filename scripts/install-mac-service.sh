@@ -31,7 +31,8 @@ if [[ -z "$NODE_BIN" ]]; then
 fi
 
 install -d -m 700 "$AGENT_DIR" "$DATA_DIR" "$RUNTIME_DIR" "$LOG_DIR" "$CACHE_DIR"
-for asset in server.js terrain-pool.js terrain-worker.js usgs.js cog.js mosaic-core.js index.html version.js sw.js manifest.json \
+for asset in server.js terrain-pool.js terrain-worker.js usgs.js cog.js mosaic-core.js terrain-core.js \
+             elevation-bands.js elevation-tile-core.js index.html version.js sw.js manifest.json \
              icon-180.png icon-192.png icon-512.png sources.json LICENSE; do
   install -m 644 "$REPO_ROOT/$asset" "$RUNTIME_DIR/$asset"
 done

@@ -26,6 +26,7 @@ class TerrainPool {
     this.sequence=1;
     this.closed=false;
     this.metrics={completed:0,failed:0,cancelled:0,timedOut:0,restarted:0,totalMs:0};
+    this.cancelGraceMs=2000;
     for(let i=0;i<this.size;i++) this._spawn({index:i,worker:null,job:null,replacing:false});
   }
 
@@ -90,6 +91,11 @@ class TerrainPool {
     slot.job=null;
     clearTimeout(job.timer);
     this._detach(job);
+    if(job.abandoned){
+      this.metrics.totalMs+=Date.now()-job.started;
+      this._drain();
+      return;
+    }
     job.settled=true;
     this.metrics.totalMs+=Date.now()-job.started;
     if(message.ok){ this.metrics.completed++; job.resolve(message.result) }
@@ -102,7 +108,22 @@ class TerrainPool {
     const queued=this.queue.indexOf(job);
     if(queued>=0){ this.queue.splice(queued,1); this._rejectJob(job,abortError(),"cancelled"); return }
     const slot=this.slots.find(value=>value.job===job);
-    if(slot) this._retire(slot,abortError(),"cancelled");
+    if(slot){
+      /* Most COG jobs are already holding useful decoded blocks or range reads
+         when a pan unloads their browser tile. Give them a short grace period
+         to finish and keep the warm worker state. Only a genuinely stale job
+         is terminated; rapid pan/zoom no longer recreates every worker. */
+      job.abandoned=true;
+      this._rejectJob(job,abortError(),"cancelled");
+      job.timer=setTimeout(()=>this._terminateAbandoned(slot,job),this.cancelGraceMs);
+    }
+  }
+
+  _terminateAbandoned(slot,job){
+    if(slot.job!==job||!job.abandoned) return;
+    slot.job=null; slot.replacing=true; clearTimeout(job.timer);
+    const worker=slot.worker; slot.worker=null;
+    if(worker) worker.terminate().finally(()=>{ if(!this.closed){ this.metrics.restarted++; this._spawn(slot); this._drain() } });
   }
 
   _retire(slot,error,metric){
