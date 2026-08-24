@@ -63,6 +63,7 @@ assert(index.includes('id="snapshot"'),"map snapshot control must be present");
 assert(index.includes('getDisplayMedia'),"map snapshot control must use browser surface capture");
 assert(index.includes('body.print-map'),"map snapshot control must have a print fallback");
 assert(index.includes('setView([47.1301,-119.2781], 9)'),"Moses Lake must remain the default terrain test view");
+assert(index.includes('placeholder="Search a place, or 47.1301, -119.2781"'),"Moses Lake coordinates must be the visible search default");
 assert(index.includes('id="srvConnect"'),"terrain engine needs an explicit connect control");
 assert(index.includes('id="srvCopyLink"'),"terrain engine needs a private setup-link control");
 assert(index.includes('takeSharedServerBase'),"private setup links must be consumed from URL fragments");

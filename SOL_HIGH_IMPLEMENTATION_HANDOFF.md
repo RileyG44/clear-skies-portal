@@ -93,7 +93,7 @@ Use one versioned key, `clearskies.state.v2`. Required schema:
       "savedSceneIds": []
     }
   },
-  "map": {"center": [46.8523, -121.7603], "zoom": 9, "query": "", "selectedLocation": null},
+  "map": {"center": [47.1301, -119.2781], "zoom": 9, "query": "", "selectedLocation": null},
   "search": {
     "days": "365", "from": "", "to": "", "cloud": "101", "imageType": "all",
     "sort": "date", "viewableOnly": false, "naturalColorFirst": true, "autoFill": false
