@@ -6,7 +6,7 @@
 /* Bump this on every deploy. Keeping the build literal here, plus a versioned
    page-script URL, prevents an older worker from serving a stale version.js
    while a newer HTML shell is already live. */
-const CSP_BUILD = "2026-08-24j";
+const CSP_BUILD = "2026-08-25b";
 const SHELL = `clear-skies-shell-${CSP_BUILD}`;
 const ASSETS = ["./", "./index.html", "./manifest.json", "./mosaic-core.js", "./terrain-core.js", "./terrain-raster.js",
                 "./elevation-bands.js", "./elevation-tile-core.js", "./wa-archaeology.js", "./glacial-research-core.js", "./research-analysis.js", "./research-worker.js",

@@ -5,13 +5,32 @@
 **How to use:** say *"check the TODO"* or *"next item from the TODO"* and I'll read this file instead of us re-deriving it in conversation. Say *"add X to the TODO"* or *"mark X done"* and I'll edit it in place.
 
 Priorities below marked **[proposed]** are my suggestion, not your decision — reorder freely.
-Last updated: 2026-08-22
+Last updated: 2026-08-25
 
 ---
 
 ## P0 — Next up
 
 ## Done
+
+- [x] **Spectrum, Ice Age, and responsive-control refinement** (2026-08-25) —
+  the elevation legend now sits directly below its colour ramp, with a separate
+  spectrum-opacity field. Continental ice limits now use the official vector
+  feature layer so its glacier/ice-limit border can be adjusted alongside the
+  Pleistocene-lake border, with widths preserved locally. Non-sidebar map tools
+  live on the right; the panel toggle follows the sidebar edge without covering
+  it; and sidebar action text scales with the panel width while remaining
+  single-line and aligned.
+
+- [x] **Mobile viewport and direct-manipulation pass** (2026-08-25) — map sizing
+  now uses CSS dynamic viewport units rather than `visualViewport` offsets, so an
+  iPhone map reaches the bottom of the display while its attribution and controls
+  remain safely inset. Single click/tap selects a point; double click/tap starts
+  imagery loading. Layer-specific 0–100% opacity controls and resets cover terrain,
+  imagery, elevation spectrum, elevation highlights, surface analysis, and overlays.
+  Sidebar headers toggle from anywhere in the header; reordering starts only after
+  a 260 ms press-and-hold; native platform select menus replace the simulated style;
+  and the pointer becomes a closed hand only during an actual map drag.
 
 - [x] **Rendering and infrastructure reliability pass** (2026-08-22) — direct-first
   national 3DEP with cached-engine fallback; bounded retries and progressive layer

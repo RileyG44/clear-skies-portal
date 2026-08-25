@@ -134,6 +134,32 @@ assert(index.includes('id="mapTheme"'),"map-only light and dark basemap control 
 assert(index.includes('clearskies.mapTheme.v1'),"map theme choice must persist between sessions");
 assert(index.includes('<option value="ft" selected>feet</option>'),"elevation must default to feet");
 assert(index.includes('id="elevAlpha"'),"elevation spectrum needs a user-controlled shader strength");
+assert(index.includes('class="elev-spectrum-scale"')&&
+       index.indexOf('class="elevKey"')<index.indexOf('id="elevAlpha"')&&
+       index.includes('for="elevAlpha">Spectrum opacity'),
+       "the elevation legend must sit below its ramp and remain separate from spectrum opacity");
+assert(index.includes('height:var(--app-height);background:var(--page)')&&!index.includes('syncVisualViewport'),
+       "the application shell must use CSS dynamic viewport sizing without a shortened visual-viewport offset");
+assert(index.includes('doubleClickZoom:false')&&index.includes('map.on("dblclick",e=>{ stageMapLocation(e); run(); });'),
+       "a map point must be selected on one click and load imagery only on double click or double tap");
+assert(index.includes('PANE_REORDER_HOLD_MS=260')&&index.includes('Press and hold to reorder.'),
+       "sidebar reordering must require a short press-and-hold instead of an immediate drag");
+assert(index.includes('id="sideToggleDock"')&&index.includes('right:calc(12px + var(--safe-right))')&&
+       index.includes('function sideMaxWidth()')&&index.includes('SIDE_TOGGLE_GUTTER=68'),
+       "right-side map tools and the standalone sidebar toggle must remain separated while resizing");
+assert(index.includes('container-type:inline-size')&&index.includes('clamp(10.5px,3.2cqi,12.5px)')&&
+       index.includes('white-space:nowrap;overflow:hidden;text-overflow:ellipsis'),
+       "sidebar action labels must adapt to panel width without changing button height");
+assert(index.includes('-webkit-appearance:menulist')&&index.includes('color-scheme:dark'),
+       "sidebar selects must retain the platform-native menu treatment");
+assert(index.includes('id="terReset"')&&index.includes('id="ctlReset"')&&
+       index.includes('id="elevSpectrumReset"')&&index.includes('id="elevBandsReset"')&&
+       index.includes('id="researchReset"')&&index.includes('id="ovReset"'),
+       "every adjustable render panel must expose its own reset control");
+assert(index.includes('function inputPercent(id,fallback)')&&
+       index.includes('const opacity=inputPercent("#elevBandAlpha",52)/100')&&
+       index.includes('bandAlpha:inputPercent("#elevBandAlpha",52)/100'),
+       "elevation spectrum and highlight opacity must support an actual zero-opacity value");
 assert(index.includes('(0.15+0.85*t)'),"neutral elevation shading must not darken the whole basemap");
 assert(index.includes('class ElevationGpuRenderer'),"elevation recolouring must use the shared WebGL2 renderer");
 assert(index.includes('elevation-tiles-prod/terrarium'),"elevation must have a browser-direct national fallback");
@@ -141,12 +167,17 @@ assert(index.includes('CSPResearchAnalysis.shouldOffload({connected:PROXY'),
        "large and mobile research rasters must prefer the connected M2 engine");
 assert(index.includes('return {...await runResearchWorker(payload),engine:"browser worker fallback"}'),
        "M2 analysis failure must retain an automatic browser-worker fallback");
-assert.match(index,/id:"waice"[\s\S]{0,500}250k_Surface_Geology\/MapServer\/export[\s\S]{0,160}layers:"0"/,
-       "continental-ice reference must use WGS 250k layer 0");
+assert.match(index,/id:"waice"[\s\S]{0,650}250k_Surface_Geology\/MapServer\/0\/query[\s\S]{0,260}lineWidth:\{label:"Glacier \/ ice-limit border"/,
+       "continental-ice reference must use the WGS 250k vector layer with an adjustable border");
 assert.match(index,/id:"waflood"[\s\S]{0,500}Ice_Age_Floods_National_Geologic_Trail_and_Sites\/FeatureServer\/2\/query/,
        "Ice Age floods reference must use the WGS hosted affected-area layer 2");
 assert.match(index,/id:"paleolakes"[\s\S]{0,500}GlacialH2O_V1\/FeatureServer\/0\/query\?where=POLY_TYPE%3D%27Lake%27/,
        "Pleistocene lakes must use only the EWU/IAFI Lake reconstruction class");
+assert.match(index,/id:"paleolakes"[\s\S]{0,700}lineWidth:\{label:"Lake border"/,
+       "Pleistocene-lake borders must expose their own adjustable width");
+assert(index.includes('function overlayLineWidth(o)')&&index.includes('id="ovLine_${o.id}"')&&
+       index.includes('lineWidths:ovLineWidths'),
+       "Ice Age border-width controls must persist and repaint existing vector layers");
 assert(index.match(/maxAllowableOffset=0\.001/g).length>=2,
        "hosted Ice Age polygons must request simplified geometry instead of multi-megabyte source vertices");
 assert.match(index,/id:"wageology"[\s\S]{0,500}100K_Surface_Geology_WA_GeMS\/MapServer\/export[\s\S]{0,160}layers:"11"/,

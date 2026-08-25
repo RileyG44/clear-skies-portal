@@ -264,8 +264,32 @@ silently turning blank.
   generated from the *end* of the range (or the last completed UTC day for a current
   search) rather than an incomplete live day, and the *Fill surroundings*
   mosaic, so neighbouring scenes come from the same era rather than from last week.
-- Sidebar panes collapse (click header), resize (drag bottom edge), and reorder
-  (drag header). Layout persists. "Reset panel layout" in the footer.
+- **Touch, viewport, and layer controls.** The map shell uses CSS `100dvh` rather
+  than JavaScript visual-viewport offsets, so it fills the current iPhone display;
+  attribution and floating controls account for the safe area without shortening
+  the map. A single map click/tap now only selects a location. Double-click or
+  double-tap to begin an imagery search, which prevents panning from accidentally
+  fetching scenes. The map uses the normal pointer at rest and changes to the
+  closed hand only while it is actually being dragged.
+- Every adjustable render layer has an opacity control that accepts 0–100%, and
+  its own reset: terrain, imagery, elevation spectrum, elevation highlights,
+  surface analysis, and overlays. Resetting a layer returns only that layer to its
+  documented defaults and does not reset unrelated work.
+- The elevation spectrum keeps its red/white/blue legend directly beneath the
+  ramp, followed by a separately labelled **Spectrum opacity** control. In the
+  Ice Age group, the continental ice-limit and Pleistocene-lake overlays expose
+  independent border-width sliders; their vector linework is cached for the
+  session and can be thinned or thickened without another data request.
+- Sidebar panes collapse or expand when any non-control part of their header is
+  clicked/tapped. Resize from the bottom edge. To reorder, press and hold the
+  header for 260 ms, then drag; a normal tap will not move the pane. Layout
+  persists, and "Reset layout" in the footer restores the stock arrangement.
+- Map tools other than the panel toggle live at the right edge. The standalone
+  panel toggle remains beside the sidebar, stays outside it while the sidebar is
+  resized, and sidebar control text scales from the panel's own width to prevent
+  action buttons from wrapping or changing height.
+- Sidebar select controls use the platform's native menu treatment instead of a
+  simulated dropdown, including on iPhone and iPad.
 - Right-click any scene on the map to swap its source or date.
 - **Ctrl+B** toggles the sidebar.
 
