@@ -108,6 +108,14 @@ assert(index.includes('if(raw[i]===raw[i]) merged[i]=raw[i]'),
        "raw lidar must refine valid pixels without erasing the national baseline");
 assert(index.includes('fallbackNativeZoom:15'),"browser elevation fallback must stretch its last native tile");
 assert(index.includes('const VIEW_MAX=28'),"the map must support deep visual overzoom");
+assert(index.includes('rotate:true,dragRotate:true,touchRotate:true')&&index.includes('id="bearingReset"'),
+       "2D maps must support direct mouse/touch bearing rotation with a north reset");
+assert(index.includes('id="map3d"')&&index.includes('import("./vendor/maplibre-gl.mjs")')&&
+       index.includes('terrain:{source:"dem",exaggeration:light.exaggeration}'),
+       "3D lidar terrain must lazy-load MapLibre and use the elevation DEM as a mesh");
+assert(index.includes('id="terSunAz"')&&index.includes('id="terSunAlt"')&&index.includes('id="terAmbient"')&&
+       index.includes('function repaintTerrainLighting()'),
+       "terrain lighting must be adjustable and shared by 2D and 3D rendering");
 assert(index.includes('maxZoom:VIEW_MAX,maxNativeZoom:17'),
        "one-metre lidar must stretch its honest native detail beyond z17 instead of oversampling or going black");
 assert(index.includes('const WADNR_OK = new Set(["hs"])'),
@@ -305,7 +313,10 @@ const manifest=JSON.parse(read("manifest.json"));
 const sources=JSON.parse(read("sources.json"));
 const pkg=JSON.parse(read("package.json"));
 assert(Array.isArray(sources.sources)&&sources.sources.length>0,"sources.json needs active sources");
-assert(!pkg.dependencies||Object.keys(pkg.dependencies).length===0,"runtime dependencies are intentionally forbidden");
+assert.equal(pkg.dependencies["maplibre-gl"],"^6.6.0","3D terrain must pin the reviewed MapLibre major/minor");
+assert.equal(pkg.dependencies["@tomickigrzegorz/leaflet-rotate"],"^0.2.4","2D rotation must use the reviewed MIT plugin");
+for(const asset of ["maplibre-gl.mjs","maplibre-gl-shared.mjs","maplibre-gl-worker.mjs","maplibre-gl.css","leaflet-rotate.umd.min.js"])
+  assert(fs.existsSync(path.join(root,"vendor",asset)),`missing vendored renderer asset: ${asset}`);
 for(const icon of manifest.icons||[])
   assert(fs.existsSync(path.join(root,icon.src)),`missing manifest icon: ${icon.src}`);
 

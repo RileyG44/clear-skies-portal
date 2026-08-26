@@ -16,8 +16,6 @@
 
   const D2R=Math.PI/180;
   const NODATA_LIMIT=-1e20;
-  const SHADE_315=terrain.createHillshade({azimuth:315,altitude:45,ambient:0.12});
-  const SHADE_MULTI=terrain.createMultidirectionalHillshade({altitude:45,ambient:0.12});
   const TINT_OF=terrain.createElevationColorizer("topographic",{space:"linear-rgb"});
   const SLOPE_OF=terrain.createElevationColorizer([
     [0,"#f2f4ee"],[5,"#b1d28b"],[15,"#f6da6f"],[30,"#f09649"],
@@ -75,6 +73,11 @@
   function renderRgba(style,surface){
     if(!STYLES.includes(style)) style="hs";
     const info=surfaceInfo(surface),out=new Uint8ClampedArray(info.width*info.height*4);
+    const lighting=surface.lighting||{},azimuth=Math.max(0,Math.min(359,Number.isFinite(+lighting.azimuth)?+lighting.azimuth:315));
+    const altitude=Math.max(5,Math.min(90,Number.isFinite(+lighting.altitude)?+lighting.altitude:45));
+    const ambient=Math.max(0,Math.min(.6,Number.isFinite(+lighting.ambient)?+lighting.ambient:.12));
+    const shadeDirect=terrain.createHillshade({azimuth,altitude,ambient});
+    const shadeMulti=terrain.createMultidirectionalHillshade({altitude,ambient});
     for(let y=0;y<info.height;y++) for(let x=0;x<info.width;x++){
       const value=valueAt(info,x,y),offset=(y*info.width+x)*4;
       if(!valid(value,info.noData)) continue;
@@ -116,10 +119,10 @@
                 Math.round(neutral[1]+(target[1]-neutral[1])*t),
                 Math.round(neutral[2]+(target[2]-neutral[2])*t),255];
       }else if(style==="tint"){
-        const tint=TINT_OF(value),multiplier=0.42+0.58*SHADE_315(gradient.dzdx,gradient.dzdy);
+        const tint=TINT_OF(value),multiplier=0.42+0.58*shadeDirect(gradient.dzdx,gradient.dzdy);
         colour=[Math.round(tint[0]*multiplier),Math.round(tint[1]*multiplier),Math.round(tint[2]*multiplier),255];
       }else{
-        const shade=(style==="hsmulti"?SHADE_MULTI:SHADE_315)(gradient.dzdx,gradient.dzdy);
+        const shade=(style==="hsmulti"?shadeMulti:shadeDirect)(gradient.dzdx,gradient.dzdy);
         const byte=Math.round(shade*255);colour=[byte,byte,byte,255];
       }
       out[offset]=colour[0];out[offset+1]=colour[1];out[offset+2]=colour[2];out[offset+3]=colour[3]===undefined?255:colour[3];
@@ -127,5 +130,5 @@
     return out;
   }
 
-  return Object.freeze({VERSION:1,STYLES,ASPECT_FLAT_GRADE,CONTOUR_FT,hasData,renderRgba});
+  return Object.freeze({VERSION:2,STYLES,ASPECT_FLAT_GRADE,CONTOUR_FT,hasData,renderRgba});
 });

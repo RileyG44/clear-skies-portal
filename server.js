@@ -23,12 +23,13 @@ fs.mkdirSync(CACHE, {recursive:true});
 usgs.init(CACHE);
 fs.mkdirSync(AREAS, {recursive:true});
 
-const MIME = {".html":"text/html; charset=utf-8",".js":"text/javascript",".css":"text/css",
+const MIME = {".html":"text/html; charset=utf-8",".js":"text/javascript",".mjs":"text/javascript",".css":"text/css",
   ".json":"application/json",".png":"image/png",".jpg":"image/jpeg",".jpeg":"image/jpeg",
   ".svg":"image/svg+xml",".md":"text/markdown; charset=utf-8",".txt":"text/plain; charset=utf-8"};
 const PUBLIC_FILES = new Set(["index.html","version.js","mosaic-core.js","terrain-core.js","terrain-raster.js",
   "elevation-bands.js","elevation-tile-core.js","wa-archaeology.js","glacial-research-core.js","research-analysis.js","research-worker.js","sw.js","manifest.json",
-  "icon-180.png","icon-192.png","icon-512.png"]);
+  "icon-180.png","icon-192.png","icon-512.png","vendor/maplibre-gl.mjs","vendor/maplibre-gl-shared.mjs",
+  "vendor/maplibre-gl-worker.mjs","vendor/maplibre-gl.css","vendor/leaflet-rotate.umd.min.js"]);
 
 const WADNR_HOST = "lidarportal.dnr.wa.gov";
 const WADNR_MAP  = "/arcgis/rest/services/lidar/wadnr_hillshade/MapServer";
@@ -464,6 +465,34 @@ function limitedUpstream(id,opts,body,signal){
 
 const TRANSPARENT = Buffer.from(
  "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=","base64");
+/* A 256x256 tile encoding a constant 0 m in Terrarium, for the DEM route only.
+   Terrarium reads elevation = (R*256 + G + B/256) - 32768, so 0 m is RGB(128,0,0).
+   The 1x1 TRANSPARENT tile below is correct for a 2D overlay but catastrophic as
+   terrain geometry: its RGB(0,0,0) decodes to -32768 m, which punches a 32 km
+   pit into the mesh wherever elevation data runs out (most obviously at the
+   coast, where it was also cached `immutable` for a week). */
+const SEA_LEVEL_DEM = (() => {
+  const W=256, row=W*4+1, raw=Buffer.alloc(row*W);
+  for(let y=0;y<W;y++){
+    const o=y*row; raw[o]=0;                       // filter: none
+    for(let x=0;x<W;x++){ const p=o+1+x*4; raw[p]=128; raw[p+1]=0; raw[p+2]=0; raw[p+3]=255 }
+  }
+  const crcT=new Int32Array(256);
+  for(let n=0;n<256;n++){ let c=n; for(let k=0;k<8;k++) c=c&1?0xedb88320^(c>>>1):c>>>1; crcT[n]=c }
+  const crc=b=>{ let c=0xffffffff; for(let i=0;i<b.length;i++) c=crcT[(c^b[i])&0xff]^(c>>>8); return (c^0xffffffff)>>>0 };
+  const chunk=(type,data)=>{
+    const len=Buffer.alloc(4); len.writeUInt32BE(data.length,0);
+    const td=Buffer.concat([Buffer.from(type,"ascii"),data]);
+    const c=Buffer.alloc(4); c.writeUInt32BE(crc(td),0);
+    return Buffer.concat([len,td,c]);
+  };
+  const ihdr=Buffer.alloc(13);
+  ihdr.writeUInt32BE(W,0); ihdr.writeUInt32BE(W,4);
+  ihdr[8]=8; ihdr[9]=6;
+  return Buffer.concat([Buffer.from([0x89,0x50,0x4e,0x47,0x0d,0x0a,0x1a,0x0a]),
+    chunk("IHDR",ihdr), chunk("IDAT",zlib.deflateSync(raw,{level:9})), chunk("IEND",Buffer.alloc(0))]);
+})();
+
 const isPng = body => Buffer.isBuffer(body)&&body.length>8&&body[0]===0x89&&body[1]===0x50&&
   body[2]===0x4e&&body[3]===0x47&&body[4]===0x0d&&body[5]===0x0a&&body[6]===0x1a&&body[7]===0x0a;
 const isTiff = body => Buffer.isBuffer(body)&&body.length>8&&
@@ -1113,7 +1142,7 @@ const server = http.createServer(async (req,res)=>{
       try{
         const body=await nationalElevationTiff(z,x,y,256,client.signal);
         out=await terrainTask(`national-decode:${ck}`,"terrarium-tiff",{body},
-          {priority:100,timeoutMs:8000},client.signal);
+          {priority:100,timeoutMs:25000},client.signal);
       }catch(e){
         if(terrainAborted(e)) return;
         return send(res,503,"image/png",TRANSPARENT,{"X-Cache":"BUSY","X-Elevation-Source":"fallback",
@@ -1140,7 +1169,7 @@ const server = http.createServer(async (req,res)=>{
       const ck=key(`elevation-v3:${z}/${x}/${y}`);
       const hit=cacheGet(ck,TTL_TILE);
       if(hit) return hit.status===204
-        ? send(res,200,"image/png",TRANSPARENT,{"X-Cache":"hit","X-Coverage":"none","X-Elevation-Source":"none","Cache-Control":"public, max-age=604800, immutable"})
+        ? send(res,200,"image/png",SEA_LEVEL_DEM,{"X-Cache":"hit","X-Coverage":"none","X-Elevation-Source":"none","Cache-Control":"public, max-age=604800, immutable"})
         : send(res,hit.status,hit.type,hit.body,{"X-Cache":"hit","X-Elevation-Source":"cached","Cache-Control":"public, max-age=604800, immutable"});
       let out=null;
       try{
@@ -1154,7 +1183,7 @@ const server = http.createServer(async (req,res)=>{
         else{
           const body=await nationalElevationTiff(z,x,y,256,client.signal);
           const national=await terrainTask(`national-decode:${ck}`,"terrarium-tiff",{body},
-            {priority:100,timeoutMs:8000},client.signal);
+            {priority:100,timeoutMs:25000},client.signal);
           out=national ? {...national,source:"3dep"} : null;
         }
       }catch(e){
@@ -1163,7 +1192,8 @@ const server = http.createServer(async (req,res)=>{
       }
       if(!out){
         cachePut(ck,204,"image/png",Buffer.alloc(0));
-        return send(res,200,"image/png",TRANSPARENT,{"X-Coverage":"none","X-Elevation-Source":"none","Cache-Control":"public, max-age=604800, immutable"});
+        // Sea level, not transparent: this tile is terrain geometry.
+        return send(res,200,"image/png",SEA_LEVEL_DEM,{"X-Coverage":"none","X-Elevation-Source":"none","Cache-Control":"public, max-age=604800, immutable"});
       }
       cachePut(ck,200,"image/png",out.png);
       return send(res,200,"image/png",out.png,{"X-Coverage":String(out.coverage),"X-Elevation-Source":out.source,
@@ -1333,7 +1363,8 @@ const server = http.createServer(async (req,res)=>{
     const inside=path.relative(ROOT,f);
     if(inside.startsWith(".."+path.sep)||path.isAbsolute(inside))
       return send(res,403,"text/plain",Buffer.from("forbidden"));
-    if(!PUBLIC_FILES.has(rel))
+    const publicRel=rel.split(path.sep).join("/");
+    if(!PUBLIC_FILES.has(publicRel))
       return send(res,404,"text/plain",Buffer.from("not found"));
     fs.readFile(f,(e,buf)=>{
       if(e) return send(res,404,"text/plain",Buffer.from("not found"));

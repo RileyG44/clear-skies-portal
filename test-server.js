@@ -3,6 +3,7 @@
 const assert = require("assert/strict");
 const fs = require("fs");
 const http = require("http");
+const zlib = require("zlib");
 const net = require("net");
 const os = require("os");
 const path = require("path");
@@ -148,6 +149,14 @@ async function main(){
     assert.match(page.headers["content-type"],/^text\/html/);
     assert.equal(page.headers["x-content-type-options"],"nosniff");
 
+    const maplibreModule=await request(port,"/vendor/maplibre-gl.mjs");
+    assert.equal(maplibreModule.status,200,"the vendored 3D renderer must be served locally");
+    assert.match(maplibreModule.headers["content-type"],/^text\/javascript/);
+    assert(maplibreModule.body.length>100000,"the MapLibre module must not be an empty placeholder");
+    const rotatePlugin=await request(port,"/vendor/leaflet-rotate.umd.min.js");
+    assert.equal(rotatePlugin.status,200,"the vendored 2D rotation plugin must be served locally");
+    assert.match(rotatePlugin.headers["content-type"],/^text\/javascript/);
+
     const badSnowBbox=await request(port,"/api/snow?bbox=bad&layer=3");
     assert.equal(badSnowBbox.status,400,"snow exports must reject malformed Web Mercator bounds");
     const badSnowLayer=await request(port,
@@ -273,6 +282,31 @@ async function main(){
 
     assert.equal((await request(port,"/api/warm/stop")).status,405);
     assert.equal((await request(port,"/api/elev/not-a-tile")).status,400);
+
+    /* A DEM tile with no coverage must still be a real 256x256 raster encoding
+       sea level. It used to be the 1x1 transparent PNG used for 2D overlays,
+       whose RGB(0,0,0) decodes in Terrarium to -32768 m — a 32 km pit in the 3D
+       mesh, cached `immutable` for a week. Ocean is the easy way to hit it. */
+    {
+      const ocean=await request(port,"/api/elev/5/3/16.png");
+      assert.equal(ocean.status,200);
+      assert.equal(ocean.headers["x-coverage"],"none");
+      const png=ocean.body;
+      assert.ok(png.length>8&&png[0]===0x89&&png.toString("ascii",1,4)==="PNG","no-coverage DEM tile must be a PNG");
+      assert.equal(png.readUInt32BE(16),256,"no-coverage DEM tile must be 256 wide");
+      assert.equal(png.readUInt32BE(20),256,"no-coverage DEM tile must be 256 tall");
+      // decode the first pixel and confirm it means 0 m, not -32768 m
+      let off=8,idat=[];
+      while(off+12<=png.length){
+        const len=png.readUInt32BE(off),type=png.toString("ascii",off+4,off+8);
+        if(type==="IDAT") idat.push(png.subarray(off+8,off+8+len));
+        if(type==="IEND") break;
+        off+=12+len;
+      }
+      const raw=zlib.inflateSync(Buffer.concat(idat));
+      const r=raw[1],g=raw[2],b=raw[3];
+      assert.equal((r*256+g+b/256)-32768,0,"no-coverage DEM tile must decode to 0 m");
+    }
     assert.equal((await request(port,"/api/usgs/tile/notastyle/1/0/0.png")).status,400);
     assert.equal((await request(port,"/.git/config")).status,404);
     assert.equal((await request(port,"/package.json")).status,404);

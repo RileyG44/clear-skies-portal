@@ -11,8 +11,10 @@ node server.js
 
 Then open **http://localhost:8765**
 
-Node 22.12+ is all you need — no `npm install` and no runtime dependencies.
-Leave the terminal open; it's the server *and* the cache.
+Run `npm install` after cloning or changing dependencies. The browser-ready
+MapLibre and Leaflet rotation files are checked into `vendor/`, so ordinary
+launches do not need a build step or a package download. Leave the terminal
+open; it's the server *and* the cache.
 
 *(The code itself uses nothing newer than Node 18 APIs; 22 is simply the oldest
 release line still getting security updates.)*
@@ -87,10 +89,35 @@ npm run verify     # all checks, tests, and dependency audit
 pip install -r requirements.txt
 ```
 
-There is no build step and no runtime dependency — `npm` here is a task runner and a
-place to declare `engines`, nothing more. CI (`.github/workflows/ci.yml`) syntax-checks
-`server.js` and the Python scripts, validates `sources.json`, and boots the server to
-confirm `/api/health` answers.
+`npm run vendor` refreshes the checked-in browser bundles from the installed
+packages. CI (`.github/workflows/ci.yml`) syntax-checks the JavaScript and Python,
+validates the static bundle and source catalog, exercises the renderer and server,
+audits dependencies, and boots the service to confirm `/api/health` answers.
+
+## 2D rotation and 3D terrain
+
+The portal still opens in **2D**. Rotate the 2D map with a right-button drag on a
+mouse or a two-finger twist on touch. The compass button on the right shows the
+current bearing and returns the map to north-up.
+
+Open **Terrain · lidar** and choose **3D terrain** for a pitched, orbitable view.
+Drag to pan, right-drag or Control-drag to orbit, use the wheel or pinch to zoom,
+and use two fingers to pitch and rotate. The selected hillshade, elevation tint,
+slope, aspect, exposure, contour, or WA DNR project is draped onto the terrain;
+the 3D canvas is destroyed when returning to 2D so it does not keep GPU memory.
+
+The same controls drive both renderers:
+
+- **Sun azimuth** rotates the illumination around the landscape.
+- **Sun altitude** moves the light from a low grazing angle to overhead.
+- **Ambient light** controls shadow depth.
+- **3D relief** adjusts vertical exaggeration without altering source elevation.
+
+Raw/national elevation products relight immediately from the cached DEM. WA DNR's
+published hillshade can be draped in 3D, but its shadows are baked into the source
+image and cannot be moved. 3D requires WebGL2; unsupported or GPU-blocked browsers
+stay safely in 2D and explain why in the Terrain pane. See `THREE_D_TERRAIN.md` for
+the implementation and maintenance handoff.
 
 ## Export a map image
 
@@ -123,6 +150,8 @@ map-like zoom would be a tiled package or Cloud-Optimized GeoTIFF rather than on
 | File | What it is |
 |---|---|
 | `index.html` | The whole app — one self-contained file, Leaflet inlined |
+| `vendor/` | Pinned browser bundles for MapLibre GL JS and Leaflet rotation |
+| `terrain-raster.js` | Shared deterministic CPU terrain styling used by 2D, 3D protocol tiles, and tests |
 | `mosaic-core.js` | Tested footprint geometry, antimeridian, identity, coverage and imagery LOD helpers |
 | `server.js` | Local terrain engine: static files, validated proxying, request coalescing, retries and disk cache |
 | `scripts/install-mac-service.sh` | Installs a loopback-only, self-healing macOS terrain-engine service |
@@ -130,6 +159,7 @@ map-like zoom would be a tiled package or Cloud-Optimized GeoTIFF rather than on
 | `test-server.js` | Offline black-box checks for CORS, request limits, traversal protection and server health |
 | `version.js` | One build identifier shared by the page and service worker cache |
 | `TODO.md` | Work queue. Say "check the TODO" to a fresh Claude session and it picks up from there |
+| `THREE_D_TERRAIN.md` | 2D rotation, 3D terrain, lighting architecture, limitations, and QA handoff |
 | `source-catalog.md` | ~50 free imagery sources with endpoints, licences, resolutions |
 | `sources.json` | Machine-readable version of the catalog |
 | `hiking-stack.md` | The Western-US subset: snow, fire, route-finding |

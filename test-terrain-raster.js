@@ -45,4 +45,22 @@ assert.equal(raster.hasData(plainPlane(8,0,0)),true);
 const empty={grid:new Float32Array(64).fill(NaN),width:8,height:8,groundRes:1};
 assert.equal(raster.hasData(empty),false);
 
+// Lighting is a render parameter, not part of the elevation source. Changing
+// the sun direction must relight the same cached DEM without another fetch.
+const litSurface=plainPlane(16,0.8,-0.3);
+const eastLight=raster.renderRgba("hillshade",{
+  ...litSurface,lighting:{azimuth:90,altitude:35,ambient:.08}
+});
+const westLight=raster.renderRgba("hillshade",{
+  ...litSurface,lighting:{azimuth:270,altitude:35,ambient:.08}
+});
+assert.notDeepEqual(Array.from(eastLight),Array.from(westLight),
+  "opposed sun azimuths must produce different hillshade pixels");
+const defaultLight=raster.renderRgba("hillshade",litSurface);
+const explicitDefault=raster.renderRgba("hillshade",{
+  ...litSurface,lighting:{azimuth:315,altitude:45,ambient:.12}
+});
+assert.deepEqual(Array.from(defaultLight),Array.from(explicitDefault),
+  "omitted lighting must preserve the documented default appearance");
+
 console.log("browser terrain raster checks passed");
