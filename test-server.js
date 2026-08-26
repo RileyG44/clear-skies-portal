@@ -26,7 +26,6 @@ async function snapshotUrlValidationChecks(){
       "planetarycomputer.microsoft.com",
       "titiler.xyz",
       "gibs.earthdata.nasa.gov",
-      "basemaps.cartocdn.com",
       "elevation.nationalmap.gov",
       "s3.amazonaws.com",
       "prd-tnm.s3.amazonaws.com",
@@ -43,8 +42,8 @@ async function snapshotUrlValidationChecks(){
     ];
     for(const hostname of exactHosts)
       assert.equal(validateSnapshotImageUrl(`https://${hostname}/tile.png`).hostname,hostname);
-    assert.equal(validateSnapshotImageUrl("https://a.basemaps.cartocdn.com/tile.png").hostname,
-      "a.basemaps.cartocdn.com","CARTO's vendor-controlled shard must be allowed");
+    assert.throws(()=>validateSnapshotImageUrl("https://a.basemaps.cartocdn.com/tile.png"),
+      /not allowed/,"the retired CARTO shard exception must not survive the Esri migration");
     assert.equal(validateSnapshotImageUrl("https://gibs.earthdata.nasa.gov:443/tile.png#ignored").href,
       "https://gibs.earthdata.nasa.gov/tile.png","default port and fragment must canonicalize");
 
@@ -61,8 +60,8 @@ async function snapshotUrlValidationChecks(){
       ["https://server.internal/tile.png",403,/literal or private/],
       ["https://evil.example/tile.png",403,/not allowed/],
       ["https://gibs.earthdata.nasa.gov.evil.example/tile.png",403,/not allowed/],
-      ["https://basemaps.cartocdn.com.evil.example/tile.png",403,/not allowed/],
-      ["https://evilbasemaps.cartocdn.com/tile.png",403,/not allowed/],
+      ["https://services.arcgisonline.com.evil.example/tile.png",403,/not allowed/],
+      ["https://evilservices.arcgisonline.com/tile.png",403,/not allowed/],
       ["https://bucket.s3.amazonaws.com/tile.png",403,/not allowed/],
       ["https://gibs.earthdata.nasa.gov/"+"x".repeat(8200),400,/exceeds/]
     ];

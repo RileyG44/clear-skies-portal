@@ -25,7 +25,7 @@ keeps every existing marker, raster, canvas, and sidebar integration on the same
 
 MapLibre GL JS is imported only when 3D is requested. Its style contains:
 
-1. the normal CARTO raster basemap;
+1. the normal Esri Canvas raster basemap, matching the 2D light/dark theme;
 2. a `raster-dem` elevation source for the geometry — the portal's national 3DEP
    tile (`/api/elev/national/...`) when the local server is up, and AWS Terrarium
    only as the no-server fallback;

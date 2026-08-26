@@ -217,7 +217,7 @@ VIIRS/MODIS near-real-time true colour and night lights, NISAR.
 some resolving finer than 1 m — then USGS 1 m, then 3DEP. Only one styled terrain
 product is painted at a time; at close zooms its last native tile is enlarged
 through z28 rather than disappearing or fetching nonexistent detail.
-The light CARTO basemap is the default so translucent geology colours remain
+The light Esri Canvas basemap is the default so translucent geology colours remain
 readable. A saved sun/moon control switches only the basemap between light and
 dark; the sidebar, controls, imagery and analysis layers do not change.
 
@@ -230,7 +230,7 @@ toggleable, with a shared opacity slider. All keyless.
 |---|---|
 | Roads & streets | Esri World Transportation |
 | Cities & boundaries | Esri World Boundaries and Places |
-| Place labels | CARTO (OSM-derived) |
+| Place labels | Esri Canvas Reference (follows the light/dark map theme) |
 | Rivers & lakes | USGS National Hydrography Dataset |
 | Peaks & landforms | USGS GNIS — summits, ridges, gaps, glaciers (zoom 10+) |
 | Named places | USGS GNIS populated places (zoom 9+) |
@@ -247,8 +247,11 @@ toggleable, with a shared opacity slider. All keyless.
 | **Snow cover** | NASA GIBS MODIS Terra NDSI (zoom ≤8) |
 
 Not OpenStreetMap's own tiles: their tile-usage policy forbids this use and the
-server answers HTTP 418. CARTO and Esri's free reference layers are the correct
-substitutes.
+server answers HTTP 418. Esri's free reference layers are the keyless substitute.
+
+CARTO's raster basemaps were used until 2026-08-26, when CARTO began requiring an
+API key and watermarking unkeyed tiles. They are also retiring raster basemaps,
+so the portal moved to Esri Canvas rather than take a key with a shelf life.
 
 The two geology layers carry their own default opacity (55%) because they are
 opaque polygon fills rather than line work; the shared slider scales them

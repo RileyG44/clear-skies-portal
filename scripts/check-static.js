@@ -153,8 +153,27 @@ assert.equal(gibsSandbox.currentItems[0].date.slice(0,10),yesterday,
        "current GIBS search must start on the last completed UTC day");
 assert.equal(gibsSandbox.historicItems[0].date.slice(0,10),"2025-07-31",
        "historical GIBS search must remain anchored on the selected end date");
-assert(index.indexOf('basemaps.cartocdn.com/light_all')<index.indexOf('basemaps.cartocdn.com/dark_all'),
+assert(index.indexOf('World_Light_Gray_Base')<index.indexOf('World_Dark_Gray_Base'),
        "the readable light basemap must precede the dark fallback");
+assert(!/cartocdn/.test(index),
+       "no CARTO basemap may remain: unkeyed tiles are watermarked and raster is being retired");
+/* setMapTheme runs during load and asks the themed overlays to rebuild, but
+   OVERLAYS is a const declared much later. Reaching it in its temporal dead
+   zone throws - and because that happens at top level it aborts the rest of
+   the script, so the whole page dies with one console line. The readiness flag
+   is what prevents it, and it only works if it is declared before the call. */
+{
+  const declared=index.indexOf("let ovThemedReady=false;");
+  const called=index.indexOf("ovRefreshThemed();");
+  const armed=index.indexOf("ovThemedReady=true;");
+  assert(declared>=0&&called>=0&&armed>=0,"themed-overlay readiness flag must exist");
+  assert(declared<called,"ovThemedReady must be declared before setMapTheme calls ovRefreshThemed");
+  assert(called<armed,"ovThemedReady must be armed only after OVERLAYS is initialised");
+  const guard=index.slice(index.indexOf("function ovRefreshThemed()"),
+                          index.indexOf("function ovRefreshThemed()")+120);
+  assert(guard.includes("if(!ovThemedReady) return;"),
+         "ovRefreshThemed must bail out until the overlay list exists");
+}
 assert(index.includes('background:#dbe6eb'),"out-of-world space must not flash black at global zooms");
 assert(index.includes('id="mapTheme"'),"map-only light and dark basemap control must be present");
 assert(index.includes('clearskies.mapTheme.v1'),"map theme choice must persist between sessions");

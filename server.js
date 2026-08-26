@@ -62,13 +62,13 @@ const DEP_RULES = new Set(["Hillshade Gray","Hillshade Multidirectional","Hillsh
 const HTTPS_AGENT = new https.Agent({keepAlive:true,maxSockets:10,maxFreeSockets:5,timeout:30000});
 /* These are the raster providers rendered by the portal today. Keep this list
    exact: the screenshot helper must never become a general-purpose proxy.
-   CARTO is the sole suffix exception because Leaflet deliberately replaces
-   {s} with vendor-controlled a/b/c/d subdomains. */
+   Every entry is matched exactly - there is no suffix wildcard. CARTO used to
+   need one because Leaflet substituted {s} with a/b/c/d shards; the basemap
+   moved to Esri, which serves from a single host, so that exception is gone. */
 const SNAPSHOT_IMAGE_HOSTS = new Set([
   "planetarycomputer.microsoft.com",
   "titiler.xyz",
   "gibs.earthdata.nasa.gov",
-  "basemaps.cartocdn.com",
   "elevation.nationalmap.gov",
   "s3.amazonaws.com",
   "prd-tnm.s3.amazonaws.com",
@@ -137,8 +137,7 @@ function validateSnapshotImageUrl(value){
   if(net.isIP(hostname)||hostname==="localhost"||hostname.endsWith(".localhost")||
      hostname.endsWith(".local")||hostname.endsWith(".internal")||hostname.endsWith(".home.arpa"))
     throw new HttpError(403,"snapshot image URL must not use a literal or private host");
-  const cartoShard=hostname.endsWith(".basemaps.cartocdn.com");
-  if(!SNAPSHOT_IMAGE_HOSTS.has(hostname)&&!cartoShard)
+  if(!SNAPSHOT_IMAGE_HOSTS.has(hostname))
     throw new HttpError(403,"snapshot image host is not allowed");
 
   target.hostname=hostname;
