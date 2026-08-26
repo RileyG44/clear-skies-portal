@@ -61,7 +61,7 @@
     for(const child of [...$("#pcCanvas").children])if(!child.classList.contains("pc-head"))child.remove();
   }
   function install({map,onBearingChange,beforeOpen,onLayoutChange}={}){
-    const panel=$("#pointCloudPanel"),canvas=$("#pcCanvas"),state={viewer:null,cloud:null,project:null,loadingProject:null,catalog:null,wanted:false,loadToken:0,suppress2d:0,suppress3d:0,cameraTimer:0,user3dActive:false,user3dUntil:0,syncGuard:CORE().createSyncGuard()};
+    const panel=$("#pointCloudPanel"),canvas=$("#pcCanvas"),state={viewer:null,cloud:null,project:null,loadingProject:null,catalog:null,wanted:false,loadToken:0,suppress2d:0,suppress3d:0,cameraTimer:0,plan:true,user3dActive:false,user3dUntil:0,syncGuard:CORE().createSyncGuard()};
     window.L?.DomEvent?.disableClickPropagation(panel);window.L?.DomEvent?.disableScrollPropagation(panel);
     const linked=()=>$("#pcLinked").checked;
     function removeCloud(){if(state.cloud){try{state.viewer?.scene?.removePointCloud(state.cloud)}catch(e){}for(const node of state.cloud.visibleNodes||[])try{node.sceneNode?.geometry?.dispose()}catch(e){}}state.cloud=null;state.project=null}
@@ -76,8 +76,23 @@
     }
     function syncFromMap(){
       if(!state.viewer||!state.cloud||!linked())return;const view=state.viewer.scene.view,box=state.cloud.boundingBox||state.cloud.pcoGeometry?.boundingBox,z=(box?.min?.z+box?.max?.z)/2||0;
-      const rect=canvas.getBoundingClientRect(),camera=CORE().cameraForBounds(projectBounds(map.getBounds()),{bearing:map.getBearing?.()||0,targetZ:z,fov:state.viewer.getFOV?.()||60,aspect:rect.width/Math.max(1,rect.height)});
-      state.suppress3d=performance.now()+300;state.syncGuard.run("2d",()=>view.setView([camera.position.x,camera.position.y,camera.position.z],[camera.target.x,camera.target.y,camera.target.z]));
+      /* A freshly loaded cloud opens looking straight down. After that the sync
+         keeps whatever tilt the user has orbited to, so panning the 2D map does
+         not yank the 3D view back to plan every time. */
+      const pitch=state.plan?90:CORE().pitchDegreesFromView(view.pitch);
+      const rect=canvas.getBoundingClientRect(),camera=CORE().cameraForBounds(projectBounds(map.getBounds()),{bearing:map.getBearing?.()||0,targetZ:z,fov:state.viewer.getFOV?.()||60,aspect:rect.width/Math.max(1,rect.height),pitch});
+      state.plan=false;
+      state.suppress3d=performance.now()+300;
+      state.syncGuard.run("2d",()=>{
+        /* Not view.setView(position,target): Potree infers yaw from the look
+           vector, and straight down carries no yaw, so the bearing would be
+           dropped and the view would land at an arbitrary rotation. Set the
+           camera state directly instead. */
+        view.position.set(camera.position.x,camera.position.y,camera.position.z);
+        view.yaw=camera.yaw;
+        view.pitch=camera.pitch;
+        view.radius=camera.radius;
+      });
     }
     function syncToMap(){
       if(!state.viewer||!state.cloud||!linked())return;const view=state.viewer.scene.view,target=view.getPivot(),bearing=((view.yaw*180/Math.PI)%360+360)%360;
@@ -92,7 +107,7 @@
       const viewer=await ensureViewer();if(!viewer||!state.wanted)return;const token=++state.loadToken;setStatus(`Loading ${item.project}…`,"loading");
       state.loadingProject=item.project;removeCloud();
       window.Potree.loadPointCloud(item.url,item.project,event=>{
-        if(token!==state.loadToken||!state.wanted)return;state.loadingProject=null;const cloud=state.cloud=event.pointcloud;state.project=item.project;cloud.material.size=1;cloud.material.pointSizeType=window.Potree.PointSizeType.ADAPTIVE;cloud.material.activeAttributeName="elevation";viewer.scene.addPointCloud(cloud);applyControls();syncFromMap();setStatus(`${item.project} · ${(item.points/1e9).toFixed(1)} billion points available`,"ready");
+        if(token!==state.loadToken||!state.wanted)return;state.loadingProject=null;state.plan=true;const cloud=state.cloud=event.pointcloud;state.project=item.project;cloud.material.size=1;cloud.material.pointSizeType=window.Potree.PointSizeType.ADAPTIVE;cloud.material.activeAttributeName="elevation";viewer.scene.addPointCloud(cloud);applyControls();syncFromMap();setStatus(`${item.project} · ${(item.points/1e9).toFixed(1)} billion points available`,"ready");
       });
     }
     async function open(){

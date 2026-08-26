@@ -16,13 +16,33 @@
     const sw=project(bounds.west,bounds.south),ne=project(bounds.east,bounds.north);
     return {west:sw.x,south:sw.y,east:ne.x,north:ne.y,width:Math.abs(ne.x-sw.x),height:Math.abs(ne.y-sw.y)};
   }
-  function cameraForBounds(bounds,{bearing=0,targetZ=0,fov=60,aspect=1,pitch=55}={}){
+  /* pitch is degrees below the horizon: 90 looks straight down, which is the
+     default so the panel opens as a plan view aligned with the 2D map.
+
+     yaw and pitch come back in Potree's own convention because a nadir camera
+     cannot be expressed as a position/target pair. Potree derives yaw from the
+     look vector, and looking straight down the look vector is (0,0,-1) for every
+     bearing - so the compass orientation is simply lost. Setting view.yaw and
+     view.pitch directly is the only way to hold north up. Potree's setTopView()
+     is yaw 0, pitch -PI/2, and this matches it. */
+  function cameraForBounds(bounds,{bearing=0,targetZ=0,fov=60,aspect=1,pitch=90}={}){
     const b=projectBounds(bounds),target={x:(b.west+b.east)/2,y:(b.south+b.north)/2,z:+targetZ||0};
     const vfov=fov*RAD,hfov=2*Math.atan(Math.tan(vfov/2)*Math.max(.2,aspect));
     const radius=Math.max(b.width/(2*Math.tan(hfov/2)),b.height/(2*Math.tan(vfov/2)))*1.18;
-    const yaw=(+bearing||0)*RAD,down=(+pitch||55)*RAD,flat=Math.cos(down);
+    const deg=Number.isFinite(+pitch)?Math.max(1,Math.min(90,+pitch)):90;
+    const yaw=(+bearing||0)*RAD,down=deg*RAD,flat=Math.cos(down);
     const direction={x:Math.sin(yaw)*flat,y:Math.cos(yaw)*flat,z:-Math.sin(down)};
-    return {target,position:{x:target.x-direction.x*radius,y:target.y-direction.y*radius,z:target.z-direction.z*radius},radius,bearing:+bearing||0};
+    return {target,
+      position:{x:target.x-direction.x*radius,y:target.y-direction.y*radius,z:target.z-direction.z*radius},
+      radius,bearing:+bearing||0,pitchDegrees:deg,
+      yaw,pitch:-down};
+  }
+
+  /* Potree pitch (radians, negative looking down) -> degrees below the horizon,
+     so a sync can preserve whatever tilt the user has orbited to. */
+  function pitchDegreesFromView(pitchRadians){
+    const value=-(+pitchRadians)*180/Math.PI;
+    return Number.isFinite(value)?Math.max(1,Math.min(90,value)):90;
   }
   function mapViewForCamera(target,radius,{height=800,fov=60,bearing=0}={}){
     const ll=unproject(target.x,target.y),span=Math.max(1,2*(+radius||1)*Math.tan((+fov||60)*RAD/2));
@@ -43,5 +63,5 @@
     let active=null;
     return {get active(){return active},run(source,fn){if(active&&active!==source)return false;const previous=active;active=source;try{fn()}finally{active=previous}return true}};
   }
-  return {R,WORLD,project,unproject,projectBounds,cameraForBounds,mapViewForCamera,projectYear,chooseCoverage,createSyncGuard};
+  return {R,WORLD,project,unproject,projectBounds,cameraForBounds,pitchDegreesFromView,mapViewForCamera,projectYear,chooseCoverage,createSyncGuard};
 });
