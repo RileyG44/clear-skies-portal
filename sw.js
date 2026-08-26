@@ -6,10 +6,11 @@
 /* Bump this on every deploy. Keeping the build literal here, plus a versioned
    page-script URL, prevents an older worker from serving a stale version.js
    while a newer HTML shell is already live. */
-const CSP_BUILD = "2026-08-26d";
+const CSP_BUILD = "2026-08-26e";
 const SHELL = `clear-skies-shell-${CSP_BUILD}`;
+const POTREE = `clear-skies-potree-${CSP_BUILD}`;
 const ASSETS = ["./", "./index.html", "./manifest.json", "./mosaic-core.js", "./terrain-core.js", "./terrain-raster.js",
-                "./elevation-bands.js", "./elevation-tile-core.js", "./wa-archaeology.js", "./glacial-research-core.js", "./research-analysis.js", "./research-worker.js",
+                "./elevation-bands.js", "./elevation-tile-core.js", "./wa-archaeology.js", "./glacial-research-core.js", "./research-analysis.js", "./research-worker.js", "./point-cloud-core.js", "./point-cloud-viewer.js", "./point-cloud-catalog.json",
                 "./vendor/maplibre-gl.mjs", "./vendor/maplibre-gl-shared.mjs", "./vendor/maplibre-gl-worker.mjs", "./vendor/maplibre-gl.css", "./vendor/leaflet-rotate.umd.min.js",
                 `./version.js?build=${CSP_BUILD}`, "./icon-180.png", "./icon-192.png", "./icon-512.png"];
 
@@ -19,7 +20,7 @@ self.addEventListener("install", e => {
 
 self.addEventListener("activate", e => {
   e.waitUntil(caches.keys()
-    .then(ks => Promise.all(ks.filter(k => k !== SHELL).map(k => caches.delete(k))))
+    .then(ks => Promise.all(ks.filter(k => k !== SHELL&&k !== POTREE).map(k => caches.delete(k))))
     .then(() => self.clients.claim()));
 });
 
@@ -29,6 +30,14 @@ self.addEventListener("fetch", e => {
   const url = new URL(req.url);
   if (url.origin !== self.location.origin) return;   // tiles and STAC go straight out
   if (url.pathname.startsWith("/api/")) return;      // never serve stale data
+
+  // The optional point-cloud runtime is intentionally not part of atomic shell
+  // installation. Cache it on first use so a missing optional asset can never
+  // take offline support down for the 2D application.
+  if(url.pathname.includes("/vendor/potree/")){
+    e.respondWith(caches.open(POTREE).then(cache=>cache.match(req).then(hit=>hit||fetch(req).then(response=>{if(response.ok)cache.put(req,response.clone());return response}))));
+    return;
+  }
 
   // Navigation: fresh when we can reach the server, cached shell when we cannot.
   if (req.mode === "navigate"){

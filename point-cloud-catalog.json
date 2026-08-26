@@ -1,0 +1,787 @@
+{
+  "schema": 1,
+  "source": "https://s3-us-west-2.amazonaws.com/usgs-lidar-public/",
+  "generatedAt": "2026-08-26T22:36:21.964Z",
+  "projects": [
+    {
+      "project": "WA_CentralWildfire_1_D22",
+      "year": 2022,
+      "points": 240251758772,
+      "dataType": "laszip",
+      "hierarchyType": "json",
+      "span": 128,
+      "srs": "EPSG:3857",
+      "bounds": [
+        -13584729,
+        5978254,
+        -147043,
+        -13287335,
+        6275648,
+        150351
+      ],
+      "boundsConforming": [
+        -13562777,
+        5978255,
+        56,
+        -13309287,
+        6275647,
+        3253
+      ],
+      "url": "https://s3-us-west-2.amazonaws.com/usgs-lidar-public/WA_CentralWildfire_1_D22/ept.json"
+    },
+    {
+      "project": "WA_CentralWildfire_2_D22",
+      "year": 2022,
+      "points": 248324114890,
+      "dataType": "laszip",
+      "hierarchyType": "json",
+      "span": 128,
+      "srs": "EPSG:3857",
+      "bounds": [
+        -13661997,
+        5733759,
+        -158433,
+        -13341833,
+        6053923,
+        161731
+      ],
+      "boundsConforming": [
+        -13661996,
+        5769014,
+        -214,
+        -13341835,
+        6018668,
+        3512
+      ],
+      "url": "https://s3-us-west-2.amazonaws.com/usgs-lidar-public/WA_CentralWildfire_2_D22/ept.json"
+    },
+    {
+      "project": "WA_ChehalisRiverTB_Topobathy_1_D23",
+      "year": 2023,
+      "points": 6125545902,
+      "dataType": "laszip",
+      "hierarchyType": "json",
+      "span": 128,
+      "srs": "EPSG:3857",
+      "bounds": [
+        -13748384,
+        5813625,
+        -53525,
+        -13641062,
+        5920947,
+        53797
+      ],
+      "boundsConforming": [
+        -13748383,
+        5843208,
+        -635,
+        -13641062,
+        5891364,
+        906
+      ],
+      "url": "https://s3-us-west-2.amazonaws.com/usgs-lidar-public/WA_ChehalisRiverTB_Topobathy_1_D23/ept.json"
+    },
+    {
+      "project": "WA_ColumbiaValley_1_2018",
+      "year": 2018,
+      "points": 96967943742,
+      "dataType": "laszip",
+      "hierarchyType": "json",
+      "span": 128,
+      "srs": "EPSG:3857",
+      "bounds": [
+        -13246485,
+        5987490,
+        -65337,
+        -13113745,
+        6120230,
+        67403
+      ],
+      "boundsConforming": [
+        -13246484,
+        6006441,
+        -160,
+        -13113746,
+        6101278,
+        2225
+      ],
+      "url": "https://s3-us-west-2.amazonaws.com/usgs-lidar-public/WA_ColumbiaValley_1_2018/ept.json"
+    },
+    {
+      "project": "WA_ColumbiaValley_2_2018",
+      "year": 2018,
+      "points": 83754576302,
+      "dataType": "laszip",
+      "hierarchyType": "json",
+      "span": 128,
+      "srs": "EPSG:3857",
+      "bounds": [
+        -13289775,
+        5875605,
+        -86930,
+        -13114163,
+        6051217,
+        88682
+      ],
+      "boundsConforming": [
+        -13289774,
+        5918005,
+        -92,
+        -13114164,
+        6008816,
+        1845
+      ],
+      "url": "https://s3-us-west-2.amazonaws.com/usgs-lidar-public/WA_ColumbiaValley_2_2018/ept.json"
+    },
+    {
+      "project": "WA_ColumbiaValley_3_2018",
+      "year": 2018,
+      "points": 85112015840,
+      "dataType": "laszip",
+      "hierarchyType": "json",
+      "span": 128,
+      "srs": "EPSG:3857",
+      "bounds": [
+        -13346284,
+        5777648,
+        -106859,
+        -13130776,
+        5993156,
+        108649
+      ],
+      "boundsConforming": [
+        -13346282,
+        5849426,
+        -183,
+        -13130777,
+        5921377,
+        1974
+      ],
+      "url": "https://s3-us-west-2.amazonaws.com/usgs-lidar-public/WA_ColumbiaValley_3_2018/ept.json"
+    },
+    {
+      "project": "WA_DNR_3DEP_Processing_1_2019",
+      "year": 2019,
+      "points": 60970621037,
+      "dataType": "laszip",
+      "hierarchyType": "json",
+      "span": 128,
+      "srs": "EPSG:3857",
+      "bounds": [
+        -13120920,
+        6056192,
+        -47035,
+        -13026850,
+        6150262,
+        47035
+      ],
+      "boundsConforming": [
+        -13120919,
+        6058519,
+        -2494,
+        -13026851,
+        6147935,
+        2494
+      ],
+      "url": "https://s3-us-west-2.amazonaws.com/usgs-lidar-public/WA_DNR_3DEP_Processing_1_2019/ept.json"
+    },
+    {
+      "project": "WA_EasternCascades_1_2019",
+      "year": 2019,
+      "points": 70566788832,
+      "dataType": "laszip",
+      "hierarchyType": "json",
+      "span": 128,
+      "srs": "EPSG:3857",
+      "bounds": [
+        -13504925,
+        5851868,
+        -76654,
+        -13348971,
+        6007822,
+        79300
+      ],
+      "boundsConforming": [
+        -13495685,
+        5851869,
+        -55,
+        -13358210,
+        6007821,
+        2701
+      ],
+      "url": "https://s3-us-west-2.amazonaws.com/usgs-lidar-public/WA_EasternCascades_1_2019/ept.json"
+    },
+    {
+      "project": "WA_EasternCascades_2_2019",
+      "year": 2019,
+      "points": 9152100863,
+      "dataType": "laszip",
+      "hierarchyType": "json",
+      "span": 128,
+      "srs": "EPSG:3857",
+      "bounds": [
+        -13527321,
+        5738270,
+        -83388,
+        -13358213,
+        5907378,
+        85720
+      ],
+      "boundsConforming": [
+        -13527320,
+        5785050,
+        -96,
+        -13358214,
+        5860598,
+        2429
+      ],
+      "url": "https://s3-us-west-2.amazonaws.com/usgs-lidar-public/WA_EasternCascades_2_2019/ept.json"
+    },
+    {
+      "project": "WA_EasternCascades_3_2019",
+      "year": 2019,
+      "points": 11851071463,
+      "dataType": "laszip",
+      "hierarchyType": "json",
+      "span": 128,
+      "srs": "EPSG:3857",
+      "bounds": [
+        -13427889,
+        5785190,
+        -76773,
+        -13272177,
+        5940902,
+        78939
+      ],
+      "boundsConforming": [
+        -13358479,
+        5785192,
+        15,
+        -13341587,
+        5940901,
+        2152
+      ],
+      "url": "https://s3-us-west-2.amazonaws.com/usgs-lidar-public/WA_EasternCascades_3_2019/ept.json"
+    },
+    {
+      "project": "WA_EasternCascades_4_2019",
+      "year": 2019,
+      "points": 7655009853,
+      "dataType": "laszip",
+      "hierarchyType": "json",
+      "span": 128,
+      "srs": "EPSG:3857",
+      "bounds": [
+        -13380731,
+        6069406,
+        -29446,
+        -13319701,
+        6130436,
+        31584
+      ],
+      "boundsConforming": [
+        -13358480,
+        6069407,
+        -778,
+        -13341953,
+        6130434,
+        2916
+      ],
+      "url": "https://s3-us-west-2.amazonaws.com/usgs-lidar-public/WA_EasternCascades_4_2019/ept.json"
+    },
+    {
+      "project": "WA_EasternCascades_5_2019",
+      "year": 2019,
+      "points": 60474218013,
+      "dataType": "laszip",
+      "hierarchyType": "json",
+      "span": 128,
+      "srs": "EPSG:3857",
+      "bounds": [
+        -13566929,
+        5896454,
+        -84446,
+        -13394979,
+        6068404,
+        87504
+      ],
+      "boundsConforming": [
+        -13529314,
+        5896455,
+        -187,
+        -13432594,
+        6068403,
+        3245
+      ],
+      "url": "https://s3-us-west-2.amazonaws.com/usgs-lidar-public/WA_EasternCascades_5_2019/ept.json"
+    },
+    {
+      "project": "WA_EasternCascades_6_2019",
+      "year": 2019,
+      "points": 169236169836,
+      "dataType": "laszip",
+      "hierarchyType": "json",
+      "span": 128,
+      "srs": "EPSG:3857",
+      "bounds": [
+        -13514801,
+        6019716,
+        -89489,
+        -13334393,
+        6200124,
+        90919
+      ],
+      "boundsConforming": [
+        -13490988,
+        6019718,
+        -2226,
+        -13358206,
+        6200123,
+        3656
+      ],
+      "url": "https://s3-us-west-2.amazonaws.com/usgs-lidar-public/WA_EasternCascades_6_2019/ept.json"
+    },
+    {
+      "project": "WA_ElwhaRiver_2012",
+      "year": 2012,
+      "points": 1372666821,
+      "dataType": "laszip",
+      "hierarchyType": "json",
+      "span": 256,
+      "srs": "EPSG:3857",
+      "bounds": [
+        -13768818,
+        6095518,
+        -17837,
+        -13732016,
+        6132320,
+        18965
+      ],
+      "boundsConforming": [
+        -13764162,
+        6095519,
+        -106,
+        -13736671,
+        6132318,
+        1233
+      ],
+      "url": "https://s3-us-west-2.amazonaws.com/usgs-lidar-public/WA_ElwhaRiver_2012/ept.json"
+    },
+    {
+      "project": "WA_FEMAHQ_B1_QL1_2018",
+      "year": 2018,
+      "points": 652534873,
+      "dataType": "laszip",
+      "hierarchyType": "json",
+      "span": 128,
+      "srs": "EPSG:3857",
+      "bounds": [
+        -13066068,
+        6173542,
+        -4398,
+        -13055728,
+        6183882,
+        5942
+      ],
+      "boundsConforming": [
+        -13066066,
+        6174504,
+        279,
+        -13055729,
+        6182920,
+        1265
+      ],
+      "url": "https://s3-us-west-2.amazonaws.com/usgs-lidar-public/WA_FEMAHQ_B1_QL1_2018/ept.json"
+    },
+    {
+      "project": "WA_FEMAHQ_B1_QL2_2018",
+      "year": 2018,
+      "points": 34593754060,
+      "dataType": "laszip",
+      "hierarchyType": "json",
+      "span": 128,
+      "srs": "EPSG:3857",
+      "bounds": [
+        -13165702,
+        5845955,
+        -69309,
+        -13025400,
+        5986257,
+        70993
+      ],
+      "boundsConforming": [
+        -13164140,
+        5845956,
+        -19,
+        -13026962,
+        5986255,
+        1703
+      ],
+      "url": "https://s3-us-west-2.amazonaws.com/usgs-lidar-public/WA_FEMAHQ_B1_QL2_2018/ept.json"
+    },
+    {
+      "project": "WA_FEMAHQ_B2B_2018",
+      "year": 2018,
+      "points": 20634727182,
+      "dataType": "laszip",
+      "hierarchyType": "json",
+      "span": 128,
+      "srs": "EPSG:3857",
+      "bounds": [
+        -13527746,
+        5659145,
+        -92929,
+        -13341514,
+        5845377,
+        93303
+      ],
+      "boundsConforming": [
+        -13527745,
+        5715647,
+        -2218,
+        -13341516,
+        5788874,
+        2591
+      ],
+      "url": "https://s3-us-west-2.amazonaws.com/usgs-lidar-public/WA_FEMAHQ_B2B_2018/ept.json"
+    },
+    {
+      "project": "WA_FEMAHQ_B2C_2018",
+      "year": 2018,
+      "points": 5706128022,
+      "dataType": "laszip",
+      "hierarchyType": "json",
+      "span": 128,
+      "srs": "EPSG:3857",
+      "bounds": [
+        -13621981,
+        5689959,
+        -38196,
+        -13548091,
+        5763849,
+        35694
+      ],
+      "boundsConforming": [
+        -13621980,
+        5706565,
+        -5282,
+        -13548092,
+        5747243,
+        2779
+      ],
+      "url": "https://s3-us-west-2.amazonaws.com/usgs-lidar-public/WA_FEMAHQ_B2C_2018/ept.json"
+    },
+    {
+      "project": "WA_KingCo_1_2021",
+      "year": 2021,
+      "points": 30991978247,
+      "dataType": "laszip",
+      "hierarchyType": "json",
+      "span": 128,
+      "srs": "EPSG:3857",
+      "bounds": [
+        -13660166,
+        5968012,
+        -55203,
+        -13550808,
+        6077370,
+        54155
+      ],
+      "boundsConforming": [
+        -13643070,
+        5968012,
+        -2352,
+        -13567904,
+        6077369,
+        1304
+      ],
+      "url": "https://s3-us-west-2.amazonaws.com/usgs-lidar-public/WA_KingCo_1_2021/ept.json"
+    },
+    {
+      "project": "WA_KittitasCounty_2011",
+      "year": 2011,
+      "points": 1477969339,
+      "dataType": "laszip",
+      "hierarchyType": "json",
+      "span": 256,
+      "srs": "EPSG:3857",
+      "bounds": [
+        -13493315,
+        5910963,
+        -47547,
+        -13396599,
+        6007679,
+        49169
+      ],
+      "boundsConforming": [
+        -13493313,
+        5932922,
+        449,
+        -13396600,
+        5985719,
+        1173
+      ],
+      "url": "https://s3-us-west-2.amazonaws.com/usgs-lidar-public/WA_KittitasCounty_2011/ept.json"
+    },
+    {
+      "project": "WA_Nisqually_Bathymetric_2020",
+      "year": 2020,
+      "points": 4986770906,
+      "dataType": "laszip",
+      "hierarchyType": "json",
+      "span": 128,
+      "srs": "EPSG:3857",
+      "bounds": [
+        -13667054,
+        5941089,
+        -11389,
+        -13646926,
+        5961217,
+        8739
+      ],
+      "boundsConforming": [
+        -13663283,
+        5941090,
+        -2842,
+        -13650697,
+        5961215,
+        191
+      ],
+      "url": "https://s3-us-west-2.amazonaws.com/usgs-lidar-public/WA_Nisqually_Bathymetric_2020/ept.json"
+    },
+    {
+      "project": "WA_Nisqually_TopoBathy_1_2020",
+      "year": 2020,
+      "points": 4986770906,
+      "dataType": "laszip",
+      "hierarchyType": "json",
+      "span": 128,
+      "srs": "EPSG:3857",
+      "bounds": [
+        -13667054,
+        5941089,
+        -11389,
+        -13646926,
+        5961217,
+        8739
+      ],
+      "boundsConforming": [
+        -13663283,
+        5941090,
+        -2842,
+        -13650697,
+        5961215,
+        191
+      ],
+      "url": "https://s3-us-west-2.amazonaws.com/usgs-lidar-public/WA_Nisqually_TopoBathy_1_2020/ept.json"
+    },
+    {
+      "project": "WA_NorthCentral_1_2021",
+      "year": 2021,
+      "points": 102689005754,
+      "dataType": "laszip",
+      "hierarchyType": "json",
+      "span": 128,
+      "srs": "EPSG:3857",
+      "bounds": [
+        -13407171,
+        5866934,
+        -107749,
+        -13193683,
+        6080422,
+        105739
+      ],
+      "boundsConforming": [
+        -13358493,
+        5866935,
+        -5001,
+        -13242361,
+        6080421,
+        2992
+      ],
+      "url": "https://s3-us-west-2.amazonaws.com/usgs-lidar-public/WA_NorthCentral_1_2021/ept.json"
+    },
+    {
+      "project": "WA_NorthCentral_2_2021",
+      "year": 2021,
+      "points": 166158783736,
+      "dataType": "laszip",
+      "hierarchyType": "json",
+      "span": 128,
+      "srs": "EPSG:3857",
+      "bounds": [
+        -13392306,
+        6077610,
+        -100389,
+        -13193010,
+        6276906,
+        98907
+      ],
+      "boundsConforming": [
+        -13358504,
+        6077612,
+        -4885,
+        -13226812,
+        6276905,
+        3403
+      ],
+      "url": "https://s3-us-west-2.amazonaws.com/usgs-lidar-public/WA_NorthCentral_2_2021/ept.json"
+    },
+    {
+      "project": "WA_NorthCentral_3_2021",
+      "year": 2021,
+      "points": 127466872082,
+      "dataType": "laszip",
+      "hierarchyType": "json",
+      "span": 128,
+      "srs": "EPSG:3857",
+      "bounds": [
+        -13613231,
+        5866848,
+        -205438,
+        -13203037,
+        6277042,
+        204756
+      ],
+      "boundsConforming": [
+        -13458095,
+        5866849,
+        -4276,
+        -13358173,
+        6277041,
+        3594
+      ],
+      "url": "https://s3-us-west-2.amazonaws.com/usgs-lidar-public/WA_NorthCentral_3_2021/ept.json"
+    },
+    {
+      "project": "WA_NorthEast_1_B22",
+      "year": 2022,
+      "points": 269734963720,
+      "dataType": "laszip",
+      "hierarchyType": "json",
+      "span": 128,
+      "srs": "EPSG:3857",
+      "bounds": [
+        -13233607,
+        6106167,
+        -123766,
+        -12982773,
+        6357001,
+        127068
+      ],
+      "boundsConforming": [
+        -13233606,
+        6185903,
+        -242,
+        -12982774,
+        6277264,
+        3545
+      ],
+      "url": "https://s3-us-west-2.amazonaws.com/usgs-lidar-public/WA_NorthEast_1_B22/ept.json"
+    },
+    {
+      "project": "WA_NorthEast_2_B22",
+      "year": 2022,
+      "points": 166814533953,
+      "dataType": "laszip",
+      "hierarchyType": "json",
+      "span": 128,
+      "srs": "EPSG:3857",
+      "bounds": [
+        -13209477,
+        5982350,
+        -101839,
+        -13002707,
+        6189120,
+        104931
+      ],
+      "boundsConforming": [
+        -13185570,
+        5982351,
+        -223,
+        -13026613,
+        6189120,
+        3316
+      ],
+      "url": "https://s3-us-west-2.amazonaws.com/usgs-lidar-public/WA_NorthEast_2_B22/ept.json"
+    },
+    {
+      "project": "WA_Pasco_1_2020",
+      "year": 2020,
+      "points": 29676609277,
+      "dataType": "laszip",
+      "hierarchyType": "json",
+      "span": 128,
+      "srs": "EPSG:3857",
+      "bounds": [
+        -13356192,
+        5858472,
+        -50576,
+        -13254250,
+        5960414,
+        51366
+      ],
+      "boundsConforming": [
+        -13356191,
+        5881015,
+        -58,
+        -13254251,
+        5937871,
+        849
+      ],
+      "url": "https://s3-us-west-2.amazonaws.com/usgs-lidar-public/WA_Pasco_1_2020/ept.json"
+    },
+    {
+      "project": "WA_PierceCounty_1_2020",
+      "year": 2020,
+      "points": 59348004619,
+      "dataType": "laszip",
+      "hierarchyType": "json",
+      "span": 128,
+      "srs": "EPSG:3857",
+      "bounds": [
+        -13680590,
+        5901210,
+        -55283,
+        -13571154,
+        6010646,
+        54153
+      ],
+      "boundsConforming": [
+        -13675203,
+        5901211,
+        -2807,
+        -13576540,
+        6010645,
+        1676
+      ],
+      "url": "https://s3-us-west-2.amazonaws.com/usgs-lidar-public/WA_PierceCounty_1_2020/ept.json"
+    },
+    {
+      "project": "WA_ThurstonCo_1_2021",
+      "year": 2021,
+      "points": 15920699661,
+      "dataType": "laszip",
+      "hierarchyType": "json",
+      "span": 128,
+      "srs": "EPSG:3857",
+      "bounds": [
+        -13715097,
+        5876555,
+        -55768,
+        -13603437,
+        5988215,
+        55892
+      ],
+      "boundsConforming": [
+        -13715095,
+        5903126,
+        -1465,
+        -13603438,
+        5961643,
+        1589
+      ],
+      "url": "https://s3-us-west-2.amazonaws.com/usgs-lidar-public/WA_ThurstonCo_1_2021/ept.json"
+    }
+  ]
+}

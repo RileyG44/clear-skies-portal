@@ -1,7 +1,7 @@
 # Build spec — linked 3D point-cloud panel
 
-Implementation handoff. Self-contained: paste this whole file as the opening
-prompt. It describes a feature that does **not** exist yet.
+Implementation handoff and historical build spec. The feature was implemented
+in build **2026-08-26e**; the measured as-built record is in §9.
 
 Everything under "Verified" was measured against the live services on
 2026-08-26. Trust those numbers rather than re-deriving them, and do not
@@ -319,3 +319,70 @@ Do not rediscover these.
   in `sw.js`; new runtime files are in the Pages `cp` list.
 - A short `POINT_CLOUD_3D.md` "as built" section records what changed, anything
   measured, and anything that turned out differently from this spec.
+
+---
+
+## 9. As built — 2026-08-26
+
+### Runtime and provenance
+
+- The app uses the official Potree **1.8.2** release, pinned in
+  `vendor/potree/SOURCE.json` to release archive SHA-256
+  `c140a8c5716a0edb5221059c8901f49d554038a05393e187f10c0ee236b1d263`.
+- The npm package named `potree` is an unrelated, obsolete package. It was not
+  added. The browser runtime is instead a curated **3.1 MB** subset of the
+  official release: Potree JS/CSS, EPT LAZ worker and WASM, COPC helpers,
+  projection/runtime companions, and the resources observed during a real EPT
+  load. `scripts/sync-vendor.js` verifies the pinned critical files.
+- Potree loads lazily on first use. Its files use a dedicated on-use service
+  worker cache rather than the atomic install-time asset list, so a future
+  optional runtime-file error cannot prevent the whole portal from installing.
+- `THIRD_PARTY_NOTICES.md` records Potree and companion licences.
+
+### Data and selection
+
+- `scripts/sync-point-cloud-catalog.js` lists the USGS bucket, reads all 30
+  Washington `ept.json` documents, verifies EPSG:3857, and writes
+  `point-cloud-catalog.json`. The generated catalog is cached for 30 days in the
+  browser and can be regenerated with `npm run catalog:point-cloud`.
+- Coverage selection uses the viewport centre and `boundsConforming`, newest
+  project first and point count as the tie-breaker. Rainier selects
+  `WA_CentralWildfire_2_D22` and reports its 248.3 billion available points.
+- A moved view invalidates any stale in-flight project callback. A location
+  outside the catalog displays an explicit no-coverage message.
+
+### Viewer and interaction
+
+- `point-cloud-viewer.js` owns the lazy runtime, Potree viewer, direct EPT load,
+  controls, class presets, camera linking, persistent panel dimensions, and
+  teardown. `point-cloud-core.js` contains the pure projection, camera,
+  coverage, and synchronization logic used by the viewer and tests.
+- Internal Potree camera changes during startup cannot move the 2D map. Only a
+  real pointer or wheel interaction in the 3D canvas can initiate 3D → 2D sync;
+  programmatic updates also pass through a shared recursion guard and timing
+  gate. Re-linking treats 2D as authoritative.
+- The point panel stops click and wheel propagation before Leaflet sees it.
+  Closing it or pressing a class preset therefore cannot accidentally select a
+  new map location.
+- Closing removes clouds and GPU materials, disposes and force-loses the WebGL
+  context, terminates both idle and active decoder workers, and preserves the
+  static panel header for a clean reopen.
+- The left sidebar and right point-cloud panel now share a 52 px collision
+  gutter. The panel being resized takes available width from the other down to
+  its minimum instead of overlapping it; the sidebar toggle remains in the
+  gutter. On phones the two workspaces are mutually exclusive. The displayed-
+  imagery info panel is offset from, and stacked above, the right tool dock.
+
+### Deployment and verification
+
+- Pages CI, the local static allowlist, macOS service installer, desktop
+  packaging, cache version, and build stamp include the point-cloud runtime,
+  catalog, and modules.
+- `npm run verify` passes the syntax/static checks, point-cloud pure tests, the
+  existing terrain and imagery suites, the server integration test, and the
+  dependency audit with zero reported vulnerabilities.
+- Browser QA used the live Rainier EPT archive in a hardware-accelerated canvas:
+  points rendered, both class presets updated immediately, close/reopen retained
+  the header, no-coverage messaging rendered, and control clicks did not move
+  the map. Layout was visually checked at the default desktop size, at 900×800
+  with both sidebars open, and at 390×844 with mobile safe-area behavior.

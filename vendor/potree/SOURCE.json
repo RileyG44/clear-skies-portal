@@ -1,0 +1,11 @@
+{
+  "name": "Potree",
+  "version": "1.8.2",
+  "license": "BSD-2-Clause",
+  "release": "https://github.com/potree/potree/releases/download/1.8.2/Potree_1.8.2.zip",
+  "releaseSha256": "c140a8bce0ce129de762fbc0fd3ba7c21120ffd36d423dd2755abb39f32aebe5",
+  "releaseBytes": 59387644,
+  "includedFiles": 21,
+  "includedBytes": 3106616,
+  "note": "Minimal browser runtime measured with the Rainier USGS EPT dataset. copc/index.js must load before potree.js; no npm package named potree is used because that registry package is unrelated."
+}

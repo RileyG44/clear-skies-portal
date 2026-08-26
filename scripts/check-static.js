@@ -336,6 +336,12 @@ assert.equal(pkg.dependencies["maplibre-gl"],"^6.6.0","3D terrain must pin the r
 assert.equal(pkg.dependencies["@tomickigrzegorz/leaflet-rotate"],"^0.2.4","2D rotation must use the reviewed MIT plugin");
 for(const asset of ["maplibre-gl.mjs","maplibre-gl-shared.mjs","maplibre-gl-worker.mjs","maplibre-gl.css","leaflet-rotate.umd.min.js"])
   assert(fs.existsSync(path.join(root,"vendor",asset)),`missing vendored renderer asset: ${asset}`);
+assert(index.includes('id="pointCloudPanel"')&&index.includes('id="terModePoints"'),"3D point-cloud panel and entry point must exist");
+assert(index.includes('id="pcBareEarth"')&&index.includes('id="pcAllReturns"'),"point-cloud class presets must be wired");
+for(const asset of ["build/potree/potree.js","build/potree/workers/EptLaszipDecoderWorker.js","build/potree/workers/laz-perf.wasm","libs/copc/index.js","SOURCE.json"])
+  assert(fs.existsSync(path.join(root,"vendor","potree",asset)),`missing vendored Potree asset: ${asset}`);
+const pointCatalog=JSON.parse(read("point-cloud-catalog.json"));
+assert.equal(pointCatalog.projects.length,30,"Washington point-cloud catalog must contain 30 projects");
 for(const icon of manifest.icons||[])
   assert(fs.existsSync(path.join(root,icon.src)),`missing manifest icon: ${icon.src}`);
 

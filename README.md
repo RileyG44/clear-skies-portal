@@ -119,6 +119,25 @@ image and cannot be moved. 3D requires WebGL2; unsupported or GPU-blocked browse
 stay safely in 2D and explain why in the Terrain pane. See `THREE_D_TERRAIN.md` for
 the implementation and maintenance handoff.
 
+## Linked 3D point clouds
+
+Open **Terrain · lidar → 3D point cloud** for the optional USGS 3DEP point-cloud
+viewer. It lazy-loads only when requested and keeps the ordinary 2D map visible
+as the geographic reference. The two cameras are linked by default; unlink them
+to inspect the cloud without moving the map.
+
+The panel streams the covering Washington EPT project directly from the USGS
+public archive and provides a 1–10 million point budget, fixed/adaptive sizing,
+elevation/intensity/classification/RGB/return colouring, Eye-Dome Lighting, and
+ASPRS class filters. **Bare earth** shows class 2 only; **All returns** restores
+the full cloud. Width and view/control split persist locally. Closing the panel
+destroys its WebGL context and workers.
+
+On narrow desktops the left and right panels share a collision boundary: the
+panel being expanded gently takes space from the other while preserving a gutter
+for the sidebar toggle. On phones, opening one workspace closes the other. See
+`POINT_CLOUD_3D.md` for architecture, provenance, maintenance details, and QA.
+
 ## Export a map image
 
 Use the camera button beside the map-panel toggle. It opens a direct **PNG** exporter;
@@ -152,6 +171,9 @@ map-like zoom would be a tiled package or Cloud-Optimized GeoTIFF rather than on
 | `index.html` | The whole app — one self-contained file, Leaflet inlined |
 | `vendor/` | Pinned browser bundles for MapLibre GL JS and Leaflet rotation |
 | `terrain-raster.js` | Shared deterministic CPU terrain styling used by 2D, 3D protocol tiles, and tests |
+| `point-cloud-viewer.js` | Lazy Potree viewer, EPT loading, controls, linked cameras, cleanup, and panel sizing |
+| `point-cloud-core.js` | Tested Web Mercator camera, coverage selection, and synchronization helpers |
+| `point-cloud-catalog.json` | Generated index of the 30 Washington USGS EPT projects |
 | `mosaic-core.js` | Tested footprint geometry, antimeridian, identity, coverage and imagery LOD helpers |
 | `server.js` | Local terrain engine: static files, validated proxying, request coalescing, retries and disk cache |
 | `scripts/install-mac-service.sh` | Installs a loopback-only, self-healing macOS terrain-engine service |
@@ -160,6 +182,7 @@ map-like zoom would be a tiled package or Cloud-Optimized GeoTIFF rather than on
 | `version.js` | One build identifier shared by the page and service worker cache |
 | `TODO.md` | Work queue. Say "check the TODO" to a fresh Claude session and it picks up from there |
 | `THREE_D_TERRAIN.md` | 2D rotation, 3D terrain, lighting architecture, limitations, and QA handoff |
+| `POINT_CLOUD_3D.md` | Linked point-cloud architecture, verified data facts, as-built notes, and QA handoff |
 | `source-catalog.md` | ~50 free imagery sources with endpoints, licences, resolutions |
 | `sources.json` | Machine-readable version of the catalog |
 | `hiking-stack.md` | The Western-US subset: snow, fire, route-finding |
