@@ -133,15 +133,47 @@
     $("#pcReset").addEventListener("click",()=>{$("#pcBudget").value=3;$("#pcSize").value=1;$("#pcSizeMode").value="adaptive";$("#pcColour").value="elevation";$("#pcEdl").checked=true;$("#pcEdlStrength").value=1;$("#pcEdlRadius").value=1.4;document.querySelectorAll("[data-pc-class]").forEach(x=>x.checked=true);applyControls();syncFromMap()});
     function drag(handle,move){handle.addEventListener("pointerdown",event=>{if(event.button!==0)return;event.preventDefault();handle.setPointerCapture(event.pointerId);const onMove=e=>move(e);const stop=()=>{handle.removeEventListener("pointermove",onMove);handle.removeEventListener("pointerup",stop);handle.removeEventListener("pointercancel",stop)};handle.addEventListener("pointermove",onMove);handle.addEventListener("pointerup",stop);handle.addEventListener("pointercancel",stop)})}
     let preferredWidth=+localStorage.getItem("csp-pc-width")||560;
-    function fitAgainstLeft(leftEdge,gap=12){
-      if(matchMedia("(max-width:760px)").matches||panel.hidden)return;
-      const css=getComputedStyle(document.documentElement),safeRight=parseFloat(css.getPropertyValue("--safe-right"))||0;
-      const width=Math.max(380,Math.min(preferredWidth,innerWidth-safeRight-8-leftEdge-gap));panel.style.width=`${width}px`;state.viewer?.renderer?.setSize(canvas.clientWidth,canvas.clientHeight);
+    const narrow=()=>matchMedia("(max-width:760px)").matches;
+
+    /* Below the breakpoint the panel is a full-width bottom sheet laid out by
+       CSS (left/right pinned to the safe area). An inline width would override
+       that -- and did: the saved desktop width was applied unconditionally at
+       startup, so a 560px panel sat on a 375px phone and hung off the right
+       edge. Clear it on narrow viewports, and re-apply on the way back so
+       rotating a phone does not strand either state. */
+    /* The single place the panel's inline width is written, so the breakpoint
+       check cannot be forgotten at one call site the way it was at startup. */
+    function setPanelWidth(px){
+      if(narrow()) panel.style.removeProperty("width");
+      else panel.style.width=`${px}px`;
+      state.viewer?.renderer?.setSize(canvas.clientWidth,canvas.clientHeight);
     }
-    drag($("#pcWidthHandle"),event=>{if(matchMedia("(max-width:760px)").matches)return;preferredWidth=Math.max(380,Math.min(innerWidth-300,innerWidth-event.clientX-8));panel.style.width=`${preferredWidth}px`;localStorage.setItem("csp-pc-width",preferredWidth);onLayoutChange?.("right");state.viewer?.renderer?.setSize(canvas.clientWidth,canvas.clientHeight)});
+    function applyPanelWidth(){ setPanelWidth(preferredWidth) }
+
+    function fitAgainstLeft(leftEdge,gap=12){
+      if(narrow()||panel.hidden){ if(narrow()) applyPanelWidth(); return }
+      const css=getComputedStyle(document.documentElement),safeRight=parseFloat(css.getPropertyValue("--safe-right"))||0;
+      setPanelWidth(Math.max(380,Math.min(preferredWidth,innerWidth-safeRight-8-leftEdge-gap)));
+    }
+    drag($("#pcWidthHandle"),event=>{if(narrow())return;preferredWidth=Math.max(380,Math.min(innerWidth-300,innerWidth-event.clientX-8));setPanelWidth(preferredWidth);localStorage.setItem("csp-pc-width",preferredWidth);onLayoutChange?.("right")});
     drag($("#pcSplitHandle"),event=>{const r=panel.getBoundingClientRect(),split=Math.max(.35,Math.min(.78,(event.clientY-r.top)/r.height));panel.style.setProperty("--pc-split",`${split*100}%`);localStorage.setItem("csp-pc-split",split)});
-    const split=+localStorage.getItem("csp-pc-split");panel.style.width=`${preferredWidth}px`;if(split)panel.style.setProperty("--pc-split",`${split*100}%`);
-    addEventListener("resize",()=>{onLayoutChange?.("right");state.viewer?.renderer?.setSize(canvas.clientWidth,canvas.clientHeight)});
+    const split=+localStorage.getItem("csp-pc-split");applyPanelWidth();if(split)panel.style.setProperty("--pc-split",`${split*100}%`);
+    addEventListener("resize",()=>{applyPanelWidth();onLayoutChange?.("right")});
+    /* iOS Safari changes the viewport when its toolbar collapses, and that
+       arrives on visualViewport rather than as a window resize. Potree resizes
+       its own renderer from renderArea every frame, so the canvas is not the
+       concern -- this is here so the breakpoint is re-evaluated and the 2D
+       sidebar is re-fitted when the viewport changes without a window resize.
+       Coalesced, because visualViewport scroll fires continuously while the
+       toolbar animates. */
+    let vvTimer=0;
+    const onVisualViewport=()=>{clearTimeout(vvTimer);vvTimer=setTimeout(()=>{applyPanelWidth();onLayoutChange?.("right")},120)};
+    visualViewport?.addEventListener("resize",onVisualViewport);
+    visualViewport?.addEventListener("scroll",onVisualViewport);
+    /* iOS fires orientationchange before the new viewport metrics settle, so
+       re-run once the layout has actually changed. */
+    addEventListener("orientationchange",()=>setTimeout(()=>{applyPanelWidth();onLayoutChange?.("right")},250));
+    matchMedia("(max-width:760px)").addEventListener?.("change",applyPanelWidth);
     return {open,close,fitAgainstLeft,get active(){return state.wanted}};
   }
   window.CSPPointCloud={install};

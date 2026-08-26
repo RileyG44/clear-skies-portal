@@ -155,6 +155,23 @@ assert.equal(gibsSandbox.historicItems[0].date.slice(0,10),"2025-07-31",
        "historical GIBS search must remain anchored on the selected end date");
 assert(index.indexOf('World_Light_Gray_Base')<index.indexOf('World_Dark_Gray_Base'),
        "the readable light basemap must precede the dark fallback");
+/* The point-cloud panel is a full-width bottom sheet below 760px, laid out by
+   CSS. An inline width overrides that, and the saved desktop width used to be
+   applied unconditionally at startup -- a 560px panel on a 375px phone, hanging
+   off the right edge. Every write to panel.style.width must be breakpoint
+   aware, which is what applyPanelWidth() centralises. */
+{
+  const viewer=fs.readFileSync(path.join(root,"point-cloud-viewer.js"),"utf8");
+  assert(/function setPanelWidth\(px\)/.test(viewer),
+         "point-cloud panel width must go through setPanelWidth()");
+  assert(/if\(narrow\(\)\) panel\.style\.removeProperty\("width"\)/.test(viewer),
+         "setPanelWidth must clear the inline width on narrow viewports");
+  const writes=(viewer.match(/panel\.style\.width\s*=/g)||[]).length;
+  assert.equal(writes,1,`panel.style.width is written ${writes} times; it belongs only inside setPanelWidth`);
+  assert(/visualViewport\?\.addEventListener\("resize"/.test(viewer),
+         "iOS changes the viewport via visualViewport without a window resize; the breakpoint must be re-evaluated there");
+}
+
 assert(!/cartocdn/.test(index),
        "no CARTO basemap may remain: unkeyed tiles are watermarked and raster is being retired");
 /* setMapTheme runs during load and asks the themed overlays to rebuild, but
