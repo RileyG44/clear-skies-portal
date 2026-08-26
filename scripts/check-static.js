@@ -74,8 +74,26 @@ assert(read("sw.js").includes(`const CSP_BUILD = "${versionSandbox.CSP_BUILD}";`
 assert(index.includes('register("sw.js",{updateViaCache:"none"})'),
        "service-worker imports must bypass stale HTTP cache during update checks");
 assert(index.includes('id="snapshot"'),"map snapshot control must be present");
-assert(index.includes('getDisplayMedia'),"map snapshot control must use browser surface capture");
-assert(index.includes('body.print-map'),"map snapshot control must have a print fallback");
+assert(index.includes('id="snapshotPanel"')&&index.includes('id="snapshotScale"')&&index.includes('id="snapshotSave"'),
+       "map export must expose a direct PNG-resolution chooser");
+assert(!index.includes('getDisplayMedia')&&index.includes('composeHighResolutionSnapshot')&&
+       index.includes('snapshotEl.onclick=()=>setSnapshotPanel(snapshotPanel.hidden)'),
+       "map export must render directly instead of rejecting macOS window capture");
+assert(index.includes('SNAPSHOT_PRESETS')&&index.includes('sourceSteps')&&index.includes('snapshotLayerTileUrl')&&
+       index.includes('SNAPSHOT_MAX_TILES=720'),
+       "higher-resolution exports must request bounded source tiles for the current geographic extent");
+assert(index.includes('touchShare=matchMedia("(pointer: coarse)").matches')&&
+       index.includes("Downloaded ${name} to this browser's Downloads."),
+       "desktop map exports must download without invoking a system share sheet");
+const snapshotRangeSandbox={};
+vm.runInNewContext(`${namedFunction(index,"snapshotWorldY")}; ${namedFunction(index,"snapshotTileRange")};
+  regional=snapshotTileRange({getWest:()=>-120,getEast:()=>-119,getNorth:()=>48,getSouth:()=>47},10);
+  dateline=snapshotTileRange({getWest:()=>179,getEast:()=>-179,getNorth:()=>1,getSouth:()=>-1},4);`,
+  snapshotRangeSandbox,{filename:"index.html#snapshot-range-test"});
+assert(snapshotRangeSandbox.regional.x1>=snapshotRangeSandbox.regional.x0&&snapshotRangeSandbox.regional.y1>=snapshotRangeSandbox.regional.y0,
+       "high-resolution export must cover every tile in an ordinary current viewport");
+assert(snapshotRangeSandbox.dateline.x1>=snapshotRangeSandbox.dateline.x0,
+       "high-resolution export must preserve an extent crossing the antimeridian");
 assert(index.includes('setView([47.1301,-119.2781], 9)'),"Moses Lake must remain the default terrain test view");
 assert(index.includes('placeholder="Search a place, or 47.1301, -119.2781"'),"Moses Lake coordinates must be the visible search default");
 assert(index.includes('id="srvConnect"'),"terrain engine needs an explicit connect control");

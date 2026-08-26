@@ -5,13 +5,25 @@
 **How to use:** say *"check the TODO"* or *"next item from the TODO"* and I'll read this file instead of us re-deriving it in conversation. Say *"add X to the TODO"* or *"mark X done"* and I'll edit it in place.
 
 Priorities below marked **[proposed]** are my suggestion, not your decision — reorder freely.
-Last updated: 2026-08-25
+Last updated: 2026-08-26
 
 ---
 
 ## P0 — Next up
 
 ## Done
+
+- [x] **Direct high-resolution map export** (2026-08-26) — the camera tool no
+  longer asks macOS to screen-share a window or tab (the former path rejected
+  macOS window captures before a file could be saved). It now opens a PNG export
+  panel for the exact current geographic extent: **Screen** uses the display
+  density, **Detail** requests one extra source zoom, and **Archive** requests
+  two. The panel discloses output pixels, megapixels, and source-tile count up
+  front; exports are bounded to 24 MP, an 8,192 px edge, and 720 tile requests.
+  Desktop saves to Downloads; touch devices retain the system share sheet. Raster
+  source limits remain honest, vector overlays stay sharp, and locally rendered
+  canvas/WebGL terrain remains at its current viewport resolution. Verified with
+  direct Screen and Detail PNG downloads in the local app, no console errors.
 
 - [x] **Spectrum, Ice Age, and responsive-control refinement** (2026-08-25) —
   the elevation legend now sits directly below its colour ramp, with a separate

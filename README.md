@@ -92,12 +92,31 @@ place to declare `engines`, nothing more. CI (`.github/workflows/ci.yml`) syntax
 `server.js` and the Python scripts, validates `sources.json`, and boots the server to
 confirm `/api/health` answers.
 
-## Save a map snapshot
+## Export a map image
 
-Use the camera button beside the map-panel toggle. Choose **This Tab** in the browser's
-capture prompt and the portal downloads a PNG of the live map viewport, including its
-currently rendered imagery, terrain, and overlays. Browsers without tab capture open
-their print dialog instead, where the same viewport can be saved as a PDF.
+Use the camera button beside the map-panel toggle. It opens a direct **PNG** exporter;
+it never asks macOS to capture a window, screen, or browser tab. On desktop the finished
+file is downloaded to the browser's Downloads folder. On touch devices the system share
+sheet is used when the browser supports sharing files.
+
+The exporter preserves the exact geographic extent currently visible on the map and
+offers three output sizes:
+
+- **Screen** uses the current display density and current source zoom.
+- **Detail** doubles each output dimension and requests one additional source-tile zoom.
+- **Archive** quadruples each output dimension and requests two additional source-tile
+  zooms, bounded to 24 megapixels, an 8,192-pixel edge, and 720 source-tile requests.
+
+The panel states the resulting pixel dimensions, megapixels, and source-tile count
+before anything is downloaded. Higher modes obtain actual smaller-area source tiles for
+ordinary tiled imagery, basemaps, and reference layers whenever the provider publishes
+them. If a source ends at a lower native zoom, it is enlarged honestly rather than
+inventing detail. Vector overlays remain sharp; locally rendered canvas/WebGL terrain
+and elevation layers are included at their currently rendered viewport resolution.
+
+A PNG is still a finite raster image: you can zoom into it until you reach the chosen
+pixel resolution, not indefinitely. A future research-grade export for continued
+map-like zoom would be a tiled package or Cloud-Optimized GeoTIFF rather than one PNG.
 
 ## What's in the box
 
