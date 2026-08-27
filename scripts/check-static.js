@@ -259,8 +259,22 @@ assert(index.includes('class="elev-spectrum-scale"')&&
        index.indexOf('class="elevKey"')<index.indexOf('id="elevAlpha"')&&
        index.includes('for="elevAlpha">Spectrum opacity'),
        "the elevation legend must sit below its ramp and remain separate from spectrum opacity");
-assert(index.includes('height:var(--app-height);background:var(--page)')&&!index.includes('syncVisualViewport'),
-       "the application shell must use CSS dynamic viewport sizing without a shortened visual-viewport offset");
+/* The shell must never be sized from a measurement that can come up short of
+   the screen. That was first a JS visual-viewport offset; replacing it with
+   height:100dvh moved the same failure rather than ending it, because an
+   installed standalone PWA reports that unit short of the display by the bottom
+   safe-area inset - the map stopped above the home indicator and the manifest
+   background showed through as a black bar. #app is position:fixed, so inset:0
+   resolves against the initial containing block, which under viewport-fit=cover
+   is the whole screen. No measurement, nothing to come up short. */
+assert(index.includes('#app{position:fixed;inset:0;width:100%;background:var(--page)}'),
+       "the application shell must be sized by inset:0 against the initial containing block");
+assert(!/#app\{[^}]*height:/.test(index),
+       "the shell must not carry an explicit height; it over-constrains inset:0 and can fall short of the screen");
+assert(!index.includes('syncVisualViewport'),
+       "the shell must never be sized from a JS-measured visual viewport");
+assert(index.includes('content="width=device-width,initial-scale=1,viewport-fit=cover"'),
+       "viewport-fit=cover is what makes the safe-area strips part of the shell");
 assert(index.includes('doubleClickZoom:false')&&index.includes('map.on("dblclick",e=>{ stageMapLocation(e); run(); });'),
        "a map point must be selected on one click and load imagery only on double click or double tap");
 assert(index.includes('PANE_REORDER_HOLD_MS=260')&&index.includes('Press and hold to reorder.'),
