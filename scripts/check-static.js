@@ -104,8 +104,16 @@ assert(index.includes('list="elevSpanPresets"'),"elevation span must accept cust
 assert(index.includes('nationalEndpoint:"/api/elev/national",rawEndpoint:"/api/usgs/elev"'),
        "elevation spectrum must progressively refine one shader layer");
 assert(!index.includes('elevRawLayer'),"elevation spectrum must not double-paint national and raw colour tiles");
-assert(index.includes('if(raw[i]===raw[i]) merged[i]=raw[i]'),
+/* Both refinement stages must go through mergeElevation. Its predecessor was an
+   inline loop guarded only by the array's existence, so a no-coverage answer -
+   which is a full grid of no-data, not a missing one - counted as a successful
+   refinement and painted the hole over the global baseline. */
+assert(/const nationalMerged=ElevationTileCore\.mergeElevation\(baseline,nationalElev\)/.test(index),
+       "national elevation must merge into the baseline, never replace it unchecked");
+assert(/const merged=ElevationTileCore\.mergeElevation\(baseline,raw\)/.test(index),
        "raw lidar must refine valid pixels without erasing the national baseline");
+assert(!/if\(nationalElev\)\{ baseline=nationalElev/.test(index),
+       "a decoded tile's existence must never stand in for it having data");
 assert(index.includes('fallbackNativeZoom:15'),"browser elevation fallback must stretch its last native tile");
 assert(index.includes('const VIEW_MAX=28'),"the map must support deep visual overzoom");
 assert(index.includes('rotate:true,dragRotate:true,touchRotate:true')&&index.includes('id="bearingReset"'),
@@ -133,7 +141,7 @@ assert(index.includes('zIndex:440')&&index.includes('zIndex:450'),
 assert(index.includes('ElevationTileCore.decodeTerrarium')&&index.includes('ElevationTileCore.resampleElevation'),
        "packed Terrarium bytes must be decoded before floating-point resampling");
 assert(index.includes('const nationalPromise=(coords.z>=13||self.options.refineOverview)')&&
-       index.includes('if(coords.z<13&&baseline&&!self.options.refineOverview)'),
+       index.includes('if(coords.z<13&&ElevationTileCore.hasElevation(baseline)&&!self.options.refineOverview)'),
        "overview elevation must support either immediate browser-only paint or explicit national refinement");
 assert(index.includes('panesEl.addEventListener("wheel"')&&index.includes('canScroll(body,delta)'),
        "wheel and trackpad input over an open submenu must scroll its content before chaining to the pane stack");

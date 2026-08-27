@@ -95,4 +95,57 @@ assert.throws(() => T.decodeTerrarium(new Uint8Array(3), 1, 1), /width \* height
 assert.throws(() => T.resampleElevation(new Float32Array(1), 1, 1,
   { x: 0, y: 0, width: 0, height: 1 }, 1, 1), /greater than zero/);
 
+/* The Nepal failure: outside 3DEP the national endpoint answers 200 with a
+   transparent tile, which decodes to a full grid of no-data. That grid is an
+   ordinary truthy array, so a caller checking only for its existence treated it
+   as a successful refinement and painted it over real global elevation. */
+{
+  const nodata = T.decodeTerrarium(new Uint8Array(4 * 4), 2, 2);   // transparent 2x2
+  assert(nodata.every(Number.isNaN), "guard: a transparent tile decodes to all no-data");
+  assert(!!nodata, "guard: the empty grid really is truthy, which is what made this bite");
+  assert.equal(T.hasElevation(nodata), false, "an all-no-data grid must not count as coverage");
+
+  const ground = Float32Array.from([100, 200, 300, 400]);
+  assert.equal(T.hasElevation(ground), true, "real elevation must count as coverage");
+  assert.equal(T.hasElevation(null), false, "a missing grid must not count as coverage");
+  assert.equal(T.hasElevation([]), false, "an empty grid must not count as coverage");
+
+  // an opaque black tile is the other encoding artefact: RGB 0,0,0 decodes to -32768
+  const black = new Uint8Array(4 * 4);
+  for (let i = 3; i < black.length; i += 4) black[i] = 255;
+  const blackGrid = T.decodeTerrarium(black, 2, 2);
+  assert(blackGrid.every(v => v === -32768), "guard: opaque black really decodes to -32768");
+  assert.equal(T.hasElevation(blackGrid), false, "-32768 is an artefact, not the sea floor");
+  assert.equal(T.isElevation(-11000), true, "the deepest real trench must still be elevation");
+}
+{
+  const base = Float32Array.from([100, 200, 300, 400]);
+  const empty = Float32Array.from([NaN, NaN, NaN, NaN]);
+
+  // the actual regression: an empty refinement must leave the baseline alone
+  assert.strictEqual(T.mergeElevation(base, empty), base, "an empty refinement must not replace the baseline");
+  assert.strictEqual(T.mergeElevation(base, null), base, "a missing refinement must not replace the baseline");
+  assert.deepEqual(Array.from(T.mergeElevation(base, empty)), [100, 200, 300, 400], "the baseline must survive intact");
+
+  // a partial refinement wins per pixel, so an edge-of-survey tile keeps both halves
+  const partial = Float32Array.from([NaN, 205, NaN, 404]);
+  assert.deepEqual(Array.from(T.mergeElevation(base, partial)), [100, 205, 300, 404],
+                   "detail must win only where it has ground");
+  assert.deepEqual(Array.from(base), [100, 200, 300, 400], "merging must not mutate the baseline");
+
+  // with no baseline yet, the refinement stands on its own
+  assert.strictEqual(T.mergeElevation(null, base), base, "detail must stand alone with no baseline");
+  assert.strictEqual(T.mergeElevation(empty, base), base, "detail must replace a baseline that has no ground");
+  assert.strictEqual(T.mergeElevation(null, empty), null, "two empties must stay empty, not fabricate a grid");
+
+  // a size mismatch cannot be merged pixelwise; the refinement wins outright
+  assert.strictEqual(T.mergeElevation(base, Float32Array.from([1, 2])).length, 2,
+                     "a differently sized refinement must replace rather than corrupt");
+
+  // -32768 padding must not overwrite real ground
+  const padded = Float32Array.from([-32768, -32768, 350, -32768]);
+  assert.deepEqual(Array.from(T.mergeElevation(base, padded)), [100, 200, 350, 400],
+                   "artefact pixels must not overwrite real ground");
+}
+
 console.log("elevation tile core checks passed");

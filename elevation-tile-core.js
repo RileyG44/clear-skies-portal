@@ -48,6 +48,43 @@
     return elevations;
   }
 
+  /* Terrarium packs elevation into RGB, so an opaque all-black pixel decodes to
+     exactly -32768. That is not a place on Earth - the deepest trench is about
+     -11000 - so anything at or below this floor is an encoding artefact from a
+     blank or padded tile, not ground. Alpha-zero is already NaN in the decoder;
+     this catches the opaque case. */
+  var NO_DATA_FLOOR = -20000;
+
+  function isElevation(value) {
+    return Number.isFinite(value) && value > NO_DATA_FLOOR;
+  }
+
+  /* Whether a decoded tile carries any ground at all. A no-coverage response is
+     a full-size grid of no-data, which is an ordinary truthy array - so callers
+     that only check for the array's existence will treat an empty tile as a
+     successful refinement and paint the hole over real data. */
+  function hasElevation(grid) {
+    if (!grid || typeof grid.length !== "number") return false;
+    for (var i = 0; i < grid.length; i++) if (isElevation(grid[i])) return true;
+    return false;
+  }
+
+  /*
+   * Layer a higher-quality tile over a coarser one, per pixel. Detail wins
+   * wherever it has ground and base shows through everywhere else, so a tile
+   * straddling the edge of a survey keeps real elevation on both sides instead
+   * of losing the covered half or the uncovered half. Neither input is mutated.
+   */
+  function mergeElevation(base, detail) {
+    if (!hasElevation(detail)) return base;
+    if (!hasElevation(base) || base.length !== detail.length) return detail;
+    var merged = new Float32Array(base);
+    for (var i = 0; i < detail.length; i++) {
+      if (isElevation(detail[i])) merged[i] = detail[i];
+    }
+    return merged;
+  }
+
   function firstDefined(object, keys, fallback) {
     for (var i = 0; i < keys.length; i++) {
       if (object[keys[i]] !== undefined) return object[keys[i]];
@@ -164,6 +201,10 @@
 
   return Object.freeze({
     VERSION: VERSION,
+    NO_DATA_FLOOR: NO_DATA_FLOOR,
+    isElevation: isElevation,
+    hasElevation: hasElevation,
+    mergeElevation: mergeElevation,
     decodeTerrariumValue: decodeTerrariumValue,
     decodeTerrarium: decodeTerrarium,
     normalizeCrop: normalizeCrop,
