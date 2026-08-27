@@ -208,6 +208,27 @@ assert(index.indexOf('World_Light_Gray_Base')<index.indexOf('World_Dark_Gray_Bas
          "touch-action must be scoped to the drag targets, never the whole sheet");
   assert(/#pcCanvas\{flex:1 1 auto;min-height:180px/.test(index),
          "the 3D view needs a floor or the controls squeeze it to a strip");
+
+  /* The sidebar is a sheet on a phone and answers the same gestures. The axis
+     is decided once from the first decisive movement, so a diagonal drag
+     cannot flip between scrolling and dismissing halfway through. */
+  assert(index.includes("#side{touch-action:pan-y}"),
+         "the sidebar must keep vertical scrolling and claim only the horizontal axis");
+  assert(/horizontal=Math\.abs\(dx\)>Math\.abs\(dy\)/.test(index),
+         "the dismiss gesture must commit to one axis rather than re-deciding mid-drag");
+  assert(/horizontal&&dx<-56/.test(index),"a swipe back toward the edge must dismiss the sidebar");
+  assert(/getElementById\("map"\)\.addEventListener\("pointerdown"/.test(index),
+         "tapping the map beside the sheet must dismiss it");
+  assert(/\.check,\.ovrow\{min-height:44px\}/.test(index),
+         "dense sidebar rows must meet the 44px touch minimum on a phone");
+
+  /* Point cloud: the ramp follows the view, and one slider lifts the canopy. */
+  assert(/function rampToView\(\)/.test(viewer)&&/elevationRangeFromNodes/.test(viewer),
+         "the elevation ramp must be scaled to the loaded nodes, not the whole project");
+  assert(index.includes('id="pcCanopy"')&&/function applyCanopy\(level\)/.test(viewer),
+         "a single canopy slider must run from bare earth to all returns");
+  assert(index.includes('<details class="pc-advanced">'),
+         "the per-class checkboxes belong behind a disclosure, not in front of the slider");
 }
 
 assert(!/cartocdn/.test(index),
@@ -427,6 +448,46 @@ assert.equal(pkg.dependencies["@tomickigrzegorz/leaflet-rotate"],"^0.2.4","2D ro
 for(const asset of ["maplibre-gl.mjs","maplibre-gl-shared.mjs","maplibre-gl-worker.mjs","maplibre-gl.css","leaflet-rotate.umd.min.js"])
   assert(fs.existsSync(path.join(root,"vendor",asset)),`missing vendored renderer asset: ${asset}`);
 assert(index.includes('id="pointCloudPanel"')&&index.includes('id="terModePoints"'),"3D point-cloud panel and entry point must exist");
+
+/* Product spelling: LiDAR in anything a reader sees. Code identifiers, URLs,
+   bucket names and comments keep their own spelling - usgs-lidar-public is a
+   real host, not copy. This checks the rendered strings only. */
+{
+  const visible=index
+    .replace(/\/\*[\s\S]*?\*\//g,"")          // block comments
+    .replace(/^\s*\/\/.*$/gm,"")               // line comments
+    .replace(/https?:\/\/[^\s"'`)]+/g,"")      // urls
+    .replace(/usgs-lidar-public|lidarportal|lidar-research|point-cloud/g,"");
+  const stragglers=[...visible.matchAll(/.{0,40}\blidar\b.{0,25}/gi)]
+    .map(m=>m[0].trim())
+    .filter(hit=>!/LiDAR/.test(hit));
+  assert.equal(stragglers.length,0,
+    `user-visible copy must spell it LiDAR: ${stragglers.slice(0,3).join(" | ")}`);
+}
+
+/* Overlay menu shape. The old grouping was the data's taxonomy, not the
+   reader's: one subject split three ways, a group holding a single layer, a
+   group whose name repeated a whole pane, and ten layers with no group at all
+   floating above the first heading. */
+{
+  const registry=index.slice(index.indexOf("const OVERLAYS = ["));
+  const entries=registry.slice(0,registry.indexOf("\n];")).split(/\n\s*\{\s*id:/).slice(1);
+  assert(entries.length>20,"overlay registry did not parse");
+  const groups=entries.map(entry=>entry.match(/group:"([^"]+)"/)?.[1]);
+  assert(groups.every(Boolean),"every overlay must sit in a group; none may float above the first heading");
+  const declared=index.match(/const OVERLAY_GROUPS=\[([^\]]+)\]/);
+  assert(declared,"the overlay group order must be declared, not left to registry order");
+  const names=[...declared[1].matchAll(/"([^"]+)"/g)].map(m=>m[1]);
+  for(const group of new Set(groups))
+    assert(names.includes(group),`overlay group ${group} is not in the declared order`);
+  const counts={};
+  for(const group of groups) counts[group]=(counts[group]||0)+1;
+  for(const [group,count] of Object.entries(counts))
+    assert(count>1,`${group} holds a single layer; that is a heading, not a group`);
+  const paneTitles=[...index.matchAll(/class="pane-t">([^<]+)</g)].map(m=>m[1].trim());
+  for(const group of names)
+    assert(!paneTitles.includes(group),`overlay group "${group}" repeats a pane title`);
+}
 assert(index.includes('id="pcBareEarth"')&&index.includes('id="pcAllReturns"'),"point-cloud class presets must be wired");
 for(const asset of ["build/potree/potree.js","build/potree/workers/EptLaszipDecoderWorker.js","build/potree/workers/laz-perf.wasm","libs/copc/index.js","SOURCE.json"])
   assert(fs.existsSync(path.join(root,"vendor","potree",asset)),`missing vendored Potree asset: ${asset}`);

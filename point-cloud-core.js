@@ -117,6 +117,56 @@
     }
     return top===null?fallback:top;
   }
+  /* Idea 1: scale the elevation ramp to what is on screen.
+     Potree seeds elevationRange from the cloud's bounding box, which is the
+     whole USGS project - near sea level to over 3000 m. A single hillside then
+     occupies a few percent of the ramp and renders as one flat colour, which is
+     why the cloud read as a featureless blue slab. Taking the range from the
+     loaded octree nodes puts the full ramp across the ground actually in view.
+
+     MIN_RAMP_SPAN stops the opposite failure: over genuinely flat ground the
+     measured span collapses toward zero and the ramp starts colouring noise. */
+  const MIN_RAMP_SPAN=25;
+  function elevationRangeFromNodes(nodes,fallback){
+    let low=Infinity,high=-Infinity;
+    for(const node of nodes||[]){
+      const box=node&&node.getBoundingBox&&node.getBoundingBox();
+      if(!box||!box.min||!box.max)continue;
+      if(Number.isFinite(box.min.z)&&box.min.z<low)low=box.min.z;
+      if(Number.isFinite(box.max.z)&&box.max.z>high)high=box.max.z;
+    }
+    if(!(low<high)) return Array.isArray(fallback)&&fallback.length===2?fallback.slice():null;
+    if(high-low<MIN_RAMP_SPAN){
+      const middle=(low+high)/2;
+      low=middle-MIN_RAMP_SPAN/2;high=middle+MIN_RAMP_SPAN/2;
+    }
+    return [low,high];
+  }
+
+  /* Idea 2: one slider from bare earth to every return.
+     Eight class checkboxes ask you to know the ASPRS numbering before you can
+     see the ground. The thing people actually want is to lift the vegetation
+     off the terrain, which is a single ordered gesture: ground, then each
+     vegetation layer by height, then the built surface, then everything else. */
+  const CANOPY_STOPS=Object.freeze([
+    Object.freeze({at:0,   label:"Bare earth",        classes:Object.freeze(["2"])}),
+    Object.freeze({at:25,  label:"+ low vegetation",  classes:Object.freeze(["2","3"])}),
+    Object.freeze({at:50,  label:"+ medium vegetation",classes:Object.freeze(["2","3","4"])}),
+    Object.freeze({at:75,  label:"+ high vegetation", classes:Object.freeze(["2","3","4","5"])}),
+    Object.freeze({at:100, label:"All returns",       classes:Object.freeze(["2","3","4","5","6","7","9","other"])})
+  ]);
+  const CANOPY_CLASSES=Object.freeze(["2","3","4","5","6","7","9","other"]);
+  function canopyStop(value){
+    const level=Number.isFinite(+value)?Math.max(0,Math.min(100,+value)):100;
+    let chosen=CANOPY_STOPS[0];
+    for(const stop of CANOPY_STOPS) if(level>=stop.at) chosen=stop;
+    return chosen;
+  }
+  function classesForCanopy(value){
+    const stop=canopyStop(value),visible={};
+    for(const code of CANOPY_CLASSES) visible[code]=stop.classes.includes(code);
+    return visible;
+  }
   function mapViewForCamera(target,radius,{height=800,fov=60,bearing=0}={}){
     const ll=unproject(target.x,target.y),span=Math.max(1,2*(+radius||1)*Math.tan((+fov||60)*RAD/2));
     const zoom=Math.log2(WORLD*Math.max(1,+height||800)/(256*span));
@@ -136,5 +186,5 @@
     let active=null;
     return {get active(){return active},run(source,fn){if(active&&active!==source)return false;const previous=active;active=source;try{fn()}finally{active=previous}return true}};
   }
-  return {R,WORLD,MIN_TILT_DEGREES,MIN_RADIUS,project,unproject,projectBounds,cameraForBounds,pitchDegreesFromView,limitPitch,clampRadius,installRadiusFloor,groundHeightFromNodes,mapViewForCamera,projectYear,chooseCoverage,createSyncGuard};
+  return {R,WORLD,MIN_TILT_DEGREES,MIN_RADIUS,MIN_RAMP_SPAN,CANOPY_STOPS,CANOPY_CLASSES,elevationRangeFromNodes,canopyStop,classesForCanopy,project,unproject,projectBounds,cameraForBounds,pitchDegreesFromView,limitPitch,clampRadius,installRadiusFloor,groundHeightFromNodes,mapViewForCamera,projectYear,chooseCoverage,createSyncGuard};
 });

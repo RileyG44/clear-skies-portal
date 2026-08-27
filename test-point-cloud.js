@@ -173,4 +173,51 @@ class FakeControls{
                                {targetZ:2460,pitch:90,aspect:1.4});
   assert(cam.position.z>2460,"the camera must sit above the local ground, not the project average");
 }
+/* Idea 1: the elevation ramp follows what is on screen. Potree seeds it from
+   the cloud's own bounding box, which on these USGS collections spans a whole
+   project - the reason a single hillside rendered as one flat colour. */
+{
+  const node=(z0,z1)=>({getBoundingBox:()=>({min:{x:0,y:0,z:z0},max:{x:1,y:1,z:z1}})});
+  const project=[56,3253];
+  assert.deepEqual(pc.elevationRangeFromNodes([node(700,940),node(880,1015)],project),[700,1015],
+                   "the ramp must span the loaded nodes, not the whole project");
+  const spread=pc.elevationRangeFromNodes([node(700,940)],project)[1]-pc.elevationRangeFromNodes([node(700,940)],project)[0];
+  assert(spread<project[1]-project[0],"guard: the project range really is far wider than the view");
+
+  // flat ground must not turn the ramp into a noise amplifier
+  const flat=pc.elevationRangeFromNodes([node(500,502)],project);
+  assert.equal(flat[1]-flat[0],pc.MIN_RAMP_SPAN,"a flat view must widen to the minimum span");
+  assert(flat[0]<501&&flat[1]>501,"the widened span must stay centred on the ground it covers");
+
+  // nothing loaded yet, or nodes with no usable box: keep the caller's fallback
+  assert.deepEqual(pc.elevationRangeFromNodes([],project),project,"with no nodes, fall back");
+  assert.deepEqual(pc.elevationRangeFromNodes(null,project),project,"with no list at all, fall back");
+  assert.deepEqual(pc.elevationRangeFromNodes([{}],project),project,"nodes without a box must not throw");
+  assert.equal(pc.elevationRangeFromNodes([],null),null,"no nodes and no fallback yields nothing to set");
+}
+/* Idea 2: one ordered gesture from bare earth to every return. */
+{
+  const on=value=>Object.entries(pc.classesForCanopy(value)).filter(([,v])=>v).map(([k])=>k);
+  assert.deepEqual(on(0),["2"],"bare earth is ground alone");
+  assert.deepEqual(on(100),[...pc.CANOPY_CLASSES],"the top of the range shows every class");
+  assert.deepEqual(on(25),["2","3"],"low vegetation comes first");
+  assert.deepEqual(on(50),["2","3","4"],"then medium");
+  assert.deepEqual(on(75),["2","3","4","5"],"then high");
+
+  // monotonic: sliding up may only ever add classes, never take one away
+  let previous=[];
+  for(let value=0;value<=100;value+=5){
+    const now=on(value);
+    for(const code of previous) assert(now.includes(code),`class ${code} disappeared at ${value}`);
+    previous=now;
+  }
+  assert.equal(pc.canopyStop(0).label,"Bare earth","the readout must name the stop");
+  assert.equal(pc.canopyStop(100).label,"All returns","the readout must name the stop");
+  assert.equal(pc.canopyStop(37).label,pc.canopyStop(25).label,"a value between stops reads as the stop below it");
+  // out-of-range and rubbish must not produce an empty scene
+  for(const bad of [-40,9999,NaN,undefined,"x"])
+    assert(on(bad).length>0,`a bad slider value (${bad}) must never hide everything`);
+  assert.deepEqual(on(-40),["2"],"below the range clamps to bare earth");
+  assert.deepEqual(on(9999),[...pc.CANOPY_CLASSES],"above the range clamps to all returns");
+}
 console.log("point cloud core tests passed");

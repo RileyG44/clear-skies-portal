@@ -137,7 +137,7 @@
       const viewer=await ensureViewer();if(!viewer||!state.wanted)return;const token=++state.loadToken;setStatus(`Loading ${item.project}…`,"loading");
       state.loadingProject=item.project;removeCloud();
       window.Potree.loadPointCloud(item.url,item.project,event=>{
-        if(token!==state.loadToken||!state.wanted)return;state.loadingProject=null;state.plan=true;const cloud=state.cloud=event.pointcloud;state.project=item.project;cloud.material.size=1;cloud.material.pointSizeType=window.Potree.PointSizeType.ADAPTIVE;cloud.material.activeAttributeName="elevation";viewer.scene.addPointCloud(cloud);applyControls();syncFromMap();setStatus(`${item.project} · ${(item.points/1e9).toFixed(1)} billion points available`,"ready");
+        if(token!==state.loadToken||!state.wanted)return;state.loadingProject=null;state.plan=true;const cloud=state.cloud=event.pointcloud;state.project=item.project;cloud.material.size=1;cloud.material.pointSizeType=window.Potree.PointSizeType.ADAPTIVE;cloud.material.activeAttributeName="elevation";viewer.scene.addPointCloud(cloud);applyControls();syncFromMap();setTimeout(rampToView,1200);setTimeout(rampToView,4000);setStatus(`${item.project} · ${(item.points/1e9).toFixed(1)} billion points available`,"ready");
       });
     }
     async function open(){
@@ -147,10 +147,36 @@
     function close(){state.wanted=false;state.loadingProject=null;state.user3dActive=false;state.user3dUntil=0;state.loadToken++;clearTimeout(state.cameraTimer);destroyViewer(state);panel.hidden=true;document.body.classList.remove("point-cloud-open");$("#terModePoints").setAttribute("aria-pressed","false");onLayoutChange?.("right")}
     function applyControls(){
       const viewer=state.viewer,cloud=state.cloud;if(viewer){viewer.setPointBudget(+$("#pcBudget").value*1e6);viewer.setEDLEnabled($("#pcEdl").checked);viewer.setEDLStrength(+$("#pcEdlStrength").value);viewer.setEDLRadius(+$("#pcEdlRadius").value)}
-      if(cloud){cloud.material.size=+$("#pcSize").value;cloud.material.pointSizeType=$("#pcSizeMode").value==="fixed"?window.Potree.PointSizeType.FIXED:window.Potree.PointSizeType.ADAPTIVE;cloud.material.activeAttributeName=$("#pcColour").value;const visible={};document.querySelectorAll("[data-pc-class]").forEach(input=>visible[input.dataset.pcClass]=input.checked);classVisibility(cloud,visible)}
+      if(cloud){cloud.material.size=+$("#pcSize").value;cloud.material.pointSizeType=$("#pcSizeMode").value==="fixed"?window.Potree.PointSizeType.FIXED:window.Potree.PointSizeType.ADAPTIVE;cloud.material.activeAttributeName=$("#pcColour").value;const visible={};document.querySelectorAll("[data-pc-class]").forEach(input=>visible[input.dataset.pcClass]=input.checked);classVisibility(cloud,visible);rampToView()}
       setOutput("#pcBudgetOut",`${$("#pcBudget").value} M`);setOutput("#pcSizeOut",(+$("#pcSize").value).toFixed(1));setOutput("#pcEdlStrengthOut",(+$("#pcEdlStrength").value).toFixed(1));setOutput("#pcEdlRadiusOut",(+$("#pcEdlRadius").value).toFixed(1));
     }
-    map.on("moveend rotate",()=>{if(!state.wanted||state.syncGuard.active==="3d"||performance.now()<state.suppress2d||!linked())return;loadCurrent()});
+    /* Scale the elevation ramp to the ground on screen. Potree seeds it from the
+       whole project's bounding box - sea level to over 3000 m on these USGS
+       collections - so one hillside occupied a sliver of the ramp and rendered
+       as a single flat colour. Recomputed as nodes load and as the view moves,
+       because both change what is actually in front of you. */
+    function rampToView(){
+      const cloud=state.cloud;
+      if(!cloud||$("#pcColour").value!=="elevation")return;
+      const box=cloud.pcoGeometry?.tightBoundingBox||cloud.boundingBox;
+      const fallback=box?[box.min.z,box.max.z]:null;
+      const range=CORE().elevationRangeFromNodes(cloud.visibleNodes,fallback);
+      if(range) cloud.material.elevationRange=range;
+    }
+    /* One gesture from bare earth to every return, in the order the world is
+       layered. The eight ASPRS checkboxes are still there under a disclosure
+       for anyone who wants a single class on its own. */
+    function applyCanopy(level){
+      const visible=CORE().classesForCanopy(level);
+      document.querySelectorAll("[data-pc-class]").forEach(input=>{
+        if(Object.prototype.hasOwnProperty.call(visible,input.dataset.pcClass))
+          input.checked=visible[input.dataset.pcClass];
+      });
+      setOutput("#pcCanopyOut",CORE().canopyStop(level).label);
+      applyControls();
+    }
+    $("#pcCanopy").addEventListener("input",event=>applyCanopy(event.target.value));
+    map.on("moveend rotate",()=>{if(!state.wanted||state.syncGuard.active==="3d"||performance.now()<state.suppress2d||!linked())return;loadCurrent();rampToView()});
     canvas.addEventListener("pointerdown",()=>{state.user3dActive=true;state.user3dUntil=Infinity},true);
     addEventListener("pointerup",()=>{if(!state.user3dActive)return;state.user3dActive=false;state.user3dUntil=performance.now()+350},true);
     addEventListener("pointercancel",()=>{state.user3dActive=false;state.user3dUntil=0},true);
@@ -158,9 +184,9 @@
     $("#terModePoints").addEventListener("click",()=>state.wanted?close():open());$("#pcClose").addEventListener("click",close);$("#pcLinked").addEventListener("change",()=>{if(linked())syncFromMap()});
     for(const id of ["#pcBudget","#pcSize","#pcSizeMode","#pcColour","#pcEdl","#pcEdlStrength","#pcEdlRadius"])$(id).addEventListener("input",applyControls);
     document.querySelectorAll("[data-pc-class]").forEach(input=>input.addEventListener("change",applyControls));
-    $("#pcBareEarth").addEventListener("click",()=>{document.querySelectorAll("[data-pc-class]").forEach(x=>x.checked=x.dataset.pcClass==="2");applyControls()});
-    $("#pcAllReturns").addEventListener("click",()=>{document.querySelectorAll("[data-pc-class]").forEach(x=>x.checked=true);applyControls()});
-    $("#pcReset").addEventListener("click",()=>{$("#pcBudget").value=3;$("#pcSize").value=1;$("#pcSizeMode").value="adaptive";$("#pcColour").value="elevation";$("#pcEdl").checked=true;$("#pcEdlStrength").value=1;$("#pcEdlRadius").value=1.4;document.querySelectorAll("[data-pc-class]").forEach(x=>x.checked=true);applyControls();syncFromMap()});
+    $("#pcBareEarth").addEventListener("click",()=>{$("#pcCanopy").value=0;applyCanopy(0)});
+    $("#pcAllReturns").addEventListener("click",()=>{$("#pcCanopy").value=100;applyCanopy(100)});
+    $("#pcReset").addEventListener("click",()=>{$("#pcBudget").value=3;$("#pcSize").value=1;$("#pcSizeMode").value="adaptive";$("#pcColour").value="elevation";$("#pcCanopy").value=100;setOutput("#pcCanopyOut",CORE().canopyStop(100).label);$("#pcEdl").checked=true;$("#pcEdlStrength").value=1;$("#pcEdlRadius").value=1.4;document.querySelectorAll("[data-pc-class]").forEach(x=>x.checked=true);applyControls();syncFromMap()});
     function drag(handle,move){handle.addEventListener("pointerdown",event=>{if(event.button!==0)return;event.preventDefault();handle.setPointerCapture(event.pointerId);const onMove=e=>move(e);const stop=()=>{handle.removeEventListener("pointermove",onMove);handle.removeEventListener("pointerup",stop);handle.removeEventListener("pointercancel",stop)};handle.addEventListener("pointermove",onMove);handle.addEventListener("pointerup",stop);handle.addEventListener("pointercancel",stop)})}
     let preferredWidth=+localStorage.getItem("csp-pc-width")||560;
     const narrow=()=>matchMedia("(max-width:760px)").matches;
