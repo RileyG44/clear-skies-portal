@@ -84,6 +84,13 @@ assert(/document\.addEventListener\("visibilitychange",recheck\)/.test(index)&&
        /registration\.update\(\)/.test(index),
        "a backgrounded PWA makes no navigations, so it must re-check on the way back in");
 assert(index.includes('id="newBuildReload"'),"the update prompt must offer a reload");
+/* A layout failure that only appears on a real phone cannot be reasoned about
+   from a desktop. Whether the page fills the window and whether the window
+   fills the screen are two different failures with two different fixes, and a
+   photograph cannot tell them apart - so the device reports them itself. */
+assert(index.includes('page fills window')&&index.includes('window fills screen'),
+       "the build stamp must separate a short page from a short web view");
+assert(index.includes('id="buildDiag"'),"the geometry readout must be reachable from the build stamp");
 assert(index.includes('register("sw.js",{updateViaCache:"none"})'),
        "service-worker imports must bypass stale HTTP cache during update checks");
 assert(index.includes('id="snapshot"'),"map snapshot control must be present");
