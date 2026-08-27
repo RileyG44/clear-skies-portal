@@ -9,10 +9,11 @@
   "scripts": {
     "vendor": "node scripts/sync-vendor.js",
     "catalog:point-cloud": "node scripts/sync-point-cloud-catalog.js",
+    "catalog:maxar": "node scripts/sync-maxar-catalog.js",
     "start": "node server.js",
     "dev": "node server.js",
     "check": "node --check server.js && node --check terrain-pool.js && node --check terrain-worker.js && node --check terrain-core.js && node --check terrain-raster.js && node --check elevation-tile-core.js && node --check wa-archaeology.js && node --check glacial-research-core.js && node --check research-analysis.js && node --check research-worker.js && node --check point-cloud-core.js && node --check point-cloud-viewer.js && node --check cog.js && node --check usgs.js && node --check electron/main.js && node scripts/check-static.js",
-    "test": "node test-point-cloud.js && node test-terrain-core.js && node test-terrain-raster.js && node test-wa-archaeology.js && node test-usgs-render.js && node test-mosaic.js && node test-elevation-bands.js && node test-elevation-tile-core.js && node test-glacial-research-core.js && node test-research-analysis.js && node test-cog.js && node test-terrain-pool.js && node test-server.js",
+    "test": "node test-point-cloud.js && node test-maxar-catalog.js && node test-terrain-core.js && node test-terrain-raster.js && node test-wa-archaeology.js && node test-usgs-render.js && node test-mosaic.js && node test-elevation-bands.js && node test-elevation-tile-core.js && node test-glacial-research-core.js && node test-research-analysis.js && node test-cog.js && node test-terrain-pool.js && node test-server.js",
     "verify": "npm run vendor && npm run check && npm test && npm audit --omit=optional",
     "app": "electron .",
     "icon": "node build/make-icon.js && rm -rf build/icon.iconset && mkdir -p build/icon.iconset && for s in 16 32 128 256 512; do sips -z $s $s build/icon-1024.png --out build/icon.iconset/icon_${s}x${s}.png >/dev/null; sips -z $((s*2)) $((s*2)) build/icon-1024.png --out build/icon.iconset/icon_${s}x${s}@2x.png >/dev/null; done && iconutil -c icns build/icon.iconset -o build/icon.icns && rm -rf build/icon.iconset",

@@ -332,8 +332,43 @@ assert(server.includes('"earthquake.usgs.gov"')&&server.includes('"tiles.arcgis.
 assert(server.includes("const TTL_SNOW   = 2*3600*1000"),
        "the M2 snow cache must not hide most of NOAA's four daily updates");
 for(const asset of ["mosaic-core.js","terrain-core.js","terrain-raster.js","elevation-bands.js","elevation-tile-core.js","wa-archaeology.js",
-                    "glacial-research-core.js","research-analysis.js","research-worker.js"])
+                    "glacial-research-core.js","research-analysis.js","research-worker.js","maxar-catalog.json"])
   assert(read(".github/workflows/ci.yml").includes(asset),`Pages artifact must include ${asset}`);
+
+/* Global imagery. The portal shipped without any: cartographic basemaps plus a
+   US-only high-resolution tier, so everywhere abroad fell back to grey tiles. */
+assert(index.includes('id:"imagery"')&&index.includes("World_Imagery/MapServer"),
+       "a global satellite mosaic must be available outside the United States");
+assert(index.includes('id:"s2cloudless"')&&index.includes("s2cloudless-${EOX_S2_YEAR}_3857"),
+       "a cloud-free global composite must back up the best-available mosaic");
+/* Esri and EOX permit in-app display but not bulk caching or re-serving. sw.js
+   returns early for cross-origin requests, so the precache cannot reach them -
+   this pins that the imagery is never added to the same-origin asset list. */
+for(const host of ["World_Imagery","tiles.maps.eox.at"])
+  assert(!read("sw.js").includes(host),
+         `display-only imagery (${host}) must never enter the service worker precache`);
+assert(read("sw.js").includes("url.origin !== self.location.origin) return"),
+       "the service worker must leave cross-origin imagery to the network");
+/* Maxar Open Data is CC-BY-NC-4.0. The non-commercial term has to reach the
+   screen, not just the source registry. */
+assert(index.includes('id:"maxarvhr"')&&index.includes('popupKind:"maxar"'),
+       "the sparse VHR index must be reachable as an overlay");
+assert(index.includes("nonCommercial:true")&&/non-commercial/i.test(index),
+       "the CC-BY-NC-4.0 term on Maxar Open Data must be stated in the UI");
+assert(index.includes("o.nonCommercial?")&&index.includes('.ovrow .nc{'),
+       "a non-commercial layer must carry its restriction on the row that switches it on");
+assert(index.includes('fetch("./maxar-catalog.json"'),
+       "the VHR coverage index must ship with the app rather than crawl S3 per visitor");
+assert(read("package.json").includes("test-maxar-catalog.js"),
+       "the shipped VHR coverage index must be covered by the test suite");
+assert(read("package.json").includes("sync-maxar-catalog.js"),
+       "the VHR coverage index must be regenerable from a documented script");
+/* A shipped runtime file has to be listed in three unrelated places - the Pages
+   artifact, the service worker precache, and the engine's own static allowlist.
+   Missing the last one served a 404 only when the browser asked for it. */
+for(const [file,label] of [["server.js","the local engine"],["sw.js","the service worker"]])
+  assert(read(file).includes("maxar-catalog.json"),
+         `${label} must serve the VHR coverage index`);
 const installer=read("scripts/install-mac-service.sh");
 for(const asset of ["terrain-core.js","terrain-raster.js","elevation-bands.js","elevation-tile-core.js","wa-archaeology.js",
                     "glacial-research-core.js","research-analysis.js","research-worker.js"])

@@ -28,7 +28,7 @@ const MIME = {".html":"text/html; charset=utf-8",".js":"text/javascript",".mjs":
   ".svg":"image/svg+xml",".wasm":"application/wasm",".md":"text/markdown; charset=utf-8",".txt":"text/plain; charset=utf-8"};
 const PUBLIC_FILES = new Set(["index.html","version.js","mosaic-core.js","terrain-core.js","terrain-raster.js",
   "elevation-bands.js","elevation-tile-core.js","wa-archaeology.js","glacial-research-core.js","research-analysis.js","research-worker.js","sw.js","manifest.json",
-  "point-cloud-core.js","point-cloud-viewer.js","point-cloud-catalog.json",
+  "point-cloud-core.js","point-cloud-viewer.js","point-cloud-catalog.json","maxar-catalog.json",
   "icon-180.png","icon-192.png","icon-512.png","vendor/maplibre-gl.mjs","vendor/maplibre-gl-shared.mjs",
   "vendor/maplibre-gl-worker.mjs","vendor/maplibre-gl.css","vendor/leaflet-rotate.umd.min.js"]);
 
@@ -74,6 +74,7 @@ const SNAPSHOT_IMAGE_HOSTS = new Set([
   "s3.amazonaws.com",
   "prd-tnm.s3.amazonaws.com",
   "services.arcgisonline.com",
+  "tiles.maps.eox.at",
   "basemap.nationalmap.gov",
   "carto.nationalmap.gov",
   "mrdata.usgs.gov",
