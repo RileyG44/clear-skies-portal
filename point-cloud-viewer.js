@@ -67,15 +67,39 @@
     function removeCloud(){if(state.cloud){try{state.viewer?.scene?.removePointCloud(state.cloud)}catch(e){}for(const node of state.cloud.visibleNodes||[])try{node.sceneNode?.geometry?.dispose()}catch(e){}}state.cloud=null;state.project=null}
     async function ensureViewer(){
       if(state.viewer)return state.viewer;const Potree=await loadRuntime();if(!state.wanted)return null;
-      trackWorkers(Potree);const viewer=state.viewer=new Potree.Viewer(canvas);CORE().limitPitch(viewer.scene?.view);viewer.setFOV(60);viewer.setPointBudget(3_000_000);viewer.setEDLEnabled(true);viewer.setEDLStrength(1);viewer.setEDLRadius(1.4);viewer.setBackground("gradient");
+      trackWorkers(Potree);const viewer=state.viewer=new Potree.Viewer(canvas);holdCamera(viewer);viewer.setFOV(60);viewer.setPointBudget(3_000_000);viewer.setEDLEnabled(true);viewer.setEDLStrength(1);viewer.setEDLRadius(1.4);viewer.setBackground("gradient");
       viewer.addEventListener("camera_changed",()=>{
         if(!linked()||state.syncGuard.active==="2d"||performance.now()<state.suppress3d||(!state.user3dActive&&performance.now()>state.user3dUntil))return;
         clearTimeout(state.cameraTimer);state.cameraTimer=setTimeout(syncToMap,120);
       });
       applyControls();return viewer;
     }
+    /* Wheel and drag input lives in the controls as pending deltas that Potree
+       drains a frame later. Whenever the camera is written directly, that
+       pending input is stale - it was sized against the camera that has just
+       been replaced - so applying it moves the view by an amount that no longer
+       means anything. Dropping it is the difference between a sync that lands
+       and one that gets dragged somewhere arbitrary a frame afterwards. */
+    function dropPendingInput(viewer){
+      const controls=viewer?.controls;if(!controls)return;
+      controls.radiusDelta=0;controls.yawDelta=0;controls.pitchDelta=0;
+      controls.panDelta?.set?.(0,0);
+      controls.stopTweens?.();
+    }
+    function holdCamera(viewer){
+      const view=viewer?.scene?.view;if(!view)return view;
+      CORE().limitPitch(view);
+      CORE().installRadiusFloor(view,()=>dropPendingInput(viewer));
+      return view;
+    }
     function syncFromMap(){
-      if(!state.viewer||!state.cloud||!linked())return;const view=state.viewer.scene.view,box=state.cloud.boundingBox||state.cloud.pcoGeometry?.boundingBox,z=(box?.min?.z+box?.max?.z)/2||0;
+      if(!state.viewer||!state.cloud||!linked())return;const view=state.viewer.scene.view,box=state.cloud.boundingBox||state.cloud.pcoGeometry?.boundingBox;
+      /* Aim at the ground actually under the map centre. The bounding-box
+         midpoint used before is a project-wide average, which on high terrain
+         sits well below the surface - harmless while zoomed out, but the camera
+         descends onto it as the radius shrinks and ends up inside the hill. */
+      const ground=CORE().projectBounds(projectBounds(map.getBounds()));
+      const z=CORE().groundHeightFromNodes(state.cloud.visibleNodes,(ground.west+ground.east)/2,(ground.south+ground.north)/2,(box?.min?.z+box?.max?.z)/2||0);
       /* A freshly loaded cloud opens looking straight down. After that the sync
          keeps whatever tilt the user has orbited to, so panning the 2D map does
          not yank the 3D view back to plan every time. */
@@ -83,7 +107,7 @@
          with its own wide-open limits whenever a scene is swapped in, and a view
          that has slipped under the ground must be lifted back out before its
          tilt is read, not after. */
-      CORE().limitPitch(view);
+      holdCamera(state.viewer);
       const pitch=state.plan?90:CORE().pitchDegreesFromView(view.pitch);
       const rect=canvas.getBoundingClientRect(),camera=CORE().cameraForBounds(projectBounds(map.getBounds()),{bearing:map.getBearing?.()||0,targetZ:z,fov:state.viewer.getFOV?.()||60,aspect:rect.width/Math.max(1,rect.height),pitch});
       state.plan=false;
@@ -97,6 +121,7 @@
         view.yaw=camera.yaw;
         view.pitch=camera.pitch;
         view.radius=camera.radius;
+        dropPendingInput(state.viewer);
       });
     }
     function syncToMap(){

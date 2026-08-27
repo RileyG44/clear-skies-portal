@@ -97,4 +97,80 @@ class FakeView{
     assert(Math.abs(pc.pitchDegreesFromView(cam.pitch)-deg)<1e-9,"the tilt floor must round-trip, not clamp");
   }
 }
+/* Potree's orbit control, reduced to its zoom path: wheel events accumulate into
+   radiusDelta, and update() drains it a frame later. Both are copied from the
+   vendored potree.js rather than paraphrased - the bug lives in the interaction
+   between that delay and a direct write to view.radius. */
+class FakeControls{
+  constructor(view){this.view=view;this.radiusDelta=0;this.yawDelta=0;this.pitchDelta=0;this.fadeFactor=20}
+  scroll(delta){const resolved=this.view.radius+this.radiusDelta;this.radiusDelta+=-delta*resolved*0.1}
+  update(dt){
+    const progression=Math.min(1,this.fadeFactor*dt);
+    const radius=this.view.radius+progression*this.radiusDelta;
+    this.view.radius=radius;
+    this.radiusDelta-=progression*this.radiusDelta;
+    return radius;
+  }
+}
+{
+  // Scrolling alone is self-damping: resolved shrinks with each tick, so it converges toward zero without crossing it.
+  const view=new FakeView();view.radius=1000;
+  const controls=new FakeControls(view);
+  for(let i=0;i<40;i++)controls.scroll(1);
+  assert(controls.update(0.05)>0,"guard: Potree's own zoom does not go negative on its own");
+
+  /* The real sequence: the user scrolls in the 3D panel, that drives the 2D map,
+     and the map sync writes a much smaller radius back before the frame lands.
+     The pending delta was sized against the OLD radius. */
+  const flipped=new FakeView();flipped.radius=15000;
+  const c2=new FakeControls(flipped);
+  for(let i=0;i<20;i++)c2.scroll(1);
+  flipped.radius=400;                      // what syncFromMap writes after the map zooms in
+  const after=c2.update(0.05);
+  assert(after<0,"guard: a stale delta on a freshly synced radius really does go negative");
+  /* Potree builds position as pivot + direction * -radius. With the camera
+     looking down, a positive radius puts it above its pivot and a negative one
+     puts it below - through the ground, with the pivot now behind it, so every
+     later orbit swings around a point at its back. */
+  const below=(radius,pitch)=>{const dir=Math.sin(pitch);return -radius*dir};
+  assert(below(400,-Math.PI/4)>0,"guard: a positive radius holds the camera above its pivot");
+  assert(below(after,-Math.PI/4)<0,"the flipped radius drops the camera below its pivot");
+}
+{
+  // The floor holds that same sequence, and reports the correction so stale input can be dropped.
+  let dropped=0;
+  const view=new FakeView();view.radius=15000;
+  pc.installRadiusFloor(view,()=>{dropped++});
+  const controls=new FakeControls(view);
+  for(let i=0;i<20;i++)controls.scroll(1);
+  view.radius=400;
+  assert.equal(view.radius,400,"an ordinary write must pass through untouched");
+  assert.equal(dropped,0,"an ordinary write must not report a correction");
+  controls.update(0.05);
+  assert(view.radius>=pc.MIN_RADIUS,"the floor must hold the camera on its own side of the pivot");
+  assert(dropped>0,"the floor must report the correction so stale input gets dropped");
+  view.radius=-1;assert.equal(view.radius,pc.MIN_RADIUS,"negative must clamp");
+  view.radius=NaN;assert.equal(view.radius,pc.MIN_RADIUS,"NaN must clamp");
+  view.radius=2500;assert.equal(view.radius,2500,"the floor must not stop zooming back out");
+  pc.installRadiusFloor(view,()=>{dropped++});
+  view.radius=800;assert.equal(view.radius,800,"installing twice must not double-wrap the accessor");
+}
+/* The second way underneath: aiming at the midpoint of a PROJECT-wide bounding
+   box. These USGS projects run from near sea level to over 3000 m, so on high
+   ground that midpoint is far below the surface. */
+{
+  const node=(level,x0,y0,x1,y1,zTop)=>({getLevel:()=>level,
+    getBoundingBox:()=>({min:{x:x0,y:y0,z:0},max:{x:x1,y:y1,z:zTop}})});
+  const nodes=[node(0,-100,-100,100,100,3253),node(3,-20,-20,20,20,2500),node(6,-5,-5,5,5,2460)];
+  assert.equal(pc.groundHeightFromNodes(nodes,0,0,1654),2460,"the deepest node covering the point wins");
+  assert.equal(pc.groundHeightFromNodes(nodes,50,50,1654),3253,"a coarser node still covers the wider area");
+  assert.equal(pc.groundHeightFromNodes(nodes,9999,9999,1654),1654,"outside every node, fall back");
+  assert.equal(pc.groundHeightFromNodes([],0,0,1654),1654,"before anything loads, fall back");
+  assert.equal(pc.groundHeightFromNodes(null,0,0,1654),1654,"no nodes at all must not throw");
+  // the project-wide midpoint really is underground here, which is what made this bite
+  assert(1654<2460,"guard: the old fallback sits below the local surface");
+  const cam=pc.cameraForBounds({west:-121.76,east:-121.755,south:46.85,north:46.854},
+                               {targetZ:2460,pitch:90,aspect:1.4});
+  assert(cam.position.z>2460,"the camera must sit above the local ground, not the project average");
+}
 console.log("point cloud core tests passed");

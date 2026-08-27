@@ -15,6 +15,15 @@
      which reads as a ceiling. Keep a couple of degrees of headroom instead. */
   const MIN_TILT_DEGREES=2;
 
+  /* Potree never clamps view.radius, and its orbit control accumulates wheel
+     input into radiusDelta that is only drained on the next frame. A map-driven
+     sync writes view.radius directly in between, so a delta sized for the OLD
+     radius lands on the NEW one - and radius + delta goes negative whenever the
+     sync zoomed in. A negative radius is not a small error: position is built as
+     pivot + direction * -radius, so the camera jumps to the far side of its own
+     pivot, through the ground, looking back up at the underside of the terrain. */
+  const MIN_RADIUS=0.5;
+
   function project(lon,lat){
     const safe=Math.max(-85.05112878,Math.min(85.05112878,+lat));
     return {x:R*(+lon)*RAD,y:R*Math.log(Math.tan(Math.PI/4+safe*RAD/2))};
@@ -69,6 +78,45 @@
     if(view.pitch>view.maxPitch)view.pitch=view.maxPitch;
     return view;
   }
+  function clampRadius(value){
+    const radius=+value;
+    return Number.isFinite(radius)&&radius>MIN_RADIUS?radius:MIN_RADIUS;
+  }
+  /* Holds the floor on Potree's live view. An accessor rather than a one-off
+     clamp because the orbit control writes radius every frame from inside its
+     own update loop, so there is no single call site to guard. onClamp fires
+     only when a write actually had to be corrected, which is the signal that
+     stale wheel input is still pending and should be dropped. */
+  function installRadiusFloor(view,onClamp){
+    if(!view||view.cspRadiusFloor)return view;
+    let current=clampRadius(view.radius);
+    Object.defineProperty(view,"radius",{configurable:true,
+      get(){return current},
+      set(value){
+        const wanted=+value;
+        current=clampRadius(wanted);
+        if(!(Number.isFinite(wanted)&&wanted>=MIN_RADIUS)&&typeof onClamp==="function")onClamp();
+      }});
+    Object.defineProperty(view,"cspRadiusFloor",{value:true,configurable:true});
+    return view;
+  }
+  /* The height of the ground under a point, taken from the deepest loaded octree
+     node covering it. The alternative - the midpoint of the cloud's bounding box -
+     is a PROJECT-wide average: these USGS projects span from near sea level to
+     over 3000 m, so on high terrain that midpoint is hundreds of metres UNDER the
+     surface. It goes unnoticed while zoomed out, because the camera sits a whole
+     viewport-radius above it, and bites as soon as the radius shrinks. */
+  function groundHeightFromNodes(nodes,x,y,fallback){
+    let top=null,deepest=-1;
+    for(const node of nodes||[]){
+      const box=node&&node.getBoundingBox&&node.getBoundingBox();
+      if(!box||!box.min||!box.max)continue;
+      if(!(x>=box.min.x&&x<=box.max.x&&y>=box.min.y&&y<=box.max.y))continue;
+      const level=node.getLevel?node.getLevel():0;
+      if(level>deepest&&Number.isFinite(box.max.z)){deepest=level;top=box.max.z}
+    }
+    return top===null?fallback:top;
+  }
   function mapViewForCamera(target,radius,{height=800,fov=60,bearing=0}={}){
     const ll=unproject(target.x,target.y),span=Math.max(1,2*(+radius||1)*Math.tan((+fov||60)*RAD/2));
     const zoom=Math.log2(WORLD*Math.max(1,+height||800)/(256*span));
@@ -88,5 +136,5 @@
     let active=null;
     return {get active(){return active},run(source,fn){if(active&&active!==source)return false;const previous=active;active=source;try{fn()}finally{active=previous}return true}};
   }
-  return {R,WORLD,MIN_TILT_DEGREES,project,unproject,projectBounds,cameraForBounds,pitchDegreesFromView,limitPitch,mapViewForCamera,projectYear,chooseCoverage,createSyncGuard};
+  return {R,WORLD,MIN_TILT_DEGREES,MIN_RADIUS,project,unproject,projectBounds,cameraForBounds,pitchDegreesFromView,limitPitch,clampRadius,installRadiusFloor,groundHeightFromNodes,mapViewForCamera,projectYear,chooseCoverage,createSyncGuard};
 });
