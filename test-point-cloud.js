@@ -47,4 +47,54 @@ const guard=pc.createSyncGuard();let nested=false;assert(guard.run("2d",()=>{nes
     assert(Math.abs(pc.pitchDegreesFromView(cam.pitch)-deg)<1e-9,"pitch must round-trip through Potree units");
   }
 }
+/* Potree's View, reduced to the parts the camera maths has to agree with. The
+   direction getter is Rz(yaw) * Rx(pitch) applied to (0,1,0), exactly as the
+   vendored potree.js builds it, and the pitch setter clamps to the same
+   min/max the real one does. */
+class FakeView{
+  constructor(){this.position={x:0,y:0,z:0};this.yaw=0;this._pitch=-Math.PI/4;this.radius=1;this.maxPitch=Math.PI/2;this.minPitch=-Math.PI/2}
+  get pitch(){return this._pitch}
+  set pitch(a){this._pitch=Math.max(Math.min(a,this.maxPitch),this.minPitch)}
+  get direction(){const c=Math.cos(this.pitch);return {x:-Math.sin(this.yaw)*c,y:Math.cos(this.yaw)*c,z:Math.sin(this.pitch)}}
+  getPivot(){const d=this.direction;return {x:this.position.x+d.x*this.radius,y:this.position.y+d.y*this.radius,z:this.position.z+d.z*this.radius}}
+}
+{
+  const b={west:-121.80,east:-121.72,south:46.82,north:46.88};
+  /* The camera is only right if Potree, using its own look vector, pivots on the
+     ground we aimed at. A tilted view over a rotated map is where a sign error in
+     the look vector shows up; nadir and north-up both hide it. */
+  for(const bearing of [0,37,90,180,285]) for(const pitch of [8,35,62,90]){
+    const cam=pc.cameraForBounds(b,{bearing,pitch,targetZ:1400,aspect:1.4});
+    const view=new FakeView();
+    view.position=cam.position;view.yaw=cam.yaw;view.pitch=cam.pitch;view.radius=cam.radius;
+    assert(Math.abs(view.pitch-cam.pitch)<1e-12,`bearing ${bearing} pitch ${pitch}: Potree must accept the tilt unclamped`);
+    const pivot=view.getPivot();
+    assert(Math.hypot(pivot.x-cam.target.x,pivot.y-cam.target.y,pivot.z-cam.target.z)<1e-6,
+           `bearing ${bearing} pitch ${pitch}: Potree must pivot on the target we aimed at`);
+    assert(cam.position.z>cam.target.z,`bearing ${bearing} pitch ${pitch}: camera must stay above the ground`);
+  }
+}
+/* The ceiling bug: the panel opens at nadir, which is the floor of Potree's
+   pitch range, so a tilt gesture can only travel toward the horizon - and
+   Potree's own maxPitch of +PI/2 lets it sail straight through into the
+   underside of the terrain. limitPitch is what stops that. */
+{
+  const view=new FakeView();
+  view.pitch=-Math.PI/2;
+  view.pitch=Math.PI/2;
+  assert(view.pitch>0,"guard: unclamped Potree really does orbit under the ground");
+  pc.limitPitch(view);
+  assert(view.pitch<0,"limitPitch must lift a view that already slipped underneath");
+  view.pitch=Math.PI/2;
+  assert(view.pitch<0,"a clamped view must not be able to orbit under the ground again");
+  assert(Math.abs(view.pitch+pc.MIN_TILT_DEGREES*Math.PI/180)<1e-12,"the clamp must sit at the tilt floor");
+  view.pitch=-Math.PI/2;
+  assert(Math.abs(view.pitch+Math.PI/2)<1e-12,"nadir must stay reachable");
+  assert.equal(pc.limitPitch(null),null,"limitPitch must tolerate a viewer with no scene yet");
+  // whatever the controls can reach now round-trips through the sync without clamping
+  for(const deg of [pc.MIN_TILT_DEGREES,30,90]){
+    const cam=pc.cameraForBounds({west:-121.8,east:-121.72,south:46.82,north:46.88},{pitch:deg,aspect:1.4});
+    assert(Math.abs(pc.pitchDegreesFromView(cam.pitch)-deg)<1e-9,"the tilt floor must round-trip, not clamp");
+  }
+}
 console.log("point cloud core tests passed");

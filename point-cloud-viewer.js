@@ -67,7 +67,7 @@
     function removeCloud(){if(state.cloud){try{state.viewer?.scene?.removePointCloud(state.cloud)}catch(e){}for(const node of state.cloud.visibleNodes||[])try{node.sceneNode?.geometry?.dispose()}catch(e){}}state.cloud=null;state.project=null}
     async function ensureViewer(){
       if(state.viewer)return state.viewer;const Potree=await loadRuntime();if(!state.wanted)return null;
-      trackWorkers(Potree);const viewer=state.viewer=new Potree.Viewer(canvas);viewer.setFOV(60);viewer.setPointBudget(3_000_000);viewer.setEDLEnabled(true);viewer.setEDLStrength(1);viewer.setEDLRadius(1.4);viewer.setBackground("gradient");
+      trackWorkers(Potree);const viewer=state.viewer=new Potree.Viewer(canvas);CORE().limitPitch(viewer.scene?.view);viewer.setFOV(60);viewer.setPointBudget(3_000_000);viewer.setEDLEnabled(true);viewer.setEDLStrength(1);viewer.setEDLRadius(1.4);viewer.setBackground("gradient");
       viewer.addEventListener("camera_changed",()=>{
         if(!linked()||state.syncGuard.active==="2d"||performance.now()<state.suppress3d||(!state.user3dActive&&performance.now()>state.user3dUntil))return;
         clearTimeout(state.cameraTimer);state.cameraTimer=setTimeout(syncToMap,120);
@@ -79,6 +79,11 @@
       /* A freshly loaded cloud opens looking straight down. After that the sync
          keeps whatever tilt the user has orbited to, so panning the 2D map does
          not yank the 3D view back to plan every time. */
+      /* Re-assert the horizon clamp on every sync: Potree recreates scene.view
+         with its own wide-open limits whenever a scene is swapped in, and a view
+         that has slipped under the ground must be lifted back out before its
+         tilt is read, not after. */
+      CORE().limitPitch(view);
       const pitch=state.plan?90:CORE().pitchDegreesFromView(view.pitch);
       const rect=canvas.getBoundingClientRect(),camera=CORE().cameraForBounds(projectBounds(map.getBounds()),{bearing:map.getBearing?.()||0,targetZ:z,fov:state.viewer.getFOV?.()||60,aspect:rect.width/Math.max(1,rect.height),pitch});
       state.plan=false;
