@@ -288,6 +288,11 @@ assert(!index.includes('syncVisualViewport'),
        "the shell must never be sized from a JS-measured visual viewport");
 assert(index.includes('content="width=device-width,initial-scale=1,viewport-fit=cover"'),
        "viewport-fit=cover is what makes the safe-area strips part of the shell");
+/* An edge-to-edge app has to say so consistently. viewport-fit=cover puts the
+   safe-area strips inside the layout; "black" asks iOS to reserve the system
+   bars and fill them with theme-color instead, which contradicts it. */
+assert(index.includes('name="apple-mobile-web-app-status-bar-style" content="black-translucent"'),
+       "an edge-to-edge app must not ask iOS to reserve the system bars");
 assert(index.includes('doubleClickZoom:false')&&index.includes('map.on("dblclick",e=>{ stageMapLocation(e); run(); });'),
        "a map point must be selected on one click and load imagery only on double click or double tap");
 assert(index.includes('PANE_REORDER_HOLD_MS=260')&&index.includes('Press and hold to reorder.'),
