@@ -71,6 +71,19 @@ assert(index.includes('<script src="glacial-research-core.js"></script>'),"index
 assert(index.includes('<script src="research-analysis.js"></script>'),"index must load the shared analysis dispatcher");
 assert(read("sw.js").includes(`const CSP_BUILD = "${versionSandbox.CSP_BUILD}";`),
        "service worker cache namespace must use the page build version");
+/* Shipping a fix is not the same as anyone receiving it. Same-origin assets are
+   served cache-first and the worker calls skipWaiting(), so a new build takes
+   the controller while the open page keeps running old HTML - and an installed
+   PWA can sit backgrounded for days making no navigation at all. Without a
+   prompt the only way through is knowing to force-quit the app. */
+assert(/navigator\.serviceWorker\.addEventListener\("controllerchange"/.test(index),
+       "a new worker taking control is the signal that the open page is stale");
+assert(/if\(hadController\) offerNewBuild\(\)/.test(index),
+       "the first worker ever taking control is not an update and must not interrupt");
+assert(/document\.addEventListener\("visibilitychange",recheck\)/.test(index)&&
+       /registration\.update\(\)/.test(index),
+       "a backgrounded PWA makes no navigations, so it must re-check on the way back in");
+assert(index.includes('id="newBuildReload"'),"the update prompt must offer a reload");
 assert(index.includes('register("sw.js",{updateViaCache:"none"})'),
        "service-worker imports must bypass stale HTTP cache during update checks");
 assert(index.includes('id="snapshot"'),"map snapshot control must be present");
