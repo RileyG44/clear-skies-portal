@@ -178,6 +178,36 @@ assert(index.indexOf('World_Light_Gray_Base')<index.indexOf('World_Dark_Gray_Bas
   assert.equal(writes,1,`panel.style.width is written ${writes} times; it belongs only inside setPanelWidth`);
   assert(/visualViewport\?\.addEventListener\("resize"/.test(viewer),
          "iOS changes the viewport via visualViewport without a window resize; the breakpoint must be re-evaluated there");
+
+  /* The phone layout is a detented sheet, per Apple's guidance for secondary
+     content: resizable between detents, with a grabber saying so, left
+     non-modal so the map behind stays live. It replaced a slab pinned at
+     top:40dvh that gave the 3D view a third of the screen with no way to
+     move it. */
+  assert(/const DETENTS=\["peek","half","full"\]/.test(viewer),
+         "the mobile sheet must offer peek, half and full detents");
+  assert(/function nearestDetent\(height,velocity\)/.test(viewer)&&/velocity<-0\.5/.test(viewer),
+         "a flick must move one detent rather than snapping to whichever is nearest");
+  assert(/velocity>0\.5&&height<=lowest\+8/.test(viewer),
+         "a firm flick down from the smallest detent must dismiss the sheet");
+  assert(/lastPointerAt/.test(viewer)&&!/event\.detail===0/.test(viewer),
+         "a touch tap reports click.detail 0 like a keyboard press; the sheet must not cycle twice on one tap");
+  assert(index.includes('id="pcGrabber"'),"the sheet must show a grabber to advertise that it resizes");
+  /* The grabber and header sit outside #pcCanvas so they survive the peek
+     detent, where the canvas is collapsed to nothing. */
+  assert(index.indexOf('id="pcGrabber"')<index.indexOf('id="pcCanvas"')&&
+         index.indexOf('class="pc-head"')<index.indexOf('id="pcCanvas"'),
+         "grabber and header must precede the canvas so peek can collapse it");
+  assert(index.includes('[data-detent="peek"] #pcCanvas'),
+         "the peek detent must collapse the 3D view and leave the map usable");
+  /* touch-action on the panel inherits into the scrolling control list and
+     stops the browser scrolling it entirely - invisible to a mouse-driven
+     test, total on a phone. It belongs on the drag targets only. */
+  assert(index.includes('#pcGrabber,#pointCloudPanel .pc-head{touch-action:none}')&&
+         index.includes('.pc-controls{touch-action:pan-y}'),
+         "touch-action must be scoped to the drag targets, never the whole sheet");
+  assert(/#pcCanvas\{flex:1 1 auto;min-height:180px/.test(index),
+         "the 3D view needs a floor or the controls squeeze it to a strip");
 }
 
 assert(!/cartocdn/.test(index),

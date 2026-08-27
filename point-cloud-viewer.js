@@ -141,7 +141,7 @@
       });
     }
     async function open(){
-      if(state.wanted)return;beforeOpen?.();state.wanted=true;panel.hidden=false;document.body.classList.add("point-cloud-open");$("#terModePoints").setAttribute("aria-pressed","true");onLayoutChange?.("right");setStatus("Loading Washington coverage index…","loading");
+      if(state.wanted)return;beforeOpen?.();state.wanted=true;panel.hidden=false;applyDetent(detent,false);document.body.classList.add("point-cloud-open");$("#terModePoints").setAttribute("aria-pressed","true");onLayoutChange?.("right");setStatus("Loading Washington coverage index…","loading");
       try{state.catalog=state.catalog||await catalog();await ensureViewer();await loadCurrent()}catch(error){console.warn("Point cloud:",error);setStatus(error.message||"Point cloud could not start.","error")}
     }
     function close(){state.wanted=false;state.loadingProject=null;state.user3dActive=false;state.user3dUntil=0;state.loadToken++;clearTimeout(state.cameraTimer);destroyViewer(state);panel.hidden=true;document.body.classList.remove("point-cloud-open");$("#terModePoints").setAttribute("aria-pressed","false");onLayoutChange?.("right")}
@@ -165,6 +165,128 @@
     let preferredWidth=+localStorage.getItem("csp-pc-width")||560;
     const narrow=()=>matchMedia("(max-width:760px)").matches;
 
+    /* ---------------------------------------------------------- mobile sheet
+       On a phone the panel is a detented bottom sheet rather than a fixed slab.
+       Peek keeps the map usable with the status line still legible, half is the
+       working view, full is for the controls. Heights are resolved to pixels so
+       the drag, the snap and the CSS transition are all working in the same
+       units - mixing dvh into the drag maths makes the snap disagree with the
+       finger by however much the browser toolbar happens to be occupying. */
+    const DETENTS=["peek","half","full"];
+    const SHEET_KEY="csp-pc-detent";
+    let detent=localStorage.getItem(SHEET_KEY);
+    if(!DETENTS.includes(detent)) detent="half";
+
+    function peekHeight(){
+      /* Measured, not guessed: the header wraps differently with the status
+         text and the safe-area inset varies by device. */
+      const grabber=$("#pcGrabber"),head=panel.querySelector(".pc-head");
+      const measured=(grabber?.offsetHeight||26)+(head?.offsetHeight||44)+12;
+      return Math.round(measured+safeBottom());
+    }
+    function safeBottom(){
+      return parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--safe-bottom"))||0;
+    }
+    function maxHeight(){ return Math.round(innerHeight*0.94) }
+    function detentHeight(name){
+      if(name==="peek") return peekHeight();
+      if(name==="full") return maxHeight();
+      return Math.round(Math.min(maxHeight(),Math.max(peekHeight()+120,innerHeight*0.58)));
+    }
+    function resizeViewer(){
+      const width=Math.max(1,canvas.clientWidth),height=Math.max(1,canvas.clientHeight);
+      state.viewer?.renderer?.setSize(width,height);
+    }
+    function applyDetent(name,persist){
+      detent=DETENTS.includes(name)?name:"half";
+      panel.dataset.detent=detent;
+      $("#pcGrabber")?.setAttribute("aria-label",
+        detent==="full"?"Collapse the point-cloud sheet":"Expand the point-cloud sheet");
+      if(!narrow()){ panel.style.removeProperty("--pc-sheet"); return }
+      panel.style.setProperty("--pc-sheet",`${detentHeight(detent)}px`);
+      if(persist!==false) try{ localStorage.setItem(SHEET_KEY,detent) }catch(e){}
+      /* The transition runs for 340ms; Potree resizes itself from renderArea
+         every frame, so this is only to get the first frame right at the new
+         size rather than one frame late. */
+      resizeViewer();
+      setTimeout(resizeViewer,360);
+    }
+    function nearestDetent(height,velocity){
+      /* A deliberate flick moves exactly one detent, which is what makes a
+         sheet feel like it obeys you rather than snapping wherever it likes.
+         Below that threshold, fall back to whichever detent is closest. */
+      const index=DETENTS.indexOf(detent);
+      if(velocity<-0.5) return DETENTS[Math.min(DETENTS.length-1,index+1)];
+      if(velocity>0.5) return index===0?null:DETENTS[index-1];
+      let best=DETENTS[0],gap=Infinity;
+      for(const name of DETENTS){
+        const distance=Math.abs(detentHeight(name)-height);
+        if(distance<gap){ gap=distance;best=name }
+      }
+      return best;
+    }
+    /* Only the grabber and the header drag the sheet. Dragging from the
+       scrolling control list as well would mean arbitrating between a scroll
+       and a drag on every touch, and getting that wrong costs you the ability
+       to scroll at all - a 70px always-visible handle is the honest trade. */
+    function startSheetDrag(event){
+      if(!narrow()||event.button>0) return;
+      if(event.target.closest("#pcClose, .pc-link")) return;
+      const startY=event.clientY,startHeight=panel.getBoundingClientRect().height;
+      const lowest=peekHeight(),highest=maxHeight();
+      let lastY=startY,lastAt=event.timeStamp||performance.now(),velocity=0,moved=false;
+      panel.classList.add("pc-dragging");
+      const target=event.currentTarget;
+      try{ target.setPointerCapture(event.pointerId) }catch(e){}
+      const onMove=move=>{
+        const now=move.timeStamp||performance.now(),dt=Math.max(1,now-lastAt);
+        velocity=(move.clientY-lastY)/dt;                       // px/ms, down positive
+        lastY=move.clientY;lastAt=now;
+        let height=startHeight+(startY-move.clientY);
+        if(Math.abs(startY-move.clientY)>3) moved=true;
+        /* Rubber band past the top stop so the sheet reads as elastic rather
+           than jammed, and never past the bottom stop into a negative height. */
+        if(height>highest) height=highest+(height-highest)*0.22;
+        panel.style.setProperty("--pc-sheet",`${Math.max(24,height)}px`);
+        resizeViewer();
+      };
+      const finish=end=>{
+        lastPointerAt=performance.now();
+        target.removeEventListener("pointermove",onMove);
+        target.removeEventListener("pointerup",finish);
+        target.removeEventListener("pointercancel",finish);
+        panel.classList.remove("pc-dragging");
+        if(!moved){ cycleDetent(); return }
+        const height=panel.getBoundingClientRect().height;
+        const next=nearestDetent(height,velocity);
+        /* A firm flick down from the smallest detent dismisses, which is the
+           gesture a sheet is expected to answer. */
+        if(next===null||(velocity>0.5&&height<=lowest+8)){ close(); return }
+        applyDetent(next);
+      };
+      target.addEventListener("pointermove",onMove);
+      target.addEventListener("pointerup",finish);
+      target.addEventListener("pointercancel",finish);
+      event.preventDefault();
+    }
+    /* Wraps rather than bouncing between the top two: peek is where the map is
+       usable again, so it has to be reachable by tapping and not only by
+       knowing that the sheet can be dragged. */
+    function cycleDetent(){
+      const index=DETENTS.indexOf(detent);
+      applyDetent(DETENTS[(index+1)%DETENTS.length]);
+    }
+    $("#pcGrabber")?.addEventListener("pointerdown",startSheetDrag);
+    panel.querySelector(".pc-head")?.addEventListener("pointerdown",startSheetDrag);
+    /* A touch tap reports click.detail === 0, exactly like a keyboard
+       activation, so telling them apart that way cycled the sheet twice and it
+       landed back where it started. Time since the pointer sequence is the
+       distinguishing signal: a keyboard press has no pointer sequence at all. */
+    let lastPointerAt=0;
+    $("#pcGrabber")?.addEventListener("click",()=>{
+      if(performance.now()-lastPointerAt>400) cycleDetent();
+    });
+
     /* Below the breakpoint the panel is a full-width bottom sheet laid out by
        CSS (left/right pinned to the safe area). An inline width would override
        that -- and did: the saved desktop width was applied unconditionally at
@@ -176,9 +298,12 @@
     function setPanelWidth(px){
       if(narrow()) panel.style.removeProperty("width");
       else panel.style.width=`${px}px`;
-      state.viewer?.renderer?.setSize(canvas.clientWidth,canvas.clientHeight);
+      resizeViewer();
     }
-    function applyPanelWidth(){ setPanelWidth(preferredWidth) }
+    /* One entry point for both axes: the width rule below the breakpoint and
+       the sheet height above it are the same decision, and splitting them is
+       how the startup bug that stranded a 560px panel on a phone happened. */
+    function applyPanelWidth(){ setPanelWidth(preferredWidth); applyDetent(detent,false) }
 
     function fitAgainstLeft(leftEdge,gap=12){
       if(narrow()||panel.hidden){ if(narrow()) applyPanelWidth(); return }
