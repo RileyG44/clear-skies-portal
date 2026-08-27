@@ -91,6 +91,16 @@ assert(index.includes('id="newBuildReload"'),"the update prompt must offer a rel
 assert(index.includes('page fills window')&&index.includes('window fills screen'),
        "the build stamp must separate a short page from a short web view");
 assert(index.includes('id="buildDiag"'),"the geometry readout must be reachable from the build stamp");
+/* An installed iOS app captures viewport-fit and the status-bar style when it
+   is added to the Home Screen; changing them later does nothing until it is
+   added again, and relaunching does not re-read them. The app says so only when
+   it measures that state, and only when the page itself is not the short one -
+   otherwise it would blame the install for a stylesheet bug. */
+assert(index.includes('id="insetNotice"'),"an inset web view must explain itself rather than look like a bug");
+assert(/if\(Math\.abs\(app\.bottom-innerHeight\)>1\) return;\s*\/\/ the page is short: not this/.test(index),
+       "the inset notice must stand down when the page is the short one");
+assert(/if\(innerWidth!==screen\.width\) return;/.test(index),
+       "a window smaller than the screen is ordinary in split view and landscape");
 assert(index.includes('register("sw.js",{updateViaCache:"none"})'),
        "service-worker imports must bypass stale HTTP cache during update checks");
 assert(index.includes('id="snapshot"'),"map snapshot control must be present");
