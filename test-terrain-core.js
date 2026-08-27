@@ -169,4 +169,27 @@ assert.equal(T.adaptiveContourInterval(5,5),null);
 assert.throws(()=>T.contourLevels(0,100,0.01,{maxLevels:100}),/maxLevels/);
 assert.throws(()=>T.adaptiveContourInterval({min:0,max:100,groundResolution:1,slopeDegrees:90}),/less than 90/);
 
+/* Whether the sun does anything, which the terrain panel now states live.
+   Two independent reasons it may not, and both used to fail silently: the
+   slider moved, the readout updated, and the picture did not change. */
+{
+  for(const style of T.SUN_LIT_STYLES)
+    assert.equal(T.sunAffectsTerrain(style,"3dep").live,true,`${style} must relight from elevation`);
+  for(const style of ["slope","aspect","northness","c2","c5","c10","c25"])
+    assert.equal(T.sunAffectsTerrain(style,"3dep").reason,"derived",
+                 `${style} is computed from gradient and has no sun to move`);
+  for(const source of T.PRERENDERED_SOURCES)
+    assert.equal(T.sunAffectsTerrain("hs",source).reason,"prerendered",
+                 `${source} arrives pre-rendered with its shadows baked in`);
+  // a lit style over a locally rendered source is the case that must stay live
+  for(const source of ["3dep","usgs1m"])
+    assert.equal(T.sunAffectsTerrain("hs",source).live,true,`${source} renders from elevation and must relight`);
+  assert.equal(T.sunAffectsTerrain("off","3dep").reason,"off","terrain off has nothing to light");
+  assert.equal(T.sunAffectsTerrain(null,"3dep").live,false,"a missing style must not claim to be lit");
+  assert.equal(T.sunAffectsTerrain("hs",null).live,true,"an unknown source must not be assumed pre-rendered");
+  /* Guard: the pre-rendered case must be reachable from the same style that is
+     live elsewhere, or the test above is only restating the style rule. */
+  assert(T.sunAffectsTerrain("hs","3dep").live!==T.sunAffectsTerrain("hs","wadnr").live,
+         "the same style must differ by source; that is the silent switch this describes");
+}
 console.log("terrain core checks passed");

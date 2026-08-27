@@ -447,6 +447,18 @@ assert.equal(pkg.dependencies["maplibre-gl"],"^6.6.0","3D terrain must pin the r
 assert.equal(pkg.dependencies["@tomickigrzegorz/leaflet-rotate"],"^0.2.4","2D rotation must use the reviewed MIT plugin");
 for(const asset of ["maplibre-gl.mjs","maplibre-gl-shared.mjs","maplibre-gl-worker.mjs","maplibre-gl.css","leaflet-rotate.umd.min.js"])
   assert(fs.existsSync(path.join(root,"vendor",asset)),`missing vendored renderer asset: ${asset}`);
+/* The sun controls do nothing for derived styles, and nothing for the published
+   WA DNR hillshade that "best available" silently switches to past z13 over
+   Washington. Both used to fail in silence: the slider moved, the readout
+   updated, the picture did not change. The note must be live state, not prose. */
+assert(index.includes('id="terLightNote"'),"the terrain lighting note must be addressable to update live");
+assert(/CSPTerrain\.sunAffectsTerrain\(/.test(index),
+       "whether the sun does anything must come from the tested rule, not a condition retyped in the UI");
+assert(/note\.dataset\.live=String\(effect\.live\)/.test(index),
+       "the note must record whether the sun is live so it can be styled and asserted");
+assert(/function paintTerrainInfo\(pick\)\{\s*\/\*[\s\S]{0,400}?\*\/\s*paintSunNote\(\);/.test(index),
+       "the note must be re-evaluated wherever terrain state changes, not only on slider input");
+
 assert(index.includes('id="pointCloudPanel"')&&index.includes('id="terModePoints"'),"3D point-cloud panel and entry point must exist");
 
 /* Product spelling: LiDAR in anything a reader sees. Code identifiers, URLs,

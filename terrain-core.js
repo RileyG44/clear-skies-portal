@@ -447,6 +447,27 @@
     return result;
   }
 
+  /* Does moving the sun change this picture?
+     Two independent reasons it may not, and the terrain panel could admit
+     neither in a way a reader could act on. Kept here so the answer is one
+     tested rule rather than a condition duplicated across the UI.
+
+     - Slope, aspect, northness and contours are derived from gradient and
+       elevation. There is no light source in them to move.
+     - Published hillshade (WA DNR, and the 3DEP export composited under it)
+       arrives as a finished image with its shadows already baked. "Best
+       available" switches to it silently once you pass z13 over Washington
+       with the engine connected, so the slider that worked at a wider zoom
+       stops working here with nothing said. */
+  const SUN_LIT_STYLES=Object.freeze(["hs","hsmulti","tint"]);
+  const PRERENDERED_SOURCES=Object.freeze(["wadnr"]);
+  function sunAffectsTerrain(style,source){
+    if(!style||style==="off") return {live:false,reason:"off"};
+    if(!SUN_LIT_STYLES.includes(style)) return {live:false,reason:"derived"};
+    if(PRERENDERED_SOURCES.includes(source)) return {live:false,reason:"prerendered"};
+    return {live:true,reason:"live"};
+  }
+
   function createElevationColorizer(ramp,options){
     const stops=normalizeColorRamp(ramp), settings=options||{};
     const space=settings.space||"srgb";
@@ -577,7 +598,7 @@
     hillshade,singleHillshade:hillshade,hillshadeByte,createHillshade,
     multidirectionalHillshade,multiHillshade:multidirectionalHillshade,multidirectionalHillshadeByte,
     createMultidirectionalHillshade,
-    ELEVATION_RAMPS,normalizeColorRamp,createElevationColorizer,colorForElevation,elevationColor:colorForElevation,
+    ELEVATION_RAMPS,SUN_LIT_STYLES,PRERENDERED_SOURCES,sunAffectsTerrain,normalizeColorRamp,createElevationColorizer,colorForElevation,elevationColor:colorForElevation,
     niceContourInterval,adaptiveContourInterval,contourIntervalDetails,indexContourInterval,contourLevels
   };
 });
