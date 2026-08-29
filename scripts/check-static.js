@@ -91,6 +91,25 @@ assert(index.includes('id="newBuildReload"'),"the update prompt must offer a rel
 assert(index.includes('page fills window')&&index.includes('window fills screen'),
        "the build stamp must separate a short page from a short web view");
 assert(index.includes('id="buildDiag"'),"the geometry readout must be reachable from the build stamp");
+
+/* The sheet's breathing room is stated, not inherited. It used to come from the
+   top safe-area inset, which is a coincidence rather than a layout: the moment
+   the status bar stopped overlaying the page that inset went to zero and the
+   panel sat flush against the very top edge. */
+assert(/#side\{position:absolute;\s*top:calc\(var\(--safe-top\) \+ 8px\)/.test(index),
+       "the phone sheet must state its own top gap rather than inherit one from the safe area");
+
+/* Which sections are open is session state, not a preference. Restoring every
+   open pane means the app launches as a wall of expanded controls you have to
+   close before you can see the list of sections at all. Order, heights and the
+   growing pane stay durable - those are arranged once and wanted back. */
+assert(index.includes('const PANE_SESSION_KEY')&&/sessionStorage\.setItem\(PANE_SESSION_KEY/.test(index),
+       "collapsed state must live in the session, so a fresh launch opens clean");
+assert(/const \{min,\.\.\.durable\}=paneState;/.test(index)&&
+       /localStorage\.setItem\(PANE_KEY, JSON\.stringify\(durable\)\)/.test(index),
+       "the durable record must not carry collapsed state back across launches");
+assert(/paneState\.min=ALL_COLLAPSED\(\);/.test(index),
+       "a launch with no session must start with every section closed");
 assert(index.includes('register("sw.js",{updateViaCache:"none"})'),
        "service-worker imports must bypass stale HTTP cache during update checks");
 assert(index.includes('id="snapshot"'),"map snapshot control must be present");
