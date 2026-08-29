@@ -91,16 +91,6 @@ assert(index.includes('id="newBuildReload"'),"the update prompt must offer a rel
 assert(index.includes('page fills window')&&index.includes('window fills screen'),
        "the build stamp must separate a short page from a short web view");
 assert(index.includes('id="buildDiag"'),"the geometry readout must be reachable from the build stamp");
-/* An installed iOS app captures viewport-fit and the status-bar style when it
-   is added to the Home Screen; changing them later does nothing until it is
-   added again, and relaunching does not re-read them. The app says so only when
-   it measures that state, and only when the page itself is not the short one -
-   otherwise it would blame the install for a stylesheet bug. */
-assert(index.includes('id="insetNotice"'),"an inset web view must explain itself rather than look like a bug");
-assert(/if\(Math\.abs\(app\.bottom-innerHeight\)>1\) return;\s*\/\/ the page is short: not this/.test(index),
-       "the inset notice must stand down when the page is the short one");
-assert(/if\(innerWidth!==screen\.width\) return;/.test(index),
-       "a window smaller than the screen is ordinary in split view and landscape");
 assert(index.includes('register("sw.js",{updateViaCache:"none"})'),
        "service-worker imports must bypass stale HTTP cache during update checks");
 assert(index.includes('id="snapshot"'),"map snapshot control must be present");
@@ -249,8 +239,18 @@ assert(index.indexOf('World_Light_Gray_Base')<index.indexOf('World_Dark_Gray_Bas
   assert(/horizontal&&dx<-56/.test(index),"a swipe back toward the edge must dismiss the sidebar");
   assert(/getElementById\("map"\)\.addEventListener\("pointerdown"/.test(index),
          "tapping the map beside the sheet must dismiss it");
-  assert(/\.check,\.ovrow\{min-height:44px\}/.test(index),
-         "dense sidebar rows must meet the 44px touch minimum on a phone");
+  /* 44pt is the minimum for a control you aim at, not a floor for every line of
+     a dense scrolling list. Applying it wholesale inflated the panes to twice
+     the visible height and left 10.5px labels stranded in oversized boxes. The
+     search row - one row, aimed at deliberately - gets the full target; list
+     rows keep a density you can actually read. */
+  assert(/\.search-row #go,\.search-row #q[^}]*min-height:44px/.test(index),
+         "the search controls are aimed at deliberately and must carry the full target");
+  const rowRule=index.match(/\.check,\.ovrow\{min-height:(\d+)px\}/);
+  assert(rowRule,"dense sidebar rows must set an explicit phone height");
+  const rowHeight=Number(rowRule[1]);
+  assert(rowHeight>=34&&rowHeight<=40,
+         `dense list rows are ${rowHeight}px; below 34 is fiddly, above 40 and the panel stops showing anything`);
 
   /* Point cloud: the ramp follows the view, and one slider lifts the canopy. */
   assert(/function rampToView\(\)/.test(viewer)&&/elevationRangeFromNodes/.test(viewer),
@@ -308,8 +308,14 @@ assert(index.includes('content="width=device-width,initial-scale=1,viewport-fit=
 /* An edge-to-edge app has to say so consistently. viewport-fit=cover puts the
    safe-area strips inside the layout; "black" asks iOS to reserve the system
    bars and fill them with theme-color instead, which contradicts it. */
-assert(index.includes('name="apple-mobile-web-app-status-bar-style" content="black-translucent"'),
-       "an edge-to-edge app must not ask iOS to reserve the system bars");
+/* The device measured its window 59px short of the screen - the status-bar
+   inset on a Dynamic Island iPhone, and the documented black-translucent
+   failure where the view is sized short and the shortfall shows as a band along
+   the bottom. With "black" the window is the area below the status bar and #app
+   fills it exactly. */
+assert(index.includes('name="apple-mobile-web-app-status-bar-style" content="black"')&&
+       !index.includes('content="black-translucent"'),
+       "black-translucent sized the window short of the screen on this hardware");
 assert(index.includes('doubleClickZoom:false')&&index.includes('map.on("dblclick",e=>{ stageMapLocation(e); run(); });'),
        "a map point must be selected on one click and load imagery only on double click or double tap");
 assert(index.includes('PANE_REORDER_HOLD_MS=260')&&index.includes('Press and hold to reorder.'),
