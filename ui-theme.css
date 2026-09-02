@@ -64,8 +64,11 @@
   /* focus ring: the surface's own ink at low alpha, so it reads on any of them */
   --ui-ring: rgba(35, 35, 34, .16);
 
-  /* tooltips invert against the interface */
+  /* Tooltips invert against the interface, so their ink is not the page's ink -
+     the map's coordinate tooltip was --ui-tooltip under --ui-text, which is
+     black on black the moment both come from one palette. */
   --ui-tooltip: #20201f;
+  --ui-tooltip-ink: #f4f4f1;
 
   /* controls floating over the map are translucent so the map shows through.
      They must follow the chrome, not the map, or they vanish over dark tiles. */
@@ -141,6 +144,7 @@
 
   /* Still inverted, but away from the surface rather than toward black. */
   --ui-tooltip: #4a4946;
+  --ui-tooltip-ink: #f7f6f3;
 
   --ui-frost: rgba(24, 24, 22, .92);
   --ui-frost-weak: rgba(24, 24, 22, .88);

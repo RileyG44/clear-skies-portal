@@ -7,7 +7,10 @@ const icon=name=>`vendor/icons/${name}.svg`;
 const compactShell=matchMedia("(max-width:1050px)");
 const side=$("#side"),panes=$("#panes"),status=$("#status"),mapEl=$("#map");
 const bridge=window.ClearSkiesPortalBridge;
-if(!side||!panes||!status||!mapEl||!bridge) return;
+/* The page is held at first paint until this fires; every exit from here has to
+   reach it, including the one where the redesign declines to run at all. */
+const ready=()=>document.documentElement.dispatchEvent(new Event("csp:ready"));
+if(!side||!panes||!status||!mapEl||!bridge){ ready(); return; }
 
 document.body.classList.add("csp-redesign");
 document.documentElement.style.setProperty("--side-w","720px");
@@ -378,4 +381,7 @@ activateRoute(Object.prototype.hasOwnProperty.call(ROUTES,savedRoute)?savedRoute
 document.body.dataset.cspView=compactShell.matches?"nav":"detail";
 $$(".csp-nav-button[data-route]").forEach(button=>button.addEventListener("click",()=>localStorage.setItem("clearskies.workspace.v1",button.dataset.route)));
 syncModeBar();updateCounts();
+/* One frame later, so the reveal shows a settled layout rather than the route
+   activating in front of the user. */
+requestAnimationFrame(ready);
 })();

@@ -152,6 +152,27 @@ assert(index.includes('id="buildDiag"'),"the geometry readout must be reachable 
     "the checked tick must be themed, or it is white on a white box in dark");
   for(const file of ["sw.js","server.js",".github/workflows/ci.yml"])
     assert(read(file).includes("ui-theme.css"),`${file} must ship the palette`);
+
+  /* An inverted surface cannot take the page's ink. The map's coordinate
+     tooltip was --ui-tooltip filled and --ui-text lettered, which is two
+     near-blacks the moment both come from one palette. */
+  assert(/\.leaflet-tooltip\{[^}]*color:var\(--ui-tooltip-ink\)/.test(uiCss),
+    "the tooltip is an inverted surface and needs the ink that inverts with it");
+  assert(!/csp-point-tip\{[^}]*background:oklch/.test(read("index.html")) ||
+         /csp-point-tip\{[^}]*background:var\(--ui-tooltip\)/.test(uiCss),
+    "the point tooltip's hard-coded fill must be overridden by a themed one");
+
+  /* The redesign restructures the legacy DOM in a script at the end of the
+     page, so without a hold the browser paints the old interface first and the
+     new one lands on top. The hold has to expire by itself: if the script never
+     runs, a page held forever is worse than a page that flashes. */
+  assert(/html\.csp-boot body\{visibility:hidden\}/.test(index),
+    "first paint must wait for the restructure, and wait by visibility so layout still measures");
+  assert(/setTimeout\(reveal,\s*\d+\)/.test(index),
+    "the paint hold must expire on its own if the interface script never runs");
+  assert(uiSystem.includes('dispatchEvent(new Event("csp:ready"))')&&
+         /if\(!side\|\|!panes\|\|!status\|\|!mapEl\|\|!bridge\)\{ ready\(\); return; \}/.test(uiSystem),
+    "every exit from the interface script must release the paint hold, including the early one");
 }
 
 /* Redesign shell. Every width rule under .csp-redesign carries !important, so

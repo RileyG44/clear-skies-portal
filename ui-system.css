@@ -572,6 +572,27 @@ body.csp-redesign .leaflet-control-attribution a{color:var(--ui-text-2)!importan
 body.csp-redesign .leaflet-popup-content-wrapper,
 body.csp-redesign .leaflet-popup-tip{background:var(--ui-surface);color:var(--ui-text)}
 
+/* Map tooltips are an inverted surface: the coordinate readout on a dropped
+   pin, and the point tooltips on overlay features, which had their own
+   hard-coded dark fill. Both take the tooltip pair, and the callout arrow takes
+   the same fill as the bubble it points out of - it was a hairline colour, so
+   it read as a stray notch. */
+body.csp-redesign .leaflet-tooltip{
+  background:var(--ui-tooltip);
+  border-color:var(--ui-tooltip);
+  color:var(--ui-tooltip-ink);
+}
+body.csp-redesign .leaflet-tooltip.csp-point-tip{
+  background:var(--ui-tooltip);
+  border-color:var(--ui-tooltip);
+  color:var(--ui-tooltip-ink);
+}
+body.csp-redesign .leaflet-tooltip-top::before{border-top-color:var(--ui-tooltip)}
+body.csp-redesign .leaflet-tooltip-bottom::before{border-bottom-color:var(--ui-tooltip)}
+body.csp-redesign .leaflet-tooltip-left::before{border-left-color:var(--ui-tooltip)}
+body.csp-redesign .leaflet-tooltip-right::before{border-right-color:var(--ui-tooltip)}
+body.csp-redesign .leaflet-tooltip a{color:var(--ui-tooltip-ink)}
+
 body.csp-redesign #drag{right:-5px}
 
 body.csp-redesign #cspMapMode{
