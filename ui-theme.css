@@ -1,0 +1,97 @@
+/* Clear Skies interface palette.
+ *
+ * ui-system.css styles roles; this file supplies the values for those roles in
+ * each theme. Splitting them is what makes a second theme a second palette
+ * rather than a second stylesheet: the redesign shipped with 242 colour
+ * literals and no custom properties, so adding dark meant editing every rule.
+ *
+ * The theme is chosen by data-ui-theme on <html>, written by setMapTheme so a
+ * single control moves the chrome and the basemap together. There is no
+ * prefers-color-scheme rule here on purpose - the map is the subject of this
+ * application and people pick its theme deliberately; having the chrome follow
+ * the operating system while the map followed a saved choice is how the two
+ * ended up disagreeing in the first place. The system preference seeds the
+ * initial value once, in index.html, and only when nothing has been saved.
+ */
+
+:root {
+  /* surfaces, lightest to deepest */
+  --ui-surface: #ffffff;
+  --ui-rail: #faf9f8;
+  --ui-sunken: #f5f5f3;
+  --ui-selected: #f0f0ee;
+  --ui-hover: #e9e9e5;
+
+  /* hairlines */
+  --ui-line: #e5e5e1;
+  --ui-line-strong: #d9d9d4;
+
+  /* ink, darkest to lightest */
+  --ui-text: #171716;
+  --ui-text-2: #464641;
+  --ui-text-muted: #71716b;
+  --ui-text-faint: #90908a;
+
+  /* a control that inverts against the surface it sits on */
+  --ui-control: #111110;
+  --ui-control-ink: #ffffff;
+
+  /* status */
+  --ui-ok: #1f7a4d;
+  --ui-warn: #b4451f;
+  --ui-danger: #a11d1d;
+
+  /* elevation. Alpha over the surface, so each theme states its own. */
+  --ui-shadow-1: rgba(0, 0, 0, .04);
+  --ui-shadow-2: rgba(0, 0, 0, .07);
+  --ui-shadow-3: rgba(0, 0, 0, .12);
+  --ui-shadow-4: rgba(0, 0, 0, .22);
+
+  /* Lucide icons ship as <img>, so currentColor cannot reach them. A filter is
+     the only lever; at rest it is a no-op. */
+  --ui-icon-filter: none;
+
+  color-scheme: light;
+}
+
+:root[data-ui-theme="dark"] {
+  /* Not an inversion of the light values. Inverting a warm paper palette gives
+     a blue-black that fights the map; these are neutral-warm at low luminance,
+     and the steps between surfaces are compressed because contrast reads
+     stronger in the dark. */
+  --ui-surface: #1c1c1a;
+  --ui-rail: #171716;
+  --ui-sunken: #131312;
+  --ui-selected: #2a2a27;
+  --ui-hover: #313130;
+
+  --ui-line: #302f2d;
+  --ui-line-strong: #3d3c39;
+
+  --ui-text: #f2f1ee;
+  --ui-text-2: #cfceca;
+  --ui-text-muted: #9d9c96;
+  --ui-text-faint: #77766f;
+
+  /* The control inverts the other way: light chip, dark ink. */
+  --ui-control: #f2f1ee;
+  --ui-control-ink: #171716;
+
+  /* Lifted, because saturated mid-tones vibrate against a dark surface. */
+  --ui-ok: #4ec98a;
+  --ui-warn: #f0a35f;
+  --ui-danger: #ff8a80;
+
+  /* Shadow does almost no work on a dark ground - depth comes from the surface
+     steps above. Kept shallow rather than removed so elevation still reads. */
+  --ui-shadow-1: rgba(0, 0, 0, .28);
+  --ui-shadow-2: rgba(0, 0, 0, .36);
+  --ui-shadow-3: rgba(0, 0, 0, .46);
+  --ui-shadow-4: rgba(0, 0, 0, .6);
+
+  /* invert() alone turns black strokes white but also flips hue on anything
+     coloured; these icons are monochrome, so it is exact. */
+  --ui-icon-filter: invert(1) brightness(.94);
+
+  color-scheme: dark;
+}

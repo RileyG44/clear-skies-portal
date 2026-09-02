@@ -71,6 +71,7 @@
           "point-cloud-viewer.js",
           "point-cloud-catalog.json",
           "index.html",
+          "ui-theme.css",
           "ui-system.css",
           "ui-system.js",
           "version.js",

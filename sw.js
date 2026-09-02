@@ -6,10 +6,10 @@
 /* Bump this on every deploy. Keeping the build literal here, plus a versioned
    page-script URL, prevents an older worker from serving a stale version.js
    while a newer HTML shell is already live. */
-const CSP_BUILD = "2026-09-02c";
+const CSP_BUILD = "2026-09-02d";
 const SHELL = `clear-skies-shell-${CSP_BUILD}`;
 const POTREE = `clear-skies-potree-${CSP_BUILD}`;
-const ASSETS = ["./", "./index.html", "./manifest.json", "./ui-system.css", "./ui-system.js", "./mosaic-core.js", "./terrain-core.js", "./terrain-raster.js",
+const ASSETS = ["./", "./index.html", "./manifest.json", "./ui-theme.css", "./ui-system.css", "./ui-system.js", "./mosaic-core.js", "./terrain-core.js", "./terrain-raster.js",
                 "./elevation-bands.js", "./elevation-tile-core.js", "./wa-archaeology.js", "./glacial-research-core.js", "./research-analysis.js", "./research-worker.js", "./point-cloud-core.js", "./point-cloud-viewer.js", "./point-cloud-catalog.json", "./maxar-catalog.json",
                 "./vendor/maplibre-gl.mjs", "./vendor/maplibre-gl-shared.mjs", "./vendor/maplibre-gl-worker.mjs", "./vendor/maplibre-gl.css", "./vendor/leaflet-rotate.umd.min.js",
                 "./vendor/icons/arrow-left.svg", "./vendor/icons/chevron-down.svg", "./vendor/icons/chevron-right.svg", "./vendor/icons/chevron-up.svg", "./vendor/icons/cloud-sun.svg", "./vendor/icons/download.svg", "./vendor/icons/history.svg", "./vendor/icons/image.svg", "./vendor/icons/layers.svg", "./vendor/icons/map-pinned.svg", "./vendor/icons/mountain-snow.svg", "./vendor/icons/radio.svg", "./vendor/icons/rotate-ccw.svg", "./vendor/icons/satellite.svg", "./vendor/icons/scan-search.svg", "./vendor/icons/search.svg", "./vendor/icons/settings-2.svg", "./vendor/icons/sliders-horizontal.svg", "./vendor/icons/tags.svg", "./vendor/icons/triangle-alert.svg",

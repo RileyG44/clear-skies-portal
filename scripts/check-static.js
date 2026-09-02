@@ -115,6 +115,29 @@ assert(index.includes('page fills window')&&index.includes('window fills screen'
        "the build stamp must separate a short page from a short web view");
 assert(index.includes('id="buildDiag"'),"the geometry readout must be reachable from the build stamp");
 
+/* One palette, two themes. The redesign shipped 242 colour literals and no
+   custom properties, so the map theme control moved the basemap and left the
+   chrome bright white beside a dark map. ui-system.css must style roles only;
+   the values live in ui-theme.css. */
+{
+  const uiCss=read("ui-system.css");
+  const literals=[...uiCss.matchAll(/#[0-9a-fA-F]{3,8}\b|rgba?\([^)]*\)/g)].map(m=>m[0]);
+  assert.equal(literals.length,0,
+    `ui-system.css must carry no colour literals; found ${literals.length}, first ${literals[0]}`);
+  const theme=read("ui-theme.css");
+  assert(theme.includes(':root[data-ui-theme="dark"]'),"a dark palette must exist");
+  const light=new Set([...theme.split('[data-ui-theme="dark"]')[0].matchAll(/--ui-[a-z0-9-]+/g)].map(m=>m[0]));
+  const dark=new Set([...theme.split('[data-ui-theme="dark"]')[1].matchAll(/--ui-[a-z0-9-]+/g)].map(m=>m[0]));
+  for(const token of light)
+    assert(dark.has(token),`${token} has no dark value; it would keep its light one`);
+  assert(index.includes("document.documentElement.dataset.uiTheme=theme"),
+    "one control must move the chrome and the basemap together");
+  assert(/img\[src\^="vendor\/icons\/"\]\{filter:var\(--ui-icon-filter\)\}/.test(uiCss),
+    "icons ship as <img>, so a filter is the only way to carry them into dark");
+  for(const file of ["sw.js","server.js",".github/workflows/ci.yml"])
+    assert(read(file).includes("ui-theme.css"),`${file} must ship the palette`);
+}
+
 /* Redesign shell. Every width rule under .csp-redesign carries !important, so
    the inline width the resize handle writes can never take effect - the handle
    stayed on screen doing nothing, which is worse than not offering it. */
