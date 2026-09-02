@@ -26,7 +26,7 @@ fs.mkdirSync(AREAS, {recursive:true});
 const MIME = {".html":"text/html; charset=utf-8",".js":"text/javascript",".mjs":"text/javascript",".css":"text/css",
   ".json":"application/json",".png":"image/png",".jpg":"image/jpeg",".jpeg":"image/jpeg",
   ".svg":"image/svg+xml",".wasm":"application/wasm",".md":"text/markdown; charset=utf-8",".txt":"text/plain; charset=utf-8"};
-const PUBLIC_FILES = new Set(["index.html","version.js","mosaic-core.js","terrain-core.js","terrain-raster.js",
+const PUBLIC_FILES = new Set(["index.html","version.js","ui-system.css","ui-system.js","mosaic-core.js","terrain-core.js","terrain-raster.js",
   "elevation-bands.js","elevation-tile-core.js","wa-archaeology.js","glacial-research-core.js","research-analysis.js","research-worker.js","sw.js","manifest.json",
   "point-cloud-core.js","point-cloud-viewer.js","point-cloud-catalog.json","maxar-catalog.json",
   "icon-180.png","icon-192.png","icon-512.png","vendor/maplibre-gl.mjs","vendor/maplibre-gl-shared.mjs",
@@ -1365,7 +1365,7 @@ const server = http.createServer(async (req,res)=>{
     if(inside.startsWith(".."+path.sep)||path.isAbsolute(inside))
       return send(res,403,"text/plain",Buffer.from("forbidden"));
     const publicRel=rel.split(path.sep).join("/");
-    if(!PUBLIC_FILES.has(publicRel)&&!publicRel.startsWith("vendor/potree/"))
+    if(!PUBLIC_FILES.has(publicRel)&&!publicRel.startsWith("vendor/potree/")&&!publicRel.startsWith("vendor/icons/"))
       return send(res,404,"text/plain",Buffer.from("not found"));
     fs.readFile(f,(e,buf)=>{
       if(e) return send(res,404,"text/plain",Buffer.from("not found"));

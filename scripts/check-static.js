@@ -56,11 +56,31 @@ new vm.Script(read("elevation-tile-core.js"),{filename:"elevation-tile-core.js"}
 new vm.Script(read("wa-archaeology.js"),{filename:"wa-archaeology.js"});
 new vm.Script(read("glacial-research-core.js"),{filename:"glacial-research-core.js"});
 new vm.Script(read("research-analysis.js"),{filename:"research-analysis.js"});
+const uiSystem=read("ui-system.js"),uiStyles=read("ui-system.css");
+new vm.Script(uiSystem,{filename:"ui-system.js"});
 const versionSandbox={};
 vm.runInNewContext(read("version.js"),versionSandbox,{filename:"version.js"});
 assert.match(versionSandbox.CSP_BUILD,/^\d{4}-\d{2}-\d{2}[a-z]$/,"build version must be date plus revision letter");
 assert(index.includes(`<script src="version.js?build=${versionSandbox.CSP_BUILD}"></script>`),
        "page must cache-bust and load the shared build version");
+assert(index.includes(`<link rel="stylesheet" href="ui-system.css?build=${versionSandbox.CSP_BUILD}">`)&&
+       index.includes(`<script src="ui-system.js?build=${versionSandbox.CSP_BUILD}"></script>`),
+       "the task-oriented interface assets must share the deployed build version");
+assert(read("sw.js").includes('"./ui-system.css"')&&read("sw.js").includes('"./ui-system.js"'),
+       "the task-oriented interface must be available in the offline shell");
+assert(uiSystem.includes('pane.classList.toggle("csp-route-hidden"')&&
+       uiStyles.includes(".pane.csp-route-hidden"),
+       "route membership must use an independent gate that legacy pane visibility cannot overwrite");
+for(const [route,group] of [["satellite","imagery"],["conditions","conditions"],["geology","geology"],["past","past"],["labels","labels"]])
+  assert(uiStyles.includes(`data-csp-route="${route}"`)&&uiStyles.includes(`data-csp-group="${group}"`),
+         `${route} must have an explicitly isolated layer catalog`);
+assert(uiSystem.includes('element.dataset.cspResearchGroup!==mode'),
+       "new research controls must remain hidden until deliberately assigned to a destination");
+assert(uiSystem.includes('data-coordinate="copy"')&&uiSystem.includes('data-coordinate="maps"')&&
+       uiSystem.includes('data-coordinate="earth"')&&uiSystem.includes('#coordGoogleEarth'),
+       "map coordinates must retain direct copy, Google Maps, and Google Earth research actions");
+assert(index.includes("refreshOverlayStatus:paintOverlayNote")&&index.includes("function visibleOverlayGroup()"),
+       "overlay counts, loading, failures and notes must follow the visible catalog group");
 assert(index.includes('<script src="mosaic-core.js"></script>'),"index must load the tested mosaic core");
 assert(index.includes('<script src="terrain-core.js"></script>')&&index.includes('<script src="terrain-raster.js"></script>'),
        "index must load tested terrain primitives and the deterministic display rasterizer");

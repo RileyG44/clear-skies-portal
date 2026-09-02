@@ -34,7 +34,8 @@
   ],
   "devDependencies": {
     "electron": "^43.4.1",
-    "electron-builder": "^26.15.3"
+    "electron-builder": "^26.15.3",
+    "lucide-static": "^1.39.0"
   },
   "build": {
     "appId": "com.rileyg44.clear-skies-portal",
@@ -70,6 +71,8 @@
           "point-cloud-viewer.js",
           "point-cloud-catalog.json",
           "index.html",
+          "ui-system.css",
+          "ui-system.js",
           "version.js",
           "manifest.json",
           "sw.js",

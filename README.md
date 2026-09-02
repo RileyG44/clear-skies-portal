@@ -169,6 +169,7 @@ map-like zoom would be a tiled package or Cloud-Optimized GeoTIFF rather than on
 | File | What it is |
 |---|---|
 | `index.html` | The whole app — one self-contained file, Leaflet inlined |
+| `ui-system.js` / `ui-system.css` | Task-oriented navigation shell, active-layer stack, category isolation, and responsive visual system |
 | `vendor/` | Pinned browser bundles for MapLibre GL JS and Leaflet rotation |
 | `terrain-raster.js` | Shared deterministic CPU terrain styling used by 2D, 3D protocol tiles, and tests |
 | `point-cloud-viewer.js` | Lazy Potree viewer, EPT loading, controls, linked cameras, cleanup, and panel sizing |
@@ -183,6 +184,7 @@ map-like zoom would be a tiled package or Cloud-Optimized GeoTIFF rather than on
 | `TODO.md` | Work queue. Say "check the TODO" to a fresh Claude session and it picks up from there |
 | `THREE_D_TERRAIN.md` | 2D rotation, 3D terrain, lighting architecture, limitations, and QA handoff |
 | `POINT_CLOUD_3D.md` | Linked point-cloud architecture, verified data facts, as-built notes, and QA handoff |
+| `UI_REDESIGN.md` | Interface information architecture, visual authority, integration boundaries, and maintenance checklist |
 | `source-catalog.md` | ~50 free imagery sources with endpoints, licences, resolutions |
 | `sources.json` | Machine-readable version of the catalog |
 | `hiking-stack.md` | The Western-US subset: snow, fire, route-finding |
@@ -327,9 +329,9 @@ silently turning blank.
   `CSP_S3_INFLIGHT` supports 1–12. Rendered tiles and every downloaded COG byte
   range persist on the SSD; writes pause before free space drops below 8 GiB,
   while uncached content continues to render normally.
-- **Open on natural colour** (Filters, on by default) keeps the map from landing on a
+- **Open on natural colour** (**Satellite imagery → Search filters**, on by default) keeps the map from landing on a
   radar or night-lights scene just because it happens to be the newest.
-- **Time window** (Filters) takes either a preset — last 14/30/90 days, last year,
+- **Time window** (**Satellite imagery → Search filters**) takes either a preset — last 14/30/90 days, last year,
   5 years, all time — or **Custom range…**, which reveals two date pickers for an
   explicit start and end (say 2025-07-01 → 2025-07-31). Leave one side empty for an
   open-ended range: only a start means "from then on", only an end means "up to then",

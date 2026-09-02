@@ -1,0 +1,644 @@
+/* Clear Skies Portal — task-oriented research interface
+   Visual authority: the supplied Apple-style settings reference.
+   The map carries colour; application chrome stays quiet and legible. */
+
+body.csp-redesign{
+  --page:#f5f5f3;
+  --surface:#ffffff;
+  --inset:#f4f4f2;
+  --hover:#ececea;
+  --hover-2:#e8e8e6;
+  --ink:#171716;
+  --ink-2:#5f5f5b;
+  --ink-3:#94948e;
+  --line:#e7e7e3;
+  --line-strong:#d9d9d4;
+  --field:#ffffff;
+  --accent:#232322;
+  --accent-ink:#171716;
+  --accent-tint:#ececea;
+  --green:#2a8a52;
+  --green-tint:#edf7f0;
+  --orange:#a46616;
+  --orange-tint:#fbf4e7;
+  --red:#c44343;
+  --red-tint:#fbeeee;
+  --tooltip-bg:#20201f;
+  --glass-side:#f7f7f5;
+  --glass-pane:#ffffff;
+  --glass-head:#ffffff;
+  --glass-control:#ffffff;
+  --glass-card:#ffffff;
+  --glass-line:#e5e5e1;
+  --radius-card:13px;
+  --radius-control:9px;
+  --radius-chip:7px;
+  --shadow-btn:0 1px 2px rgba(0,0,0,.035);
+  --shadow-card:0 1px 2px rgba(0,0,0,.025);
+  --shadow-raised:0 4px 14px rgba(0,0,0,.09);
+  --shadow-overlay:0 18px 48px rgba(0,0,0,.14);
+  --shadow-inset-field:inset 0 1px 1px rgba(0,0,0,.025);
+  --ring:rgba(35,35,34,.16);
+  color:var(--ink);
+  background:#fff;
+  font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI",sans-serif;
+  font-size:13px;
+  line-height:1.45;
+  font-feature-settings:"cv05" 1,"ss01" 1;
+}
+
+body.csp-redesign #side{
+  inset:0 auto 0 0;
+  width:720px!important;
+  min-width:620px;
+  max-width:880px;
+  display:grid;
+  grid-template-columns:minmax(250px,41%) minmax(360px,59%);
+  grid-template-rows:minmax(0,1fr);
+  padding:0;
+  border:0;
+  border-right:1px solid var(--line);
+  border-radius:0;
+  background:var(--surface);
+  box-shadow:8px 0 28px rgba(0,0,0,.04);
+  backdrop-filter:none;
+  -webkit-backdrop-filter:none;
+  overflow:hidden;
+  container-type:normal;
+  --sidebar-control-font:12.5px;
+  --sidebar-caption-font:11px;
+}
+
+body.csp-redesign #cspNav,
+body.csp-redesign #cspWorkspace{
+  min-width:0;
+  min-height:0;
+  height:100%;
+}
+
+body.csp-redesign #cspNav{
+  display:flex;
+  flex-direction:column;
+  background:#f7f7f5;
+  border-right:1px solid var(--line);
+  overflow:hidden;
+}
+
+body.csp-redesign #cspNav > header{
+  display:none;
+}
+
+body.csp-redesign #cspNav h1{
+  font-size:15px;
+  font-weight:600;
+  letter-spacing:-.018em;
+  color:var(--ink);
+}
+
+body.csp-redesign #cspNav h1 .portal{
+  color:var(--ink);
+  background:none;
+  -webkit-text-fill-color:currentColor;
+}
+
+body.csp-redesign #cspNav header .sub{display:none}
+
+body.csp-redesign #cspNav .searchbox{
+  order:0;
+  padding:15px 14px 12px;
+  border:0;
+  background:transparent;
+}
+
+body.csp-redesign #cspNav .search-row{
+  display:grid;
+  grid-template-columns:minmax(0,1fr) 38px 38px;
+  gap:6px;
+}
+
+body.csp-redesign #cspNav #iw{grid-column:1;grid-row:1;height:38px}
+body.csp-redesign #cspNav #loc{
+  display:grid;
+  grid-column:2;
+  grid-row:1;
+  place-items:center;
+  width:38px;
+  height:38px;
+  padding:0;
+  border:1px solid var(--line);
+  border-radius:11px;
+  background:#fff;
+  color:var(--ink-2);
+  box-shadow:0 1px 2px rgba(0,0,0,.03);
+}
+body.csp-redesign #cspNav #loc:hover{background:#f1f1ef;color:var(--ink)}
+body.csp-redesign #cspNav #loc img{width:16px;height:16px;opacity:.7}
+body.csp-redesign #cspNav #go{grid-column:3;grid-row:1;width:38px;padding:0;font-size:0}
+body.csp-redesign #cspNav #go::before{
+  content:"";
+  display:block;
+  width:17px;
+  height:17px;
+  margin:auto;
+  background:url("vendor/icons/search.svg") center/contain no-repeat;
+  filter:invert(1);
+}
+
+body.csp-redesign #cspNav #q{
+  padding-left:34px;
+  border-color:var(--line);
+  border-radius:11px;
+  background:#fff url("vendor/icons/search.svg") 11px center/15px 15px no-repeat;
+  color:var(--ink);
+  box-shadow:0 1px 2px rgba(0,0,0,.03);
+}
+
+body.csp-redesign #cspNav #q::placeholder{color:#9b9b95}
+body.csp-redesign #cspNav #coordCopy,
+body.csp-redesign #cspNav .coord-launch{display:none}
+
+body.csp-redesign .csp-coordinate-actions{
+  display:flex;
+  align-items:center;
+  gap:10px;
+  min-height:28px;
+  padding:0 18px 9px;
+  color:var(--ink-3);
+  font-size:11px;
+}
+body.csp-redesign .csp-coordinate-actions[hidden]{display:none}
+
+body.csp-redesign .csp-coordinate-actions button{
+  min-height:26px;
+  padding:0;
+  border:0;
+  background:transparent;
+  color:var(--ink-2);
+  font-size:11px;
+}
+
+body.csp-redesign #cspNavScroll{
+  order:2;
+  flex:1;
+  min-height:0;
+  overflow:auto;
+  padding:2px 14px 18px;
+  scrollbar-width:thin;
+  scrollbar-color:var(--line-strong) transparent;
+}
+
+body.csp-redesign .csp-nav-label{
+  margin:16px 12px 6px;
+  color:var(--ink-3);
+  font-size:11px;
+  font-weight:400;
+  letter-spacing:.005em;
+}
+
+body.csp-redesign .csp-nav-button{
+  width:100%;
+  min-height:39px;
+  display:grid;
+  grid-template-columns:20px minmax(0,1fr) auto;
+  align-items:center;
+  gap:10px;
+  padding:7px 11px;
+  border:0;
+  border-radius:10px;
+  background:transparent;
+  color:var(--ink-2);
+  text-align:left;
+  font-size:13px;
+  font-weight:450;
+  letter-spacing:-.008em;
+  box-shadow:none;
+}
+
+body.csp-redesign .csp-nav-button:hover{background:#eeeeec;color:var(--ink);text-decoration:none}
+body.csp-redesign .csp-nav-button[aria-current="page"]{background:#e9e9e7;color:var(--ink);font-weight:590}
+body.csp-redesign .csp-nav-button img{width:17px;height:17px;opacity:.76}
+body.csp-redesign .csp-nav-button[aria-current="page"] img{opacity:1}
+body.csp-redesign .csp-nav-button .csp-nav-count{color:var(--ink-3);font-size:11px;font-variant-numeric:tabular-nums}
+body.csp-redesign .csp-nav-button .csp-nav-dot{width:4px;height:4px;border-radius:50%;background:var(--ink-2);margin-right:5px}
+body.csp-redesign .csp-nav-button .csp-nav-dot.on{background:var(--green);box-shadow:0 0 0 3px rgba(42,138,82,.1)}
+body.csp-redesign .csp-nav-button .csp-nav-dot.off{background:var(--ink-3)}
+
+body.csp-redesign #cspNav .foot{
+  order:3;
+  margin-top:auto;
+  padding:10px 14px calc(10px + var(--safe-bottom));
+  border-top:1px solid var(--line);
+  background:#f7f7f5;
+  color:var(--ink-3);
+}
+
+body.csp-redesign #cspNav .foot-meta{padding:0 6px;min-height:28px}
+body.csp-redesign #cspNav .about-disclosure{display:none}
+body.csp-redesign #cspEngineNav{margin-bottom:8px}
+body.csp-redesign #cspEngineNav .csp-nav-button{font-size:12px}
+
+body.csp-redesign #cspWorkspace{
+  display:flex;
+  flex-direction:column;
+  background:#fff;
+  overflow:hidden;
+}
+
+body.csp-redesign #cspWorkspaceHeader{
+  position:relative;
+  z-index:4;
+  flex:none;
+  padding:22px 24px 18px;
+  border-bottom:1px solid var(--line);
+  background:rgba(255,255,255,.96);
+}
+
+body.csp-redesign #cspBack{
+  display:none;
+  align-items:center;
+  gap:6px;
+  margin:0 0 14px -4px;
+  padding:4px;
+  min-height:28px;
+  border:0;
+  background:transparent;
+  color:var(--ink-2);
+  font-size:12px;
+}
+body.csp-redesign #cspBack img{width:16px;height:16px}
+
+body.csp-redesign #cspWorkspaceTitle{
+  color:var(--ink);
+  font-size:26px;
+  line-height:1.12;
+  font-weight:650;
+  letter-spacing:-.036em;
+}
+
+body.csp-redesign #cspWorkspaceDescription{
+  margin-top:7px;
+  max-width:42ch;
+  color:var(--ink-2);
+  font-size:12.5px;
+  line-height:1.48;
+}
+
+body.csp-redesign #cspWorkspaceScroll{
+  flex:1;
+  min-height:0;
+  overflow:auto;
+  overscroll-behavior:contain;
+  padding:20px 0 36px;
+  scrollbar-width:thin;
+  scrollbar-color:var(--line-strong) transparent;
+}
+
+body.csp-redesign #cspWorkspace #status{
+  min-height:0;
+  margin:0 24px 14px;
+  padding:0;
+  border:0;
+  background:transparent;
+  color:var(--ink-3);
+  font-size:11px;
+}
+
+body.csp-redesign #panes{
+  display:block;
+  min-height:0;
+  overflow:visible;
+}
+
+body.csp-redesign #panes .pane{
+  height:auto!important;
+  margin:0 24px 14px;
+  overflow:hidden;
+  border:1px solid var(--line);
+  border-radius:13px;
+  background:#fff;
+  box-shadow:none;
+}
+body.csp-redesign #panes .pane.csp-route-hidden,
+body.csp-redesign #panes .pane-b > .csp-route-hidden{display:none!important}
+
+body.csp-redesign #panes .pane + .pane{border-top:1px solid var(--line)}
+body.csp-redesign #panes .pane-h{
+  min-height:45px;
+  padding:10px 13px 10px 15px;
+  border-bottom:1px solid var(--line);
+  background:#fff;
+}
+body.csp-redesign #panes .pane.min .pane-h{border-bottom:0}
+body.csp-redesign #panes .pane-h:hover{background:#fafaf9}
+body.csp-redesign #panes .pane-t{color:var(--ink);font-size:13px;font-weight:590}
+body.csp-redesign #panes .pane-n{color:var(--ink-3);font-size:11px}
+body.csp-redesign #panes .grip{display:none}
+body.csp-redesign #panes .pane-x{color:var(--ink-3)}
+body.csp-redesign #panes .pane-x::after{border-color:var(--ink-3)}
+body.csp-redesign #panes .pane-b{flex:none;overflow:visible;color:var(--ink-2)}
+body.csp-redesign #panes .pane-rz{display:none}
+body.csp-redesign #panes .pane[data-pane="filters"] .pane-b,
+body.csp-redesign #panes .pane[data-pane="summary"] .pane-b,
+body.csp-redesign #panes .pane[data-pane="terrain"] .pane-b,
+body.csp-redesign #panes .pane[data-pane="research"] .pane-b,
+body.csp-redesign #panes .pane[data-pane="passes"] .pane-b,
+body.csp-redesign #panes .pane[data-pane="alerts"] .pane-b,
+body.csp-redesign #panes .pane[data-pane="overlays"] .pane-b{padding:14px 15px 15px}
+
+body.csp-redesign #panes .pane[data-pane="results"] .pane-b{overflow:visible}
+body.csp-redesign #panes #results{height:auto;overflow:visible}
+body.csp-redesign #panes .grp{top:0;background:#fafaf9;color:var(--ink-3);border-color:var(--line)}
+body.csp-redesign #panes .item{border-color:var(--line);background:#fff}
+body.csp-redesign #panes .item:hover{background:#fafaf9}
+body.csp-redesign #panes .item.sel{background:#f0f0ee}
+body.csp-redesign #panes .item.sel::before{background:#222}
+body.csp-redesign #panes .dt{color:var(--ink-2)}
+body.csp-redesign #panes .tag{background:#f3f3f1;color:var(--ink-2);box-shadow:0 0 0 1px var(--line)}
+
+body.csp-redesign input[type=text],
+body.csp-redesign input[type=number],
+body.csp-redesign input[type=date],
+body.csp-redesign input[type=url],
+body.csp-redesign select{
+  color-scheme:light;
+  color:var(--ink);
+  border-color:var(--line-strong);
+  background:#fff;
+  box-shadow:var(--shadow-inset-field);
+}
+body.csp-redesign input[type=text]:focus,
+body.csp-redesign input[type=number]:focus,
+body.csp-redesign input[type=date]:focus,
+body.csp-redesign input[type=url]:focus,
+body.csp-redesign select:focus{border-color:#9b9b95;box-shadow:0 0 0 3px rgba(20,20,20,.08)}
+body.csp-redesign .ghost{background:#fff;border-color:var(--line-strong);color:var(--ink);box-shadow:var(--shadow-btn)}
+body.csp-redesign .ghost:hover{background:#f2f2f0}
+body.csp-redesign .linkbtn{color:var(--ink-2)}
+body.csp-redesign .check{color:var(--ink-2)}
+body.csp-redesign .check:hover{background:#f4f4f2;border-color:var(--line)}
+body.csp-redesign .check.on{background:#eeeeec;border-color:#d8d8d3;color:var(--ink)}
+body.csp-redesign input[type=checkbox]{border-color:#b8b8b2;background:#fff;box-shadow:none}
+body.csp-redesign input[type=checkbox]:checked{border-color:#252524;background-color:#252524}
+body.csp-redesign input[type=range]::-webkit-slider-runnable-track{background:#deded9;box-shadow:none}
+body.csp-redesign input[type=range]::-webkit-slider-thumb{border-color:#cecec9;background:#fff;box-shadow:0 1px 4px rgba(0,0,0,.2)}
+body.csp-redesign input[type=range]::-moz-range-track{background:#deded9}
+body.csp-redesign input[type=range]::-moz-range-thumb{border-color:#cecec9;background:#fff;box-shadow:0 1px 4px rgba(0,0,0,.2)}
+
+body.csp-redesign .ovgrp{position:static;background:transparent;color:var(--ink-3)}
+body.csp-redesign .ovrow{color:var(--ink-2)}
+body.csp-redesign .ovrow:hover{background:#f4f4f2}
+body.csp-redesign .ovrow .nm{color:var(--ink-2)}
+body.csp-redesign .ovrow.on .nm{color:var(--ink)}
+body.csp-redesign .ovfoot{border-color:var(--line)}
+body.csp-redesign .ovfoot{display:none}
+body.csp-redesign .ov-opacity-control,
+body.csp-redesign .ov-line-control{
+  display:grid;
+  gap:5px;
+  margin:0 0 8px 31px;
+  padding:7px 9px 8px;
+  border:1px solid var(--line);
+  border-radius:9px;
+  background:#fafaf9;
+}
+body.csp-redesign .ov-opacity-control[hidden],
+body.csp-redesign .ov-line-control[hidden]{display:none}
+
+/* A destination owns one catalog group. The shared registry remains the data
+   source, but unrelated rows never leak into a task panel—even when the map
+   refresh routine changes a control's hidden state. */
+body.csp-redesign #ovList > *{display:none!important}
+body.csp-redesign[data-csp-route="satellite"] #ovList > .ovgrp[data-csp-group="imagery"],
+body.csp-redesign[data-csp-route="conditions"] #ovList > .ovgrp[data-csp-group="conditions"],
+body.csp-redesign[data-csp-route="geology"] #ovList > .ovgrp[data-csp-group="geology"],
+body.csp-redesign[data-csp-route="past"] #ovList > .ovgrp[data-csp-group="past"],
+body.csp-redesign[data-csp-route="labels"] #ovList > .ovgrp[data-csp-group="labels"]{display:block!important}
+body.csp-redesign[data-csp-route="satellite"] #ovList > .ovrow[data-csp-group="imagery"],
+body.csp-redesign[data-csp-route="conditions"] #ovList > .ovrow[data-csp-group="conditions"],
+body.csp-redesign[data-csp-route="geology"] #ovList > .ovrow[data-csp-group="geology"],
+body.csp-redesign[data-csp-route="past"] #ovList > .ovrow[data-csp-group="past"],
+body.csp-redesign[data-csp-route="labels"] #ovList > .ovrow[data-csp-group="labels"]{display:flex!important}
+body.csp-redesign[data-csp-route="satellite"] #ovList > .ov-opacity-control[data-csp-group="imagery"]:not([hidden]),
+body.csp-redesign[data-csp-route="conditions"] #ovList > .ov-opacity-control[data-csp-group="conditions"]:not([hidden]),
+body.csp-redesign[data-csp-route="geology"] #ovList > .ov-opacity-control[data-csp-group="geology"]:not([hidden]),
+body.csp-redesign[data-csp-route="past"] #ovList > .ov-opacity-control[data-csp-group="past"]:not([hidden]),
+body.csp-redesign[data-csp-route="labels"] #ovList > .ov-opacity-control[data-csp-group="labels"]:not([hidden]),
+body.csp-redesign[data-csp-route="satellite"] #ovList > .ov-line-control[data-csp-group="imagery"]:not([hidden]),
+body.csp-redesign[data-csp-route="conditions"] #ovList > .ov-line-control[data-csp-group="conditions"]:not([hidden]),
+body.csp-redesign[data-csp-route="geology"] #ovList > .ov-line-control[data-csp-group="geology"]:not([hidden]),
+body.csp-redesign[data-csp-route="past"] #ovList > .ov-line-control[data-csp-group="past"]:not([hidden]),
+body.csp-redesign[data-csp-route="labels"] #ovList > .ov-line-control[data-csp-group="labels"]:not([hidden]){display:grid!important}
+
+body.csp-redesign #cspCustomView:empty{display:none}
+body.csp-redesign .csp-section-label{
+  margin:2px 24px 8px;
+  color:var(--ink-3);
+  font-size:11px;
+}
+body.csp-redesign .csp-card{
+  margin:0 24px 16px;
+  overflow:hidden;
+  border:1px solid var(--line);
+  border-radius:13px;
+  background:#fff;
+}
+body.csp-redesign .csp-card-head{padding:14px 15px 11px;border-bottom:1px solid var(--line)}
+body.csp-redesign .csp-card-title{color:var(--ink);font-size:13px;font-weight:600}
+body.csp-redesign .csp-card-copy{margin-top:3px;color:var(--ink-3);font-size:11px;line-height:1.45}
+
+body.csp-redesign #cspActiveLayerStack{display:flex;flex-direction:column}
+body.csp-redesign .csp-layer-card{
+  position:relative;
+  display:grid;
+  grid-template-columns:18px minmax(0,1fr) auto;
+  gap:10px;
+  padding:13px 14px 12px;
+  border-bottom:1px solid var(--line);
+  background:#fff;
+  touch-action:pan-y;
+}
+body.csp-redesign .csp-layer-card.csp-layer-locked,
+body.csp-redesign .csp-layer-card.csp-layer-compact{grid-template-columns:minmax(0,1fr) auto}
+body.csp-redesign .csp-layer-card.csp-layer-locked .csp-layer-main,
+body.csp-redesign .csp-layer-card.csp-layer-compact .csp-layer-main{grid-column:1}
+body.csp-redesign .csp-layer-card.csp-layer-locked .csp-switch,
+body.csp-redesign .csp-layer-card.csp-layer-compact .csp-switch{grid-column:2}
+body.csp-redesign .csp-layer-card:last-child{border-bottom:0}
+body.csp-redesign .csp-layer-card.csp-dragging{opacity:.55;background:#f2f2f0}
+body.csp-redesign .csp-layer-handle{
+  width:18px;
+  height:32px;
+  border:0;
+  background:url("vendor/icons/sliders-horizontal.svg") center/15px 15px no-repeat;
+  opacity:.32;
+  cursor:grab;
+}
+body.csp-redesign .csp-layer-handle:active{cursor:grabbing}
+body.csp-redesign .csp-layer-main{min-width:0}
+body.csp-redesign .csp-layer-name{color:var(--ink);font-size:13px;font-weight:590;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+body.csp-redesign .csp-layer-meta{margin-top:2px;color:var(--ink-3);font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+body.csp-redesign .csp-layer-opacity{grid-column:2/4;display:grid;grid-template-columns:auto minmax(0,1fr) 38px;gap:10px;align-items:center;margin-top:6px}
+body.csp-redesign .csp-layer-locked .csp-layer-opacity,
+body.csp-redesign .csp-layer-compact .csp-layer-opacity{grid-column:1/3}
+body.csp-redesign .csp-layer-opacity label{color:var(--ink-3);font-size:11px}
+body.csp-redesign .csp-layer-opacity output{color:var(--ink-2);font-size:11px;text-align:right;font-variant-numeric:tabular-nums}
+body.csp-redesign .csp-layer-actions{grid-column:2/4;display:flex;align-items:center;justify-content:flex-end;gap:10px;margin-top:3px}
+body.csp-redesign .csp-layer-actions > span{margin-right:auto;color:var(--ink-3);font-size:10.5px}
+body.csp-redesign .csp-layer-actions button{min-height:24px;padding:0;border:0;background:transparent;color:var(--ink-3);font-size:10.5px}
+body.csp-redesign .csp-layer-actions .csp-layer-move{display:grid;place-items:center;width:24px;margin:0 -3px}
+body.csp-redesign .csp-layer-actions .csp-layer-move img{width:14px;height:14px;opacity:.55}
+body.csp-redesign .csp-layer-actions button:hover{color:var(--ink)}
+body.csp-redesign .csp-layer-actions button:disabled{opacity:.35;pointer-events:none}
+body.csp-redesign .csp-switch{position:relative;width:34px;height:20px;margin-top:1px}
+body.csp-redesign .csp-switch input{position:absolute;opacity:0;pointer-events:none}
+body.csp-redesign .csp-switch span{display:block;width:34px;height:20px;border-radius:999px;background:#d8d8d4;transition:background .15s ease}
+body.csp-redesign .csp-switch span::after{content:"";position:absolute;left:2px;top:2px;width:16px;height:16px;border-radius:50%;background:#fff;box-shadow:0 1px 3px rgba(0,0,0,.22);transition:transform .15s ease}
+body.csp-redesign .csp-switch input:checked + span{background:#252524}
+body.csp-redesign .csp-switch input:checked + span::after{transform:translateX(14px)}
+body.csp-redesign .csp-switch input:focus-visible + span{box-shadow:0 0 0 3px rgba(20,20,20,.12)}
+body.csp-redesign .csp-empty-layers{padding:28px 20px;text-align:center;color:var(--ink-3);font-size:12px;line-height:1.55}
+
+body.csp-redesign .csp-available-row{
+  width:100%;
+  display:grid;
+  grid-template-columns:minmax(0,1fr) auto;
+  gap:12px;
+  padding:12px 15px;
+  border:0;
+  border-bottom:1px solid var(--line);
+  border-radius:0;
+  background:#fff;
+  text-align:left;
+  color:var(--ink);
+}
+body.csp-redesign .csp-available-row:last-child{border-bottom:0}
+body.csp-redesign .csp-available-row:hover{background:#fafaf9}
+body.csp-redesign .csp-available-row span{color:var(--ink-3);font-size:11px}
+
+body.csp-redesign #snapshotPanel.csp-inline-export{
+  position:static;
+  display:block;
+  width:auto;
+  max-height:none;
+  margin:0 24px 16px;
+  overflow:hidden;
+  border:1px solid var(--line);
+  border-radius:13px;
+  background:#fff;
+  box-shadow:none;
+  backdrop-filter:none;
+  -webkit-backdrop-filter:none;
+  animation:none;
+}
+body.csp-redesign #snapshotPanel.csp-inline-export .tool-popover-head{border-color:var(--line)}
+body.csp-redesign #snapshotPanel.csp-inline-export .tool-popover-title{color:var(--ink)}
+body.csp-redesign #snapshotPanel.csp-inline-export .tool-close{display:none}
+body.csp-redesign #snapshotPanel.csp-inline-export .snapshot-export-note{color:var(--ink-3)}
+body.csp-redesign #snapshotPanel.csp-inline-export #snapshotSave{background:#242423;color:#fff;border-color:#242423}
+
+body.csp-redesign #ctl{display:none!important}
+body.csp-redesign #mapInfoToggle{display:none!important}
+body.csp-redesign #sideToggleDock{top:calc(14px + var(--safe-top))}
+body.csp-redesign:not(.collapsed) #sideToggleDock{left:calc(var(--side-w) + 12px + var(--safe-left))}
+body.csp-redesign .map-tool,
+body.csp-redesign .leaflet-control-zoom a{
+  background:rgba(255,255,255,.94)!important;
+  border-color:rgba(0,0,0,.08)!important;
+  color:#343432!important;
+  box-shadow:0 5px 16px rgba(0,0,0,.1)!important;
+  backdrop-filter:blur(16px);
+  -webkit-backdrop-filter:blur(16px);
+}
+body.csp-redesign .map-tool:hover{background:#fff!important;color:#111!important}
+body.csp-redesign .tool-popover{background:rgba(255,255,255,.96);border-color:var(--line);color:var(--ink)}
+body.csp-redesign .tool-popover-head{border-color:var(--line)}
+body.csp-redesign .tool-popover-title{color:var(--ink)}
+body.csp-redesign .leaflet-control-attribution{background:rgba(255,255,255,.82)!important;color:#777!important}
+body.csp-redesign .leaflet-control-attribution a{color:#555!important}
+body.csp-redesign .leaflet-popup-content-wrapper,
+body.csp-redesign .leaflet-popup-tip{background:#fff;color:#222}
+
+body.csp-redesign #drag{right:-5px}
+
+body.csp-redesign #cspMapMode{
+  position:absolute;
+  left:50%;
+  bottom:calc(14px + var(--safe-bottom));
+  z-index:1090;
+  display:flex;
+  gap:2px;
+  padding:3px;
+  border:1px solid rgba(0,0,0,.08);
+  border-radius:11px;
+  background:rgba(255,255,255,.92);
+  box-shadow:0 5px 18px rgba(0,0,0,.1);
+  backdrop-filter:blur(16px);
+  -webkit-backdrop-filter:blur(16px);
+  transform:translateX(-50%);
+}
+body.csp-redesign #cspMapMode button{
+  min-height:29px;
+  padding:0 11px;
+  border:0;
+  border-radius:8px;
+  background:transparent;
+  color:#6f6f6a;
+  font-size:11.5px;
+  font-weight:500;
+  white-space:nowrap;
+  box-shadow:none;
+}
+body.csp-redesign #cspMapMode button[aria-pressed="true"]{background:#f0f0ee;color:#171716;font-weight:600}
+
+@media (max-width:1050px){
+  body.csp-redesign #side{
+    width:min(440px,calc(100vw - 68px))!important;
+    min-width:0;
+    grid-template-columns:minmax(0,1fr);
+  }
+  body.csp-redesign #cspNav,
+  body.csp-redesign #cspWorkspace{grid-area:1/1}
+  body.csp-redesign #cspWorkspace{display:none}
+  body.csp-redesign[data-csp-view="detail"] #cspNav{display:none}
+  body.csp-redesign[data-csp-view="detail"] #cspWorkspace{display:flex}
+  body.csp-redesign #cspBack{display:flex}
+  body.csp-redesign:not(.collapsed) #sideToggleDock{left:calc(min(440px,100vw - 68px) + 12px + var(--safe-left))}
+}
+
+@media (max-width:760px){
+  body.csp-redesign{--sheet-w:min(calc(100vw - 76px - var(--safe-left) - var(--safe-right)),420px)}
+  body.csp-redesign #side{
+    top:calc(var(--safe-top) + 8px);
+    bottom:calc(var(--safe-bottom) + 8px);
+    left:calc(var(--safe-left) + 8px);
+    width:var(--sheet-w)!important;
+    border:1px solid var(--line);
+    border-radius:15px;
+    box-shadow:0 16px 42px rgba(0,0,0,.2);
+  }
+  body.csp-redesign #cspNav .searchbox{padding-top:13px}
+  body.csp-redesign #cspWorkspaceHeader{padding:17px 18px 15px}
+  body.csp-redesign #cspWorkspaceTitle{font-size:23px}
+  body.csp-redesign .terrain-mode button{padding:0 3px;font-size:10px;white-space:nowrap}
+  body.csp-redesign #cspWorkspaceScroll{padding-top:15px}
+  body.csp-redesign #cspWorkspace #status,
+  body.csp-redesign #panes .pane,
+  body.csp-redesign .csp-card,
+  body.csp-redesign .csp-section-label,
+  body.csp-redesign #snapshotPanel.csp-inline-export{margin-left:16px;margin-right:16px}
+  body.csp-redesign:not(.collapsed) #sideToggleDock{left:calc(var(--sheet-w) + 16px + var(--safe-left))}
+  body.csp-redesign #mapDock{top:calc(14px + var(--safe-top))}
+  body.csp-redesign:not(.collapsed) #mapDock{
+    opacity:0;
+    pointer-events:none;
+    transform:translateX(10px);
+  }
+  body.csp-redesign #cspMapMode{bottom:calc(26px + var(--safe-bottom))}
+  body.csp-redesign #cspMapMode button{padding:0 8px;font-size:10.5px}
+  body.csp-redesign:not(.collapsed) #cspMapMode{opacity:0;pointer-events:none}
+}
+
+@media (prefers-reduced-motion:reduce){
+  body.csp-redesign .csp-switch span,
+  body.csp-redesign .csp-switch span::after{transition:none}
+}
