@@ -115,6 +115,22 @@ assert(index.includes('page fills window')&&index.includes('window fills screen'
        "the build stamp must separate a short page from a short web view");
 assert(index.includes('id="buildDiag"'),"the geometry readout must be reachable from the build stamp");
 
+/* Redesign shell. Every width rule under .csp-redesign carries !important, so
+   the inline width the resize handle writes can never take effect - the handle
+   stayed on screen doing nothing, which is worse than not offering it. */
+{
+  const ui=read("ui-system.css");
+  assert(ui.includes("body.csp-redesign #drag{display:none}"),
+         "a resize handle that cannot resize must not stay on screen");
+  assert(/@media \(pointer:coarse\)\{[\s\S]{0,240}?\.csp-nav-button\{min-height:44px\}/.test(ui),
+         "navigation rows must reach the touch minimum where the input is a thumb");
+  /* Swiping back inside the sheet's detail view used to close the sheet and
+     leave the route where it was, so reopening landed straight back on the
+     screen you had just tried to leave. */
+  assert(/document\.body\.dataset\.cspView==="detail"&&back/.test(index),
+         "the dismiss gesture must go back before it closes, when there is somewhere to go back to");
+}
+
 /* The sheet's breathing room is stated, not inherited. It used to come from the
    top safe-area inset, which is a coincidence rather than a layout: the moment
    the status bar stopped overlaying the page that inset went to zero and the

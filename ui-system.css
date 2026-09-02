@@ -237,6 +237,14 @@ body.csp-redesign #cspNav .about-disclosure{display:none}
 body.csp-redesign #cspEngineNav{margin-bottom:8px}
 body.csp-redesign #cspEngineNav .csp-nav-button{font-size:12px}
 
+/* 39px reads fine under a mouse and is a near-miss under a thumb. Lifted only
+   where the input is touch, so the desktop rail keeps its density. */
+@media (pointer:coarse){
+  body.csp-redesign .csp-nav-button{min-height:44px}
+  body.csp-redesign #resetPanes,
+  body.csp-redesign #cspBack{min-height:44px}
+}
+
 body.csp-redesign #cspWorkspace{
   display:flex;
   flex-direction:column;
@@ -589,6 +597,12 @@ body.csp-redesign #cspMapMode button{
   box-shadow:none;
 }
 body.csp-redesign #cspMapMode button[aria-pressed="true"]{background:#f0f0ee;color:#171716;font-weight:600}
+
+/* The redesign fixes the shell at a 294px rail plus a 426px workspace, and
+   every width rule below carries !important - so the inline width the drag
+   handle writes can never win. The handle stayed visible and did nothing, which
+   is worse than not offering it. */
+body.csp-redesign #drag{display:none}
 
 @media (max-width:1050px){
   body.csp-redesign #side{
