@@ -26,11 +26,14 @@
   --ui-line: #e5e5e1;
   --ui-line-strong: #d9d9d4;
 
-  /* ink, darkest to lightest */
+  /* Ink, darkest to lightest. Every step clears 4.5:1 against the deepest
+     surface it is allowed to sit on, measured rather than eyeballed: the faint
+     step is used for 10-11px labels, which is exactly where a "quiet" grey
+     stops being readable. */
   --ui-text: #171716;
   --ui-text-2: #464641;
-  --ui-text-muted: #71716b;
-  --ui-text-faint: #90908a;
+  --ui-text-muted: #63635e;
+  --ui-text-faint: #6f6f69;
 
   /* a control that inverts against the surface it sits on */
   --ui-control: #111110;
@@ -46,6 +49,42 @@
   --ui-shadow-2: rgba(0, 0, 0, .07);
   --ui-shadow-3: rgba(0, 0, 0, .12);
   --ui-shadow-4: rgba(0, 0, 0, .22);
+
+  /* a second, deeper hover for controls that sit on an already-hovered row */
+  --ui-hover-2: #e8e8e6;
+
+  /* the range track: a groove, not a hairline */
+  --ui-track: #deded9;
+
+  /* status tints - the same hue as the status colour at reading strength */
+  --ui-tint-ok: rgba(42, 138, 82, .10);
+  --ui-tint-warn: rgba(164, 102, 22, .10);
+  --ui-tint-danger: rgba(196, 67, 67, .10);
+
+  /* focus ring: the surface's own ink at low alpha, so it reads on any of them */
+  --ui-ring: rgba(35, 35, 34, .16);
+
+  /* tooltips invert against the interface */
+  --ui-tooltip: #20201f;
+
+  /* controls floating over the map are translucent so the map shows through.
+     They must follow the chrome, not the map, or they vanish over dark tiles. */
+  --ui-frost: rgba(255, 255, 255, .94);
+  --ui-frost-weak: rgba(255, 255, 255, .82);
+
+  /* The switch knob. It has to read against the off track and the on track,
+     which sit on opposite sides of the surface in the two themes, so it is its
+     own value rather than a reuse of the surface. */
+  --ui-thumb: #ffffff;
+
+  /* An icon drawn on --ui-control rather than on a surface: it must invert the
+     other way, so it is the complement of --ui-icon-filter, not a copy. */
+  --ui-icon-filter-control: invert(1);
+
+  /* The checkbox tick is stroked in the markup, so it cannot inherit; the whole
+     glyph is a themed value, stroked to match --ui-control-ink because the box
+     it sits in is filled with --ui-control. */
+  --ui-check-glyph: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='m3.5 8.2 2.7 2.7 6-6' fill='none' stroke='%23ffffff' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
 
   /* Lucide icons ship as <img>, so currentColor cannot reach them. A filter is
      the only lever; at rest it is a no-op. */
@@ -71,7 +110,7 @@
   --ui-text: #f2f1ee;
   --ui-text-2: #cfceca;
   --ui-text-muted: #9d9c96;
-  --ui-text-faint: #77766f;
+  --ui-text-faint: #8a8982;
 
   /* The control inverts the other way: light chip, dark ink. */
   --ui-control: #f2f1ee;
@@ -88,6 +127,29 @@
   --ui-shadow-2: rgba(0, 0, 0, .36);
   --ui-shadow-3: rgba(0, 0, 0, .46);
   --ui-shadow-4: rgba(0, 0, 0, .6);
+
+  --ui-hover-2: #3a3a38;
+
+  --ui-track: #3d3c39;
+
+  /* Alpha is raised: a 10% tint that reads on white disappears on near-black. */
+  --ui-tint-ok: rgba(78, 201, 138, .16);
+  --ui-tint-warn: rgba(240, 163, 95, .16);
+  --ui-tint-danger: rgba(255, 138, 128, .16);
+
+  --ui-ring: rgba(242, 241, 238, .24);
+
+  /* Still inverted, but away from the surface rather than toward black. */
+  --ui-tooltip: #4a4946;
+
+  --ui-frost: rgba(24, 24, 22, .92);
+  --ui-frost-weak: rgba(24, 24, 22, .88);
+
+  --ui-thumb: #9d9c96;
+
+  --ui-icon-filter-control: none;
+
+  --ui-check-glyph: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='m3.5 8.2 2.7 2.7 6-6' fill='none' stroke='%23171716' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
 
   /* invert() alone turns black strokes white but also flips hue on anything
      coloured; these icons are monochrome, so it is exact. */

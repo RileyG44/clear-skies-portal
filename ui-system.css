@@ -6,39 +6,39 @@ body.csp-redesign{
   --page:var(--ui-sunken);
   --surface:var(--ui-surface);
   --inset:var(--ui-sunken);
-  --hover:#ececea;
-  --hover-2:#e8e8e6;
+  --hover:var(--ui-hover);
+  --hover-2:var(--ui-hover-2);
   --ink:var(--ui-text);
-  --ink-2:#5f5f5b;
+  --ink-2:var(--ui-text-2);
   --ink-3:var(--ui-text-faint);
-  --line:#e7e7e3;
+  --line:var(--ui-line);
   --line-strong:var(--ui-line-strong);
   --field:var(--ui-surface);
   --accent:var(--ui-text);
   --accent-ink:var(--ui-text);
-  --accent-tint:#ececea;
-  --green:#2a8a52;
-  --green-tint:#edf7f0;
-  --orange:#a46616;
-  --orange-tint:#fbf4e7;
-  --red:#c44343;
-  --red-tint:#fbeeee;
-  --tooltip-bg:#20201f;
+  --accent-tint:var(--ui-hover);
+  --green:var(--ui-ok);
+  --green-tint:var(--ui-tint-ok);
+  --orange:var(--ui-warn);
+  --orange-tint:var(--ui-tint-warn);
+  --red:var(--ui-danger);
+  --red-tint:var(--ui-tint-danger);
+  --tooltip-bg:var(--ui-tooltip);
   --glass-side:var(--ui-rail);
   --glass-pane:var(--ui-surface);
   --glass-head:var(--ui-surface);
   --glass-control:var(--ui-surface);
   --glass-card:var(--ui-surface);
-  --glass-line:#e5e5e1;
+  --glass-line:var(--ui-line);
   --radius-card:13px;
   --radius-control:9px;
   --radius-chip:7px;
-  --shadow-btn:0 1px 2px rgba(0,0,0,.035);
-  --shadow-card:0 1px 2px rgba(0,0,0,.025);
-  --shadow-raised:0 4px 14px rgba(0,0,0,.09);
+  --shadow-btn:0 1px 2px var(--ui-shadow-1);
+  --shadow-card:0 1px 2px var(--ui-shadow-1);
+  --shadow-raised:0 4px 14px var(--ui-shadow-2);
   --shadow-overlay:0 18px 48px var(--ui-shadow-3);
-  --shadow-inset-field:inset 0 1px 1px rgba(0,0,0,.025);
-  --ring:rgba(35,35,34,.16);
+  --shadow-inset-field:inset 0 1px 1px var(--ui-shadow-1);
+  --ring:var(--ui-ring);
   color:var(--ink);
   background:var(--ui-surface);
   font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI",sans-serif;
@@ -131,7 +131,7 @@ body.csp-redesign #cspNav #loc{
   color:var(--ink-2);
   box-shadow:0 1px 2px var(--ui-shadow-1);
 }
-body.csp-redesign #cspNav #loc:hover{background:#f1f1ef;color:var(--ink)}
+body.csp-redesign #cspNav #loc:hover{background:var(--ui-hover);color:var(--ink)}
 body.csp-redesign #cspNav #loc img{width:16px;height:16px;opacity:.7}
 body.csp-redesign #cspNav #go{grid-column:3;grid-row:1;width:38px;padding:0;font-size:0}
 body.csp-redesign #cspNav #go::before{
@@ -141,7 +141,9 @@ body.csp-redesign #cspNav #go::before{
   height:17px;
   margin:auto;
   background:url("vendor/icons/search.svg") center/contain no-repeat;
-  filter:invert(1);
+  /* the glyph sits on --ui-control, which flips with the theme, so the filter
+     that keeps it legible has to flip with it too */
+  filter:var(--ui-icon-filter-control);
 }
 
 body.csp-redesign #cspNav #q{
@@ -153,7 +155,7 @@ body.csp-redesign #cspNav #q{
   box-shadow:0 1px 2px var(--ui-shadow-1);
 }
 
-body.csp-redesign #cspNav #q::placeholder{color:#9b9b95}
+body.csp-redesign #cspNav #q::placeholder{color:var(--ui-text-faint)}
 body.csp-redesign #cspNav #coordCopy,
 body.csp-redesign #cspNav .coord-launch{display:none}
 
@@ -214,13 +216,13 @@ body.csp-redesign .csp-nav-button{
   box-shadow:none;
 }
 
-body.csp-redesign .csp-nav-button:hover{background:#eeeeec;color:var(--ink);text-decoration:none}
-body.csp-redesign .csp-nav-button[aria-current="page"]{background:#e9e9e7;color:var(--ink);font-weight:590}
+body.csp-redesign .csp-nav-button:hover{background:var(--ui-hover);color:var(--ink);text-decoration:none}
+body.csp-redesign .csp-nav-button[aria-current="page"]{background:var(--ui-selected);color:var(--ink);font-weight:590}
 body.csp-redesign .csp-nav-button img{width:17px;height:17px;opacity:.76}
 body.csp-redesign .csp-nav-button[aria-current="page"] img{opacity:1}
 body.csp-redesign .csp-nav-button .csp-nav-count{color:var(--ink-3);font-size:11px;font-variant-numeric:tabular-nums}
 body.csp-redesign .csp-nav-button .csp-nav-dot{width:4px;height:4px;border-radius:50%;background:var(--ink-2);margin-right:5px}
-body.csp-redesign .csp-nav-button .csp-nav-dot.on{background:var(--green);box-shadow:0 0 0 3px rgba(42,138,82,.1)}
+body.csp-redesign .csp-nav-button .csp-nav-dot.on{background:var(--green);box-shadow:0 0 0 3px var(--ui-tint-ok)}
 body.csp-redesign .csp-nav-button .csp-nav-dot.off{background:var(--ink-3)}
 
 body.csp-redesign #cspNav .foot{
@@ -258,7 +260,7 @@ body.csp-redesign #cspWorkspaceHeader{
   flex:none;
   padding:22px 24px 18px;
   border-bottom:1px solid var(--line);
-  background:rgba(255,255,255,.96);
+  background:var(--ui-frost);
 }
 
 body.csp-redesign #cspBack{
@@ -337,7 +339,7 @@ body.csp-redesign #panes .pane-h{
   background:var(--ui-surface);
 }
 body.csp-redesign #panes .pane.min .pane-h{border-bottom:0}
-body.csp-redesign #panes .pane-h:hover{background:#fafaf9}
+body.csp-redesign #panes .pane-h:hover{background:var(--ui-hover)}
 body.csp-redesign #panes .pane-t{color:var(--ink);font-size:13px;font-weight:590}
 body.csp-redesign #panes .pane-n{color:var(--ink-3);font-size:11px}
 body.csp-redesign #panes .grip{display:none}
@@ -355,13 +357,13 @@ body.csp-redesign #panes .pane[data-pane="overlays"] .pane-b{padding:14px 15px 1
 
 body.csp-redesign #panes .pane[data-pane="results"] .pane-b{overflow:visible}
 body.csp-redesign #panes #results{height:auto;overflow:visible}
-body.csp-redesign #panes .grp{top:0;background:#fafaf9;color:var(--ink-3);border-color:var(--line)}
+body.csp-redesign #panes .grp{top:0;background:var(--ui-rail);color:var(--ink-3);border-color:var(--line)}
 body.csp-redesign #panes .item{border-color:var(--line);background:var(--ui-surface)}
-body.csp-redesign #panes .item:hover{background:#fafaf9}
+body.csp-redesign #panes .item:hover{background:var(--ui-hover)}
 body.csp-redesign #panes .item.sel{background:var(--ui-selected)}
-body.csp-redesign #panes .item.sel::before{background:#222}
+body.csp-redesign #panes .item.sel::before{background:var(--ui-control)}
 body.csp-redesign #panes .dt{color:var(--ink-2)}
-body.csp-redesign #panes .tag{background:#f3f3f1;color:var(--ink-2);box-shadow:0 0 0 1px var(--line)}
+body.csp-redesign #panes .tag{background:var(--ui-sunken);color:var(--ink-2);box-shadow:0 0 0 1px var(--line)}
 
 body.csp-redesign input[type=text],
 body.csp-redesign input[type=number],
@@ -378,19 +380,21 @@ body.csp-redesign input[type=text]:focus,
 body.csp-redesign input[type=number]:focus,
 body.csp-redesign input[type=date]:focus,
 body.csp-redesign input[type=url]:focus,
-body.csp-redesign select:focus{border-color:#9b9b95;box-shadow:0 0 0 3px rgba(20,20,20,.08)}
+body.csp-redesign select:focus{border-color:var(--ui-text-faint);box-shadow:0 0 0 3px var(--ui-ring)}
 body.csp-redesign .ghost{background:var(--ui-surface);border-color:var(--line-strong);color:var(--ink);box-shadow:var(--shadow-btn)}
-body.csp-redesign .ghost:hover{background:#f2f2f0}
+body.csp-redesign .ghost:hover{background:var(--ui-hover)}
 body.csp-redesign .linkbtn{color:var(--ink-2)}
 body.csp-redesign .check{color:var(--ink-2)}
 body.csp-redesign .check:hover{background:var(--ui-sunken);border-color:var(--line)}
-body.csp-redesign .check.on{background:#eeeeec;border-color:#d8d8d3;color:var(--ink)}
-body.csp-redesign input[type=checkbox]{border-color:#b8b8b2;background:var(--ui-surface);box-shadow:none}
-body.csp-redesign input[type=checkbox]:checked{border-color:#252524;background-color:#252524}
-body.csp-redesign input[type=range]::-webkit-slider-runnable-track{background:#deded9;box-shadow:none}
-body.csp-redesign input[type=range]::-webkit-slider-thumb{border-color:#cecec9;background:var(--ui-surface);box-shadow:0 1px 4px var(--ui-shadow-4)}
-body.csp-redesign input[type=range]::-moz-range-track{background:#deded9}
-body.csp-redesign input[type=range]::-moz-range-thumb{border-color:#cecec9;background:var(--ui-surface);box-shadow:0 1px 4px var(--ui-shadow-4)}
+body.csp-redesign .check.on{background:var(--ui-selected);border-color:var(--ui-line-strong);color:var(--ink)}
+body.csp-redesign input[type=checkbox]{border-color:var(--ui-text-faint);background:var(--ui-surface);box-shadow:none}
+/* The tick is a stroked SVG in the base stylesheet, painted white for a dark
+   box. In dark the box is light, so the glyph itself is themed. */
+body.csp-redesign input[type=checkbox]:checked{border-color:var(--ui-control);background-color:var(--ui-control);background-image:var(--ui-check-glyph)}
+body.csp-redesign input[type=range]::-webkit-slider-runnable-track{background:var(--ui-track);box-shadow:none}
+body.csp-redesign input[type=range]::-webkit-slider-thumb{border-color:var(--ui-line-strong);background:var(--ui-surface);box-shadow:0 1px 4px var(--ui-shadow-4)}
+body.csp-redesign input[type=range]::-moz-range-track{background:var(--ui-track)}
+body.csp-redesign input[type=range]::-moz-range-thumb{border-color:var(--ui-line-strong);background:var(--ui-surface);box-shadow:0 1px 4px var(--ui-shadow-4)}
 
 body.csp-redesign .ovgrp{position:static;background:transparent;color:var(--ink-3)}
 body.csp-redesign .ovrow{color:var(--ink-2)}
@@ -407,7 +411,7 @@ body.csp-redesign .ov-line-control{
   padding:7px 9px 8px;
   border:1px solid var(--line);
   border-radius:9px;
-  background:#fafaf9;
+  background:var(--ui-rail);
 }
 body.csp-redesign .ov-opacity-control[hidden],
 body.csp-redesign .ov-line-control[hidden]{display:none}
@@ -472,7 +476,7 @@ body.csp-redesign .csp-layer-card.csp-layer-compact .csp-layer-main{grid-column:
 body.csp-redesign .csp-layer-card.csp-layer-locked .csp-switch,
 body.csp-redesign .csp-layer-card.csp-layer-compact .csp-switch{grid-column:2}
 body.csp-redesign .csp-layer-card:last-child{border-bottom:0}
-body.csp-redesign .csp-layer-card.csp-dragging{opacity:.55;background:#f2f2f0}
+body.csp-redesign .csp-layer-card.csp-dragging{opacity:.55;background:var(--ui-hover)}
 body.csp-redesign .csp-layer-handle{
   width:18px;
   height:32px;
@@ -499,11 +503,13 @@ body.csp-redesign .csp-layer-actions button:hover{color:var(--ink)}
 body.csp-redesign .csp-layer-actions button:disabled{opacity:.35;pointer-events:none}
 body.csp-redesign .csp-switch{position:relative;width:34px;height:20px;margin-top:1px}
 body.csp-redesign .csp-switch input{position:absolute;opacity:0;pointer-events:none}
-body.csp-redesign .csp-switch span{display:block;width:34px;height:20px;border-radius:999px;background:#d8d8d4;transition:background .15s ease}
-body.csp-redesign .csp-switch span::after{content:"";position:absolute;left:2px;top:2px;width:16px;height:16px;border-radius:50%;background:var(--ui-surface);box-shadow:0 1px 3px rgba(0,0,0,.22);transition:transform .15s ease}
-body.csp-redesign .csp-switch input:checked + span{background:#252524}
-body.csp-redesign .csp-switch input:checked + span::after{transform:translateX(14px)}
-body.csp-redesign .csp-switch input:focus-visible + span{box-shadow:0 0 0 3px rgba(20,20,20,.12)}
+body.csp-redesign .csp-switch span{display:block;width:34px;height:20px;border-radius:999px;background:var(--ui-line-strong);transition:background .15s ease}
+body.csp-redesign .csp-switch span::after{content:"";position:absolute;left:2px;top:2px;width:16px;height:16px;border-radius:50%;background:var(--ui-thumb);box-shadow:0 1px 3px var(--ui-shadow-4);transition:transform .15s ease}
+body.csp-redesign .csp-switch input:checked + span{background:var(--ui-control)}
+/* On, the track is --ui-control, so the knob takes the surface it inverts
+   against - white on black in light, dark on white in dark. */
+body.csp-redesign .csp-switch input:checked + span::after{transform:translateX(14px);background:var(--ui-surface)}
+body.csp-redesign .csp-switch input:focus-visible + span{box-shadow:0 0 0 3px var(--ui-ring)}
 body.csp-redesign .csp-empty-layers{padding:28px 20px;text-align:center;color:var(--ink-3);font-size:12px;line-height:1.55}
 
 body.csp-redesign .csp-available-row{
@@ -520,7 +526,7 @@ body.csp-redesign .csp-available-row{
   color:var(--ink);
 }
 body.csp-redesign .csp-available-row:last-child{border-bottom:0}
-body.csp-redesign .csp-available-row:hover{background:#fafaf9}
+body.csp-redesign .csp-available-row:hover{background:var(--ui-hover)}
 body.csp-redesign .csp-available-row span{color:var(--ink-3);font-size:11px}
 
 body.csp-redesign #snapshotPanel.csp-inline-export{
@@ -542,7 +548,7 @@ body.csp-redesign #snapshotPanel.csp-inline-export .tool-popover-head{border-col
 body.csp-redesign #snapshotPanel.csp-inline-export .tool-popover-title{color:var(--ink)}
 body.csp-redesign #snapshotPanel.csp-inline-export .tool-close{display:none}
 body.csp-redesign #snapshotPanel.csp-inline-export .snapshot-export-note{color:var(--ink-3)}
-body.csp-redesign #snapshotPanel.csp-inline-export #snapshotSave{background:#242423;color:var(--ui-surface);border-color:#242423}
+body.csp-redesign #snapshotPanel.csp-inline-export #snapshotSave{background:var(--ui-control);color:var(--ui-control-ink);border-color:var(--ui-control)}
 
 body.csp-redesign #ctl{display:none!important}
 body.csp-redesign #mapInfoToggle{display:none!important}
@@ -550,21 +556,21 @@ body.csp-redesign #sideToggleDock{top:calc(14px + var(--safe-top))}
 body.csp-redesign:not(.collapsed) #sideToggleDock{left:calc(var(--side-w) + 12px + var(--safe-left))}
 body.csp-redesign .map-tool,
 body.csp-redesign .leaflet-control-zoom a{
-  background:rgba(255,255,255,.94)!important;
-  border-color:var(--ui-shadow-2)!important;
-  color:#343432!important;
+  background:var(--ui-frost)!important;
+  border-color:var(--ui-line)!important;
+  color:var(--ui-text-2)!important;
   box-shadow:0 5px 16px var(--ui-shadow-3)!important;
   backdrop-filter:blur(16px);
   -webkit-backdrop-filter:blur(16px);
 }
-body.csp-redesign .map-tool:hover{background:var(--ui-surface)!important;color:#111!important}
-body.csp-redesign .tool-popover{background:rgba(255,255,255,.96);border-color:var(--line);color:var(--ink)}
+body.csp-redesign .map-tool:hover{background:var(--ui-surface)!important;color:var(--ui-text)!important}
+body.csp-redesign .tool-popover{background:var(--ui-frost);border-color:var(--line);color:var(--ink)}
 body.csp-redesign .tool-popover-head{border-color:var(--line)}
 body.csp-redesign .tool-popover-title{color:var(--ink)}
-body.csp-redesign .leaflet-control-attribution{background:rgba(255,255,255,.82)!important;color:#777!important}
-body.csp-redesign .leaflet-control-attribution a{color:#555!important}
+body.csp-redesign .leaflet-control-attribution{background:var(--ui-frost-weak)!important;color:var(--ui-text-muted)!important}
+body.csp-redesign .leaflet-control-attribution a{color:var(--ui-text-2)!important}
 body.csp-redesign .leaflet-popup-content-wrapper,
-body.csp-redesign .leaflet-popup-tip{background:var(--ui-surface);color:#222}
+body.csp-redesign .leaflet-popup-tip{background:var(--ui-surface);color:var(--ui-text)}
 
 body.csp-redesign #drag{right:-5px}
 
@@ -578,7 +584,7 @@ body.csp-redesign #cspMapMode{
   padding:3px;
   border:1px solid var(--ui-shadow-2);
   border-radius:11px;
-  background:rgba(255,255,255,.92);
+  background:var(--ui-frost);
   box-shadow:0 5px 18px var(--ui-shadow-3);
   backdrop-filter:blur(16px);
   -webkit-backdrop-filter:blur(16px);
@@ -590,7 +596,7 @@ body.csp-redesign #cspMapMode button{
   border:0;
   border-radius:8px;
   background:transparent;
-  color:#6f6f6a;
+  color:var(--ui-text-muted);
   font-size:11.5px;
   font-weight:500;
   white-space:nowrap;

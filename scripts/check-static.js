@@ -63,14 +63,19 @@ vm.runInNewContext(read("version.js"),versionSandbox,{filename:"version.js"});
 assert.match(versionSandbox.CSP_BUILD,/^\d{4}-\d{2}-\d{2}[a-z]$/,"build version must be date plus revision letter");
 assert(index.includes(`<script src="version.js?build=${versionSandbox.CSP_BUILD}"></script>`),
        "page must cache-bust and load the shared build version");
+assert(index.includes(`<link rel="stylesheet" href="ui-theme.css?build=${versionSandbox.CSP_BUILD}">`)&&
+       index.indexOf("ui-theme.css?build=")<index.indexOf("ui-system.css?build="),
+       "the palette must load, and load before the stylesheet whose roles it fills");
 assert(index.includes(`<link rel="stylesheet" href="ui-system.css?build=${versionSandbox.CSP_BUILD}">`)&&
        index.includes(`<script src="ui-system.js?build=${versionSandbox.CSP_BUILD}"></script>`),
        "the task-oriented interface assets must share the deployed build version");
 assert(read("sw.js").includes('"./ui-system.css"')&&read("sw.js").includes('"./ui-system.js"'),
        "the task-oriented interface must be available in the offline shell");
 const deploymentWorkflow=read(".github/workflows/ci.yml");
-assert(deploymentWorkflow.includes("cp index.html ui-system.css ui-system.js"),
-       "the GitHub Pages artifact must include the task-oriented interface assets");
+const pagesCopy=deploymentWorkflow.split("\n").find(line=>line.includes("cp index.html"))||"";
+for(const asset of ["ui-theme.css","ui-system.css","ui-system.js"])
+  assert(pagesCopy.split(/\s+/).includes(asset),
+         `the GitHub Pages artifact must include ${asset}`);
 assert(uiSystem.includes('pane.classList.toggle("csp-route-hidden"')&&
        uiStyles.includes(".pane.csp-route-hidden"),
        "route membership must use an independent gate that legacy pane visibility cannot overwrite");
@@ -134,6 +139,17 @@ assert(index.includes('id="buildDiag"'),"the geometry readout must be reachable 
     "one control must move the chrome and the basemap together");
   assert(/img\[src\^="vendor\/icons\/"\]\{filter:var\(--ui-icon-filter\)\}/.test(uiCss),
     "icons ship as <img>, so a filter is the only way to carry them into dark");
+  /* A hard-coded invert() is the same bug in a different place: it assumes the
+     thing underneath is light. The search glyph sits on --ui-control, which is
+     black in light and near-white in dark, so an unconditional invert made it
+     white on white. Every filter that exists to keep a glyph legible has to be
+     a themed value. */
+  assert(!/filter:\s*invert\(/.test(uiCss),
+    "an unconditional invert() assumes one theme; use --ui-icon-filter or --ui-icon-filter-control");
+  /* The checkbox tick is stroked in the base stylesheet's data URI, so it can
+     neither inherit colour nor be filtered without inverting its box too. */
+  assert(uiCss.includes("background-image:var(--ui-check-glyph)"),
+    "the checked tick must be themed, or it is white on a white box in dark");
   for(const file of ["sw.js","server.js",".github/workflows/ci.yml"])
     assert(read(file).includes("ui-theme.css"),`${file} must ship the palette`);
 }
