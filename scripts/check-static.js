@@ -68,6 +68,9 @@ assert(index.includes(`<link rel="stylesheet" href="ui-system.css?build=${versio
        "the task-oriented interface assets must share the deployed build version");
 assert(read("sw.js").includes('"./ui-system.css"')&&read("sw.js").includes('"./ui-system.js"'),
        "the task-oriented interface must be available in the offline shell");
+const deploymentWorkflow=read(".github/workflows/ci.yml");
+assert(deploymentWorkflow.includes("cp index.html ui-system.css ui-system.js"),
+       "the GitHub Pages artifact must include the task-oriented interface assets");
 assert(uiSystem.includes('pane.classList.toggle("csp-route-hidden"')&&
        uiStyles.includes(".pane.csp-route-hidden"),
        "route membership must use an independent gate that legacy pane visibility cannot overwrite");

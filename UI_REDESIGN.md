@@ -1,6 +1,6 @@
 # Clear Skies interface system
 
-Build: `2026-09-02a`
+Build: `2026-09-02b`
 
 This document is the implementation handoff for the task-oriented sidebar introduced in the September 2026 redesign. It explains the information architecture, visual rules, integration points, persistence, and QA contract so a future Claude or Codex session can continue without rediscovering the design.
 

@@ -57,7 +57,7 @@ jobs:
       - name: Assemble the static site
         run: |
           mkdir _site
-          cp index.html mosaic-core.js terrain-core.js terrain-raster.js elevation-bands.js elevation-tile-core.js wa-archaeology.js glacial-research-core.js research-analysis.js research-worker.js point-cloud-core.js point-cloud-viewer.js point-cloud-catalog.json maxar-catalog.json version.js sw.js manifest.json icon-180.png icon-192.png icon-512.png .nojekyll _site/
+          cp index.html ui-system.css ui-system.js mosaic-core.js terrain-core.js terrain-raster.js elevation-bands.js elevation-tile-core.js wa-archaeology.js glacial-research-core.js research-analysis.js research-worker.js point-cloud-core.js point-cloud-viewer.js point-cloud-catalog.json maxar-catalog.json version.js sw.js manifest.json icon-180.png icon-192.png icon-512.png .nojekyll _site/
           cp -R vendor _site/vendor
 
       - uses: actions/upload-pages-artifact@v5
