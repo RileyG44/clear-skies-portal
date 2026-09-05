@@ -13,8 +13,8 @@ const ready=()=>document.documentElement.dispatchEvent(new Event("csp:ready"));
 if(!side||!panes||!status||!mapEl||!bridge){ ready(); return; }
 
 document.body.classList.add("csp-redesign");
-document.documentElement.style.setProperty("--side-w","720px");
-side.style.width="720px";
+document.documentElement.style.setProperty("--side-w","580px");
+side.style.width="580px";
 $("#q").placeholder="Search places, layers…";
 
 const ROUTES={
@@ -216,8 +216,10 @@ function buildLayerCard(layer,index,entries,compact=false){
   $(".csp-layer-meta",card).textContent=layer.meta||"";
   $(".csp-switch input",card)?.addEventListener("change",event=>{bridge.setLayerVisible(layer.id,event.target.checked);scheduleLayerRefresh(0)});
   const range=$(".csp-layer-range",card),output=$(".csp-layer-opacity output",card);
+  range?.setAttribute("aria-label",`${layer.name} opacity`);
   range?.addEventListener("input",event=>{output.textContent=event.target.value+"%";bridge.setLayerOpacity(layer.id,event.target.value)});
   range?.addEventListener("change",()=>scheduleLayerRefresh(0));
+  range?.addEventListener("blur",()=>scheduleLayerRefresh(0));
   card.addEventListener("click",event=>{
     const action=event.target.closest("button")?.dataset.action;if(!action) return;
     if(action==="edit") activateRoute(routeForLayer(layer));
@@ -335,11 +337,15 @@ function syncModeBar(){
   $$("button",modeBar).forEach(button=>button.setAttribute("aria-pressed",String(button.dataset.mode===mode)));
 }
 
-let refreshTimer=0;
+let refreshTimer=0,lastLayerSignature="";
 function scheduleLayerRefresh(delay=80){
   clearTimeout(refreshTimer);refreshTimer=setTimeout(()=>{
     if(document.activeElement?.classList.contains("csp-layer-range")) return;
-    if(currentRoute==="layers") renderLayersView();else if(currentRoute==="satellite") renderSatelliteView();
+    const signature=JSON.stringify([currentRoute,layerSort(bridge.activeLayers())]);
+    if(signature!==lastLayerSignature){
+      lastLayerSignature=signature;
+      if(currentRoute==="layers")renderLayersView();else if(currentRoute==="satellite")renderSatelliteView();
+    }
     updateCounts();syncModeBar();
   },delay);
 }
