@@ -49,11 +49,11 @@ body.csp-redesign{
 
 body.csp-redesign #side{
   inset:0 auto 0 0;
-  width:720px!important;
-  min-width:620px;
+  width:var(--side-w)!important;
+  min-width:520px;
   max-width:880px;
   display:grid;
-  grid-template-columns:minmax(250px,41%) minmax(360px,59%);
+  grid-template-columns:210px minmax(0,1fr);
   grid-template-rows:minmax(0,1fr);
   padding:0;
   border:0;
@@ -625,11 +625,9 @@ body.csp-redesign #cspMapMode button{
 }
 body.csp-redesign #cspMapMode button[aria-pressed="true"]{background:var(--ui-selected);color:var(--ui-text);font-weight:600}
 
-/* The redesign fixes the shell at a 294px rail plus a 426px workspace, and
-   every width rule below carries !important - so the inline width the drag
-   handle writes can never win. The handle stayed visible and did nothing, which
-   is worse than not offering it. */
-body.csp-redesign #drag{display:none}
+/* The resize handle and CSS share the same width variable. */
+body.csp-redesign #drag{display:block;width:6px;cursor:col-resize}
+@media(max-width:1050px){body.csp-redesign #drag{display:none}}
 
 @media (max-width:1050px){
   body.csp-redesign #side{
@@ -687,3 +685,29 @@ body.csp-redesign #drag{display:none}
 /* Lucide ships as <img>, so currentColor cannot reach the strokes. The filter
    is a no-op in light and inverts the monochrome artwork in dark. */
 body.csp-redesign img[src^="vendor/icons/"]{filter:var(--ui-icon-filter)}
+
+body.csp-redesign #terrainLoadStatus{
+  margin:12px 0;padding:10px 12px;border:1px solid var(--line);border-radius:8px;
+  background:var(--ui-hover);color:var(--ui-text);font-size:13px;line-height:1.5;
+}
+body.csp-redesign #terrainLoadStatus[hidden]{display:none}
+
+/* Keep the primary search usable in the narrower navigation rail. */
+@media(min-width:1051px){
+  body.csp-redesign #cspNav .search-row{grid-template-columns:minmax(0,1fr) 38px}
+  body.csp-redesign #cspNav #iw{grid-column:1 / -1;grid-row:1}
+  body.csp-redesign #cspNav #loc{grid-column:1;grid-row:2;width:38px;justify-self:end}
+  body.csp-redesign #cspNav #go{grid-column:2;grid-row:2}
+}
+body.csp-redesign .csp-nav-button > span:not(.csp-nav-count):not(.csp-nav-dot){min-width:0;white-space:normal;line-height:1.35}
+body.csp-redesign .terrain-action-row{flex-wrap:wrap}
+
+body.csp-redesign #terLightNote{color:var(--ui-text-muted)}
+body.csp-redesign #terrainLoadStatus[data-state="partial"]{color:var(--ui-warn)}
+body.csp-redesign #drag{right:0}
+@media(min-width:1051px){
+  body.csp-redesign:not(.collapsed) #cspMapMode{left:calc(var(--side-w) + (100% - var(--side-w))/2)}
+}
+
+body.csp-redesign #cspNav .foot-meta{flex-wrap:wrap;gap:8px}
+body.csp-redesign #buildDiag{max-width:100%;overflow:auto}

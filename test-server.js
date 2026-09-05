@@ -107,7 +107,7 @@ function request(port,pathname,{method="GET",headers={},body=null}={}){
 async function main(){
   await snapshotUrlValidationChecks();
   const port=await freePort();
-  const child=spawn(process.execPath,["server.js"],{
+  const child=spawn(process.execPath,["--require",path.join(root,"test-elevation-upstream-fixture.js"),"server.js"],{
     cwd:root,
     env:{...process.env,PORT:String(port),HOST:"127.0.0.1",CSP_CACHE_DIR:cache,CSP_TERRAIN_WORKERS:"1"},
     stdio:["ignore","pipe","pipe"]
@@ -306,6 +306,13 @@ async function main(){
       const r=raw[1],g=raw[2],b=raw[3];
       assert.equal((r*256+g+b/256)-32768,0,"no-coverage DEM tile must decode to 0 m");
     }
+    const national=await request(port,"/api/elev/national/5/4/15.png");
+    assert.equal(national.status,200);
+    assert.equal(national.headers["x-elevation-source"],"3dep");
+    assert.equal(national.headers["x-coverage"],"1");
+    const nationalCached=await request(port,"/api/elev/national/5/4/15.png");
+    assert.equal(nationalCached.headers["x-cache"],"hit");
+    assert.deepEqual(nationalCached.body,national.body);
     assert.equal((await request(port,"/api/usgs/tile/notastyle/1/0/0.png")).status,400);
     assert.equal((await request(port,"/.git/config")).status,404);
     assert.equal((await request(port,"/package.json")).status,404);
