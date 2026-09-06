@@ -711,3 +711,79 @@ body.csp-redesign #drag{right:0}
 
 body.csp-redesign #cspNav .foot-meta{flex-wrap:wrap;gap:8px}
 body.csp-redesign #buildDiag{max-width:100%;overflow:auto}
+
+/* Compact panels have their own layout, rather than squeezing desktop controls
+   into the legacy search grid. Keep intrinsic button widths within their tracks. */
+body.csp-redesign #cspNav #loc{min-width:0}
+/* Suggestions anchor below the whole search area, including its action row. */
+body.csp-redesign #cspNav #iw{position:static}
+body.csp-redesign .csp-locate-label{display:none}
+@media(max-width:1050px){
+  body.csp-redesign #cspNav .search-row{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+  body.csp-redesign #cspNav #iw{grid-column:1/-1;grid-row:1;height:44px}
+  body.csp-redesign #cspNav #q{font-size:16px;min-height:44px}
+  body.csp-redesign #cspNav #loc,
+  body.csp-redesign #cspNav #go{
+    grid-row:2;display:flex;align-items:center;justify-content:center;gap:8px;
+    width:100%;height:44px;min-height:44px;padding:0 10px;font-size:13px;
+  }
+  body.csp-redesign #cspNav #loc{grid-column:1}
+  body.csp-redesign #cspNav #go{grid-column:2;color:var(--ui-control-ink)}
+  body.csp-redesign #cspNav #go::before{margin:0;flex:none}
+  body.csp-redesign #cspNav #ac{max-height:min(300px,45dvh);overflow-y:auto}
+  body.csp-redesign #cspNav #ac .r{min-height:44px}
+  body.csp-redesign .csp-locate-label{display:inline}
+  body.csp-redesign .csp-coordinate-actions{flex-wrap:wrap;gap:4px 12px;padding:0 14px 8px}
+  body.csp-redesign .csp-coordinate-actions button{min-height:44px}
+  body.csp-redesign .csp-nav-button,
+  body.csp-redesign #cspBack,
+  body.csp-redesign #resetPanes{min-height:44px}
+  body.csp-redesign #cspNavScroll,
+  body.csp-redesign #cspWorkspaceScroll{overscroll-behavior:contain}
+}
+@media(max-width:760px){
+  body.csp-redesign #cspWorkspaceHeader{padding:12px 16px}
+  body.csp-redesign #cspWorkspaceDescription{margin-bottom:0}
+  body.csp-redesign #cspWorkspace #status,
+  body.csp-redesign #panes .pane,
+  body.csp-redesign .csp-card,
+  body.csp-redesign .csp-section-label,
+  body.csp-redesign #snapshotPanel.csp-inline-export{margin-left:10px;margin-right:10px}
+  body.csp-redesign #panes .pane-b{padding-left:12px!important;padding-right:12px!important}
+  body.csp-redesign .terrain-mode{grid-template-columns:repeat(3,minmax(0,1fr));gap:4px}
+  body.csp-redesign .terrain-mode button{min-height:44px;padding:6px 4px;font-size:12px;white-space:normal;line-height:1.3}
+  body.csp-redesign .fgrid{grid-template-columns:minmax(0,1fr);gap:6px}
+  body.csp-redesign .fgrid > label:not(:first-child){margin-top:8px}
+  body.csp-redesign #side input:is([type=text],[type=number],[type=date],[type=url]),
+  body.csp-redesign #side select{font-size:16px;min-height:44px;min-width:0;max-width:100%}
+  body.csp-redesign .terrain-action-row{display:grid;grid-template-columns:minmax(0,1fr);gap:8px}
+  body.csp-redesign .terrain-action-row > *{width:100%;min-width:0;min-height:44px;white-space:normal}
+  body.csp-redesign .terrain-look-reset,
+  body.csp-redesign .linkbtn,
+  body.csp-redesign .terrain-appearance summary,
+  body.csp-redesign .terrain-lighting summary{min-height:44px}
+  body.csp-redesign .terrain-look-grid,
+  body.csp-redesign .terrain-lighting .terrain-look-grid{grid-template-columns:minmax(0,1fr) auto;gap:4px 8px;padding:8px 0 2px}
+  body.csp-redesign .terrain-look-grid label{grid-column:1/-1}
+  body.csp-redesign .terrain-look-grid output{grid-column:2}
+  body.csp-redesign .terrain-look-grid input[type=range]{grid-column:1;min-height:36px}
+  body.csp-redesign .elev-band-row{grid-template-columns:minmax(0,1fr) 44px;gap:8px}
+  body.csp-redesign .elev-band-row .unit-field{grid-column:1/-1}
+  body.csp-redesign .elev-band-row input[type=color]{width:44px;height:44px}
+  body.csp-redesign .elev-band-row .check{min-height:44px}
+  body.csp-redesign .csp-layer-actions{grid-column:1/-1;flex-wrap:wrap;gap:6px}
+  body.csp-redesign .csp-layer-actions button{min-height:44px;min-width:44px;padding:0 6px}
+  body.csp-redesign .csp-layer-actions .csp-layer-move{width:44px;margin:0}
+  body.csp-redesign #cspMapMode{max-width:calc(100% - 80px);bottom:calc(40px + var(--safe-bottom))}
+  body.csp-redesign #cspMapMode button{min-height:44px;white-space:normal;font-size:12px;line-height:1.25}
+  body.csp-redesign .leaflet-control-zoom a{width:44px;height:44px;line-height:44px}
+}
+/* A landscape phone or an open keyboard must not squeeze navigation to zero. */
+@media(max-width:1050px) and (max-height:600px){
+  body.csp-redesign #cspNav{overflow-y:auto;overscroll-behavior:contain}
+  body.csp-redesign #cspNavScroll{flex:0 0 auto;overflow:visible}
+  body.csp-redesign #cspNav > .searchbox,
+  body.csp-redesign #cspNav > .foot{flex-shrink:0}
+  body.csp-redesign #cspWorkspaceHeader{padding:8px 16px}
+  body.csp-redesign #cspWorkspaceDescription{display:none}
+}
