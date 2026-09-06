@@ -81,7 +81,7 @@ coordinateActions.addEventListener("click",event=>{
 });
 
 const locateButton=$("#loc");
-if(locateButton) locateButton.innerHTML=`<img src="${icon("map-pinned")}" alt="">`;
+if(locateButton) locateButton.innerHTML=`<img src="${icon("map-pinned")}" alt=""><span class="csp-locate-label">Locate me</span>`;
 
 const SEARCH_ROUTES=new Map([
   ["layers","layers"],["active layers","layers"],
