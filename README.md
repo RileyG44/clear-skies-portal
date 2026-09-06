@@ -3,6 +3,13 @@
 A local web app that finds the most recent satellite imagery for any location on Earth,
 plus lidar terrain. Everything it uses is free and needs no API key.
 
+## Native iOS specification and agent governance
+
+See [the draft native specification](docs/ios/SPEC.md) and
+[Spec Owner governance](docs/ios/GOVERNANCE.md). Agents must read
+[AGENTS.md](AGENTS.md). Riley approves every Spec Owner request; the initial
+product/architecture proposal awaits his baseline approval.
+
 ## Run it
 
 ```
