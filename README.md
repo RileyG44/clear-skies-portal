@@ -53,7 +53,10 @@ to the current view, with percentages based on rendered samples rather than a
 misleading coverage claim. It can also query USGS mosaic metadata at the map
 center. USGS 3DEP is a national service with mixed native resolutions; a 1 m
 capability does not mean every location has 1 m data, so the UI states that
-limitation instead of advertising a resolution the provider did not return.
+limitation instead of advertising a resolution the provider did not return. The
+source popup and Terrain pane show both native/provider spacing and the current
+display sampling (m/pixel); a fine display sampling number can still be an
+upsampled overview when the provider has no finer survey at that point.
 
 `server.js` is the optional local terrain engine. It is required for providers
 that do not allow browser requests (WA DNR, Macrostrat, and SNODAS), for rendering

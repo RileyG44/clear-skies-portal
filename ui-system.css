@@ -707,6 +707,7 @@ body.csp-redesign .terrain-source-panel-heading{margin:2px 0 6px;color:var(--ink
 body.csp-redesign .terrain-source-panel-row{padding:8px 0;border-top:1px solid var(--line)}
 body.csp-redesign .terrain-source-panel-name{color:var(--ink);font-weight:600}
 body.csp-redesign .terrain-source-panel-meta{margin-top:2px;color:var(--ink-3);overflow-wrap:anywhere}
+body.csp-redesign .terrain-resolution-note{color:var(--ink-3);font-size:10px}
 body.csp-redesign .terrain-source-panel-note{padding-top:4px;color:var(--ink-3);font-size:10px}
 
 /* Keep the primary search usable in the narrower navigation rail. */

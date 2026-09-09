@@ -16,12 +16,14 @@ assert.equal(decoded.grid[3],20);
 assert.equal(terrain.decode({...block,mask:new Uint8Array(4)}),null);
 assert.throws(()=>terrain.decode({...block,pixels:[new Float32Array(3)]}));
 const tiles=[
-  {current:true,el:{_cspHasContent:true,_cspSourceCounts:{1:1,2:3},_cspRefining:true}},
+  {current:true,el:{_cspHasContent:true,_cspSourceCounts:{1:1,2:3},_cspSourceResolution:{1:30,2:.75},_cspRefining:true}},
   {current:false,el:{_cspHasContent:true,_cspSourceCounts:{3:100}}},
   {current:true,el:{_cspHasContent:false,_cspSourceCounts:{3:4}}}
 ];
 const summary=terrain.summarize(tiles);
 assert.equal(summary.coverage,50);assert.equal(summary.refining,true);
 assert.deepEqual(summary.sources.map(s=>[s.rank,s.percent]),[[2,75],[1,25]],'never attribute hidden, failed or retired pixels');
+assert.equal(summary.sources.find(s=>s.rank===2).sampleMeters,.75,'report the weighted displayed sample spacing');
+assert.match(summary.sources.find(s=>s.rank===1).nativeLabel,/30 m/,'keep provider-native resolution alongside display sampling');
 assert.equal(terrain.summarize([]).sources.length,0);
 console.log('public terrain checks passed (raw elevation URL, masks, nodata, mixed sources, hidden tiles)');

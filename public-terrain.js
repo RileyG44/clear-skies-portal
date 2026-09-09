@@ -7,10 +7,10 @@
   'use strict';
   const SERVICE='https://elevation.nationalmap.gov/arcgis/rest/services/3DEPElevation/ImageServer';
   const SOURCES=Object.freeze({
-    1:{label:'AWS global terrain (overview)',url:'https://registry.opendata.aws/terrain-tiles/'},
-    2:{label:'USGS 3DEP elevation',url:SERVICE},
-    3:{label:'USGS 1 m DEM',url:'https://www.usgs.gov/3d-elevation-program'},
-    4:{label:'WA DNR published LiDAR hillshade',url:'https://lidarportal.dnr.wa.gov/'}
+    1:{label:'AWS global terrain (overview)',url:'https://registry.opendata.aws/terrain-tiles/',nativeLabel:'~30 m source spacing (1 arc-second overview)'},
+    2:{label:'USGS 3DEP elevation',url:SERVICE,nativeLabel:'Provider mosaic varies; 1 m where available'},
+    3:{label:'USGS 1 m DEM',url:'https://www.usgs.gov/3d-elevation-program',nativeLabel:'1 m where the selected survey covers this point'},
+    4:{label:'WA DNR published LiDAR hillshade',url:'https://lidarportal.dnr.wa.gov/',nativeLabel:'Project-native spacing varies; published hillshade'}
   });
   function nationalUrl(coords,size=256){
     const {z,x,y}=coords,n=2**z,r=20037508.342789244;
@@ -35,15 +35,19 @@
     return valid?{grid,width,height}:null;
   }
   function summarize(tiles){
-    const counts={};let total=0,ready=0,refining=false,failed=false;
+    const counts={},resolutionSums={};let total=0,ready=0,refining=false,failed=false;
     for(const tile of tiles){
       if(tile.current===false)continue;total++;
       const el=tile.el;if(!el?._cspHasContent)continue;
       ready++;refining||=!!el._cspRefining;failed||=!!el._cspRefineFailed;
-      for(const [rank,count] of Object.entries(el._cspSourceCounts||{})) if(SOURCES[rank]&&count>0)counts[rank]=(counts[rank]||0)+count;
+      for(const [rank,count] of Object.entries(el._cspSourceCounts||{})) if(SOURCES[rank]&&count>0){
+        counts[rank]=(counts[rank]||0)+count;
+        const meters=Number(el._cspSourceResolution?.[rank]);
+        if(Number.isFinite(meters)&&meters>0)resolutionSums[rank]=(resolutionSums[rank]||0)+count*meters;
+      }
     }
     const pixels=Object.values(counts).reduce((a,b)=>a+b,0);
-    const sources=Object.keys(counts).sort((a,b)=>b-a).map(rank=>({...SOURCES[rank],rank:+rank,pixels:counts[rank],percent:100*counts[rank]/pixels}));
+    const sources=Object.keys(counts).sort((a,b)=>b-a).map(rank=>({...SOURCES[rank],rank:+rank,pixels:counts[rank],percent:100*counts[rank]/pixels,sampleMeters:resolutionSums[rank]?resolutionSums[rank]/counts[rank]:null}));
     return {total,ready,refining,failed,sources,coverage:total?Math.round(100*ready/total):0};
   }
   function identifyUrl(lat,lng,zoom){
