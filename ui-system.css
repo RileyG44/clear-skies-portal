@@ -699,15 +699,15 @@ body.csp-redesign #terrainSurveyInfo p{margin:8px 0}
 body.csp-redesign #terrainSourceSummary a,
 body.csp-redesign #terrainSurveyInfo a{color:var(--ink);text-decoration:underline;text-underline-offset:2px}
 body.csp-redesign #terrainInspectSource{white-space:normal;min-height:38px;text-align:left}
-body.csp-redesign #terrainSourceBadge{
-  position:absolute;right:calc(12px + var(--safe-right));bottom:calc(94px + var(--safe-bottom));z-index:1095;
-  max-width:min(260px,calc(100% - 24px));padding:8px 11px;min-height:36px;
-  background:var(--surface);border:1px solid var(--line);border-radius:9px;color:var(--ink-2);
-  font:500 11px/1.4 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;text-align:left;
-  box-shadow:var(--shadow-btn);white-space:normal;
-}
-body.csp-redesign #terrainSourceBadge[hidden]{display:none}
-@media(max-width:760px){body.csp-redesign:not(.collapsed) #terrainSourceBadge{display:none}}
+body.csp-redesign #terrainSourcePanel{width:min(330px,calc(100vw - 20px))}
+body.csp-redesign .terrain-source-panel-body{padding:11px 12px;color:var(--ink-2);font-size:11px;line-height:1.45}
+body.csp-redesign .terrain-source-panel-body p{margin:0 0 10px}
+body.csp-redesign .terrain-source-panel-status{color:var(--ink);font-weight:600}
+body.csp-redesign .terrain-source-panel-heading{margin:2px 0 6px;color:var(--ink-3);font-size:9.5px;font-weight:650;letter-spacing:.08em;text-transform:uppercase}
+body.csp-redesign .terrain-source-panel-row{padding:8px 0;border-top:1px solid var(--line)}
+body.csp-redesign .terrain-source-panel-name{color:var(--ink);font-weight:600}
+body.csp-redesign .terrain-source-panel-meta{margin-top:2px;color:var(--ink-3);overflow-wrap:anywhere}
+body.csp-redesign .terrain-source-panel-note{padding-top:4px;color:var(--ink-3);font-size:10px}
 
 /* Keep the primary search usable in the narrower navigation rail. */
 @media(min-width:1051px){
