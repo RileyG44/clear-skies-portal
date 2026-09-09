@@ -18,6 +18,10 @@ const files=[
 for(const [source,target] of files)
   fs.copyFileSync(path.join(root,source),path.join(vendor,target));
 
+fs.mkdirSync(path.join(vendor,'lerc'),{recursive:true});
+for(const name of ['LercDecode.js','LercDecode.es.js','lerc-wasm.wasm','README.md'])
+  fs.copyFileSync(path.join(root,'node_modules','lerc',name),path.join(vendor,'lerc',name));
+
 /* Keep the interface icon set local and tiny. Lucide is the source library,
    but shipping its all-icons runtime for a small navigation set
    would slow the very first paint for no benefit. The build copies only the

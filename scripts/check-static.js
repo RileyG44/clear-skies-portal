@@ -94,6 +94,13 @@ assert(index.includes('<script src="terrain-core.js"></script>')&&index.includes
        "index must load tested terrain primitives and the deterministic display rasterizer");
 assert(index.includes('<script src="elevation-bands.js"></script>'),"index must load the tested elevation-band core");
 assert(index.includes('<script src="elevation-tile-core.js"></script>'),"index must decode packed elevation before resampling");
+assert(index.includes('<script src="public-terrain.js"></script>'),"index must load the public terrain source registry");
+for(const asset of ["public-terrain.js","public-terrain-worker.js"])
+  assert(fs.existsSync(path.join(root,asset)),`public terrain asset is missing: ${asset}`);
+for(const asset of ["LercDecode.js","LercDecode.es.js","lerc-wasm.wasm"])
+  assert(fs.existsSync(path.join(root,"vendor","lerc",asset)),`LERC decoder asset is missing: ${asset}`);
+assert(read("sw.js").includes('"./public-terrain-worker.js"'),"the offline shell must cache the public terrain worker");
+assert(deploymentWorkflow.includes("public-terrain.js public-terrain-worker.js"),"GitHub Pages must ship the public terrain assets");
 assert(index.includes('<script src="wa-archaeology.js"></script>'),"index must load the public-safe archaeology index");
 assert(index.includes('<script src="glacial-research-core.js"></script>'),"index must load geomorphology primitives");
 assert(index.includes('<script src="research-analysis.js"></script>'),"index must load the shared analysis dispatcher");

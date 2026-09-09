@@ -44,6 +44,17 @@ proxy hop, then automatically falls back to the terrain engine if the provider
 fails or a cached tile is needed offline. Existing imagery/terrain stays visible
 until a replacement has rendered, so a slow source cannot blank the map.
 
+For visitors who do not run the local engine, the hosted page requests USGS 3DEP
+as compressed LERC/F32 elevation tiles and decodes them in a worker on the device.
+An AWS Terrarium tile is kept as an overview fallback so the first view remains
+usable while a higher-fidelity 3DEP tile refines it. The Terrain pane's **Rendered
+data & source details** card reports the sources that actually contributed pixels
+to the current view, with percentages based on rendered samples rather than a
+misleading coverage claim. It can also query USGS mosaic metadata at the map
+center. USGS 3DEP is a national service with mixed native resolutions; a 1 m
+capability does not mean every location has 1 m data, so the UI states that
+limitation instead of advertising a resolution the provider did not return.
+
 `server.js` is the optional local terrain engine. It is required for providers
 that do not allow browser requests (WA DNR, Macrostrat, and SNODAS), for rendering
 raw USGS 1 m DEMs, and for resumable offline-area downloads. When the page itself

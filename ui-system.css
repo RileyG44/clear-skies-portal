@@ -691,6 +691,23 @@ body.csp-redesign #terrainLoadStatus{
   background:var(--ui-hover);color:var(--ui-text);font-size:13px;line-height:1.5;
 }
 body.csp-redesign #terrainLoadStatus[hidden]{display:none}
+body.csp-redesign #terrainSourceDetails{margin:8px 0 12px;padding-top:8px}
+body.csp-redesign #terrainSourceSummary,
+body.csp-redesign #terrainSurveyInfo{font-size:11.5px;line-height:1.5;color:var(--ink-2);overflow-wrap:anywhere}
+body.csp-redesign #terrainSourceSummary p,
+body.csp-redesign #terrainSurveyInfo p{margin:8px 0}
+body.csp-redesign #terrainSourceSummary a,
+body.csp-redesign #terrainSurveyInfo a{color:var(--ink);text-decoration:underline;text-underline-offset:2px}
+body.csp-redesign #terrainInspectSource{white-space:normal;min-height:38px;text-align:left}
+body.csp-redesign #terrainSourceBadge{
+  position:absolute;right:calc(12px + var(--safe-right));bottom:calc(94px + var(--safe-bottom));z-index:1095;
+  max-width:min(260px,calc(100% - 24px));padding:8px 11px;min-height:36px;
+  background:var(--surface);border:1px solid var(--line);border-radius:9px;color:var(--ink-2);
+  font:500 11px/1.4 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;text-align:left;
+  box-shadow:var(--shadow-btn);white-space:normal;
+}
+body.csp-redesign #terrainSourceBadge[hidden]{display:none}
+@media(max-width:760px){body.csp-redesign:not(.collapsed) #terrainSourceBadge{display:none}}
 
 /* Keep the primary search usable in the narrower navigation rail. */
 @media(min-width:1051px){
