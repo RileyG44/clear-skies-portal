@@ -552,7 +552,7 @@ const SNAPSHOT_IMAGE_TYPES = new Map([
 ]);
 const SNAPSHOT_REDIRECT_STATUSES = new Set([301,302,303,307,308]);
 
-async function fetchSnapshotImage(initial){
+async function fetchSnapshotImage(initial, signal){
   let target=validateSnapshotImageUrl(initial instanceof URL ? initial.href : initial);
   const visited=new Set();
   for(let redirects=0;;redirects++){
@@ -573,7 +573,7 @@ async function fetchSnapshotImage(initial){
           "Accept":"image/png,image/jpeg,image/webp",
           "Accept-Encoding":"gzip, deflate, br"
         }
-      });
+      }, null, signal);
     }catch(error){
       if(error&&error.code==="UPSTREAM_TOO_LARGE")
         throw new HttpError(502,`snapshot image exceeds ${MAX_SNAPSHOT_IMAGE} bytes`);
@@ -943,7 +943,9 @@ const server = http.createServer(async (req,res)=>{
     if(p==="/api/snapshot/image"){
       const target=validateSnapshotImageUrl(u.searchParams.get("url"));
       const result=await cached(key("snapshot:image:v1:"+target.href),TTL_SNAPSHOT,
-        ()=>fetchSnapshotImage(target));
+        /* Pass the client's signal so an abandoned snapshot fetch dies with the
+           page instead of holding one of the four global upstream slots. */
+        ()=>fetchSnapshotImage(target, client.signal));
       return send(res,200,result.type,result.body,{
         "X-Cache":result.hit?"HIT":"MISS",
         "Cache-Control":"public, max-age=86400"
