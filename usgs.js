@@ -465,20 +465,13 @@ async function sampleGrid(z,x,y,size,options={}){
        0.5 m/1 m lidar surface. Open only small headers, reject incompatible
        projections, then rank by true native pixel size with recency as the
        tie-breaker. The header cache makes this free after first discovery. */
-    /* The candidate probes are independent, so ask for all of them together
-       instead of awaiting each in turn: identical candidates, identical bytes
-       and identical ranking, but one round trip's latency instead of one per
-       candidate. openCog memoises per worker, so this is paid once per worker
-       per product - measured, the 256 KB header probe dominates the cache. */
-    const probed=await Promise.all(group.slice(0,8).map(async s=>{
-      try{ return {s,key:tileKey(s),t:await openCog(tileKey(s), s.size)} }catch(e){ return null }
-    }));
     const available=[];
-    for(const hit of probed){
-      if(!hit) continue;
-      const {s,key,t}=hit;
+    for(const s of group.slice(0,8)){
+      const key=tileKey(s);
+      let t; try{ t=await openCog(key, s.size) }catch(e){ continue }
       if(t.geo.epsg && t.geo.epsg!==26900+zone && t.geo.epsg!==32600+zone) continue;
-      available.push({s,key,t,base:t.geo.scale[0]||1});
+      const base=t.geo.scale[0]||1;
+      available.push({s,key,t,base});
     }
     available.sort((a,b)=>a.base-b.base || b.s.year-a.s.year || b.s.size-a.s.size);
     for(const {s,key,t,base} of available.slice(0,PER_CELL)){
