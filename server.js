@@ -368,14 +368,14 @@ function coalesce(id,fn){
 
 /* A cold tile pays a one-off cost to open the project that covers it (measured
    ~2.8 s for the first USGS 1 m tile in an area); once a worker is warm its
-   neighbours cost ~80 ms each. So after a cold render, quietly pre-render the
-   four orthogonal neighbours: that hides the stall behind the pan or zoom the
-   user is about to make, and turns the next screenful into cache hits.
+   neighbours are far cheaper. So after a render, quietly pre-render the ring of
+   neighbours around it: that hides the stall behind the pan or zoom the user is
+   about to make, and turns the next screenful into cache hits.
 
    Deliberately conservative, because extra load is the thing we are trying to
-   remove: only when the pool has nothing else to do, only four tiles, and
-   rate-limited per window. A cache hit never triggers it, so panning across
-   already-warm ground costs nothing, and a busy pool is always left alone. */
+   remove: only when the pool has nothing else to do, only the eight surrounding
+   tiles, and rate-limited per window. Already-cached neighbours are skipped, so
+   a busy pool is always left alone and a settled viewport costs nothing. */
 const WARM_RING_WINDOW_MS=5000;
 const WARM_RING_MAX=12;                 // prefetches started per window
 const warmRingSeen=new Set();           // jobKeys queued or running right now
@@ -387,7 +387,7 @@ function warmNeighbourTiles(style,z,x,y){
   const now=Date.now();
   if(now-warmRingSince>WARM_RING_WINDOW_MS){ warmRingSince=now; warmRingStarted=0 }
   const limit=Math.pow(2,z);
-  for(const [dx,dy] of [[1,0],[-1,0],[0,1],[0,-1]]){
+  for(const [dx,dy] of [[1,0],[-1,0],[0,1],[0,-1],[1,1],[-1,-1],[1,-1],[-1,1]]){
     if(warmRingStarted>=WARM_RING_MAX) return;
     const nx=x+dx, ny=y+dy;
     if(nx<0||ny<0||nx>=limit||ny>=limit) continue;
@@ -1138,9 +1138,13 @@ const server = http.createServer(async (req,res)=>{
         return send(res,400,"text/plain",Buffer.from("bad tile coordinates or style"));
       const ck=key(`${TERRAIN_RENDER_VERSION}:${style}:${z}/${x}/${y}`);
       const hit=cacheGet(ck, TTL_TILE);
-      if(hit) return hit.status===204
+      /* Also warm from a hit: otherwise the ring only ever extends one tile from
+         a cold render, and a steady pan walks off the warm edge (measured:
+         first pan a 4 ms hit, the next still a 0.9 s miss). Warming here makes
+         the ring travel with the user. */
+      if(hit){ warmNeighbourTiles(style,z,x,y); return hit.status===204
         ? send(res,200,"image/png",TRANSPARENT,{"X-Cache":"hit","X-Coverage":"none","Cache-Control":"public, max-age=604800, immutable"})
-        : send(res,hit.status,hit.type,hit.body,{"X-Cache":"hit","Cache-Control":"public, max-age=604800, immutable"});
+        : send(res,hit.status,hit.type,hit.body,{"X-Cache":"hit","Cache-Control":"public, max-age=604800, immutable"}) }
       let out=null;
       /* Several Leaflet tiles can ask for the same raw-COG render while a
          pan/zoom is settling. Share that expensive range-read/PNG job. */
