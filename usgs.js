@@ -322,6 +322,7 @@ async function fetchRange(key, a, b){
 
 /* -------------------------------------------------------------- COG access */
 const HDR_BYTES = 262144;                 // IFD chain + tile tables live up front
+const PROBE_BYTES = 1<<16;                // first look: most directories fit in 64 KB
 const TAIL_BYTES = 1<<20;                 // when the directory is at the end instead
 const headers = new Map();                // key -> parsed tiff
 const decoded = new Map();                // key|lvl|idx -> Float32Array (LRU)
@@ -335,9 +336,21 @@ const DECODE_MAX = 48;
    tail holding the directory and its offset tables is small: ~14 KB there. */
 async function openCog(key, size){
   if(headers.has(key)) return headers.get(key);
-  const {buf}=await fetchRange(key, 0, HDR_BYTES-1);
+  /* Probe small first: probing 256 KB per candidate was 71% of all cached bytes
+     (5,248 files of exactly HDR_BYTES against 825 of real pixels). A short head
+     is enough whenever the directory really does sit at the front - which is the
+     common case - and cog.parseTiff now reports `complete:false` when it ran out
+     of buffer, so a file we cannot yet read is never mistaken for one that has
+     no readable directory. Anything not proven complete escalates to the full
+     head below, which is exactly the old behaviour. */
+  const probeBytes=Math.min(PROBE_BYTES, HDR_BYTES);
+  let {buf}=await fetchRange(key, 0, probeBytes-1);
   let t=null;
   try{ t=cog.parseTiff(buf) }catch(e){ t=null }
+  if(t && t.levels.length && t.complete===false && probeBytes<HDR_BYTES){
+    ({buf}=await fetchRange(key, 0, HDR_BYTES-1));
+    try{ t=cog.parseTiff(buf) }catch(e){ t=null }
+  }
   if(!t || !t.levels.length){
     const le = buf.toString("ascii",0,2)==="II";
     const ver = le?buf.readUInt16LE(2):buf.readUInt16BE(2);

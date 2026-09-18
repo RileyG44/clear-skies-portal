@@ -152,9 +152,9 @@ function parseTiff(b, base=0, head=null){
   };
   const one=(t,d)=>{ if(!t) return d; const v=vals(t); return v.length?v[0]:d; };
 
-  const levels=[]; let ifd = big?u64(8):u32(4), guard=0, geo=null;
+  const levels=[]; let ifd = big?u64(8):u32(4), guard=0, geo=null, truncated=false;
   while(ifd && guard++<16){
-    if(!fits(ifd,2)) break;                          // absolute, not buffer-relative
+    if(!fits(ifd,2)){ truncated=true; break }        // absolute, not buffer-relative
     const {tags,nextIfd}=readEntries(ifd);
     const lv={
       w:one(tags[256]), h:one(tags[257]),
@@ -176,7 +176,7 @@ function parseTiff(b, base=0, head=null){
       lv.counts  = vals(tags[279]);                   // StripByteCounts
       lv.stripped = true;
     }
-    if(!lv.tw || !lv.offsets.length) break;
+    if(!lv.tw || !lv.offsets.length){ truncated=true; break }
     levels.push(lv);
     if(!geo){
       const gk=vals(tags[34735]);
@@ -192,8 +192,13 @@ function parseTiff(b, base=0, head=null){
     }
     ifd=nextIfd;
   }
+  /* A short buffer makes parseTiff read zeroes past its end, and a tile table
+     of zeroes is indistinguishable from a real one once vals() has run: every
+     offset points at the header. Say so explicitly, so a caller that fetched a
+     partial head can tell "this is all there is" from "this is all I got". */
+  if(ifd) truncated=true;                            // chain ran off the buffer
   if(!levels.length) throw new Error("no readable IFD found (neither tiles nor strips)");
-  return {le, big, levels, geo};
+  return {le, big, levels, geo, complete:!truncated};
 }
 
 /* ------------------------------------------------------- decode a raw tile */
