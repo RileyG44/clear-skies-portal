@@ -52,7 +52,16 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+
       - uses: actions/configure-pages@v6
+
+      # Same posture as the check job: no lifecycle scripts. esbuild's platform
+      # binary ships as an optional dependency, so it does not need one.
+      - name: Install build tooling
+        run: npm ci --ignore-scripts
 
       - name: Assemble the static site
         run: |
@@ -60,6 +69,11 @@ jobs:
           cp index.html ui-theme.css ui-system.css ui-system.js mosaic-core.js terrain-core.js terrain-raster.js elevation-bands.js elevation-tile-core.js tile-pipeline.js wa-archaeology.js glacial-research-core.js research-analysis.js research-worker.js point-cloud-core.js point-cloud-viewer.js point-cloud-catalog.json maxar-catalog.json version.js sw.js manifest.json icon-180.png icon-192.png icon-512.png .nojekyll _site/
           cp -R vendor _site/vendor
           cp public-terrain.js public-terrain-worker.js _site/
+
+      # The repo stays readable (check-static asserts exact strings, and the tests
+      # run against the sources); only the shipped bytes are compacted.
+      - name: Minify the shipped bytes
+        run: node scripts/minify-site.js _site
 
       - uses: actions/upload-pages-artifact@v5
         with:
