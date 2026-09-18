@@ -5204,13 +5204,13 @@ function applyTerrain(force){
     nextLayer=new CompositeTerrainLayer({...TILE_OPTS,opacity:op,maxZoom:VIEW_MAX,maxNativeZoom:18,zIndex:440,className:`terrain-style-${style}`,
       baseUrl:c=>depProxyTileUrl(c,style),detailUrl:c=>waTileUrl(c,pick.ids),attribution:"WA DNR LiDAR + USGS 3DEP fallback"});
   }else if(pick.src==="usgs1m"){
-    nextLayer=new AnalyticTerrainLayer({...TILE_OPTS,opacity:op,maxZoom:VIEW_MAX,maxNativeZoom:PROXY?17:18,zIndex:440,
+    nextLayer=new AnalyticTerrainLayer({...TILE_OPTS,opacity:op,maxZoom:VIEW_MAX,maxNativeZoom:PROXY?18:17,zIndex:440,
       className:`terrain-style-${style}`,style,sourceLabel:"usgs-1m",refineOverview:true,
       nationalEndpoint:"/api/elev/national",rawEndpoint:"/api/usgs/elev",
       fallback:"https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.png",fallbackNativeZoom:15,nationalNativeZoom:17,
       attribution:"USGS 3DEP 1 m elevation + AWS Terrarium fallback"});
   }else{
-    nextLayer=new AnalyticTerrainLayer({...TILE_OPTS,opacity:op,maxZoom:VIEW_MAX,maxNativeZoom:PROXY?17:18,zIndex:440,
+    nextLayer=new AnalyticTerrainLayer({...TILE_OPTS,opacity:op,maxZoom:VIEW_MAX,maxNativeZoom:PROXY?18:17,zIndex:440,
       className:`terrain-style-${style}`,style,sourceLabel:"national",refineOverview:true,
       nationalEndpoint:"/api/elev/national",rawEndpoint:null,
       fallback:"https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.png",fallbackNativeZoom:15,nationalNativeZoom:17,
@@ -6296,7 +6296,7 @@ function warmPlan(){
   const pad={view:0, pad50:0.25, pad100:0.5}[$("#terExtent").value] || 0;
   if(pad>0) b=b.pad(pad);
   const zNow=map.getZoom(), mode=$("#terDepth").value,style=$("#terStyle").value;
-  const nativeCeiling=chooseTerrain(style).src==="wadnr"?18:17;
+  const nativeCeiling=chooseTerrain(style).src==="3dep"?17:18;
   const requestedZ1=Math.min(nativeCeiling,mode==="screen"?zNow+2:nativeCeiling);
   let range=warmLevelRange(b,zNow,requestedZ1);
   /* Only the finest few levels are worth downloading: they are where the
@@ -7613,7 +7613,7 @@ function applyElev(){
   if(!elevLayer){
     elevLayer=new ElevLayer({nationalEndpoint:"/api/elev/national",rawEndpoint:"/api/usgs/elev",
                              fallback:"https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.png",
-                             fallbackNativeZoom:15,nationalNativeZoom:17,render,maxZoom:VIEW_MAX,maxNativeZoom:PROXY?17:18,
+                             fallbackNativeZoom:15,nationalNativeZoom:17,render,maxZoom:VIEW_MAX,maxNativeZoom:PROXY?18:17,
                              zIndex:450,keepBuffer:1,updateWhenIdle:true,updateWhenZooming:false,maxRetries:0});
     elevLayer.on("tileload tilerefine tileerror load",()=>{scheduleTerrainStatus();paintElevOut()});
     elevLayer.addTo(map);
