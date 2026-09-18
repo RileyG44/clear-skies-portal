@@ -976,6 +976,12 @@ html.csp-boot body{visibility:hidden}
 </script>
 </head>
 <body>
+<!-- The redesigned shell is the intended look, so claim it before the first paint instead of
+     waiting for ui-system.js (the last script on the page) to run. The boot guard above keeps
+     the page hidden until it is ready, so this cannot flash a half-built layout; it only stops
+     the 4 s guard from revealing the legacy design first. ui-system.js drops the class again if
+     it genuinely cannot run. -->
+<script>document.body.classList.add("csp-redesign");</script>
 <div id="app">
   <div id="side">
     <header>

@@ -177,6 +177,14 @@ assert(index.includes('id="buildDiag"'),"the geometry readout must be reachable 
     "first paint must wait for the restructure, and wait by visibility so layout still measures");
   assert(/setTimeout\(reveal,\s*\d+\)/.test(index),
     "the paint hold must expire on its own if the interface script never runs");
+  /* The hold expires on a timer, the restructure happens at the end of the page,
+     and on a slow load the timer wins - which used to reveal the legacy design
+     and then snap to the redesign in front of the user. Claim the redesign in
+     the body before anything can be painted, so whichever way the hold ends the
+     new interface is what appears. */
+  const claim = index.indexOf('document.body.classList.add("csp-redesign")');
+  assert(claim !== -1 && claim < index.indexOf('src="ui-system.js'),
+    "the redesign must be claimed before first paint, not only when the interface script runs");
   assert(uiSystem.includes('dispatchEvent(new Event("csp:ready"))')&&
          /if\(!side\|\|!panes\|\|!status\|\|!mapEl\|\|!bridge\)\{ ready\(\); return; \}/.test(uiSystem),
     "every exit from the interface script must release the paint hold, including the early one");
