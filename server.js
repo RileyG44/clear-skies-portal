@@ -386,15 +386,21 @@ function warmNeighbourTiles(style,z,x,y){
   if(stats.active||stats.queued) return; // never compete with a real request
   const now=Date.now();
   if(now-warmRingSince>WARM_RING_WINDOW_MS){ warmRingSince=now; warmRingStarted=0 }
-  const limit=Math.pow(2,z);
-  for(const [dx,dy] of [[1,0],[-1,0],[0,1],[0,-1],[1,1],[-1,-1],[1,-1],[-1,1]]){
+  /* Zooming in is the gesture this is really for, and it lands on a different
+     tile set: the ring above only ever helps a lateral pan. So also warm the
+     four children one level down. */
+  const targets=[[1,0],[-1,0],[0,1],[0,-1],[1,1],[-1,-1],[1,-1],[-1,1]]
+    .map(([dx,dy])=>({z,x:x+dx,y:y+dy}));
+  if(z<19) targets.push({z:z+1,x:x*2,y:y*2},{z:z+1,x:x*2+1,y:y*2},
+                        {z:z+1,x:x*2,y:y*2+1},{z:z+1,x:x*2+1,y:y*2+1});
+  for(const target of targets){
     if(warmRingStarted>=WARM_RING_MAX) return;
-    const nx=x+dx, ny=y+dy;
+    const tz=target.z, nx=target.x, ny=target.y, limit=Math.pow(2,tz);
     if(nx<0||ny<0||nx>=limit||ny>=limit) continue;
-    const nk=key(`${TERRAIN_RENDER_VERSION}:${style}:${z}/${nx}/${ny}`);
+    const nk=key(`${TERRAIN_RENDER_VERSION}:${style}:${tz}/${nx}/${ny}`);
     if(warmRingSeen.has(nk)||cacheGet(nk,TTL_TILE)) continue;
     warmRingSeen.add(nk); warmRingStarted++;
-    terrainTask(`raw-terrain:${nk}`,"raw-terrain",{style,z,x:nx,y:ny,size:256},{priority:-10,timeoutMs:30000})
+    terrainTask(`raw-terrain:${nk}`,"raw-terrain",{style,z:tz,x:nx,y:ny,size:256},{priority:-10,timeoutMs:30000})
       .then(out=>{ if(out) cachePut(nk,200,"image/png",out.png); else cachePut(nk,204,"image/png",Buffer.alloc(0)) })
       .catch(()=>{})
       .finally(()=>warmRingSeen.delete(nk));
