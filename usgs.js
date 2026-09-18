@@ -679,7 +679,13 @@ async function elevTile(z,x,y,size){
     out[o+2]=Math.floor((t-Math.floor(t))*256)&255;
     out[o+3]=255;
   }
-  return {png:encodePNG(out,w,w), coverage:+S.coverage.toFixed(3)};
+  /* Report the same provenance the terrain path does. The client cannot choose a
+     zoom ceiling from the source's real resolution while this path only says
+     "coverage", so the panel ends up describing a function of z instead of what
+     was actually rendered. Additive: existing callers read .png/.coverage only. */
+  return {png:encodePNG(out,w,w), coverage:+S.coverage.toFixed(3),
+          groundRes:S.groundRes==null?null:+S.groundRes.toFixed(2),
+          sources:S.sources||[]};
 }
 
 async function renderTile(style,z,x,y,size){

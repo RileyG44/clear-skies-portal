@@ -1301,7 +1301,13 @@ const server = http.createServer(async (req,res)=>{
       if(!out){ cachePut(ck,204,"image/png",Buffer.alloc(0));
                 return send(res,200,"image/png",TRANSPARENT,{"X-Coverage":"none","Cache-Control":"public, max-age=604800, immutable"}) }
       cachePut(ck,200,"image/png",out.png);
-      return send(res,200,"image/png",out.png,{"X-Coverage":String(out.coverage),"X-Cache":"miss",
+      /* Mirror the tile route: say which project and what ground resolution were
+         actually used, so the client can size its zoom ceiling to the source
+         rather than to a fixed z. */
+      return send(res,200,"image/png",out.png,{"X-Coverage":String(out.coverage),
+                                                  "X-Ground-Res":out.groundRes==null?"":String(out.groundRes),
+                                                  "X-Sources":(out.sources||[]).map(s2=>`${s2.project}@${s2.res}m`).join(","),
+                                                  "X-Cache":"miss",
                                                   "Cache-Control":"public, max-age=604800, immutable"});
     }
 
