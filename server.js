@@ -1066,8 +1066,14 @@ const server = http.createServer(async (req,res)=>{
       const rel = map[sat] || map.J1;
       const r = await cached(key("firms:"+rel), TTL_FIRMS, ()=>upstream({
         host:"firms.modaps.eosdis.nasa.gov", path:"/data/active_fire/"+rel, method:"GET",
-        headers:{"User-Agent":"clear-skies-portal","Accept-Encoding":"gzip"}}));
-      return send(res, r.status, "text/csv; charset=utf-8", r.body, {"X-Cache": r.hit?"HIT":"MISS"});
+        headers:{"User-Agent":"clear-skies-portal","Accept-Encoding":"gzip"}}, null, client.signal));
+      /* This used to send no Cache-Control at all, so every page load re-fetched a
+         national-extent CSV. The server already holds it for TTL_FIRMS (20 min);
+         let the browser keep it for half that, and only when it really loaded -
+         an upstream error must not be pinned in the browser for ten minutes. */
+      return send(res, r.status, "text/csv; charset=utf-8", r.body,
+                  {"X-Cache": r.hit?"HIT":"MISS",
+                   "Cache-Control": r.status===200 ? "public, max-age=600" : "no-store"});
     }
 
     /* ---- pre-cache an area so it's instant (and works offline) later ---- */
