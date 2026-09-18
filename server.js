@@ -366,6 +366,41 @@ function coalesce(id,fn){
   return task;
 }
 
+/* A cold tile pays a one-off cost to open the project that covers it (measured
+   ~2.8 s for the first USGS 1 m tile in an area); once a worker is warm its
+   neighbours cost ~80 ms each. So after a cold render, quietly pre-render the
+   four orthogonal neighbours: that hides the stall behind the pan or zoom the
+   user is about to make, and turns the next screenful into cache hits.
+
+   Deliberately conservative, because extra load is the thing we are trying to
+   remove: only when the pool has nothing else to do, only four tiles, and
+   rate-limited per window. A cache hit never triggers it, so panning across
+   already-warm ground costs nothing, and a busy pool is always left alone. */
+const WARM_RING_WINDOW_MS=5000;
+const WARM_RING_MAX=12;                 // prefetches started per window
+const warmRingSeen=new Set();           // jobKeys queued or running right now
+let warmRingStarted=0, warmRingSince=0;
+function warmNeighbourTiles(style,z,x,y){
+  if(z<11||z>19) return;                // outside the 1 m layers worth warming
+  const stats=terrainPool.stats();
+  if(stats.active||stats.queued) return; // never compete with a real request
+  const now=Date.now();
+  if(now-warmRingSince>WARM_RING_WINDOW_MS){ warmRingSince=now; warmRingStarted=0 }
+  const limit=Math.pow(2,z);
+  for(const [dx,dy] of [[1,0],[-1,0],[0,1],[0,-1]]){
+    if(warmRingStarted>=WARM_RING_MAX) return;
+    const nx=x+dx, ny=y+dy;
+    if(nx<0||ny<0||nx>=limit||ny>=limit) continue;
+    const nk=key(`${TERRAIN_RENDER_VERSION}:${style}:${z}/${nx}/${ny}`);
+    if(warmRingSeen.has(nk)||cacheGet(nk,TTL_TILE)) continue;
+    warmRingSeen.add(nk); warmRingStarted++;
+    terrainTask(`raw-terrain:${nk}`,"raw-terrain",{style,z,x:nx,y:ny,size:256},{priority:-10,timeoutMs:30000})
+      .then(out=>{ if(out) cachePut(nk,200,"image/png",out.png); else cachePut(nk,204,"image/png",Buffer.alloc(0)) })
+      .catch(()=>{})
+      .finally(()=>warmRingSeen.delete(nk));
+  }
+}
+
 /* Coalesce identical terrain jobs while letting extra viewers cancel their
    own waits. If the final viewer leaves, queued work is discarded but an
    already-running render finishes and is cached instead of killing a warm
@@ -1120,6 +1155,7 @@ const server = http.createServer(async (req,res)=>{
         return send(res,200,"image/png",TRANSPARENT,{"X-Coverage":"none","Cache-Control":"public, max-age=604800, immutable"});
       }
       cachePut(ck,200,"image/png",out.png);
+      warmNeighbourTiles(style,z,x,y);   // hide the next pan's cold start
       return send(res,200,"image/png",out.png,
         {"X-Coverage":String(out.meta.coverage), "X-Ground-Res":String(out.meta.groundRes),
          "X-Sources":out.meta.sources.map(s2=>s2.project+"@"+s2.res+"m").join(","), "X-Cache":"miss",
