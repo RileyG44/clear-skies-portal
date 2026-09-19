@@ -1946,7 +1946,34 @@ L.control.zoom({position:"bottomright"}).addTo(map);
     settleToNativeLevel();
   },{passive:false});
 }
-document.getElementById("map").addEventListener("contextmenu", e=>e.preventDefault());
+/* Right-drag is how the 3D view is orbited (two fingers pressed on a trackpad, or
+   Ctrl-drag), and the browser's own menu used to open the moment that press
+   landed - MapLibre only suppresses it when the map has a contextmenu listener of
+   its own, and the drag handler's suppression is not attached yet at the instant
+   of the press. So: never let the browser menu open over the map, and give a
+   stationary right-click the app's own map menu instead, which is where Copy
+   coordinates and the scene actions already live. A right-click that moves is an
+   orbit and gets no menu. */
+{
+  const mapEl=document.getElementById("map");
+  let press=null;
+  /* The press itself never opens anything: a menu appearing at press time is in
+     the way of the gesture, and in 3D Leaflet's own contextmenu handler fired
+     from the event that MapLibre had not suppressed yet, so it asked for a
+     coordinate from a map that is not on screen. Both are stopped here and the
+     menu is opened on release instead, if the press did not move. */
+  mapEl.addEventListener("contextmenu",event=>{ event.preventDefault(); event.stopPropagation() },{capture:true});
+  mapEl.addEventListener("mousedown",event=>{ if(event.button===2) press={x:event.clientX,y:event.clientY} },{capture:true});
+  mapEl.addEventListener("mouseup",event=>{
+    if(event.button!==2||!press) return;
+    const moved=Math.hypot(event.clientX-press.x,event.clientY-press.y); press=null;
+    if(moved>6) return;                       // a right-drag is a rotate, not a click
+    const rect=mapEl.getBoundingClientRect();
+    const point=[event.clientX-rect.left,event.clientY-rect.top];
+    const ll=map3d?map3d.unproject(point):map.containerPointToLatLng(L.point(point[0],point[1]));
+    map.fire("contextmenu",{latlng:L.latLng(ll.lat,ll.lng),originalEvent:event,containerPoint:L.point(point[0],point[1])});
+  },{capture:true});
+}
 const bearingButton=document.getElementById("bearingReset");
 function activeBearing(){ return document.body.classList.contains("terrain-3d")&&map3d ? map3d.getBearing() : (map.getBearing?.()||0) }
 function syncBearingButton(){
@@ -4770,16 +4797,30 @@ let map3dLoading=null,map3dStyleTimer=null;
    where it matters: in the colour. This also answers MapLibre's warning about
    sharing one source between terrain and a hillshade layer. */
 const DEM_MAX_ZOOM=14;
+/* The engine path renders the same USGS 3DEP service the public path reads and
+   serves it from its own cache, so it can answer fine mesh tiles too. There is no
+   reason for a self-hosted copy to sample the terrain more coarsely than the
+   Pages copy does. */
+const DEM_ENGINE_MAX_ZOOM=17;
+/* How fine the 3D *mesh* is sampled, as opposed to the drape. The public pipeline
+   can serve finer USGS 3DEP elevation than the engine's national mosaic - 1 m
+   where a survey covers the point - and that is what gives close-up terrain its
+   shape rather than its colour. Each level finer is four times the elevation
+   tiles per view and every tile is a five-tile skirt (centre plus four
+   neighbours), so this is the one number that trades 3D detail for requests;
+   17 is where a close-up still resolves the mesh without the request count
+   running away (measured: see the commit that raised it). */
+const DEM_MESH_MAX_ZOOM=17;
 const public3dSources=new Map();
 function public3dSourceText(){
-  if(PROXY)return "Mesh: national USGS 3DEP from the terrain engine, capped at zoom 14. The drape can contain finer elevation or published WA DNR hillshade. Mesh detail and drape detail are different.";
+  if(PROXY)return `Mesh: national USGS 3DEP from the terrain engine, capped at zoom ${DEM_ENGINE_MAX_ZOOM}. The drape can contain finer elevation or published WA DNR hillshade. Mesh detail and drape detail are different.`;
   const bounds=map3d?.getBounds(),ranks=new Set();
   if(bounds)for(const entry of public3dSources.values()){
     const n=2**entry.z,west=entry.x/n*360-180,east=(entry.x+1)/n*360-180;
     const north=Math.atan(Math.sinh(Math.PI*(1-2*entry.y/n)))*180/Math.PI,south=Math.atan(Math.sinh(Math.PI*(1-2*(entry.y+1)/n)))*180/Math.PI;
     if(east>=bounds.getWest()&&west<=bounds.getEast()&&north>=bounds.getSouth()&&south<=bounds.getNorth())ranks.add(entry.rank);
   }
-  return `Loaded 3D elevation tiles overlapping this view: ${ranks.size?[...ranks].sort((a,b)=>b-a).map(rank=>CSPPublicTerrain.SOURCES[rank].label).join(" + "):"waiting for data"}. Mesh sampling is capped at zoom 15; analytical drapes can request finer samples. This is loaded-tile provenance, not a survey coverage percentage.`;
+  return `Loaded 3D elevation tiles overlapping this view: ${ranks.size?[...ranks].sort((a,b)=>b-a).map(rank=>CSPPublicTerrain.SOURCES[rank].label).join(" + "):"waiting for data"}. Mesh sampling is capped at zoom ${DEM_MESH_MAX_ZOOM}; analytical drapes can request finer samples. This is loaded-tile provenance, not a survey coverage percentage.`;
 }
 function terrainDemTiles(){
   return [PROXY?api("/api/elev/national/{z}/{x}/{y}.png"):"cspelevation://dem/{z}/{x}/{y}.png"];
@@ -4831,7 +4872,7 @@ function terrainRasterStyle(){
   const sources={
     basemap:{type:"raster",tiles:[`${ESRI_CANVAS}/World_${theme==="dark"?"Dark":"Light"}_Gray_Base/MapServer/tile/{z}/{y}/{x}`],
       tileSize:256,maxzoom:19,attribution:"Esri, HERE, Garmin, © OpenStreetMap contributors"},
-    dem:{type:"raster-dem",tiles:terrainDemTiles(),tileSize:256,maxzoom:PROXY?DEM_MAX_ZOOM:15,encoding:"terrarium",
+    dem:{type:"raster-dem",tiles:terrainDemTiles(),tileSize:256,maxzoom:PROXY?DEM_ENGINE_MAX_ZOOM:DEM_MESH_MAX_ZOOM,encoding:"terrarium",
       attribution:"USGS 3DEP / AWS overview fallback (see terrain source status)"}
   };
   const layers=[
