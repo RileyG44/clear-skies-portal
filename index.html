@@ -1774,16 +1774,26 @@ L.control.zoom({position:"bottomright"}).addTo(map);
      Settling onto the nearest whole level once the scroll stops keeps the rest
      state exactly as sharp as it was (scale 1, native level) without giving back
      the smooth motion. 0.05 avoids nudging when it is already there. */
-  let settleTimer=null;
+  /* Where a gesture comes to rest has to be a whole level (see above), but the
+     motion between rests should still start from wherever the map actually is,
+     and a nudge smaller than half a level should not simply be swallowed. So the
+     intent of the gesture is carried forward: once a scroll has asked for half a
+     level's worth, the rest commits a level and keeps the remainder. Repeated
+     small nudges therefore add up, while every rest stays on a native level. */
+  let settleTimer=null, carry=0;
   const settleToNativeLevel=()=>{
     const z=map.getZoom(), nearest=Math.round(z);
-    if(Math.abs(z-nearest)>0.05) map.setZoom(nearest,{animate:true,duration:0.2});
+    let target=nearest;
+    if(Math.abs(carry)>=0.5){ target=nearest+Math.sign(carry); carry-=Math.sign(carry); }
+    if(Math.abs(z-target)>0.05) map.setZoom(target,{animate:true,duration:0.2});
   };
   pinchEl.addEventListener("wheel",event=>{
     event.preventDefault();
     const unit=event.deltaMode===1?16:event.deltaMode===2?pinchEl.clientHeight:1;
     const step=-event.deltaY*unit*ZOOM_PER_PIXEL*(event.ctrlKey?0.6:1);
-    if(step) map.setZoom(map.getZoom()+step,{animate:false});
+    if(!step) return;
+    map.setZoom(map.getZoom()+step,{animate:false});
+    carry+=step;
     clearTimeout(settleTimer); settleTimer=setTimeout(settleToNativeLevel,160);
   },{passive:false});
   const pinch={scale:1,zoom:0};
