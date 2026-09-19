@@ -1909,22 +1909,26 @@ L.control.zoom({position:"bottomright"}).addTo(map);
   };
   pinchEl.addEventListener("wheel",event=>{
     event.preventDefault();
-    noteGesture();
     const unit=event.deltaMode===1?16:event.deltaMode===2?pinchEl.clientHeight:1;
     const step=-event.deltaY*unit*ZOOM_PER_PIXEL*(event.ctrlKey?0.6:1);
     if(!step) return;
+    /* intentBase() first: it is what notices an outside jump - leaving 3D hands
+       the view back through map.setView - and rebases `visual` on what is actually
+       on screen. Reading the gesture base before that read left it stale, which
+       made the gesture's travel read as more than a level and swallowed the zoom. */
     intent=intentBase()+step;
+    noteGesture();
     aimAt(intent);
     clearTimeout(settleTimer); settleTimer=setTimeout(settleToNativeLevel,160);
   },{passive:false});
   const pinch={scale:1,zoom:0};
   pinchEl.addEventListener("gesturestart",event=>{
-    event.preventDefault(); noteGesture(); pinch.scale=event.scale||1; pinch.zoom=visual===null?viewZoom():visual;
+    event.preventDefault(); intent=intentBase(); noteGesture();
+    pinch.scale=event.scale||1; pinch.zoom=visual===null?viewZoom():visual;
     /* Seed the accumulator from where the gesture starts. Doing it at the end
        instead counted the gesture's own travel twice: a 1.4x pinch added its
        0.49 level to a `nearest` that already contained it, and landed a whole
        level past the amount that was actually pinched. */
-    intent=intentBase();
   },{passive:false});
   pinchEl.addEventListener("gesturechange",event=>{
     event.preventDefault();
