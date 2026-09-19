@@ -1742,6 +1742,29 @@ const map = L.map("map",{zoomControl:false,doubleClickZoom:false,maxZoom:VIEW_MA
   rotate:true,dragRotate:true,touchRotate:true,touchGestures:true,rotateControl:false,
   shiftKeyRotate:false,preventPageGestures:true}).setView([47.1301,-119.2781], 9);
 L.control.zoom({position:"bottomright"}).addTo(map);
+/* Trackpad pinch-to-zoom on macOS, which reaches us in two different shapes and
+   was doing neither before: Safari fires gesture* events (nothing handled them, so
+   the page zoomed and the map sat still), while Chrome and Edge deliver a wheel
+   event with ctrlKey set (Leaflet zooms on it, but nothing stopped the browser
+   from page-zooming the whole UI at the same time).
+
+   preventDefault is what suppresses the browser gesture. It deliberately does NOT
+   stopPropagation, so Leaflet still sees the ctrl+wheel and performs the zoom
+   itself - suppressing the event outright would break wheel zoom on the map. */
+{
+  const pinchEl=document.getElementById("map");
+  pinchEl.addEventListener("wheel",event=>{ if(event.ctrlKey) event.preventDefault() },{passive:false});
+  const pinch={scale:1,zoom:0};
+  pinchEl.addEventListener("gesturestart",event=>{
+    event.preventDefault(); pinch.scale=event.scale||1; pinch.zoom=map.getZoom();
+  },{passive:false});
+  pinchEl.addEventListener("gesturechange",event=>{
+    event.preventDefault();
+    const step=Math.log2((event.scale||1)/pinch.scale);
+    if(step) map.setZoom(pinch.zoom+step,{animate:false});
+  },{passive:false});
+  pinchEl.addEventListener("gestureend",event=>{ event.preventDefault() },{passive:false});
+}
 document.getElementById("map").addEventListener("contextmenu", e=>e.preventDefault());
 const bearingButton=document.getElementById("bearingReset");
 function activeBearing(){ return document.body.classList.contains("terrain-3d")&&map3d ? map3d.getBearing() : (map.getBearing?.()||0) }
