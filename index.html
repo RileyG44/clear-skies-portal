@@ -1767,11 +1767,24 @@ L.control.zoom({position:"bottomright"}).addTo(map);
      pinch: macOS sends that as ctrl+wheel, with a finer factor because a pinch
      produces many small deltas. */
   const ZOOM_PER_PIXEL=1/420;              // pixels of scroll per zoom level
+  /* Motion during the gesture is continuous; where it comes to rest is not.
+     Leaflet picks the tile level as round(zoom), so resting between levels -
+     and a smooth zoom now rests almost anywhere - leaves tiles upscaled by up
+     to 1.41x, which is visibly softer than the whole-level zooming it replaced.
+     Settling onto the nearest whole level once the scroll stops keeps the rest
+     state exactly as sharp as it was (scale 1, native level) without giving back
+     the smooth motion. 0.05 avoids nudging when it is already there. */
+  let settleTimer=null;
+  const settleToNativeLevel=()=>{
+    const z=map.getZoom(), nearest=Math.round(z);
+    if(Math.abs(z-nearest)>0.05) map.setZoom(nearest,{animate:true,duration:0.2});
+  };
   pinchEl.addEventListener("wheel",event=>{
     event.preventDefault();
     const unit=event.deltaMode===1?16:event.deltaMode===2?pinchEl.clientHeight:1;
     const step=-event.deltaY*unit*ZOOM_PER_PIXEL*(event.ctrlKey?0.6:1);
     if(step) map.setZoom(map.getZoom()+step,{animate:false});
+    clearTimeout(settleTimer); settleTimer=setTimeout(settleToNativeLevel,160);
   },{passive:false});
   const pinch={scale:1,zoom:0};
   pinchEl.addEventListener("gesturestart",event=>{
