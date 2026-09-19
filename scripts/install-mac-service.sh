@@ -53,9 +53,23 @@ install -m 700 "$SCRIPT_DIR/launch-terrain-engine.sh" "$RUNTIME_DIR/launch-terra
 # into the launch-agent-safe cache outside the privacy-protected Documents tree.
 LEGACY_CACHE="$HOME/Documents/clear-skies-portal/.cache"
 if [[ -d "$LEGACY_CACHE" && ! -e "$CACHE_DIR/.legacy-imported" ]]; then
-  # A warm cache can contain thousands of range chunks. It must not hold up
-  # recovery; the engine can read whatever has arrived while the copy continues.
-  (rsync -a --ignore-existing "$LEGACY_CACHE/" "$CACHE_DIR/" && touch "$CACHE_DIR/.legacy-imported") &!
+  # A warm cache can contain thousands of range chunks (measured: 1.8 GB in this
+  # checkout). It must not hold up recovery; the engine can read whatever has
+  # arrived while the copy continues.
+  #
+  # `&!` alone is not enough. It disowns the job, but the child still inherits
+  # this shell's stdout, so anything that captures our output blocks until the
+  # copy finishes - `install-mac-service.sh | tee log`, `$(...)`, or CI would
+  # hang for as long as 1.8 GB takes, which is the opposite of the intent above.
+  # Detach the child's stdio completely and record its outcome in a log instead.
+  (
+    if rsync -a --ignore-existing "$LEGACY_CACHE/" "$CACHE_DIR/"; then
+      touch "$CACHE_DIR/.legacy-imported"
+      print -r -- "legacy cache imported $(date +%FT%T)"
+    else
+      print -r -- "legacy cache import failed $(date +%FT%T) (recovery is unaffected; the engine rebuilds what it needs)"
+    fi
+  ) </dev/null >>"$LOG_DIR/legacy-import.log" 2>&1 &!
 fi
 
 install -m 600 "$SCRIPT_DIR/com.rileyg44.clear-skies-portal.plist" "$AGENT_FILE"
