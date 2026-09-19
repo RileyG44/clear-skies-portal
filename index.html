@@ -1785,14 +1785,20 @@ L.control.zoom({position:"bottomright"}).addTo(map);
      cannot overshoot - which an earlier carry-the-remainder version did. */
   let settleTimer=null, intent=null;
   const intentFrom=(z)=>(intent===null||Math.abs(intent-z)>0.6)?z:intent;   // self-heal after a button/flyTo jump
-  /* 3D terrain puts a MapLibre camera on screen and hides the Leaflet panes.
-     Wheel zoom there belongs to MapLibre (it answers the ctrl+wheel that Chrome
-     and Edge send for a pinch, and it does so smoothly), so the wheel path below
-     deliberately steps out of the way - but MapLibre has no Safari gesture
-     support at all, and the gesture path was writing to the hidden Leaflet map.
-     A pinch in 3D therefore moved nothing on screen while still swallowing the
-     browser's page zoom, i.e. it did nothing. The gesture path asks which camera
-     is on screen instead; MapLibre's zoom is world-equivalent to Leaflet's. */
+  /* 3D terrain puts a MapLibre camera on screen and hides the Leaflet panes, so
+     every path here has to move whichever camera is on screen. Two reasons.
+
+     The gesture path had no choice: MapLibre does not handle Safari's gesture
+     events at all, and with this writing to the hidden Leaflet map a pinch in 3D
+     moved nothing on screen while still swallowing the browser's page zoom, i.e.
+     it did nothing.
+
+     The wheel path is here for sharpness. MapLibre's own scroll zoom eases to a
+     fractional zoom and stops there, which rests the raster tiles up to 1.41x
+     upscaled - the soft case the settle below exists to avoid, and the one place
+     the 3D view was still softer at rest than the 2D map. MapLibre's scrollZoom is
+     therefore off (see enterTerrain3d) and this handler owns the wheel in both
+     views, so the two can never both answer the same event either. */
   const viewZoom=()=>map3d?map3d.getZoom():map.getZoom();
   const viewZoomTo=(z,animate)=>{
     if(map3d){ if(animate) map3d.easeTo({zoom:z,duration:200}); else map3d.setZoom(z); return }
@@ -1806,12 +1812,11 @@ L.control.zoom({position:"bottomright"}).addTo(map);
   };
   pinchEl.addEventListener("wheel",event=>{
     event.preventDefault();
-    if(map3d) return;                       // MapLibre zooms itself; do not move the hidden map
     const unit=event.deltaMode===1?16:event.deltaMode===2?pinchEl.clientHeight:1;
     const step=-event.deltaY*unit*ZOOM_PER_PIXEL*(event.ctrlKey?0.6:1);
     if(!step) return;
-    intent=intentFrom(map.getZoom())+step;
-    map.setZoom(intent,{animate:false});
+    intent=intentFrom(viewZoom())+step;
+    viewZoomTo(intent,false);
     clearTimeout(settleTimer); settleTimer=setTimeout(settleToNativeLevel,160);
   },{passive:false});
   const pinch={scale:1,zoom:0};
@@ -4839,7 +4844,10 @@ async function enterTerrain3d(){
     await installMaplibreProtocols(module);
     const center=map.getCenter(),bearing=map.getBearing?.()||0;
     map3d=new module.Map({container:"map3d",style:terrainRasterStyle(),center:[center.lng,center.lat],zoom:map.getZoom(),bearing,pitch:58,
-      maxZoom:22,maxPitch:85,renderWorldCopies:false,canvasContextAttributes:{antialias:true,powerPreference:"high-performance"},
+      /* scrollZoom is off so one handler owns the wheel in either view, with the
+         settle that keeps the 3D rest state on a native level instead of the
+         1.41x upscale MapLibre's own easing would leave it on. */
+      maxZoom:22,maxPitch:85,renderWorldCopies:false,scrollZoom:false,canvasContextAttributes:{antialias:true,powerPreference:"high-performance"},
       attributionControl:true,fadeDuration:0});
     map3d.on("rotate",syncBearingButton);map3d.on("pitch",syncBearingButton);
     map3d.on("moveend",scheduleTerrainStatus);map3d.on("idle",scheduleTerrainStatus);

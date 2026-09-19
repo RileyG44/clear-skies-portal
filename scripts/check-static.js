@@ -273,9 +273,11 @@ assert(index.includes('rotate:true,dragRotate:true,touchRotate:true')&&index.inc
 assert(index.includes('zoomSnap:0,scrollWheelZoom:false')&&index.includes('pinchEl.addEventListener("gesturestart"')&&
        index.includes('scrollWheelZoom is off because Leaflet'),
        "trackpad pinch must zoom the map continuously instead of stepping whole levels or page-zooming");
-assert(index.includes('const intentFrom=')&&index.includes('if(map3d) return;')&&
+assert(index.includes('const intentFrom=')&&index.includes('const viewZoom=')&&
        index.includes('intent=intentFrom(pinch.zoom)+((viewZoom())-pinch.zoom)'),
        "a pinch must settle onto a native level, counting its travel once, and must drive the 3D camera when 3D is on screen");
+assert(index.includes('scrollZoom:false')&&index.includes('viewZoomTo(intent,false)'),
+       "one handler must own the wheel in both views, so 3D rests on a native level like 2D instead of an eased fractional zoom");
 assert(index.includes('id="map3d"')&&index.includes('import("./vendor/maplibre-gl.mjs")')&&
        index.includes('terrain:{source:"dem",exaggeration:light.exaggeration}'),
        "3D lidar terrain must lazy-load MapLibre and use the elevation DEM as a mesh");
