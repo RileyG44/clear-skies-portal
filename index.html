@@ -1789,7 +1789,7 @@ L.control.zoom({position:"bottomright"}).addTo(map);
      rest lands on round(intent) - two quarter-level nudges commit one level, and
      because the target is the rounded intent rather than "the nearest level plus
      one", a large gesture cannot overshoot either. */
-  let settleTimer=null, intent=null, aim=null, zoomFrame=null, committed=null, visual=null, settleCommit=false;
+  let settleTimer=null, intent=null, aim=null, zoomFrame=null, committed=null, visual=null, settleCommit=false, gestureStart=null;
   const viewClamp=(z)=>map3d?Math.max(map3d.getMinZoom(),Math.min(map3d.getMaxZoom(),z))
                             :Math.max(map.getMinZoom(),Math.min(map.getMaxZoom(),z));
   /* Motion, not steps - and painted, not committed.
@@ -1862,6 +1862,10 @@ L.control.zoom({position:"bottomright"}).addTo(map);
     if(intent===null) intent=visual===null?viewZoom():visual;
     return intent;
   };
+  /* Where the gesture in progress began, so the settle can tell a small ask from
+     a long scroll. Only re-read while nothing is easing: mid-gesture this is the
+     same value on purpose. */
+  const noteGesture=()=>{ if(gestureStart===null||zoomFrame===null) gestureStart=visual===null?viewZoom():visual };
   /* 3D terrain puts a MapLibre camera on screen and hides the Leaflet panes, so
      every path here has to move whichever camera is on screen. Two reasons.
 
@@ -1879,14 +1883,33 @@ L.control.zoom({position:"bottomright"}).addTo(map);
   const viewZoom=()=>map3d?map3d.getZoom():map.getZoom();
   const settleToNativeLevel=()=>{
     intent=intentBase();
+    /* A small zoom should move the view the way it was asked and stay there.
+       Rounding to the nearest level instead sent it back whenever the request
+       landed in the lower half of a level - the bounce that read as the map
+       fighting the gesture. So a gesture that stays within one level commits one,
+       in the direction it was asked for; a longer one still rounds to nearest, so
+       a long scroll lands where it stopped rather than a level past it. Under
+       0.12 of a level is trackpad debris and is still ignored. */
+    const travel=intent-(gestureStart===null?intent:gestureStart);
+    const target=Math.abs(travel)>=0.12&&Math.abs(travel)<0.5
+      ? Math.round(gestureStart)+Math.sign(travel)
+      : Math.round(intent);
+    /* The accumulator restarts from where the view is left. Keeping the fraction
+       that this commit just rounded away made the *next* gesture's travel read as
+       backwards - a second small zoom in committed a level out, which is the map
+       "bouncing right back" this fixes. With small gestures committing on their
+       own there is nothing left for a remainder to accumulate toward. */
+    intent=target;
     /* The settle is the one time the zoom is committed even if the tile level
        happens to match: it also brings the camera itself onto the level, so
        everything that reads the map's zoom sees the resting value. */
     settleCommit=true;
-    aimAt(Math.round(intent));
+    gestureStart=null;
+    aimAt(target);
   };
   pinchEl.addEventListener("wheel",event=>{
     event.preventDefault();
+    noteGesture();
     const unit=event.deltaMode===1?16:event.deltaMode===2?pinchEl.clientHeight:1;
     const step=-event.deltaY*unit*ZOOM_PER_PIXEL*(event.ctrlKey?0.6:1);
     if(!step) return;
@@ -1896,7 +1919,7 @@ L.control.zoom({position:"bottomright"}).addTo(map);
   },{passive:false});
   const pinch={scale:1,zoom:0};
   pinchEl.addEventListener("gesturestart",event=>{
-    event.preventDefault(); pinch.scale=event.scale||1; pinch.zoom=visual===null?viewZoom():visual;
+    event.preventDefault(); noteGesture(); pinch.scale=event.scale||1; pinch.zoom=visual===null?viewZoom():visual;
     /* Seed the accumulator from where the gesture starts. Doing it at the end
        instead counted the gesture's own travel twice: a 1.4x pinch added its
        0.49 level to a `nearest` that already contained it, and landed a whole
@@ -4757,8 +4780,47 @@ function public3dSourceText(){
 function terrainDemTiles(){
   return [PROXY?api("/api/elev/national/{z}/{x}/{y}.png"):"cspelevation://dem/{z}/{x}/{y}.png"];
 }
+function terrainTheme(){ return $("#map").dataset.basemapTheme==="dark"?"dark":"light" }
+/* A physical-relief tint, taken straight from the elevation the mesh is built
+   from: green low, tan in the middle, rock and snow high. Deliberately subtle -
+   the shading carries the shape, this only stops the ground reading as flat
+   white paper when a hillshade is the only thing draped on it. */
+function hypsometricRamp(){
+  /* Muted toward grey: this is a depth cue over the ground texture, not a paint
+     job. At full saturation it swallowed the basemap's streets and labels at close
+     zoom, where flat ground has no relief to explain the colour. */
+  return ["interpolate",["linear"],["elevation"],
+    0,"#5f7a6c",250,"#7d8f74",500,"#9aa67f",900,"#b3ab8c",
+    1400,"#bda98a",1900,"#b2957c",2500,"#9d8b7c",3000,"#ada49e",3600,"#e6e4e1"];
+}
+/* Sky and atmosphere for the 3D view.
+
+   The 3D view had no sky at all - terrain ended in a flat background colour,
+   which is most of why it read as a sheet rather than a landscape. A sky layer
+   gives it a horizon, and fog-ground-blend gives it aerial perspective: distant
+   ground fades toward the horizon colour the way it does in a photograph, which
+   is the strongest depth cue a 3D map can carry. The palette follows the sun that
+   is already driving the shading, so moving the sun moves the whole scene rather
+   than just the shadows. */
+function terrainSky(theme,light){
+  const lerp=(a,b,t)=>a.map((v,i)=>Math.round(v+(b[i]-v)*t));
+  const rgb=(c)=>`rgb(${c[0]},${c[1]},${c[2]})`;
+  const day ={sky:[63,127,196],horizon:[207,224,238],fog:[195,211,223]};
+  const gold={sky:[74,111,165],horizon:[232,195,154],fog:[205,181,155]};
+  const dusk={sky:[34,45,70],  horizon:[214,152,104],fog:[186,143,116]};
+  const night={sky:[14,21,36], horizon:[46,58,77],  fog:[38,48,63]};
+  const t=Math.max(0,Math.min(1,(light.altitude-8)/47));      // 8deg low sun .. 55deg high
+  const low=light.altitude<12?dusk:gold;
+  let sky=lerp(low.sky,day.sky,t), horizon=lerp(low.horizon,day.horizon,t), fog=lerp(low.fog,day.fog,t);
+  if(theme==="dark"){                                          // never a bright sky over the dark basemap
+    sky=lerp(sky,night.sky,.78); horizon=lerp(horizon,night.horizon,.82); fog=lerp(fog,night.fog,.82);
+  }
+  return {
+    "sky-color":rgb(sky),"horizon-color":rgb(horizon),"fog-color":rgb(fog),
+    "sky-horizon-blend":.55,"horizon-fog-blend":.3,"fog-ground-blend":.9,"atmosphere-blend":.6};
+}
 function terrainRasterStyle(){
-  const theme=$("#map").dataset.basemapTheme==="dark"?"dark":"light",style=$("#terStyle").value==="off"?"hs":$("#terStyle").value;
+  const theme=terrainTheme(),style=$("#terStyle").value==="off"?"hs":$("#terStyle").value;
   const light=terrainLighting(),opacity=terrainOpacity()/100,pick=chooseTerrain(style);
   const directions=style==="hsmulti"?[light.azimuth,(light.azimuth+90)%360,(light.azimuth+180)%360,(light.azimuth+270)%360]:light.azimuth;
   const altitudes=style==="hsmulti"?[light.altitude,light.altitude,light.altitude,light.altitude]:light.altitude;
@@ -4770,14 +4832,24 @@ function terrainRasterStyle(){
   };
   const layers=[
     {id:"background",type:"background",paint:{"background-color":theme==="dark"?"#111416":"#dbe6eb"}},
-    {id:"basemap",type:"raster",source:"basemap",paint:{"raster-fade-duration":0}}
+    /* The reference basemap is drawn on the terrain as its ground texture. At full
+       strength its roads and labels read as a flat map lying on the landscape; at
+       half strength the relief and the sky carry the depth instead. */
+    {id:"basemap",type:"raster",source:"basemap",paint:{"raster-fade-duration":0,"raster-opacity":.5}}
   ];
+  /* Elevation tint under the shading, for every case where the ground would
+     otherwise be bare hillshade or a published drape. */
+  if(style==="hs"||style==="hsmulti"||pick.src==="wadnr") layers.push({id:"terrain-relief",type:"color-relief",source:"dem",
+    paint:{"color-relief-color":hypsometricRamp(),"color-relief-opacity":theme==="dark"?.32:.4}});
   if(style==="hs"||style==="hsmulti") layers.push({id:"terrain-hillshade",type:"hillshade",source:"dem",paint:{
     "hillshade-method":style==="hsmulti"?"multidirectional":"standard",
     "hillshade-illumination-direction":directions,"hillshade-illumination-altitude":altitudes,
-    "hillshade-illumination-anchor":"map","hillshade-exaggeration":Math.max(.05,Math.min(1,opacity)),
-    "hillshade-shadow-color":`rgba(0,0,0,${Math.max(.2,1-light.ambient).toFixed(2)})`,
-    "hillshade-highlight-color":`rgba(255,255,255,${Math.max(.3,opacity).toFixed(2)})`,"hillshade-accent-color":"#37424b"
+    "hillshade-illumination-anchor":"map","hillshade-exaggeration":Math.max(.05,Math.min(1,opacity*1.15)),
+    /* Cool shadow, warm highlight: closer to how sunlight on ground actually
+       reads than black and white, and it stops the lit slopes blowing out. */
+    "hillshade-shadow-color":`rgba(22,28,36,${Math.max(.2,1-light.ambient).toFixed(2)})`,
+    "hillshade-highlight-color":`rgba(255,247,235,${Math.max(.3,Math.min(1,opacity*1.1)).toFixed(2)})`,
+    "hillshade-accent-color":"#5f6d79"
   }});
   else{
     sources.analysis={type:"raster",tiles:[`cspterrain://${style}/{z}/{x}/{y}.png?r=${++map3dStyleRevision}`],tileSize:256,maxzoom:18};
@@ -4788,7 +4860,9 @@ function terrainRasterStyle(){
       attribution:"WA DNR LiDAR"};
     layers.push({id:"wadnr-drape",type:"raster",source:"wadnr",paint:{"raster-opacity":opacity,"raster-fade-duration":0}});
   }
-  return {version:8,sources,layers,terrain:{source:"dem",exaggeration:light.exaggeration}};
+  /* `sky` is a style-level object in MapLibre, not a layer - a "sky" layer type is
+     rejected by the style validator and takes the whole style down with it. */
+  return {version:8,sources,layers,sky:terrainSky(theme,light),terrain:{source:"dem",exaggeration:light.exaggeration}};
 }
 async function imageBitmapFromBlob(blob){
   if(typeof createImageBitmap==="function") return createImageBitmap(blob);
@@ -5001,21 +5075,29 @@ function refresh3dStyle(){
    styles need new tiles, because their colour is baked into the raster. */
 function analyticalStyle(){ const v=$("#terStyle").value; return v!=="off"&&v!=="hs"&&v!=="hsmulti" }
 
+/* Sun, relief and sky are all paint state, so a slider drag repaints them in
+   place; only the analytical styles need new tiles, because their colour is baked
+   into the raster. Both callers below share these so the live path and the
+   freshly-built style can never drift apart. */
+function paint3dSky(light){ map3d?.setSky?.(terrainSky(terrainTheme(),light)) }
+function paint3dHillshade(light,opacity,style){
+  if(!map3d?.getLayer("terrain-hillshade")) return;
+  const multi=style==="hsmulti";
+  map3d.setPaintProperty("terrain-hillshade","hillshade-illumination-direction",
+    multi?[light.azimuth,(light.azimuth+90)%360,(light.azimuth+180)%360,(light.azimuth+270)%360]:light.azimuth);
+  map3d.setPaintProperty("terrain-hillshade","hillshade-illumination-altitude",
+    multi?[light.altitude,light.altitude,light.altitude,light.altitude]:light.altitude);
+  map3d.setPaintProperty("terrain-hillshade","hillshade-exaggeration",Math.max(.05,Math.min(1,opacity*1.15)));
+  map3d.setPaintProperty("terrain-hillshade","hillshade-shadow-color",`rgba(22,28,36,${Math.max(.2,1-light.ambient).toFixed(2)})`);
+  map3d.setPaintProperty("terrain-hillshade","hillshade-highlight-color",`rgba(255,247,235,${Math.max(.3,Math.min(1,opacity*1.1)).toFixed(2)})`);
+}
 function apply3dLighting(){
   if(!map3d||!map3d.isStyleLoaded?.()) return false;
   const light=terrainLighting(),opacity=terrainOpacity()/100,style=$("#terStyle").value;
   try{
     map3d.setTerrain({source:"dem",exaggeration:light.exaggeration});
-    if(map3d.getLayer("terrain-hillshade")){
-      const multi=style==="hsmulti";
-      const dirs=multi?[light.azimuth,(light.azimuth+90)%360,(light.azimuth+180)%360,(light.azimuth+270)%360]:light.azimuth;
-      const alts=multi?[light.altitude,light.altitude,light.altitude,light.altitude]:light.altitude;
-      map3d.setPaintProperty("terrain-hillshade","hillshade-illumination-direction",dirs);
-      map3d.setPaintProperty("terrain-hillshade","hillshade-illumination-altitude",alts);
-      map3d.setPaintProperty("terrain-hillshade","hillshade-exaggeration",Math.max(.05,Math.min(1,opacity)));
-      map3d.setPaintProperty("terrain-hillshade","hillshade-shadow-color",`rgba(0,0,0,${Math.max(.2,1-light.ambient).toFixed(2)})`);
-      map3d.setPaintProperty("terrain-hillshade","hillshade-highlight-color",`rgba(255,255,255,${Math.max(.3,opacity).toFixed(2)})`);
-    }
+    paint3dHillshade(light,opacity,style);
+    paint3dSky(light);
     if(map3d.getLayer("terrain-analysis")) map3d.setPaintProperty("terrain-analysis","raster-opacity",opacity);
     if(map3d.getLayer("wadnr-drape")) map3d.setPaintProperty("wadnr-drape","raster-opacity",opacity);
     return !analyticalStyle();          // analytical colour is baked into the tile
@@ -7946,10 +8028,8 @@ function paintTerrainLightingFrame(){
   for(const layer of [terBase,terLayer]) if(layer?._store)
     layer._store.forEach(tile=>layer._paint(tile.cv,tile.elev,tile.coords));
   if(map3d?.getLayer("terrain-hillshade")){
-    const multi=$("#terStyle").value==="hsmulti";
-    map3d.setPaintProperty("terrain-hillshade","hillshade-illumination-direction",multi?[light.azimuth,(light.azimuth+90)%360,(light.azimuth+180)%360,(light.azimuth+270)%360]:light.azimuth);
-    map3d.setPaintProperty("terrain-hillshade","hillshade-illumination-altitude",multi?[light.altitude,light.altitude,light.altitude,light.altitude]:light.altitude);
-    map3d.setPaintProperty("terrain-hillshade","hillshade-shadow-color",`rgba(0,0,0,${Math.max(.2,1-light.ambient).toFixed(2)})`);
+    paint3dHillshade(light,terrainOpacity()/100,$("#terStyle").value);
+    paint3dSky(light);
     map3d.setTerrain({source:"dem",exaggeration:light.exaggeration});
   }else schedule3dStyle();
   saveTerrainPrefs();

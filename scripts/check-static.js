@@ -276,8 +276,12 @@ assert(index.includes('zoomSnap:0,scrollWheelZoom:false')&&index.includes('pinch
 assert(index.includes('const intentBase=')&&index.includes('const viewZoom=')&&
        index.includes('intent=intentBase()+((visual===null?pinch.zoom:visual)-pinch.zoom)'),
        "a pinch must settle onto a native level, counting its travel once, and must drive the 3D camera when 3D is on screen");
-assert(index.includes('scrollZoom:false')&&index.includes('const ZOOM_EASE=')&&index.includes('aimAt(Math.round(intent))'),
+assert(index.includes('scrollZoom:false')&&index.includes('const ZOOM_EASE=')&&index.includes('aimAt(target)'),
        "one handler must own the wheel in both views, and zoom must ease towards its aim rather than step in one event");
+assert(index.includes('Math.round(gestureStart)+Math.sign(travel)'),
+       "a small zoom must commit in the direction it was asked for instead of bouncing back to the level it started from");
+assert(index.includes('terrainSky(theme,light)')&&index.includes('hypsometricRamp()'),
+       "the 3D view must carry a sky and an elevation relief tint, not a bare hillshade on a flat background");
 assert(index.includes('_setZoomTransforms(center,z)')&&index.includes('L.GridLayer.prototype._invalidateAll'),
        "zoom motion must scale the existing tiles instead of re-creating them every frame, and hold the outgoing level while a new one loads");
 assert(index.includes('id="map3d"')&&index.includes('import("./vendor/maplibre-gl.mjs")')&&
