@@ -1767,24 +1767,68 @@ L.control.zoom({position:"bottomright"}).addTo(map);
      pinch: macOS sends that as ctrl+wheel, with a finer factor because a pinch
      produces many small deltas. */
   const ZOOM_PER_PIXEL=1/420;              // pixels of scroll per zoom level
-  /* Motion during the gesture is continuous; where it comes to rest is not.
-     Leaflet picks the tile level as round(zoom), so resting between levels -
-     and a smooth zoom now rests almost anywhere - leaves tiles upscaled by up
-     to 1.41x, which is visibly softer than the whole-level zooming it replaced.
-     Settling onto the nearest whole level once the scroll stops keeps the rest
-     state exactly as sharp as it was (scale 1, native level) without giving back
-     the smooth motion. 0.05 avoids nudging when it is already there. */
-  /* Where a gesture comes to rest has to be a whole level (see above), but the
-     motion between rests should still start from wherever the map actually is,
-     and a nudge smaller than half a level should not simply be swallowed.
+  /* Motion during a gesture is continuous; where it comes to rest is not.
+     Leaflet picks the tile level as round(zoom), so resting between levels - and
+     a smooth zoom rests almost anywhere - leaves tiles upscaled by up to 1.41x,
+     which is visibly softer than the whole-level zooming it replaced. 160 ms
+     after the last event the view settles onto the nearest whole level, which is
+     the one scale where Leaflet draws the tiles natively at 1.000.
 
-     So the gesture's intent is tracked separately from the rendered zoom: small
-     nudges accumulate in `intent` and the rest lands on round(intent). That is
-     what makes two quarter-level nudges commit a level, and because the target is
-     the rounded intent rather than "the nearest level plus one", a large gesture
-     cannot overshoot - which an earlier carry-the-remainder version did. */
-  let settleTimer=null, intent=null;
-  const intentFrom=(z)=>(intent===null||Math.abs(intent-z)>0.6)?z:intent;   // self-heal after a button/flyTo jump
+     What the gesture asked for is tracked separately, in `intent`, rather than
+     being read back off the camera: a gesture that asks for less than half a level
+     is undone by that settle, and reading the camera would forget it, so repeated
+     small nudges could never add up to anything. `intent` accumulates them and the
+     rest lands on round(intent) - two quarter-level nudges commit one level, and
+     because the target is the rounded intent rather than "the nearest level plus
+     one", a large gesture cannot overshoot either. */
+  let settleTimer=null, intent=null, aim=null, zoomFrame=null, commanded=null;
+  const viewClamp=(z)=>map3d?Math.max(map3d.getMinZoom(),Math.min(map3d.getMaxZoom(),z))
+                            :Math.max(map.getMinZoom(),Math.min(map.getMaxZoom(),z));
+  /* Motion, not steps. A wheel notch or a pinch delta arrives as a single event,
+     and applying it in that one event is the discrete jump this whole change set
+     exists to remove. It is also what made the settle look like a snap: the
+     accumulator holds a fractional intent while the camera rests on a whole
+     level, so the next gesture used to move the camera by up to half a level
+     inside one frame to catch up with it. Measured across three small flicks:
+     0.238, then 0.476, then 0.714 of a level, i.e. a 64% jump in image scale.
+
+     Easing the camera towards the aim turns both into motion - the same journey
+     at 60 fps. 0.3 of the remaining distance per frame arrives in about 120 ms,
+     quick enough to stay attached to the fingers and slow enough to read as an
+     animation rather than a step. The loop stops the moment it arrives, and
+     stands down if anything else moves the camera (a zoom button, a flyTo, a
+     search) instead of fighting it. */
+  const ZOOM_EASE=0.3;
+  const zoomStep=()=>{
+    zoomFrame=null;
+    const z=viewZoom();
+    /* Someone else moved the camera while this was easing - a zoom button, a
+       flyTo, a search. That wins: stop chasing, and forget the aim so the next
+       gesture starts from what is actually on screen. */
+    if(commanded!==null&&Math.abs(z-commanded)>0.01){ commanded=null; aim=null; intent=null; return }
+    const step=(aim===null?z:aim)-z;
+    if(Math.abs(step)<0.002){ commanded=null; return }
+    commanded=z+step*ZOOM_EASE;
+    viewZoomTo(commanded);
+    zoomFrame=requestAnimationFrame(zoomStep);
+  };
+  const aimAt=(target)=>{
+    aim=viewClamp(target); commanded=null;
+    if(zoomFrame===null) zoomFrame=requestAnimationFrame(zoomStep);
+  };
+  /* What the next input continues from. While the ease is in flight the camera
+     deliberately trails the aim, so a camera reading is no longer a way to tell
+     whether anything happened to the view: the running loop is. Only when the
+     loop is idle and the camera is not where it was left (a zoom button, a
+     flyTo, a search) is the accumulated intent rebased onto what is on screen -
+     and that reading is what an earlier 0.6-of-a-level camera comparison was
+     standing in for, which quietly dropped accumulated intent once the camera
+     started trailing the aim. */
+  const intentBase=()=>{
+    const z=viewZoom();
+    if(zoomFrame===null&&aim!==null&&Math.abs(z-aim)>0.01){ aim=null; intent=null }
+    return intent===null?z:intent;
+  };
   /* 3D terrain puts a MapLibre camera on screen and hides the Leaflet panes, so
      every path here has to move whichever camera is on screen. Two reasons.
 
@@ -1800,23 +1844,20 @@ L.control.zoom({position:"bottomright"}).addTo(map);
      therefore off (see enterTerrain3d) and this handler owns the wheel in both
      views, so the two can never both answer the same event either. */
   const viewZoom=()=>map3d?map3d.getZoom():map.getZoom();
-  const viewZoomTo=(z,animate)=>{
-    if(map3d){ if(animate) map3d.easeTo({zoom:z,duration:200}); else map3d.setZoom(z); return }
-    map.setZoom(z,animate?{animate:true,duration:0.2}:{animate:false});
-  };
+  /* Always a jump-to: the easing above is the animation, one frame at a time, so
+     Leaflet's own transition would only fight it. */
+  const viewZoomTo=(z)=>{ if(map3d) map3d.setZoom(z); else map.setZoom(z,{animate:false}) };
   const settleToNativeLevel=()=>{
-    const z=viewZoom();
-    intent=intentFrom(z);
-    const target=Math.round(intent);
-    if(Math.abs(z-target)>0.05) viewZoomTo(target,true);
+    intent=intentBase();
+    aimAt(Math.round(intent));
   };
   pinchEl.addEventListener("wheel",event=>{
     event.preventDefault();
     const unit=event.deltaMode===1?16:event.deltaMode===2?pinchEl.clientHeight:1;
     const step=-event.deltaY*unit*ZOOM_PER_PIXEL*(event.ctrlKey?0.6:1);
     if(!step) return;
-    intent=intentFrom(viewZoom())+step;
-    viewZoomTo(intent,false);
+    intent=intentBase()+step;
+    aimAt(intent);
     clearTimeout(settleTimer); settleTimer=setTimeout(settleToNativeLevel,160);
   },{passive:false});
   const pinch={scale:1,zoom:0};
@@ -1826,12 +1867,12 @@ L.control.zoom({position:"bottomright"}).addTo(map);
        instead counted the gesture's own travel twice: a 1.4x pinch added its
        0.49 level to a `nearest` that already contained it, and landed a whole
        level past the amount that was actually pinched. */
-    intent=intentFrom(pinch.zoom);
+    intent=intentBase();
   },{passive:false});
   pinchEl.addEventListener("gesturechange",event=>{
     event.preventDefault();
     const step=Math.log2((event.scale||1)/pinch.scale);
-    if(step) viewZoomTo(pinch.zoom+step,false);
+    if(step) aimAt(pinch.zoom+step);
   },{passive:false});
   pinchEl.addEventListener("gestureend",event=>{
     event.preventDefault();
@@ -1840,7 +1881,7 @@ L.control.zoom({position:"bottomright"}).addTo(map);
        the upscaled-and-soft case the settle exists to avoid. The gesture's travel
        is added to the intent seeded at gesturestart, so small pinches accumulate
        into a committed level without a large one overshooting. */
-    intent=intentFrom(pinch.zoom)+((viewZoom())-pinch.zoom);
+    intent=intentBase()+((aim===null?viewZoom():aim)-pinch.zoom);
     settleToNativeLevel();
   },{passive:false});
 }
