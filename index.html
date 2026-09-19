@@ -134,7 +134,15 @@ body.terrain-3d #map>.leaflet-pane,body.terrain-3d #map>.leaflet-control-contain
 .map-tool.active{color:var(--accent-ink);background:oklch(34% .035 253/.9)}
 #bearingReset svg{transition:transform .14s linear}
 .leaflet-container img.leaflet-tile{mix-blend-mode:normal}
-.leaflet-container:not(.leaflet-pan-anim):not(.leaflet-zoom-anim) .leaflet-tile{transition:opacity .16s linear}
+/* Tiles used to fade in here whenever the map was not panning or animating a
+   zoom, and a fade is the wrong shape for this map: a newly created tile is
+   transparent until its image decodes, so fading it in from zero means fading it
+   in from the background - black on the dark theme - rather than from the imagery
+   that was already on screen. Measured: on the deployed site, 128 of 233 frames
+   of a small zoom had every loaded tile under 0.05 opacity. Tiles now appear the
+   moment they decode; ui-system.css keeps the one fade that is safe, which only
+   applies while the previous tile level is being held underneath (see the level
+   hold further down this file). */
 /* Apple uses the arrow to select ordinary content and the closed hand only
    while a map is actively moving. Leaflet adds .leaflet-grab for every
    enabled map, so override that permanent hand state here. */
@@ -1781,53 +1789,78 @@ L.control.zoom({position:"bottomright"}).addTo(map);
      rest lands on round(intent) - two quarter-level nudges commit one level, and
      because the target is the rounded intent rather than "the nearest level plus
      one", a large gesture cannot overshoot either. */
-  let settleTimer=null, intent=null, aim=null, zoomFrame=null, commanded=null;
+  let settleTimer=null, intent=null, aim=null, zoomFrame=null, committed=null, visual=null, settleCommit=false;
   const viewClamp=(z)=>map3d?Math.max(map3d.getMinZoom(),Math.min(map3d.getMaxZoom(),z))
                             :Math.max(map.getMinZoom(),Math.min(map.getMaxZoom(),z));
-  /* Motion, not steps. A wheel notch or a pinch delta arrives as a single event,
-     and applying it in that one event is the discrete jump this whole change set
-     exists to remove. It is also what made the settle look like a snap: the
-     accumulator holds a fractional intent while the camera rests on a whole
-     level, so the next gesture used to move the camera by up to half a level
-     inside one frame to catch up with it. Measured across three small flicks:
-     0.238, then 0.476, then 0.714 of a level, i.e. a 64% jump in image scale.
+  /* Motion, not steps - and painted, not committed.
 
-     Easing the camera towards the aim turns both into motion - the same journey
-     at 60 fps. 0.3 of the remaining distance per frame arrives in about 120 ms,
-     quick enough to stay attached to the fingers and slow enough to read as an
-     animation rather than a step. The loop stops the moment it arrives, and
-     stands down if anything else moves the camera (a zoom button, a flyTo, a
-     search) instead of fighting it. */
+     A wheel notch or a pinch delta arrives as a single event, so applying it in
+     that event is the discrete jump this whole change set exists to remove. But
+     easing it through Leaflet's setZoom is worse than it sounds: setZoom is the
+     *jump* API - it fires viewprereset/viewreset, and every tile of every layer is
+     thrown away and rebuilt. Measured on one 100px wheel nudge, the frame-by-frame
+     easing that used to sit here rebuilt the tile set 26 times and created 576
+     <img> elements. A new tile is hidden until its image has decoded, so the map
+     spent most of those frames showing its own background - the black flash - and
+     each rebuild is also what made a zoom read as snapshots of a picture instead
+     of a picture scaling.
+
+     So the motion scales the decoded pixels instead. Leaflet already does exactly
+     that for its own animated zooms: it transforms the tile panes, whose `zoom`
+     scale the imagery is drawn at, and only rebuilds tiles at the end. This does
+     the same thing per frame and commits the zoom when the tile level under the
+     pixels changes or when the gesture settles. That is the Photos behaviour the
+     request described - the image scales under the fingers, and the detail
+     sharpens once it stops.
+
+     0.3 of the remaining distance per frame arrives in about 120ms: quick enough
+     to stay attached to the fingers, slow enough to read as an animation. */
   const ZOOM_EASE=0.3;
+  const paintZoom=(z)=>{
+    visual=z;
+    /* MapLibre has no separate paint and commit: a camera update is the zoom, so
+       this is also the committed value - otherwise the check in syncIfMoved would
+       read our own painting as somebody else moving the view and stop the ease. */
+    if(map3d){ committed=z; map3d.setZoom(z); return }
+    const center=map.getCenter();
+    map.eachLayer(layer=>{ if(layer._levels&&layer._setZoomTransforms) layer._setZoomTransforms(center,z) });
+  };
+  const commitZoom=(z)=>{
+    committed=z; settleCommit=false;
+    if(map3d){ map3d.setZoom(z); return }
+    if(Math.abs(map.getZoom()-z)>1e-6) map.setZoom(z,{animate:false});
+  };
+  /* Anything that commits a zoom outside this handler - the zoom buttons, a flyTo,
+     a search - leaves the camera away from the last value committed here, and that
+     is the signal to start again from what is on screen. While painting is in
+     flight the camera is *supposed* to differ, so it is not consulted then. */
+  const syncIfMoved=()=>{
+    if(zoomFrame!==null) return;
+    const z=viewZoom();
+    if(committed===null||visual===null||Math.abs(z-committed)>0.01){ aim=null; intent=null; visual=z; committed=z }
+  };
   const zoomStep=()=>{
     zoomFrame=null;
-    const z=viewZoom();
-    /* Someone else moved the camera while this was easing - a zoom button, a
-       flyTo, a search. That wins: stop chasing, and forget the aim so the next
-       gesture starts from what is actually on screen. */
-    if(commanded!==null&&Math.abs(z-commanded)>0.01){ commanded=null; aim=null; intent=null; return }
-    const step=(aim===null?z:aim)-z;
-    if(Math.abs(step)<0.002){ commanded=null; return }
-    commanded=z+step*ZOOM_EASE;
-    viewZoomTo(commanded);
-    zoomFrame=requestAnimationFrame(zoomStep);
+    syncIfMoved();
+    if(aim===null) return;
+    const step=aim-visual;
+    if(Math.abs(step)>=0.002){ paintZoom(visual+step*ZOOM_EASE); zoomFrame=requestAnimationFrame(zoomStep); return }
+    /* Landed. Commit when this was the settle, or when the imagery underneath is
+       no longer the level being shown - one rebuild, with the hold covering the
+       tiles while they load. */
+    if(settleCommit||(!map3d&&Math.round(visual)!==Math.round(viewZoom()))) commitZoom(visual);
   };
   const aimAt=(target)=>{
-    aim=viewClamp(target); commanded=null;
+    syncIfMoved();
+    aim=viewClamp(target);
     if(zoomFrame===null) zoomFrame=requestAnimationFrame(zoomStep);
   };
-  /* What the next input continues from. While the ease is in flight the camera
-     deliberately trails the aim, so a camera reading is no longer a way to tell
-     whether anything happened to the view: the running loop is. Only when the
-     loop is idle and the camera is not where it was left (a zoom button, a
-     flyTo, a search) is the accumulated intent rebased onto what is on screen -
-     and that reading is what an earlier 0.6-of-a-level camera comparison was
-     standing in for, which quietly dropped accumulated intent once the camera
-     started trailing the aim. */
+  /* What the next input continues from: what is on screen, which is the painted
+     zoom rather than the committed one while the accumulator is ahead of it. */
   const intentBase=()=>{
-    const z=viewZoom();
-    if(zoomFrame===null&&aim!==null&&Math.abs(z-aim)>0.01){ aim=null; intent=null }
-    return intent===null?z:intent;
+    syncIfMoved();
+    if(intent===null) intent=visual===null?viewZoom():visual;
+    return intent;
   };
   /* 3D terrain puts a MapLibre camera on screen and hides the Leaflet panes, so
      every path here has to move whichever camera is on screen. Two reasons.
@@ -1844,11 +1877,12 @@ L.control.zoom({position:"bottomright"}).addTo(map);
      therefore off (see enterTerrain3d) and this handler owns the wheel in both
      views, so the two can never both answer the same event either. */
   const viewZoom=()=>map3d?map3d.getZoom():map.getZoom();
-  /* Always a jump-to: the easing above is the animation, one frame at a time, so
-     Leaflet's own transition would only fight it. */
-  const viewZoomTo=(z)=>{ if(map3d) map3d.setZoom(z); else map.setZoom(z,{animate:false}) };
   const settleToNativeLevel=()=>{
     intent=intentBase();
+    /* The settle is the one time the zoom is committed even if the tile level
+       happens to match: it also brings the camera itself onto the level, so
+       everything that reads the map's zoom sees the resting value. */
+    settleCommit=true;
     aimAt(Math.round(intent));
   };
   pinchEl.addEventListener("wheel",event=>{
@@ -1862,7 +1896,7 @@ L.control.zoom({position:"bottomright"}).addTo(map);
   },{passive:false});
   const pinch={scale:1,zoom:0};
   pinchEl.addEventListener("gesturestart",event=>{
-    event.preventDefault(); pinch.scale=event.scale||1; pinch.zoom=viewZoom();
+    event.preventDefault(); pinch.scale=event.scale||1; pinch.zoom=visual===null?viewZoom():visual;
     /* Seed the accumulator from where the gesture starts. Doing it at the end
        instead counted the gesture's own travel twice: a 1.4x pinch added its
        0.49 level to a `nearest` that already contained it, and landed a whole
@@ -1881,7 +1915,7 @@ L.control.zoom({position:"bottomright"}).addTo(map);
        the upscaled-and-soft case the settle exists to avoid. The gesture's travel
        is added to the intent seeded at gesturestart, so small pinches accumulate
        into a committed level without a large one overshooting. */
-    intent=intentBase()+((aim===null?viewZoom():aim)-pinch.zoom);
+    intent=intentBase()+((visual===null?pinch.zoom:visual)-pinch.zoom);
     settleToNativeLevel();
   },{passive:false});
 }
@@ -1916,6 +1950,53 @@ const retryUrl=(value,n)=>{
   try{ const u=new URL(value,location.href); u.searchParams.set("_csp_retry",String(n)); return u.href }
   catch(e){ return value }
 };
+/* Keep the outgoing tile level on screen while the incoming one loads.
+
+   Leaflet swaps levels by creating the new level's container and pruning the old
+   level's tiles. Nothing is wrong with that on a fast local cache, but measured
+   against the deployed site - where imagery comes from the providers rather than
+   this machine - a one-level zoom left the viewport 0% covered by loaded tiles
+   for 168ms, and the fade that used to sit on top of that stretch made more than
+   half the frames of a small zoom show no imagery at all. On a dark theme that is
+   the whole screen going black and then snapping to the new frame.
+
+   Google Earth never shows that: the outgoing imagery stays on screen while the
+   new level loads, which is what makes a zoom read as "the picture scales, then
+   the detail sharpens". So a level change clones the outgoing level's container
+   underneath the incoming one and keeps it until the layer has painted (its own
+   `load` event), the view starts moving again, or 2.5s pass - so a tile that never
+   loads cannot leave a stale copy behind. The clone is pixels the browser has
+   already decoded, so it costs no requests; it is also outside Leaflet's own
+   bookkeeping (it lives in no `_levels` entry), so it cannot be handed back to
+   any of the tile pipeline. */
+{
+  const invalidateAll=L.GridLayer.prototype._invalidateAll;
+  L.GridLayer.prototype._invalidateAll=function(){
+    /* Snapshot before the wipe: _invalidateAll drops every level container and
+       every tile in one pass, so afterwards there is nothing left to copy. */
+    let snapshot=null;
+    if(this._container&&this._tileZoom!==undefined){
+      const level=this._levels&&this._levels[this._tileZoom];
+      if(level&&level.el&&level.el.children.length) snapshot=level.el.cloneNode(true);
+    }
+    invalidateAll.call(this);
+    if(!snapshot||!this._container) return;
+    this._cspDropHold&&this._cspDropHold();
+    const hold=snapshot, container=this._container;
+    hold.classList.add("csp-tile-hold");
+    container.insertBefore(hold,container.firstChild);
+    let timer=null;
+    const drop=()=>{ clearTimeout(timer); this._cspDropHold=null; hold.remove() };
+    this._cspDropHold=drop;
+    timer=setTimeout(drop,2500);
+    /* Leaflet fades a tile in over 200ms from the moment it decoded, so the hold
+       has to outlive the load event by that fade: dropping it on `load` alone
+       leaves the last 200ms of the fade running over the page background, which
+       is exactly the black this exists to remove. */
+    this.once("load",()=>{ clearTimeout(timer); timer=setTimeout(drop,260) });
+    this.once("movestart",drop);
+  };
+}
 const ResilientTileLayer=L.TileLayer.extend({
   initialize(url,options){
     L.TileLayer.prototype.initialize.call(this,url,options);

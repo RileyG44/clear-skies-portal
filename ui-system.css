@@ -806,19 +806,19 @@ body.csp-redesign .csp-locate-label{display:none}
   body.csp-redesign #cspWorkspaceDescription{display:none}
 }
 
-/* Tiles fade in as they arrive.
+/* A tile is hidden until its image has decoded - Leaflet appends the <img>
+   before it loads, so without this a new tile is a transparent hole showing
+   whatever is behind the map.
 
-   The terrain layers deliberately update on idle rather than during a gesture -
-   they are expensive renders, and re-requesting them per frame would be far worse
-   than a momentarily scaled tile - so a new level lands in a batch and used to
-   pop into place. A short fade makes that read as the imagery settling instead of
-   flashing, which is the "image adjustment" half of smooth zoom.
-
-   Leaflet still controls visibility through its own loaded class, so a tile that
-   never loads stays hidden exactly as before, and a tile that does load ends at
-   full opacity. Nothing here changes which tiles are requested or when. */
-.leaflet-tile{opacity:0;transition:opacity .22s ease-out}
+   The fade itself belongs to Leaflet (map option `fadeAnimation`, on by default):
+   it ramps each tile's opacity over 200ms from the moment that tile decoded. The
+   app used to add a second fade on top of it with a CSS transition, which is the
+   wrong shape here - a tile that has just been created is transparent, so fading
+   it in fades in the *background* rather than the previous imagery, and on the
+   dark theme that is the whole screen going black. Measured on the deployed site
+   before removing it: 128 of 233 frames of a small zoom had every loaded tile
+   under 0.05 opacity. What makes Leaflet's own fade read as a cross-fade instead
+   is the level hold in index.html, which keeps the outgoing imagery on screen
+   underneath until the new level has finished arriving. */
+.leaflet-tile{opacity:0}
 .leaflet-tile-loaded{opacity:1}
-@media (prefers-reduced-motion:reduce){
-  .leaflet-tile{transition:none}
-}
