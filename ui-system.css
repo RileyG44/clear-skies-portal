@@ -805,3 +805,20 @@ body.csp-redesign .csp-locate-label{display:none}
   body.csp-redesign #cspWorkspaceHeader{padding:8px 16px}
   body.csp-redesign #cspWorkspaceDescription{display:none}
 }
+
+/* Tiles fade in as they arrive.
+
+   The terrain layers deliberately update on idle rather than during a gesture -
+   they are expensive renders, and re-requesting them per frame would be far worse
+   than a momentarily scaled tile - so a new level lands in a batch and used to
+   pop into place. A short fade makes that read as the imagery settling instead of
+   flashing, which is the "image adjustment" half of smooth zoom.
+
+   Leaflet still controls visibility through its own loaded class, so a tile that
+   never loads stays hidden exactly as before, and a tile that does load ends at
+   full opacity. Nothing here changes which tiles are requested or when. */
+.leaflet-tile{opacity:0;transition:opacity .22s ease-out}
+.leaflet-tile-loaded{opacity:1}
+@media (prefers-reduced-motion:reduce){
+  .leaflet-tile{transition:none}
+}
