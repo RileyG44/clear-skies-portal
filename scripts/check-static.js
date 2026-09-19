@@ -265,6 +265,17 @@ assert(index.includes('fallbackNativeZoom:15'),"browser elevation fallback must 
 assert(index.includes('const VIEW_MAX=28'),"the map must support deep visual overzoom");
 assert(index.includes('rotate:true,dragRotate:true,touchRotate:true')&&index.includes('id="bearingReset"'),
        "2D maps must support direct mouse/touch bearing rotation with a north reset");
+/* A trackpad pinch is OS-level input and cannot be synthesised by a test, so it
+   is worth pinning the three things that make it work: continuous zoom instead
+   of Leaflet's whole-level wheel handling, Safari's gesture events (which are
+   the only pinch Chrome and Edge do not send), and the settle that keeps the
+   rest state on a native, un-upscaled level. */
+assert(index.includes('zoomSnap:0,scrollWheelZoom:false')&&index.includes('pinchEl.addEventListener("gesturestart"')&&
+       index.includes('scrollWheelZoom is off because Leaflet'),
+       "trackpad pinch must zoom the map continuously instead of stepping whole levels or page-zooming");
+assert(index.includes('const intentFrom=')&&index.includes('if(map3d) return;')&&
+       index.includes('intent=intentFrom(pinch.zoom)+((viewZoom())-pinch.zoom)'),
+       "a pinch must settle onto a native level, counting its travel once, and must drive the 3D camera when 3D is on screen");
 assert(index.includes('id="map3d"')&&index.includes('import("./vendor/maplibre-gl.mjs")')&&
        index.includes('terrain:{source:"dem",exaggeration:light.exaggeration}'),
        "3D lidar terrain must lazy-load MapLibre and use the elevation DEM as a mesh");

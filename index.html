@@ -1776,36 +1776,68 @@ L.control.zoom({position:"bottomright"}).addTo(map);
      the smooth motion. 0.05 avoids nudging when it is already there. */
   /* Where a gesture comes to rest has to be a whole level (see above), but the
      motion between rests should still start from wherever the map actually is,
-     and a nudge smaller than half a level should not simply be swallowed. So the
-     intent of the gesture is carried forward: once a scroll has asked for half a
-     level's worth, the rest commits a level and keeps the remainder. Repeated
-     small nudges therefore add up, while every rest stays on a native level. */
-  let settleTimer=null, carry=0;
+     and a nudge smaller than half a level should not simply be swallowed.
+
+     So the gesture's intent is tracked separately from the rendered zoom: small
+     nudges accumulate in `intent` and the rest lands on round(intent). That is
+     what makes two quarter-level nudges commit a level, and because the target is
+     the rounded intent rather than "the nearest level plus one", a large gesture
+     cannot overshoot - which an earlier carry-the-remainder version did. */
+  let settleTimer=null, intent=null;
+  const intentFrom=(z)=>(intent===null||Math.abs(intent-z)>0.6)?z:intent;   // self-heal after a button/flyTo jump
+  /* 3D terrain puts a MapLibre camera on screen and hides the Leaflet panes.
+     Wheel zoom there belongs to MapLibre (it answers the ctrl+wheel that Chrome
+     and Edge send for a pinch, and it does so smoothly), so the wheel path below
+     deliberately steps out of the way - but MapLibre has no Safari gesture
+     support at all, and the gesture path was writing to the hidden Leaflet map.
+     A pinch in 3D therefore moved nothing on screen while still swallowing the
+     browser's page zoom, i.e. it did nothing. The gesture path asks which camera
+     is on screen instead; MapLibre's zoom is world-equivalent to Leaflet's. */
+  const viewZoom=()=>map3d?map3d.getZoom():map.getZoom();
+  const viewZoomTo=(z,animate)=>{
+    if(map3d){ if(animate) map3d.easeTo({zoom:z,duration:200}); else map3d.setZoom(z); return }
+    map.setZoom(z,animate?{animate:true,duration:0.2}:{animate:false});
+  };
   const settleToNativeLevel=()=>{
-    const z=map.getZoom(), nearest=Math.round(z);
-    let target=nearest;
-    if(Math.abs(carry)>=0.5){ target=nearest+Math.sign(carry); carry-=Math.sign(carry); }
-    if(Math.abs(z-target)>0.05) map.setZoom(target,{animate:true,duration:0.2});
+    const z=viewZoom();
+    intent=intentFrom(z);
+    const target=Math.round(intent);
+    if(Math.abs(z-target)>0.05) viewZoomTo(target,true);
   };
   pinchEl.addEventListener("wheel",event=>{
     event.preventDefault();
+    if(map3d) return;                       // MapLibre zooms itself; do not move the hidden map
     const unit=event.deltaMode===1?16:event.deltaMode===2?pinchEl.clientHeight:1;
     const step=-event.deltaY*unit*ZOOM_PER_PIXEL*(event.ctrlKey?0.6:1);
     if(!step) return;
-    map.setZoom(map.getZoom()+step,{animate:false});
-    carry+=step;
+    intent=intentFrom(map.getZoom())+step;
+    map.setZoom(intent,{animate:false});
     clearTimeout(settleTimer); settleTimer=setTimeout(settleToNativeLevel,160);
   },{passive:false});
   const pinch={scale:1,zoom:0};
   pinchEl.addEventListener("gesturestart",event=>{
-    event.preventDefault(); pinch.scale=event.scale||1; pinch.zoom=map.getZoom();
+    event.preventDefault(); pinch.scale=event.scale||1; pinch.zoom=viewZoom();
+    /* Seed the accumulator from where the gesture starts. Doing it at the end
+       instead counted the gesture's own travel twice: a 1.4x pinch added its
+       0.49 level to a `nearest` that already contained it, and landed a whole
+       level past the amount that was actually pinched. */
+    intent=intentFrom(pinch.zoom);
   },{passive:false});
   pinchEl.addEventListener("gesturechange",event=>{
     event.preventDefault();
     const step=Math.log2((event.scale||1)/pinch.scale);
-    if(step) map.setZoom(pinch.zoom+step,{animate:false});
+    if(step) viewZoomTo(pinch.zoom+step,false);
   },{passive:false});
-  pinchEl.addEventListener("gestureend",event=>{ event.preventDefault() },{passive:false});
+  pinchEl.addEventListener("gestureend",event=>{
+    event.preventDefault();
+    /* Same contract as the wheel path, and the socket it was missing: without
+       this a trackpad pinch rested wherever it stopped - between levels, which is
+       the upscaled-and-soft case the settle exists to avoid. The gesture's travel
+       is added to the intent seeded at gesturestart, so small pinches accumulate
+       into a committed level without a large one overshooting. */
+    intent=intentFrom(pinch.zoom)+((viewZoom())-pinch.zoom);
+    settleToNativeLevel();
+  },{passive:false});
 }
 document.getElementById("map").addEventListener("contextmenu", e=>e.preventDefault());
 const bearingButton=document.getElementById("bearingReset");
