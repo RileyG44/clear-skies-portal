@@ -1739,6 +1739,12 @@ let map3dWanted=false,map3dLightTimer=null;
    dead zone throws even from typeof, which aborted the whole script. */
 let ovThemedReady=false;
 const map = L.map("map",{zoomControl:false,doubleClickZoom:false,maxZoom:VIEW_MAX,minZoom:0,
+  /* zoomSnap:0 is what makes continuous zoom possible at all - with Leaflet's
+     default of 1 every zoom lands on a whole level, which is the discrete
+     stepping this replaces. scrollWheelZoom is off because Leaflet's own wheel
+     handler ceils each gesture to a whole level (see the smooth wheel handler
+     below); the pinch handlers further down handle Safari's gesture events. */
+  zoomSnap:0,scrollWheelZoom:false,
   rotate:true,dragRotate:true,touchRotate:true,touchGestures:true,rotateControl:false,
   shiftKeyRotate:false,preventPageGestures:true}).setView([47.1301,-119.2781], 9);
 L.control.zoom({position:"bottomright"}).addTo(map);
@@ -1753,7 +1759,20 @@ L.control.zoom({position:"bottomright"}).addTo(map);
    itself - suppressing the event outright would break wheel zoom on the map. */
 {
   const pinchEl=document.getElementById("map");
-  pinchEl.addEventListener("wheel",event=>{ if(event.ctrlKey) event.preventDefault() },{passive:false});
+  /* Continuous wheel/pinch zoom. Leaflet's ScrollWheelZoom rounds every gesture to
+     a whole level - it ceils its accumulated delta - so the map stepped in
+     discrete jumps even though nothing here asked it to. This applies the wheel
+     delta as a fraction of a level instead, which zoomSnap:0 in the map options
+     now permits, and keeps the map (not the browser) responding to trackpad
+     pinch: macOS sends that as ctrl+wheel, with a finer factor because a pinch
+     produces many small deltas. */
+  const ZOOM_PER_PIXEL=1/420;              // pixels of scroll per zoom level
+  pinchEl.addEventListener("wheel",event=>{
+    event.preventDefault();
+    const unit=event.deltaMode===1?16:event.deltaMode===2?pinchEl.clientHeight:1;
+    const step=-event.deltaY*unit*ZOOM_PER_PIXEL*(event.ctrlKey?0.6:1);
+    if(step) map.setZoom(map.getZoom()+step,{animate:false});
+  },{passive:false});
   const pinch={scale:1,zoom:0};
   pinchEl.addEventListener("gesturestart",event=>{
     event.preventDefault(); pinch.scale=event.scale||1; pinch.zoom=map.getZoom();
@@ -5048,7 +5067,7 @@ terrainLoadStatus.after(terrainSourceDetails);
 let surveyController=null;
 $("#terrainInspectSource").onclick=async()=>{
   surveyController?.abort();surveyController=new AbortController();const controller=surveyController;
-  const view=document.body.classList.contains("terrain-3d")&&map3d?map3d:map,center=view.getCenter(),zoom=view.getZoom();
+  const view=document.body.classList.contains("terrain-3d")&&map3d?map3d:map,center=view.getCenter(),zoom=Math.round(view.getZoom());
   const output=$("#terrainSurveyInfo");output.textContent="Looking up the USGS mosaic at this point…";
   const timer=setTimeout(()=>controller.abort(),18000);
   try{
@@ -6318,7 +6337,9 @@ function warmPlan(){
   let b=map.getBounds();
   const pad={view:0, pad50:0.25, pad100:0.5}[$("#terExtent").value] || 0;
   if(pad>0) b=b.pad(pad);
-  const zNow=map.getZoom(), mode=$("#terDepth").value,style=$("#terStyle").value;
+  /* Zoom is fractional now, but everything downstream of here builds whole tile
+     coordinates for the pre-cache, so round at the boundary. */
+  const zNow=Math.round(map.getZoom()), mode=$("#terDepth").value,style=$("#terStyle").value;
   const nativeCeiling=chooseTerrain(style).src==="3dep"?17:18;
   const requestedZ1=Math.min(nativeCeiling,mode==="screen"?zNow+2:nativeCeiling);
   let range=warmLevelRange(b,zNow,requestedZ1);
