@@ -1921,30 +1921,41 @@ L.control.zoom({position:"bottomright"}).addTo(map);
     aimAt(intent);
     clearTimeout(settleTimer); settleTimer=setTimeout(settleToNativeLevel,160);
   },{passive:false});
-  const pinch={scale:1,zoom:0};
-  pinchEl.addEventListener("gesturestart",event=>{
-    event.preventDefault(); intent=intentBase(); noteGesture();
-    pinch.scale=event.scale||1; pinch.zoom=visual===null?viewZoom():visual;
-    /* Seed the accumulator from where the gesture starts. Doing it at the end
-       instead counted the gesture's own travel twice: a 1.4x pinch added its
-       0.49 level to a `nearest` that already contained it, and landed a whole
-       level past the amount that was actually pinched. */
-  },{passive:false});
-  pinchEl.addEventListener("gesturechange",event=>{
-    event.preventDefault();
-    const step=Math.log2((event.scale||1)/pinch.scale);
-    if(step) aimAt(pinch.zoom+step);
-  },{passive:false});
-  pinchEl.addEventListener("gestureend",event=>{
-    event.preventDefault();
-    /* Same contract as the wheel path, and the socket it was missing: without
-       this a trackpad pinch rested wherever it stopped - between levels, which is
-       the upscaled-and-soft case the settle exists to avoid. The gesture's travel
-       is added to the intent seeded at gesturestart, so small pinches accumulate
-       into a committed level without a large one overshooting. */
-    intent=intentBase()+((visual===null?pinch.zoom:visual)-pinch.zoom);
-    settleToNativeLevel();
-  },{passive:false});
+  /* Safari's gesture events are how a *trackpad* pinch arrives on macOS, where
+     there are no touch events to read - that is the whole reason this path exists.
+     A touch screen fires the same events for a two-finger gesture, but there the
+     touch path already does the job natively (measured with a synthetic
+     two-finger touch sequence in 3D: rotate moved the bearing 0 -> -83 degrees and
+     a spread took zoom 14 -> 15.05), and claiming the gesture on a touch device
+     only prevents the platform default and fights it - which is what stopped
+     two-finger rotate and tilt working on iOS. Trackpad only. */
+  const trackpadGestures=!(("ontouchstart" in window)||navigator.maxTouchPoints>0);
+  if(trackpadGestures){
+    const pinch={scale:1,zoom:0};
+    pinchEl.addEventListener("gesturestart",event=>{
+      event.preventDefault(); intent=intentBase(); noteGesture();
+      pinch.scale=event.scale||1; pinch.zoom=visual===null?viewZoom():visual;
+      /* Seed the accumulator from where the gesture starts. Doing it at the end
+         instead counted the gesture's own travel twice: a 1.4x pinch added its
+         0.49 level to a `nearest` that already contained it, and landed a whole
+         level past the amount that was actually pinched. */
+    },{passive:false});
+    pinchEl.addEventListener("gesturechange",event=>{
+      event.preventDefault();
+      const step=Math.log2((event.scale||1)/pinch.scale);
+      if(step) aimAt(pinch.zoom+step);
+    },{passive:false});
+    pinchEl.addEventListener("gestureend",event=>{
+      event.preventDefault();
+      /* Same contract as the wheel path, and the socket it was missing: without
+         this a trackpad pinch rested wherever it stopped - between levels, which is
+         the upscaled-and-soft case the settle exists to avoid. The gesture's travel
+         is added to the intent seeded at gesturestart, so small pinches accumulate
+         into a committed level without a large one overshooting. */
+      intent=intentBase()+((visual===null?pinch.zoom:visual)-pinch.zoom);
+      settleToNativeLevel();
+    },{passive:false});
+  }
 }
 /* Right-drag is how the 3D view is orbited (two fingers pressed on a trackpad, or
    Ctrl-drag), and the browser's own menu used to open the moment that press

@@ -280,6 +280,8 @@ assert(index.includes('scrollZoom:false')&&index.includes('const ZOOM_EASE=')&&i
        "one handler must own the wheel in both views, and zoom must ease towards its aim rather than step in one event");
 assert(index.includes('Math.round(gestureStart)+Math.sign(travel)'),
        "a small zoom must commit in the direction it was asked for instead of bouncing back to the level it started from");
+assert(index.includes('const trackpadGestures=')&&index.includes('if(trackpadGestures){'),
+       "Safari gesture events must be claimed on a trackpad only; on a touch screen they would suppress the native two-finger rotate, tilt and zoom");
 assert(index.includes('terrainSky(theme,light)')&&index.includes('hypsometricRamp()'),
        "the 3D view must carry a sky and an elevation relief tint, not a bare hillshade on a flat background");
 assert(index.includes('_setZoomTransforms(center,z)')&&index.includes('L.GridLayer.prototype._invalidateAll'),
