@@ -162,22 +162,31 @@ body.csp-redesign #cspNav .coord-launch{display:none}
 body.csp-redesign .csp-coordinate-actions{
   display:flex;
   align-items:center;
-  gap:10px;
-  min-height:28px;
-  padding:0 18px 9px;
+  gap:4px;
+  min-height:36px;
+  padding:0 14px 8px;
   color:var(--ink-3);
-  font-size:11px;
 }
 body.csp-redesign .csp-coordinate-actions[hidden]{display:none}
 
 body.csp-redesign .csp-coordinate-actions button{
-  min-height:26px;
+  display:grid;
+  place-items:center;
+  width:36px;
+  min-width:36px;
+  height:36px;
+  min-height:36px;
   padding:0;
-  border:0;
+  border:1px solid transparent;
+  border-radius:9px;
   background:transparent;
   color:var(--ink-2);
-  font-size:11px;
+  cursor:pointer;
+  transition:background-color .14s ease,border-color .14s ease,color .14s ease;
 }
+body.csp-redesign .csp-coordinate-actions button:hover{background:var(--ui-hover);border-color:var(--line);color:var(--ink)}
+body.csp-redesign .csp-coordinate-actions button:focus-visible{outline:2px solid var(--ui-text-muted);outline-offset:1px}
+body.csp-redesign .csp-coordinate-actions svg{display:block;width:17px;height:17px}
 
 body.csp-redesign #cspNavScroll{
   order:2;
@@ -745,22 +754,22 @@ body.csp-redesign #cspNav #loc{min-width:0}
 body.csp-redesign #cspNav #iw{position:static}
 body.csp-redesign .csp-locate-label{display:none}
 @media(max-width:1050px){
-  body.csp-redesign #cspNav .search-row{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
-  body.csp-redesign #cspNav #iw{grid-column:1/-1;grid-row:1;height:44px}
+  body.csp-redesign #cspNav .search-row{grid-template-columns:minmax(0,1fr) 44px 44px;gap:6px}
+  body.csp-redesign #cspNav #iw{grid-column:1;grid-row:1;height:44px;min-width:0}
   body.csp-redesign #cspNav #q{font-size:16px;min-height:44px}
   body.csp-redesign #cspNav #loc,
   body.csp-redesign #cspNav #go{
-    grid-row:2;display:flex;align-items:center;justify-content:center;gap:8px;
-    width:100%;height:44px;min-height:44px;padding:0 10px;font-size:13px;
+    grid-row:1;display:grid;place-items:center;gap:0;
+    width:44px;min-width:44px;height:44px;min-height:44px;padding:0;font-size:0;
   }
-  body.csp-redesign #cspNav #loc{grid-column:1}
-  body.csp-redesign #cspNav #go{grid-column:2;color:var(--ui-control-ink)}
+  body.csp-redesign #cspNav #loc{grid-column:2}
+  body.csp-redesign #cspNav #go{grid-column:3;color:var(--ui-control-ink)}
   body.csp-redesign #cspNav #go::before{margin:0;flex:none}
   body.csp-redesign #cspNav #ac{max-height:min(300px,45dvh);overflow-y:auto}
   body.csp-redesign #cspNav #ac .r{min-height:44px}
-  body.csp-redesign .csp-locate-label{display:inline}
-  body.csp-redesign .csp-coordinate-actions{flex-wrap:wrap;gap:4px 12px;padding:0 14px 8px}
-  body.csp-redesign .csp-coordinate-actions button{min-height:44px}
+  body.csp-redesign .csp-locate-label{display:none}
+  body.csp-redesign .csp-coordinate-actions{gap:4px;padding:0 14px 8px}
+  body.csp-redesign .csp-coordinate-actions button{width:44px;min-width:44px;height:44px;min-height:44px}
   body.csp-redesign .csp-nav-button,
   body.csp-redesign #cspBack,
   body.csp-redesign #resetPanes{min-height:44px}
@@ -814,7 +823,7 @@ body.csp-redesign .csp-locate-label{display:none}
   body.csp-redesign .csp-layer-actions{grid-column:1/-1;flex-wrap:wrap;gap:6px}
   body.csp-redesign .csp-layer-actions button{min-height:44px;min-width:44px;padding:0 6px}
   body.csp-redesign .csp-layer-actions .csp-layer-move{width:44px;margin:0}
-  body.csp-redesign #cspMapMode{max-width:calc(100% - 80px);bottom:calc(40px + var(--safe-bottom))}
+  body.csp-redesign #cspMapMode{max-width:calc(100% - 80px);bottom:calc(6px + var(--safe-bottom))}
   body.csp-redesign #cspMapMode button{min-height:44px;white-space:normal;font-size:12px;line-height:1.25}
 }
 /* A landscape phone or an open keyboard must not squeeze navigation to zero. */

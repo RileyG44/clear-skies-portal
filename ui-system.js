@@ -45,7 +45,16 @@ side.insertBefore(nav,oldHeader);
 nav.append(oldHeader,searchbox);
 
 const coordinateActions=document.createElement("div");coordinateActions.className="csp-coordinate-actions";
-coordinateActions.innerHTML=`<button type="button" data-coordinate="copy">Copy coordinates</button><button type="button" data-coordinate="maps">Google Maps</button><button type="button" data-coordinate="earth">Google Earth</button>`;
+coordinateActions.innerHTML=`
+  <button type="button" data-coordinate="copy" title="Copy coordinates" aria-label="Copy coordinates">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="8" width="13" height="13" rx="2"/><path d="M16 8V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h3"/></svg>
+  </button>
+  <button type="button" data-coordinate="maps" title="Open coordinates in Google Maps" aria-label="Open coordinates in Google Maps">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m3 6 6-3 6 3 6-3v15l-6 3-6-3-6 3z"/><path d="M9 3v15m6-12v15"/></svg>
+  </button>
+  <button type="button" data-coordinate="earth" title="Open coordinates in Google Earth" aria-label="Open coordinates in Google Earth">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"/></svg>
+  </button>`;
 nav.append(coordinateActions,navScroll);
 nav.append(foot);
 side.insertBefore(workspace,drag);
