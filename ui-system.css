@@ -141,8 +141,7 @@ body.csp-redesign #cspNav #go::before{
   height:17px;
   margin:auto;
   background:url("vendor/icons/search.svg") center/contain no-repeat;
-  /* the glyph sits on --ui-control, which flips with the theme, so the filter
-     that keeps it legible has to flip with it too */
+  /* Desktop uses the filled control role, so the glyph flips with that surface. */
   filter:var(--ui-icon-filter-control);
 }
 
@@ -761,10 +760,17 @@ body.csp-redesign .csp-locate-label{display:none}
   body.csp-redesign #cspNav #go{
     grid-row:1;display:grid;place-items:center;gap:0;
     width:44px;min-width:44px;height:44px;min-height:44px;padding:0;font-size:0;
+    border:1px solid var(--line);border-radius:11px;
+    background:var(--ui-surface);color:var(--ink-2);
+    box-shadow:0 1px 2px var(--ui-shadow-1);
   }
   body.csp-redesign #cspNav #loc{grid-column:2}
-  body.csp-redesign #cspNav #go{grid-column:3;color:var(--ui-control-ink)}
-  body.csp-redesign #cspNav #go::before{margin:0;flex:none}
+  body.csp-redesign #cspNav #go{grid-column:3;position:relative}
+  body.csp-redesign #cspNav #go:hover{background:var(--ui-hover);color:var(--ink)}
+  body.csp-redesign #cspNav #go::before{
+    position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);
+    margin:0;filter:var(--ui-icon-filter);opacity:.72;
+  }
   body.csp-redesign #cspNav #ac{max-height:min(300px,45dvh);overflow-y:auto}
   body.csp-redesign #cspNav #ac .r{min-height:44px}
   body.csp-redesign .csp-locate-label{display:none}
