@@ -71,6 +71,33 @@ engineNav.innerHTML=`<button class="csp-nav-button" type="button"><img src="${ic
 foot.prepend(engineNav);
 engineNav.querySelector("button").addEventListener("click",()=>$("#serverToggle")?.click());
 
+/* Leaflet's attribution is required source information, but on a phone its
+   long inline string competes with the map itself. Keep it available in the
+   navigation rail, where it can expand only when someone needs it. */
+const mapSources=document.createElement("details");mapSources.id="cspMapSources";
+mapSources.innerHTML=`<summary><img src="${icon("layers")}" alt=""><span>Map sources</span><img class="csp-sources-chevron" src="${icon("chevron-right")}" alt=""></summary><div id="cspMapSourcesContent" aria-live="polite"></div>`;
+engineNav.after(mapSources);
+const mapSourcesContent=$("#cspMapSourcesContent",mapSources);
+const syncMapSources=()=>{
+  const attribution=typeof map!=="undefined"?map.attributionControl?._container:null;
+  const markup=attribution?.innerHTML.trim();
+  mapSourcesContent.innerHTML=markup||"Source details will appear when a map layer is active.";
+};
+mapSources.addEventListener("toggle",()=>{if(mapSources.open) syncMapSources()});
+const attributionNode=typeof map!=="undefined"?map.attributionControl?._container:null;
+if(attributionNode) new MutationObserver(syncMapSources).observe(attributionNode,{childList:true,subtree:true,characterData:true});
+syncMapSources();
+
+/* iOS can still honour a page-scale gesture in some embedded browser modes even
+   with the viewport lock. Suppress only gestures that start on application
+   chrome; the map surface stays untouched so two-finger zoom, rotate and tilt
+   continue to belong to the map engine. */
+for(const chrome of [side,$("#sideToggleDock"),$("#mapDock"),$("#serverPanel"),$("#terrainSourcePanel"),$("#ctl"),$("#cspMapMode")].filter(Boolean)){
+  for(const type of ["gesturestart","gesturechange","gestureend"])
+    chrome.addEventListener(type,event=>event.preventDefault(),{passive:false});
+  chrome.addEventListener("touchmove",event=>{if(event.touches.length>1) event.preventDefault()},{passive:false});
+}
+
 coordinateActions.addEventListener("click",event=>{
   const action=event.target.closest("button")?.dataset.coordinate;if(!action) return;
   if(action==="copy") $("#coordCopy")?.click();

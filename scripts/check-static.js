@@ -448,8 +448,15 @@ assert(!/#app\{[^}]*height:/.test(index),
        "the shell must not carry an explicit height; it over-constrains inset:0 and can fall short of the screen");
 assert(!index.includes('syncVisualViewport'),
        "the shell must never be sized from a JS-measured visual viewport");
-assert(index.includes('content="width=device-width,initial-scale=1,viewport-fit=cover"'),
-       "viewport-fit=cover is what makes the safe-area strips part of the shell");
+assert(index.includes('content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover"'),
+       "the map app must lock browser-scale gestures while retaining the safe-area viewport");
+assert(index.includes('const leafZoomControl=L.control.zoom')&&index.includes('compactMapViewport')&&
+       uiStyles.includes('.leaflet-control-zoom{display:none!important}'),
+       "mobile must not render duplicate Leaflet zoom buttons when map pinch is available");
+assert(uiSystem.includes('id="cspMapSources"')&&uiSystem.includes('map.attributionControl')&&
+       uiStyles.includes('body.csp-redesign .leaflet-control-attribution,')&&
+       uiStyles.includes('body.csp-redesign .maplibregl-ctrl-attrib{display:none!important}'),
+       "mobile attribution must be available from the sidebar without covering the map");
 /* An edge-to-edge app has to say so consistently. viewport-fit=cover puts the
    safe-area strips inside the layout; "black" asks iOS to reserve the system
    bars and fill them with theme-color instead, which contradicts it. */
