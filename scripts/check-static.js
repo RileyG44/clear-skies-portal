@@ -284,8 +284,10 @@ assert(index.includes('const trackpadGestures=')&&index.includes('if(trackpadGes
        "Safari gesture events must be claimed on a trackpad only; on a touch screen they would suppress the native two-finger rotate, tilt and zoom");
 assert(index.includes('terrainSky(theme,light)')&&index.includes('hypsometricRamp()'),
        "the 3D view must carry a sky and an elevation relief tint, not a bare hillshade on a flat background");
-assert(index.includes('_setZoomTransforms(center,z)')&&index.includes('L.GridLayer.prototype._invalidateAll'),
-       "zoom motion must scale the existing tiles instead of re-creating them every frame, and hold the outgoing level while a new one loads");
+assert(index.includes('map.fire("zoomanim",{center,zoom:z,noUpdate:true})')&&
+       index.includes('this._cspTransformHold=transformHold')&&
+       index.includes('L.GridLayer.prototype._invalidateAll'),
+       "zoom preview must transform every Leaflet renderer and keep outgoing tile holds aligned while replacements load");
 assert(index.includes('id="map3d"')&&index.includes('import("./vendor/maplibre-gl.mjs")')&&
        index.includes('terrain:{source:"dem",exaggeration:light.exaggeration}'),
        "3D lidar terrain must lazy-load MapLibre and use the elevation DEM as a mesh");
