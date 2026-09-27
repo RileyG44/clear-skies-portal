@@ -208,6 +208,7 @@ map-like zoom would be a tiled package or Cloud-Optimized GeoTIFF rather than on
 | `probe.py` | Tiny script that reports scene freshness at a few test points |
 | `cog.js` | COG/GeoTIFF reader — TIFF LZW + floating-point predictor, geodesy. No dependencies |
 | `usgs.js` | USGS 3DEP 1 m DEM source: S3 index, range reads, terrain rendering, PNG encoder |
+| `nadi1-cordilleran.json` | NADI-1 Cordilleran ice margins, 25–10.5 ka, clipped to the Pacific Northwest (Dalton et al. 2023, CC BY 4.0). Rebuild with `scripts/build-nadi1-cordilleran.py` |
 | `test-cog.js` | Offline checks: LZW, predictor, geodesy, cell maths, PNG. `node test-cog.js` |
 | `.devcontainer/` | Codespaces / Dev Containers setup — Node 24, Python 3.14, port 8765 |
 | `.github/workflows/ci.yml` | Syntax checks, `sources.json` validation, server smoke test |

@@ -29,7 +29,7 @@ const MIME = {".html":"text/html; charset=utf-8",".js":"text/javascript",".mjs":
 const PUBLIC_FILES = new Set(["index.html","version.js","ui-theme.css","ui-system.css","ui-system.js","mosaic-core.js","terrain-core.js","terrain-raster.js",
   "public-terrain.js","public-terrain-worker.js","vendor/lerc/LercDecode.js","vendor/lerc/LercDecode.es.js","vendor/lerc/lerc-wasm.wasm",
   "elevation-bands.js","elevation-tile-core.js","tile-pipeline.js","wa-archaeology.js","glacial-research-core.js","research-analysis.js","research-worker.js","sw.js","manifest.json",
-  "point-cloud-core.js","point-cloud-viewer.js","point-cloud-catalog.json","maxar-catalog.json",
+  "point-cloud-core.js","point-cloud-viewer.js","point-cloud-catalog.json","maxar-catalog.json","nadi1-cordilleran.json",
   "icon-180.png","icon-192.png","icon-512.png","vendor/maplibre-gl.mjs","vendor/maplibre-gl-shared.mjs",
   "vendor/maplibre-gl-worker.mjs","vendor/maplibre-gl.css","vendor/leaflet-rotate.umd.min.js"]);
 
