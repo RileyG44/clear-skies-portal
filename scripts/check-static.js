@@ -294,12 +294,17 @@ assert(index.includes('register("sw.js",{updateViaCache:"none"})'),
 assert(index.includes('id="snapshot"'),"map snapshot control must be present");
 assert(index.includes('id="snapshotPanel"')&&index.includes('id="snapshotScale"')&&index.includes('id="snapshotSave"'),
        "map export must expose a direct PNG-resolution chooser");
-assert(!index.includes('getDisplayMedia')&&index.includes('composeHighResolutionSnapshot')&&
-       index.includes('snapshotEl.onclick=()=>setSnapshotPanel(snapshotPanel.hidden)'),
-       "map export must render directly instead of rejecting macOS window capture");
-assert(index.includes('SNAPSHOT_PRESETS')&&index.includes('sourceSteps')&&index.includes('snapshotLayerTileUrl')&&
-       index.includes('SNAPSHOT_MAX_TILES=720'),
-       "higher-resolution exports must request bounded source tiles for the current geographic extent");
+assert(!index.includes('getDisplayMedia')&&index.includes('composeSnapshot')&&
+       index.includes('snapshotEl.onclick=()=>snapSel.hidden?startSnapshotSelect():endSnapshotSelect()'),
+       "the camera must open the on-map area selection and render directly instead of capturing the window");
+assert(index.includes('id="snapSel"')&&index.includes('id="snapSelBox"')&&index.includes('id="snapSelRes"')&&
+       ["nw","n","ne","e","se","s","sw","w"].every(h=>index.includes(`data-h="${h}"`)),
+       "the capture selection needs a movable box, eight resize handles and a resolution choice");
+assert(index.includes('SNAPSHOT_SCALES=[1,2,4,8]')&&index.includes('snapshotLayerTileUrl')&&
+       index.includes('SNAPSHOT_MAX_TILES=1600')&&index.includes('snapshotTilePlan'),
+       "higher-resolution exports must request bounded source tiles for the selected area");
+assert(!/"#snapshot"\)\)\s*\$\("#snapshot"\)\.onclick/.test(fs.readFileSync(path.join(root,"ui-system.js"),"utf8")),
+       "the redesign must not re-route the camera button away from the map selection");
 assert(index.includes('touchShare=matchMedia("(pointer: coarse)").matches')&&
        index.includes("Downloaded ${name} to this browser's Downloads."),
        "desktop map exports must download without invoking a system share sheet");
