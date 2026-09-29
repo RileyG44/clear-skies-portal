@@ -17,6 +17,7 @@ process.env.CSP_TERRAIN_WORKERS="1";
 const {
   validateSnapshotImageUrl,
   resolveSnapshotImageRedirect,
+  send,
   closeServerResources
 }=require("./server.js");
 
@@ -184,6 +185,24 @@ async function main(){
     assert.equal(page.status,200);
     assert.match(page.headers["content-type"],/^text\/html/);
     assert.equal(page.headers["x-content-type-options"],"nosniff");
+
+    /* The shell is revalidated, not re-downloaded, and goes out compressed to
+       clients that accept it; the compressed bytes must be the same page. */
+    assert.equal(page.headers["cache-control"],"no-cache");
+    assert(page.headers.etag,"static files carry an ETag");
+    const notModified=await request(port,"/",{headers:{"If-None-Match":page.headers.etag}});
+    assert.equal(notModified.status,304,"a matching ETag revalidates without a body");
+    assert.equal(notModified.body.length,0);
+    for(const [accept,encoding,decode] of [["br, gzip","br",zlib.brotliDecompressSync],["gzip","gzip",zlib.gunzipSync]]){
+      const packed=await request(port,"/",{headers:{"Accept-Encoding":accept}});
+      assert.equal(packed.headers["content-encoding"],encoding);
+      assert.match(packed.headers.vary,/Accept-Encoding/);
+      assert(packed.body.length<page.body.length/2,`${encoding} shell is smaller`);
+      assert.deepEqual(decode(packed.body),page.body,`${encoding} shell decodes to the same page`);
+      assert.notEqual(packed.headers.etag,page.headers.etag,"each encoding has its own validator");
+    }
+    const health2=await request(port,"/api/health",{headers:{"Accept-Encoding":"gzip"}});
+    assert.equal(health2.headers["content-encoding"],undefined,"tiny bodies are not worth compressing");
 
     const maplibreModule=await request(port,"/vendor/maplibre-gl.mjs");
     assert.equal(maplibreModule.status,200,"the vendored 3D renderer must be served locally");
@@ -355,6 +374,24 @@ async function main(){
     assert.equal((await request(port,"/package.json")).status,404);
     assert.equal((await request(port,"/%2e%2e%2fpackage.json")).status,403);
     assert.equal((await request(port,"/%E0%A4%A")).status,400);
+
+    /* Dynamic JSON goes through the same path as the API routes: compressed
+       off the event loop, and exactly the bytes it was given. */
+    const bigJson=Buffer.from(JSON.stringify({rows:Array.from({length:400},(_,i)=>({i,name:"tile "+i}))}));
+    const captured=await new Promise(resolve=>{
+      const fake={req:{method:"GET",headers:{"accept-encoding":"gzip, br"}},destroyed:false,writableEnded:false,
+        writeHead(status,headers){ this.status=status; this.headers=headers; return this },
+        end(body){ this.writableEnded=true; resolve({status:this.status,headers:this.headers,body}) }};
+      send(fake,200,"application/json",bigJson);
+    });
+    assert.equal(captured.headers["Content-Encoding"],"br");
+    assert.deepEqual(zlib.brotliDecompressSync(captured.body),bigJson);
+    const pngPassthrough=await new Promise(resolve=>{
+      const fake={req:{method:"GET",headers:{"accept-encoding":"br"}},destroyed:false,writableEnded:false,
+        writeHead(status,headers){ this.headers=headers; return this }, end(body){ resolve({headers:this.headers,body}) }};
+      send(fake,200,"image/png",Buffer.alloc(4096));
+    });
+    assert.equal(pngPassthrough.headers["Content-Encoding"],undefined,"images pass straight through");
 
     console.log("server integration checks passed");
   } finally {

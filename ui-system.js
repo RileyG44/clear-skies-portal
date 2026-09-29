@@ -206,16 +206,9 @@ function annotateOverlayGroups(){
 new MutationObserver(annotateOverlayGroups).observe($("#ovList"),{childList:true});
 
 const snapshotPanel=$("#snapshotPanel"),snapshotHome=snapshotPanel?.parentElement;
-/* The camera button opens Export. From a collapsed panel - a peeking phone
-   sheet or a hidden desktop panel - it has to open it too, or the route
-   changes out of sight. */
-if($("#snapshot")) $("#snapshot").onclick=()=>{
-  activateRoute("export");
-  if(document.body.classList.contains("collapsed")){
-    if(document.body.dataset.cspDetent!=="large") document.body.dataset.cspDetent="medium";
-    $("#sideToggle")?.click();
-  }
-};
+/* The camera button goes straight to choosing an area on the map (the page's
+   own handler); the Export view keeps the resolution choice and a button
+   that starts the same selection. */
 
 const visited=new Set();
 let currentRoute="layers";
@@ -510,7 +503,7 @@ document.addEventListener("change",()=>scheduleLayerRefresh(0),true);
 document.addEventListener("csp:layers-changed",()=>scheduleLayerRefresh(80));
 new MutationObserver(()=>scheduleLayerRefresh(80)).observe($("#ctl"),{attributes:true,childList:true,subtree:true,characterData:true});
 new MutationObserver(()=>scheduleLayerRefresh(80)).observe($("#panes"),{attributes:true,subtree:true,attributeFilter:["class","hidden","aria-pressed"]});
-setInterval(()=>scheduleLayerRefresh(0),1800);
+setInterval(()=>{ if(document.visibilityState==="visible") scheduleLayerRefresh(0) },1800);
 
 /* Slider groove fill. A range cannot style its own filled portion in WebKit,
    so the value is mirrored into --csp-fill. Programmatic resets do not fire
@@ -524,7 +517,7 @@ function syncRangeFill(input){
 const syncAllRangeFills=()=>{for(const input of document.querySelectorAll('input[type="range"]')) syncRangeFill(input)};
 document.addEventListener("input",event=>{if(event.target.matches?.('input[type="range"]')) syncRangeFill(event.target)},true);
 document.addEventListener("click",()=>requestAnimationFrame(syncAllRangeFills),true);
-setInterval(syncAllRangeFills,1000);
+setInterval(()=>{ if(document.visibilityState==="visible") syncAllRangeFills() },1000);
 syncAllRangeFills();
 
 /* Phone bottom sheet, modelled on the Maps sheet in iOS 26. Three resting

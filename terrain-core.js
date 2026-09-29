@@ -199,22 +199,28 @@
     return {azimuth:normalizeDegrees(azimuth),altitude,ambient,zFactor,rowAxis:rowAxisOf(options)};
   }
 
+  function lightVector(lighting){
+    const azimuth=lighting.azimuth*DEG_TO_RAD, altitude=lighting.altitude*DEG_TO_RAD;
+    return {east:Math.cos(altitude)*Math.sin(azimuth), north:Math.cos(altitude)*Math.cos(azimuth),
+            up:Math.sin(altitude)};
+  }
+  /* Compiled lighting carries its light vector (`vec`), so a tile's 65,536
+     pixels do not each recompute the same four trig calls. */
+  function withLightVector(lighting){ lighting.vec=lightVector(lighting); return lighting; }
+
   function directIllumination(dzdx,dzdy,lighting){
     const east=dzdx*lighting.zFactor;
     const north=(lighting.rowAxis==="south"?-dzdy:dzdy)*lighting.zFactor;
-    const normalLength=Math.hypot(east,north,1);
-    const azimuth=lighting.azimuth*DEG_TO_RAD, altitude=lighting.altitude*DEG_TO_RAD;
-    const lightEast=Math.cos(altitude)*Math.sin(azimuth);
-    const lightNorth=Math.cos(altitude)*Math.cos(azimuth);
-    const lightUp=Math.sin(altitude);
-    return clamp((-east*lightEast-north*lightNorth+lightUp)/normalLength,0,1);
+    const light=lighting.vec||lightVector(lighting);
+    const d=(-east*light.east-north*light.north+light.up)/Math.sqrt(east*east+north*north+1);
+    return d<0?0:d>1?1:d;
   }
 
   /* Compile invariant lighting once for hot pixel loops.  The scalar helpers
      below remain convenient for probes and tests, while tile renderers avoid
      reparsing the same azimuth, altitude and blend options 65,536 times. */
   function createHillshade(options){
-    const lighting=validatedLighting(options||{});
+    const lighting=withLightVector(validatedLighting(options||{}));
     return function compiledHillshade(dzdx,dzdy){
       if(!finiteNumber(dzdx)||!finiteNumber(dzdy)) return null;
       const direct=directIllumination(dzdx,dzdy,lighting);
@@ -304,7 +310,7 @@
       const weight=direction.weight===null?1:direction.weight;
       if(!finiteNumber(weight)||weight<0) throw new RangeError("each weight must be a finite non-negative number");
       return {azimuth:normalizeDegrees(direction.azimuth),weight,
-              lighting:{...base,azimuth:normalizeDegrees(direction.azimuth),altitude:direction.altitude,ambient:0}};
+              lighting:withLightVector({...base,azimuth:normalizeDegrees(direction.azimuth),altitude:direction.altitude,ambient:0})};
     });
     if(weighting==="explicit"&&!compiled.some(direction=>direction.weight>0))
       throw new RangeError("at least one multidirectional weight must be greater than zero");
