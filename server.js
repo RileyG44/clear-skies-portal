@@ -31,7 +31,7 @@ fs.mkdirSync(AREAS, {recursive:true});
 
 const MIME = {".html":"text/html; charset=utf-8",".js":"text/javascript",".mjs":"text/javascript",".css":"text/css",
   ".json":"application/json",".png":"image/png",".jpg":"image/jpeg",".jpeg":"image/jpeg",
-  ".svg":"image/svg+xml",".wasm":"application/wasm",".md":"text/markdown; charset=utf-8",".txt":"text/plain; charset=utf-8"};
+  ".svg":"image/svg+xml",".wasm":"application/wasm",".md":"text/markdown; charset=utf-8",".txt":"text/plain; charset=utf-8",".woff2":"font/woff2"};
 const PUBLIC_FILES = new Set(["index.html","version.js","ui-theme.css","ui-system.css","ui-system.js","mosaic-core.js","terrain-core.js","terrain-raster.js",
   "public-terrain.js","public-terrain-worker.js","vendor/lerc/LercDecode.js","vendor/lerc/LercDecode.es.js","vendor/lerc/lerc-wasm.wasm",
   "elevation-bands.js","elevation-tile-core.js","tile-pipeline.js","wa-archaeology.js","glacial-research-core.js","research-analysis.js","research-worker.js","sw.js","manifest.json",
@@ -1440,7 +1440,7 @@ const server = http.createServer(async (req,res)=>{
     if(inside.startsWith(".."+path.sep)||path.isAbsolute(inside))
       return send(res,403,"text/plain",Buffer.from("forbidden"));
     const publicRel=rel.split(path.sep).join("/");
-    if(!PUBLIC_FILES.has(publicRel)&&!publicRel.startsWith("vendor/potree/")&&!publicRel.startsWith("vendor/icons/"))
+    if(!PUBLIC_FILES.has(publicRel)&&!publicRel.startsWith("vendor/potree/")&&!publicRel.startsWith("vendor/icons/")&&publicRel!=="vendor/fonts/inter-latin-wght-normal.woff2")
       return send(res,404,"text/plain",Buffer.from("not found"));
     fs.readFile(f,(e,buf)=>{
       if(e) return send(res,404,"text/plain",Buffer.from("not found"));

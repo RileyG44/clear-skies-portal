@@ -20,7 +20,16 @@ const classicUi=new URLSearchParams(location.search).get("ui")==="classic";
 document.documentElement.classList.toggle("csp-glass",!classicUi);
 document.documentElement.style.setProperty("--side-w","580px");
 side.style.width="580px";
-$("#q").placeholder="Search places, layers…";
+/* The placeholder follows the field's own width, not the window's: the rail
+   on a desktop is narrower than the field on a phone. A clipped "Search pla…"
+   reads as broken; "Search" is what a system search field says anyway. */
+{
+  const q=$("#q"),long="Search places, layers…";
+  q.placeholder=long;
+  if(window.ResizeObserver) new ResizeObserver(([entry])=>{
+    q.placeholder=entry.contentRect.width<190?"Search":long;
+  }).observe(q);
+}
 
 const ROUTES={
   layers:{title:"Layers",description:"Everything currently drawn on the map, in render order.",icon:"layers",panes:[],custom:"layers"},
@@ -52,13 +61,13 @@ nav.append(oldHeader,searchbox);
 const coordinateActions=document.createElement("div");coordinateActions.className="csp-coordinate-actions";
 coordinateActions.innerHTML=`
   <button type="button" data-coordinate="copy" title="Copy coordinates" aria-label="Copy coordinates">
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="8" width="13" height="13" rx="2"/><path d="M16 8V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h3"/></svg>
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="8" width="13" height="13" rx="2"/><path d="M16 8V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h3"/></svg><span>Copy</span>
   </button>
   <button type="button" data-coordinate="maps" title="Open coordinates in Google Maps" aria-label="Open coordinates in Google Maps">
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m3 6 6-3 6 3 6-3v15l-6 3-6-3-6 3z"/><path d="M9 3v15m6-12v15"/></svg>
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m3 6 6-3 6 3 6-3v15l-6 3-6-3-6 3z"/><path d="M9 3v15m6-12v15"/></svg><span>Maps</span>
   </button>
   <button type="button" data-coordinate="earth" title="Open coordinates in Google Earth" aria-label="Open coordinates in Google Earth">
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"/></svg>
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"/></svg><span>Earth</span>
   </button>`;
 nav.append(coordinateActions,navScroll);
 nav.append(foot);
@@ -122,7 +131,7 @@ coordinateActions.addEventListener("click",event=>{
 });
 
 const locateButton=$("#loc");
-if(locateButton) locateButton.innerHTML=`<img src="${icon("map-pinned")}" alt=""><span class="csp-locate-label">Locate me</span>`;
+if(locateButton) locateButton.innerHTML=`<img src="${icon(classicUi?"map-pinned":"navigation")}" alt=""><span class="csp-locate-label">Locate me</span>`;
 
 const SEARCH_ROUTES=new Map([
   ["layers","layers"],["active layers","layers"],
