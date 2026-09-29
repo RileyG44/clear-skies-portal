@@ -86,9 +86,14 @@ stop_agent(){ launchctl bootout "gui/$USER_ID" "$AGENT_FILE" 2>/dev/null || true
 
 checkout_ref(){
   local ref=$1 commit
-  git -C "$REPO_ROOT" fetch --quiet origin "$ref" 2>/dev/null || print -u2 "preview: could not fetch origin/$ref; using the local copy"
-  commit=$(git -C "$REPO_ROOT" rev-parse --verify --quiet "origin/$ref^{commit}" 2>/dev/null ||
-           git -C "$REPO_ROOT" rev-parse --verify --quiet "$ref^{commit}" 2>/dev/null) || die "unknown branch or commit: $ref"
+  # What is pushed is what collaborators expect to see, so a fresh fetch wins.
+  # If the fetch fails, a stale remote-tracking ref is worse than the local
+  # branch, so fall back to the local one first.
+  local order=("$ref" "origin/$ref")
+  if git -C "$REPO_ROOT" fetch --quiet origin "$ref" 2>/dev/null; then order=("origin/$ref" "$ref")
+  else print -u2 "preview: could not fetch origin/$ref; using the local copy"; fi
+  commit=$(git -C "$REPO_ROOT" rev-parse --verify --quiet "${order[1]}^{commit}" 2>/dev/null ||
+           git -C "$REPO_ROOT" rev-parse --verify --quiet "${order[2]}^{commit}" 2>/dev/null) || die "unknown branch or commit: $ref"
   install -d -m 700 "$DATA_DIR"
   if [[ -e "$CHECKOUT/.git" ]]; then
     # A managed checkout: local edits here are never intentional, so a forced
