@@ -308,6 +308,14 @@ assert(!/"#snapshot"\)\)\s*\$\("#snapshot"\)\.onclick/.test(fs.readFileSync(path
 assert(index.includes('touchShare=matchMedia("(pointer: coarse)").matches')&&
        index.includes("Downloaded ${name} to this browser's Downloads."),
        "desktop map exports must download without invoking a system share sheet");
+const reliefSandbox={};
+vm.runInNewContext(`${namedFunction(index,"reliefZFactor")}; lidar=reliefZFactor(1); continental=reliefZFactor(6600);`,reliefSandbox,{filename:"index.html#relief-test"});
+assert(Math.abs(reliefSandbox.lidar-1.024)<0.001&&reliefSandbox.continental>8&&reliefSandbox.continental<11,
+       "zoomed-out hillshade must use the scaled z-factor: ~1x at lidar cells, ~9x at continental cells");
+assert(index.includes('const HIDPI=')&&index.includes('this._cspDz=HIDPI')&&index.includes('size=${EXPORT_PX},${EXPORT_PX}'),
+       "terrain and exported map images must be drawn at the screen's pixel density");
+assert(index.includes('module.addProtocol("cspmesh"')&&index.includes('MESH_FAST_WAIT')&&index.includes('module.prewarm?.()'),
+       "the 3D mesh must answer from the CDN overview when 3DEP is slow, and MapLibre must be prewarmed");
 const snapshotRangeSandbox={};
 vm.runInNewContext(`${namedFunction(index,"snapshotWorldY")}; ${namedFunction(index,"snapshotTileRange")};
   regional=snapshotTileRange({getWest:()=>-120,getEast:()=>-119,getNorth:()=>48,getSouth:()=>47},10);
@@ -355,9 +363,10 @@ assert(index.includes('const trackpadGestures=')&&index.includes('if(trackpadGes
 assert(index.includes('terrainSky(theme,light)')&&index.includes('hypsometricRamp()'),
        "the 3D view must carry a sky and an elevation relief tint, not a bare hillshade on a flat background");
 assert(index.includes('map.fire("zoomanim",{center,zoom:z,noUpdate:true})')&&
+       index.includes('paintPanes(center,z)')&&index.includes('skipWhilePainted(L.GridLayer.prototype,"_animateZoom")')&&
        index.includes('this._cspTransformHold=transformHold')&&
        index.includes('L.GridLayer.prototype._invalidateAll'),
-       "zoom preview must transform every Leaflet renderer and keep outgoing tile holds aligned while replacements load");
+       "zoom preview must move the tile and overlay panes as units, keep markers on zoomanim, and keep outgoing tile holds aligned while replacements load");
 assert(index.includes('id="map3d"')&&index.includes('import("./vendor/maplibre-gl.mjs")')&&
        index.includes('terrain:{source:"dem",exaggeration:light.exaggeration}'),
        "3D lidar terrain must lazy-load MapLibre and use the elevation DEM as a mesh");

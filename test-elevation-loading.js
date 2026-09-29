@@ -10,12 +10,12 @@ class Grid {
   constructor(options){this.events={};this.initialize(options);}
   on(name,fn){this.events[name]=fn;return this;}
   fire(name,value){this.events[name]?.(value);}
-  getTileSize(){return {x:2,y:2};}
+  getTileSize(){const t=this.options.tileSize;return t?{x:t,y:t}:{x:2,y:2};}
   static extend(methods){class Layer extends Grid{};Object.assign(Layer.prototype,methods);return Layer;}
 }
 async function main(){
   const calls=new Map(),deferred=new Map();
-  const context={L:{GridLayer:Grid,setOptions:(self,opts)=>{self.options=opts;}},
+  const context={L:{GridLayer:Grid,setOptions:(self,opts)=>{self.options=opts;},point:(x,y)=>({x,y})},HIDPI:false,
     document:{createElement:()=>({dataset:{}})},AbortController,DOMException,Float32Array,Promise,
     PROXY:true,api:value=>'engine'+value,CSPTilePipeline:pipeline,ElevationTileCore:core,CSPPublicTerrain:require('./public-terrain'),
     elevationRequests:new RequestPool(),fetchElevation:(url,signal)=>{
@@ -59,6 +59,20 @@ async function main(){
   assert.deepEqual([...publicLayer._store.get('17/2/2').elev],[10,2,30,40]);
   assert.equal(publicCanvas._cspSourceCounts[2],3);assert.equal(publicCanvas._cspSourceCounts[1],1);
   assert.equal(publicDone,1,'refinement does not trigger completion twice');
-  console.log('elevation loading checks passed (actual layer, out-of-order responses, shared requests, pan cancellation, revisit)');
+
+  /* High-density screens: the display tile at z16 is drawn from the whole z17
+     source tile at twice its CSS size, keyed and stored by the source tile. */
+  context.PROXY=true;context.HIDPI=true;
+  const dense=new context.Layer({...opts,tileSize:2,maxNativeZoom:18});dense._paint=()=>{};
+  assert.equal(dense.options.tileSize,1,'the grid is half size');
+  assert.equal(dense.options.maxNativeZoom,17,'native zoom is counted in source tiles');
+  const display={z:16,x:5,y:6};
+  const denseCanvas=dense.createTile(display,()=>{});await tick();
+  assert.equal(denseCanvas.width,2,'the canvas holds the full source tile');
+  assert.ok(calls.has('engine/raw/17/5/6.png'),'source tiles are one zoom finer than the display grid');
+  assert.equal(denseCanvas._cspCoords.z,17);
+  dense.fire('tileunload',{coords:display,tile:denseCanvas});
+  assert.equal(dense._pending.size,0,'unloading the display tile cancels its source request');
+  console.log('elevation loading checks passed (actual layer, out-of-order responses, shared requests, pan cancellation, revisit, high density)');
 }
 main().catch(error=>{console.error(error);process.exitCode=1;});
