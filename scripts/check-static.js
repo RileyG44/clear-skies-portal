@@ -317,11 +317,17 @@ assert(index.includes('const HIDPI=')&&index.includes('this._cspDz=HIDPI')&&inde
 assert(index.includes('module.addProtocol("cspmesh"')&&index.includes('MESH_FAST_WAIT')&&index.includes('module.prewarm?.()'),
        "the 3D mesh must answer from the CDN overview when 3DEP is slow, and MapLibre must be prewarmed");
 assert(index.includes('if(data&&data.pinch&&!map3d){ pinchFrame(center,zoom);return this }')&&
-       index.includes('if(pinchLive){ pinchLive=false;commitView(center,zoom);return }'),
+       index.includes('pinchLive=false;commitView(center,zoom);\n      map.eachLayer(layer=>layer._cspEndDeferral?.());')&&
+       index.includes('map._cspDeferExpensive=true;\n      try{ commitView(center,zoom) }finally{ map._cspDeferExpensive=false }')&&
+       index.includes('CompositeTerrainLayer.prototype._cspExpensive=true;')&&index.includes('ElevLayer.prototype._cspExpensive=true;'),
        "touch pinch must paint through the pane painter and commit the exact frame at lift-off, not replay Leaflet's CSS zoom");
 assert(index.includes('function releaseCanvas(canvas)')&&/tileunload[\s\S]{0,400}releaseCanvas\(event\.tile\)/.test(index)&&
        !index.includes('const canvas=document.createElement("canvas");canvas.width=bitmap.width'),
        "canvases must be released when tiles unload and elevation decoding must share a scratch canvas (iOS caps total canvas memory)");
+assert(index.includes('World_Light_Gray_Base/MapServer/tile/{z}/{y}/{x}", attr:ESRI_ATTR, max:16}')&&
+       index.includes('World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}", attr:ESRI_ATTR, max:16}')&&
+       index.includes('tileSize:256,maxzoom:16,attribution:"Esri, HERE, Garmin'),
+       "Esri Canvas tiles exist only to z16; past it every tile is a 'Map data not yet available' stamp");
 assert(index.includes('/api/wadnr/export?bbox=${b.join(",")}&size=${px},${px}&dpi=${Math.round(96*px/256)}')&&
        index.includes('const waSharpPx=()=>serverHealth?.features?.includes("wadnr-dpi")?EXPORT_PX:256;'),
        "WA DNR exports must keep the scale of its tile cache (dpi grows with size), or tiles come back 'Map data not yet available'");

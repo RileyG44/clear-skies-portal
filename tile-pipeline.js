@@ -7,8 +7,11 @@
   'use strict';
   const aborted=()=>Object.assign(new Error('Tile request cancelled'),{name:'AbortError'});
   class RequestPool {
-    constructor({concurrency=6,maxBytes=48*1024*1024,ttl=5*60*1000,groupLimits={}}={}){
-      this.groupLimits=groupLimits;this.groupActive=new Map();
+    /* idleGroups start only while nothing from any other group is queued or
+       running: work that improves what is already on screen must not hold a
+       slot that a tile still showing nothing is waiting for. */
+    constructor({concurrency=6,maxBytes=48*1024*1024,ttl=5*60*1000,groupLimits={},idleGroups=[]}={}){
+      this.groupLimits=groupLimits;this.groupActive=new Map();this.idleGroups=new Set(idleGroups);
       this.concurrency=concurrency;this.maxBytes=maxBytes;this.ttl=ttl;
       this.cache=new Map();this.jobs=new Map();this.queue=[];this.active=0;this.bytes=0;
     }
@@ -41,7 +44,10 @@
     _drain(){
       this.queue.sort((a,b)=>b.priority-a.priority);
       while(this.active<this.concurrency&&this.queue.length){
-        const index=this.queue.findIndex(job=>(this.groupActive.get(job.group)||0)<(this.groupLimits[job.group]??this.concurrency));
+        let idleActive=0;for(const group of this.idleGroups)idleActive+=this.groupActive.get(group)||0;
+        const busy=this.active>idleActive||this.queue.some(job=>job.waiters.size&&!this.idleGroups.has(job.group));
+        const index=this.queue.findIndex(job=>(this.groupActive.get(job.group)||0)<(this.groupLimits[job.group]??this.concurrency)&&
+          !(busy&&this.idleGroups.has(job.group)));
         if(index<0)break;
         const [job]=this.queue.splice(index,1);if(!job.waiters.size)continue;
         this.groupActive.set(job.group,(this.groupActive.get(job.group)||0)+1);
