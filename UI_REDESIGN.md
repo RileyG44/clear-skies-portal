@@ -117,10 +117,26 @@ A visual refresh on top of the same information architecture, following Apple's 
   - A fixed locate track beside the field.
   - The Copy, Maps and Earth shortcuts as equal capsules on one row. Their labels are shown or hidden by a container query on the row's own width.
   - Touch layouts use 44 px targets and 16 px text. The placeholder shortens to "Search" when the field is narrower than 190 px.
-  - `scripts/ui-stress.js` checks all of this against 64 size, orientation, state and theme cases and writes a crop of each. Run it after any change to this area.
+  - `scripts/ui-stress.js` checks all of this against 64 size, orientation, state and theme cases and writes a crop of each. Run it, and `scripts/ui-sheet.js`, after any change to this area.
 - **Phone:**
   - The sidebar becomes a bottom sheet with a grabber and two detents (`data-csp-detent="medium|large"` on `<body>`). Tap the grabber to cycle, drag to resize, or drag well below medium to close through the existing toggle. The toggle and map tools stay at the top, where the sheet never reaches.
-  - In landscape it is a card on the leading edge instead, as in Maps.
+  - It moves like the Maps sheet. You can drag it from anywhere on it, not only the grabber:
+    - At peek and medium, a vertical drag always moves the sheet, and the content does not scroll (swipe up for large).
+    - At large, the content scrolls, and once it is at its top, pulling down takes the sheet with it (`touchmove` claims the gesture before the browser scrolls). Touch ownership per detent is also set with `touch-action`.
+    - The release speed is projected forward (about 300 ms of travel), and the sheet settles on the detent nearest that point. A flick carries on, a slow drag lands where it is let go, and dragging past either end rubber-bands.
+    - Sliders, pickers, the layer reorder handle and the suggestion list keep their own drags.
+  - On the phone the sheet is glass after the Maps sheet in iOS 26: inset 8 px with a 38 px radius, a bright rim and a sheen along its top edge. Its cards and fields are thinner glass with their own rims.
+    - It is nearly clear at peek, where it only frames the search field, and frosts over when opened, where it carries pages of text.
+    - A web page cannot sample the map under it to flip its ink the way iOS does, so the opened value is set where secondary text still reads over dark water.
+    - The values are the `--sheet-*` tokens in `ui-theme.css`.
+  - Collapsing never hides it in portrait. "Collapsed" is a peek detent: the grabber and the search field (or a detail page's title) stay above the bottom edge. Tapping the strip, tapping the grabber, or dragging up opens it again; tapping the search field opens it to large.
+  - Every existing close path now lands on peek: tapping the map, dragging down, the back swipe, and the arrow keys on the grabber. The sidebar toggle is hidden on a portrait phone because the peek replaces it.
+  - While the point-cloud viewer, which is its own bottom sheet, is open, the peek steps fully out of the way.
+  - `setCollapsed()` still marks the panel inert. `ui-system.js` lifts that while it peeks, and hides the clipped rows with `visibility` so they stay out of the tab order.
+  - `scripts/ui-sheet.js` drives all of this.
+  - In landscape it is a card on the leading edge instead, as in Maps, and keeps the hide-and-toggle behaviour, since a peek strip would cover most of a landscape phone's height.
+- **Map controls:** the dock is one vertical glass capsule, as in Maps, rather than a column of separate buttons. It stays top-right, where its popovers are anchored.
+- **View modes:** the floating control and the Terrain pane use the same parallel names: 2D map, 3D terrain, Point cloud.
 - **Accessibility:** `prefers-reduced-transparency` and browsers without `backdrop-filter` get the same layout on solid surfaces. `prefers-reduced-motion` removes the sheet and switch springs. Faint ink uses Apple's increased-contrast secondary label, because the standard one measures about 3.4:1 on white.
 - **Tokens:** all values live in `ui-theme.css` under `:root.csp-glass` and `:root.csp-glass[data-ui-theme="dark"]`. The dark block restates every value the light glass block overrides, because the light glass block outranks the classic dark palette.
 

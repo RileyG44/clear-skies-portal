@@ -210,6 +210,17 @@ assert(index.includes('id="buildDiag"'),"the geometry readout must be reachable 
     "the coordinate shortcuts must not be squeezed when the phone sheet is short");
   assert(/container-type:inline-size/.test(rule(".csp-glass body.csp-redesign .csp-coordinate-actions")),
     "shortcut labels follow the panel's width, not the window's");
+  /* The phone sheet peeks instead of disappearing: collapsed is a detent in
+     portrait, the toggle is redundant there, and the panel is kept usable
+     while it peeks. scripts/ui-sheet.js drives the interactions. */
+  assert(/@media \(max-width:760px\) and \(orientation:portrait\)\{[\s\S]*?\.collapsed #side\{[^}]*height:var\(--sheet-peek\)/.test(ui),
+    "a collapsed portrait phone sheet must peek, not hide");
+  assert(/orientation:portrait\)\{[\s\S]*?#sideToggleDock\{display:none\}/.test(ui),
+    "the peek replaces the sidebar toggle on a portrait phone");
+  assert(read("ui-system.js").includes("if(sheetMode()) side.inert=false"),
+    "a peeking sheet must stay interactive; setCollapsed() makes the panel inert");
+  assert(read("ui-system.js").includes('data-mode="2d">2D map<')&&read("index.html").includes('id="terModePoints" type="button" aria-pressed="false">Point cloud<'),
+    "the map view modes share one set of parallel names in both controls");
   assert(read("ui-system.js").includes('"Search":long'),"the placeholder must shorten in a narrow field instead of clipping");
   assert(fs.existsSync(path.join(root,"vendor","fonts","inter-latin-wght-normal.woff2")),"the Inter fallback face must be vendored");
   assert(read("sw.js").includes("./vendor/fonts/inter-latin-wght-normal.woff2"),"the fallback face must be in the offline shell");
