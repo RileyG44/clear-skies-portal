@@ -63,18 +63,34 @@ async function main(){
   assert.equal(publicDone,1,'refinement does not trigger completion twice');
 
   /* High-density screens: the display tile at z16 is drawn from the whole z17
-     source tile at twice its CSS size, keyed and stored by the source tile. */
+     source tile at twice its CSS size, keyed and stored by the source tile.
+     It first paints from the z16 tile the screen's zoom always used - one
+     request shared by four display tiles - and only then asks for z17. */
   context.PROXY=true;context.HIDPI=true;
   const dense=new context.Layer({...opts,tileSize:2,maxNativeZoom:18});dense._paint=()=>{};
   assert.equal(dense.options.tileSize,1,'the grid is half size');
   assert.equal(dense.options.maxNativeZoom,17,'native zoom is counted in source tiles');
-  const display={z:16,x:5,y:6};
-  const denseCanvas=dense.createTile(display,()=>{});await tick();
+  const display={z:16,x:5,y:6},sibling={z:16,x:4,y:6};let denseDone=0;
+  const denseCanvas=dense.createTile(display,error=>{assert.ifError(error);denseDone++;});
+  const siblingCanvas=dense.createTile(sibling,()=>{});await tick();
   assert.equal(denseCanvas.width,2,'the canvas holds the full source tile');
-  assert.ok(calls.has('engine/raw/17/5/6.png'),'source tiles are one zoom finer than the display grid');
   assert.equal(denseCanvas._cspCoords.z,17);
-  dense.fire('tileunload',{coords:display,tile:denseCanvas});
-  assert.equal(dense._pending.size,0,'unloading the display tile cancels its source request');
-  console.log('elevation loading checks passed (actual layer, out-of-order responses, shared requests, pan cancellation, revisit, high density)');
+  assert.equal(calls.get('engine/raw/16/2/3.png'),1,'the first pass is the on-screen zoom, shared by sibling tiles');
+  assert.equal(calls.has('engine/raw/17/5/6.png'),false,'the finer zoom waits until the tile has painted');
+  deferred.get('engine/raw/16/2/3.png')({grid:new Float32Array([1,2,3,4]),width:2,height:2});await tick();
+  assert.equal(denseDone,1,'the tile paints from the first pass');
+  assert.ok([...dense._store.get('17/5/6').elev].every(v=>v>=1&&v<=4),'the first pass is drawn from the coarser tile');
+  deferred.get('engine/national/16/2/3.png')({grid:new Float32Array([9,9,9,9]),width:2,height:2});
+  deferred.get('fallback/16/2/3')({grid:new Float32Array([9,9,9,9]),width:2,height:2});await tick();await tick();
+  assert.equal(calls.get('engine/raw/17/5/6.png'),1,'then the best source sharpens at the finer zoom');
+  assert.equal(calls.has('engine/national/17/5/6.png'),false,'only the best source is sharpened');
+  assert.equal(denseCanvas._cspRefining,true);
+  deferred.get('engine/raw/17/5/6.png')({grid:new Float32Array([5,NaN,7,8]),width:2,height:2});await tick();await tick();
+  assert.deepEqual([...dense._store.get('17/5/6').elev],[5,2,7,8],'sharper pixels replace their own source, gaps keep the first pass');
+  assert.equal(denseCanvas._cspSourceCounts[3],4,'sharpening does not change attribution');
+  assert.equal(denseCanvas._cspRefining,false);assert.equal(denseDone,1);
+  dense.fire('tileunload',{coords:sibling,tile:siblingCanvas});
+  assert.equal(dense._pending.has('17/4/6'),false,'unloading the display tile cancels its source request');
+  console.log('elevation loading checks passed (actual layer, out-of-order responses, shared requests, pan cancellation, revisit, high density, sharpening)');
 }
 main().catch(error=>{console.error(error);process.exitCode=1;});

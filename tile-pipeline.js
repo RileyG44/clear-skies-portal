@@ -74,14 +74,19 @@
      Missing detail never overwrites valid overview pixels. */
   class ProgressiveGrid {
     constructor(length){this.grid=new Float32Array(length);this.grid.fill(NaN);this.ranks=new Uint8Array(length);this.counts=new Uint32Array(256);this.valid=0;}
-    accept(values,rank){
+    /* sharper: the same source at a finer zoom, so it may also replace pixels
+       of its own rank - never a better source's. */
+    accept(values,rank,sharper=false){
       if(!values||values.length!==this.grid.length||!(rank>0&&rank<256))return false;
       let changed=false;
       for(let i=0;i<values.length;i++){
         const value=values[i];
-        if(Number.isFinite(value)&&value>-20000&&rank>this.ranks[i]){
-          if(!this.ranks[i])this.valid++;else this.counts[this.ranks[i]]--;
-          this.counts[rank]++;this.ranks[i]=rank;this.grid[i]=value;changed=true;
+        if(Number.isFinite(value)&&value>-20000&&(rank>this.ranks[i]||sharper&&rank===this.ranks[i])){
+          if(rank!==this.ranks[i]){
+            if(!this.ranks[i])this.valid++;else this.counts[this.ranks[i]]--;
+            this.counts[rank]++;this.ranks[i]=rank;
+          }
+          this.grid[i]=value;changed=true;
         }
       }
       return changed;
