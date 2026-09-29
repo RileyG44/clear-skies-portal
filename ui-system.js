@@ -13,6 +13,11 @@ const ready=()=>document.documentElement.dispatchEvent(new Event("csp:ready"));
 if(!side||!panes||!status||!mapEl||!bridge){ ready(); return; }
 
 document.body.classList.add("csp-redesign");
+/* The Liquid Glass layer is on by default; ?ui=classic shows the previous
+   palette and shell for side-by-side review. Set before the boot guard lifts,
+   so neither look flashes on the way to the other. */
+const classicUi=new URLSearchParams(location.search).get("ui")==="classic";
+document.documentElement.classList.toggle("csp-glass",!classicUi);
 document.documentElement.style.setProperty("--side-w","580px");
 side.style.width="580px";
 $("#q").placeholder="Search places, layers…";
@@ -390,7 +395,7 @@ function updateCounts(){
   const active=bridge.activeLayers(),catalog=bridge.overlayCatalog();
   const set=(key,value)=>{const el=$(`[data-count="${key}"]`);if(el) el.textContent=value||""};
   set("layers",String(active.filter(layer=>!layer.locked).length));
-  set("satellite",$("#n_results")?.textContent||"");
+  set("satellite",($("#n_results")?.textContent||"").match(/\d[\d,]*/)?.[0]||"");
   const terrainCount=active.filter(layer=>layer.id==="terrain"||layer.id.startsWith("elevation-")).length;
   set("terrain",terrainCount?String(terrainCount):"");
   set("analyze",active.some(layer=>layer.id==="surface-analysis")?"1":"");
@@ -417,6 +422,86 @@ document.addEventListener("csp:layers-changed",()=>scheduleLayerRefresh(80));
 new MutationObserver(()=>scheduleLayerRefresh(80)).observe($("#ctl"),{attributes:true,childList:true,subtree:true,characterData:true});
 new MutationObserver(()=>scheduleLayerRefresh(80)).observe($("#panes"),{attributes:true,subtree:true,attributeFilter:["class","hidden","aria-pressed"]});
 setInterval(()=>scheduleLayerRefresh(0),1800);
+
+/* Slider groove fill. A range cannot style its own filled portion in WebKit,
+   so the value is mirrored into --csp-fill. Programmatic resets do not fire
+   input events, so a periodic sweep catches those; it only writes when the
+   value changed. */
+function syncRangeFill(input){
+  const min=+input.min||0,max=input.max===""?100:+input.max,value=+input.value;
+  const fill=max>min?`${Math.round((value-min)/(max-min)*1000)/10}%`:"0%";
+  if(input.style.getPropertyValue("--csp-fill")!==fill) input.style.setProperty("--csp-fill",fill);
+}
+const syncAllRangeFills=()=>{for(const input of document.querySelectorAll('input[type="range"]')) syncRangeFill(input)};
+document.addEventListener("input",event=>{if(event.target.matches?.('input[type="range"]')) syncRangeFill(event.target)},true);
+document.addEventListener("click",()=>requestAnimationFrame(syncAllRangeFills),true);
+setInterval(syncAllRangeFills,1000);
+syncAllRangeFills();
+
+/* Phone bottom sheet. The grabber is the HIG's affordance for a resizable
+   sheet: tap cycles between the medium and large detents, a drag follows the
+   finger and settles on the nearer one, and dragging well below medium closes
+   the sheet through the existing toggle so every close path stays the same. */
+const phoneSheet=matchMedia("(max-width:760px)");
+const grabber=document.createElement("button");
+grabber.id="cspGrabber";grabber.type="button";
+grabber.setAttribute("aria-label","Resize panel");
+side.prepend(grabber);
+const setDetent=detent=>{
+  document.body.dataset.cspDetent=detent;
+  grabber.setAttribute("aria-expanded",String(detent==="large"));
+  side.style.height="";
+};
+setDetent("medium");
+{
+  let startY=0,startH=0,dragging=false,moved=false;
+  grabber.addEventListener("pointerdown",event=>{
+    if(!phoneSheet.matches) return;
+    dragging=true;moved=false;startY=event.clientY;startH=side.getBoundingClientRect().height;
+    grabber.setPointerCapture(event.pointerId);
+  });
+  grabber.addEventListener("pointermove",event=>{
+    if(!dragging) return;
+    const dy=event.clientY-startY;
+    if(!moved&&Math.abs(dy)<6) return;
+    moved=true;document.body.classList.add("csp-sheet-dragging");
+    side.style.height=`${Math.max(120,Math.min(innerHeight-40,startH-dy))}px`;
+  });
+  const finish=event=>{
+    if(!dragging) return;
+    dragging=false;document.body.classList.remove("csp-sheet-dragging");
+    if(!moved){setDetent(document.body.dataset.cspDetent==="large"?"medium":"large");return}
+    const height=side.getBoundingClientRect().height,dy=event.clientY-startY;
+    const probe=document.createElement("div");probe.style.cssText="position:absolute;visibility:hidden;height:var(--sheet-medium)";
+    document.body.append(probe);const medium=probe.getBoundingClientRect().height;probe.remove();
+    if(dy>0&&height<medium-90){setDetent("medium");$("#sideToggle")?.click();return}
+    setDetent(height>(medium+innerHeight)/2-20?"large":"medium");
+  };
+  grabber.addEventListener("pointerup",finish);
+  grabber.addEventListener("pointercancel",finish);
+  grabber.addEventListener("keydown",event=>{
+    if(event.key==="ArrowUp") setDetent("large");
+    else if(event.key==="ArrowDown") setDetent("medium");
+    else return;
+    event.preventDefault();
+  });
+}
+
+/* A preview engine (scripts/preview.sh) labels itself, so a preview tab can
+   never be mistaken for the live portal. */
+if(/^https?:$/.test(location.protocol)&&!/\.github\.io$/.test(location.hostname)){
+  fetch("api/health",{cache:"no-store"}).then(response=>response.ok?response.json():null).then(health=>{
+    if(health?.channel!=="preview") return;
+    document.documentElement.dataset.cspChannel="preview";
+    const stamp=$("#buildStamp");
+    if(stamp&&!$(".csp-preview-badge",stamp.parentElement)){
+      const badge=document.createElement("span");badge.className="csp-preview-badge";badge.textContent="Preview";
+      badge.title=health.previewRef?`Preview of ${health.previewRef}`:"Preview build, not the live portal";
+      stamp.after(badge);
+    }
+    document.title=`Preview · ${document.title.replace(/^Preview · /,"")}`;
+  }).catch(()=>{});
+}
 
 const savedRoute=localStorage.getItem("clearskies.workspace.v1");
 activateRoute(Object.prototype.hasOwnProperty.call(ROUTES,savedRoute)?savedRoute:"layers",{stayOnNav:compactShell.matches});

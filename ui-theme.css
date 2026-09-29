@@ -161,3 +161,178 @@
 
   color-scheme: dark;
 }
+
+/* Liquid Glass palette (September 2026 preview).
+ *
+ * ui-system.js puts .csp-glass on <html> unless the URL carries ?ui=classic, so
+ * the previous palette above stays one query string away for side-by-side
+ * review. Values follow Apple's system colours rather than inventing new ones:
+ * label/secondaryLabel inks, systemGroupedBackground surfaces, systemBlue as
+ * the single accent and systemGreen for "on". The faint ink is Apple's
+ * increased-contrast secondary label, because the standard 60% one measures
+ * about 3.4:1 on white and this interface sets 11px metadata in it.
+ */
+:root.csp-glass {
+  --ui-surface: #ffffff;
+  --ui-rail: #f5f5f7;
+  --ui-sunken: #f2f2f7;
+  --ui-selected: #e8e8ed;
+  --ui-hover: #ececf1;
+  --ui-hover-2: #e3e3e8;
+
+  --ui-line: #e2e2e7;
+  --ui-line-strong: #d1d1d6;
+
+  --ui-text: #1d1d1f;
+  --ui-text-2: #3c3c43;
+  --ui-text-muted: #636366;
+  --ui-text-faint: #6c6c70;
+
+  --ui-accent: #007aff;
+  --ui-accent-ink: #ffffff;
+  --ui-accent-tint: rgba(0, 122, 255, .12);
+  --ui-on: #34c759;
+
+  --ui-control: var(--ui-accent);
+  --ui-control-ink: #ffffff;
+  --ui-icon-filter-control: brightness(0) invert(1);
+  --ui-check-glyph: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='m3.5 8.2 2.7 2.7 6-6' fill='none' stroke='%23ffffff' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  --ui-thumb: #ffffff;
+  --ui-track: rgba(120, 120, 128, .2);
+  --ui-fill: rgba(120, 120, 128, .12);
+  --ui-fill-2: rgba(120, 120, 128, .2);
+  --ui-ring: rgba(0, 122, 255, .35);
+
+  --ui-ok: #248a3d;
+  --ui-warn: #c93400;
+  --ui-danger: #d70015;
+
+  /* Glass: the regular variant (blur plus a luminosity lift) because the
+     sidebar carries a lot of text. The rim is a light edge on top of a dark
+     hairline, which is what makes a translucent panel read as a solid object. */
+  --glass-panel: rgba(250, 250, 252, .72);
+  --glass-panel-strong: rgba(252, 252, 254, .86);
+  --glass-control: rgba(255, 255, 255, .74);
+  --glass-rim: rgba(255, 255, 255, .7);
+  --glass-edge: rgba(0, 0, 0, .1);
+  --glass-blur: blur(28px) saturate(1.8);
+  --glass-card: rgba(255, 255, 255, .92);
+
+  --ui-frost: rgba(255, 255, 255, .78);
+  --ui-frost-weak: rgba(255, 255, 255, .7);
+
+  /* Switch knobs and slider thumbs are white in both appearances on Apple
+     platforms, with the same layered shadow. */
+  --glass-knob-shadow: 0 0 0 .5px rgba(0, 0, 0, .04), 0 3px 8px rgba(0, 0, 0, .15), 0 3px 1px rgba(0, 0, 0, .06);
+  --glass-tile-shadow: inset 0 .5px 0 rgba(255, 255, 255, .35), 0 .5px 1.5px rgba(0, 0, 0, .12);
+  --ui-segment-thumb: #ffffff;
+
+  /* Glyphs on a coloured sidebar tile are white in both appearances; the back
+     chevron is tinted to the accent. */
+  --ui-icon-filter-tile: brightness(0) invert(1);
+  --ui-icon-filter-accent: brightness(0) saturate(100%) invert(33%) sepia(98%) saturate(2400%) hue-rotate(205deg) brightness(101%);
+
+  --ui-shadow-1: rgba(0, 0, 0, .05);
+  --ui-shadow-2: rgba(0, 0, 0, .08);
+  --ui-shadow-3: rgba(0, 0, 0, .12);
+  --ui-shadow-4: rgba(0, 0, 0, .2);
+
+  /* Sidebar symbol tiles, one system colour per destination. */
+  --tile-layers: #007aff;
+  --tile-satellite: #5856d6;
+  --tile-terrain: #34c759;
+  --tile-analyze: #ff9500;
+  --tile-export: #8e8e93;
+  --tile-conditions: #32ade6;
+  --tile-geology: #ff3b30;
+  --tile-past: #a2845e;
+  --tile-labels: #af52de;
+  --tile-engine: #8e8e93;
+}
+
+:root.csp-glass[data-ui-theme="dark"] {
+  --ui-surface: #1c1c1e;
+  --ui-rail: #161618;
+  --ui-sunken: #0f0f10;
+  --ui-selected: #2c2c2e;
+  --ui-hover: #2c2c2e;
+  --ui-hover-2: #3a3a3c;
+
+  --ui-line: #38383a;
+  --ui-line-strong: #48484a;
+
+  --ui-text: #f5f5f7;
+  --ui-text-2: #d1d1d6;
+  --ui-text-muted: #aeaeb2;
+  --ui-text-faint: #98989d;
+
+  --ui-accent: #0a84ff;
+  --ui-accent-tint: rgba(10, 132, 255, .2);
+  --ui-segment-thumb: #636366;
+  --ui-icon-filter-accent: brightness(0) saturate(100%) invert(45%) sepia(90%) saturate(2600%) hue-rotate(200deg) brightness(103%);
+  --ui-on: #30d158;
+  --ui-control: var(--ui-accent);
+  --ui-control-ink: #ffffff;
+  --ui-icon-filter-control: brightness(0) invert(1);
+  --ui-check-glyph: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='m3.5 8.2 2.7 2.7 6-6' fill='none' stroke='%23ffffff' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  --ui-thumb: #ffffff;
+  --ui-track: rgba(120, 120, 128, .36);
+  --ui-fill: rgba(120, 120, 128, .24);
+  --ui-fill-2: rgba(120, 120, 128, .32);
+  --ui-ring: rgba(10, 132, 255, .5);
+
+  --ui-ok: #30d158;
+  --ui-warn: #ff9f0a;
+  --ui-danger: #ff6961;
+
+  --glass-panel: rgba(30, 30, 32, .78);
+  --glass-panel-strong: rgba(28, 28, 30, .84);
+  --glass-control: rgba(44, 44, 46, .7);
+  --glass-rim: rgba(255, 255, 255, .12);
+  --glass-edge: rgba(0, 0, 0, .5);
+  --glass-card: rgba(44, 44, 46, .78);
+
+  --ui-frost: rgba(36, 36, 38, .78);
+  --ui-frost-weak: rgba(36, 36, 38, .7);
+
+  /* the light block above outranks the classic dark palette, so every value
+     it sets has to be restated here */
+  --ui-shadow-1: rgba(0, 0, 0, .28);
+  --ui-shadow-2: rgba(0, 0, 0, .36);
+  --ui-shadow-3: rgba(0, 0, 0, .46);
+  --ui-shadow-4: rgba(0, 0, 0, .6);
+
+  --tile-layers: #0a84ff;
+  --tile-satellite: #5e5ce6;
+  --tile-terrain: #30d158;
+  --tile-analyze: #ff9f0a;
+  --tile-export: #8e8e93;
+  --tile-conditions: #64d2ff;
+  --tile-geology: #ff453a;
+  --tile-past: #ac8e68;
+  --tile-labels: #bf5af2;
+  --tile-engine: #8e8e93;
+}
+
+/* Reduce Transparency, and browsers without backdrop blur: the same layout on
+   solid material, never text over an unblurred map. */
+@media (prefers-reduced-transparency: reduce) {
+  :root.csp-glass {
+    --glass-panel: var(--ui-rail);
+    --glass-panel-strong: var(--ui-surface);
+    --glass-control: var(--ui-surface);
+    --glass-card: var(--ui-surface);
+    --ui-frost: var(--ui-surface);
+    --ui-frost-weak: var(--ui-surface);
+  }
+}
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  :root.csp-glass {
+    --glass-panel: var(--ui-rail);
+    --glass-panel-strong: var(--ui-surface);
+    --glass-control: var(--ui-surface);
+    --glass-card: var(--ui-surface);
+    --ui-frost: var(--ui-surface);
+    --ui-frost-weak: var(--ui-surface);
+  }
+}

@@ -99,7 +99,21 @@ The mobile sheet's **All tools** button returns to navigation. The sidebar toggl
 
 Selecting a point on the map continues to write its coordinates into the search field. Once a point exists, the search area exposes **Copy coordinates**, **Google Maps**, and **Google Earth** as first-class research shortcuts. Do not bury or remove these actions; they are part of the core cross-reference workflow for street-level and quick external 3D inspection.
 
-## Design tokens
+## Liquid Glass layer (build `2026-09-29a`, in preview)
+
+A visual refresh on top of the same information architecture, following Apple's current HIG pages on [Materials](https://developer.apple.com/design/human-interface-guidelines/materials) (Liquid Glass), [Sidebars](https://developer.apple.com/design/human-interface-guidelines/sidebars), [Sheets](https://developer.apple.com/design/human-interface-guidelines/sheets) and [Color](https://developer.apple.com/design/human-interface-guidelines/color). Nothing about routing, the bridge, or control IDs changed.
+
+- **Switch:** `ui-system.js` (and the first-paint claim in `index.html`) put `csp-glass` on `<html>`. Every rule in the "Liquid Glass" block at the end of `ui-system.css` is scoped under it. `?ui=classic` removes the class and shows the design documented below, for side-by-side review.
+- **Functional layer only:** the sidebar and the controls floating on the map are glass (the regular variant: blur plus a luminosity lift, because the sidebar carries a lot of text). Content inside the sidebar sits on ordinary grouped cards, never on more glass. The panel floats 10 px in from the window edges with a 24 px radius, and the map runs underneath it.
+- **Colour:** one accent (systemBlue) for selection, links and primary actions. SystemGreen means "on" (switches). A system colour per destination appears only on the sidebar symbol tiles. The map still supplies the rest of the colour.
+- **Controls:** iOS switch proportions, white knobs and slider thumbs in both appearances, accent-filled slider grooves (`--csp-fill`, kept current by `syncRangeFill` in `ui-system.js`), recessed segmented controls with a raised thumb, gray-fill buttons with accent labels, and borderless filled fields.
+- **Phone:** the sidebar becomes a bottom sheet with a grabber and two detents (`data-csp-detent="medium|large"` on `<body>`). Tap the grabber to cycle, drag to resize, or drag well below medium to close through the existing toggle. The toggle and map tools stay at the top, where the sheet never reaches.
+- **Accessibility:** `prefers-reduced-transparency` and browsers without `backdrop-filter` get the same layout on solid surfaces. `prefers-reduced-motion` removes the sheet and switch springs. Faint ink uses Apple's increased-contrast secondary label, because the standard one measures about 3.4:1 on white.
+- **Tokens:** all values live in `ui-theme.css` under `:root.csp-glass` and `:root.csp-glass[data-ui-theme="dark"]`. The dark block restates every value the light glass block overrides, because the light glass block outranks the classic dark palette.
+
+The classic tokens below still describe `?ui=classic`. When the glass layer is accepted, fold its values into the base palette and delete the classic ones rather than keeping both.
+
+## Design tokens (classic)
 
 - Font: `-apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", sans-serif`
 - Control/body: 12–13 px

@@ -19,6 +19,12 @@ const HOST  = process.env.HOST || "127.0.0.1";   // 0.0.0.0 in a devcontainer/Co
 const CACHE = process.env.CSP_CACHE_DIR || path.join(ROOT, ".cache");   // packaged app redirects this outside the bundle
 const AREAS = path.join(CACHE, "areas");   // one manifest per downloaded area
 const STARTED = Date.now();
+const CHANNEL = process.env.CSP_CHANNEL==="preview" ? "preview" : "live";
+const PREVIEW_REF = String(process.env.CSP_PREVIEW_REF||"").slice(0,120)||undefined;
+const PREVIEW_SW = `self.addEventListener("install",()=>self.skipWaiting());
+self.addEventListener("activate",e=>e.waitUntil(caches.keys()
+  .then(keys=>Promise.all(keys.map(key=>caches.delete(key))))
+  .then(()=>self.registration.unregister())));`;
 fs.mkdirSync(CACHE, {recursive:true});
 usgs.init(CACHE);
 fs.mkdirSync(AREAS, {recursive:true});
@@ -1415,11 +1421,19 @@ const server = http.createServer(async (req,res)=>{
         cacheDisk:cacheDiskStats(),
         nationalCircuit:{failures:depCircuit.failures,coolingDown:Date.now()<depCircuit.openUntil,
                          retryInSec:Math.max(0,Math.ceil((depCircuit.openUntil-Date.now())/1000))},
-        uptimeSec:Math.floor((Date.now()-STARTED)/1000)
+        uptimeSec:Math.floor((Date.now()-STARTED)/1000),
+        /* scripts/preview.sh sets these so the page can label a preview copy */
+        channel:CHANNEL, previewRef:CHANNEL==="preview"?PREVIEW_REF:undefined
       })),{"Cache-Control":"no-store"});
     }
 
     /* ---- static ---- */
+    /* A preview is reloaded after every push without a build bump, and the
+       offline worker serves the shell cache-first by build - so a preview tab
+       would keep showing the design it first loaded. Preview engines hand out
+       a worker that clears its caches and removes itself instead. */
+    if(p === "/sw.js" && CHANNEL === "preview")
+      return send(res,200,"text/javascript",Buffer.from(PREVIEW_SW),{"Cache-Control":"no-store"});
     const rel=path.normalize(p === "/" ? "index.html" : p.replace(/^([/\\])+/,""));
     const f=path.resolve(ROOT,rel);
     const inside=path.relative(ROOT,f);
