@@ -353,6 +353,22 @@
       Object.freeze([6000,Object.freeze([245,247,250,255])]),
       Object.freeze([9000,Object.freeze([255,255,255,255])])
     ]),
+    /* The elevation-tinted style. Water and sea-level ground read blue-teal,
+       lowlands green, then olive, tan and grey rock to snow above ~3,200 m -
+       the palette people read as physical relief. Interpolated in sRGB, so
+       the steps between stops stay even to the eye. (The older "topographic"
+       ramp spends 250-2,500 m on pale greens and tans, so most of the Pacific
+       Northwest came out as shades of yellow.) */
+    relief:Object.freeze([
+      Object.freeze([-500,Object.freeze([22,46,72,255])]),
+      Object.freeze([0,Object.freeze([40,70,95,255])]),
+      Object.freeze([300,Object.freeze([70,110,70,255])]),
+      Object.freeze([900,Object.freeze([128,140,92,255])]),
+      Object.freeze([1600,Object.freeze([160,140,108,255])]),
+      Object.freeze([2400,Object.freeze([190,180,170,255])]),
+      Object.freeze([3200,Object.freeze([245,246,250,255])]),
+      Object.freeze([6000,Object.freeze([255,255,255,255])])
+    ]),
     terrain:Object.freeze([
       Object.freeze([-1000,Object.freeze([28,74,125,255])]),
       Object.freeze([0,Object.freeze([159,205,224,255])]),
@@ -499,6 +515,16 @@
     };
   }
 
+  /* How the elevation tint is lit: deep shadow, and lit slopes a little above
+     the ramp colour, clamped. Shared by the server, browser and GPU renderers
+     (the shader restates the same numbers). */
+  const TINT_SHADE_FLOOR=0.33, TINT_SHADE_GAIN=0.82;
+  function shadeTint(color,shade){
+    const multiplier=TINT_SHADE_FLOOR+TINT_SHADE_GAIN*shade;
+    return [Math.min(255,Math.round(color[0]*multiplier)),Math.min(255,Math.round(color[1]*multiplier)),
+            Math.min(255,Math.round(color[2]*multiplier)),255];
+  }
+
   function colorForElevation(elevation,ramp,options){
     return createElevationColorizer(ramp,options)(elevation);
   }
@@ -598,7 +624,7 @@
     hillshade,singleHillshade:hillshade,hillshadeByte,createHillshade,
     multidirectionalHillshade,multiHillshade:multidirectionalHillshade,multidirectionalHillshadeByte,
     createMultidirectionalHillshade,
-    ELEVATION_RAMPS,SUN_LIT_STYLES,PRERENDERED_SOURCES,sunAffectsTerrain,normalizeColorRamp,createElevationColorizer,colorForElevation,elevationColor:colorForElevation,
+    ELEVATION_RAMPS,TINT_SHADE_FLOOR,TINT_SHADE_GAIN,shadeTint,SUN_LIT_STYLES,PRERENDERED_SOURCES,sunAffectsTerrain,normalizeColorRamp,createElevationColorizer,colorForElevation,elevationColor:colorForElevation,
     niceContourInterval,adaptiveContourInterval,contourIntervalDetails,indexContourInterval,contourLevels
   };
 });

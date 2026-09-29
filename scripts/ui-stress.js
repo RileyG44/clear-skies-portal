@@ -41,12 +41,11 @@ function measure() {
   const btns = [...ca.querySelectorAll('button')].filter(b => !b.hidden).map(b => ({ ...r(b), label: getComputedStyle(b.querySelector('span')).display !== 'none', overflow: b.scrollWidth > b.clientWidth + 1 }));
   return { nav: r(nav), q: r(q), go: r(go), loc: r(loc), iw: r($('#iw')), ca: ca.hidden ? null : r(ca), btns,
     navOverflow: nav.scrollWidth > nav.clientWidth + 1, docOverflow: document.documentElement.scrollWidth > innerWidth,
-    // the 2D map / 3D terrain / Point cloud control, measured as if shown
-    mode: (() => { const bar = document.getElementById('cspMapMode'); if (!bar) return null;
-      const b = bar.getBoundingClientRect(); const tops = new Set([...bar.querySelectorAll('button')].map(x => Math.round(x.getBoundingClientRect().top)));
-      return { l: b.left, r: b.right, rows: tops.size, clipped: [...bar.querySelectorAll('button')].some(x => x.scrollWidth > x.clientWidth + 1) }; })(),
-    font: getComputedStyle(q).fontFamily, qFont: parseFloat(getComputedStyle(q).fontSize),
-    interLoaded: [...document.fonts].some(f => f.family.includes('Inter') && f.status === 'loaded'),
+    // the map-button capsule (now carrying the view-mode button) must fit the screen
+    dock: (() => { const d = document.getElementById('mapDock'); if (!d) return null; const b = d.getBoundingClientRect();
+      return { top: b.top, bottom: b.bottom, h: b.height, hasMode: !!d.querySelector('#mapModeToggle') }; })(),
+    vh: innerHeight,
+    largeSheet: document.body.dataset.cspDetent === 'large' && !document.body.classList.contains('collapsed'),
     vw: innerWidth, view: document.body.dataset.cspView, collapsed: document.body.classList.contains('collapsed') };
 }
 
@@ -84,10 +83,11 @@ function check(m, kind, state) {
       }
     }
   }
-  if (m.mode) {
-    if (m.mode.rows > 1) f.push('map mode labels wrap onto two rows');
-    if (m.mode.clipped) f.push('a map mode label is clipped');
-    if (m.mode.l < 0 || m.mode.r > m.vw) f.push('map mode control runs off screen');
+  if (m.dock) {
+    if (!m.dock.hasMode) f.push('view-mode button missing from the map buttons');
+    // the column only steps aside for a full-height phone sheet
+    if (m.dock.h < 40 && !(kind === 'phone' && m.largeSheet)) f.push('map buttons are not showing');
+    if (m.dock.bottom > m.vh - 4) f.push(`map buttons run off the bottom (${Math.round(m.dock.bottom)} > ${m.vh})`);
   }
   if (m.navOverflow) f.push('panel scrolls sideways');
   if (m.docOverflow) f.push('page scrolls sideways');

@@ -115,7 +115,7 @@ syncMapSources();
    with the viewport lock. Suppress only gestures that start on application
    chrome; the map surface stays untouched so two-finger zoom, rotate and tilt
    continue to belong to the map engine. */
-for(const chrome of [side,$("#sideToggleDock"),$("#mapDock"),$("#serverPanel"),$("#terrainSourcePanel"),$("#ctl"),$("#cspMapMode")].filter(Boolean)){
+for(const chrome of [side,$("#sideToggleDock"),$("#mapDock"),$("#serverPanel"),$("#terrainSourcePanel"),$("#ctl")].filter(Boolean)){
   for(const type of ["gesturestart","gesturechange","gestureend"])
     chrome.addEventListener(type,event=>event.preventDefault(),{passive:false});
   chrome.addEventListener("touchmove",event=>{if(event.touches.length>1) event.preventDefault()},{passive:false});
@@ -206,7 +206,16 @@ function annotateOverlayGroups(){
 new MutationObserver(annotateOverlayGroups).observe($("#ovList"),{childList:true});
 
 const snapshotPanel=$("#snapshotPanel"),snapshotHome=snapshotPanel?.parentElement;
-if($("#snapshot")) $("#snapshot").onclick=()=>activateRoute("export");
+/* The camera button opens Export. From a collapsed panel - a peeking phone
+   sheet or a hidden desktop panel - it has to open it too, or the route
+   changes out of sight. */
+if($("#snapshot")) $("#snapshot").onclick=()=>{
+  activateRoute("export");
+  if(document.body.classList.contains("collapsed")){
+    if(document.body.dataset.cspDetent!=="large") document.body.dataset.cspDetent="medium";
+    $("#sideToggle")?.click();
+  }
+};
 
 const visited=new Set();
 let currentRoute="layers";
@@ -375,18 +384,87 @@ navScroll.addEventListener("click",event=>{const route=event.target.closest("[da
 $("#cspBack").addEventListener("click",()=>{document.body.dataset.cspView="nav"});
 compactShell.addEventListener("change",event=>{if(!event.matches) delete document.body.dataset.cspView;else document.body.dataset.cspView="nav"});
 
-const modeBar=document.createElement("div");modeBar.id="cspMapMode";modeBar.setAttribute("role","group");modeBar.setAttribute("aria-label","Map view mode");
-/* Three parallel names - what kind of view, then what it shows - matching the
-   same control in the Terrain pane. */
-modeBar.innerHTML=`<button type="button" data-mode="2d">2D map</button><button type="button" data-mode="3d">3D terrain</button><button type="button" data-mode="points">Point cloud</button>`;
-mapEl.append(modeBar);
-modeBar.addEventListener("click",event=>{
-  const mode=event.target.closest("button")?.dataset.mode;if(!mode) return;
-  $(mode==="2d"?"#terMode2d":mode==="3d"?"#terMode3d":"#terModePoints")?.click();syncModeBar();
+/* View mode lives in the map-button capsule, as the map-type button does in
+   Maps: its glyph shows the current mode, and it opens a small glass menu of
+   the three. The names match the same control in the Terrain pane. */
+const MODE_GLYPHS={
+  "2d":'<path d="M14.106 5.553a2 2 0 0 0 1.788 0l3.659-1.83A1 1 0 0 1 21 4.619v12.764a1 1 0 0 1-.553.894l-4.553 2.277a2 2 0 0 1-1.788 0l-4.212-2.106a2 2 0 0 0-1.788 0l-3.659 1.83A1 1 0 0 1 3 19.381V6.618a1 1 0 0 1 .553-.894l4.553-2.277a2 2 0 0 1 1.788 0z"/><path d="M15 5.764v15"/><path d="M9 3.236v15"/>',
+  "3d":'<path d="m8 3 4 8 5-5 5 15H2L8 3z"/>',
+  points:'<circle cx="7.5" cy="7.5" r="1" fill="currentColor"/><circle cx="18.5" cy="5.5" r="1" fill="currentColor"/><circle cx="11.5" cy="11.5" r="1" fill="currentColor"/><circle cx="7.5" cy="16.5" r="1" fill="currentColor"/><circle cx="17.5" cy="14.5" r="1" fill="currentColor"/><path d="M3 3v16a2 2 0 0 0 2 2h16"/>'
+};
+const MODES=[
+  {mode:"2d",label:"2D map",detail:"Flat map with every layer",control:"#terMode2d"},
+  {mode:"3d",label:"3D terrain",detail:"Tilt and fly over the relief",control:"#terMode3d"},
+  {mode:"points",label:"Point cloud",detail:"LiDAR returns in 3D",control:"#terModePoints"}
+];
+const svg=body=>`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${body}</svg>`;
+const modeToggle=$("#mapModeToggle");
+const modeMenu=document.createElement("div");
+modeMenu.id="mapModeMenu";modeMenu.className="tool-popover csp-mode-menu";modeMenu.hidden=true;
+modeMenu.setAttribute("role","menu");modeMenu.setAttribute("aria-label","Map view");
+modeMenu.innerHTML=`<div class="csp-mode-menu-title">Map view</div>`+MODES.map(item=>
+  `<button type="button" role="menuitemradio" aria-checked="false" data-mode="${item.mode}">
+     <span class="csp-mode-glyph">${svg(MODE_GLYPHS[item.mode])}</span>
+     <span class="csp-mode-text"><span class="csp-mode-label">${item.label}</span><span class="csp-mode-detail">${item.detail}</span></span>
+     <span class="csp-mode-check">${svg('<path d="M20 6 9 17l-5-5"/>')}</span>
+   </button>`).join("");
+($("#app")||document.body).append(modeMenu);
+for(const type of ["gesturestart","gesturechange","gestureend"]) modeMenu.addEventListener(type,event=>event.preventDefault(),{passive:false});
+const currentMode=()=>$("#terModePoints")?.getAttribute("aria-pressed")==="true"?"points":$("#terMode3d")?.getAttribute("aria-pressed")==="true"?"3d":"2d";
+function placeModeMenu(){
+  if(!modeToggle||modeMenu.hidden) return;
+  // beside the capsule, top-aligned with the button, kept inside the window
+  const a=modeToggle.getBoundingClientRect(),app=($("#app")||document.body).getBoundingClientRect();
+  const w=modeMenu.offsetWidth,h=modeMenu.offsetHeight,gap=10,pad=8;
+  let left=a.left-app.left-w-gap;
+  if(left<pad) left=a.right-app.left+gap;
+  left=Math.max(pad,Math.min(left,app.width-w-pad));
+  const top=Math.max(pad,Math.min(a.top-app.top,app.height-h-pad));
+  modeMenu.style.left=`${Math.round(left)}px`;modeMenu.style.top=`${Math.round(top)}px`;modeMenu.style.right="auto";
+}
+function setModeMenu(open,{focus=false,restore=false}={}){
+  if(!modeToggle) return;
+  modeMenu.hidden=!open;
+  modeToggle.setAttribute("aria-expanded",String(open));
+  if(open){
+    syncModeBar();placeModeMenu();
+    if(focus) $('[aria-checked="true"]',modeMenu)?.focus();
+  }else if(restore) modeToggle.focus({preventScroll:true});
+}
+modeToggle?.addEventListener("click",event=>{
+  event.stopPropagation();
+  // keyboard activation lands focus in the menu; a pointer does not need it
+  setModeMenu(modeMenu.hidden,{focus:event.detail===0});
 });
+modeMenu.addEventListener("click",event=>{
+  const item=event.target.closest("[data-mode]");if(!item) return;
+  const target=MODES.find(entry=>entry.mode===item.dataset.mode);
+  if(target&&currentMode()!==target.mode) $(target.control)?.click();
+  syncModeBar();
+  setModeMenu(false,{restore:event.detail===0});
+});
+modeMenu.addEventListener("keydown",event=>{
+  const items=$$("[data-mode]",modeMenu),index=items.indexOf(document.activeElement);
+  if(event.key==="Escape"){setModeMenu(false,{restore:true});event.preventDefault();return}
+  if(event.key==="ArrowDown"||event.key==="ArrowUp"){
+    const next=items[(index+(event.key==="ArrowDown"?1:items.length-1))%items.length];
+    next?.focus();event.preventDefault();
+  }
+});
+document.addEventListener("pointerdown",event=>{
+  if(!modeMenu.hidden&&!modeMenu.contains(event.target)&&!modeToggle?.contains(event.target)) setModeMenu(false);
+},true);
+document.addEventListener("keydown",event=>{if(event.key==="Escape"&&!modeMenu.hidden) setModeMenu(false,{restore:true})});
+addEventListener("resize",placeModeMenu);
 function syncModeBar(){
-  const mode=$("#terModePoints")?.getAttribute("aria-pressed")==="true"?"points":$("#terMode3d")?.getAttribute("aria-pressed")==="true"?"3d":"2d";
-  $$("button",modeBar).forEach(button=>button.setAttribute("aria-pressed",String(button.dataset.mode===mode)));
+  const mode=currentMode(),entry=MODES.find(item=>item.mode===mode);
+  $$("[data-mode]",modeMenu).forEach(item=>item.setAttribute("aria-checked",String(item.dataset.mode===mode)));
+  if(modeToggle&&modeToggle.dataset.mode!==mode){
+    modeToggle.dataset.mode=mode;
+    modeToggle.innerHTML=svg(MODE_GLYPHS[mode]);
+    modeToggle.title=modeToggle.ariaLabel=`Map view: ${entry.label}`;
+    modeToggle.setAttribute("aria-label",`Map view: ${entry.label}`);
+  }
 }
 
 let refreshTimer=0,lastLayerSignature="";

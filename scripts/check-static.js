@@ -190,6 +190,18 @@ assert(index.includes('id="buildDiag"'),"the geometry readout must be reachable 
     "every exit from the interface script must release the paint hold, including the early one");
 }
 
+/* A selector list that ends in a comma swallows the next rule's selector. It
+   happened once when a rule was removed from the end of a list, and hid the
+   map buttons on phones: nothing else would have caught it. */
+{
+  const lines=read("ui-system.css").split("\n");
+  lines.forEach((line,i)=>{
+    const next=(lines[i+1]||"").trim();
+    assert(!(line.trimEnd().endsWith(",")&&(next===""||next.startsWith("/*")||next.startsWith("}"))),
+      `ui-system.css:${i+1} ends a selector list with a comma`);
+  });
+}
+
 /* Liquid Glass search row. The base stylesheet stacks three placements for
    locate and search (desktop moved them to a second row), and that is what made
    the rail's search area and the coordinate shortcuts below it wrap. The glass
@@ -219,8 +231,24 @@ assert(index.includes('id="buildDiag"'),"the geometry readout must be reachable 
     "the peek replaces the sidebar toggle on a portrait phone");
   assert(read("ui-system.js").includes("if(sheetMode()) side.inert=false"),
     "a peeking sheet must stay interactive; setCollapsed() makes the panel inert");
-  assert(read("ui-system.js").includes('data-mode="2d">2D map<')&&read("index.html").includes('id="terModePoints" type="button" aria-pressed="false">Point cloud<'),
+  assert(read("ui-system.js").includes('label:"2D map"')&&read("ui-system.js").includes('label:"3D terrain"')&&read("ui-system.js").includes('label:"Point cloud"')&&
+         read("index.html").includes('id="terModePoints" type="button" aria-pressed="false">Point cloud<'),
     "the map view modes share one set of parallel names in both controls");
+  /* View mode is a button in the map-button capsule that opens a menu, not a
+     floating bar over the map. */
+  assert(index.includes('id="mapModeToggle"')&&index.includes('const DOCK_DEFAULT=["mapModeToggle",'),
+    "the view-mode button must live in the map-button capsule, and be part of its saved order");
+  assert(!read("ui-system.js").includes('"cspMapMode"')&&!ui.includes("#cspMapMode"),
+    "the floating view-mode bar is gone; the mode menu replaces it");
+  /* One Liquid Glass material for everything floating on the map: controls
+     take the clear strength, anything read takes the frosted one. A new
+     floating surface belongs in one of these two lists. */
+  for(const selector of ["#mapDock",".leaflet-control-zoom","#sideToggleDock .map-tool"])
+    assert(new RegExp(`:is\\([^)]*${selector.replace(/[.#]/g,m=>"\\"+m)}[^)]*\\)\\{[^}]*background-color:var\\(--lg-control\\)`).test(ui),
+      `${selector} must use the clear Liquid Glass material`);
+  for(const selector of [".tool-popover","#menu",".leaflet-popup-content-wrapper","#snapshotStatus","#pointCloudPanel"])
+    assert(new RegExp(`:is\\([^)]*${selector.replace(/[.#]/g,m=>"\\"+m)}[^)]*\\)\\{[^}]*background-color:var\\(--lg-popover\\)`).test(ui),
+      `${selector} must use the frosted Liquid Glass material`);
   assert(read("ui-system.js").includes('"Search":long'),"the placeholder must shorten in a narrow field instead of clipping");
   assert(fs.existsSync(path.join(root,"vendor","fonts","inter-latin-wght-normal.woff2")),"the Inter fallback face must be vendored");
   assert(read("sw.js").includes("./vendor/fonts/inter-latin-wght-normal.woff2"),"the fallback face must be in the offline shell");
@@ -614,7 +642,7 @@ assert(elevSandbox.lower[0]>elevSandbox.lower[2],"lower elevations must trend re
 assert(elevSandbox.upper[2]>elevSandbox.upper[0],"higher elevations must trend blue");
 const server=read("server.js");
 assert(server.includes('if(z>=13) try{ raw=await terrainTask'),"raw lidar elevation must be reserved for useful close zooms");
-assert(server.includes('const TERRAIN_RENDER_VERSION = "terrain-v2"'),
+assert(server.includes('const TERRAIN_RENDER_VERSION = "terrain-v3"')&&index.includes("?rv=terrain-v3`"),
        "corrected terrain renders must use a new server-cache namespace");
 assert(server.includes('function slot(signal)')&&server.includes('queue.splice(index,1)'),
        "abandoned viewport requests must leave the upstream concurrency queue immediately");
