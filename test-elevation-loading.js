@@ -16,6 +16,7 @@ class Grid {
 async function main(){
   const calls=new Map(),deferred=new Map();
   const context={L:{GridLayer:Grid,setOptions:(self,opts)=>{self.options=opts;},point:(x,y)=>({x,y})},HIDPI:false,
+    releaseCanvas:canvas=>{ if(canvas&&canvas.width){ canvas.width=0;canvas.height=0 } },
     document:{createElement:()=>({dataset:{}})},AbortController,DOMException,Float32Array,Promise,
     PROXY:true,api:value=>'engine'+value,CSPTilePipeline:pipeline,ElevationTileCore:core,CSPPublicTerrain:require('./public-terrain'),
     elevationRequests:new RequestPool(),fetchElevation:(url,signal)=>{
@@ -34,6 +35,7 @@ async function main(){
   assert.equal(done,1,'detail paints without waiting for the fallback');
   assert.equal(cv.dataset.cspQuality,'3');assert.equal(cv._cspRefining,true);
   first.fire('tileunload',{coords,tile:cv});
+  assert.equal(cv.width,0,'an unloaded tile gives its canvas memory back at once (iOS caps total canvas memory)');
   deferred.get('engine/national/17/1/2.png')({grid:new Float32Array([10,20,30,40]),width:2,height:2});
   deferred.get('fallback/17/1/2')({grid:new Float32Array([1,2,3,4]),width:2,height:2});await tick();
   assert.equal(first._store.size,0,'departed tiles must not resurrect');
