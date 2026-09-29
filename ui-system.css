@@ -1357,7 +1357,24 @@ body.csp-redesign .csp-preview-badge{
 }
 .csp-glass body.csp-redesign .map-tool{width:38px;height:38px;min-height:38px;border-radius:999px}
 .csp-glass body.csp-redesign .map-tool:hover{background:var(--glass-panel-strong)!important}
-.csp-glass body.csp-redesign #mapDock{gap:10px}
+/* The map controls are one vertical capsule of glass, as in Maps, rather
+   than a column of separate buttons. */
+.csp-glass body.csp-redesign #mapDock{
+  gap:2px;
+  padding:4px;
+  border-radius:999px;
+  background:var(--glass-control);
+  -webkit-backdrop-filter:var(--glass-blur);
+  backdrop-filter:var(--glass-blur);
+  box-shadow:inset 0 0 0 .5px var(--glass-rim),0 0 0 .5px var(--glass-edge),0 8px 24px var(--ui-shadow-2);
+}
+.csp-glass body.csp-redesign #mapDock .map-tool{
+  background:transparent!important;
+  box-shadow:none!important;
+  -webkit-backdrop-filter:none;
+  backdrop-filter:none;
+}
+.csp-glass body.csp-redesign #mapDock .map-tool:hover{background:var(--ui-fill)!important}
 .csp-glass body.csp-redesign .leaflet-control-zoom{border:0!important;border-radius:999px;overflow:hidden;box-shadow:0 6px 20px var(--ui-shadow-2)}
 .csp-glass body.csp-redesign .leaflet-control-zoom a{width:38px!important;height:38px!important;line-height:38px!important;border-radius:0!important;box-shadow:none!important}
 .csp-glass body.csp-redesign .leaflet-control-zoom a + a{border-top:.5px solid var(--glass-edge)!important}
@@ -1525,6 +1542,38 @@ body.csp-redesign #cspGrabber{display:none}
   .csp-glass body.csp-redesign #cspMapMode button{min-height:40px;padding:0 14px;white-space:nowrap}
 }
 
+/* ---- the phone sheet's glass -------------------------------------------
+   The Maps sheet: a large, continuous-corner slab of glass with a bright rim
+   and a sheen along its top edge, inset from the screen edges, with the map
+   running blurred beneath it. Cards and fields inside are thinner glass. */
+@media (max-width:760px){
+  .csp-glass body.csp-redesign #side{
+    --glass-card:var(--sheet-card);
+    --ui-text-muted:var(--sheet-ink-muted);
+    --ui-text-faint:var(--sheet-ink-faint);
+    background:var(--sheet-glass);
+    -webkit-backdrop-filter:var(--sheet-filter);
+    backdrop-filter:var(--sheet-filter);
+    box-shadow:var(--sheet-rim);
+  }
+  .csp-glass body.csp-redesign #side::before{
+    content:"";
+    position:absolute;
+    inset:0;
+    z-index:-1;
+    border-radius:inherit;
+    background:var(--sheet-sheen);
+    pointer-events:none;
+  }
+  .csp-glass body.csp-redesign #side #q,
+  .csp-glass body.csp-redesign #side #loc,
+  .csp-glass body.csp-redesign #side .csp-coordinate-actions button{background-color:var(--sheet-field);box-shadow:var(--sheet-field-rim)}
+  .csp-glass body.csp-redesign #side #loc:hover,
+  .csp-glass body.csp-redesign #side .csp-coordinate-actions button:hover{background-color:var(--sheet-field-hover)}
+  .csp-glass body.csp-redesign #side #q:focus{background-color:var(--ui-surface);box-shadow:var(--sheet-field-rim),0 0 0 3px var(--ui-ring)}
+  .csp-glass body.csp-redesign #cspGrabber::before{background:var(--sheet-grabber);opacity:1}
+}
+
 /* A phone on its side has no height for a bottom sheet: the sheet would cover
    the map and run into the map tools. Maps uses a card on the leading edge
    there, so this does too. */
@@ -1553,17 +1602,30 @@ body.csp-redesign #cspGrabber{display:none}
    above the bottom edge, and the strip can be tapped or pulled back up. The
    sidebar toggle is redundant with that, so it goes, as in Maps. */
 @media (max-width:760px) and (orientation:portrait){
-  .csp-glass body.csp-redesign{--sheet-peek:78px}
+  .csp-glass body.csp-redesign{--sheet-peek:80px}
+  .csp-glass body.csp-redesign #side{
+    left:calc(8px + var(--safe-left));
+    right:calc(8px + var(--safe-right));
+    bottom:calc(8px + var(--safe-bottom));
+    border-radius:38px;
+    transition:height .45s var(--spring),background-color .35s ease,transform .42s var(--spring),opacity .25s ease;
+  }
+  /* Touch ownership follows the detent, as in Maps: at peek and medium a
+     vertical drag moves the sheet, so nothing inside it pans; at large the
+     content scrolls (ui-system.js takes the drag back once it is at the top). */
+  .csp-glass body.csp-redesign #side,
+  .csp-glass body.csp-redesign #side :is(#cspNav,#cspNavScroll,#cspWorkspaceScroll){touch-action:none}
+  .csp-glass body.csp-redesign[data-csp-detent="large"]:not(.collapsed) #side :is(#cspNav,#cspNavScroll,#cspWorkspaceScroll){touch-action:pan-y}
+  .csp-glass body.csp-redesign #side #ac{touch-action:pan-y}
+  .csp-glass body.csp-redesign #side input[type=range]{touch-action:none}
   .csp-glass body.csp-redesign.collapsed #side{
     height:var(--sheet-peek);
     transform:none;
     opacity:1;
     visibility:visible;
     pointer-events:auto;
-    /* nothing in the strip scrolls, so a vertical drag is the sheet's */
-    touch-action:none;
     cursor:pointer;
-    transition:height .42s var(--spring),box-shadow .2s ease;
+    background:var(--sheet-glass-clear);
   }
   .csp-glass body.csp-redesign.collapsed #cspGrabber{width:100%}
   /* Rows below the strip are clipped by the sheet's height; hiding them as

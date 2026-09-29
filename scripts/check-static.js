@@ -217,7 +217,7 @@ assert(index.includes('id="buildDiag"'),"the geometry readout must be reachable 
     "a collapsed portrait phone sheet must peek, not hide");
   assert(/orientation:portrait\)\{[\s\S]*?#sideToggleDock\{display:none\}/.test(ui),
     "the peek replaces the sidebar toggle on a portrait phone");
-  assert(read("ui-system.js").includes("if(peekLayout.matches&&glassOn()) side.inert=false"),
+  assert(read("ui-system.js").includes("if(sheetMode()) side.inert=false"),
     "a peeking sheet must stay interactive; setCollapsed() makes the panel inert");
   assert(read("ui-system.js").includes('data-mode="2d">2D map<')&&read("index.html").includes('id="terModePoints" type="button" aria-pressed="false">Point cloud<'),
     "the map view modes share one set of parallel names in both controls");

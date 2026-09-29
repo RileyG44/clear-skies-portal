@@ -104,6 +104,87 @@ const base = process.argv[2] || 'http://127.0.0.1:8765/';
   ok('small landscape phone: collapsed card hidden and inert, toggle shown', l3.collapsed && l3.vis==='hidden' && l3.inert && l3.toggle!=='none', JSON.stringify(l3));
   await ctx3.close();
 
+
+  /* Touch, driven through Chromium's input domain so the page sees real
+     touchstart/touchmove/touchend with the same timing a finger produces:
+     dragging from the content, handing the drag between the sheet and the
+     content's own scrolling, velocity projection, sliders, rubber-banding. */
+  {
+  const ctx4 = await browser.newContext({ viewport:{width:390,height:844}, isMobile:true, hasTouch:true });
+  const page = await ctx4.newPage();
+  const cdp = await ctx4.newCDPSession(page);
+  page.on('pageerror',e=>{ if(!/_fadeAnimated/.test(e.message)) errs.push(e.message) });
+  await page.goto(base, { waitUntil:'domcontentloaded' }); await page.waitForTimeout(2200);
+  const touch = async (x,y,dx,dy,ms=300,steps=12) => {
+    await cdp.send('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:[{x,y}]});
+    for(let i=1;i<=steps;i++){ await cdp.send('Input.dispatchTouchEvent',{type:'touchMove',touchPoints:[{x:x+dx*i/steps,y:y+dy*i/steps}]}); await page.waitForTimeout(ms/steps); }
+    await cdp.send('Input.dispatchTouchEvent',{type:'touchEnd',touchPoints:[]});
+    await page.waitForTimeout(650);
+  };
+  const st = () => page.evaluate(() => { const side=document.getElementById('side'); const r=side.getBoundingClientRect();
+    const sc=document.body.dataset.cspView==='detail'?document.getElementById('cspWorkspaceScroll'):document.getElementById('cspNav');
+    return {h:Math.round(r.height), top:Math.round(r.top), detent:document.body.classList.contains('collapsed')?'peek':document.body.dataset.cspDetent, scroll:Math.round(sc.scrollTop)}; });
+  let s=await st(); ok('starts medium', s.detent==='medium', JSON.stringify(s));
+  // drag on content (a nav row) up -> large
+  let row=await (await page.$('.csp-nav-button[data-route="satellite"]')).boundingBox();
+  await touch(row.x+row.width/2,row.y+row.height/2,0,-300,400);
+  s=await st(); ok('drag up on content at medium -> large', s.detent==='large', JSON.stringify(s));
+  // drag on content down from large (nav scrolled to top) -> goes down
+  row=await (await page.$('.csp-nav-button[data-route="layers"]')).boundingBox();
+  await touch(row.x+row.width/2,row.y+row.height/2,0,300,500);
+  s=await st(); ok('pull down at top of large -> medium', s.detent==='medium', JSON.stringify(s));
+  // drag down on content at medium -> peek
+  row=await (await page.$('.csp-nav-button[data-route="layers"]')).boundingBox();
+  await touch(row.x+row.width/2,row.y+row.height/2,0,320,450);
+  s=await st(); ok('drag down on content at medium -> peek', s.detent==='peek', JSON.stringify(s));
+  // fast flick up from peek (short distance, high speed) -> opens
+  let side=await (await page.$('#side')).boundingBox();
+  await touch(side.x+side.width/2, side.y+side.height-20, 0, -90, 60, 4);
+  s=await st(); ok('quick flick up from peek opens', s.detent!=='peek', JSON.stringify(s));
+  // slow small nudge from medium down does not collapse
+  row=await (await page.$('.csp-nav-button[data-route="layers"]')).boundingBox();
+  await touch(row.x+row.width/2,row.y+row.height/2,0,40,700);
+  s=await st(); ok('slow small nudge stays put', s.detent===(s.detent) && s.detent!=='peek', JSON.stringify(s));
+  // go to a long detail page, open large, scroll content
+  await page.evaluate(()=>document.querySelector('.csp-nav-button[data-route="conditions"]').click()); await page.waitForTimeout(500);
+  await page.evaluate(()=>{ if(document.body.dataset.cspDetent!=='large') document.getElementById('cspGrabber').click(); }); await page.waitForTimeout(600);
+  s=await st(); ok('detail at large', s.detent==='large', JSON.stringify(s));
+  const mid={x:195,y:500};
+  await touch(mid.x,mid.y,0,-250,400);
+  let s2=await st(); ok('swipe up at large scrolls content, sheet stays', s2.detent==='large' && s2.scroll>50, JSON.stringify(s2));
+  await touch(mid.x,300,0,120,400);
+  let s3=await st(); ok('swipe down while scrolled scrolls back, sheet stays large', s3.detent==='large' && s3.scroll<s2.scroll, JSON.stringify(s3));
+  await page.evaluate(()=>document.getElementById('cspWorkspaceScroll').scrollTop=0);
+  await touch(mid.x,300,0,260,450);
+  s=await st(); ok('swipe down at top of content collapses the sheet', s.detent!=='large', JSON.stringify(s));
+  // slider at medium: horizontal drag changes value, sheet unchanged
+  await page.evaluate(()=>{document.querySelector('.csp-nav-button[data-route="terrain"]')?.click()}); await page.waitForTimeout(300);
+  await page.evaluate(()=>{ const b=document.getElementById('cspBack'); if(document.body.dataset.cspView==='nav') document.querySelector('.csp-nav-button[data-route="terrain"]').click(); if(document.body.classList.contains('collapsed')) document.getElementById('sideToggle').click(); document.body.dataset.cspDetent='large'; });
+  await page.waitForTimeout(600);
+  const slider=await page.$('#terOp'); await slider.scrollIntoViewIfNeeded(); await page.waitForTimeout(300);
+  const sb=await slider.boundingBox(); const before=await slider.evaluate(e=>+e.value); const sBefore=await st();
+  await touch(sb.x+sb.width*0.7, sb.y+sb.height/2, -sb.width*0.4, 6, 300);
+  const after=await slider.evaluate(e=>+e.value); const sAfter=await st();
+  ok('slider drag changes the value, not the sheet', after!==before && sAfter.detent===sBefore.detent, `value ${before}->${after}, ${sBefore.detent}->${sAfter.detent}`);
+  // rubber band past large returns to large
+  const g=await (await page.$('#cspGrabber')).boundingBox();
+  await touch(g.x+g.width/2,g.y+g.height/2,0,-200,300);
+  s=await st(); ok('dragging past large rubber-bands back to large', s.detent==='large' && s.top>=50, JSON.stringify(s));
+
+  // flicks: a hard flick carries two detents, a slow drag settles where it ends
+  const d = () => page.evaluate(()=>document.body.classList.contains('collapsed')?'peek':document.body.dataset.cspDetent);
+  await page.evaluate(()=>{ if(!document.body.classList.contains('collapsed')) document.getElementById('sideToggle').click(); }); await page.waitForTimeout(700);
+  let sb2=await (await page.$('#side')).boundingBox();
+  await touch(sb2.x+sb2.width/2, sb2.y+40, 0, -260, 0, 3);
+  ok('hard flick up from peek -> large', await d()==='large');
+  let gb=await (await page.$('#cspGrabber')).boundingBox();
+  await touch(gb.x+gb.width/2, gb.y+10, 0, 260, 0, 3);
+  ok('hard flick down from large -> peek', await d()==='peek');
+  sb2=await (await page.$('#side')).boundingBox();
+  await touch(sb2.x+sb2.width/2, sb2.y+40, 0, -330, 900, 20);
+  ok('slow drag up from peek settles on medium', await d()==='medium');
+  await ctx4.close();
+  }
   console.log(results.join('\n')); console.log(errs.length ? 'page errors: '+errs.join(' | ') : 'no page errors');
   await browser.close();
   process.exitCode = results.some(r => r.startsWith('FAIL')) || errs.length ? 1 : 0;
