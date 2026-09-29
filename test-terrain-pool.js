@@ -60,6 +60,26 @@ async function main(){
     assert(stats.cancelled>=1);
     assert(stats.timedOut>=1);
   }finally{ await pool.close() }
+
+  /* Network-bound renders share a worker; CPU-bound work does not, and a
+     render that hangs takes only itself down - its neighbour is re-run. */
+  const shared=new TerrainPool({cacheDir:__dirname,size:1,maxQueue:8,workerFile,jobsPerWorker:2,shareable:["delay"]});
+  try{
+    let t0=Date.now();
+    assert.deepEqual(await Promise.all([shared.run("delay",{ms:120,value:"a"}),shared.run("delay",{ms:120,value:"b"})]),["a","b"]);
+    const overlapped=Date.now()-t0;
+    assert(overlapped<220,`two waiting renders overlap on one worker (${overlapped} ms)`);
+    t0=Date.now();
+    const order=[];
+    await Promise.all([shared.run("delay",{ms:80,value:1}).then(v=>order.push(v)),
+                       shared.run("spin",{ms:60}).then(()=>order.push("spin"))]);
+    assert.deepEqual(order,[1,"spin"],"CPU-bound work waits for the worker to be free");
+    const hung=shared.run("delay",{ms:5000,value:"hung"},{timeoutMs:60});
+    const neighbour=shared.run("delay",{ms:150,value:"neighbour"},{timeoutMs:2000});
+    await rejectsCode(hung,"TIMEOUT");
+    assert.equal(await neighbour,"neighbour","a job sharing a timed-out worker is re-run, not failed");
+    assert(shared.stats().requeued>=1);
+  }finally{ await shared.close() }
   console.log("terrain worker pool checks passed");
 }
 
