@@ -655,6 +655,14 @@ assert(read("package.json").includes("sync-maxar-catalog.js"),
 for(const [file,label] of [["server.js","the local engine"],["sw.js","the service worker"]])
   assert(read(file).includes("maxar-catalog.json"),
          `${label} must serve the VHR coverage index`);
+/* NADI-1 ice margins ship as one bundled file; like the VHR index it has to be
+   in the Pages artifact, the precache, the engine allowlist and the installer. */
+assert(index.includes('id:"nadi1ice"')&&index.includes('geojson:"./nadi1-cordilleran.json"'),
+       "the NADI-1 ice-margin overlay must load its bundled slices");
+assert(index.includes("ovSliceData(o,result.data)")&&index.includes('id="ovTime_${o.id}"'),
+       "a time-sliced overlay must draw one slice and expose its slider");
+for(const file of [".github/workflows/ci.yml","sw.js","server.js","scripts/install-mac-service.sh","scripts/minify-site.js"])
+  assert(read(file).includes("nadi1-cordilleran.json"),`${file} must ship the NADI-1 ice-margin slices`);
 const installer=read("scripts/install-mac-service.sh");
 for(const asset of ["terrain-core.js","terrain-raster.js","elevation-bands.js","elevation-tile-core.js","wa-archaeology.js",
                     "glacial-research-core.js","research-analysis.js","research-worker.js"])

@@ -76,7 +76,7 @@ const steps = () => [
     "point-cloud-core.js", "point-cloud-viewer.js", "version.js"]
     .map((f) => [f, () => shrink(f, { loader: "js", opts: JS_OPTS })]),
   // Catalogs are fetched and parsed on load; they are the least dense bytes here.
-  ...["maxar-catalog.json", "point-cloud-catalog.json"].map((f) => [f, () => {
+  ...["maxar-catalog.json", "point-cloud-catalog.json", "nadi1-cordilleran.json"].map((f) => [f, () => {
     const file = path.join(dir, f);
     if (!fs.existsSync(file)) return 0;
     const before = fs.readFileSync(file, "utf8");
