@@ -104,12 +104,46 @@ function request(port,pathname,{method="GET",headers={},body=null}={}){
   });
 }
 
+/* A preview engine (scripts/preview.sh) must say so, and must not hand out the
+   cache-first offline worker - reviewers would keep seeing the build they
+   first loaded. A live engine keeps the real worker. */
+async function previewChannelChecks(){
+  const port=await freePort();
+  const child=spawn(process.execPath,["server.js"],{
+    cwd:root,
+    env:{...process.env,PORT:String(port),HOST:"127.0.0.1",CSP_CACHE_DIR:path.join(cache,"preview"),CSP_TERRAIN_WORKERS:"1",
+         CSP_CHANNEL:"preview",CSP_PREVIEW_REF:"feature/example"},
+    stdio:["ignore","pipe","pipe"]
+  });
+  let logs="";
+  child.stdout.on("data",chunk=>{ logs+=chunk });
+  child.stderr.on("data",chunk=>{ logs+=chunk });
+  try{
+    let health=null;
+    for(let i=0;i<50;i++){
+      try{ health=await request(port,"/api/health"); if(health.status===200) break }catch(e){}
+      await new Promise(resolve=>setTimeout(resolve,100));
+    }
+    assert.equal(health&&health.status,200,`preview server failed to start\n${logs}`);
+    const body=JSON.parse(health.body);
+    assert.equal(body.channel,"preview","a preview engine must report its channel");
+    assert.equal(body.previewRef,"feature/example","a preview engine must report what it is previewing");
+    const worker=await request(port,"/sw.js");
+    assert.equal(worker.status,200);
+    assert(/unregister\(\)/.test(worker.body.toString())&&!worker.body.toString().includes("clear-skies-shell"),
+           "a preview engine must serve a worker that removes itself, not the offline shell");
+  }finally{
+    child.kill();
+  }
+}
+
 async function main(){
   await snapshotUrlValidationChecks();
+  await previewChannelChecks();
   const port=await freePort();
   const child=spawn(process.execPath,["--require",path.join(root,"test-elevation-upstream-fixture.js"),"server.js"],{
     cwd:root,
-    env:{...process.env,PORT:String(port),HOST:"127.0.0.1",CSP_CACHE_DIR:cache,CSP_TERRAIN_WORKERS:"1"},
+    env:{...process.env,PORT:String(port),HOST:"127.0.0.1",CSP_CACHE_DIR:cache,CSP_TERRAIN_WORKERS:"1",CSP_CHANNEL:""},
     stdio:["ignore","pipe","pipe"]
   });
   let logs="";
@@ -127,6 +161,9 @@ async function main(){
     assert.equal(healthBody.ok,true);
     assert(Number.isInteger(healthBody.cached)&&healthBody.cached>=0,"health must report the cached tile count");
     assert(Number.isFinite(healthBody.uptimeSec)&&healthBody.uptimeSec>=0,"health must report process uptime");
+    assert.equal(healthBody.channel,"live","an engine started without CSP_CHANNEL must report itself as live");
+    const liveWorker=await request(port,"/sw.js");
+    assert(liveWorker.body.toString().includes("clear-skies-shell"),"a live engine must serve the offline worker");
     assert(Number.isInteger(healthBody.rendering)&&healthBody.rendering>=0,"health must report active terrain renders");
     assert(Number.isInteger(healthBody.renderQueued)&&healthBody.renderQueued>=0,"health must report queued terrain renders");
     assert.equal(healthBody.terrain.workers,1,"health must report the configured terrain worker pool");

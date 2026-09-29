@@ -19,13 +19,19 @@ const HOST  = process.env.HOST || "127.0.0.1";   // 0.0.0.0 in a devcontainer/Co
 const CACHE = process.env.CSP_CACHE_DIR || path.join(ROOT, ".cache");   // packaged app redirects this outside the bundle
 const AREAS = path.join(CACHE, "areas");   // one manifest per downloaded area
 const STARTED = Date.now();
+const CHANNEL = process.env.CSP_CHANNEL==="preview" ? "preview" : "live";
+const PREVIEW_REF = String(process.env.CSP_PREVIEW_REF||"").slice(0,120)||undefined;
+const PREVIEW_SW = `self.addEventListener("install",()=>self.skipWaiting());
+self.addEventListener("activate",e=>e.waitUntil(caches.keys()
+  .then(keys=>Promise.all(keys.map(key=>caches.delete(key))))
+  .then(()=>self.registration.unregister())));`;
 fs.mkdirSync(CACHE, {recursive:true});
 usgs.init(CACHE);
 fs.mkdirSync(AREAS, {recursive:true});
 
 const MIME = {".html":"text/html; charset=utf-8",".js":"text/javascript",".mjs":"text/javascript",".css":"text/css",
   ".json":"application/json",".png":"image/png",".jpg":"image/jpeg",".jpeg":"image/jpeg",
-  ".svg":"image/svg+xml",".wasm":"application/wasm",".md":"text/markdown; charset=utf-8",".txt":"text/plain; charset=utf-8"};
+  ".svg":"image/svg+xml",".wasm":"application/wasm",".md":"text/markdown; charset=utf-8",".txt":"text/plain; charset=utf-8",".woff2":"font/woff2"};
 const PUBLIC_FILES = new Set(["index.html","version.js","ui-theme.css","ui-system.css","ui-system.js","mosaic-core.js","terrain-core.js","terrain-raster.js",
   "public-terrain.js","public-terrain-worker.js","vendor/lerc/LercDecode.js","vendor/lerc/LercDecode.es.js","vendor/lerc/lerc-wasm.wasm",
   "elevation-bands.js","elevation-tile-core.js","tile-pipeline.js","wa-archaeology.js","glacial-research-core.js","research-analysis.js","research-worker.js","sw.js","manifest.json",
@@ -1415,18 +1421,26 @@ const server = http.createServer(async (req,res)=>{
         cacheDisk:cacheDiskStats(),
         nationalCircuit:{failures:depCircuit.failures,coolingDown:Date.now()<depCircuit.openUntil,
                          retryInSec:Math.max(0,Math.ceil((depCircuit.openUntil-Date.now())/1000))},
-        uptimeSec:Math.floor((Date.now()-STARTED)/1000)
+        uptimeSec:Math.floor((Date.now()-STARTED)/1000),
+        /* scripts/preview.sh sets these so the page can label a preview copy */
+        channel:CHANNEL, previewRef:CHANNEL==="preview"?PREVIEW_REF:undefined
       })),{"Cache-Control":"no-store"});
     }
 
     /* ---- static ---- */
+    /* A preview is reloaded after every push without a build bump, and the
+       offline worker serves the shell cache-first by build - so a preview tab
+       would keep showing the design it first loaded. Preview engines hand out
+       a worker that clears its caches and removes itself instead. */
+    if(p === "/sw.js" && CHANNEL === "preview")
+      return send(res,200,"text/javascript",Buffer.from(PREVIEW_SW),{"Cache-Control":"no-store"});
     const rel=path.normalize(p === "/" ? "index.html" : p.replace(/^([/\\])+/,""));
     const f=path.resolve(ROOT,rel);
     const inside=path.relative(ROOT,f);
     if(inside.startsWith(".."+path.sep)||path.isAbsolute(inside))
       return send(res,403,"text/plain",Buffer.from("forbidden"));
     const publicRel=rel.split(path.sep).join("/");
-    if(!PUBLIC_FILES.has(publicRel)&&!publicRel.startsWith("vendor/potree/")&&!publicRel.startsWith("vendor/icons/"))
+    if(!PUBLIC_FILES.has(publicRel)&&!publicRel.startsWith("vendor/potree/")&&!publicRel.startsWith("vendor/icons/")&&publicRel!=="vendor/fonts/inter-latin-wght-normal.woff2")
       return send(res,404,"text/plain",Buffer.from("not found"));
     fs.readFile(f,(e,buf)=>{
       if(e) return send(res,404,"text/plain",Buffer.from("not found"));

@@ -93,6 +93,30 @@ device connects. Cross-origin access defaults to this repository's GitHub Pages
 origin. Add other trusted origins explicitly with a comma-separated
 `CSP_CORS_ORIGINS` environment variable.
 
+## Preview UI changes on your tailnet
+
+`scripts/preview.sh` runs a second, non-live copy of the portal from any
+branch, so a proposed change can be reviewed on your devices before it ships.
+It is separate from the live copy in every way: it has its own git worktree,
+port (8766), cache and launch agent, and its own Tailscale Serve entry on
+HTTPS port 8443. The live engine on 8765, its `:443` Serve entry, and GitHub
+Pages are never touched.
+
+```
+scripts/preview.sh up claude/happy-brahmagupta-7mvo7a   # or any branch; defaults to this checkout's
+scripts/preview.sh update    # pull the same branch again after new pushes
+scripts/preview.sh status    # branch, commit, health, and the URL
+scripts/preview.sh down      # stop it and remove the :8443 entry
+```
+
+It prints `https://<this-mac>.<tailnet>.ts.net:8443/`, which opens on any
+device signed in to your tailnet. It is tailnet-only; never use Funnel for it.
+Preview pages show a **Preview** badge beside the build stamp and in the tab
+title, and they skip the offline service worker so every reload shows the latest
+push. Append `?ui=classic` to compare against the previous interface. The
+branch has to include this script's server support (merge `main` into older
+branches first).
+
 ## Develop it
 
 ```

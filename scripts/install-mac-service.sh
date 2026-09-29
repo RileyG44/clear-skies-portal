@@ -40,7 +40,7 @@ for asset in server.js terrain-pool.js terrain-worker.js usgs.js cog.js mosaic-c
 done
 rm -rf "$RUNTIME_DIR/vendor/potree"
 cp -R "$REPO_ROOT/vendor/potree" "$RUNTIME_DIR/vendor/potree"
-for directory in lerc icons; do
+for directory in lerc icons fonts; do
   install -d -m 755 "$RUNTIME_DIR/vendor/$directory"
   cp -R "$REPO_ROOT/vendor/$directory/." "$RUNTIME_DIR/vendor/$directory/"
 done

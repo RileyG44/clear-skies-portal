@@ -190,6 +190,32 @@ assert(index.includes('id="buildDiag"'),"the geometry readout must be reachable 
     "every exit from the interface script must release the paint hold, including the early one");
 }
 
+/* Liquid Glass search row. The base stylesheet stacks three placements for
+   locate and search (desktop moved them to a second row), and that is what made
+   the rail's search area and the coordinate shortcuts below it wrap. The glass
+   layer replaces them with one row at every width; scripts/ui-stress.js checks
+   the rendered geometry, and these keep the rules that guarantee it. */
+{
+  const ui=read("ui-system.css");
+  const rule=selector=>{
+    const at=ui.indexOf(selector+"{");
+    assert(at>=0,`missing rule ${selector}`);
+    return ui.slice(at,ui.indexOf("}",at));
+  };
+  assert(/grid-template-columns:minmax\(0,1fr\) var\(--search-h\)/.test(rule(".csp-glass body.csp-redesign #cspNav .search-row")),
+    "the glass search row must be one flexible field track plus a fixed locate track");
+  for(const id of ["#iw","#go","#loc"])
+    assert(/grid-row:1/.test(rule(`.csp-glass body.csp-redesign #cspNav ${id}`)),`${id} must stay on the search row`);
+  assert(/flex:none/.test(rule(".csp-glass body.csp-redesign .csp-coordinate-actions")),
+    "the coordinate shortcuts must not be squeezed when the phone sheet is short");
+  assert(/container-type:inline-size/.test(rule(".csp-glass body.csp-redesign .csp-coordinate-actions")),
+    "shortcut labels follow the panel's width, not the window's");
+  assert(read("ui-system.js").includes('"Search":long'),"the placeholder must shorten in a narrow field instead of clipping");
+  assert(fs.existsSync(path.join(root,"vendor","fonts","inter-latin-wght-normal.woff2")),"the Inter fallback face must be vendored");
+  assert(read("sw.js").includes("./vendor/fonts/inter-latin-wght-normal.woff2"),"the fallback face must be in the offline shell");
+  assert(read("scripts/install-mac-service.sh").includes("lerc icons fonts"),"the installed engine must carry the fonts");
+}
+
 /* Redesign shell. Every width rule under .csp-redesign carries !important, so
    the inline width the resize handle writes can never take effect - the handle
    stayed on screen doing nothing, which is worse than not offering it. */

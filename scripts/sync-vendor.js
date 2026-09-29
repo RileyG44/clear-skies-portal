@@ -27,8 +27,8 @@ for(const name of ['LercDecode.js','LercDecode.es.js','lerc-wasm.wasm','README.m
    would slow the very first paint for no benefit. The build copies only the
    audited symbols used by the portal shell. */
 const iconNames=[
-  "arrow-left","chevron-down","chevron-right","chevron-up","cloud-sun","download","history","image",
-  "layers","map-pinned","mountain-snow","radio","rotate-ccw","satellite","scan-search",
+  "arrow-left","arrow-right","chevron-down","chevron-right","chevron-up","cloud-sun","download","history","image",
+  "layers","map-pinned","mountain-snow","navigation","radio","rotate-ccw","satellite","scan-search",
   "search","settings-2","sliders-horizontal","tags","triangle-alert"
 ];
 const iconDir=path.join(vendor,"icons");
@@ -36,6 +36,16 @@ fs.mkdirSync(iconDir,{recursive:true});
 for(const name of iconNames)
   fs.copyFileSync(path.join(root,"node_modules/lucide-static/icons",`${name}.svg`),path.join(iconDir,`${name}.svg`));
 
+/* Inter stands in for SF Pro where the system does not provide it. SF Pro's
+   licence limits it to Apple platforms, so it cannot be shipped; Apple devices
+   resolve -apple-system first and never download this file. One variable
+   Latin face covers every weight the interface uses. */
+const fontDir=path.join(vendor,"fonts");
+fs.mkdirSync(fontDir,{recursive:true});
+const interPackage=path.join(root,"node_modules/@fontsource-variable/inter");
+fs.copyFileSync(path.join(interPackage,"files/inter-latin-wght-normal.woff2"),path.join(fontDir,"inter-latin-wght-normal.woff2"));
+fs.copyFileSync(path.join(interPackage,"LICENSE"),path.join(fontDir,"Inter-LICENSE.txt"));
+
 const potreeRequired=["build/potree/potree.js","build/potree/potree.css","build/potree/workers/EptLaszipDecoderWorker.js","build/potree/workers/laz-perf.wasm","libs/copc/index.js","SOURCE.json"];
 for(const asset of potreeRequired){if(!fs.existsSync(path.join(vendor,"potree",asset)))throw new Error(`missing pinned Potree asset: ${asset}`)}
-console.log(`synced ${files.length} package assets and ${iconNames.length} interface icons; verified ${potreeRequired.length} pinned Potree assets`);
+console.log(`synced ${files.length} package assets, ${iconNames.length} interface icons and the Inter fallback face; verified ${potreeRequired.length} pinned Potree assets`);

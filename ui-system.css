@@ -186,6 +186,7 @@ body.csp-redesign .csp-coordinate-actions button{
 body.csp-redesign .csp-coordinate-actions button:hover{background:var(--ui-hover);border-color:var(--line);color:var(--ink)}
 body.csp-redesign .csp-coordinate-actions button:focus-visible{outline:2px solid var(--ui-text-muted);outline-offset:1px}
 body.csp-redesign .csp-coordinate-actions svg{display:block;width:17px;height:17px}
+body.csp-redesign .csp-coordinate-actions span{display:none}
 
 body.csp-redesign #cspNavScroll{
   order:2;
@@ -858,3 +859,697 @@ body.csp-redesign .csp-locate-label{display:none}
    underneath until the new level has finished arriving. */
 .leaflet-tile{opacity:0}
 .leaflet-tile-loaded{opacity:1}
+
+/* Inter, for systems without SF Pro. Declared outside the glass scope because
+   @font-face cannot be scoped; nothing uses it unless the stack below does,
+   and a face that is never used is never downloaded. */
+@font-face{
+  font-family:"Inter Variable";
+  font-style:normal;
+  font-weight:100 900;
+  font-display:swap;
+  src:url("vendor/fonts/inter-latin-wght-normal.woff2") format("woff2");
+  unicode-range:U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD;
+}
+
+/* ======================================================================
+   Liquid Glass (September 2026 preview)
+
+   Follows Apple's HIG for materials, sidebars and sheets:
+   - Navigation floats above the map in a glass layer, and the map runs
+     underneath it ("extend visually rich content beneath the sidebar").
+   - Glass is kept to the functional layer: the sidebar and the controls that
+     float on the map. Content inside the sidebar sits on ordinary grouped
+     cards, never more glass.
+   - One accent (systemBlue) for selection and primary actions, systemGreen
+     for switches. Sidebar symbols are monochrome, like SF Symbols in a
+     system sidebar, and the selected row is a lifted piece of glass.
+   - SF Pro where the system has it, Inter (vendored) where it does not.
+   - On a phone the sidebar becomes a bottom sheet with a grabber and two
+     detents, the pattern people know from Maps.
+   Everything here is scoped to html.csp-glass; ?ui=classic removes it.
+   ====================================================================== */
+
+.csp-glass body.csp-redesign{
+  --radius-card:14px;
+  --radius-control:10px;
+  --glass-inset:10px;
+  --spring:cubic-bezier(.32,.72,0,1);
+  /* SF Pro on every Apple device (Safari resolves -apple-system, Chrome and
+     Edge resolve BlinkMacSystemFont). SF Pro may not be redistributed, so
+     everywhere else gets Inter, the closest open face, before the platform's
+     own UI font. */
+  font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","SF Pro","Inter Variable",system-ui,"Segoe UI",Roboto,sans-serif;
+  -webkit-font-smoothing:antialiased;
+  -moz-osx-font-smoothing:grayscale;
+  font-feature-settings:normal;
+  letter-spacing:-.003em;
+}
+
+/* ---- the floating panel ---------------------------------------------- */
+
+.csp-glass body.csp-redesign #side{
+  top:calc(var(--glass-inset) + var(--safe-top));
+  bottom:calc(var(--glass-inset) + var(--safe-bottom));
+  left:calc(var(--glass-inset) + var(--safe-left));
+  border:0;
+  border-radius:24px;
+  background:var(--glass-panel);
+  -webkit-backdrop-filter:var(--glass-blur);
+  backdrop-filter:var(--glass-blur);
+  box-shadow:
+    inset 0 0 0 .5px var(--glass-rim),
+    0 0 0 .5px var(--glass-edge),
+    0 12px 40px var(--ui-shadow-3),
+    0 2px 6px var(--ui-shadow-1);
+}
+.csp-glass body.csp-redesign:not(.collapsed) #sideToggleDock{left:calc(var(--side-w) + var(--glass-inset) + 12px + var(--safe-left))}
+
+/* The rail holds the search row, so it is sized for it: 232px leaves the field
+   room for a short query beside the locate button. Touch on a wide screen
+   (an iPad in landscape) needs 44px targets and gets a little more. */
+.csp-glass body.csp-redesign #side{grid-template-columns:232px minmax(0,1fr)}
+.csp-glass body.csp-redesign #cspNav{
+  background:transparent;
+  border-right:.5px solid var(--glass-edge);
+}
+.csp-glass body.csp-redesign #cspNav .foot{
+  background:transparent;
+  border-top:.5px solid var(--glass-edge);
+}
+.csp-glass body.csp-redesign #cspWorkspace{background:var(--glass-panel-strong)}
+
+/* ---- search -------------------------------------------------------------
+   One layout at every width, replacing the three the base stylesheet stacks
+   up (desktop pushed locate and search onto a second row, and the compact
+   rules placed them again). A capsule field, the go button inside its
+   trailing end, and locate beside it:
+
+       [ (magnifier) Search places, layers…    (->) ]  (locate)
+       [ Copy ]  [ Maps ]  [ Earth ]      <- only once a point exists
+
+   Every track is fixed except the field, which is minmax(0,1fr), so nothing
+   can wrap: the field gives up width and the text scrolls inside it. */
+
+.csp-glass body.csp-redesign #cspNav .searchbox{--search-h:36px;--go:calc(var(--search-h) - 10px);flex:none;padding:14px 12px 10px}
+.csp-glass body.csp-redesign #cspNav .search-row{
+  display:grid;
+  grid-template-columns:minmax(0,1fr) var(--search-h);
+  grid-template-rows:var(--search-h);
+  align-items:center;
+  gap:8px;
+}
+.csp-glass body.csp-redesign #cspNav #iw{
+  grid-column:1;grid-row:1;
+  width:auto;min-width:0;height:var(--search-h);
+}
+.csp-glass body.csp-redesign #cspNav #q{
+  width:100%;
+  height:var(--search-h);
+  min-height:var(--search-h);
+  padding:0 calc(var(--go) + 8px) 0 32px;
+  border:0;
+  border-radius:999px;
+  background-color:var(--ui-fill);
+  background-image:var(--ui-search-glyph);
+  background-position:12px center;
+  background-size:15px 15px;
+  box-shadow:none;
+  font-size:13px;
+  text-overflow:ellipsis;
+}
+.csp-glass body.csp-redesign #cspNav #q:focus{box-shadow:0 0 0 3px var(--ui-ring);background-color:var(--ui-surface)}
+.csp-glass body.csp-redesign #cspNav #q::placeholder{color:var(--ui-text-muted)}
+.csp-glass body.csp-redesign #cspNav #go{
+  grid-column:1;grid-row:1;
+  justify-self:end;align-self:center;
+  position:relative;z-index:1;
+  display:block;
+  width:var(--go);min-width:var(--go);
+  height:var(--go);min-height:var(--go);
+  margin:0 5px 0 0;padding:0;
+  border:0;border-radius:50%;
+  background:var(--ui-accent);
+  box-shadow:0 1px 3px var(--ui-shadow-2);
+  font-size:0;
+  transition:opacity .2s ease,transform .25s var(--spring),visibility 0s;
+}
+.csp-glass body.csp-redesign #cspNav #go:hover{background:var(--ui-accent);filter:brightness(1.08)}
+.csp-glass body.csp-redesign #cspNav #go::before{
+  content:"";
+  position:absolute;left:50%;top:50%;
+  width:14px;height:14px;margin:0;
+  background:url("vendor/icons/arrow-right.svg") center/contain no-repeat;
+  filter:var(--ui-icon-filter-control);
+  opacity:1;
+  transform:translate(-50%,-50%);
+}
+/* Nothing to submit, nothing to press: the go button appears with text, the
+   way a search field's trailing control does. visibility also takes it out of
+   the tab order while it is hidden. */
+.csp-glass body.csp-redesign #cspNav .search-row:has(#q:placeholder-shown) #go{
+  opacity:0;visibility:hidden;transform:scale(.6);
+  transition:opacity .15s ease,transform .2s ease,visibility 0s linear .2s;
+}
+.csp-glass body.csp-redesign #cspNav #loc{
+  grid-column:2;grid-row:1;
+  display:grid;place-items:center;
+  width:var(--search-h);min-width:var(--search-h);
+  height:var(--search-h);min-height:var(--search-h);
+  padding:0;
+  border:0;border-radius:50%;
+  background:var(--ui-fill);
+  box-shadow:none;
+}
+.csp-glass body.csp-redesign #cspNav #loc:hover{background:var(--ui-fill-2)}
+.csp-glass body.csp-redesign #cspNav #loc img{width:16px;height:16px;opacity:.85;filter:var(--ui-icon-filter)}
+.csp-glass body.csp-redesign #cspNav #coordCopy,
+.csp-glass body.csp-redesign #cspNav .coord-launch{display:none}
+.csp-glass body.csp-redesign #cspNav #ac{
+  border:0;border-radius:14px;overflow:hidden;
+  background:var(--glass-panel-strong);
+  -webkit-backdrop-filter:var(--glass-blur);backdrop-filter:var(--glass-blur);
+  box-shadow:inset 0 0 0 .5px var(--glass-rim),0 0 0 .5px var(--glass-edge),0 12px 32px var(--ui-shadow-3);
+}
+
+/* Coordinate shortcuts: equal capsules on one line. Labels show only when the
+   row is wide enough for all three (a container query, so it follows the
+   panel's own width - the resizable desktop rail, the tablet column and the
+   phone sheet alike - rather than the window's). */
+.csp-glass body.csp-redesign .csp-coordinate-actions{
+  container-type:inline-size;
+  /* A flex child of a column that may scroll: without this it is the first
+     thing squeezed when the phone sheet is short. */
+  flex:none;
+  display:flex;
+  align-items:center;
+  gap:6px;
+  min-height:0;
+  padding:0 12px 10px;
+}
+.csp-glass body.csp-redesign .csp-coordinate-actions[hidden],
+.csp-glass body.csp-redesign .csp-coordinate-actions button[hidden]{display:none}
+.csp-glass body.csp-redesign .csp-coordinate-actions button{
+  flex:1 1 0;
+  display:inline-flex;align-items:center;justify-content:center;gap:5px;
+  width:auto;min-width:0;
+  height:30px;min-height:30px;
+  padding:0 8px;
+  border:0;border-radius:999px;
+  background:var(--ui-fill);
+  color:var(--ui-text);
+  font-size:12px;font-weight:500;
+}
+.csp-glass body.csp-redesign .csp-coordinate-actions button:hover{background:var(--ui-fill-2);border-color:transparent;color:var(--ui-text)}
+.csp-glass body.csp-redesign .csp-coordinate-actions button:focus-visible{outline:none;box-shadow:0 0 0 3px var(--ui-ring)}
+.csp-glass body.csp-redesign .csp-coordinate-actions svg{flex:none;width:15px;height:15px}
+.csp-glass body.csp-redesign .csp-coordinate-actions span{display:inline;min-width:0;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
+@container (max-width:229px){
+  .csp-glass body.csp-redesign .csp-coordinate-actions span{display:none}
+}
+
+/* ---- sidebar rows: monochrome symbols, a glass selection ---------------- */
+
+.csp-glass body.csp-redesign #cspNavScroll{padding:0 10px 16px}
+.csp-glass body.csp-redesign .csp-nav-label{
+  margin:18px 10px 6px;
+  color:var(--ui-text-muted);
+  font-size:11px;
+  font-weight:600;
+  letter-spacing:.01em;
+}
+.csp-glass body.csp-redesign .csp-nav-button{
+  grid-template-columns:20px minmax(0,1fr) auto;
+  gap:10px;
+  min-height:34px;
+  padding:6px 10px;
+  border-radius:10px;
+  color:var(--ui-text);
+  font-size:13px;
+  font-weight:500;
+  transition:background-color .18s ease,box-shadow .18s ease;
+}
+.csp-glass body.csp-redesign .csp-nav-button img{
+  grid-column:1;grid-row:1;
+  justify-self:center;
+  width:17px;
+  height:17px;
+  opacity:.78;
+  filter:var(--ui-icon-filter);
+}
+.csp-glass body.csp-redesign .csp-nav-button > span:not(.csp-nav-count):not(.csp-nav-dot){grid-column:2;grid-row:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.csp-glass body.csp-redesign .csp-nav-button .csp-nav-count,
+.csp-glass body.csp-redesign .csp-nav-button .csp-nav-dot{grid-column:3;grid-row:1}
+.csp-glass body.csp-redesign .csp-nav-button:hover{background:var(--ui-fill);color:var(--ui-text)}
+/* The selected row is a small piece of glass lifted off the sidebar, the way a
+   selected tab sits in an iOS 26 tab bar - not a colour wash. */
+.csp-glass body.csp-redesign .csp-nav-button[aria-current="page"]{
+  background:var(--glass-select);
+  color:var(--ui-text);
+  font-weight:600;
+  box-shadow:inset 0 0 0 .5px var(--glass-rim),0 0 0 .5px var(--glass-edge),0 2px 8px var(--ui-shadow-2);
+}
+.csp-glass body.csp-redesign .csp-nav-button[aria-current="page"] img{opacity:1}
+.csp-glass body.csp-redesign .csp-nav-button .csp-nav-count{
+  min-width:20px;
+  padding:1px 6px;
+  border-radius:999px;
+  background:var(--ui-fill);
+  color:var(--ui-text-muted);
+  font-size:11px;
+  font-weight:600;
+  text-align:center;
+}
+.csp-glass body.csp-redesign .csp-nav-button .csp-nav-count:empty{display:none}
+.csp-glass body.csp-redesign .csp-nav-button .csp-nav-dot{width:7px;height:7px;margin-right:4px}
+.csp-glass body.csp-redesign .csp-nav-button .csp-nav-dot.on{background:var(--ui-on);box-shadow:0 0 0 3px color-mix(in srgb,var(--ui-on) 22%,transparent)}
+.csp-glass body.csp-redesign #cspEngineNav .csp-nav-button{font-size:12.5px}
+
+.csp-glass body.csp-redesign #cspMapSources{border:0;border-radius:10px;background:var(--ui-fill)}
+.csp-glass body.csp-redesign #cspMapSources summary>img,
+.csp-glass body.csp-redesign #cspMapSources summary .csp-sources-chevron{filter:var(--ui-icon-filter)}
+.csp-glass body.csp-redesign #cspMapSourcesContent{border-top:.5px solid var(--glass-edge)}
+.csp-glass body.csp-redesign #resetPanes{color:var(--ui-accent);text-decoration:none}
+body.csp-redesign .csp-preview-badge{
+  display:inline-flex;
+  align-items:center;
+  margin-left:6px;
+  padding:1px 7px;
+  border-radius:999px;
+  background:var(--ui-warn);
+  color:var(--ui-accent-ink);
+  font-size:10px;
+  font-weight:700;
+  letter-spacing:.04em;
+  text-transform:uppercase;
+  vertical-align:1px;
+}
+
+/* ---- workspace: large title over inset-grouped cards ------------------- */
+
+.csp-glass body.csp-redesign #cspWorkspaceHeader{
+  padding:26px 24px 14px;
+  border-bottom:0;
+  background:transparent;
+}
+.csp-glass body.csp-redesign #cspWorkspaceTitle{
+  font-size:28px;
+  line-height:1.1;
+  font-weight:700;
+  letter-spacing:-.022em;
+}
+.csp-glass body.csp-redesign #cspWorkspaceDescription{
+  margin-top:6px;
+  color:var(--ui-text-muted);
+  font-size:13px;
+  line-height:1.42;
+}
+.csp-glass body.csp-redesign #cspBack{
+  color:var(--ui-accent);
+  font-size:15px;
+  font-weight:500;
+  margin:0 0 10px -6px;
+}
+.csp-glass body.csp-redesign #cspBack img{filter:var(--ui-icon-filter-accent)}
+.csp-glass body.csp-redesign #cspWorkspaceScroll{padding:8px 0 36px}
+
+.csp-glass body.csp-redesign .csp-section-label{
+  margin:14px 36px 7px;
+  color:var(--ui-text-muted);
+  font-size:12px;
+  font-weight:500;
+}
+.csp-glass body.csp-redesign .csp-card,
+.csp-glass body.csp-redesign #panes .pane,
+.csp-glass body.csp-redesign #snapshotPanel.csp-inline-export{
+  border:0;
+  border-radius:var(--radius-card);
+  background:var(--glass-card);
+  box-shadow:0 0 0 .5px var(--glass-edge),0 1px 3px var(--ui-shadow-1);
+}
+.csp-glass body.csp-redesign #panes .pane + .pane{border-top:0}
+.csp-glass body.csp-redesign #panes .pane-h{
+  min-height:44px;
+  padding:10px 14px 10px 16px;
+  border-bottom:.5px solid var(--ui-line);
+  background:transparent;
+}
+.csp-glass body.csp-redesign #panes .pane-h:hover{background:var(--ui-fill)}
+.csp-glass body.csp-redesign #panes .pane-t{font-size:15px;font-weight:600;letter-spacing:-.01em}
+.csp-glass body.csp-redesign #panes .pane-b{color:var(--ui-text-2)}
+.csp-glass body.csp-redesign .csp-card-head{padding:14px 16px 11px;border-bottom:.5px solid var(--ui-line)}
+.csp-glass body.csp-redesign .csp-card-title{font-size:15px;font-weight:600;letter-spacing:-.01em}
+.csp-glass body.csp-redesign .csp-card-copy{color:var(--ui-text-muted);font-size:12px}
+.csp-glass body.csp-redesign #panes .item{background:transparent;border-color:var(--ui-line)}
+.csp-glass body.csp-redesign #panes .item.sel{background:var(--ui-accent-tint)}
+.csp-glass body.csp-redesign #panes .item.sel::before{background:var(--ui-accent)}
+.csp-glass body.csp-redesign #panes .grp{background:var(--glass-panel-strong);-webkit-backdrop-filter:blur(12px);backdrop-filter:blur(12px)}
+.csp-glass body.csp-redesign #panes .tag{border-radius:6px;background:var(--ui-fill);box-shadow:none}
+
+/* ---- the active layer list: an iOS grouped list ------------------------ */
+
+.csp-glass body.csp-redesign .csp-layer-card{
+  padding:12px 14px 11px;
+  border-bottom:.5px solid var(--ui-line);
+  background:transparent;
+}
+.csp-glass body.csp-redesign .csp-layer-name{font-size:14px;font-weight:600;letter-spacing:-.008em}
+.csp-glass body.csp-redesign .csp-layer-meta{color:var(--ui-text-muted);font-size:12px}
+.csp-glass body.csp-redesign .csp-layer-handle{filter:var(--ui-icon-filter);opacity:.4}
+.csp-glass body.csp-redesign .csp-layer-opacity label,
+.csp-glass body.csp-redesign .csp-layer-opacity output{color:var(--ui-text-muted);font-size:12px}
+.csp-glass body.csp-redesign .csp-layer-actions button{color:var(--ui-accent);font-size:12px;font-weight:500}
+.csp-glass body.csp-redesign .csp-layer-actions button:hover{color:var(--ui-accent);filter:brightness(1.15)}
+.csp-glass body.csp-redesign .csp-layer-actions .csp-layer-move{border-radius:999px;background:var(--ui-fill)}
+.csp-glass body.csp-redesign .csp-layer-actions .csp-layer-move img{filter:var(--ui-icon-filter);opacity:.75}
+.csp-glass body.csp-redesign .csp-layer-actions > span{color:var(--ui-text-muted);font-size:11.5px}
+.csp-glass body.csp-redesign .csp-available-row{padding:13px 16px;background:transparent;border-bottom:.5px solid var(--ui-line)}
+.csp-glass body.csp-redesign .csp-available-row:hover{background:var(--ui-fill)}
+.csp-glass body.csp-redesign .csp-available-row span{color:var(--ui-text-muted);font-size:12px}
+
+/* ---- controls ----------------------------------------------------------- */
+
+/* Liquid Glass switch (iOS 26): a capsule knob that turns to clear glass and
+   swells while it is held, then springs to the other side. */
+.csp-glass body.csp-redesign .csp-switch,
+.csp-glass body.csp-redesign .csp-switch span{width:46px;height:26px}
+.csp-glass body.csp-redesign .csp-switch span{background:var(--ui-fill-2);transition:background-color .25s ease}
+.csp-glass body.csp-redesign .csp-switch span::after{
+  left:3px;top:3px;width:28px;height:20px;
+  border-radius:999px;
+  background:var(--ui-thumb);
+  box-shadow:var(--glass-knob-shadow);
+  transition:transform .35s var(--spring),background-color .2s ease,box-shadow .2s ease;
+}
+.csp-glass body.csp-redesign .csp-switch input:checked + span{background:var(--ui-on)}
+.csp-glass body.csp-redesign .csp-switch input:checked + span::after{transform:translateX(12px);background:var(--ui-thumb)}
+.csp-glass body.csp-redesign .csp-switch:active span::after{transform:scale(1.25);background:var(--glass-lens);box-shadow:var(--glass-lens-shadow)}
+.csp-glass body.csp-redesign .csp-switch:active input:checked + span::after{transform:translateX(12px) scale(1.25)}
+
+.csp-glass body.csp-redesign input[type=checkbox]{border-radius:5px;border-color:var(--ui-line-strong)}
+.csp-glass body.csp-redesign input[type=checkbox]:checked{border-color:var(--ui-accent);background-color:var(--ui-accent)}
+
+/* Liquid Glass slider (iOS 26): a 6px groove filled with the accent up to a
+   capsule thumb. While dragged, the thumb becomes a clear glass lens - it
+   swells and the groove and fill show through it - then settles back to white.
+   --csp-fill is kept current by ui-system.js; without it the groove is simply
+   unfilled. */
+.csp-glass body.csp-redesign input[type=range]{--csp-fill:0%;min-height:24px;background:transparent;cursor:pointer}
+.csp-glass body.csp-redesign input[type=range]::-webkit-slider-runnable-track{
+  height:6px;
+  border-radius:999px;
+  background:linear-gradient(to right,var(--ui-accent) var(--csp-fill),var(--ui-track) var(--csp-fill));
+}
+.csp-glass body.csp-redesign input[type=range]::-moz-range-track{height:6px;border-radius:999px;background:var(--ui-track)}
+.csp-glass body.csp-redesign input[type=range]::-moz-range-progress{height:6px;border-radius:999px;background:var(--ui-accent)}
+.csp-glass body.csp-redesign input[type=range]::-webkit-slider-thumb{
+  -webkit-appearance:none;appearance:none;
+  width:30px;height:20px;
+  margin-top:-7px;
+  border:0;
+  border-radius:999px;
+  background:var(--ui-thumb);
+  box-shadow:var(--glass-knob-shadow);
+  transition:transform .3s var(--spring),background-color .18s ease,box-shadow .18s ease;
+}
+.csp-glass body.csp-redesign input[type=range]::-moz-range-thumb{
+  width:30px;height:20px;border:0;border-radius:999px;background:var(--ui-thumb);
+  box-shadow:var(--glass-knob-shadow);
+  transition:transform .3s var(--spring),background-color .18s ease,box-shadow .18s ease;
+}
+.csp-glass body.csp-redesign input[type=range]:active::-webkit-slider-thumb{
+  transform:scale(1.4,1.5);
+  background:var(--glass-lens);
+  box-shadow:var(--glass-lens-shadow);
+}
+.csp-glass body.csp-redesign input[type=range]:active::-moz-range-thumb{
+  transform:scale(1.4,1.5);
+  background:var(--glass-lens);
+  box-shadow:var(--glass-lens-shadow);
+}
+.csp-glass body.csp-redesign input[type=range]:focus-visible{outline:none}
+.csp-glass body.csp-redesign input[type=range]:focus-visible::-webkit-slider-thumb{box-shadow:var(--glass-knob-shadow),0 0 0 3px var(--ui-ring)}
+.csp-glass body.csp-redesign input[type=range]:focus-visible::-moz-range-thumb{box-shadow:var(--glass-knob-shadow),0 0 0 3px var(--ui-ring)}
+
+.csp-glass body.csp-redesign input[type=text],
+.csp-glass body.csp-redesign input[type=number],
+.csp-glass body.csp-redesign input[type=date],
+.csp-glass body.csp-redesign input[type=url],
+.csp-glass body.csp-redesign select{
+  border-color:transparent;
+  border-radius:8px;
+  background-color:var(--ui-fill);
+  box-shadow:none;
+}
+.csp-glass body.csp-redesign input[type=text]:focus,
+.csp-glass body.csp-redesign input[type=number]:focus,
+.csp-glass body.csp-redesign input[type=date]:focus,
+.csp-glass body.csp-redesign input[type=url]:focus,
+.csp-glass body.csp-redesign select:focus{border-color:var(--ui-accent);box-shadow:0 0 0 3px var(--ui-ring);background-color:var(--ui-surface)}
+:root.csp-glass[data-ui-theme="dark"] body.csp-redesign :is(input[type=text],input[type=number],input[type=date],input[type=url],select){color-scheme:dark}
+
+.csp-glass body.csp-redesign .ghost{
+  border:0;
+  border-radius:8px;
+  background:var(--ui-fill);
+  color:var(--ui-accent);
+  font-weight:500;
+  box-shadow:none;
+}
+.csp-glass body.csp-redesign .ghost:hover{background:var(--ui-fill-2)}
+.csp-glass body.csp-redesign .linkbtn{color:var(--ui-accent)}
+.csp-glass body.csp-redesign .check{border-radius:8px}
+.csp-glass body.csp-redesign .check.on{background:var(--ui-accent-tint);border-color:transparent;color:var(--ui-text)}
+.csp-glass body.csp-redesign #snapshotPanel.csp-inline-export #snapshotSave{border-radius:10px;border-color:var(--ui-accent);background:var(--ui-accent)}
+
+.csp-glass body.csp-redesign .ovrow{border-radius:8px}
+.csp-glass body.csp-redesign .ovrow:hover{background:var(--ui-fill)}
+.csp-glass body.csp-redesign .ov-opacity-control,
+.csp-glass body.csp-redesign .ov-line-control{border:0;border-radius:10px;background:var(--ui-fill)}
+
+/* Segmented controls: a recessed track with a raised white thumb. */
+.csp-glass body.csp-redesign .terrain-mode{
+  gap:2px;
+  padding:2px;
+  border:0;
+  border-radius:9px;
+  background:var(--ui-fill);
+}
+.csp-glass body.csp-redesign .terrain-mode button{border-radius:7px;color:var(--ui-text);font-weight:500}
+.csp-glass body.csp-redesign .terrain-mode button[aria-pressed="true"]{
+  background:var(--ui-segment-thumb);
+  font-weight:600;
+  box-shadow:0 0 0 .5px var(--ui-shadow-1),0 3px 8px var(--ui-shadow-2),0 3px 1px var(--ui-shadow-1);
+}
+:root.csp-glass[data-ui-theme="dark"] body.csp-redesign .terrain-mode button[aria-pressed="true"]{background:var(--ui-segment-thumb)}
+
+/* ---- controls floating on the map: glass capsules ---------------------- */
+
+.csp-glass body.csp-redesign .map-tool,
+.csp-glass body.csp-redesign #sideToggleDock button,
+.csp-glass body.csp-redesign .leaflet-control-zoom a{
+  border:0!important;
+  background:var(--glass-control)!important;
+  color:var(--ui-text)!important;
+  box-shadow:inset 0 0 0 .5px var(--glass-rim),0 0 0 .5px var(--glass-edge),0 6px 20px var(--ui-shadow-2)!important;
+  -webkit-backdrop-filter:var(--glass-blur);
+  backdrop-filter:var(--glass-blur);
+}
+.csp-glass body.csp-redesign .map-tool{width:38px;height:38px;min-height:38px;border-radius:999px}
+.csp-glass body.csp-redesign .map-tool:hover{background:var(--glass-panel-strong)!important}
+.csp-glass body.csp-redesign #mapDock{gap:10px}
+.csp-glass body.csp-redesign .leaflet-control-zoom{border:0!important;border-radius:999px;overflow:hidden;box-shadow:0 6px 20px var(--ui-shadow-2)}
+.csp-glass body.csp-redesign .leaflet-control-zoom a{width:38px!important;height:38px!important;line-height:38px!important;border-radius:0!important;box-shadow:none!important}
+.csp-glass body.csp-redesign .leaflet-control-zoom a + a{border-top:.5px solid var(--glass-edge)!important}
+.csp-glass body.csp-redesign .tool-popover{
+  border:0;
+  border-radius:18px;
+  background:var(--glass-panel-strong);
+  -webkit-backdrop-filter:var(--glass-blur);
+  backdrop-filter:var(--glass-blur);
+  box-shadow:inset 0 0 0 .5px var(--glass-rim),0 0 0 .5px var(--glass-edge),0 18px 48px var(--ui-shadow-3);
+}
+.csp-glass body.csp-redesign .leaflet-control-attribution{
+  border-radius:8px 0 0 0;
+  -webkit-backdrop-filter:blur(12px);
+  backdrop-filter:blur(12px);
+}
+
+.csp-glass body.csp-redesign #cspMapMode{
+  bottom:calc(18px + var(--safe-bottom));
+  padding:3px;
+  border:0;
+  border-radius:999px;
+  background:var(--glass-control);
+  -webkit-backdrop-filter:var(--glass-blur);
+  backdrop-filter:var(--glass-blur);
+  box-shadow:inset 0 0 0 .5px var(--glass-rim),0 0 0 .5px var(--glass-edge),0 8px 28px var(--ui-shadow-3);
+}
+.csp-glass body.csp-redesign #cspMapMode button{
+  min-height:32px;
+  padding:0 15px;
+  border-radius:999px;
+  color:var(--ui-text);
+  font-size:12.5px;
+  font-weight:500;
+  transition:background-color .2s ease,color .2s ease;
+}
+.csp-glass body.csp-redesign #cspMapMode button[aria-pressed="true"]{
+  background:var(--ui-accent);
+  color:var(--ui-accent-ink);
+  font-weight:600;
+  box-shadow:0 2px 6px color-mix(in srgb,var(--ui-accent) 40%,transparent);
+}
+
+.csp-glass body.csp-redesign .leaflet-popup-content-wrapper{border-radius:14px;box-shadow:0 12px 36px var(--ui-shadow-3)}
+.csp-glass body.csp-redesign .leaflet-tooltip{border-radius:8px}
+
+/* Phone grabber: absent everywhere except the glass bottom sheet below. It is
+   unscoped on purpose - in the classic shell it would otherwise take a cell of
+   the sidebar grid. */
+body.csp-redesign #cspGrabber{display:none}
+
+/* The mode control centres on the map that is actually visible, not on the
+   window, so an open panel never sits on top of it. */
+.csp-glass body.csp-redesign:not(.collapsed) #cspMapMode{left:calc((var(--side-w) + var(--glass-inset) + 100vw) / 2)}
+.csp-glass body.csp-redesign #cspMapMode{transition:left .34s var(--ease-out-strong)}
+
+/* ---- tablet: one glass column ------------------------------------------ */
+
+/* The glass rules above outrank the base stylesheet's touch and compact
+   rules, so the ones that matter for touch are restated here. */
+@media (pointer:coarse){
+  .csp-glass body.csp-redesign .csp-nav-button{min-height:44px}
+  .csp-glass body.csp-redesign #side{grid-template-columns:252px minmax(0,1fr)}
+  .csp-glass body.csp-redesign #cspNav .searchbox{--search-h:44px;--go:32px}
+  .csp-glass body.csp-redesign #cspNav #q{font-size:16px}
+  .csp-glass body.csp-redesign .csp-coordinate-actions button{height:40px;min-height:40px}
+}
+
+@media (max-width:1050px){
+  .csp-glass body.csp-redesign #side{width:min(420px,calc(100vw - 76px))!important;grid-template-columns:minmax(0,1fr)}
+  /* 16px keeps iOS from zooming the page when the field takes focus, and
+     compact layouts are touch layouts, so every search target is 44. */
+  .csp-glass body.csp-redesign #cspNav .searchbox{--search-h:44px;--go:32px}
+  .csp-glass body.csp-redesign #cspNav #q{font-size:16px}
+  .csp-glass body.csp-redesign .csp-coordinate-actions button{height:40px;min-height:40px;font-size:14px}
+  .csp-glass body.csp-redesign #cspNav{border-right:0}
+  .csp-glass body.csp-redesign #cspWorkspace{background:transparent}
+  .csp-glass body.csp-redesign:not(.collapsed) #sideToggleDock{left:calc(min(420px,100vw - 76px) + var(--glass-inset) + 10px + var(--safe-left))}
+  .csp-glass body.csp-redesign:not(.collapsed) #cspMapMode{left:calc((min(420px,100vw - 76px) + var(--glass-inset) + 100vw) / 2)}
+  .csp-glass body.csp-redesign .map-tool{width:44px;height:44px;min-height:44px}
+}
+
+/* ---- phone: a bottom sheet with two detents ------------------------------
+   Medium leaves the top of the map in view so a tapped point stays visible
+   while its details are read; large is for the long catalog panes. The
+   grabber cycles between them, as the HIG asks, and can be dragged. */
+
+@media (max-width:760px){
+  .csp-glass body.csp-redesign{
+    --sheet-w:auto;
+    --sheet-medium:min(56dvh,520px);
+    --sheet-large:calc(100dvh - 64px - var(--safe-top));
+  }
+  .csp-glass body.csp-redesign #side{
+    top:auto;
+    left:calc(6px + var(--safe-left));
+    right:calc(6px + var(--safe-right));
+    bottom:calc(6px + var(--safe-bottom));
+    width:auto!important;
+    height:var(--sheet-medium);
+    border-radius:30px;
+    grid-template-rows:minmax(0,1fr);
+    padding-top:18px;
+    transition:height .42s var(--spring),transform .42s var(--spring),opacity .25s ease,visibility 0s linear .42s;
+    box-shadow:inset 0 0 0 .5px var(--glass-rim),0 0 0 .5px var(--glass-edge),0 -4px 36px var(--ui-shadow-3);
+  }
+  .csp-glass body.csp-redesign:not(.collapsed) #side{transition:height .42s var(--spring),transform .42s var(--spring),opacity .25s ease,visibility 0s}
+  .csp-glass body.csp-redesign[data-csp-detent="large"] #side{height:var(--sheet-large)}
+  .csp-glass body.csp-redesign.collapsed #side{transform:translateY(calc(100% + 24px));opacity:1}
+  .csp-glass body.csp-redesign.csp-sheet-dragging #side{transition:none}
+
+  .csp-glass body.csp-redesign #cspGrabber{
+    display:block;
+    position:absolute;
+    top:0;
+    left:50%;
+    z-index:6;
+    width:88px;
+    height:22px;
+    padding:0;
+    border:0;
+    background:transparent;
+    transform:translateX(-50%);
+    cursor:grab;
+    touch-action:none;
+  }
+  .csp-glass body.csp-redesign #cspGrabber::before{
+    content:"";
+    position:absolute;
+    left:50%;
+    top:7px;
+    width:36px;
+    height:5px;
+    border-radius:999px;
+    background:var(--ui-text-faint);
+    opacity:.55;
+    transform:translateX(-50%);
+  }
+  .csp-glass body.csp-redesign #cspGrabber:focus-visible{outline:none}
+  .csp-glass body.csp-redesign #cspGrabber:focus-visible::before{opacity:1;box-shadow:0 0 0 3px var(--ui-ring)}
+
+  /* At the medium detent the pinned footer would leave room for three rows,
+     so the whole navigation scrolls as one and the footer follows the list. */
+  .csp-glass body.csp-redesign #cspNav{overflow-y:auto;overscroll-behavior:contain}
+  .csp-glass body.csp-redesign #cspNavScroll{flex:0 0 auto;overflow:visible}
+  .csp-glass body.csp-redesign #cspNav > .searchbox,
+  .csp-glass body.csp-redesign #cspNav > .foot{flex-shrink:0}
+  .csp-glass body.csp-redesign #cspNav > .foot{margin-top:8px}
+  .csp-glass body.csp-redesign:not(.collapsed) #cspMapMode{left:50%}
+  .csp-glass body.csp-redesign #cspNav .searchbox{padding:4px 14px 8px}
+  .csp-glass body.csp-redesign #cspWorkspaceHeader{padding:4px 18px 10px}
+  .csp-glass body.csp-redesign #cspWorkspaceTitle{font-size:26px}
+  .csp-glass body.csp-redesign .csp-nav-button{min-height:46px;font-size:16px;gap:12px;grid-template-columns:24px minmax(0,1fr) auto}
+  .csp-glass body.csp-redesign .csp-nav-button img{width:20px;height:20px}
+  .csp-glass body.csp-redesign .csp-nav-label{font-size:13px;margin:16px 12px 6px}
+
+  /* The sheet owns the bottom of the screen, so the toggle and tools stay at
+     the top where they never collide with it. */
+  .csp-glass body.csp-redesign #sideToggleDock,
+  .csp-glass body.csp-redesign:not(.collapsed) #sideToggleDock{left:calc(12px + var(--safe-left));top:calc(12px + var(--safe-top))}
+  .csp-glass body.csp-redesign #mapDock,
+  .csp-glass body.csp-redesign:not(.collapsed) #mapDock{top:calc(12px + var(--safe-top));opacity:1;pointer-events:auto;transform:none}
+  .csp-glass body.csp-redesign[data-csp-detent="large"]:not(.collapsed) #mapDock{opacity:0;pointer-events:none}
+  .csp-glass body.csp-redesign #cspMapMode{bottom:calc(20px + var(--safe-bottom));max-width:calc(100% - 24px)}
+  .csp-glass body.csp-redesign #cspMapMode button{min-height:40px;padding:0 14px;white-space:nowrap}
+}
+
+/* A phone on its side has no height for a bottom sheet: the sheet would cover
+   the map and run into the map tools. Maps uses a card on the leading edge
+   there, so this does too. */
+@media (max-width:760px) and (orientation:landscape){
+  .csp-glass body.csp-redesign{--card-w:min(340px,calc(100vw - 140px - var(--safe-left) - var(--safe-right)))}
+  .csp-glass body.csp-redesign #side,
+  .csp-glass body.csp-redesign[data-csp-detent="large"] #side{
+    top:calc(8px + var(--safe-top));
+    bottom:calc(8px + var(--safe-bottom));
+    left:calc(8px + var(--safe-left));
+    right:auto;
+    width:var(--card-w)!important;
+    height:auto;
+    padding-top:0;
+    border-radius:22px;
+  }
+  .csp-glass body.csp-redesign.collapsed #side{transform:translateX(calc(-100% - 24px))}
+  .csp-glass body.csp-redesign #cspGrabber{display:none}
+  .csp-glass body.csp-redesign:not(.collapsed) #sideToggleDock{left:calc(var(--card-w) + 16px + var(--safe-left))}
+  .csp-glass body.csp-redesign[data-csp-detent="large"]:not(.collapsed) #mapDock{opacity:1;pointer-events:auto}
+  .csp-glass body.csp-redesign #cspNav .searchbox{padding-top:12px}
+}
+
+@media (prefers-reduced-motion:reduce){
+  .csp-glass body.csp-redesign #side,
+  .csp-glass body.csp-redesign .csp-switch span::after,
+  .csp-glass body.csp-redesign #cspMapMode button{transition:none!important}
+}
