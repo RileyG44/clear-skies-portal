@@ -206,7 +206,16 @@ function annotateOverlayGroups(){
 new MutationObserver(annotateOverlayGroups).observe($("#ovList"),{childList:true});
 
 const snapshotPanel=$("#snapshotPanel"),snapshotHome=snapshotPanel?.parentElement;
-if($("#snapshot")) $("#snapshot").onclick=()=>activateRoute("export");
+/* The camera button opens Export. From a collapsed panel - a peeking phone
+   sheet or a hidden desktop panel - it has to open it too, or the route
+   changes out of sight. */
+if($("#snapshot")) $("#snapshot").onclick=()=>{
+  activateRoute("export");
+  if(document.body.classList.contains("collapsed")){
+    if(document.body.dataset.cspDetent!=="large") document.body.dataset.cspDetent="medium";
+    $("#sideToggle")?.click();
+  }
+};
 
 const visited=new Set();
 let currentRoute="layers";
@@ -387,7 +396,20 @@ modeBar.addEventListener("click",event=>{
 function syncModeBar(){
   const mode=$("#terModePoints")?.getAttribute("aria-pressed")==="true"?"points":$("#terMode3d")?.getAttribute("aria-pressed")==="true"?"3d":"2d";
   $$("button",modeBar).forEach(button=>button.setAttribute("aria-pressed",String(button.dataset.mode===mode)));
+  placeModeLens();
 }
+/* The glass lens under the selected mode is one element that slides between
+   the buttons, rather than each button lighting up in place. */
+function placeModeLens(){
+  const selected=$('button[aria-pressed="true"]',modeBar);
+  if(!selected||!selected.offsetWidth) return;
+  const x=`${selected.offsetLeft}px`,w=`${selected.offsetWidth}px`;
+  if(modeBar.style.getPropertyValue("--lens-x")===x&&modeBar.style.getPropertyValue("--lens-w")===w) return;
+  modeBar.style.setProperty("--lens-x",x);modeBar.style.setProperty("--lens-w",w);
+  modeBar.dataset.lens="";
+}
+addEventListener("resize",placeModeLens);
+document.fonts?.ready.then(placeModeLens);
 
 let refreshTimer=0,lastLayerSignature="";
 function scheduleLayerRefresh(delay=80){

@@ -135,7 +135,14 @@ A visual refresh on top of the same information architecture, following Apple's 
   - `setCollapsed()` still marks the panel inert. `ui-system.js` lifts that while it peeks, and hides the clipped rows with `visibility` so they stay out of the tab order.
   - `scripts/ui-sheet.js` drives all of this.
   - In landscape it is a card on the leading edge instead, as in Maps, and keeps the hide-and-toggle behaviour, since a peek strip would cover most of a landscape phone's height.
-- **Map controls:** the dock is one vertical glass capsule, as in Maps, rather than a column of separate buttons. It stays top-right, where its popovers are anchored.
+- **One material for everything floating on the map.** The sheet set the look, and every other floating surface uses the same Liquid Glass. Each strength is the blurred, brightened map, a translucent fill, a top sheen and a bright rim over a hairline. The values are the `--lg-*` tokens in `ui-theme.css`, and `check-static.js` asserts that each surface uses them. The two strengths:
+  - *Clear* (`--lg-control`) is for controls: the map-button capsule, the view-mode bar, zoom and the sidebar toggle. Buttons inside a glass group are bare glyphs on one piece of glass.
+  - *Frosted* (`--lg-popover`) is for anything read: the tool popovers, the context menu, map callouts and tooltips, the snapshot toast, the point-cloud viewer and the search suggestions.
+- **Map controls:** the dock is one vertical glass capsule, as in Maps, rather than a column of separate buttons. It stays top-right, where its popovers are anchored. On a phone, popovers are narrowed so they open beside the capsule rather than over it.
+- **View-mode bar:** a clear capsule with a lens of brighter glass that slides to the selected mode. `placeModeLens()` in `ui-system.js` sets `--lens-x` and `--lens-w`. The selected label is the accent in light mode, and full-strength ink on the dark lens, where the accent measures about 2.3:1.
+- **Context menu:** rounded rows on glass. The highlighted row gets a fill rather than an outline; the menu focuses its first row on open, so an outline would show on every right-click.
+- **Callouts and tooltips:** frosted glass with the tail dropped. A hard tail cannot share the blur.
+- **Camera button:** opens Export, and also opens the panel if it is collapsed, so the route never changes out of sight.
 - **View modes:** the floating control and the Terrain pane use the same parallel names: 2D map, 3D terrain, Point cloud.
 - **Accessibility:** `prefers-reduced-transparency` and browsers without `backdrop-filter` get the same layout on solid surfaces. `prefers-reduced-motion` removes the sheet and switch springs. Faint ink uses Apple's increased-contrast secondary label, because the standard one measures about 3.4:1 on white.
 - **Tokens:** all values live in `ui-theme.css` under `:root.csp-glass` and `:root.csp-glass[data-ui-theme="dark"]`. The dark block restates every value the light glass block overrides, because the light glass block outranks the classic dark palette.

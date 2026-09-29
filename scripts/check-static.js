@@ -221,6 +221,15 @@ assert(index.includes('id="buildDiag"'),"the geometry readout must be reachable 
     "a peeking sheet must stay interactive; setCollapsed() makes the panel inert");
   assert(read("ui-system.js").includes('data-mode="2d">2D map<')&&read("index.html").includes('id="terModePoints" type="button" aria-pressed="false">Point cloud<'),
     "the map view modes share one set of parallel names in both controls");
+  /* One Liquid Glass material for everything floating on the map: controls
+     take the clear strength, anything read takes the frosted one. A new
+     floating surface belongs in one of these two lists. */
+  for(const selector of ["#mapDock","#cspMapMode",".leaflet-control-zoom","#sideToggleDock .map-tool"])
+    assert(new RegExp(`:is\\([^)]*${selector.replace(/[.#]/g,m=>"\\"+m)}[^)]*\\)\\{[^}]*background-color:var\\(--lg-control\\)`).test(ui),
+      `${selector} must use the clear Liquid Glass material`);
+  for(const selector of [".tool-popover","#menu",".leaflet-popup-content-wrapper","#snapshotStatus","#pointCloudPanel"])
+    assert(new RegExp(`:is\\([^)]*${selector.replace(/[.#]/g,m=>"\\"+m)}[^)]*\\)\\{[^}]*background-color:var\\(--lg-popover\\)`).test(ui),
+      `${selector} must use the frosted Liquid Glass material`);
   assert(read("ui-system.js").includes('"Search":long'),"the placeholder must shorten in a narrow field instead of clipping");
   assert(fs.existsSync(path.join(root,"vendor","fonts","inter-latin-wght-normal.woff2")),"the Inter fallback face must be vendored");
   assert(read("sw.js").includes("./vendor/fonts/inter-latin-wght-normal.woff2"),"the fallback face must be in the offline shell");

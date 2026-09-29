@@ -253,6 +253,27 @@
   --sheet-ink-faint: #58585c;
   --sheet-grabber: rgba(60, 60, 67, .32);
 
+  /* One Liquid Glass material for everything that floats on the map, in the
+     two strengths the sheet already uses:
+       --lg-control  clear glass for controls (mode bar, map buttons, zoom).
+                     Carries only glyphs and short labels, so it can be clear;
+                     it is a little denser than the peek strip because its
+                     glyphs are small and have no field behind them.
+       --lg-popover  frosted glass for anything read (popovers, menus, map
+                     callouts, toasts) - the opened sheet's value.
+     Both take the sheet's blur, rim and top sheen, so a popover and the
+     sheet it sits beside are visibly the same material. */
+  --lg-control: rgba(250, 250, 252, .5);
+  --lg-popover: rgba(248, 248, 250, .8);
+  --lg-filter: blur(30px) saturate(1.9) brightness(1.12);
+  --lg-rim: inset 0 1px 0 rgba(255, 255, 255, .7), inset 0 0 0 .5px rgba(255, 255, 255, .5), 0 0 0 .5px rgba(0, 0, 0, .08), 0 8px 26px rgba(0, 0, 0, .16);
+  --lg-rim-lifted: inset 0 1px 0 rgba(255, 255, 255, .7), inset 0 0 0 .5px rgba(255, 255, 255, .5), 0 0 0 .5px rgba(0, 0, 0, .08), 0 18px 50px rgba(0, 0, 0, .22);
+  --lg-sheen: linear-gradient(180deg, rgba(255, 255, 255, .45) 0, rgba(255, 255, 255, 0) 55%);
+  --lg-sheen-tall: linear-gradient(180deg, rgba(255, 255, 255, .4) 0, rgba(255, 255, 255, 0) 72px);
+  /* the selected segment: a raised lens of brighter glass */
+  --lg-lens: rgba(255, 255, 255, .82);
+  --lg-lens-rim: inset 0 0 0 .5px rgba(255, 255, 255, .95), 0 0 0 .5px rgba(0, 0, 0, .06), 0 2px 8px rgba(0, 0, 0, .14);
+
   /* The search field draws its magnifier as a background image, which no
      filter can reach without also filtering the field, so the glyph itself is
      themed - the same approach as the checkbox tick. */
@@ -299,6 +320,15 @@
   --sheet-ink-muted: #b4b4b9;
   --sheet-ink-faint: #a6a6ab;
   --sheet-grabber: rgba(235, 235, 245, .34);
+  --lg-control: rgba(30, 30, 32, .46);
+  --lg-popover: rgba(30, 30, 32, .76);
+  --lg-filter: blur(30px) saturate(1.6) brightness(.8);
+  --lg-rim: inset 0 1px 0 rgba(255, 255, 255, .16), inset 0 0 0 .5px rgba(255, 255, 255, .12), 0 0 0 .5px rgba(0, 0, 0, .5), 0 8px 26px rgba(0, 0, 0, .4);
+  --lg-rim-lifted: inset 0 1px 0 rgba(255, 255, 255, .16), inset 0 0 0 .5px rgba(255, 255, 255, .12), 0 0 0 .5px rgba(0, 0, 0, .5), 0 18px 50px rgba(0, 0, 0, .5);
+  --lg-sheen: linear-gradient(180deg, rgba(255, 255, 255, .1) 0, rgba(255, 255, 255, 0) 55%);
+  --lg-sheen-tall: linear-gradient(180deg, rgba(255, 255, 255, .08) 0, rgba(255, 255, 255, 0) 72px);
+  --lg-lens: rgba(255, 255, 255, .18);
+  --lg-lens-rim: inset 0 0 0 .5px rgba(255, 255, 255, .22), 0 0 0 .5px rgba(0, 0, 0, .4), 0 2px 8px rgba(0, 0, 0, .35);
   --ui-search-glyph: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23aeaeb2' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m21 21-4.34-4.34'/%3E%3Ccircle cx='11' cy='11' r='8'/%3E%3C/svg%3E");
   --glass-select: rgba(255, 255, 255, .13);
   --glass-lens: rgba(255, 255, 255, .16);
@@ -345,6 +375,8 @@
     --sheet-glass-clear: var(--ui-rail);
     --sheet-glass: var(--ui-rail);
     --sheet-card: var(--ui-surface);
+    --lg-control: var(--ui-surface);
+    --lg-popover: var(--ui-surface);
   }
   :root.csp-glass {
     --glass-panel: var(--ui-rail);
@@ -356,6 +388,13 @@
   }
 }
 @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  :root.csp-glass,
+  :root.csp-glass[data-ui-theme="dark"] {
+    --lg-control: var(--ui-surface);
+    --lg-popover: var(--ui-surface);
+    --sheet-glass-clear: var(--ui-rail);
+    --sheet-glass: var(--ui-rail);
+  }
   :root.csp-glass {
     --glass-panel: var(--ui-rail);
     --glass-panel-strong: var(--ui-surface);
