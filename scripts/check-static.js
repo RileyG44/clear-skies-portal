@@ -324,6 +324,12 @@ assert(index.includes('if(data&&data.pinch&&!map3d){ pinchFrame(center,zoom);ret
 assert(index.includes('function releaseCanvas(canvas)')&&/tileunload[\s\S]{0,400}releaseCanvas\(event\.tile\)/.test(index)&&
        !index.includes('const canvas=document.createElement("canvas");canvas.width=bitmap.width'),
        "canvases must be released when tiles unload and elevation decoding must share a scratch canvas (iOS caps total canvas memory)");
+assert(index.includes('url:ESRI_IMAGERY, attr:ESRI_IMAGERY_ATTR, maxZoom:19, sharp:true,')&&
+       index.includes('return resilientLayer(ovUrl(o), o.sharp?sharpTiles(options):options);')&&
+       index.includes('const direct=sharpSceneUrl(tuneTileUrl(it.tiles.url,it));')&&index.includes('const value=sharpSceneUrl(tuneTileUrl(raw,it));'),
+       "satellite imagery must be fetched at the screen's pixel density on phones (retina grid for Esri/EOX, @2x for scene tilers)");
+assert(index.includes('maxNativeZoom:TERRAIN_OVERZOOM,rawNativeZoom:18')&&index.includes('crop,size.x,size.y,{smooth:true})'),
+       "LiDAR terrain must keep rendering crisp shading past its data zoom instead of stretching a z18 picture");
 assert(index.includes('World_Light_Gray_Base/MapServer/tile/{z}/{y}/{x}", attr:ESRI_ATTR, max:16}')&&
        index.includes('World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}", attr:ESRI_ATTR, max:16}')&&
        index.includes('tileSize:256,maxzoom:16,attribution:"Esri, HERE, Garmin'),
@@ -680,7 +686,7 @@ const server=read("server.js");
 assert(server.includes('if(z>=13) try{ raw=await terrainTask'),"raw lidar elevation must be reserved for useful close zooms");
 assert(server.includes('const TERRAIN_RENDER_VERSION = "terrain-v3"')&&index.includes("?rv=terrain-v3`"),
        "corrected terrain renders must use a new server-cache namespace");
-assert(server.includes('function slot(signal)')&&server.includes('queue.splice(index,1)'),
+assert(server.includes('function slot(signal,host)')&&server.includes('line.queue.splice(index,1)')&&server.includes('[WADNR_HOST]:MAX_INFLIGHT, [DEP_HOST]:'),
        "abandoned viewport requests must leave the upstream concurrency queue immediately");
 assert(server.includes('"X-CSP-Error":"upstream"'),
        "transient tile failures must remain retryable without noisy broken-image responses");

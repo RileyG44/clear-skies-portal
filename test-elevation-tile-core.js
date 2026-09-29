@@ -148,4 +148,24 @@ assert.throws(() => T.resampleElevation(new Float32Array(1), 1, 1,
                    "artefact pixels must not overwrite real ground");
 }
 
+/* Smooth magnification: exact on a plane (no facets), curved on a curve, and
+   bilinear next to no-data. */
+{
+  const n = 8, plane = new Float32Array(n * n), bowl = new Float32Array(n * n);
+  for (let y = 0; y < n; y++) for (let x = 0; x < n; x++) { plane[y * n + x] = 3 * x + 2 * y + 100; bowl[y * n + x] = (x - 3.5) ** 2; }
+  const crop = { x: 2, y: 2, width: 4, height: 4 };
+  const smooth = T.resampleElevation(plane, n, n, crop, 32, 32, { smooth: true });
+  const linear = T.resampleElevation(plane, n, n, crop, 32, 32);
+  for (let i = 0; i < smooth.length; i++) assert.ok(Math.abs(smooth[i] - linear[i]) < 1e-3, "a plane stays a plane");
+  const curve = T.resampleElevation(bowl, n, n, { x: 0, y: 0, width: 8, height: 1 }, 64, 1, { smooth: true });
+  const straight = T.resampleElevation(bowl, n, n, { x: 0, y: 0, width: 8, height: 1 }, 64, 1);
+  const secondDiff = a => { let jumps = 0; for (let i = 14; i < 42; i++) jumps = Math.max(jumps, Math.abs(a[i + 1] - 2 * a[i] + a[i - 1])); return jumps; };
+  assert.ok(secondDiff(curve) < secondDiff(straight) / 2, "the bowl magnifies without bilinear's kinks");
+  const holed = bowl.slice(); holed[3] = NaN;
+  const nearHole = T.resampleElevation(holed, n, n, { x: 0, y: 0, width: 8, height: 1 }, 64, 1, { smooth: true });
+  assert.ok(nearHole.every(v => Number.isNaN(v) || Number.isFinite(v)) && Number.isFinite(nearHole[0]), "no-data falls back, never spreads garbage");
+  const shrink = T.resampleElevation(bowl, n, n, null, 4, 4, { smooth: true });
+  assert.deepEqual(Array.from(shrink), Array.from(T.resampleElevation(bowl, n, n, null, 4, 4)), "shrinking stays bilinear");
+}
+
 console.log("elevation tile core checks passed");

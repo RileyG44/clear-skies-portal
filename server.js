@@ -339,12 +339,24 @@ function upstream(opts, postBody){
 /* ArcGIS generates uncached WA composites on demand. Sending a full viewport
    at once makes every request slower and pushes them over the timeout; four
    concurrent jobs complete sooner in practice while 3DEP remains visible. */
+/* That limit is WA DNR's. USGS 3DEP (hillshade exports and the national
+   elevation behind the 1 m terrain) used to wait in the same four-wide line,
+   so one slow WA composite held up every USGS tile behind it. Each host now
+   has its own line: WA DNR keeps four, USGS gets twelve. */
 const MAX_INFLIGHT = 4;
-let inflight = 0; const queue = [];
+const LANE_LIMITS = {[WADNR_HOST]:MAX_INFLIGHT, [DEP_HOST]:Math.max(1,Math.min(32,Number(process.env.CSP_USGS_INFLIGHT)||12))};
+const lanes = new Map();
+const lane = host => {
+  const name = host||"";
+  if(!lanes.has(name)) lanes.set(name,{inflight:0,queue:[],limit:LANE_LIMITS[name]||MAX_INFLIGHT});
+  return lanes.get(name);
+};
+const upstreamLoad = () => { let inflight=0,queued=0; for(const l of lanes.values()){ inflight+=l.inflight; queued+=l.queue.length } return {inflight,queued} };
 const pending = new Map();
-function slot(signal){
+function slot(signal,host){
   if(signal&&signal.aborted)
     return Promise.reject(new TerrainPoolError("upstream request cancelled","ABORT_ERR"));
+  const line=lane(host);
   return new Promise((resolve,reject)=>{
     let settled=false;
     const waiter={grant:null};
@@ -352,18 +364,18 @@ function slot(signal){
     const onAbort=()=>{
       if(settled) return;
       settled=true; cleanup();
-      const index=queue.indexOf(waiter); if(index>=0) queue.splice(index,1);
+      const index=line.queue.indexOf(waiter); if(index>=0) line.queue.splice(index,1);
       reject(new TerrainPoolError("upstream request cancelled","ABORT_ERR"));
     };
     waiter.grant=()=>{
       if(settled) return;
-      settled=true; cleanup(); inflight++; resolve();
+      settled=true; cleanup(); line.inflight++; resolve();
     };
     if(signal) signal.addEventListener("abort",onAbort,{once:true});
-    if(inflight < MAX_INFLIGHT) waiter.grant(); else queue.push(waiter);
+    if(line.inflight < line.limit) waiter.grant(); else line.queue.push(waiter);
   });
 }
-function release(){ inflight=Math.max(0,inflight-1); const n=queue.shift(); if(n) n.grant() }
+function release(host){ const line=lane(host); line.inflight=Math.max(0,line.inflight-1); const n=line.queue.shift(); if(n) n.grant() }
 
 function coalesce(id,fn){
   if(pending.has(id)) return pending.get(id);
@@ -490,9 +502,9 @@ function limitedUpstream(id,opts,body,signal){
     entry={controller:new AbortController(),waiters:new Set(),promise:null};
     limitedPending.set(taskKey,entry);
     entry.promise=(async()=>{
-      await slot(entry.controller.signal);
+      await slot(entry.controller.signal,opts.host);
       try{ return await upstream({...opts,signal:entry.controller.signal},body) }
-      finally{ release() }
+      finally{ release(opts.host) }
     })().finally(()=>limitedPending.delete(taskKey));
   }
   const waiter={}; entry.waiters.add(waiter);
@@ -778,7 +790,7 @@ async function nationalElevationTiff(z,x,y,size,signal){
   const bbox=mercBbox(z,x,y);
   const requestPath=`/arcgis/rest/services/3DEPElevation/ImageServer/exportImage`
     + `?bbox=${bbox}&bboxSR=3857&imageSR=3857&size=${size},${size}&format=tiff&f=image`;
-  await slot(signal);
+  await slot(signal,DEP_HOST);
   try{
     const r=await upstream({host:DEP_HOST,path:requestPath,method:"GET",signal,
       headers:{"User-Agent":"clear-skies-portal"},__timeout:18000});
@@ -788,7 +800,7 @@ async function nationalElevationTiff(z,x,y,size,signal){
   }catch(error){
     if(!terrainAborted(error)) depFailed();
     throw error;
-  }finally{ release() }
+  }finally{ release(DEP_HOST) }
 }
 
 function validateWarmJob(value, source){
@@ -1493,7 +1505,7 @@ const server = http.createServer(async (req,res)=>{
     if(p === "/api/health"){
       const terrain=terrainPool.stats();
       return send(res,200,"application/json",Buffer.from(JSON.stringify({
-        ok:true, cached:cacheCount, inflight, queued:queue.length, terrainRenderVersion:TERRAIN_RENDER_VERSION,
+        ok:true, cached:cacheCount, ...upstreamLoad(), terrainRenderVersion:TERRAIN_RENDER_VERSION,
         rendering:terrain.active, renderQueued:terrain.queued, terrain,
         memoryCache:{entries:cacheMemory.size,entryLimit:CACHE_MEMORY_ENTRY_LIMIT,
           MiB:+(cacheMemoryBytes/1048576).toFixed(1),limitMiB:CACHE_MEMORY_LIMIT/1048576},

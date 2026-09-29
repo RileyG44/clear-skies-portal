@@ -24,7 +24,10 @@ class TerrainPool {
   constructor({cacheDir,size,maxQueue=40,workerFile=path.join(__dirname,"terrain-worker.js"),jobsPerWorker,shareable=SHAREABLE}={}){
     const available=typeof os.availableParallelism==="function" ? os.availableParallelism() : os.cpus().length;
     const configured=Number(process.env.CSP_TERRAIN_WORKERS||size||0);
-    this.size=Math.max(1,Math.min(8,Number.isInteger(configured)&&configured>0 ? configured : Math.min(4,Math.max(2,available-2))));
+    /* Default: every core but one (up to 8). Each render is mostly waiting on
+       S3 range reads and decoding, so the Mac serves raw LiDAR fastest when
+       all of it is working; the one spare keeps the HTTP server responsive. */
+    this.size=Math.max(1,Math.min(8,Number.isInteger(configured)&&configured>0 ? configured : Math.max(2,available-1)));
     const perWorker=Number(jobsPerWorker??process.env.CSP_TERRAIN_JOBS_PER_WORKER??2);
     this.jobsPerWorker=Math.max(1,Math.min(4,Number.isInteger(perWorker)?perWorker:2));
     this.shareable=new Set(shareable);

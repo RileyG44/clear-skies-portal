@@ -159,13 +159,57 @@
    * `source` is never mutated. NaN and infinities are no-data. If all samples
    * carrying non-zero weight are no-data, the destination sample remains NaN.
    */
-  function resampleElevation(source, sourceWidth, sourceHeight, crop, destinationWidth, destinationHeight) {
+  /*
+   * Catmull-Rom taps per output sample: four source indices and weights per
+   * axis. Bicubic keeps the surface's slope continuous across source pixels,
+   * so a hillshade computed from a magnified grid is smooth instead of showing
+   * the diamond facets bilinear interpolation leaves.
+   */
+  function makeCubicAxis(outputSize, cropStart, cropSize, sourceSize) {
+    var index = new Int32Array(outputSize * 4), weight = new Float64Array(outputSize * 4), sourceMax = sourceSize - 1;
+    for (var target = 0; target < outputSize; target++) {
+      var coordinate = clamp(cropStart + (target + 0.5) * cropSize / outputSize - 0.5, 0, sourceMax);
+      var base = Math.floor(coordinate), t = coordinate - base, t2 = t * t, t3 = t2 * t;
+      var w = [(-t3 + 2 * t2 - t) / 2, (3 * t3 - 5 * t2 + 2) / 2, (-3 * t3 + 4 * t2 + t) / 2, (t3 - t2) / 2];
+      for (var k = 0; k < 4; k++) {
+        index[target * 4 + k] = clamp(base - 1 + k, 0, sourceMax);
+        weight[target * 4 + k] = w[k];
+      }
+    }
+    return { index: index, weight: weight };
+  }
+
+  function resampleElevation(source, sourceWidth, sourceHeight, crop, destinationWidth, destinationHeight, options) {
     rasterLength(source, sourceWidth, sourceHeight, 1, "source");
     var area = normalizeCrop(crop, sourceWidth, sourceHeight);
     if (destinationWidth === undefined) destinationWidth = Math.max(1, Math.round(area.width));
     if (destinationHeight === undefined) destinationHeight = Math.max(1, Math.round(area.height));
     positiveInteger(destinationWidth, "destinationWidth");
     positiveInteger(destinationHeight, "destinationHeight");
+    var bilinear = resampleBilinear(source, sourceWidth, sourceHeight, area, destinationWidth, destinationHeight);
+    /* Smooth only when magnifying; shrinking gains nothing from it. */
+    if (!(options && options.smooth) || (area.width >= destinationWidth && area.height >= destinationHeight)) return bilinear;
+    var xs = makeCubicAxis(destinationWidth, area.x, area.width, sourceWidth);
+    var ys = makeCubicAxis(destinationHeight, area.y, area.height, sourceHeight);
+    for (var targetY = 0; targetY < destinationHeight; targetY++) {
+      for (var targetX = 0; targetX < destinationWidth; targetX++) {
+        var sum = 0, valid = true;
+        for (var j = 0; j < 4 && valid; j++) {
+          var row = ys.index[targetY * 4 + j] * sourceWidth, wy = ys.weight[targetY * 4 + j];
+          for (var i = 0; i < 4; i++) {
+            var value = source[row + xs.index[targetX * 4 + i]];
+            if (!Number.isFinite(value) || value <= NO_DATA_FLOOR) { valid = false; break; }
+            sum += value * wy * xs.weight[targetX * 4 + i];
+          }
+        }
+        /* Next to no-data, keep the no-data-aware bilinear value. */
+        if (valid) bilinear[targetY * destinationWidth + targetX] = sum;
+      }
+    }
+    return bilinear;
+  }
+
+  function resampleBilinear(source, sourceWidth, sourceHeight, area, destinationWidth, destinationHeight) {
 
     var xs = makeAxisSamples(destinationWidth, area.x, area.width, sourceWidth);
     var ys = makeAxisSamples(destinationHeight, area.y, area.height, sourceHeight);
