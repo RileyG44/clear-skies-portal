@@ -117,10 +117,16 @@ A visual refresh on top of the same information architecture, following Apple's 
   - A fixed locate track beside the field.
   - The Copy, Maps and Earth shortcuts as equal capsules on one row. Their labels are shown or hidden by a container query on the row's own width.
   - Touch layouts use 44 px targets and 16 px text. The placeholder shortens to "Search" when the field is narrower than 190 px.
-  - `scripts/ui-stress.js` checks all of this against 64 size, orientation, state and theme cases and writes a crop of each. Run it after any change to this area.
+  - `scripts/ui-stress.js` checks all of this against 64 size, orientation, state and theme cases and writes a crop of each. Run it, and `scripts/ui-sheet.js`, after any change to this area.
 - **Phone:**
   - The sidebar becomes a bottom sheet with a grabber and two detents (`data-csp-detent="medium|large"` on `<body>`). Tap the grabber to cycle, drag to resize, or drag well below medium to close through the existing toggle. The toggle and map tools stay at the top, where the sheet never reaches.
-  - In landscape it is a card on the leading edge instead, as in Maps.
+  - Collapsing never hides it in portrait. "Collapsed" is a peek detent: the grabber and the search field (or a detail page's title) stay above the bottom edge. Tapping the strip, tapping the grabber, or dragging up opens it again; tapping the search field opens it to large.
+  - Every existing close path now lands on peek: tapping the map, dragging down, the back swipe, and the arrow keys on the grabber. The sidebar toggle is hidden on a portrait phone because the peek replaces it.
+  - While the point-cloud viewer, which is its own bottom sheet, is open, the peek steps fully out of the way.
+  - `setCollapsed()` still marks the panel inert. `ui-system.js` lifts that while it peeks, and hides the clipped rows with `visibility` so they stay out of the tab order.
+  - `scripts/ui-sheet.js` drives all of this.
+  - In landscape it is a card on the leading edge instead, as in Maps, and keeps the hide-and-toggle behaviour, since a peek strip would cover most of a landscape phone's height.
+- **View modes:** the floating control and the Terrain pane use the same parallel names: 2D map, 3D terrain, Point cloud.
 - **Accessibility:** `prefers-reduced-transparency` and browsers without `backdrop-filter` get the same layout on solid surfaces. `prefers-reduced-motion` removes the sheet and switch springs. Faint ink uses Apple's increased-contrast secondary label, because the standard one measures about 3.4:1 on white.
 - **Tokens:** all values live in `ui-theme.css` under `:root.csp-glass` and `:root.csp-glass[data-ui-theme="dark"]`. The dark block restates every value the light glass block overrides, because the light glass block outranks the classic dark palette.
 

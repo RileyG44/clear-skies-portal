@@ -376,7 +376,9 @@ $("#cspBack").addEventListener("click",()=>{document.body.dataset.cspView="nav"}
 compactShell.addEventListener("change",event=>{if(!event.matches) delete document.body.dataset.cspView;else document.body.dataset.cspView="nav"});
 
 const modeBar=document.createElement("div");modeBar.id="cspMapMode";modeBar.setAttribute("role","group");modeBar.setAttribute("aria-label","Map view mode");
-modeBar.innerHTML=`<button type="button" data-mode="2d">2D</button><button type="button" data-mode="3d">3D terrain</button><button type="button" data-mode="points">Point cloud</button>`;
+/* Three parallel names - what kind of view, then what it shows - matching the
+   same control in the Terrain pane. */
+modeBar.innerHTML=`<button type="button" data-mode="2d">2D map</button><button type="button" data-mode="3d">3D terrain</button><button type="button" data-mode="points">Point cloud</button>`;
 mapEl.append(modeBar);
 modeBar.addEventListener("click",event=>{
   const mode=event.target.closest("button")?.dataset.mode;if(!mode) return;
@@ -447,50 +449,128 @@ document.addEventListener("click",()=>requestAnimationFrame(syncAllRangeFills),t
 setInterval(syncAllRangeFills,1000);
 syncAllRangeFills();
 
-/* Phone bottom sheet. The grabber is the HIG's affordance for a resizable
-   sheet: tap cycles between the medium and large detents, a drag follows the
-   finger and settles on the nearer one, and dragging well below medium closes
-   the sheet through the existing toggle so every close path stays the same. */
+/* Phone bottom sheet, with three resting heights like Maps:
+
+     peek    - "collapsed": just the grabber and the search field (or the
+               current page's title) stay above the bottom edge, so the sheet
+               can always be pulled back up. Nothing hides it completely.
+     medium  - half the screen, the top of the map still in view.
+     large   - nearly full height, for the long catalog panes.
+
+   Dragging from any of them follows the finger and settles on the nearest;
+   the grabber also taps through them, and in peek a tap anywhere on the
+   strip opens it. Closing and opening still go through the existing toggle,
+   so every other close path (tapping the map, the back swipe, opening the
+   point-cloud viewer) now lands on peek instead of hiding the sheet.
+   A phone on its side uses the leading-edge card instead, and keeps the old
+   hide-and-toggle behaviour, because a peek strip there would cover most of
+   the map's height. */
 const phoneSheet=matchMedia("(max-width:760px)");
+const peekLayout=matchMedia("(max-width:760px) and (orientation:portrait)");
+const glassOn=()=>document.documentElement.classList.contains("csp-glass");
+const isCollapsed=()=>document.body.classList.contains("collapsed");
+const peeking=()=>peekLayout.matches&&glassOn()&&isCollapsed();
+const toggleSheet=()=>$("#sideToggle")?.click();
 const grabber=document.createElement("button");
 grabber.id="cspGrabber";grabber.type="button";
-grabber.setAttribute("aria-label","Resize panel");
 side.prepend(grabber);
+const syncGrabber=()=>{
+  grabber.setAttribute("aria-label",peeking()?"Show panel":"Resize panel");
+  grabber.setAttribute("aria-expanded",String(!isCollapsed()&&document.body.dataset.cspDetent==="large"));
+};
 const setDetent=detent=>{
   document.body.dataset.cspDetent=detent;
-  grabber.setAttribute("aria-expanded",String(detent==="large"));
   side.style.height="";
+  syncGrabber();
 };
+const openSheet=(detent="medium")=>{setDetent(detent);if(isCollapsed()) toggleSheet()};
 setDetent("medium");
+/* setCollapsed() makes the whole panel inert, which is right when it is hidden
+   and wrong when it peeks: the search field is on screen and must work. The
+   rows below the strip are hidden by CSS (visibility), so they stay out of the
+   tab order without inert. */
+const syncPeek=()=>{
+  if(peekLayout.matches&&glassOn()) side.inert=false;
+  else side.inert=isCollapsed();
+  syncGrabber();
+};
+new MutationObserver(syncPeek).observe(document.body,{attributes:true,attributeFilter:["class"]});
+peekLayout.addEventListener("change",syncPeek);
+syncPeek();
 {
-  let startY=0,startH=0,dragging=false,moved=false;
-  grabber.addEventListener("pointerdown",event=>{
-    if(!phoneSheet.matches) return;
+  let startY=0,startH=0,dragging=false,moved=false,fromPeek=false,fromGrabber=false,suppressClick=false;
+  const mediumHeight=()=>{
+    const probe=document.createElement("div");probe.style.cssText="position:absolute;visibility:hidden;height:var(--sheet-medium)";
+    document.body.append(probe);const height=probe.getBoundingClientRect().height;probe.remove();return height;
+  };
+  side.addEventListener("pointerdown",event=>{
+    if(!phoneSheet.matches||!glassOn()) return;
+    fromGrabber=event.target===grabber;
+    fromPeek=peeking();
+    // An open sheet scrolls its content, so only the grabber drags it; a
+    // peeking one has nothing to scroll, so the whole strip does.
+    if(!fromGrabber&&!fromPeek) return;
     dragging=true;moved=false;startY=event.clientY;startH=side.getBoundingClientRect().height;
-    grabber.setPointerCapture(event.pointerId);
   });
-  grabber.addEventListener("pointermove",event=>{
+  side.addEventListener("pointermove",event=>{
     if(!dragging) return;
     const dy=event.clientY-startY;
     if(!moved&&Math.abs(dy)<6) return;
-    moved=true;document.body.classList.add("csp-sheet-dragging");
-    side.style.height=`${Math.max(120,Math.min(innerHeight-40,startH-dy))}px`;
+    if(!moved){
+      moved=true;
+      try{side.setPointerCapture(event.pointerId)}catch{}
+      document.body.classList.add("csp-sheet-dragging");
+    }
+    side.style.height=`${Math.max(60,Math.min(innerHeight-40,startH-dy))}px`;
   });
   const finish=event=>{
     if(!dragging) return;
     dragging=false;document.body.classList.remove("csp-sheet-dragging");
-    if(!moved){setDetent(document.body.dataset.cspDetent==="large"?"medium":"large");return}
-    const height=side.getBoundingClientRect().height,dy=event.clientY-startY;
-    const probe=document.createElement("div");probe.style.cssText="position:absolute;visibility:hidden;height:var(--sheet-medium)";
-    document.body.append(probe);const medium=probe.getBoundingClientRect().height;probe.remove();
-    if(dy>0&&height<medium-90){setDetent("medium");$("#sideToggle")?.click();return}
-    setDetent(height>(medium+innerHeight)/2-20?"large":"medium");
+    if(!moved){
+      // A tap on the grabber steps through the detents; a tap elsewhere on a
+      // peeking strip is handled by the click listener below.
+      if(fromGrabber){
+        if(fromPeek) openSheet("medium");
+        else setDetent(document.body.dataset.cspDetent==="large"?"medium":"large");
+        suppressClick=true;setTimeout(()=>{suppressClick=false},0);
+      }
+      return;
+    }
+    suppressClick=true;setTimeout(()=>{suppressClick=false},0);
+    const height=side.getBoundingClientRect().height,medium=mediumHeight(),dy=event.clientY-startY;
+    const nearest=height>(medium+innerHeight)/2-20?"large":"medium";
+    if(fromPeek){
+      if(dy<0&&height>startH+50) openSheet(nearest);
+      else side.style.height="";
+      return;
+    }
+    if(dy>0&&height<medium-90){setDetent("medium");toggleSheet();return}
+    setDetent(nearest);
   };
-  grabber.addEventListener("pointerup",finish);
-  grabber.addEventListener("pointercancel",finish);
+  side.addEventListener("pointerup",finish);
+  side.addEventListener("pointercancel",finish);
+  side.addEventListener("click",event=>{
+    if(suppressClick) return;
+    if(event.target===grabber&&event.detail===0){
+      // keyboard activation of the grabber
+      if(peeking()) openSheet("medium");
+      else setDetent(document.body.dataset.cspDetent==="large"?"medium":"large");
+      return;
+    }
+    if(!peeking()||event.target===grabber) return;
+    // Searching wants room for suggestions, the way Maps goes full height.
+    openSheet(event.target.closest("#q")?"large":"medium");
+  });
+  side.addEventListener("focusin",event=>{
+    if(peeking()&&event.target.closest("#q")) openSheet("large");
+  });
   grabber.addEventListener("keydown",event=>{
-    if(event.key==="ArrowUp") setDetent("large");
-    else if(event.key==="ArrowDown") setDetent("medium");
+    if(event.key==="ArrowUp"){if(peeking()) openSheet("medium");else setDetent("large")}
+    else if(event.key==="ArrowDown"){
+      if(isCollapsed()) return;
+      if(document.body.dataset.cspDetent==="large") setDetent("medium");
+      else if(peekLayout.matches&&glassOn()) toggleSheet();
+    }
     else return;
     event.preventDefault();
   });

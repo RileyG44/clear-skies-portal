@@ -41,9 +41,13 @@ function measure() {
   const btns = [...ca.querySelectorAll('button')].filter(b => !b.hidden).map(b => ({ ...r(b), label: getComputedStyle(b.querySelector('span')).display !== 'none', overflow: b.scrollWidth > b.clientWidth + 1 }));
   return { nav: r(nav), q: r(q), go: r(go), loc: r(loc), iw: r($('#iw')), ca: ca.hidden ? null : r(ca), btns,
     navOverflow: nav.scrollWidth > nav.clientWidth + 1, docOverflow: document.documentElement.scrollWidth > innerWidth,
+    // the 2D map / 3D terrain / Point cloud control, measured as if shown
+    mode: (() => { const bar = document.getElementById('cspMapMode'); if (!bar) return null;
+      const b = bar.getBoundingClientRect(); const tops = new Set([...bar.querySelectorAll('button')].map(x => Math.round(x.getBoundingClientRect().top)));
+      return { l: b.left, r: b.right, rows: tops.size, clipped: [...bar.querySelectorAll('button')].some(x => x.scrollWidth > x.clientWidth + 1) }; })(),
     font: getComputedStyle(q).fontFamily, qFont: parseFloat(getComputedStyle(q).fontSize),
     interLoaded: [...document.fonts].some(f => f.family.includes('Inter') && f.status === 'loaded'),
-    view: document.body.dataset.cspView, collapsed: document.body.classList.contains('collapsed') };
+    vw: innerWidth, view: document.body.dataset.cspView, collapsed: document.body.classList.contains('collapsed') };
 }
 
 function check(m, kind, state) {
@@ -80,6 +84,11 @@ function check(m, kind, state) {
       }
     }
   }
+  if (m.mode) {
+    if (m.mode.rows > 1) f.push('map mode labels wrap onto two rows');
+    if (m.mode.clipped) f.push('a map mode label is clipped');
+    if (m.mode.l < 0 || m.mode.r > m.vw) f.push('map mode control runs off screen');
+  }
   if (m.navOverflow) f.push('panel scrolls sideways');
   if (m.docOverflow) f.push('page scrolls sideways');
   return f;
@@ -106,7 +115,7 @@ function check(m, kind, state) {
     await page.goto(base + query, { waitUntil: 'domcontentloaded' });
     await page.waitForTimeout(1800);
     if (c.dark && await page.evaluate(() => document.documentElement.dataset.uiTheme) !== 'dark') { await page.click('#mapTheme'); await page.waitForTimeout(300); }
-    if (await page.evaluate(() => document.body.classList.contains('collapsed'))) { await page.click('#sideToggle'); await page.waitForTimeout(500); }
+    if (await page.evaluate(() => document.body.classList.contains('collapsed'))) { await page.evaluate(() => document.getElementById('sideToggle').click()); await page.waitForTimeout(500); }
     if (c.kind !== 'desktop' && c.kind !== 'desktop-touch' && await page.evaluate(() => document.body.dataset.cspView === 'detail')) { await page.click('#cspBack'); await page.waitForTimeout(300); }
     if (c.side) { await page.evaluate(w => { document.documentElement.style.setProperty('--side-w', w + 'px'); document.getElementById('side').style.width = w + 'px'; }, c.side); }
     if (c.state === 'long') await page.fill('#q', 'Mount Rainier National Park Paradise Visitor Center, Washington, United States');
@@ -115,7 +124,7 @@ function check(m, kind, state) {
       await page.fill('#q', '46.853, -121.76');
       await page.press('#q', 'Enter');
       await page.waitForTimeout(900);
-      if (await page.evaluate(() => document.body.classList.contains('collapsed'))) { await page.click('#sideToggle'); await page.waitForTimeout(500); }
+      if (await page.evaluate(() => document.body.classList.contains('collapsed'))) { await page.evaluate(() => document.getElementById('sideToggle').click()); await page.waitForTimeout(500); }
       if (await page.evaluate(() => document.body.dataset.cspView === 'detail' && getComputedStyle(document.getElementById('cspBack')).display !== 'none')) { await page.click('#cspBack'); await page.waitForTimeout(300); }
     }
     await page.evaluate(() => document.activeElement?.blur());

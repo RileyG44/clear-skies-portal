@@ -1548,6 +1548,45 @@ body.csp-redesign #cspGrabber{display:none}
   .csp-glass body.csp-redesign #cspNav .searchbox{padding-top:12px}
 }
 
+/* Portrait phone: the sheet never disappears. Collapsed is the peek detent -
+   the grabber and the search field (or, on a detail page, its title) stay
+   above the bottom edge, and the strip can be tapped or pulled back up. The
+   sidebar toggle is redundant with that, so it goes, as in Maps. */
+@media (max-width:760px) and (orientation:portrait){
+  .csp-glass body.csp-redesign{--sheet-peek:78px}
+  .csp-glass body.csp-redesign.collapsed #side{
+    height:var(--sheet-peek);
+    transform:none;
+    opacity:1;
+    visibility:visible;
+    pointer-events:auto;
+    /* nothing in the strip scrolls, so a vertical drag is the sheet's */
+    touch-action:none;
+    cursor:pointer;
+    transition:height .42s var(--spring),box-shadow .2s ease;
+  }
+  .csp-glass body.csp-redesign.collapsed #cspGrabber{width:100%}
+  /* Rows below the strip are clipped by the sheet's height; hiding them as
+     well keeps them out of the tab order and the accessibility tree while the
+     panel is not inert. */
+  .csp-glass body.csp-redesign.collapsed #cspNavScroll,
+  .csp-glass body.csp-redesign.collapsed #cspNav > .foot,
+  .csp-glass body.csp-redesign.collapsed .csp-coordinate-actions,
+  .csp-glass body.csp-redesign.collapsed #cspWorkspaceScroll,
+  .csp-glass body.csp-redesign.collapsed #cspBack,
+  .csp-glass body.csp-redesign.collapsed #cspWorkspaceDescription{visibility:hidden}
+  .csp-glass body.csp-redesign.collapsed #cspBack{display:none}
+  .csp-glass body.csp-redesign #sideToggleDock{display:none}
+  /* The mode control rides just above the strip. */
+  .csp-glass body.csp-redesign.collapsed #cspMapMode{bottom:calc(var(--sheet-peek) + 18px + var(--safe-bottom))}
+  /* The point-cloud viewer is its own bottom sheet on a phone; while it is
+     open the peek steps fully out of its way. */
+  .csp-glass body.csp-redesign.collapsed:has(#pointCloudPanel:not([hidden])) #side{
+    transform:translateY(calc(100% + 24px));
+    visibility:hidden;
+  }
+}
+
 @media (prefers-reduced-motion:reduce){
   .csp-glass body.csp-redesign #side,
   .csp-glass body.csp-redesign .csp-switch span::after,
