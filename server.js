@@ -1076,11 +1076,18 @@ const server = http.createServer(async (req,res)=>{
       const size   = u.searchParams.get("size")   || "256,256";
       const layers = u.searchParams.get("layers") || "";
       const dims=csvNumbers(size,2);
+      /* The dpi sets the map scale ArcGIS draws at. WA DNR's hillshade comes
+         from a tile cache: a 512 px export at 96 dpi asks for one level finer
+         than the cache holds, and every such tile came back as Esri's "Map
+         data not yet available" stamp. So a larger export keeps the scale of
+         a 256 px one (192 dpi at 512 px) unless the page asks otherwise. */
+      const dpi=u.searchParams.has("dpi")?Number(u.searchParams.get("dpi")):dims?Math.round(96*dims[0]/256):96;
       if(!validMercBbox(bbox)||!dims||dims.some(v=>!Number.isInteger(v)||v<1||v>1024)||
+         !Number.isInteger(dpi)||dpi<24||dpi>384||
          (layers&&(!/^\d+(,\d+)*$/.test(layers)||layers.split(",").length>14)))
         return send(res,400,"application/json",Buffer.from('{"error":"bad params"}'));
       let qp = `?bbox=${bbox}&bboxSR=3857&imageSR=3857&size=${size}`
-             + `&format=png32&transparent=true&dpi=96&f=image`;
+             + `&format=png32&transparent=true&dpi=${dpi}&f=image`;
       if(layers) qp += `&layers=show:${layers}`;
       const k = key("wadnr:export:"+qp);
       const good = cacheGet(k, TTL_TILE);
@@ -1097,7 +1104,7 @@ const server = http.createServer(async (req,res)=>{
       }
       /* Offline, or upstream down: a high-density request can still be drawn
          from the 256 px copy an area download cached. */
-      const lowRes=size!=="256,256"&&cacheGet(key("wadnr:export:"+qp.replace(`size=${size}`,"size=256,256")),TTL_TILE);
+      const lowRes=size!=="256,256"&&cacheGet(key("wadnr:export:"+qp.replace(`size=${size}`,"size=256,256").replace(`dpi=${dpi}`,"dpi=96")),TTL_TILE);
       if(lowRes) return send(res,200,lowRes.type,lowRes.body,{"X-Cache":"HIT-256","Cache-Control":"no-store"});
       /* A transport or upstream failure is not an empty lidar tile. Returning
          a successful transparent image made the browser stop retrying and the
@@ -1496,7 +1503,10 @@ const server = http.createServer(async (req,res)=>{
                          retryInSec:Math.max(0,Math.ceil((depCircuit.openUntil-Date.now())/1000))},
         uptimeSec:Math.floor((Date.now()-STARTED)/1000),
         /* scripts/preview.sh sets these so the page can label a preview copy */
-        channel:CHANNEL, previewRef:CHANNEL==="preview"?PREVIEW_REF:undefined
+        channel:CHANNEL, previewRef:CHANNEL==="preview"?PREVIEW_REF:undefined,
+        /* What the page may ask of this engine. Without "wadnr-dpi" the page
+           keeps to the 256 px WA DNR export every engine has handled. */
+        features:["wadnr-dpi"]
       })),{"Cache-Control":"no-store"});
     }
 

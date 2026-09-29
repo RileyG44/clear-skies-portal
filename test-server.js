@@ -142,9 +142,11 @@ async function main(){
   await snapshotUrlValidationChecks();
   await previewChannelChecks();
   const port=await freePort();
+  const upstreamLog=path.join(cache,"upstream.log");
   const child=spawn(process.execPath,["--require",path.join(root,"test-elevation-upstream-fixture.js"),"server.js"],{
     cwd:root,
-    env:{...process.env,PORT:String(port),HOST:"127.0.0.1",CSP_CACHE_DIR:cache,CSP_TERRAIN_WORKERS:"1",CSP_CHANNEL:""},
+    env:{...process.env,PORT:String(port),HOST:"127.0.0.1",CSP_CACHE_DIR:cache,CSP_TERRAIN_WORKERS:"1",CSP_CHANNEL:"",
+         CSP_TEST_UPSTREAM_LOG:upstreamLog},
     stdio:["ignore","pipe","pipe"]
   });
   let logs="";
@@ -180,6 +182,28 @@ async function main(){
     assert.equal(healthBody.analysisCache.entries,0,"fresh analysis cache must be empty");
     assert.equal(healthBody.nationalCircuit.coolingDown,false,"fresh fallback circuit must be closed");
     assert.equal(health.headers["cache-control"],"no-store","health must never be served stale");
+    assert(healthBody.features.includes("wadnr-dpi"),"health must tell the page it may ask WA DNR for a dpi");
+
+    /* WA DNR's hillshade is a tile cache. A 512 px export at 96 dpi is one level
+       past it and comes back as "Map data not yet available", so 512 px keeps
+       the 256 px scale (192 dpi); 256 px keeps its old upstream request. */
+    const waBbox="-13580000,5920000,-13579000,5921000";
+    const waUpstream=()=>fs.existsSync(upstreamLog)?fs.readFileSync(upstreamLog,"utf8").trim().split("\n"):[];
+    for(const [query,expect] of [["size=512,512","size=512,512&format=png32&transparent=true&dpi=192&f=image"],
+                                 ["size=256,256","size=256,256&format=png32&transparent=true&dpi=96&f=image"],
+                                 ["size=256,256&dpi=96&layers=3","size=256,256&format=png32&transparent=true&dpi=96&f=image&layers=show:3"]]){
+      const before=waUpstream().length;
+      const wa=await request(port,`/api/wadnr/export?bbox=${waBbox}&${query}`);
+      assert.equal(wa.status,200,`WA DNR export ${query}`);
+      assert.match(wa.headers["content-type"],/^image\/png/);
+      const sent=waUpstream().slice(before);
+      assert.equal(sent.length,1,`one upstream export for ${query}`);
+      assert(sent[0].endsWith(expect),`WA DNR ${query} asks upstream for ${expect}, not ${sent[0]}`);
+    }
+    const waCached=await request(port,`/api/wadnr/export?bbox=${waBbox}&size=512,512&dpi=192`);
+    assert.equal(waCached.headers["x-cache"],"HIT","an explicit dpi shares the cache entry of the default");
+    assert.equal((await request(port,`/api/wadnr/export?bbox=${waBbox}&size=512,512&dpi=abc`)).status,400);
+    assert.equal((await request(port,`/api/wadnr/export?bbox=${waBbox}&size=512,512&dpi=4000`)).status,400);
 
     const page=await request(port,"/");
     assert.equal(page.status,200);

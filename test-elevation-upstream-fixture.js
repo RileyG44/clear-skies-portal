@@ -10,7 +10,19 @@ function tiff(value){
   for(let i=offset;i<buffer.length;i+=4)buffer.writeFloatLE(value,i);
   return buffer;
 }
+/* WA DNR exports: answer with a small PNG and log the upstream path, so the
+   test can check the scale (dpi) the engine asks for. */
+function waExport(options,callback){
+  if(process.env.CSP_TEST_UPSTREAM_LOG) require('node:fs').appendFileSync(process.env.CSP_TEST_UPSTREAM_LOG,options.path+'\n');
+  const response=Readable.from([require('./usgs.js').encodePNG(Buffer.alloc(4*4*4,200),4,4)]);
+  response.statusCode=200;response.headers={'content-type':'image/png'};
+  const req=new EventEmitter();req.setTimeout=()=>req;req.write=()=>true;
+  req.destroy=error=>{req.destroyed=true;if(error)queueMicrotask(()=>req.emit('error',error));};
+  req.end=()=>queueMicrotask(()=>{if(!req.destroyed)callback(response);});
+  return req;
+}
 https.request=(options,callback)=>{
+  if(options.host==='lidarportal.dnr.wa.gov'&&options.path.includes('/MapServer/export?')) return waExport(options,callback);
   if(options.host!=='elevation.nationalmap.gov'||!options.path.startsWith('/arcgis/rest/services/3DEPElevation/ImageServer/exportImage?'))
     throw new Error('Unexpected external request in offline integration test');
   const query=new URL('https://fixture.invalid'+options.path).searchParams;
