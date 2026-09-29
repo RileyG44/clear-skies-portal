@@ -604,12 +604,75 @@ async function fetchSnapshotImage(initial, signal){
 }
 
 /* ------------------------------------------------------------------ app */
+/* Text bodies (JSON, scripts, styles, markup) go out compressed when the
+   client accepts it: the page reaches this engine over Tailscale, often from
+   a phone, and JSON and the app shell shrink 4-10x. Compression runs on
+   libuv's thread pool, never on the event loop that is serving tiles. Images
+   are already compressed and pass straight through. */
+const COMPRESSIBLE=/^(?:text\/|application\/(?:json|javascript|xml|geo\+json|manifest\+json|vnd\.geo\+json)|image\/svg\+xml)/;
+const COMPRESS_MIN=1024;
+function pickEncoding(req){
+  const ae=String(req&&req.headers&&req.headers["accept-encoding"]||"");
+  return /\bbr\b/.test(ae) ? "br" : /\bgzip\b/.test(ae) ? "gzip" : null;
+}
+function compress(body,encoding,level){
+  return new Promise((resolve,reject)=>{
+    const done=(error,out)=>error?reject(error):resolve(out);
+    if(encoding==="br") zlib.brotliCompress(body,{params:{
+      [zlib.constants.BROTLI_PARAM_QUALITY]:level==="static"?9:5,
+      [zlib.constants.BROTLI_PARAM_SIZE_HINT]:body.length}},done);
+    else zlib.gzip(body,{level:level==="static"?9:5},done);
+  });
+}
 function send(res, status, type, body, extra={}){
   if(res.destroyed||res.writableEnded) return;
   const origin=allowedOrigin(res.req);
   const headers={"Content-Type":type,"X-Content-Type-Options":"nosniff",...extra};
-  if(origin){ headers["Access-Control-Allow-Origin"]=origin; headers.Vary="Origin" }
-  res.writeHead(status,headers).end(body);
+  const vary=[];
+  if(origin){ headers["Access-Control-Allow-Origin"]=origin; vary.push("Origin") }
+  if(COMPRESSIBLE.test(type)) vary.push("Accept-Encoding");
+  if(vary.length) headers.Vary=vary.join(", ");
+  const encoding=COMPRESSIBLE.test(type) && !headers["Content-Encoding"] && Buffer.isBuffer(body) && body.length>=COMPRESS_MIN && res.req && res.req.method!=="HEAD"
+    ? pickEncoding(res.req) : null;
+  if(!encoding){ res.writeHead(status,headers).end(body); return }
+  compress(body,encoding,"dynamic").then(out=>{
+    if(res.destroyed||res.writableEnded) return;
+    headers["Content-Encoding"]=encoding;
+    res.writeHead(status,headers).end(out);
+  },()=>{ if(!res.destroyed&&!res.writableEnded) res.writeHead(status,headers).end(body) });
+}
+
+/* Static files: an ETag from size and mtime, so a reload revalidates with a
+   304 instead of re-downloading the 640 KB app shell, and the compressed form
+   is made once per file version (at a higher level, since it is reused) rather
+   than on every request. `no-cache` still asks on every load, so a deploy is
+   picked up immediately - it just costs a round trip, not the whole body. */
+const staticCompressed=new Map();          // path|etag|encoding -> Buffer
+async function sendStatic(req,res,f){
+  let st; try{ st=await fs.promises.stat(f) }catch(e){ return send(res,404,"text/plain",Buffer.from("not found")) }
+  if(!st.isFile()) return send(res,404,"text/plain",Buffer.from("not found"));
+  const type=MIME[path.extname(f).toLowerCase()]||"application/octet-stream";
+  const etag=`"${st.size.toString(36)}-${Math.floor(st.mtimeMs).toString(36)}"`;
+  const encoding=COMPRESSIBLE.test(type)&&st.size>=COMPRESS_MIN ? pickEncoding(req) : null;
+  const tag=encoding ? etag.slice(0,-1)+"-"+encoding+'"' : etag;
+  const extra={"Cache-Control":"no-cache","ETag":tag};
+  const inm=String(req.headers["if-none-match"]||"");
+  if(inm && inm.split(/\s*,\s*/).some(value=>value===tag||value==="W/"+tag||value==="*")){
+    const origin=allowedOrigin(req), headers={...extra,"Vary":"Accept-Encoding"};
+    if(origin){ headers["Access-Control-Allow-Origin"]=origin; headers.Vary+=", Origin" }
+    return res.writeHead(304,headers).end();
+  }
+  let buf; try{ buf=await fs.promises.readFile(f) }catch(e){ return send(res,404,"text/plain",Buffer.from("not found")) }
+  if(!encoding) return send(res,200,type,buf,extra);
+  const key=`${f}|${etag}|${encoding}`;
+  let out=staticCompressed.get(key);
+  if(!out){
+    try{ out=await compress(buf,encoding,"static") }catch(e){ return send(res,200,type,buf,extra) }
+    for(const k of [...staticCompressed.keys()])      // drop superseded versions of this file
+      if(k.startsWith(f+"|") && !k.startsWith(`${f}|${etag}|`)) staticCompressed.delete(k);
+    staticCompressed.set(key,out);
+  }
+  return send(res,200,type,out,{...extra,"Content-Encoding":encoding});
 }
 
 const jsonBody = value => Buffer.from(JSON.stringify(value));
@@ -1442,11 +1505,7 @@ const server = http.createServer(async (req,res)=>{
     const publicRel=rel.split(path.sep).join("/");
     if(!PUBLIC_FILES.has(publicRel)&&!publicRel.startsWith("vendor/potree/")&&!publicRel.startsWith("vendor/icons/")&&publicRel!=="vendor/fonts/inter-latin-wght-normal.woff2")
       return send(res,404,"text/plain",Buffer.from("not found"));
-    fs.readFile(f,(e,buf)=>{
-      if(e) return send(res,404,"text/plain",Buffer.from("not found"));
-      send(res,200, MIME[path.extname(f).toLowerCase()] || "application/octet-stream", buf,
-           {"Cache-Control":"no-store"});
-    });
+    return sendStatic(req,res,f);
   }catch(err){
     const status=Number(err&&err.status)||500;
     if(status>=500) console.error(err);
@@ -1468,5 +1527,6 @@ if(require.main===module){
 module.exports={
   validateSnapshotImageUrl,
   resolveSnapshotImageRedirect,
+  send,
   closeServerResources:()=>terrainPool.close()
 };

@@ -19,25 +19,21 @@ function lzwDecode(src, expected){
   const out = Buffer.alloc(expected);
   let outPos = 0;
 
-  // Dictionary as flat arrays: a prefix code plus one appended byte, walked
-  // backwards into a scratch stack. No string concatenation, no allocation.
-  const pfx = new Int32Array(4096), suf = new Uint8Array(4096);
-  for(let i=0;i<256;i++){ pfx[i]=-1; suf[i]=i; }
+  /* Every dictionary string is already sitting in the output: a new entry is
+     the previous code's string (where it was last written) plus one byte, and
+     that byte is the one written right after it. So each code is just an
+     offset and a length into `out`, and emitting it is a copy from earlier in
+     the output — no prefix-chain walk, no scratch stack, no reversal. */
+  const off = new Int32Array(4096), len = new Int32Array(4096);
+  for(let i=0;i<256;i++) len[i]=1;
 
-  let next = 258, width = 9, old = -1;
+  let next = 258, width = 9, old = -1, oldPos = 0;
   let bitBuf = 0, bitCnt = 0, p = 0;
-  const stack = Buffer.alloc(4096);
-
-  const emit = code => {
-    let n = 0, c = code;
-    while(c >= 0 && n < 4096){ stack[n++] = suf[c]; c = pfx[c]; }
-    while(n > 0 && outPos < expected) out[outPos++] = stack[--n];
-  };
-  const firstOf = code => { let c = code; while(pfx[c] >= 0) c = pfx[c]; return suf[c]; };
+  const n = src.length;
 
   for(;;){
     while(bitCnt < width){
-      if(p >= src.length){ bitCnt = -1; break; }
+      if(p >= n){ bitCnt = -1; break; }
       bitBuf = ((bitBuf << 8) | src[p++]) >>> 0; bitCnt += 8;
     }
     if(bitCnt < 0) break;
@@ -47,17 +43,26 @@ function lzwDecode(src, expected){
     if(code === EOI) break;
     if(code === CLEAR){ next = 258; width = 9; old = -1; continue; }
 
-    if(old < 0){ emit(code); old = code; continue; }
+    const at = outPos;
+    if(code < 256){
+      if(outPos < expected) out[outPos++] = code;
+    }else if(code < next){
+      const o = off[code], l = Math.min(len[code], expected - outPos);
+      if(l > 16) out.copyWithin(outPos, o, o + l);
+      else for(let i=0;i<l;i++) out[outPos+i] = out[o+i];
+      outPos += l;
+    }else if(code === next && old >= 0){
+      /* Not yet in the table: the classic KwKwK case, old's string plus its
+         own first byte. The copy overlaps its own output by one byte, so it
+         runs forwards byte by byte (copyWithin would read the stale byte). */
+      const o = oldPos, l = Math.min(len[old] + 1, expected - outPos);
+      for(let i=0;i<l;i++) out[outPos+i] = out[o+i];
+      outPos += l;
+    }else break;             // corrupt: a code past the table (the old prefix-chain
+                             // decoder could loop forever here and hang its worker)
 
-    if(code < next){
-      emit(code);
-      if(next < 4096){ pfx[next]=old; suf[next]=firstOf(code); next++; }
-    }else{
-      // Not yet in the table: the classic KwKwK case.
-      if(next < 4096){ pfx[next]=old; suf[next]=firstOf(old); next++; }
-      emit(next-1);
-    }
-    old = code;
+    if(old >= 0 && next < 4096){ off[next] = oldPos; len[next] = len[old] + 1; next++; }
+    old = code; oldPos = at;
     // Early change: widen one code sooner than a naive reading suggests.
     if(next + 1 >= (1 << width) && width < 12) width++;
   }
@@ -78,7 +83,11 @@ function undoPredictor3(buf, width, rows, spp, bps){
     if(o + rowBytes > buf.length) break;
     for(let i=spp; i<rowBytes; i++) buf[o+i] = (buf[o+i] + buf[o+i-spp]) & 0xff;
     buf.copy(tmp, 0, o, o+rowBytes);
-    for(let n=0; n<wc; n++)
+    if(bps === 4){                                  // the float32 DEMs: unrolled
+      for(let n=0, q=o; n<wc; n++, q+=4){
+        buf[q] = tmp[3*wc+n]; buf[q+1] = tmp[2*wc+n]; buf[q+2] = tmp[wc+n]; buf[q+3] = tmp[n];
+      }
+    }else for(let n=0; n<wc; n++)
       for(let b=0; b<bps; b++)
         buf[o + bps*n + b] = tmp[(bps - b - 1)*wc + n];   // little-endian target
   }
@@ -202,6 +211,7 @@ function parseTiff(b, base=0, head=null){
 }
 
 /* ------------------------------------------------------- decode a raw tile */
+const LITTLE_ENDIAN_HOST = require("os").endianness() === "LE";
 function decodeTile(raw, lv){
   const px = lv.tw * lv.th, bytes = px * lv.spp * (lv.bps/8);
   let d;
@@ -214,6 +224,12 @@ function decodeTile(raw, lv){
   if(lv.pred===3) undoPredictor3(d, lv.tw, lv.th, lv.spp, lv.bps/8);
   else if(lv.pred===2) undoPredictor2(d, lv.tw, lv.th, lv.spp, lv.bps/8);
 
+  /* The predictor leaves little-endian floats, which on a little-endian host
+     (every Mac and PC) are already the Float32Array's bytes: view them rather
+     than reading a quarter-million values one call at a time. */
+  if(lv.bps===32 && lv.sf===3 && LITTLE_ENDIAN_HOST)
+    return (d.byteOffset & 3) ? new Float32Array(d.buffer.slice(d.byteOffset, d.byteOffset+px*4))
+                              : new Float32Array(d.buffer, d.byteOffset, px);
   const out=new Float32Array(px);
   if(lv.bps===32 && lv.sf===3){ for(let i=0;i<px;i++) out[i]=d.readFloatLE(i*4); return out; }
   if(lv.bps===32)            { for(let i=0;i<px;i++) out[i]= lv.sf===2?d.readInt32LE(i*4):d.readUInt32LE(i*4); return out; }

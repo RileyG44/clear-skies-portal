@@ -28,6 +28,48 @@ console.log("TIFF LZW");
   // A stream that is only CLEAR + EOI must yield nothing rather than throw.
   const empty = cog.lzwDecode(Buffer.from([0x80,0x08,0x00]), 0);
   ok("empty stream is handled", empty.length===0);
+
+  /* Round-trip through a reference TIFF-LZW encoder (MSB-first, early change,
+     CLEAR when the table fills), on data shaped like DEM planes: long runs
+     (which exercise the KwKwK case), repeated phrases, and noise, and long
+     enough to force several table resets. */
+  const encode = data => {
+    const bytes=[]; let buf=0, cnt=0, width=9;
+    const put = code => { buf=(buf<<width)|code; cnt+=width;
+      while(cnt>=8){ bytes.push((buf>>>(cnt-8))&0xff); cnt-=8; } buf&=(1<<cnt)-1; };
+    let dict=new Map(), next=258;
+    put(256);
+    let w=String.fromCharCode(data[0]);
+    for(let i=1;i<data.length;i++){
+      const c=String.fromCharCode(data[i]), wc=w+c;
+      if(wc.length===1 || dict.has(wc)){ w=wc; continue; }
+      put(w.length===1 ? w.charCodeAt(0) : dict.get(w));
+      dict.set(wc,next++);
+      if(next >= (1<<width) && width<12) width++;   // the decoder's early change, seen from this side
+      if(next>=4094){ put(256); dict=new Map(); next=258; width=9; }
+      w=c;
+    }
+    put(w.length===1 ? w.charCodeAt(0) : dict.get(w));
+    put(257);
+    if(cnt>0) bytes.push((buf<<(8-cnt))&0xff);
+    return Buffer.from(bytes);
+  };
+  let seed=7; const rnd=()=>(seed=(Math.imul(seed,1103515245)+12345)&0x7fffffff)/0x80000000;
+  const data=Buffer.alloc(200000);
+  for(let i=0;i<data.length;){
+    const kind=rnd();
+    if(kind<0.3){ const v=(rnd()*256)|0, l=1+((rnd()*400)|0); for(let j=0;j<l&&i<data.length;j++) data[i++]=v; }
+    else if(kind<0.6){ const at=Math.max(0,i-1-((rnd()*300)|0)), l=(rnd()*60)|0; for(let j=0;j<l&&i<data.length;j++) data[i++]=data[at+j]; }
+    else data[i++]=(rnd()*256)|0;
+  }
+  const back = cog.lzwDecode(encode(data), data.length);
+  ok("round-trips 200 KB of run/phrase/noise data", back.equals(data));
+  const single = Buffer.alloc(5000, 0x41);
+  ok("round-trips a single long run (KwKwK every step)", cog.lzwDecode(encode(single), single.length).equals(single));
+  // A corrupt stream (a code past the table) stops rather than hanging.
+  const junk = Buffer.from(encode(data).subarray(0,4000)); for(let i=200;i<4000;i+=37) junk[i]^=0xff;
+  const t0 = Date.now(); cog.lzwDecode(junk, data.length);
+  ok("a corrupt stream returns promptly", Date.now()-t0 < 1000);
 }
 
 console.log("floating-point predictor 3");
@@ -98,16 +140,47 @@ console.log("PNG encoder");
      png.slice(0,8).equals(Buffer.from([0x89,0x50,0x4e,0x47,0x0d,0x0a,0x1a,0x0a])));
   ok("IHDR carries the dimensions", png.readUInt32BE(16)===w && png.readUInt32BE(20)===h);
   ok("ends with IEND", png.slice(-8,-4).toString("ascii")==="IEND");
-  // zlib must be able to read back the IDAT payload we wrote
+  /* Decode it back — every colour type and filter the encoder may pick — and
+     require the exact RGBA it was given, for grey, grey+alpha, RGB and RGBA
+     images (hillshade, hillshade with no-data, elevation, tint with no-data). */
   const zlib=require("zlib");
-  let idat=null, off=8;
-  while(off<png.length){
-    const len=png.readUInt32BE(off), type=png.toString("ascii",off+4,off+8);
-    if(type==="IDAT"){ idat=png.subarray(off+8,off+8+len); break }
-    off+=12+len;
+  const decode = buf => {
+    let off=8, idat=[], W, H, type;
+    while(off<buf.length){
+      const len=buf.readUInt32BE(off), t=buf.toString("ascii",off+4,off+8), d=buf.subarray(off+8,off+8+len);
+      if(t==="IHDR"){ W=d.readUInt32BE(0); H=d.readUInt32BE(4); type=d[9]; }
+      if(t==="IDAT") idat.push(d);
+      off+=12+len;
+    }
+    const bpp={0:1,2:3,4:2,6:4}[type], stride=W*bpp, raw=zlib.inflateSync(Buffer.concat(idat)), px=Buffer.alloc(stride*H);
+    for(let y=0;y<H;y++){
+      const f=raw[y*(stride+1)];
+      for(let i=0;i<stride;i++){
+        const a=i>=bpp?px[y*stride+i-bpp]:0, b=y?px[(y-1)*stride+i]:0, c=(i>=bpp&&y)?px[(y-1)*stride+i-bpp]:0;
+        const p=a+b-c, pa=Math.abs(p-a), pb=Math.abs(p-b), pc=Math.abs(p-c);
+        const pred=[0,a,b,(a+b)>>1, pa<=pb&&pa<=pc?a:pb<=pc?b:c][f];
+        px[y*stride+i]=(raw[y*(stride+1)+1+i]+pred)&255;
+      }
+    }
+    const out=Buffer.alloc(W*H*4);
+    for(let i=0;i<W*H;i++){
+      const q=i*bpp;
+      if(type===0) out.set([px[q],px[q],px[q],255],i*4);
+      if(type===4) out.set([px[q],px[q],px[q],px[q+1]],i*4);
+      if(type===2) out.set([px[q],px[q+1],px[q+2],255],i*4);
+      if(type===6) out.set(px.subarray(q,q+4),i*4);
+    }
+    return {type, rgba:out};
+  };
+  const W2=37, H2=23;
+  const make = (grey, opaque) => { const b=Buffer.alloc(W2*H2*4);
+    for(let i=0;i<W2*H2;i++){ const x=i%W2, y=(i/W2)|0, g=(x*7+y*13+((x*y)%5))&255;
+      b[i*4]=g; b[i*4+1]=grey?g:(x*3)&255; b[i*4+2]=grey?g:(y*11)&255; b[i*4+3]=opaque||(x+y)%9?255:0; }
+    return b; };
+  for(const [name,grey,opaque,type] of [["grey",true,true,0],["grey+alpha",true,false,4],["RGB",false,true,2],["RGBA",false,false,6]]){
+    const src=make(grey,opaque), got=decode(usgs.encodePNG(src,W2,H2));
+    ok(`${name} image uses colour type ${type} and decodes exactly`, got.type===type && got.rgba.equals(src), "type "+got.type);
   }
-  ok("IDAT inflates to the expected raw size",
-     !!idat && zlib.inflateSync(idat).length===(w*4+1)*h);
 }
 
 console.log("NODATA sentinel");

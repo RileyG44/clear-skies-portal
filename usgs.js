@@ -393,6 +393,7 @@ function crcTable(){
   return CRCT;
 }
 function crc32(buf){
+  if(zlib.crc32) return zlib.crc32(buf)>>>0;         // native since Node 22.2
   const t=crcTable(); let c=0xffffffff;
   for(let i=0;i<buf.length;i++) c=t[(c^buf[i])&0xff]^(c>>>8);
   return (c^0xffffffff)>>>0;
@@ -403,29 +404,104 @@ function chunk(type, data){
   const crc=Buffer.alloc(4); crc.writeUInt32BE(crc32(td),0);
   return Buffer.concat([len,td,crc]);
 }
-/* RGBA8 -> PNG */
+/* RGBA8 -> PNG, losslessly, in the smallest colour type that holds the image:
+   hillshades are grey and usually opaque, so they go out as 1-byte greyscale
+   rather than 4-byte RGBA; elevation tiles are opaque RGB. Each row takes
+   whichever of the none/sub/up filters leaves the smallest residuals (the
+   libpng heuristic). Measured on real tiles, hillshade PNGs come out ~45%
+   smaller and ~5x quicker to encode than filter-none RGBA at level 6. */
 function encodePNG(rgba, w, h){
-  const raw=Buffer.alloc((w*4+1)*h);
+  const px=w*h;
+  let grey=true, opaque=true;
+  for(let i=0;i<px*4;i+=4){
+    if(rgba[i+3]!==255) opaque=false;
+    if(rgba[i]!==rgba[i+1] || rgba[i]!==rgba[i+2]) grey=false;
+    if(!grey && !opaque) break;
+  }
+  const bpp = grey ? (opaque?1:2) : (opaque?3:4);
+  const type = grey ? (opaque?0:4) : (opaque?2:6);
+  const stride=w*bpp;
+  let packed;
+  if(bpp===4) packed=rgba;
+  else{
+    packed=Buffer.allocUnsafe(stride*h);
+    for(let i=0,o=0;i<px*4;i+=4){
+      if(grey){ packed[o++]=rgba[i]; if(bpp===2) packed[o++]=rgba[i+3]; }
+      else{ packed[o++]=rgba[i]; packed[o++]=rgba[i+1]; packed[o++]=rgba[i+2]; }
+    }
+  }
+  const raw=Buffer.allocUnsafe((stride+1)*h);
+  const cand=[Buffer.allocUnsafe(stride),Buffer.allocUnsafe(stride),Buffer.allocUnsafe(stride)];
   for(let y=0;y<h;y++){
-    raw[y*(w*4+1)]=0;                                   // filter: none
-    rgba.copy(raw, y*(w*4+1)+1, y*w*4, (y+1)*w*4);
+    const r=y*stride, up=r-stride;
+    let best=0, bestCost=Infinity;
+    for(let f=0;f<3;f++){
+      const c=cand[f]; let cost=0;
+      for(let i=0;i<stride;i++){
+        const v=packed[r+i];
+        const d = f===0 ? v : f===1 ? (i>=bpp ? (v-packed[r+i-bpp])&255 : v) : (y ? (v-packed[up+i])&255 : v);
+        c[i]=d; cost += d<128 ? d : 256-d;
+        if(cost>=bestCost) break;
+      }
+      if(cost<bestCost){ bestCost=cost; best=f; }
+    }
+    raw[y*(stride+1)]=best;
+    cand[best].copy(raw, y*(stride+1)+1);          // only losers stop early, so the winner is whole
   }
   const ihdr=Buffer.alloc(13);
   ihdr.writeUInt32BE(w,0); ihdr.writeUInt32BE(h,4);
-  ihdr[8]=8; ihdr[9]=6; ihdr[10]=0; ihdr[11]=0; ihdr[12]=0;   // 8-bit RGBA
+  ihdr[8]=8; ihdr[9]=type; ihdr[10]=0; ihdr[11]=0; ihdr[12]=0;
   return Buffer.concat([
     Buffer.from([0x89,0x50,0x4e,0x47,0x0d,0x0a,0x1a,0x0a]),
     chunk("IHDR",ihdr),
-    chunk("IDAT",zlib.deflateSync(raw,{level:6})),
+    chunk("IDAT",zlib.deflateSync(raw,{level:PNG_LEVEL})),
     chunk("IEND",Buffer.alloc(0))
   ]);
 }
+/* zlib level 4: within ~3% of level 6's size at a third of the time on
+   filtered terrain rows. Tiles are rendered once and then served from cache,
+   but a cold pan renders dozens at once. */
+const PNG_LEVEL=4;
 
 /* -------------------------------------------------------------- rendering */
 /* Sentinel for 'no elevation here'. Math.fround matters: the grid is a
    Float32Array, so a plain -1e30 double does not survive the round-trip and
    every `=== NODATA` comparison silently fails. */
 const NODATA = Math.fround(-1e30);
+/* Grid points between exact projections in sampleGrid (see there). */
+const LATTICE_STEP = 8;
+
+/* UTM easting/northing of every point of an n x n grid laid over Mercator
+   bounds b at `step` metres, grid point (1,1) at the first pixel centre.
+   Mercator -> UTM is smooth, so this projects exactly on a coarse lattice and
+   interpolates between lattice points, as GDAL's approximate transformer
+   does. The exact transverse-Mercator series (trig and a dozen hyperbolic
+   terms) at every grid point was a quarter of all render time; the
+   interpolation error stays far below a DEM pixel at every zoom
+   (test-usgs-render.js checks it). */
+function utmGrid(b,n,step,zone,K=LATTICE_STEP){
+  const m=Math.floor((n-1)/K)+2;                    // one node past the last grid point
+  const latE=new Float64Array(m*m), latN=new Float64Array(m*m);
+  for(let j=0;j<m;j++){
+    const my=b.maxy - (j*K-1+0.5)*step;
+    for(let i=0;i<m;i++){
+      const ll=cog.mercToLonLat(b.minx + (i*K-1+0.5)*step, my);
+      const u=cog.lonLatToUTM(ll.lon,ll.lat,zone);
+      latE[j*m+i]=u.e; latN[j*m+i]=u.n;
+    }
+  }
+  const E=new Float64Array(n*n), N=new Float64Array(n*n);
+  for(let gy=0; gy<n; gy++){
+    const j=(gy/K)|0, ty=(gy-j*K)/K, r0=j*m, r1=r0+m;
+    for(let gx=0; gx<n; gx++){
+      const i=(gx/K)|0, tx=(gx-i*K)/K;
+      const w00=(1-tx)*(1-ty), w10=tx*(1-ty), w01=(1-tx)*ty, w11=tx*ty, k=gy*n+gx;
+      E[k]=latE[r0+i]*w00 + latE[r0+i+1]*w10 + latE[r1+i]*w01 + latE[r1+i+1]*w11;
+      N[k]=latN[r0+i]*w00 + latN[r0+i+1]*w10 + latN[r1+i]*w01 + latN[r1+i+1]*w11;
+    }
+  }
+  return {E,N};
+}
 
 /* Sample a (w+2)x(h+2) elevation grid covering one slippy tile, with a one
    pixel skirt so the hillshade kernel has neighbours at the tile edge — this
@@ -520,11 +596,20 @@ async function sampleGrid(z,x,y,size,options={}){
     await Promise.all(jobs);
   }
 
-  /* Bilinear, so a half-pixel offset does not read as a terrace. */
-  const at=(o,px,py)=>{
+  /* Bilinear, so a half-pixel offset does not read as a terrace. This runs
+     four reads per source for each of ~66k grid points, so it avoids the
+     per-read string key and per-call array the obvious version allocates:
+     the prefetched COG tiles sit in a flat array indexed by tile column/row. */
+  for(const o of opened){
     const L=o.t.levels[o.lvl];
+    o.L=L; o.cols=Math.ceil(L.w/L.tw);
+    o.blocks=new Array(o.cols*Math.ceil(L.h/L.th)).fill(null);
+    for(const [k,a] of o.tiles){ const i=k.indexOf(","); o.blocks[(+k.slice(i+1))*o.cols + (+k.slice(0,i))]=a; }
+  }
+  const at=(o,px,py)=>{
+    const L=o.L;
     if(px<0||py<0||px>=L.w||py>=L.h) return NaN;
-    const a=o.tiles.get(Math.floor(px/L.tw)+","+Math.floor(py/L.th));
+    const a=o.blocks[((py/L.th)|0)*o.cols + ((px/L.tw)|0)];
     if(!a) return NaN;
     const v=a[(py%L.th)*L.tw + (px%L.tw)];
     if(v===undefined || v<-1e5 || (o.nodata!=null && v===o.nodata)) return NaN;
@@ -534,26 +619,23 @@ async function sampleGrid(z,x,y,size,options={}){
     const fx=(e-o.ox)/o.res - 0.5, fy=(o.oy-nn)/o.res - 0.5;
     const x0=Math.floor(fx), y0=Math.floor(fy);
     const dx=fx-x0, dy=fy-y0;
-    const v00=at(o,x0,y0), v10=at(o,x0+1,y0), v01=at(o,x0,y0+1), v11=at(o,x0+1,y0+1);
-    const samples=[[v00,(1-dx)*(1-dy)],[v10,dx*(1-dy)],[v01,(1-dx)*dy],[v11,dx*dy]];
-    let sum=0,weight=0;
-    for(const [value,w] of samples) if(w>0&&!Number.isNaN(value)){ sum+=value*w;weight+=w }
+    let sum=0,weight=0,v,w;
+    v=at(o,x0,y0);     w=(1-dx)*(1-dy); if(w>0&&v===v){ sum+=v*w; weight+=w }
+    v=at(o,x0+1,y0);   w=dx*(1-dy);     if(w>0&&v===v){ sum+=v*w; weight+=w }
+    v=at(o,x0,y0+1);   w=(1-dx)*dy;     if(w>0&&v===v){ sum+=v*w; weight+=w }
+    v=at(o,x0+1,y0+1); w=dx*dy;         if(w>0&&v===v){ sum+=v*w; weight+=w }
     return weight>0 ? sum/weight : NaN;
   };
 
+  const {E,N}=utmGrid(b,n,step,zone);
+
   let filled=0;
-  for(let gy=0; gy<n; gy++){
-    const my=b.maxy - (gy-1+0.5)*step;
-    for(let gx=0; gx<n; gx++){
-      const mx=b.minx + (gx-1+0.5)*step;
-      const ll=cog.mercToLonLat(mx,my);
-      const u=cog.lonLatToUTM(ll.lon,ll.lat,zone);
-      for(const o of opened){
-        const v=bilinear(o,u.e,u.n);
-        if(Number.isNaN(v)) continue;
-        grid[gy*n+gx]=v; filled++;
-        break;
-      }
+  for(let k=0; k<n*n; k++){
+    for(const o of opened){
+      const v=bilinear(o,E[k],N[k]);
+      if(v!==v) continue;
+      grid[k]=v; filled++;
+      break;
     }
   }
   if(!filled) return null;
@@ -572,7 +654,7 @@ function gradient(g,n,i,j,res){
   const a=at(i-1,j-1), b=at(i-1,j), c=at(i-1,j+1);
   const d=at(i,j-1),   f=at(i,j+1);
   const gg=at(i+1,j-1),h=at(i+1,j), k=at(i+1,j+1);
-  if([a,b,c,d,f,gg,h,k].some(Number.isNaN)) return null;
+  if(a!==a||b!==b||c!==c||d!==d||f!==f||gg!==gg||h!==h||k!==k) return null;   // any NaN (no array per pixel)
   return { dzdx:((c+2*f+k)-(a+2*d+gg))/(8*res),
            dzdy:((gg+2*h+k)-(a+2*b+c))/(8*res) };
 }
@@ -1007,5 +1089,5 @@ async function fabric(bbox, opt){
 }
 
 module.exports = Object.assign(module.exports, { init, buildIndex, getIndex, findCells, cellOf, cellBounds, projectYear, scopeList, fabric, elevTile,
-                   openCog, cogTile, fetchRange, renderTile, sampleGrid, encodePNG, renderRgba,
+                   openCog, cogTile, fetchRange, renderTile, sampleGrid, utmGrid, encodePNG, renderRgba,
                    checkFresh, tileKey, tileUrl, s3head, S3_BASE });
