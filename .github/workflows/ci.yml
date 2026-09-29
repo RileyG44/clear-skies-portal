@@ -38,6 +38,25 @@ jobs:
       - name: Syntax-check Python scripts
         run: python -m compileall -q trailcheck.py snowline.py probe.py
 
+  # The engine often runs on a Windows desktop, not the Mac: run the whole
+  # suite there too, including the real server, worker pool and disk cache.
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+
+      - name: Install
+        run: npm ci --ignore-scripts
+
+      - name: Check and test on Windows
+        run: |
+          npm run check
+          npm test
+
   deploy:
     if: github.event_name != 'pull_request'
     needs: check
