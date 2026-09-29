@@ -624,6 +624,9 @@ function compress(body,encoding,level){
     else zlib.gzip(body,{level:level==="static"?9:5},done);
   });
 }
+/* Exported map images come at 256 px, or 512 for high-density screens - the
+   same area, twice the pixels. Nothing else, so the cache keys stay few. */
+function exportPixels(u){ return u.searchParams.get("size")==="512"?512:256 }
 function send(res, status, type, body, extra={}){
   if(res.destroyed||res.writableEnded) return;
   const origin=allowedOrigin(res.req);
@@ -1092,6 +1095,10 @@ const server = http.createServer(async (req,res)=>{
         cachePut(k, 200, "image/png", r.body);
         return send(res,200,"image/png",r.body,{"X-Cache":"MISS","Cache-Control":"public, max-age=604800"});
       }
+      /* Offline, or upstream down: a high-density request can still be drawn
+         from the 256 px copy an area download cached. */
+      const lowRes=size!=="256,256"&&cacheGet(key("wadnr:export:"+qp.replace(`size=${size}`,"size=256,256")),TTL_TILE);
+      if(lowRes) return send(res,200,lowRes.type,lowRes.body,{"X-Cache":"HIT-256","Cache-Control":"no-store"});
       /* A transport or upstream failure is not an empty lidar tile. Returning
          a successful transparent image made the browser stop retrying and the
          map appeared to give up. Preserve the error so the resilient tile
@@ -1103,12 +1110,13 @@ const server = http.createServer(async (req,res)=>{
     /* ---- 3DEP terrain tiles (cached, so warmed areas work offline) ---- */
     if(p === "/api/3dep"){
       const bbox=u.searchParams.get("bbox")||"";
+      const px=exportPixels(u);
       const rule=u.searchParams.get("rule")||"Hillshade Gray";
       if(!validMercBbox(bbox)||!DEP_RULES.has(rule))
         return send(res,400,"application/json",Buffer.from('{"error":"bad bbox or rendering rule"}'));
       const rr=encodeURIComponent(JSON.stringify({rasterFunction:rule}));
       const dp=`/arcgis/rest/services/3DEPElevation/ImageServer/exportImage`
-             + `?bbox=${bbox}&bboxSR=3857&imageSR=3857&size=256,256&format=png&transparent=true&f=image&renderingRule=${rr}`;
+             + `?bbox=${bbox}&bboxSR=3857&imageSR=3857&size=${px},${px}&format=png&transparent=true&f=image&renderingRule=${rr}`;
       const k=key("3dep:"+dp);
       const hit=cacheGet(k,TTL_TILE);
       if(hit) return send(res,200,hit.type,hit.body,{"X-Cache":"HIT","Cache-Control":"public, max-age=604800"});
@@ -1124,6 +1132,8 @@ const server = http.createServer(async (req,res)=>{
         cachePut(k,200,r.type,r.body);
         return send(res,200,r.type,r.body,{"X-Cache":"MISS","Cache-Control":"public, max-age=604800"});
       }
+      const lowRes=px!==256&&cacheGet(key("3dep:"+dp.replace(`size=${px},${px}`,"size=256,256")),TTL_TILE);
+      if(lowRes) return send(res,200,lowRes.type,lowRes.body,{"X-Cache":"HIT-256","Cache-Control":"no-store"});
       return send(res,204,"image/png",Buffer.alloc(0),
                   {"X-Cache":"ERROR","X-CSP-Error":"upstream","Cache-Control":"no-store","Retry-After":"2"});
     }
@@ -1451,12 +1461,12 @@ const server = http.createServer(async (req,res)=>{
        analysis for most of an update cycle. */
     if(p === "/api/snow"){
       const bbox=u.searchParams.get("bbox")||"";
-      const layer=u.searchParams.get("layer")||"3";
+      const layer=u.searchParams.get("layer")||"3",px=exportPixels(u);
       if(!validMercBbox(bbox)) return send(res,400,"application/json",Buffer.from('{"error":"bad bbox"}'));
       if(!["3","7"].includes(layer))                 // 3 = snow depth, 7 = SWE
         return send(res,400,"application/json",Buffer.from('{"error":"bad layer"}'));
       const pth="/raster/rest/services/snow/NOHRSC_Snow_Analysis/MapServer/export"
-              + `?bbox=${bbox}&bboxSR=3857&imageSR=3857&size=256,256`
+              + `?bbox=${bbox}&bboxSR=3857&imageSR=3857&size=${px},${px}`
               + `&format=png32&transparent=true&f=image&layers=show:${layer}`;
       const k=key("snow:"+pth);
       const hit=cacheGet(k, TTL_SNOW);
