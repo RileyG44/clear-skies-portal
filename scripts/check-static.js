@@ -316,6 +316,16 @@ assert(index.includes('const HIDPI=')&&index.includes('this._cspDz=HIDPI')&&inde
        "terrain and exported map images must be drawn at the screen's pixel density");
 assert(index.includes('module.addProtocol("cspmesh"')&&index.includes('MESH_FAST_WAIT')&&index.includes('module.prewarm?.()'),
        "the 3D mesh must answer from the CDN overview when 3DEP is slow, and MapLibre must be prewarmed");
+assert(index.includes('if(data&&data.pinch&&!map3d){ pinchFrame(center,zoom);return this }')&&
+       index.includes('if(pinchLive){ pinchLive=false;commitView(center,zoom);return }'),
+       "touch pinch must paint through the pane painter and commit the exact frame at lift-off, not replay Leaflet's CSS zoom");
+assert(index.includes('function releaseCanvas(canvas)')&&/tileunload[\s\S]{0,400}releaseCanvas\(event\.tile\)/.test(index)&&
+       !index.includes('const canvas=document.createElement("canvas");canvas.width=bitmap.width'),
+       "canvases must be released when tiles unload and elevation decoding must share a scratch canvas (iOS caps total canvas memory)");
+assert(index.includes('if(this._map&&this._map._committingRotatePan) return invalidateAll.call(this);'),
+       "leaflet-rotate's pane re-base must not create tile holds");
+assert(index.includes('L.GridLayer.prototype.options.updateWhenIdle=false;')&&!/sourceSig=\[pick\.src,\(pick\.ids/.test(index),
+       "tiles must load while panning on phones, and the terrain layer must not rebuild as the view moves");
 const snapshotRangeSandbox={};
 vm.runInNewContext(`${namedFunction(index,"snapshotWorldY")}; ${namedFunction(index,"snapshotTileRange")};
   regional=snapshotTileRange({getWest:()=>-120,getEast:()=>-119,getNorth:()=>48,getSouth:()=>47},10);
