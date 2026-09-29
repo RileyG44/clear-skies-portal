@@ -23,11 +23,11 @@ const base = process.argv[2] || 'http://127.0.0.1:8765/';
   await page.waitForTimeout(2200);
   const st = () => page.evaluate(() => {
     const side=document.getElementById('side'), r=side.getBoundingClientRect(), q=document.getElementById('q').getBoundingClientRect();
-    const mm=document.getElementById('cspMapMode').getBoundingClientRect();
+    const mb=document.getElementById('mapModeToggle'), mr=mb.getBoundingClientRect(), dock=document.getElementById('mapDock');
     return { h:Math.round(r.height), top:Math.round(r.top), bottom:Math.round(r.bottom), collapsed:document.body.classList.contains('collapsed'),
       detent:document.body.dataset.cspDetent, inert:side.inert, qVisible:q.top>=r.top && q.bottom<=r.bottom+1 && q.height>0,
       toggleShown:getComputedStyle(document.getElementById('sideToggleDock')).display!=='none',
-      modeBottom:Math.round(mm.bottom), modeOpacity:getComputedStyle(document.getElementById('cspMapMode')).opacity,
+      modeInDock:dock.contains(mb)&&mr.width>0, modeClear:mr.bottom<=r.top-4,
       navHidden:getComputedStyle(document.getElementById('cspNavScroll')).visibility, active:document.activeElement.id,
       label:document.getElementById('cspGrabber').getAttribute('aria-label') };
   });
@@ -39,7 +39,14 @@ const base = process.argv[2] || 'http://127.0.0.1:8765/';
   ok('peek is usable (not inert), search in view', !s.inert && s.qVisible);
   ok('sidebar toggle hidden on portrait phone', !s.toggleShown);
   ok('rows below strip hidden from AT', s.navHidden==='hidden');
-  ok('map mode sits above the peek', s.modeBottom <= s.top - 4 && s.modeOpacity==='1', `mode bottom ${s.modeBottom}, sheet top ${s.top}`);
+  ok('view-mode button is in the map-button capsule, clear of the sheet', s.modeInDock && s.modeClear);
+  await page.tap('#mapModeToggle'); await page.waitForTimeout(400);
+  const menu = await page.evaluate(() => { const m=document.getElementById('mapModeMenu'), r=m.getBoundingClientRect(), d=document.getElementById('mapDock').getBoundingClientRect();
+    return { open:!m.hidden, inside:r.left>=0&&r.right<=innerWidth&&r.top>=0&&r.bottom<=innerHeight, clearOfDock:r.right<=d.left-4, items:m.querySelectorAll('[role=menuitemradio]').length,
+             checked:m.querySelector('[aria-checked=true]')?.dataset.mode }; });
+  ok('mode menu opens beside the capsule with three modes', menu.open && menu.inside && menu.clearOfDock && menu.items===3 && menu.checked==='2d', JSON.stringify(menu));
+  await page.tap('#map', {position:{x:120,y:300}}); await page.waitForTimeout(400);
+  ok('tapping the map closes the mode menu', await page.evaluate(()=>document.getElementById('mapModeMenu').hidden));
   ok('grabber says Show panel in peek', s.label==='Show panel');
 
   await page.tap('#q'); await page.waitForTimeout(700);

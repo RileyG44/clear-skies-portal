@@ -1536,6 +1536,9 @@ html.csp-boot body{visibility:hidden}
       </button>
     </div>
     <div id="mapDock" aria-label="Map tools">
+      <button class="map-tool" id="mapModeToggle" data-tool="mapMode" type="button" title="Map view: 2D map" aria-label="Map view: 2D map" aria-haspopup="menu" aria-expanded="false" aria-controls="mapModeMenu">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14.106 5.553a2 2 0 0 0 1.788 0l3.659-1.83A1 1 0 0 1 21 4.619v12.764a1 1 0 0 1-.553.894l-4.553 2.277a2 2 0 0 1-1.788 0l-4.212-2.106a2 2 0 0 0-1.788 0l-3.659 1.83A1 1 0 0 1 3 19.381V6.618a1 1 0 0 1 .553-.894l4.553-2.277a2 2 0 0 1 1.788 0z"/><path d="M15 5.764v15"/><path d="M9 3.236v15"/></svg>
+      </button>
       <button class="map-tool" id="snapshot" data-tool="snapshot" title="Save the current map viewport" aria-label="Save current map viewport as an image">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
           <path d="M4 7.5h3l1.35-2h7.3L17 7.5h3A1.5 1.5 0 0 1 21.5 9v9.5A1.5 1.5 0 0 1 20 20H4A1.5 1.5 0 0 1 2.5 18.5V9A1.5 1.5 0 0 1 4 7.5Z"/><circle cx="12" cy="13.5" r="3.5"/>
@@ -3054,7 +3057,7 @@ $("#sideToggle").onclick=()=>setCollapsed(!document.body.classList.contains("col
 const sideToggleDock=$("#sideToggleDock"), dockEl=$("#mapDock"), serverPanel=$("#serverPanel"), serverToggle=$("#serverToggle"),
       terrainSourcePanel=$("#terrainSourcePanel"), terrainSourceToggle=$("#terrainSourceToggle");
 const DOCK_ORDER_KEY="clearskies.mapToolOrder.v1";
-const DOCK_DEFAULT=["snapshot","mapInfoToggle","terrainSourceToggle","mapTheme","bearingReset","serverToggle"];
+const DOCK_DEFAULT=["mapModeToggle","snapshot","mapInfoToggle","terrainSourceToggle","mapTheme","bearingReset","serverToggle"];
 const allDockButtons=()=>[...dockEl.querySelectorAll(".map-tool")];
 const dockButtons=()=>allDockButtons().filter(el=>!el.hidden);
 function saveDockOrder(){
@@ -4659,7 +4662,7 @@ const DepLayer = ResilientTileLayer.extend({
    zoom; 204 means no federal coverage for that tile and the layer underneath
    shows through. Needs server.js — the S3 bucket sets no CORS header. */
 const UsgsLayer = ResilientTileLayer.extend({
-  getTileUrl(c){ return `${API}/api/usgs/tile/${this.options.style}/${c.z}/${c.x}/${c.y}.png?rv=terrain-v2` }
+  getTileUrl(c){ return `${API}/api/usgs/tile/${this.options.style}/${c.z}/${c.x}/${c.y}.png?rv=terrain-v3` }
 });
 
 /* Layer count barely changes how long WA DNR takes per tile, but it changes
@@ -5699,9 +5702,9 @@ function paintTerrainLegend(style){
     bar="linear-gradient(90deg,#37895c,#f7f3e0,#d6524e)";
     ticks="<span>north-facing</span><span>east / west</span><span>south-facing</span>";
   }else if(style==="tint"){
-    caption="Elevation tint · feet · linear-RGB colour";
-    bar="linear-gradient(90deg,#b5d6e5,#dce8be,#9dbe6c,#ccbF7e,#a98460,#cdcdd2,#f5f7fa)";
-    ticks="<span>sea</span><span>820 ft</span><span>4,900 ft</span><span>13,100 ft+</span>";
+    caption="Elevation tint · feet";
+    bar="linear-gradient(90deg,#28465f 0%,#466e46 9%,#808c5c 28%,#a08c6c 50%,#beb4aa 75%,#f5f6fa 100%)";
+    ticks="<span>sea</span><span>3,500 ft</span><span>7,000 ft</span><span>10,500 ft+</span>";
   }else if(style==="hsmulti"){
     caption="Mark / GDAL multidirectional hillshade";
     bar="linear-gradient(90deg,#222,#777,#c5c5c5,#fff)";
@@ -7417,16 +7420,15 @@ class TerrainGpuRenderer{
           return clamp(mix(hi,lo,lessThanEqual(value,vec3(0.0031308))),0.0,1.0);
         }
         vec3 linearColour(vec3 a,vec3 b,float t){ return linearToSrgb(mix(srgbToLinear(a),srgbToLinear(b),clamp(t,0.0,1.0))); }
+        /* The "relief" ramp from terrain-core.js, interpolated in sRGB like it. */
         vec3 tintColour(float value){
-          vec3 c0=vec3(20,61,111)/255.0,c1=vec3(181,214,229)/255.0,c2=vec3(220,232,190)/255.0;
-          vec3 c3=vec3(157,190,108)/255.0,c4=vec3(204,191,126)/255.0,c5=vec3(169,132,96)/255.0;
-          vec3 c6=vec3(139,112,105)/255.0,c7=vec3(205,205,210)/255.0,c8=vec3(245,247,250)/255.0,c9=vec3(255)/255.0;
-          if(value<=-500.0) return c0;if(value<=0.0) return linearColour(c0,c1,(value+500.0)/500.0);
-          if(value<=1.0) return linearColour(c1,c2,value);if(value<=250.0) return linearColour(c2,c3,(value-1.0)/249.0);
-          if(value<=750.0) return linearColour(c3,c4,(value-250.0)/500.0);if(value<=1500.0) return linearColour(c4,c5,(value-750.0)/750.0);
-          if(value<=2500.0) return linearColour(c5,c6,(value-1500.0)/1000.0);if(value<=4000.0) return linearColour(c6,c7,(value-2500.0)/1500.0);
-          if(value<=6000.0) return linearColour(c7,c8,(value-4000.0)/2000.0);if(value<=9000.0) return linearColour(c8,c9,(value-6000.0)/3000.0);
-          return c9;
+          vec3 c0=vec3(22,46,72)/255.0,c1=vec3(40,70,95)/255.0,c2=vec3(70,110,70)/255.0,c3=vec3(128,140,92)/255.0;
+          vec3 c4=vec3(160,140,108)/255.0,c5=vec3(190,180,170)/255.0,c6=vec3(245,246,250)/255.0,c7=vec3(255)/255.0;
+          if(value<=-500.0) return c0;if(value<=0.0) return mix(c0,c1,(value+500.0)/500.0);
+          if(value<=300.0) return mix(c1,c2,value/300.0);if(value<=900.0) return mix(c2,c3,(value-300.0)/600.0);
+          if(value<=1600.0) return mix(c3,c4,(value-900.0)/700.0);if(value<=2400.0) return mix(c4,c5,(value-1600.0)/800.0);
+          if(value<=3200.0) return mix(c5,c6,(value-2400.0)/800.0);if(value<=6000.0) return mix(c6,c7,(value-3200.0)/2800.0);
+          return c7;
         }
         void main(){
           vec2 px=vec2(1.0/256.0,0.0),py=vec2(0.0,1.0/256.0);
@@ -7462,7 +7464,7 @@ class TerrainGpuRenderer{
           }
           if(style==5){
             float shade315=ambientLight+(1.0-ambientLight)*directShade(dx,dy,sunAzimuth);
-            colour=vec4(tintColour(v)*(0.42+0.58*shade315),1.0);return;
+            colour=vec4(min(tintColour(v)*(0.33+0.82*shade315),vec3(1.0)),1.0);return;
           }
           float direct;
           if(style==1){

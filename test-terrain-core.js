@@ -139,6 +139,21 @@ const isolated=T.createElevationColorizer([[0,"#010203"],[1,"#040506"]]);
 const mutable=isolated(0); mutable[0]=255;
 assert.deepEqual(isolated(0),[1,2,3,255]);
 assert.deepEqual(T.colorForElevation(0,"topographic"),[181,214,229,255]);
+// The elevation-tinted style's ramp: blue-teal water and sea level, green
+// lowlands, tan uplands, snow at the top - not the old run of yellows.
+assert.deepEqual(T.colorForElevation(0,"relief"),[40,70,95,255],"sea level is blue-teal");
+{
+  const low=T.colorForElevation(300,"relief"),mid=T.colorForElevation(1600,"relief"),high=T.colorForElevation(3200,"relief");
+  assert(low[1]>low[0]&&low[1]>low[2],"lowlands are green");
+  assert(mid[0]>mid[2]&&mid[0]>100,"mid elevations are tan");
+  assert(high.slice(0,3).every(c=>c>240),"the top of the ramp is snow");
+  assert(T.colorForElevation(-200,"relief")[2]>T.colorForElevation(-200,"relief")[0],"below sea level stays blue");
+}
+// Tint lighting is shared by every renderer: shadow darkens, full sun lifts,
+// nothing overflows a byte.
+assert.deepEqual(T.shadeTint([100,100,100,255],0),[33,33,33,255]);
+assert.deepEqual(T.shadeTint([100,100,100,255],1),[115,115,115,255]);
+assert.deepEqual(T.shadeTint([250,250,250,255],1),[255,255,255,255]);
 assert.equal(Object.isFrozen(T.ELEVATION_RAMPS),true);
 assert.throws(()=>T.normalizeColorRamp([]),/at least one/);
 assert.throws(()=>T.colorForElevation(1,[[0,"red"]]),/color/);

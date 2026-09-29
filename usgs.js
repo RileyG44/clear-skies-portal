@@ -583,7 +583,7 @@ const D2R=Math.PI/180;
    turning them into apparent black/no-data holes. */
 const SHADE_315=terrain.createHillshade({azimuth:315,altitude:45,ambient:0.12});
 const SHADE_MULTI=terrain.createMultidirectionalHillshade({altitude:45,ambient:0.12});
-const TINT_OF=terrain.createElevationColorizer("topographic",{space:"linear-rgb"});
+const TINT_OF=terrain.createElevationColorizer("relief");
 const SLOPE_OF=terrain.createElevationColorizer([
   [0,"#f2f4ee"],[5,"#b1d28b"],[15,"#f6da6f"],[30,"#f09649"],
   [45,"#d54650"],[60,"#762c69"],[90,"#321948"]
@@ -651,8 +651,7 @@ function renderRgba(style, S){
       const g8=Math.round(SHADE_MULTI(gr.dzdx,gr.dzdy)*255); r=g=b=g8;
     }else if(style==="tint"){
       const s=SHADE_315(gr.dzdx,gr.dzdy);
-      const c=TINT_OF(v); const m=0.42+0.58*s;
-      r=Math.round(c[0]*m); g=Math.round(c[1]*m); b=Math.round(c[2]*m);
+      [r,g,b]=terrain.shadeTint(TINT_OF(v),s);
     }else{                                            // hs
       const g8=Math.round(SHADE_315(gr.dzdx,gr.dzdy)*255); r=g=b=g8;
     }

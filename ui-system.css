@@ -612,35 +612,6 @@ body.csp-redesign .leaflet-tooltip a{color:var(--ui-tooltip-ink)}
 
 body.csp-redesign #drag{right:-5px}
 
-body.csp-redesign #cspMapMode{
-  position:absolute;
-  left:50%;
-  bottom:calc(14px + var(--safe-bottom));
-  z-index:1090;
-  display:flex;
-  gap:2px;
-  padding:3px;
-  border:1px solid var(--ui-shadow-2);
-  border-radius:11px;
-  background:var(--ui-frost);
-  box-shadow:0 5px 18px var(--ui-shadow-3);
-  backdrop-filter:blur(16px);
-  -webkit-backdrop-filter:blur(16px);
-  transform:translateX(-50%);
-}
-body.csp-redesign #cspMapMode button{
-  min-height:29px;
-  padding:0 11px;
-  border:0;
-  border-radius:8px;
-  background:transparent;
-  color:var(--ui-text-muted);
-  font-size:11.5px;
-  font-weight:500;
-  white-space:nowrap;
-  box-shadow:none;
-}
-body.csp-redesign #cspMapMode button[aria-pressed="true"]{background:var(--ui-selected);color:var(--ui-text);font-weight:600}
 
 /* The resize handle and CSS share the same width variable. */
 body.csp-redesign #drag{display:block;width:6px;cursor:col-resize}
@@ -689,9 +660,6 @@ body.csp-redesign #drag{display:block;width:6px;cursor:col-resize}
     pointer-events:none;
     transform:translateX(10px);
   }
-  body.csp-redesign #cspMapMode{bottom:calc(26px + var(--safe-bottom))}
-  body.csp-redesign #cspMapMode button{padding:0 8px;font-size:10.5px}
-  body.csp-redesign:not(.collapsed) #cspMapMode{opacity:0;pointer-events:none}
 }
 
 @media (prefers-reduced-motion:reduce){
@@ -741,7 +709,6 @@ body.csp-redesign #terLightNote{color:var(--ui-text-muted)}
 body.csp-redesign #terrainLoadStatus[data-state="partial"]{color:var(--ui-warn)}
 body.csp-redesign #drag{right:0}
 @media(min-width:1051px){
-  body.csp-redesign:not(.collapsed) #cspMapMode{left:calc(var(--side-w) + (100% - var(--side-w))/2)}
 }
 
 body.csp-redesign #cspNav .foot-meta{flex-wrap:wrap;gap:8px}
@@ -791,8 +758,7 @@ body.csp-redesign .csp-locate-label{display:none}
   body.csp-redesign #mapDock,
   body.csp-redesign #serverPanel,
   body.csp-redesign #terrainSourcePanel,
-  body.csp-redesign #ctl,
-  body.csp-redesign #cspMapMode{touch-action:none}
+  body.csp-redesign #ctl{touch-action:none}
   /* Attribution remains available from Map sources in the sidebar instead of
      covering imagery in the small mobile viewport. */
   body.csp-redesign .leaflet-control-attribution,
@@ -830,8 +796,6 @@ body.csp-redesign .csp-locate-label{display:none}
   body.csp-redesign .csp-layer-actions{grid-column:1/-1;flex-wrap:wrap;gap:6px}
   body.csp-redesign .csp-layer-actions button{min-height:44px;min-width:44px;padding:0 6px}
   body.csp-redesign .csp-layer-actions .csp-layer-move{width:44px;margin:0}
-  body.csp-redesign #cspMapMode{max-width:calc(100% - 80px);bottom:calc(6px + var(--safe-bottom))}
-  body.csp-redesign #cspMapMode button{min-height:44px;white-space:normal;font-size:12px;line-height:1.25}
 }
 /* A landscape phone or an open keyboard must not squeeze navigation to zero. */
 @media(max-width:1050px) and (max-height:600px){
@@ -1355,7 +1319,7 @@ body.csp-redesign .csp-preview-badge{
    top edge and a bright rim over a hairline. Buttons inside a glass group
    are bare glyphs on that one piece of glass, as in Maps. */
 
-.csp-glass body.csp-redesign :is(#mapDock,#cspMapMode,.leaflet-control-zoom,#sideToggleDock .map-tool){
+.csp-glass body.csp-redesign :is(#mapDock,.leaflet-control-zoom,#sideToggleDock .map-tool){
   border:0!important;
   background-color:var(--lg-control)!important;
   background-image:var(--lg-sheen)!important;
@@ -1390,49 +1354,63 @@ body.csp-redesign .csp-preview-badge{
 .csp-glass body.csp-redesign .leaflet-control-zoom a:hover{background:var(--ui-fill)!important}
 .csp-glass body.csp-redesign .leaflet-control-zoom a + a{border-top:.5px solid var(--glass-edge)!important}
 
-/* View modes: a clear capsule with a lens of brighter glass that slides to
-   the selected mode (ui-system.js places it), its label in the accent - the
-   selected tab in an iOS 26 tab bar. */
-.csp-glass body.csp-redesign #cspMapMode{
-  bottom:calc(18px + var(--safe-bottom));
-  gap:0;
-  padding:4px;
-  border-radius:999px;
+
+/* The view-mode menu the mode button opens: a small frosted popover of three
+   rows, each a glyph, a name and a line of detail, the current one checked. */
+.csp-glass body.csp-redesign .tool-popover.csp-mode-menu{
+  width:min(264px,calc(100vw - 96px - var(--safe-left) - var(--safe-right)));
+  max-height:none;
+  padding:6px;
+  border-radius:20px;
+  overflow:visible;
+  animation:pop .16s var(--ease-out-strong);
 }
-.csp-glass body.csp-redesign #cspMapMode::before{
-  content:"";
-  position:absolute;
-  top:4px;bottom:4px;
-  left:var(--lens-x,4px);
-  width:var(--lens-w,0px);
-  border-radius:999px;
-  background:var(--lg-lens);
-  box-shadow:var(--lg-lens-rim);
-  transition:left .38s var(--spring),width .38s var(--spring);
-  pointer-events:none;
+.csp-glass body.csp-redesign .csp-mode-menu-title{
+  margin:4px 10px 6px;
+  color:var(--ui-text-muted);
+  font-size:11px;
+  font-weight:600;
+  letter-spacing:.01em;
 }
-.csp-glass body.csp-redesign #cspMapMode:not([data-lens])::before{display:none}
-.csp-glass body.csp-redesign #cspMapMode button{
-  position:relative;
-  z-index:1;
-  min-height:32px;
-  padding:0 15px;
-  border-radius:999px;
+.csp-glass body.csp-redesign .csp-mode-menu [data-mode]{
+  display:grid;
+  grid-template-columns:32px minmax(0,1fr) 18px;
+  align-items:center;
+  gap:10px;
+  width:100%;
+  min-height:48px;
+  padding:6px 10px 6px 8px;
+  border:0;
+  border-radius:14px;
   background:transparent;
   color:var(--ui-text);
-  font-size:12.5px;
-  font-weight:500;
-  box-shadow:none;
-  transition:color .2s ease;
+  text-align:left;
+  cursor:pointer;
 }
-.csp-glass body.csp-redesign #cspMapMode button:hover{background:transparent;color:var(--ui-accent)}
-.csp-glass body.csp-redesign #cspMapMode button[aria-pressed="true"]{color:var(--ui-accent);font-weight:600}
-/* On the dark lens the accent measures about 2.3:1; the lens alone marks the
-   selection there, and the label keeps full-strength ink. */
-:root.csp-glass[data-ui-theme="dark"] body.csp-redesign #cspMapMode button[aria-pressed="true"]{color:var(--ui-text)}
-/* before the lens has been placed, the selected mode still reads */
-.csp-glass body.csp-redesign #cspMapMode:not([data-lens]) button[aria-pressed="true"]{background:var(--lg-lens);box-shadow:var(--lg-lens-rim)}
-.csp-glass body.csp-redesign #cspMapMode button:focus-visible{outline:none;box-shadow:0 0 0 3px var(--ui-ring)}
+.csp-glass body.csp-redesign .csp-mode-menu [data-mode]:hover{background:var(--ui-fill)}
+.csp-glass body.csp-redesign .csp-mode-menu [data-mode]:focus-visible{outline:none;background:var(--ui-fill-2)}
+.csp-glass body.csp-redesign .csp-mode-menu [aria-checked="true"]{background:var(--lg-lens);box-shadow:var(--lg-lens-rim)}
+.csp-glass body.csp-redesign .csp-mode-glyph{
+  display:grid;place-items:center;
+  width:32px;height:32px;
+  border-radius:10px;
+  background:var(--ui-fill);
+}
+.csp-glass body.csp-redesign .csp-mode-menu [aria-checked="true"] .csp-mode-glyph{background:var(--ui-accent);color:var(--ui-accent-ink)}
+.csp-glass body.csp-redesign .csp-mode-glyph svg{width:17px;height:17px}
+.csp-glass body.csp-redesign .csp-mode-text{display:grid;gap:1px;min-width:0}
+.csp-glass body.csp-redesign .csp-mode-label{font-size:13.5px;font-weight:600;letter-spacing:-.01em}
+.csp-glass body.csp-redesign .csp-mode-detail{color:var(--ui-text-muted);font-size:11.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.csp-glass body.csp-redesign .csp-mode-check{display:grid;place-items:center;color:var(--ui-accent);visibility:hidden}
+.csp-glass body.csp-redesign .csp-mode-check svg{width:16px;height:16px}
+.csp-glass body.csp-redesign .csp-mode-menu [aria-checked="true"] .csp-mode-check{visibility:visible}
+@media (pointer:coarse){
+  .csp-glass body.csp-redesign .csp-mode-menu [data-mode]{min-height:56px}
+  .csp-glass body.csp-redesign .csp-mode-label{font-size:15px}
+  .csp-glass body.csp-redesign .csp-mode-detail{font-size:12.5px}
+}
+/* The classic shell has no glass menu styling; keep it a plain list there. */
+body.csp-redesign .csp-mode-menu [data-mode]{display:flex;gap:8px;align-items:center;width:100%;text-align:left}
 
 /* Frosted surfaces: popovers, menus, callouts, toasts. */
 .csp-glass body.csp-redesign :is(.tool-popover,#menu,.leaflet-popup-content-wrapper,#snapshotStatus,#pointCloudPanel,#blk,#cspNav #ac){
@@ -1536,10 +1514,6 @@ body.csp-redesign .csp-preview-badge{
    the sidebar grid. */
 body.csp-redesign #cspGrabber{display:none}
 
-/* The mode control centres on the map that is actually visible, not on the
-   window, so an open panel never sits on top of it. */
-.csp-glass body.csp-redesign:not(.collapsed) #cspMapMode{left:calc((var(--side-w) + var(--glass-inset) + 100vw) / 2)}
-.csp-glass body.csp-redesign #cspMapMode{transition:left .34s var(--ease-out-strong)}
 
 /* ---- tablet: one glass column ------------------------------------------ */
 
@@ -1563,7 +1537,6 @@ body.csp-redesign #cspGrabber{display:none}
   .csp-glass body.csp-redesign #cspNav{border-right:0}
   .csp-glass body.csp-redesign #cspWorkspace{background:transparent}
   .csp-glass body.csp-redesign:not(.collapsed) #sideToggleDock{left:calc(min(420px,100vw - 76px) + var(--glass-inset) + 10px + var(--safe-left))}
-  .csp-glass body.csp-redesign:not(.collapsed) #cspMapMode{left:calc((min(420px,100vw - 76px) + var(--glass-inset) + 100vw) / 2)}
   .csp-glass body.csp-redesign .map-tool{width:44px;height:44px;min-height:44px}
 }
 
@@ -1633,7 +1606,6 @@ body.csp-redesign #cspGrabber{display:none}
   .csp-glass body.csp-redesign #cspNav > .searchbox,
   .csp-glass body.csp-redesign #cspNav > .foot{flex-shrink:0}
   .csp-glass body.csp-redesign #cspNav > .foot{margin-top:8px}
-  .csp-glass body.csp-redesign:not(.collapsed) #cspMapMode{left:50%}
   .csp-glass body.csp-redesign #cspNav .searchbox{padding:4px 14px 8px}
   /* Popovers open beside the map-button capsule; on a phone there is only
      room beside it if they are narrower than the screen less the capsule. */
@@ -1651,8 +1623,6 @@ body.csp-redesign #cspGrabber{display:none}
   .csp-glass body.csp-redesign #mapDock,
   .csp-glass body.csp-redesign:not(.collapsed) #mapDock{top:calc(12px + var(--safe-top));opacity:1;pointer-events:auto;transform:none}
   .csp-glass body.csp-redesign[data-csp-detent="large"]:not(.collapsed) #mapDock{opacity:0;pointer-events:none}
-  .csp-glass body.csp-redesign #cspMapMode{bottom:calc(20px + var(--safe-bottom));max-width:calc(100% - 24px)}
-  .csp-glass body.csp-redesign #cspMapMode button{min-height:40px;padding:0 14px;white-space:nowrap}
 }
 
 /* ---- the phone sheet's glass -------------------------------------------
@@ -1752,8 +1722,6 @@ body.csp-redesign #cspGrabber{display:none}
   .csp-glass body.csp-redesign.collapsed #cspWorkspaceDescription{visibility:hidden}
   .csp-glass body.csp-redesign.collapsed #cspBack{display:none}
   .csp-glass body.csp-redesign #sideToggleDock{display:none}
-  /* The mode control rides just above the strip. */
-  .csp-glass body.csp-redesign.collapsed #cspMapMode{bottom:calc(var(--sheet-peek) + 18px + var(--safe-bottom))}
   /* The point-cloud viewer is its own bottom sheet on a phone; while it is
      open the peek steps fully out of its way. */
   .csp-glass body.csp-redesign.collapsed:has(#pointCloudPanel:not([hidden])) #side{
@@ -1765,5 +1733,5 @@ body.csp-redesign #cspGrabber{display:none}
 @media (prefers-reduced-motion:reduce){
   .csp-glass body.csp-redesign #side,
   .csp-glass body.csp-redesign .csp-switch span::after,
-  .csp-glass body.csp-redesign #cspMapMode button{transition:none!important}
+  .csp-glass body.csp-redesign .csp-mode-menu{transition:none!important;animation:none!important}
 }

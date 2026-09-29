@@ -16,7 +16,7 @@
 
   const D2R=Math.PI/180;
   const NODATA_LIMIT=-1e20;
-  const TINT_OF=terrain.createElevationColorizer("topographic",{space:"linear-rgb"});
+  const TINT_OF=terrain.createElevationColorizer("relief");
   const SLOPE_OF=terrain.createElevationColorizer([
     [0,"#f2f4ee"],[5,"#b1d28b"],[15,"#f6da6f"],[30,"#f09649"],
     [45,"#d54650"],[60,"#762c69"],[90,"#321948"]
@@ -119,8 +119,7 @@
                 Math.round(neutral[1]+(target[1]-neutral[1])*t),
                 Math.round(neutral[2]+(target[2]-neutral[2])*t),255];
       }else if(style==="tint"){
-        const tint=TINT_OF(value),multiplier=0.42+0.58*shadeDirect(gradient.dzdx,gradient.dzdy);
-        colour=[Math.round(tint[0]*multiplier),Math.round(tint[1]*multiplier),Math.round(tint[2]*multiplier),255];
+        colour=terrain.shadeTint(TINT_OF(value),shadeDirect(gradient.dzdx,gradient.dzdy));
       }else{
         const shade=(style==="hsmulti"?shadeMulti:shadeDirect)(gradient.dzdx,gradient.dzdy);
         const byte=Math.round(shade*255);colour=[byte,byte,byte,255];

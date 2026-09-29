@@ -139,11 +139,19 @@ A visual refresh on top of the same information architecture, following Apple's 
   - *Clear* (`--lg-control`) is for controls: the map-button capsule, the view-mode bar, zoom and the sidebar toggle. Buttons inside a glass group are bare glyphs on one piece of glass.
   - *Frosted* (`--lg-popover`) is for anything read: the tool popovers, the context menu, map callouts and tooltips, the snapshot toast, the point-cloud viewer and the search suggestions.
 - **Map controls:** the dock is one vertical glass capsule, as in Maps, rather than a column of separate buttons. It stays top-right, where its popovers are anchored. On a phone, popovers are narrowed so they open beside the capsule rather than over it.
-- **View-mode bar:** a clear capsule with a lens of brighter glass that slides to the selected mode. `placeModeLens()` in `ui-system.js` sets `--lens-x` and `--lens-w`. The selected label is the accent in light mode, and full-strength ink on the dark lens, where the accent measures about 2.3:1.
+- **View mode:** a button at the top of the map-button capsule, as the map-type button is in Maps. It replaces the old floating bar, and it is first in the capsule's saved order (`DOCK_DEFAULT`).
+  - Its glyph shows the current mode: map, mountain, or scatter dots for Point cloud.
+  - It opens a small frosted menu of the three modes, each with a glyph, a name and a line of detail. The current mode sits on a glass lens with a check mark.
+  - The menu is a `role="menu"` of `menuitemradio`s. Arrow keys move through it, Escape closes it and returns focus to the button, and a click outside closes it.
+  - It drives the same `#terMode*` buttons as the Terrain pane, so the two controls cannot disagree.
 - **Context menu:** rounded rows on glass. The highlighted row gets a fill rather than an outline; the menu focuses its first row on open, so an outline would show on every right-click.
 - **Callouts and tooltips:** frosted glass with the tail dropped. A hard tail cannot share the blur.
 - **Camera button:** opens Export, and also opens the panel if it is collapsed, so the route never changes out of sight.
-- **View modes:** the floating control and the Terrain pane use the same parallel names: 2D map, 3D terrain, Point cloud.
+- **View modes:** the mode menu and the Terrain pane use the same parallel names: 2D map, 3D terrain, Point cloud.
+- **Elevation tint:** the "Elevation tinted" style uses the `relief` ramp in `terrain-core.js`: blue-teal water and sea level, green lowlands, then olive, tan and grey rock, with snow above about 3,200 m.
+  - The older `topographic` ramp spent 250–2,500 m on pale greens and tans, so most of the Pacific Northwest rendered as shades of yellow. It is unchanged for its other users.
+  - Tint lighting is `shadeTint()` in `terrain-core.js`: a deeper shadow, and lit slopes a little above the ramp colour. The server renderer (`usgs.js`), the browser renderer (`terrain-raster.js`) and the GPU shader in `index.html` all use the same ramp and lighting; the shader restates the numbers.
+  - `TERRAIN_RENDER_VERSION` moved to `terrain-v3`, with the matching `?rv=` on the page, so neither the engine's cache nor browsers' seven-day tile cache serves old tiles.
 - **Accessibility:** `prefers-reduced-transparency` and browsers without `backdrop-filter` get the same layout on solid surfaces. `prefers-reduced-motion` removes the sheet and switch springs. Faint ink uses Apple's increased-contrast secondary label, because the standard one measures about 3.4:1 on white.
 - **Tokens:** all values live in `ui-theme.css` under `:root.csp-glass` and `:root.csp-glass[data-ui-theme="dark"]`. The dark block restates every value the light glass block overrides, because the light glass block outranks the classic dark palette.
 
