@@ -23,6 +23,25 @@ You can also open `index.html` straight from disk, but two things break that way
 the WA DNR lidar layers (they need the proxy) and the locate button (browsers only
 grant geolocation on `https://` or `localhost`).
 
+## Search coordinates
+
+The search box accepts place names, decimal latitude/longitude, and coordinates
+copied from Google Earth or Google Maps in degrees/minutes/seconds (DMS):
+
+```
+47.661614, -118.707269
+47°39'41.81"N 118°42'26.17"W
+47°39′41.81″N, 118°42′26.17″W
+```
+
+Hemisphere letters may appear before or after each angle; labelled pairs can
+also be longitude first. Degrees/decimal minutes and decimal degrees with
+hemisphere letters are supported. Unlabelled pairs remain latitude first.
+Search, Copy coordinates, Google Maps and Google Earth use the same parser;
+copying and external links always use decimal coordinates. Invalid ranges or
+minutes/seconds of 60 or greater show an error instead of searching for a place.
+Regression tests live in `test-coordinate-search.js` and run with `npm test`.
+
 ## Run it in a Codespace
 
 Press **`.`** on the GitHub repo page, or *Code → Codespaces → Create codespace*.
