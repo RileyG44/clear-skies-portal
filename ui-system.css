@@ -1735,3 +1735,60 @@ body.csp-redesign #cspGrabber{display:none}
   .csp-glass body.csp-redesign .csp-switch span::after,
   .csp-glass body.csp-redesign .csp-mode-menu{transition:none!important;animation:none!important}
 }
+
+/* ---- fixes 2026-10-10b ---------------------------------------------------- */
+
+/* The suggestion list sits inside the sidebar's own glass, and a backdrop
+   filter nested in another one has nothing behind it to blur, so the rows
+   showed the sidebar's labels straight through. It is read, not looked
+   through: give it a solid surface. */
+.csp-glass body.csp-redesign #cspNav #ac{background-color:var(--ui-surface)!important;background-image:none!important}
+
+/* Scene-source chips and the result count describe the satellite search; on
+   the other pages they read as that page's own status. Messages that are not
+   about scenes (location, geocoding errors) still show everywhere. */
+body.csp-redesign:not([data-csp-route="satellite"]) #status[data-kind="scenes"]{display:none}
+
+/* Source credits wrap within the map beside an open sidebar instead of running
+   underneath it. */
+@media (min-width:761px){
+  body.csp-redesign:not(.collapsed) .leaflet-control-attribution{
+    max-width:calc(100vw - var(--side-w) - 48px - var(--safe-left) - var(--safe-right));
+    white-space:normal;text-align:right;
+  }
+}
+
+/* ---- installed app: map under the status bar -------------------------------
+   With a translucent status bar the map runs to the top of the screen. The
+   clock and battery are drawn in white, so a short shade sits behind them,
+   no deeper than the status bar itself - it never reaches the map buttons. */
+#statusScrim{display:none}
+.csp-standalone #statusScrim{
+  display:block;position:absolute;left:0;right:0;top:0;z-index:1250;
+  height:calc(var(--safe-top) + 18px);pointer-events:none;
+  background:linear-gradient(to bottom,oklch(0% 0 0/.24) 0%,oklch(0% 0 0/.16) 35%,oklch(0% 0 0/.07) 65%,oklch(0% 0 0/.02) 85%,oklch(0% 0 0/0) 100%);
+}
+
+/* ---- phone sheet concentric with the screen corners ------------------------
+   On an iPhone with rounded display corners the sheet comes down to the bottom
+   edge, inset evenly on three sides, and its corner radius is the screen's
+   less that inset, so the two curves run parallel as they do in Maps. The home
+   indicator floats over the sheet; its height is added back to every detent so
+   the search field and rows sit where they did. Safari in the browser keeps
+   the floating sheet, because its toolbar, not the screen, is the edge there. */
+@media (max-width:760px) and (orientation:portrait){
+  .csp-glass.csp-round-screen body.csp-redesign{
+    --sheet-inset:8px;
+    --sheet-radius:max(30px,calc(var(--screen-radius) - var(--sheet-inset)));
+    --sheet-lift:max(0px,calc(var(--safe-bottom) - var(--sheet-inset)));
+    --sheet-peek:calc(80px + var(--sheet-lift));
+    --sheet-medium:calc(min(56dvh,520px) + var(--sheet-lift));
+  }
+  .csp-glass.csp-round-screen body.csp-redesign #side{
+    left:calc(var(--sheet-inset) + var(--safe-left));
+    right:calc(var(--sheet-inset) + var(--safe-right));
+    bottom:var(--sheet-inset);
+    border-radius:var(--sheet-radius);
+    padding-bottom:var(--sheet-lift);
+  }
+}

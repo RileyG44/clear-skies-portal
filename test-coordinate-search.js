@@ -6,12 +6,12 @@ const section=(start,end)=>{
   assert(from>=0&&to>from,'missing coordinate section: '+start);
   return html.slice(from,to);
 };
-const field={value:''},status={innerHTML:''};
+const field={value:''},status={innerHTML:'',dataset:{}};
 const calls={locations:[],views:[],geocodes:[],runs:0,hidden:0,shown:0,aborts:0,timers:0};
 const context={
   $:selector=>{assert.equal(selector,'#q');return field;},
   LOC:{lat:1,lng:2},statusEl:status,
-  acHide:()=>calls.hidden++,acShow:()=>calls.shown++,
+  acHide:()=>calls.hidden++,acShow:()=>calls.shown++,acCancel:()=>calls.cancels=(calls.cancels||0)+1,
   setLoc:(lat,lng,keepLabel)=>{
     calls.locations.push([lat,lng,keepLabel]);
     if(!keepLabel) field.value=lat.toFixed(5)+', '+lng.toFixed(5);
@@ -96,6 +96,8 @@ async function main(){
   assert.equal(context.coordinateForActions(),context.LOC,'place names preserve the selected point');
   await context.doSearch();
   assert.equal(calls.geocodes[0],'Moses Lake, WA');assert.equal(calls.runs,3);
+  assert.equal(field.value,'Moses Lake, WA','a searched place name stays in the field instead of becoming coordinates');
+  assert(calls.cancels>=1,'a search cancels pending suggestions so they cannot reopen the list');
   console.log('coordinate search: '+checked+' parser cases + autocomplete, search, errors and Maps/Earth action checks passed');
 }
 main().catch(error=>{console.error(error);process.exitCode=1;});

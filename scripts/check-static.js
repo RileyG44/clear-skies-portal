@@ -551,7 +551,9 @@ assert(index.includes('class="elev-spectrum-scale"')&&
    background showed through as a black bar. #app is position:fixed, so inset:0
    resolves against the initial containing block, which under viewport-fit=cover
    is the whole screen. No measurement, nothing to come up short. */
-assert(index.includes('#app{position:fixed;inset:0;width:100%;background:var(--page)}'),
+/* The one exception is the measured standalone shortfall (see below): a
+   negative bottom offset by exactly the status-bar gap, never a height. */
+assert(index.includes('#app{position:fixed;inset:0;bottom:calc(-1 * var(--standalone-gap,0px));width:100%;background:var(--page)}'),
        "the application shell must be sized by inset:0 against the initial containing block");
 assert(!/#app\{[^}]*height:/.test(index),
        "the shell must not carry an explicit height; it over-constrains inset:0 and can fall short of the screen");
@@ -566,17 +568,16 @@ assert(uiSystem.includes('id="cspMapSources"')&&uiSystem.includes('map.attributi
        uiStyles.includes('body.csp-redesign .leaflet-control-attribution,')&&
        uiStyles.includes('body.csp-redesign .maplibregl-ctrl-attrib{display:none!important}'),
        "mobile attribution must be available from the sidebar without covering the map");
-/* An edge-to-edge app has to say so consistently. viewport-fit=cover puts the
-   safe-area strips inside the layout; "black" asks iOS to reserve the system
-   bars and fill them with theme-color instead, which contradicts it. */
-/* The device measured its window 59px short of the screen - the status-bar
-   inset on a Dynamic Island iPhone, and the documented black-translucent
-   failure where the view is sized short and the shortfall shows as a band along
-   the bottom. With "black" the window is the area below the status bar and #app
-   fills it exactly. */
-assert(index.includes('name="apple-mobile-web-app-status-bar-style" content="black"')&&
-       !index.includes('content="black-translucent"'),
-       "black-translucent sized the window short of the screen on this hardware");
+/* The map runs under the status bar and around the Dynamic Island, so the
+   installed app uses black-translucent with viewport-fit=cover. That setting
+   sizes the window short of the screen by the status-bar inset on this
+   hardware (measured: 59px), which showed as a band along the bottom; the
+   standaloneViewport() script measures that shortfall and extends #app by it,
+   capped so an unrelated measurement can never pull the shell around. */
+assert(index.includes('name="apple-mobile-web-app-status-bar-style" content="black-translucent"'),
+       "the map must run under the status bar in the installed app");
+assert(index.includes('function standaloneViewport()')&&index.includes('--standalone-gap')&&index.includes('if(gap>80) gap=0'),
+       "black-translucent needs the measured standalone shortfall compensated, or the bottom band returns");
 assert(index.includes('doubleClickZoom:false')&&index.includes('map.on("dblclick",e=>{ stageMapLocation(e); run(); });'),
        "a map point must be selected on one click and load imagery only on double click or double tap");
 assert(index.includes('PANE_REORDER_HOLD_MS=260')&&index.includes('Press and hold to reorder.'),

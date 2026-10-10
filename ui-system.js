@@ -580,6 +580,14 @@ const syncPeek=()=>{
 new MutationObserver(syncPeek).observe(document.body,{attributes:true,attributeFilter:["class"]});
 peekLayout.addEventListener("change",syncPeek);
 syncPeek();
+/* A portrait phone opens on the map: the sheet starts at peek, search field
+   ready, as Maps does. Placed without animation so it does not slide down on
+   launch. */
+if(sheetMode()&&!isCollapsed()){
+  document.body.classList.add("csp-sheet-dragging");
+  toggleSheet();
+  requestAnimationFrame(()=>requestAnimationFrame(()=>document.body.classList.remove("csp-sheet-dragging")));
+}
 {
   const probeHeight=variable=>{
     const probe=document.createElement("div");probe.style.cssText=`position:absolute;visibility:hidden;height:var(${variable})`;
