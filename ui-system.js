@@ -707,12 +707,56 @@ if(sheetMode()&&!isCollapsed()){
       return;
     }
     if(!peeking()) return;
-    // Searching wants room for suggestions, the way Maps goes full height.
-    openSheet(event.target.closest("#q")?"large":"medium");
+    openSheet("medium");
   });
   side.addEventListener("focusin",event=>{
     if(peeking()&&event.target.closest("#q")) openSheet("large");
   });
+  /* The search capsule takes two taps, as in Maps: the first opens the sheet
+     with no keyboard; the next, with the sheet open, focuses the field. A tap
+     on the collapsed field must not focus it - iOS would raise the keyboard
+     while the field is at the bottom of the screen and pan the whole page up
+     to keep it in view. preventDefault on touchend (and mousedown) stops the
+     focus; the tap then opens the sheet itself. */
+  const q=$("#q");
+  let qTouch=null;
+  q.addEventListener("touchstart",event=>{
+    const t=event.touches[0];qTouch=peeking()&&t?{x:t.clientX,y:t.clientY}:null;
+  },{passive:true});
+  q.addEventListener("touchend",event=>{
+    if(!qTouch||!peeking()) return;
+    const t=event.changedTouches[0],tap=t&&Math.hypot(t.clientX-qTouch.x,t.clientY-qTouch.y)<10;
+    qTouch=null;
+    if(!tap) return;          // a drag: the sheet gesture handles it
+    if(event.cancelable) event.preventDefault();
+    openSheet("medium");
+  },{passive:false});
+  q.addEventListener("mousedown",event=>{if(peeking()) event.preventDefault()});
+  /* Focusing with the sheet open: the sheet rises to full height so the
+     suggestions have room, and the keyboard covers the lower part of the
+     sheet rather than shoving the page up. iOS may still pan the document a
+     little while the keyboard animates; undo that while the field has focus. */
+  q.addEventListener("focus",()=>{
+    if(!sheetMode()) return;
+    if(currentDetent()!=="large") openSheet("large");
+    const until=performance.now()+900;
+    const pin=()=>{
+      if(window.scrollY||document.documentElement.scrollTop) window.scrollTo(0,0);
+      if(performance.now()<until&&document.activeElement===q) requestAnimationFrame(pin);
+    };
+    requestAnimationFrame(pin);
+  });
+  window.visualViewport?.addEventListener("scroll",()=>{
+    if(sheetMode()&&document.activeElement===q&&window.scrollY) window.scrollTo(0,0);
+  });
+  /* With the keyboard up, a tap anywhere outside the search row dismisses it.
+     A tap on the map also lowers the sheet back to the capsule (the existing
+     map handler does that). */
+  document.addEventListener("pointerdown",event=>{
+    if(!sheetMode()||document.activeElement!==q) return;
+    if(event.target.closest(".search-row,#ac")) return;
+    q.blur();
+  },true);
   grabber.addEventListener("keydown",event=>{
     const detent=currentDetent();
     if(event.key==="ArrowUp"){if(detent!=="large") goToDetent(detent==="peek"?"medium":"large")}

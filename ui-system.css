@@ -1843,3 +1843,55 @@ body.csp-redesign:not([data-csp-route="satellite"]) #status[data-kind="scenes"]{
   .csp-glass body.csp-redesign.collapsed #side #loc{background-image:none}
   .csp-glass body.csp-redesign.collapsed #side #loc img{width:19px;height:19px}
 }
+
+/* ---- phone menu typography -------------------------------------------------
+   The icons lead and the words follow: symbols at full ink and a size up,
+   labels a step smaller in regular weight and a softened ink, so the row reads
+   as a list rather than a column of headlines. Each label sits on the bottom
+   line of its icon (baseline on the icon's lower edge) instead of floating at
+   its centre. Section headings drop to small caps-spaced grey so they read as
+   structure, not as items. */
+@media (max-width:760px){
+  .csp-glass body.csp-redesign .csp-nav-button{
+    --nav-icon:22px;
+    grid-template-columns:var(--nav-icon) minmax(0,1fr) auto;
+    align-items:end;
+    gap:14px;
+    min-height:48px;
+    padding:12px 12px 13px;
+    color:var(--ui-text-2);
+    font-size:15px;
+    font-weight:400;
+    letter-spacing:-.012em;
+  }
+  .csp-glass body.csp-redesign .csp-nav-button img{
+    width:var(--nav-icon);height:var(--nav-icon);
+    align-self:end;
+    opacity:1;
+  }
+  .csp-glass body.csp-redesign .csp-nav-button > span:not(.csp-nav-count):not(.csp-nav-dot){
+    line-height:1;
+    margin-bottom:-.2em;      /* baseline onto the icon's bottom edge */
+    padding-bottom:.2em;      /* keep descenders inside the row */
+  }
+  .csp-glass body.csp-redesign .csp-nav-button .csp-nav-count,
+  .csp-glass body.csp-redesign .csp-nav-button .csp-nav-dot{align-self:center}
+  .csp-glass body.csp-redesign .csp-nav-button[aria-current="page"]{color:var(--ui-text);font-weight:500}
+  .csp-glass body.csp-redesign .csp-nav-button:hover{color:var(--ui-text-2)}
+  .csp-glass body.csp-redesign .csp-nav-button[aria-current="page"]:hover{color:var(--ui-text)}
+  .csp-glass body.csp-redesign .csp-nav-button .csp-nav-count{
+    min-width:22px;padding:2px 7px;
+    font-size:12px;font-weight:500;
+    color:var(--ui-text-muted);
+  }
+  .csp-glass body.csp-redesign .csp-nav-label{
+    margin:22px 14px 4px;
+    color:var(--ui-text-muted);
+    opacity:.8;
+    font-size:12px;
+    font-weight:600;
+    letter-spacing:.06em;
+    text-transform:uppercase;
+  }
+  .csp-glass body.csp-redesign #cspEngineNav .csp-nav-button{font-size:15px}
+}
