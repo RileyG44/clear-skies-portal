@@ -38,7 +38,9 @@ Hemisphere letters may appear before or after each angle; labelled pairs can
 also be longitude first. Degrees/decimal minutes and decimal degrees with
 hemisphere letters are supported. Unlabelled pairs remain latitude first.
 Search, Copy coordinates, Google Maps and Google Earth use the same parser;
-copying and external links always use decimal coordinates. Invalid ranges or
+copying and external links always use decimal coordinates. Searching retains the
+original pasted text so copying a searched coordinate does not lose precision.
+Invalid ranges or
 minutes/seconds of 60 or greater show an error instead of searching for a place.
 Regression tests live in `test-coordinate-search.js` and run with `npm test`.
 

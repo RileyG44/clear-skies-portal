@@ -12,7 +12,10 @@ const context={
   $:selector=>{assert.equal(selector,'#q');return field;},
   LOC:{lat:1,lng:2},statusEl:status,
   acHide:()=>calls.hidden++,acShow:()=>calls.shown++,
-  setLoc:(...args)=>calls.locations.push(args),
+  setLoc:(lat,lng,keepLabel)=>{
+    calls.locations.push([lat,lng,keepLabel]);
+    if(!keepLabel) field.value=lat.toFixed(5)+', '+lng.toFixed(5);
+  },
   map:{getZoom:()=>8,setView:(...args)=>calls.views.push(args)},
   geocode:async text=>{calls.geocodes.push(text);return {lat:47,lng:-119};},
   run:()=>calls.runs++,
@@ -75,6 +78,9 @@ async function main(){
   assert(links.maps.includes('47.661614%2C-118.707269'));
   assert(links.earth.includes('47.661614,-118.707269'));
   await context.doSearch();
+  assert.equal(field.value,'47°39\'41.81"N 118°42\'26.17"W','search must preserve pasted coordinate precision');
+  assert.equal(context.coordinateForActions().lat,lat);
+  assert.equal(context.coordinateForActions().lng,lng);
   assert.equal(calls.geocodes.length,0,'DMS search must stay local');
   assert.equal(calls.locations[0][0],lat);assert.equal(calls.locations[0][1],lng);
   assert.equal(calls.views[0][1],10);assert.equal(calls.runs,1);
