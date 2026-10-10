@@ -1790,3 +1790,56 @@ body.csp-redesign:not([data-csp-route="satellite"]) #status[data-kind="scenes"]{
     padding-bottom:var(--sheet-lift);
   }
 }
+
+/* ---- phone, collapsed: a floating search capsule ---------------------------
+   No slab at the peek detent. The search field is its own Liquid Glass
+   capsule and the locate button its own glass circle, floating over the map
+   just above the home indicator, the way the iOS 26 Safari and Maps bars do.
+   Tapping the field or dragging up on it opens the full sheet as before. On a
+   detail page the capsule still shows search; opening returns to that page. */
+@media (max-width:760px) and (orientation:portrait){
+  .csp-glass body.csp-redesign.collapsed{
+    --capsule-h:52px;
+    --sheet-peek:var(--capsule-h);
+  }
+  .csp-glass body.csp-redesign.collapsed #side,
+  .csp-glass.csp-round-screen body.csp-redesign.collapsed #side{
+    left:calc(14px + var(--safe-left));
+    right:calc(14px + var(--safe-right));
+    bottom:max(14px,calc(var(--safe-bottom) - 6px));
+    height:var(--capsule-h);
+    padding:0;
+    border-radius:0;
+    background:transparent;
+    -webkit-backdrop-filter:none;
+    backdrop-filter:none;
+    box-shadow:none;
+    overflow:visible;
+  }
+  .csp-glass body.csp-redesign.collapsed #side::before,
+  .csp-glass body.csp-redesign.collapsed #cspGrabber{display:none}
+  .csp-glass body.csp-redesign.collapsed[data-csp-view="detail"] #cspNav{display:flex}
+  .csp-glass body.csp-redesign.collapsed[data-csp-view="detail"] #cspWorkspace{display:none}
+  .csp-glass body.csp-redesign.collapsed #cspNav{overflow:visible;background:transparent}
+  .csp-glass body.csp-redesign.collapsed #cspNav .searchbox{
+    --search-h:var(--capsule-h);--go:36px;
+    padding:0;background:transparent;border:0;
+  }
+  .csp-glass body.csp-redesign.collapsed #cspNav .search-row{gap:10px}
+  .csp-glass body.csp-redesign.collapsed #side #q,
+  .csp-glass body.csp-redesign.collapsed #side #loc{
+    background-color:var(--lg-control);
+    background-image:var(--ui-search-glyph);
+    -webkit-backdrop-filter:var(--lg-filter);
+    backdrop-filter:var(--lg-filter);
+    box-shadow:var(--lg-rim);
+  }
+  .csp-glass body.csp-redesign.collapsed #side #q{
+    padding-left:40px;
+    background-position:16px center;
+    background-size:17px 17px;
+    font-size:17px;
+  }
+  .csp-glass body.csp-redesign.collapsed #side #loc{background-image:none}
+  .csp-glass body.csp-redesign.collapsed #side #loc img{width:19px;height:19px}
+}
