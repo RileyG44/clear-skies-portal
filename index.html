@@ -17,15 +17,11 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Clear Skies">
 <!-- black-translucent: the map runs up under the status bar and around the
-     Dynamic Island, with no system band above it.
-
-     This setting has a known WebKit defect in the installed app: the page is
-     laid out from the top of the screen but the window is sized short by the
-     status-bar inset (59px on a Dynamic Island iPhone), and the shortfall shows
-     as a band along the bottom. That is why "black" was used before. The
-     standaloneViewport() script below measures the shortfall and extends #app
-     by exactly that much, so the window filling the screen no longer depends on
-     the bug being absent. Tap the build stamp to see the measurements. -->
+     Dynamic Island. iOS 26 reports innerHeight one status bar short in this mode
+     while the page still fills the screen, so nothing may be sized or offset from
+     that measurement (doing so pushed the sheet off the bottom). iOS 26 also
+     draws its own Liquid Glass fade over the top ~40pt; there is no opt-out, so
+     the map buttons start below it. -->
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <title>Clear Skies — Portal</title>
 <style>
@@ -109,7 +105,7 @@ body{
    through as a black bar across the bottom of the display.
 
    --app-height stays for the popover that genuinely wants a dvh ceiling. */
-#app{position:fixed;inset:0;bottom:calc(-1 * var(--standalone-gap,0px));width:100%;background:var(--page)}
+#app{position:fixed;inset:0;width:100%;background:var(--page)}
 /* Belt and braces: if anything else ever comes up short, the strip reads as the
    app rather than as the shell's own background. */
 html{background:var(--page)}
@@ -995,8 +991,8 @@ body.pane-reordering,body.pane-reordering *{cursor:grabbing!important;user-selec
 }
 
 </style>
-<link rel="stylesheet" href="ui-theme.css?build=2026-10-10b">
-<link rel="stylesheet" href="ui-system.css?build=2026-10-10b">
+<link rel="stylesheet" href="ui-theme.css?build=2026-10-10c">
+<link rel="stylesheet" href="ui-system.css?build=2026-10-10c">
 <style>
 /* The redesign restructures the legacy DOM rather than replacing it, and the
    script that does so is the last thing on the page - so the browser paints the
@@ -1030,7 +1026,6 @@ html.csp-boot body{visibility:hidden}
      it genuinely cannot run. -->
 <script>document.body.classList.add("csp-redesign");document.documentElement.classList.toggle("csp-glass",new URLSearchParams(location.search).get("ui")!=="classic");</script>
 <div id="app">
-  <div id="statusScrim" aria-hidden="true"></div>
   <div id="side">
     <header>
       <h1>Clear Skies <span class="portal">Portal</span></h1>
@@ -1720,7 +1715,7 @@ html.csp-boot body{visibility:hidden}
   L.Renderer.prototype.onAdd=function(map){return onAdd.call(this,map||this._map)};
 })();
 </script>
-<script src="version.js?build=2026-10-10b"></script>
+<script src="version.js?build=2026-10-10c"></script>
 <script src="mosaic-core.js"></script>
 <script src="terrain-core.js"></script>
 <script src="terrain-raster.js"></script>
@@ -7890,41 +7885,26 @@ console.log("Clear Skies Portal build "+CSP_BUILD);
    a desktop; what settles it is whether the page fills the window and whether
    the window fills the screen, which are two different failures with two
    different fixes and are indistinguishable in a photograph. */
-/* Installed app with a translucent status bar: see the status-bar-style meta.
-   When the window comes back shorter than the screen, #app is extended by the
-   difference so the map reaches the bottom edge. Also reports the rounded
-   display corners so the phone sheet can sit concentric with them. */
+/* Installed app: flags standalone mode and reports the display's corner radius
+   so the phone sheet can sit concentric with it. Deliberately measures nothing
+   about the window height - see the status-bar-style meta. */
 (function standaloneViewport(){
   const root=document.documentElement;
   const standalone=()=>(navigator.standalone===true)||matchMedia("(display-mode: standalone)").matches;
-  const safeTop=()=>{
-    const probe=document.createElement("div");
-    probe.style.cssText="position:fixed;visibility:hidden;top:0;height:env(safe-area-inset-top,0px)";
-    document.body.appendChild(probe);const h=probe.getBoundingClientRect().height;probe.remove();return h;
+  /* Display corner radius in CSS px by screen size: Dynamic Island models 55,
+     iPhone 12-14 47, X-11 39. Anything else is treated as square. */
+  const cornerRadius=()=>{
+    const h=Math.max(screen.width,screen.height);
+    return [852,874,932,956].includes(h)?55:[844,926].includes(h)?47:[812,896].includes(h)?39:0;
   };
   function apply(){
-    const on=standalone();
+    const on=standalone(),radius=cornerRadius();
     root.classList.toggle("csp-standalone",on);
-    let gap=0;
-    if(on){
-      const portrait=matchMedia("(orientation:portrait)").matches;
-      const screenH=portrait?Math.max(screen.width,screen.height):Math.min(screen.width,screen.height);
-      gap=Math.max(0,Math.round(screenH-innerHeight));
-      if(gap>80) gap=0;   // not the status-bar shortfall; leave layout alone
-    }
-    root.style.setProperty("--standalone-gap",gap+"px");
-    /* Display corner radius in CSS px, from the top inset that identifies the
-       hardware family: Dynamic Island (59-62) 55, notch 12-16 (47-50) 47,
-       notch X-11 (44) 39. Anything else is treated as square. */
-    const top=safeTop();
-    const radius=top>=58?55:top>=46?47:top>=40?39:0;
     root.style.setProperty("--screen-radius",radius+"px");
     root.classList.toggle("csp-round-screen",on&&radius>0);
-    if(typeof map!=="undefined"&&map.invalidateSize) map.invalidateSize({pan:false,animate:false});
   }
   apply();
   addEventListener("resize",apply);
-  addEventListener("orientationchange",()=>setTimeout(apply,300));
 })();
 (function stamp(){
   const el=document.getElementById("buildStamp");
@@ -7958,7 +7938,7 @@ console.log("Clear Skies Portal build "+CSP_BUILD);
       `client ${document.documentElement.clientWidth}x${document.documentElement.clientHeight}`,
       `#app top ${round(app.top)} bottom ${round(app.bottom)} h ${round(app.height)}`,
       `safe t${round(inset.top)} r${round(inset.right)} b${round(inset.bottom)} l${round(inset.left)}`,
-      `standalone gap ${getComputedStyle(document.documentElement).getPropertyValue("--standalone-gap").trim()||"0px"}  corners ${getComputedStyle(document.documentElement).getPropertyValue("--screen-radius").trim()||"0px"}`,
+      `corners ${getComputedStyle(document.documentElement).getPropertyValue("--screen-radius").trim()||"0px"}`,
       `page fills window: ${pageFillsWindow?"yes":"NO"}`,
       `window fills screen: ${windowFillsScreen?"yes":"NO"}`
     ].join("\n");
@@ -9272,6 +9252,6 @@ $("#q").addEventListener("blur",()=>setTimeout(acHide,120));
 document.addEventListener("click",e=>{ if(!e.target.closest("#iw")) acHide() });
 })();
 </script>
-<script src="ui-system.js?build=2026-10-10b"></script>
+<script src="ui-system.js?build=2026-10-10c"></script>
 </body>
 </html>

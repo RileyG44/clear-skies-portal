@@ -1759,14 +1759,12 @@ body.csp-redesign:not([data-csp-route="satellite"]) #status[data-kind="scenes"]{
 }
 
 /* ---- installed app: map under the status bar -------------------------------
-   With a translucent status bar the map runs to the top of the screen. The
-   clock and battery are drawn in white, so a short shade sits behind them,
-   no deeper than the status bar itself - it never reaches the map buttons. */
-#statusScrim{display:none}
-.csp-standalone #statusScrim{
-  display:block;position:absolute;left:0;right:0;top:0;z-index:1250;
-  height:calc(var(--safe-top) + 18px);pointer-events:none;
-  background:linear-gradient(to bottom,oklch(0% 0 0/.24) 0%,oklch(0% 0 0/.16) 35%,oklch(0% 0 0/.07) 65%,oklch(0% 0 0/.02) 85%,oklch(0% 0 0/0) 100%);
+   Nothing is drawn behind the status bar; the map runs to the top edge. iOS 26
+   lays its own Liquid Glass fade over roughly the top 40pt of an installed web
+   app and offers no way to turn it off, so the map buttons start below it. */
+@media (max-width:760px) and (orientation:portrait){
+  .csp-glass.csp-standalone body.csp-redesign #mapDock,
+  .csp-glass.csp-standalone body.csp-redesign:not(.collapsed) #mapDock{top:calc(var(--safe-top) + 40px)}
 }
 
 /* ---- phone sheet concentric with the screen corners ------------------------
