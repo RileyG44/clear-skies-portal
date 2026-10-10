@@ -300,9 +300,18 @@ assert(!index.includes('getDisplayMedia')&&index.includes('composeSnapshot')&&
 assert(index.includes('id="snapSel"')&&index.includes('id="snapSelBox"')&&index.includes('id="snapSelRes"')&&
        ["nw","n","ne","e","se","s","sw","w"].every(h=>index.includes(`data-h="${h}"`)),
        "the capture selection needs a movable box, eight resize handles and a resolution choice");
-assert(index.includes('SNAPSHOT_SCALES=[1,2,4,8]')&&index.includes('snapshotLayerTileUrl')&&
-       index.includes('SNAPSHOT_MAX_TILES=1600')&&index.includes('snapshotTilePlan'),
-       "higher-resolution exports must request bounded source tiles for the selected area");
+assert(index.includes('SNAPSHOT_SCALES=[1,2,4,8,16,32]')&&index.includes('snapshotLayerTileUrl')&&
+       index.includes('SNAPSHOT_MAX_TILES=30000')&&index.includes('snapshotTilePlan')&&index.includes('SNAPSHOT_FETCH_CONCURRENCY=8'),
+       "higher-resolution exports must request bounded source tiles for the selected area, a few at a time");
+/* Big exports are drawn in blocks and streamed to a PNG, never one canvas:
+   that is what lifts the browser's 16.7 MP / 16,384 px canvas caps. */
+assert(index.includes('<script src="png-stream.js"></script>')&&index.includes('CSPPngStream.create(')&&
+       index.includes('async function composeSnapshotStream(')&&index.includes('SNAPSHOT_BLOCK_EDGE=4096'),
+       "large exports must stream through the tested PNG encoder in bounded blocks");
+assert(index.includes('noFinerDetail=!map3d&&scale>8'),
+       "scales past 8x are offered only where a source has finer tiles");
+for(const file of ["server.js","sw.js","package.json",".github/workflows/ci.yml","scripts/minify-site.js"])
+  assert(read(file).includes("png-stream.js"),`${file} must ship the PNG encoder`);
 assert(!/"#snapshot"\)\)\s*\$\("#snapshot"\)\.onclick/.test(fs.readFileSync(path.join(root,"ui-system.js"),"utf8")),
        "the redesign must not re-route the camera button away from the map selection");
 assert(index.includes('touchShare=matchMedia("(pointer: coarse)").matches')&&

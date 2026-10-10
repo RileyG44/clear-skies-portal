@@ -199,25 +199,36 @@ for the sidebar toggle. On phones, opening one workspace closes the other. See
 
 ## Export a map image
 
-Use the camera button beside the map-panel toggle. It opens a direct **PNG** exporter;
-it never asks macOS to capture a window, screen, or browser tab. On desktop the finished
-file is downloaded to the browser's Downloads folder. On touch devices the system share
-sheet is used when the browser supports sharing files.
+Use the camera button. Drag a rectangle over the map (or **Full view**), pick a
+resolution and **Save**. It renders a **PNG** directly from the source tiles; it never
+captures a window, screen or browser tab.
 
-The exporter preserves the exact geographic extent currently visible on the map and
-offers three output sizes:
+Resolution is output pixels per screen point: **1×, 2×, 4×, 8×, 16× and 32×**. Each step
+up requests source tiles one zoom level finer for that area, so the extra pixels are real
+detail wherever a provider publishes it. Where a source ends at a lower native zoom it is
+enlarged, never invented, and 16× and 32× are only offered when some layer on the map
+has finer tiles to give. Vector overlays are rasterized at full output resolution;
+locally rendered terrain canvases come in at their on-screen resolution.
 
-- **Screen** uses the current display density and current source zoom.
-- **Detail** doubles each output dimension and requests one additional source-tile zoom.
-- **Archive** quadruples each output dimension and requests two additional source-tile
-  zooms, bounded to 24 megapixels, an 8,192-pixel edge, and 720 source-tile requests.
+Large exports (over about 12 MP, or wider than 8,192 px) are drawn in blocks of at most
+4,096 px and streamed into the PNG a band of rows at a time (`png-stream.js`, using the
+browser's own zlib compressor). No canvas ever holds the whole picture, so the browser
+canvas caps (16.7 MP on iPhone, 16,384 px per side everywhere) no longer apply. Each
+block fetches only the tiles it overlaps, every layer's tiles for a band are fetched
+together, the next band is fetched while the current one is drawn, and a tile is
+released after the last band that needs it.
 
-The panel states the resulting pixel dimensions, megapixels, and source-tile count
-before anything is downloaded. Higher modes obtain actual smaller-area source tiles for
-ordinary tiled imagery, basemaps, and reference layers whenever the provider publishes
-them. If a source ends at a lower native zoom, it is enlarged honestly rather than
-inventing detail. Vector overlays remain sharp; locally rendered canvas/WebGL terrain
-and elevation layers are included at their currently rendered viewport resolution.
+Where the file goes:
+
+- **Chrome or Edge on a computer:** a large export opens a save dialog and is written
+  straight to disk as it is made, up to 2,000 MP.
+- **Other desktop browsers:** downloaded at the end, up to 600 MP.
+- **iPhone / iPad:** handed to the share sheet (Save Image or Save to Files), up to
+  200 MP, since the finished file has to fit in the phone's memory first.
+
+Source requests run eight at a time from the browser cache first, with a ceiling of
+30,000 tiles per export. A tile a source answers with "no data" (outside a scene's
+footprint) is left empty rather than reported as a failure.
 
 A PNG is still a finite raster image: you can zoom into it until you reach the chosen
 pixel resolution, not indefinitely. A future research-grade export for continued
