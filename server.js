@@ -5,6 +5,7 @@
 const http  = require("http");
 const https = require("https");
 const fs    = require("fs");
+const fsp   = fs.promises;
 const path  = require("path");
 const crypto= require("crypto");
 const net   = require("net");
@@ -18,6 +19,10 @@ const PORT  = Number(process.env.PORT || 8765);
 const HOST  = process.env.HOST || "127.0.0.1";   // 0.0.0.0 in a devcontainer/Codespace
 const CACHE = process.env.CSP_CACHE_DIR || path.join(ROOT, ".cache");   // packaged app redirects this outside the bundle
 const AREAS = path.join(CACHE, "areas");   // one manifest per downloaded area
+/* Markup (annotation) layers: one GeoJSON file per layer. Kept beside the app,
+   not in the cache (they are the user's work, never evicted) and listed in
+   .gitignore, so they stay on this machine. */
+const MARKUP = process.env.CSP_MARKUP_DIR || path.join(ROOT, "markup");
 const STARTED = Date.now();
 const CHANNEL = process.env.CSP_CHANNEL==="preview" ? "preview" : "live";
 const PREVIEW_REF = String(process.env.CSP_PREVIEW_REF||"").slice(0,120)||undefined;
@@ -34,7 +39,7 @@ const MIME = {".html":"text/html; charset=utf-8",".js":"text/javascript",".mjs":
   ".svg":"image/svg+xml",".wasm":"application/wasm",".md":"text/markdown; charset=utf-8",".txt":"text/plain; charset=utf-8",".woff2":"font/woff2"};
 const PUBLIC_FILES = new Set(["index.html","version.js","ui-theme.css","ui-system.css","ui-system.js","mosaic-core.js","terrain-core.js","terrain-raster.js",
   "public-terrain.js","public-terrain-worker.js","vendor/lerc/LercDecode.js","vendor/lerc/LercDecode.es.js","vendor/lerc/lerc-wasm.wasm",
-  "elevation-bands.js","elevation-tile-core.js","tile-pipeline.js","png-stream.js","wa-archaeology.js","glacial-research-core.js","research-analysis.js","research-worker.js","sw.js","manifest.json",
+  "elevation-bands.js","elevation-tile-core.js","tile-pipeline.js","png-stream.js","markup.js","wa-archaeology.js","glacial-research-core.js","research-analysis.js","research-worker.js","sw.js","manifest.json",
   "point-cloud-core.js","point-cloud-viewer.js","point-cloud-catalog.json","maxar-catalog.json","nadi1-cordilleran.json",
   "icon-180.png","icon-192.png","icon-512.png","vendor/maplibre-gl.mjs","vendor/maplibre-gl-shared.mjs",
   "vendor/maplibre-gl-worker.mjs","vendor/maplibre-gl.css","vendor/leaflet-rotate.umd.min.js"]);
@@ -184,6 +189,54 @@ async function readBody(req, limit=MAX_BODY){
   }
   if(tooLarge) throw new HttpError(413, `request body exceeds ${limit} bytes`);
   return Buffer.concat(chunks);
+}
+
+
+/* ---- markup layers ------------------------------------------------------- */
+const MARKUP_ID=/^[a-z0-9][a-z0-9-]{0,63}$/;
+const MAX_MARKUP_BODY=8*1024*1024, MAX_MARKUP_FEATURES=20000;
+const MARKUP_TOMBSTONES=path.join(MARKUP,".deleted.json");
+function markupPath(id){
+  if(!MARKUP_ID.test(id)) throw new HttpError(400,"invalid markup layer id");
+  return path.join(MARKUP,id+".geojson");
+}
+function validMarkupLayer(doc,id){
+  const meta=doc&&doc.markup;
+  if(!doc||doc.type!=="FeatureCollection"||!Array.isArray(doc.features)||!meta||typeof meta!=="object")
+    throw new HttpError(400,"markup layer must be a GeoJSON FeatureCollection with a markup header");
+  if(meta.id!==id) throw new HttpError(400,"markup layer id does not match its address");
+  if(typeof meta.name!=="string"||!meta.name.trim()||meta.name.length>120) throw new HttpError(400,"markup layer needs a name");
+  if(!/^#[0-9a-f]{6}$/i.test(String(meta.color||""))) throw new HttpError(400,"markup layer colour must be #rrggbb");
+  if(!Number.isFinite(meta.updated)) throw new HttpError(400,"markup layer needs an updated time");
+  if(doc.features.length>MAX_MARKUP_FEATURES) throw new HttpError(413,"too many markup features");
+  for(const f of doc.features)
+    if(!f||f.type!=="Feature"||!f.geometry||typeof f.geometry.type!=="string"||!f.properties||typeof f.properties!=="object")
+      throw new HttpError(400,"markup features must be GeoJSON Features with properties");
+  return doc;
+}
+async function markupTombstones(){
+  try{ return JSON.parse(await fsp.readFile(MARKUP_TOMBSTONES,"utf8"))||{} }catch(e){ return {} }
+}
+async function markupWrite(file,text){
+  await fsp.mkdir(MARKUP,{recursive:true});
+  const tmp=file+"."+process.pid+"."+Date.now()+".tmp";
+  await fsp.writeFile(tmp,text);await fsp.rename(tmp,file);
+}
+async function markupRead(id){
+  try{ return JSON.parse(await fsp.readFile(markupPath(id),"utf8")) }
+  catch(e){ if(e&&e.code==="ENOENT") return null; throw e }
+}
+async function markupList(){
+  let names=[];
+  try{ names=(await fsp.readdir(MARKUP)).filter(n=>n.endsWith(".geojson")) }catch(e){ if(e.code!=="ENOENT") throw e }
+  const layers=[];
+  for(const name of names){
+    try{
+      const doc=JSON.parse(await fsp.readFile(path.join(MARKUP,name),"utf8")),m=doc.markup||{};
+      layers.push({id:m.id,name:m.name,color:m.color,updated:m.updated,count:(doc.features||[]).length});
+    }catch(e){}
+  }
+  return {layers:layers.filter(l=>l.id&&MARKUP_ID.test(l.id)),deleted:await markupTombstones()};
 }
 
 async function readJson(req, fallback){
@@ -1502,6 +1555,45 @@ const server = http.createServer(async (req,res)=>{
                   {"X-Cache":"ERROR","X-CSP-Error":"upstream","Cache-Control":"no-store","Retry-After":"2"});
     }
 
+    /* ---- markup layers: list, read, save (last edit wins), delete to trash ---- */
+    if(p==="/api/markup"&&req.method==="GET")
+      return send(res,200,"application/json",jsonBody(await markupList()),{"Cache-Control":"no-store"});
+    {
+      const m=/^\/api\/markup\/([^/]+)(\/delete)?$/.exec(p);
+      if(m){
+        const id=m[1],file=markupPath(id);
+        if(m[2]){
+          if(req.method!=="POST") return send(res,405,"application/json",jsonBody({error:"method not allowed"}),{"Allow":"POST"});
+          const body=await readJson(req,{}),at=Number(body.at)||Date.now();
+          const stones=await markupTombstones();stones[id]=Math.max(stones[id]||0,at);
+          await markupWrite(MARKUP_TOMBSTONES,JSON.stringify(stones));
+          try{ await fsp.mkdir(path.join(MARKUP,".trash"),{recursive:true});await fsp.rename(file,path.join(MARKUP,".trash",`${id}-${Date.now()}.geojson`)) }
+          catch(e){ if(e.code!=="ENOENT") throw e }
+          return send(res,200,"application/json",jsonBody({ok:true,deleted:stones[id]}),{"Cache-Control":"no-store"});
+        }
+        if(req.method==="GET"){
+          const doc=await markupRead(id);
+          if(!doc) return send(res,404,"application/json",jsonBody({error:"no such markup layer"}),{"Cache-Control":"no-store"});
+          return send(res,200,"application/geo+json",jsonBody(doc),{"Cache-Control":"no-store"});
+        }
+        if(req.method==="POST"){
+          let doc;
+          try{ doc=JSON.parse((await readBody(req,MAX_MARKUP_BODY)).toString()) }
+          catch(e){ if(e instanceof HttpError) throw e; throw new HttpError(400,"invalid JSON body") }
+          validMarkupLayer(doc,id);
+          const stones=await markupTombstones();
+          if(stones[id]&&stones[id]>=doc.markup.updated)
+            return send(res,410,"application/json",jsonBody({error:"markup layer was deleted",deleted:stones[id]}),{"Cache-Control":"no-store"});
+          const stored=await markupRead(id);
+          if(stored&&stored.markup&&stored.markup.updated>doc.markup.updated)
+            return send(res,409,"application/geo+json",jsonBody(stored),{"Cache-Control":"no-store"});
+          await markupWrite(file,JSON.stringify(doc));
+          return send(res,200,"application/json",jsonBody({ok:true,updated:doc.markup.updated}),{"Cache-Control":"no-store"});
+        }
+        return send(res,405,"application/json",jsonBody({error:"method not allowed"}),{"Allow":"GET, POST"});
+      }
+    }
+
     if(p === "/api/health"){
       const terrain=terrainPool.stats();
       return send(res,200,"application/json",Buffer.from(JSON.stringify({
@@ -1518,7 +1610,7 @@ const server = http.createServer(async (req,res)=>{
         channel:CHANNEL, previewRef:CHANNEL==="preview"?PREVIEW_REF:undefined,
         /* What the page may ask of this engine. Without "wadnr-dpi" the page
            keeps to the 256 px WA DNR export every engine has handled. */
-        features:["wadnr-dpi"]
+        features:["wadnr-dpi","markup"]
       })),{"Cache-Control":"no-store"});
     }
 

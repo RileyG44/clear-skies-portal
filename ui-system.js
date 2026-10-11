@@ -40,6 +40,7 @@ const ROUTES={
   conditions:{title:"Conditions",description:"Weather, earthquakes, volcanoes, fire, snow, and other time-sensitive layers.",icon:"cloud-sun",panes:["alerts","overlays"],open:["alerts","overlays"],overlayGroup:"Conditions",overlayTitle:"Conditions layers"},
   geology:{title:"Geology & hazards",description:"Surface geology, faults, seismic context, landslides, and point identification.",icon:"triangle-alert",panes:["overlays","research"],open:["overlays","research"],overlayGroup:"Geology & hazards",overlayTitle:"Geology layers",researchMode:"geology"},
   past:{title:"Past landscapes",description:"Ice-age lakes, glaciers, archaeology, and reconstructed environments.",icon:"history",panes:["overlays"],open:["overlays"],overlayGroup:"Past landscapes",overlayTitle:"Past landscape layers"},
+  markup:{title:"Markup",description:"Draw, write and pin notes on the map, in layers you can switch on and off together or apart.",icon:"pen-line",panes:[],custom:"markup"},
   labels:{title:"Labels & reference",description:"Roads, trails, places, water, boundaries, and reference labels.",icon:"tags",panes:["overlays"],open:["overlays"],overlayGroup:"Labels & reference",overlayTitle:"Reference layers"}
 };
 
@@ -87,7 +88,7 @@ function navGroup(label,items){
   navScroll.append(group);
 }
 navGroup("Map",["layers","satellite","terrain","analyze","export"]);
-navGroup("Layer groups",["conditions","geology","past","labels"]);
+navGroup("Layer groups",["conditions","geology","past","labels","markup"]);
 
 const engineNav=document.createElement("div");engineNav.id="cspEngineNav";
 engineNav.innerHTML=`<button class="csp-nav-button" type="button"><img src="${icon("settings-2")}" alt=""><span>Terrain engine</span><span class="csp-nav-dot"></span></button>`;
@@ -142,7 +143,7 @@ const SEARCH_ROUTES=new Map([
   ["conditions","conditions"],["weather","conditions"],["earthquakes","conditions"],["fire","conditions"],["snow","conditions"],
   ["geology","geology"],["hazards","geology"],["faults","geology"],["landslides","geology"],
   ["past landscapes","past"],["glaciers","past"],["ice age","past"],["archaeology","past"],
-  ["labels","labels"],["reference","labels"],["roads","labels"],["boundaries","labels"]
+  ["labels","labels"],["reference","labels"],["roads","labels"],["boundaries","labels"],["markup","markup"],["annotate","markup"],["annotations","markup"],["draw","markup"],["drawing","markup"],["notes","markup"]
 ]);
 function routeFromSearch(){
   const value=$("#q")?.value.trim().toLocaleLowerCase().replace(/\s+/g," ");
@@ -243,6 +244,7 @@ function saveLayerOrder(ids){
 }
 
 function routeForLayer(layer){
+  if(layer.id.startsWith("markup:")) return "markup";
   if(layer.id==="scene"||layer.id==="active-fires") return layer.id==="scene"?"satellite":"conditions";
   if(layer.id==="terrain"||layer.id.startsWith("elevation-")) return "terrain";
   if(layer.id==="surface-analysis") return "analyze";
@@ -310,7 +312,7 @@ function renderLayerStack(container,onlyScene=false){
 
 function availableLayersCard(){
   const card=document.createElement("div");card.className="csp-card";
-  const options=[["satellite","Satellite imagery","Dated optical, radar, IR, and global mosaics"],["terrain","Terrain & LiDAR","Hillshade, elevation, contours, and 3D"],["conditions","Conditions","Weather, seismicity, fire, and snow"],["geology","Geology & hazards","Surface geology, faults, and landslides"],["past","Past landscapes","Glaciers, ice-age lakes, and archaeology"],["labels","Labels & reference","Roads, trails, water, places, and boundaries"]];
+  const options=[["satellite","Satellite imagery","Dated optical, radar, IR, and global mosaics"],["terrain","Terrain & LiDAR","Hillshade, elevation, contours, and 3D"],["conditions","Conditions","Weather, seismicity, fire, and snow"],["geology","Geology & hazards","Surface geology, faults, and landslides"],["past","Past landscapes","Glaciers, ice-age lakes, and archaeology"],["labels","Labels & reference","Roads, trails, water, places, and boundaries"],["markup","Markup","Your own drawings, notes and pins"]];
   for(const [route,name,meta] of options){
     const button=document.createElement("button");button.className="csp-available-row";button.type="button";
     button.innerHTML=`<strong>${name}</strong><img src="${icon("chevron-right")}" alt="" width="15" height="15"><span>${meta}</span>`;
@@ -351,6 +353,7 @@ function renderCustom(route){
   if(route.custom==="layers") renderLayersView();
   else if(route.custom==="satellite") renderSatelliteView();
   else if(route.custom==="export") renderExportView();
+  else if(route.custom==="markup"){ clearCustom();const box=document.createElement("div");customView.append(box);window.CSPMarkup?.renderPanel(box) }
   else clearCustom();
 }
 
@@ -481,6 +484,7 @@ function updateCounts(){
   const terrainCount=active.filter(layer=>layer.id==="terrain"||layer.id.startsWith("elevation-")).length;
   set("terrain",terrainCount?String(terrainCount):"");
   set("analyze",active.some(layer=>layer.id==="surface-analysis")?"1":"");
+  const markupCount=active.filter(layer=>layer.id.startsWith("markup:")).length;set("markup",markupCount?String(markupCount):"");
   for(const [key,group] of [["conditions","Conditions"],["geology","Geology & hazards"],["past","Past landscapes"],["labels","Labels & reference"]]){
     const ids=new Set(catalog.filter(item=>item.group===group).map(item=>`overlay:${item.id}`));
     const count=active.filter(layer=>ids.has(layer.id)).length;set(key,count?String(count):"");

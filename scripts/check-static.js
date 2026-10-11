@@ -308,6 +308,14 @@ assert(index.includes('SNAPSHOT_SCALES=[1,2,4,8,16,32]')&&index.includes('snapsh
 assert(index.includes('<script src="png-stream.js"></script>')&&index.includes('CSPPngStream.create(')&&
        index.includes('async function composeSnapshotStream(')&&index.includes('SNAPSHOT_BLOCK_EDGE=4096'),
        "large exports must stream through the tested PNG encoder in bounded blocks");
+/* Markup layers: the user's own drawings, kept on this machine (gitignored)
+   and in the browser, drawn in panes the PNG export captures. */
+assert(index.includes('<script src="markup.js?build=')&&index.includes('.csp-markup-pane svg')&&
+       index.includes('window.CSPMarkup?.activeEntries()')&&index.includes('server:()=>({online:PROXY,base:API})'),
+       "markup layers must load, list in Layers, reach the engine and appear in exports");
+assert(read(".gitignore").includes("\nmarkup/"),"markup layers are the user's files and must never be committed");
+for(const file of ["server.js","sw.js","package.json",".github/workflows/ci.yml","scripts/minify-site.js"])
+  assert(read(file).includes("markup.js"),`${file} must ship markup.js`);
 assert(index.includes('noFinerDetail=!map3d&&scale>8'),
        "scales past 8x are offered only where a source has finer tiles");
 for(const file of ["server.js","sw.js","package.json",".github/workflows/ci.yml","scripts/minify-site.js"])

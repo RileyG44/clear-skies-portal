@@ -991,8 +991,8 @@ body.pane-reordering,body.pane-reordering *{cursor:grabbing!important;user-selec
 }
 
 </style>
-<link rel="stylesheet" href="ui-theme.css?build=2026-10-10f">
-<link rel="stylesheet" href="ui-system.css?build=2026-10-10f">
+<link rel="stylesheet" href="ui-theme.css?build=2026-10-10g">
+<link rel="stylesheet" href="ui-system.css?build=2026-10-10g">
 <style>
 /* The redesign restructures the legacy DOM rather than replacing it, and the
    script that does so is the last thing on the page - so the browser paints the
@@ -1717,7 +1717,7 @@ html.csp-boot body{visibility:hidden}
   L.Renderer.prototype.onAdd=function(map){return onAdd.call(this,map||this._map)};
 })();
 </script>
-<script src="version.js?build=2026-10-10f"></script>
+<script src="version.js?build=2026-10-10g"></script>
 <script src="mosaic-core.js"></script>
 <script src="png-stream.js"></script>
 <script src="terrain-core.js"></script>
@@ -3908,7 +3908,7 @@ function snapshotDomMatrix(el,root){
 function snapshotDomItems(sel){
   const mapEl=$("#map"),box=mapEl.getBoundingClientRect();
   const left=box.left+sel.x,top=box.top+sel.y,right=left+sel.w,bottom=top+sel.h;
-  return [...mapEl.querySelectorAll("canvas.leaflet-tile,canvas.leaflet-zoom-animated,img.leaflet-image-layer,img.leaflet-marker-icon,.leaflet-overlay-pane svg,.leaflet-marker-pane svg")]
+  return [...mapEl.querySelectorAll("canvas.leaflet-tile,canvas.leaflet-zoom-animated,img.leaflet-image-layer,img.leaflet-marker-icon,.leaflet-overlay-pane svg,.leaflet-marker-pane svg,.csp-markup-pane svg")]
     .filter(el=>!el.closest(".csp-tile-hold")&&!(el.parentElement&&el.parentElement.closest("svg")))
     .filter(el=>{ const r=el.getBoundingClientRect();return r.width>0&&r.height>0&&r.right>left&&r.left<right&&r.bottom>top&&r.top<bottom })
     .filter(el=>snapshotElementOpacity(el,mapEl)>0.001&&getComputedStyle(el).visibility!=="hidden");
@@ -6233,6 +6233,7 @@ function probeServer(){
     .catch(()=>{ if(token===probeToken&&base===API){ PROXY=false; serverHealth=null } })
     .then(()=>{ if(token===probeToken){
       paintServerBox(); paintTerrainInfo(); scheduleServerProbe(PROXY?40000:15000);
+      if(becameAvailable) document.dispatchEvent(new CustomEvent("csp:server",{detail:{online:true}}));
       if(becameAvailable){ refreshTerrainCoverage(true);schedule3dStyle() }
     } return PROXY })
     .finally(()=>clearTimeout(timer));
@@ -9311,6 +9312,7 @@ function cspActiveLayers(){
       meta:`${o.group||"Overlay"} · ${o.via||"public source"}`,opacity:overlayOpacityPercent(o),visible:true,kind:"overlay"});
   }
   if($("#fire").checked) layers.push({id:"active-fires",name:"Active fires",meta:"NIFC live perimeter feed",opacity:100,visible:true,kind:"condition",noOpacity:true});
+  layers.push(...(window.CSPMarkup?.activeEntries()||[]));
   layers.push({id:"basemap",name:"Reference basemap",meta:"Pinned below all research layers",opacity:100,visible:true,kind:"base",locked:true,noOpacity:true});
   return layers;
 }
@@ -9331,6 +9333,7 @@ function cspSetLayerVisible(id,visible){
   }else if(id==="surface-analysis") cspInput("#researchOpacity",visible?70:0);
   else if(id==="active-fires") cspInput("#fire",visible,"change");
   else if(id.startsWith("overlay:")) cspInput("#ov_"+id.slice(8),visible,"change");
+  else if(id.startsWith("markup:")) window.CSPMarkup?.setVisible(id.slice(7),visible);
   document.dispatchEvent(new CustomEvent("csp:layers-changed"));
 }
 function cspSetLayerOpacity(id,value){
@@ -9341,6 +9344,7 @@ function cspSetLayerOpacity(id,value){
   else if(id==="elevation-bands") cspInput("#elevBandAlpha",value);
   else if(id==="surface-analysis") cspInput("#researchOpacity",value);
   else if(id.startsWith("overlay:")) setOverlayOpacity(id.slice(8),value);
+  else if(id.startsWith("markup:")) window.CSPMarkup?.setOpacity(id.slice(7),value);
   document.dispatchEvent(new CustomEvent("csp:layers-changed"));
 }
 function cspResetLayer(id){
@@ -9355,6 +9359,7 @@ function cspResetLayer(id){
     if(o?.timeSlice){const input=$("#ovTime_"+overlayId);if(input){input.value=o.timeSlice.values.indexOf(o.timeSlice.default);input.dispatchEvent(new Event("input",{bubbles:true}))}}
     if(o&&ovLayers[overlayId]?.setOpacity) ovLayers[overlayId].setOpacity(ovOpacity(o));ovSave();
   }
+  else if(id.startsWith("markup:")) window.CSPMarkup?.resetLayer(id.slice(7));
   document.dispatchEvent(new CustomEvent("csp:layers-changed"));
 }
 function cspSetLayerOrder(order){
@@ -9369,8 +9374,13 @@ function cspSetLayerOrder(order){
     else if(id.startsWith("overlay:")) ovLayers[id.slice(8)]?.setZIndex?.(z);
   });
   setOverlayOrder((order||[]).filter(id=>id.startsWith("overlay:")).map(id=>id.slice(8)));
+  window.CSPMarkup?.setOrder((order||[]).filter(id=>id.startsWith("markup:")).map(id=>id.slice(7)));
 }
 window.ClearSkiesPortalBridge={
+  /* For markup.js: the map, the engine address, and whether it answers. */
+  map,
+  api,
+  server:()=>({online:PROXY,base:API}),
   activeLayers:cspActiveLayers,
   setLayerVisible:cspSetLayerVisible,
   setLayerOpacity:cspSetLayerOpacity,
@@ -9431,6 +9441,7 @@ $("#q").addEventListener("blur",()=>setTimeout(acHide,120));
 document.addEventListener("click",e=>{ if(!e.target.closest("#iw")) acHide() });
 })();
 </script>
-<script src="ui-system.js?build=2026-10-10f"></script>
+<script src="markup.js?build=2026-10-10g"></script>
+<script src="ui-system.js?build=2026-10-10g"></script>
 </body>
 </html>

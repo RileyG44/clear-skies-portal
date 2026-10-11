@@ -29,7 +29,10 @@ for(const name of ['LercDecode.js','LercDecode.es.js','lerc-wasm.wasm','README.m
 const iconNames=[
   "arrow-left","arrow-right","chevron-down","chevron-right","chevron-up","cloud-sun","download","history","image",
   "layers","map-pinned","mountain-snow","navigation","radio","rotate-ccw","satellite","scan-search",
-  "search","settings-2","sliders-horizontal","tags","triangle-alert"
+  "search","settings-2","sliders-horizontal","tags","triangle-alert",
+  /* markup tools */
+  "pen-line","hand","mouse-pointer-2","pencil","minus","move-up-right","pentagon","square","circle","type","map-pin",
+  "undo-2","trash-2","check","plus"
 ];
 const iconDir=path.join(vendor,"icons");
 fs.mkdirSync(iconDir,{recursive:true});

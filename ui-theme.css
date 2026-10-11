@@ -404,3 +404,7 @@
     --ui-frost-weak: var(--ui-surface);
   }
 }
+
+/* Ink on an accent-filled control (the Done button, markup handles). The same
+   in every theme: the accent is always a saturated blue. */
+:root{--ui-on-accent:#ffffff}

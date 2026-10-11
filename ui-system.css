@@ -1895,3 +1895,89 @@ body.csp-redesign:not([data-csp-route="satellite"]) #status[data-kind="scenes"]{
   }
   .csp-glass body.csp-redesign #cspEngineNav .csp-nav-button{font-size:15px}
 }
+
+/* ---- markup layers ----------------------------------------------------------
+   The drawing toolbar floats at the top of the map in the same glass as the
+   map buttons; on a phone it takes the top of the screen and the map-button
+   column steps aside while drawing. */
+#mkCapture{position:absolute;inset:0;z-index:650;touch-action:none;cursor:crosshair}
+#mkCapture[data-tool="text"]{cursor:text}
+#mkCapture[hidden]{display:none}
+#mkBar{
+  position:absolute;z-index:1320;top:calc(12px + var(--safe-top));left:50%;transform:translateX(-50%);
+  display:flex;flex-direction:column;gap:6px;width:max-content;max-width:calc(100vw - 24px - var(--safe-left) - var(--safe-right));
+  padding:6px;border-radius:22px;
+  background-color:var(--lg-control);background-image:var(--lg-sheen);
+  -webkit-backdrop-filter:var(--lg-filter);backdrop-filter:var(--lg-filter);
+  box-shadow:var(--lg-rim-lifted);color:var(--ui-text);
+}
+#mkBar[hidden]{display:none}
+#mkBar .mk-row{display:flex;align-items:center;gap:4px;overflow-x:auto;scrollbar-width:none;-webkit-overflow-scrolling:touch}
+#mkBar .mk-row::-webkit-scrollbar{display:none}
+#mkBar .mk-tool,#mkBar .mk-icon-btn{
+  flex:none;display:grid;place-items:center;width:38px;height:38px;padding:0;border:0;border-radius:12px;
+  background:transparent;cursor:pointer;
+}
+#mkBar .mk-tool img,#mkBar .mk-icon-btn img{width:19px;height:19px;filter:var(--ui-icon-filter)}
+#mkBar .mk-tool:hover,#mkBar .mk-icon-btn:hover:not(:disabled){background:var(--ui-fill)}
+#mkBar .mk-tool[aria-pressed="true"]{background:var(--ui-accent)}
+#mkBar .mk-tool[aria-pressed="true"] img{filter:brightness(0) invert(1)}
+#mkBar .mk-icon-btn:disabled{opacity:.35;cursor:default}
+#mkBar .mk-style{padding:0 4px 0 8px;overflow:visible}
+#mkBar .mk-scroll{flex:1 1 auto;min-width:0;overflow-x:auto;scrollbar-width:none;padding:3px}
+#mkBar .mk-scroll::-webkit-scrollbar{display:none}
+#mkBar .mk-layer-name{flex:none;max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:13px;font-weight:600;margin-right:6px}
+.mk-swatches{display:flex;gap:5px;flex:none}
+.mk-swatch{flex:none;width:24px;height:24px;min-width:0;min-height:0;padding:0;border-radius:50%;border:0;background:var(--c);cursor:pointer;
+  box-shadow:inset 0 0 0 1px var(--ui-line-strong)}
+.mk-swatch[aria-pressed="true"]{box-shadow:inset 0 0 0 1px var(--ui-line-strong),0 0 0 2px var(--ui-surface),0 0 0 4px var(--ui-accent)}
+.mk-text-btn{flex:none;height:32px;padding:0 10px;border:0;border-radius:10px;background:var(--ui-fill);
+  color:var(--ui-text);font:inherit;font-size:13px;font-weight:500;cursor:pointer;white-space:nowrap}
+.mk-text-btn:disabled{opacity:.4;cursor:default}
+.mk-done{flex:none;height:32px;padding:0 14px;border:0;border-radius:999px;background:var(--ui-accent);color:var(--ui-on-accent);
+  font:inherit;font-size:13px;font-weight:600;cursor:pointer;margin-left:4px;white-space:nowrap}
+body.csp-markup-editing .snap-sel{display:none}
+@media (max-width:760px){
+  #mkBar{left:calc(10px + var(--safe-left));right:calc(10px + var(--safe-right));transform:none;width:auto;max-width:none;top:calc(8px + var(--safe-top))}
+  .csp-glass body.csp-redesign.csp-markup-editing #mapDock{opacity:0;pointer-events:none}
+  #mkBar .mk-tools{overflow:visible}
+  #mkBar .mk-tool{flex:1 1 0;width:auto;min-width:30px;height:42px}
+  #mkBar .mk-icon-btn{width:38px;height:38px}
+  #mkBar .mk-layer-name{display:none}
+  #mkBar .mk-style{padding:0 2px 0 4px}
+}
+/* Handles: white discs on a dark rim; the move handle is larger, with a
+   four-way cue. */
+.csp-mk-handle{border-radius:50%;background:var(--ui-on-accent);box-shadow:0 0 0 2px var(--ui-accent),0 2px 6px var(--ui-shadow-3)}
+.csp-mk-handle-move{background:var(--ui-accent);box-shadow:0 0 0 2px var(--ui-on-accent),0 2px 8px var(--ui-shadow-3)}
+.csp-mk-handle-move::after{content:"";position:absolute;inset:8px;border-radius:50%;border:2px solid var(--ui-on-accent)}
+.csp-mk-selected{filter:drop-shadow(0 0 2px var(--ui-accent)) drop-shadow(0 0 4px var(--ui-accent))}
+.csp-mk-point{cursor:pointer}
+.mk-text-input{
+  position:absolute;z-index:1330;transform:translate(-50%,-50%);min-width:120px;max-width:70vw;
+  padding:6px 10px;border:0;border-radius:10px;outline:none;resize:none;field-sizing:content;
+  background:var(--ui-surface);color:var(--ui-text);box-shadow:0 0 0 2px var(--ui-accent),0 6px 18px var(--ui-shadow-3);
+  font:650 16px/1.25 -apple-system,BlinkMacSystemFont,"SF Pro Text","Inter Variable",system-ui,sans-serif;text-align:center;
+}
+/* Panel */
+.mk-panel{display:flex;flex-direction:column;gap:6px;padding:8px}
+.mk-add{display:flex;align-items:center;gap:10px;height:44px;padding:0 12px;border:0;border-radius:12px;
+  background:var(--ui-fill);color:var(--ui-accent);font:inherit;font-size:15px;font-weight:500;cursor:pointer}
+.mk-add img{width:18px;height:18px;filter:var(--ui-icon-filter)}
+.mk-add[hidden]{display:none}
+.mk-new{display:flex;flex-direction:column;gap:10px;padding:10px;border-radius:12px;background:var(--ui-fill)}
+.mk-new[hidden]{display:none}
+.mk-new-name,.mk-rename{width:100%;height:40px;padding:0 12px;border:0;border-radius:10px;background:var(--ui-surface);
+  color:var(--ui-text);font:inherit;font-size:16px;box-shadow:inset 0 0 0 1px var(--ui-line)}
+.mk-new-actions{display:flex;justify-content:flex-end;gap:8px}
+.mk-list{display:flex;flex-direction:column}
+.mk-layer{display:grid;grid-template-columns:14px minmax(0,1fr) auto;align-items:center;gap:6px 10px;padding:10px 6px;
+  border-top:1px solid var(--ui-line)}
+.mk-layer:first-child{border-top:0}
+.mk-dot{width:14px;height:14px;border-radius:50%;background:var(--c);box-shadow:inset 0 0 0 1px var(--ui-line-strong)}
+.mk-layer-title{font-size:15px;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.mk-layer-meta{font-size:12px;color:var(--ui-text-muted);margin-top:1px}
+.mk-layer-actions{grid-column:2 / -1;display:flex;flex-wrap:wrap;gap:6px}
+.mk-layer-actions .mk-primary{background:var(--ui-accent);color:var(--ui-on-accent)}
+.mk-layer-actions .mk-danger{color:var(--ui-danger)}
+.mk-note{font-size:12px;color:var(--ui-text-muted);padding:6px 4px 2px;line-height:1.4}
