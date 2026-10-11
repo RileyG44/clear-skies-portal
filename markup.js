@@ -27,6 +27,20 @@ const map=B.map;
 const $=(s,r=document)=>r.querySelector(s);
 const SVGNS="http://www.w3.org/2000/svg";
 const PALETTE=["#ff3b30","#ff9500","#ffcc00","#34c759","#00c7be","#0a84ff","#5e5ce6","#bf5af2","#ffffff","#1c1c1e"];
+/* The layer colour picker: ten hue rows of five, light to dark, the most
+   used hues first. The middle column is each hue at full strength. */
+const COLOR_GRID=[
+  ["#ffb3ae","#ff7a70","#ff3b30","#d70015","#8e0b0b"],   // red
+  ["#ffd2a1","#ffb35c","#ff9500","#c96a00","#7a3e00"],   // orange
+  ["#fff2a8","#ffe066","#ffcc00","#c99a00","#7a5c00"],   // yellow
+  ["#b7f0c4","#6fdc8c","#34c759","#248a3d","#14532d"],   // green
+  ["#a8d4ff","#5eb0ff","#0a84ff","#0055c4","#003170"],   // blue
+  ["#a6f0ec","#4fdcd4","#00c7be","#00918a","#00524e"],   // teal
+  ["#e3c4f7","#cf8ef0","#af52de","#8a2bb8","#521571"],   // purple
+  ["#ffc2d6","#ff8fb1","#ff2d55","#c2002e","#70001c"],   // pink
+  ["#e8d2b8","#c9a77c","#a2845e","#7a5c3a","#4a3520"],   // earth
+  ["#ffffff","#d1d1d6","#8e8e93","#3a3a3c","#000000"]    // neutral
+].flat();
 const VIEW_KEY="clearskies.markup.view.v1";
 const icon=name=>`vendor/icons/${name}.svg`;
 
@@ -361,7 +375,7 @@ function paintBar(){
     <div class="mk-row mk-tools">${TOOLS.map(([id,ic,label])=>`<button type="button" class="mk-tool" data-tool="${id}" aria-pressed="${tool===id}" title="${label}" aria-label="${label}"><img src="${icon(ic)}" alt=""></button>`).join("")}</div>
     <div class="mk-row mk-style">
       <span class="mk-layer-name"></span>
-      <div class="mk-swatches mk-scroll">${PALETTE.map(c=>`<button type="button" class="mk-swatch" data-color="${c}" style="--c:${c}" aria-pressed="${c===color}" aria-label="Colour ${c}"></button>`).join("")}</div>
+      <div class="mk-swatches mk-scroll">${[...new Set([editing.doc.markup.color,...(color&&!PALETTE.includes(color)?[color]:[]),...PALETTE])].map(c=>`<button type="button" class="mk-swatch" data-color="${c}" style="--c:${c}" aria-pressed="${c===color}" aria-label="Colour ${c}"></button>`).join("")}</div>
       <button type="button" class="mk-text-btn" data-act="width" title="Stroke width">${WIDTHS[penWidth].label}</button>
       ${sel&&(sel.properties.kind==="text"||sel.properties.kind==="pin")?`<button type="button" class="mk-text-btn" data-act="edit-text">Edit text</button>`:""}
       ${sel?`<button type="button" class="mk-icon-btn" data-act="delete" title="Delete" aria-label="Delete selected"><img src="${icon("trash-2")}" alt=""></button>`:""}
@@ -624,7 +638,7 @@ function renderPanel(container){
     <div class="csp-card mk-panel">
       <div class="mk-new" hidden>
         <input class="mk-new-name" type="text" maxlength="120" placeholder="Layer name, e.g. Pangborn Bar" aria-label="New layer name">
-        <div class="mk-swatches mk-new-colors">${PALETTE.slice(0,8).map((c,i)=>`<button type="button" class="mk-swatch" data-new-color="${c}" style="--c:${c}" aria-pressed="${i===0}" aria-label="Colour ${c}"></button>`).join("")}</div>
+        <div class="mk-color-grid" role="radiogroup" aria-label="Layer colour">${COLOR_GRID.map((c,i)=>`<button type="button" class="mk-swatch" role="radio" data-new-color="${c}" style="--c:${c}" aria-pressed="${i===2}" aria-checked="${i===2}" aria-label="Colour ${c}"></button>`).join("")}</div>
         <div class="mk-new-actions"><button type="button" class="mk-text-btn" data-act="cancel-new">Cancel</button><button type="button" class="mk-done" data-act="create">Create layer</button></div>
       </div>
       <button type="button" class="mk-add" data-act="new"><img src="${icon("plus")}" alt=""><span>New markup layer</span></button>
@@ -653,7 +667,7 @@ function renderPanel(container){
   container.onclick=event=>{
     const button=event.target.closest("button");if(!button) return;
     const row=button.closest(".mk-layer"),layer=row&&layers.get(row.dataset.id),act=button.dataset.act;
-    if(button.dataset.newColor){ container.querySelectorAll("[data-new-color]").forEach(b=>b.setAttribute("aria-pressed",String(b===button)));return }
+    if(button.dataset.newColor){ container.querySelectorAll("[data-new-color]").forEach(b=>{ b.setAttribute("aria-pressed",String(b===button));b.setAttribute("aria-checked",String(b===button)) });return }
     if(act==="new"){ $(".mk-new",container).hidden=false;button.hidden=true;$(".mk-new-name",container).focus();return }
     if(act==="cancel-new"){ renderPanel(container);return }
     if(act==="create"){
@@ -676,6 +690,14 @@ function renderPanel(container){
       button.dataset.confirm="1";button.textContent="Delete for good?";setTimeout(()=>{ if(button.isConnected){ delete button.dataset.confirm;button.textContent="Delete" } },4000);
     }
   };
+  /* The grid fades out below its fifth row; the fade lifts once it has
+     scrolled to the end, and a matching fade appears at the top once it has
+     scrolled away from it. */
+  const grid=$(".mk-color-grid",container);
+  if(grid){
+    const edges=()=>{ grid.classList.toggle("mk-at-top",grid.scrollTop<2);grid.classList.toggle("mk-at-end",grid.scrollTop+grid.clientHeight>=grid.scrollHeight-2) };
+    grid.addEventListener("scroll",edges,{passive:true});requestAnimationFrame(edges);
+  }
   $(".mk-new-name",container)?.addEventListener("keydown",event=>{ if(event.key==="Enter") container.querySelector('[data-act="create"]').click() });
 }
 
