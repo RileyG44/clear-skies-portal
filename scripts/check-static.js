@@ -316,6 +316,12 @@ assert(index.includes('<script src="markup.js?build=')&&index.includes('.csp-mar
 assert(read(".gitignore").includes("\nmarkup/"),"markup layers are the user's files and must never be committed");
 for(const file of ["server.js","sw.js","package.json",".github/workflows/ci.yml","scripts/minify-site.js"])
   assert(read(file).includes("markup.js"),`${file} must ship markup.js`);
+/* The elevation spectrum and highlights drape in 3D, over any terrain or
+   lidar layer or on their own, coloured by the same function as 2D. */
+assert(index.includes('module.addProtocol("cspelev"')&&index.includes('function elevationColours(')&&
+       index.includes('if(elev) elevationColours(elev,w*h,settings,im.data);')&&index.includes('id:"elev-spectrum"')&&
+       index.includes('if($("#terStyle").value==="off"&&!elevationActive())'),
+       "the elevation spectrum must render in 3D from the shared 2D colouring, with or without a terrain layer");
 assert(index.includes('noFinerDetail=!map3d&&scale>8'),
        "scales past 8x are offered only where a source has finer tiles");
 for(const file of ["server.js","sw.js","package.json",".github/workflows/ci.yml","scripts/minify-site.js"])

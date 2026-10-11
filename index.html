@@ -991,8 +991,8 @@ body.pane-reordering,body.pane-reordering *{cursor:grabbing!important;user-selec
 }
 
 </style>
-<link rel="stylesheet" href="ui-theme.css?build=2026-10-10g">
-<link rel="stylesheet" href="ui-system.css?build=2026-10-10g">
+<link rel="stylesheet" href="ui-theme.css?build=2026-10-10h">
+<link rel="stylesheet" href="ui-system.css?build=2026-10-10h">
 <style>
 /* The redesign restructures the legacy DOM rather than replacing it, and the
    script that does so is the last thing on the page - so the browser paints the
@@ -1717,7 +1717,7 @@ html.csp-boot body{visibility:hidden}
   L.Renderer.prototype.onAdd=function(map){return onAdd.call(this,map||this._map)};
 })();
 </script>
-<script src="version.js?build=2026-10-10g"></script>
+<script src="version.js?build=2026-10-10h"></script>
 <script src="mosaic-core.js"></script>
 <script src="png-stream.js"></script>
 <script src="terrain-core.js"></script>
@@ -5855,7 +5855,16 @@ function terrainSky(theme,light){
     "sky-color":rgb(sky),"horizon-color":rgb(horizon),"fog-color":rgb(fog),
     "sky-horizon-blend":.55,"horizon-fog-blend":.3,"fog-ground-blend":.9,"atmosphere-blend":.6};
 }
+/* What the 3D style is made of. A slider can repaint in place; a change in
+   this key (terrain style, terrain on/off, spectrum on/off) needs a new style. */
+function map3dStructureKey(){ return [$("#terStyle").value,elevationActive()?"elev":"-"].join("|") }
+let map3dBuiltKey="",elevSpectrumRevision=0;
 function terrainRasterStyle(){
+  map3dBuiltKey=map3dStructureKey();
+  /* With no terrain style but the spectrum on, the spectrum stands on its own:
+     no analytical drape, just a light hillshade so the ground still reads as
+     ground. With neither on, 3D shows the default hillshade as before. */
+  const spectrumAlone=$("#terStyle").value==="off"&&elevationActive();
   const theme=terrainTheme(),style=$("#terStyle").value==="off"?"hs":$("#terStyle").value;
   const light=terrainLighting(),opacity=terrainOpacity()/100,pick=chooseTerrain(style);
   const directions=style==="hsmulti"?[light.azimuth,(light.azimuth+90)%360,(light.azimuth+180)%360,(light.azimuth+270)%360]:light.azimuth;
@@ -5880,7 +5889,7 @@ function terrainRasterStyle(){
   ];
   /* Elevation tint under the shading, for every case where the ground would
      otherwise be bare hillshade or a published drape. */
-  if(style==="hs"||style==="hsmulti"||pick.src==="wadnr") layers.push({id:"terrain-relief",type:"color-relief",source:"demShade",
+  if(!spectrumAlone&&(style==="hs"||style==="hsmulti"||pick.src==="wadnr")) layers.push({id:"terrain-relief",type:"color-relief",source:"demShade",
     paint:{"color-relief-color":hypsometricRamp(),"color-relief-opacity":theme==="dark"?.32:.4}});
   if(style==="hs"||style==="hsmulti") layers.push({id:"terrain-hillshade",type:"hillshade",source:"demShade",paint:{
     "hillshade-method":style==="hsmulti"?"multidirectional":"standard",
@@ -5896,10 +5905,23 @@ function terrainRasterStyle(){
     sources.analysis={type:"raster",tiles:[`cspterrain://${style}/{z}/{x}/{y}.png?r=${++map3dStyleRevision}`],tileSize:256,maxzoom:18};
     layers.push({id:"terrain-analysis",type:"raster",source:"analysis",paint:{"raster-opacity":opacity,"raster-fade-duration":0}});
   }
-  if(pick.src==="wadnr"&&pick.ids?.length){
+  if(spectrumAlone){
+    /* The hillshade above was built at full terrain strength; standing alone
+       under the spectrum it is only there for form, so it is lightened. */
+    const shade=layers.find(layer=>layer.id==="terrain-hillshade");
+    if(shade){ shade.paint["hillshade-exaggeration"]=.45;shade.paint["hillshade-highlight-color"]="rgba(255,255,255,0)" }
+  }
+  if(!spectrumAlone&&pick.src==="wadnr"&&pick.ids?.length){
     sources.wadnr={type:"raster",tiles:[`cspwa://${pick.ids.join(",")}/{z}/{x}/{y}.png`],tileSize:256,maxzoom:18,
       attribution:"WA DNR LiDAR"};
     layers.push({id:"wadnr-drape",type:"raster",source:"wadnr",paint:{"raster-opacity":opacity,"raster-fade-duration":0}});
+  }
+  /* The elevation spectrum and highlights, draped over whatever terrain or
+     lidar layer is on (or on their own). Colour is baked into the tile, so a
+     setting change swaps the tile URL rather than rebuilding the style. */
+  if(elevationActive()){
+    sources.elevspec={type:"raster",tiles:[`cspelev://s/{z}/{x}/{y}.png?r=${elevSpectrumRevision}`],tileSize:256,maxzoom:18};
+    layers.push({id:"elev-spectrum",type:"raster",source:"elevspec",paint:{"raster-opacity":1,"raster-fade-duration":0}});
   }
   /* `sky` is a style-level object in MapLibre, not a layer - a "sky" layer type is
      rejected by the style validator and takes the whole style down with it. */
@@ -6047,6 +6069,13 @@ async function installMaplibreProtocols(module){
       groundRes:reliefResolution(tileGroundResolution({z,x,y}),style),lighting:terrainLighting()});
     return {data:await encodeTileRgba(rgba)};
   });
+  module.addProtocol("cspelev",async(params,controller)=>{
+    const match=params.url.match(/^cspelev:\/\/s\/(\d+)\/(\d+)\/(\d+)\.png/);
+    if(!match) throw new Error("invalid elevation spectrum tile request");
+    const grid=await skirtedElevation(+match[1],+match[2],+match[3],controller.signal);
+    const rgba=elevationColours(grid,256*256,elevationRenderSettings(),new Uint8ClampedArray(256*256*4),256,258,259);
+    return {data:await encodeTileRgba(rgba)};
+  });
   module.addProtocol("cspwa",async(params,controller)=>{
     const match=params.url.match(/^cspwa:\/\/([^/]+)\/(\d+)\/(\d+)\/(\d+)\.png/);
     if(!match) throw new Error("invalid WA LiDAR tile request");
@@ -6099,7 +6128,7 @@ function loadMaplibreStyles(){
 }
 async function enterTerrain3d(){
   if(map3d||map3dLoading) return map3dLoading;
-  if($("#terStyle").value==="off"){ $("#terStyle").value="hs";syncTerrainLookControls();saveTerrainPrefs();applyTerrain(true) }
+  if($("#terStyle").value==="off"&&!elevationActive()){ $("#terStyle").value="hs";syncTerrainLookControls();saveTerrainPrefs();applyTerrain(true) }
   setTerrainModeUi(true,"Starting the GPU terrain viewer…");
   map3dWanted=true;
   map3dLoading=(async()=>{
@@ -6176,6 +6205,7 @@ function paint3dHillshade(light,opacity,style){
 }
 function apply3dLighting(){
   if(!map3d||!map3d.isStyleLoaded?.()) return false;
+  if(map3dBuiltKey!==map3dStructureKey()) return false;
   const light=terrainLighting(),opacity=terrainOpacity()/100,style=$("#terStyle").value;
   try{
     map3d.setTerrain({source:"dem",exaggeration:light.exaggeration});
@@ -8799,27 +8829,7 @@ const ElevLayer = L.GridLayer.extend({
     const settings=this.options.render;
     if(elev&&elevGpu.paint(cv,elev,settings)) return;
     const im=ctx.createImageData(w,h);
-    if(elev){
-      for(let i=0;i<w*h;i++){
-        const v=elev[i],o=i*4;
-        if(v===v){
-          let pr=0,pg=0,pb=0,pa=0;
-          const over=(r,g,b,a)=>{ pr=r*a+pr*(1-a);pg=g*a+pg*(1-a);pb=b*a+pb*(1-a);pa=a+pa*(1-a) };
-          if(settings.spectrumOn){
-            const d=(v-settings.level)/Math.max(1,settings.span),t=Math.min(1,Math.abs(d));
-            const smooth=t*t*(3-2*t),hi=d>=0,a=settings.spectrumAlpha*(.15+.85*t);
-            over((255+((hi?70:248)-255)*smooth)/255,
-                 (255+((hi?160:92)-255)*smooth)/255,
-                 (250+((hi?255:108)-250)*smooth)/255,a);
-          }
-          const band=settings.bandCompiled.rgba(v,"premultiplied"),ba=band[3]/255;
-          if(ba>0){ pr=band[0]/255+pr*(1-ba);pg=band[1]/255+pg*(1-ba);
-                    pb=band[2]/255+pb*(1-ba);pa=ba+pa*(1-ba) }
-          if(pa>0){ im.data[o]=Math.round(pr/pa*255);im.data[o+1]=Math.round(pg/pa*255);
-                    im.data[o+2]=Math.round(pb/pa*255);im.data[o+3]=Math.round(pa*255) }
-        }
-      }
-    }
+    if(elev) elevationColours(elev,w*h,settings,im.data);
     ctx.putImageData(im,0,0);
   },
   setRender:function(settings){                  // no refetch: repaint what is held
@@ -9052,6 +9062,32 @@ $("#researchReset").onclick=()=>{
 
 const ELEV_UNIT={m:1, ft:0.3048, yd:0.9144};
 let elevLayer=null;
+/* The spectrum and the below/above highlights for one tile of heights, as
+   straight (not premultiplied) RGBA. The 2D layer's CPU path and the 3D
+   drape both colour through here, so the two views cannot disagree. `stride`
+   and `offset` let the 3D path read the 256x256 interior of a skirted 258
+   grid in place. */
+function elevationColours(elev,count,settings,out,width=count,stride=width,offset=0){
+  for(let i=0;i<count;i++){
+    const v=elev[offset+Math.floor(i/width)*stride+(i%width)],o=i*4;
+    if(v!==v) continue;
+    let pr=0,pg=0,pb=0,pa=0;
+    const over=(r,g,b,a)=>{ pr=r*a+pr*(1-a);pg=g*a+pg*(1-a);pb=b*a+pb*(1-a);pa=a+pa*(1-a) };
+    if(settings.spectrumOn){
+      const d=(v-settings.level)/Math.max(1,settings.span),t=Math.min(1,Math.abs(d));
+      const smooth=t*t*(3-2*t),hi=d>=0,a=settings.spectrumAlpha*(.15+.85*t);
+      over((255+((hi?70:248)-255)*smooth)/255,
+           (255+((hi?160:92)-255)*smooth)/255,
+           (250+((hi?255:108)-250)*smooth)/255,a);
+    }
+    const band=settings.bandCompiled.rgba(v,"premultiplied"),ba=band[3]/255;
+    if(ba>0){ pr=band[0]/255+pr*(1-ba);pg=band[1]/255+pg*(1-ba);
+              pb=band[2]/255+pb*(1-ba);pa=ba+pa*(1-ba) }
+    if(pa>0){ out[o]=Math.round(pr/pa*255);out[o+1]=Math.round(pg/pa*255);
+              out[o+2]=Math.round(pb/pa*255);out[o+3]=Math.round(pa*255) }
+  }
+  return out;
+}
 function elevMetres(){ return (+$("#elevVal").value||0) * ELEV_UNIT[$("#elevUnit").value] }
 function elevSpanMetres(){ return Math.max(3,(+$("#elevSpan").value||300)*0.3048) }
 function inputPercent(id,fallback){
@@ -9152,6 +9188,7 @@ function applyElev(){
   const on=elevationActive();
   if(!on){
     if(elevLayer){ map.removeLayer(elevLayer); elevLayer=null }
+    sync3dSpectrum();
     return;
   }
   const render=elevationRenderSettings();
@@ -9166,6 +9203,21 @@ function applyElev(){
     elevLayer.setRender(render);
   }
   scheduleTerrainStatus();
+  sync3dSpectrum();
+}
+/* In 3D, a spectrum setting swaps the drape's tile URL (the cached heights
+   are recoloured, nothing is refetched); turning it on or off, or changing
+   what it sits on, rebuilds the style. */
+let elev3dTimer=0;
+function sync3dSpectrum(){
+  if(!map3d) return;
+  clearTimeout(elev3dTimer);
+  elev3dTimer=setTimeout(()=>{
+    if(!map3d) return;
+    if(map3dBuiltKey!==map3dStructureKey()){ refresh3dStyle();return }
+    const source=map3d.getSource?.("elevspec");
+    if(source?.setTiles) source.setTiles([`cspelev://s/{z}/{x}/{y}.png?r=${++elevSpectrumRevision}`]);
+  },140);
 }
 
 /* Numbers for what an aspect map only suggests. Everything here is measured
@@ -9441,7 +9493,7 @@ $("#q").addEventListener("blur",()=>setTimeout(acHide,120));
 document.addEventListener("click",e=>{ if(!e.target.closest("#iw")) acHide() });
 })();
 </script>
-<script src="markup.js?build=2026-10-10g"></script>
-<script src="ui-system.js?build=2026-10-10g"></script>
+<script src="markup.js?build=2026-10-10h"></script>
+<script src="ui-system.js?build=2026-10-10h"></script>
 </body>
 </html>

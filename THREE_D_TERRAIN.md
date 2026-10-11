@@ -136,3 +136,15 @@ vendored modules through the actual static route. Final manual QA should use a
 hardware-accelerated WebGL2 browser: open a familiar LiDAR-covered location, cycle
 all terrain styles in 3D, move every lighting slider, orbit/pitch/zoom, return to
 2D, and confirm the bearing and terrain selection survive the transition.
+
+## Elevation spectrum in 3D
+
+The elevation spectrum and the below/above highlights drape on the 3D surface as
+a raster layer (`cspelev://`), coloured from the same skirted elevation tiles as
+the mesh by `elevationColours()`, the function the 2D layer's CPU path also uses,
+so both views agree. It sits above any terrain style or WA DNR lidar drape; with
+the terrain layer off it stands alone over a lightened hillshade, and entering 3D
+no longer switches hillshade on when the spectrum is already showing. Changing a
+spectrum setting swaps the drape's tile URL (recolouring cached heights); turning
+the spectrum or terrain on or off rebuilds the style (`map3dStructureKey`).
+
