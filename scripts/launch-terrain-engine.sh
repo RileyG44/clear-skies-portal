@@ -49,6 +49,9 @@ while true; do
     sleep "$CHECK_INTERVAL"
     if curl --fail --silent --show-error --max-time "$CHECK_TIMEOUT" "http://127.0.0.1:${ENGINE_PORT}/api/health" >/dev/null 2>&1; then
       health_misses=0
+      if [[ "${CSP_MAINTAIN_TAILSCALE:-0}" == "1" && -f "$SCRIPT_DIR/share-terrain-engine.sh" ]]; then
+        CSP_NODE_BIN="$NODE_BIN" CSP_ENGINE_PORT="$ENGINE_PORT" /bin/zsh "$SCRIPT_DIR/share-terrain-engine.sh" --check || true
+      fi
     else
       ((health_misses++))
       if (( health_misses >= MAX_HEALTH_MISSES )); then

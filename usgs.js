@@ -1020,7 +1020,7 @@ async function fabric(bbox, opt){
   const res=Math.max((maxE-minE)/n,(maxN-minN)/n,1);
   const lo=Math.max(2*res,(opt.lo||50)), hi=Math.max(lo*1.5,(opt.hi||300));
 
-  const got=await sampleUTMGrid(minE,minN,res,n,zone);
+  const got=await (opt.sample||sampleUTMGrid)(minE,minN,res,n,zone);
   if(!got) return {ok:false, reason:"no 1 m coverage in this view", zone};
   const {grid,sources}=got;
   const valid=[...grid].filter(isFinite);
@@ -1065,6 +1065,7 @@ async function fabric(bbox, opt){
     if(deg>=20){ const m=Math.hypot(dx,dy); faceX.push(-dx/m); faceY.push(-dy/m) }
   }
   degs.sort((x,y)=>x-y);
+  if(!degs.length||!bv.length)return {ok:false,reason:"Not enough contiguous elevation samples to measure fabric",sources};
   const P=q=>+degs[Math.floor(q*(degs.length-1))].toFixed(1);
   const mA=across.reduce((x,v)=>x+v,0)/(across.length||1);
   const sA=Math.sqrt(across.reduce((x,v)=>x+(v-mA)**2,0)/(across.length||1))||1;
@@ -1088,6 +1089,6 @@ async function fabric(bbox, opt){
   };
 }
 
-module.exports = Object.assign(module.exports, { init, buildIndex, getIndex, findCells, cellOf, cellBounds, projectYear, scopeList, fabric, elevTile,
+module.exports = Object.assign(module.exports, { init, buildIndex, getIndex, findCells, cellOf, cellBounds, projectYear, scopeList, fabric, sampleUTMGrid, elevTile,
                    openCog, cogTile, fetchRange, renderTile, sampleGrid, utmGrid, encodePNG, renderRgba,
                    checkFresh, tileKey, tileUrl, s3head, S3_BASE });

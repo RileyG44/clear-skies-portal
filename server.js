@@ -1,7 +1,7 @@
 /* Clear Skies Portal — local server
    Serves the app and proxies the few upstreams that refuse CORS
    (WA DNR lidar portal, NASA FIRMS), with an on-disk cache so repeat
-   tiles are instant. Node >= 22.12, no runtime dependencies.          */
+   tiles are instant. Node >= 22.12; the DNR reader is bundled locally. */
 const http  = require("http");
 const https = require("https");
 const fs    = require("fs");
@@ -13,6 +13,7 @@ const zlib  = require("zlib");
 const usgs  = require("./usgs.js");
 const {TerrainPool,TerrainPoolError}=require("./terrain-pool.js");
 const researchAnalysis=require("./research-analysis.js");
+const {DnrStore}=require("./wadnr.js");
 
 const ROOT  = __dirname;
 const PORT  = Number(process.env.PORT || 8765);
@@ -32,6 +33,7 @@ self.addEventListener("activate",e=>e.waitUntil(caches.keys()
   .then(()=>self.registration.unregister())));`;
 fs.mkdirSync(CACHE, {recursive:true});
 usgs.init(CACHE);
+const dnr=new DnrStore(CACHE);
 fs.mkdirSync(AREAS, {recursive:true});
 
 const MIME = {".html":"text/html; charset=utf-8",".js":"text/javascript",".mjs":"text/javascript",".css":"text/css",
@@ -300,7 +302,7 @@ function memoryCacheGet(k,ttl){
   const value=cacheMemory.get(k);if(!value) return null;
   if(Date.now()-value.at>ttl){cacheMemory.delete(k);cacheMemoryBytes-=value.charge;return null}
   cacheMemory.delete(k);cacheMemory.set(k,value);
-  return {body:value.body,type:value.type,status:value.status};
+  return {body:value.body,type:value.type,status:value.status,sourceMeta:value.sourceMeta};
 }
 function cacheGet(k, ttl){
   const warm=memoryCacheGet(k,ttl);if(warm) return warm;
@@ -309,21 +311,21 @@ function cacheGet(k, ttl){
     const st = fs.statSync(f);
     if(Date.now() - st.mtimeMs > ttl) return null;
     const raw = JSON.parse(fs.readFileSync(f + ".meta", "utf8"));
-    const value={body: fs.readFileSync(f), type: raw.type, status: raw.status};memoryCachePut(k,value,st.mtimeMs);return value;
+    const value={body: fs.readFileSync(f), ...raw};memoryCachePut(k,value,st.mtimeMs);return value;
   }catch(e){ return null }
 }
-function cachePut(k, status, type, body){
+function cachePut(k, status, type, body,sourceMeta){
   /* RAM stays useful even when the disk has reached its safety reserve. The
      previous ordering disabled both caches exactly when storage pressure made
      memory hits most valuable. */
-  memoryCachePut(k,{status,type,body});
+  memoryCachePut(k,{status,type,body,sourceMeta});
   if(!cacheDiskStats((body&&body.length||0)+4096).writable) return true;
   const target=path.join(CACHE,k), suffix=`.tmp-${process.pid}-${crypto.randomBytes(4).toString("hex")}`;
   const bodyTmp=target+suffix, metaTmp=target+".meta"+suffix;
   const isNew=!fs.existsSync(target);
   try{
     fs.writeFileSync(bodyTmp, body);
-    fs.writeFileSync(metaTmp, JSON.stringify({status,type}));
+    fs.writeFileSync(metaTmp, JSON.stringify({status,type,sourceMeta}));
     fs.renameSync(bodyTmp,target);
     fs.renameSync(metaTmp,target+".meta");
     if(isNew) cacheCount++;
@@ -697,7 +699,11 @@ function send(res, status, type, body, extra={}){
   const origin=allowedOrigin(res.req);
   const headers={"Content-Type":type,"X-Content-Type-Options":"nosniff",...extra};
   const vary=[];
-  if(origin){ headers["Access-Control-Allow-Origin"]=origin; vary.push("Origin") }
+  if(origin){
+    headers["Access-Control-Allow-Origin"]=origin;
+    headers["Access-Control-Expose-Headers"]="X-Coverage, X-Cache, X-CSP-Error, X-Elevation-Source, X-Ground-Res, X-Sources, X-DNR-Status, X-DNR-Revision, X-DNR-Sources, Retry-After";
+    vary.push("Origin");
+  }
   if(COMPRESSIBLE.test(type)) vary.push("Accept-Encoding");
   if(vary.length) headers.Vary=vary.join(", ");
   const encoding=COMPRESSIBLE.test(type) && !headers["Content-Encoding"] && Buffer.isBuffer(body) && body.length>=COMPRESS_MIN && res.req && res.req.method!=="HEAD"
@@ -775,7 +781,10 @@ async function waQuery(bbox){
     headers:{"Content-Type":"application/x-www-form-urlencoded",
              "Content-Length":Buffer.byteLength(form),
              "User-Agent":"clear-skies-portal"}}, form));
-  try{ const j=JSON.parse(r.body.toString()); return Array.isArray(j)?j:[] }catch(e){ return [] }
+  if(r.status!==200)throw new Error(`DNR coverage HTTP ${r.status}`);
+  const j=JSON.parse(r.body.toString());
+  if(!Array.isArray(j))throw new Error("Invalid DNR coverage response");
+  return j;
 }
 const dsFingerprint = rows => rows.map(d=>({
   dataset_id:d.dataset_id, project_name:d.project_name,
@@ -1033,6 +1042,7 @@ const server = http.createServer(async (req,res)=>{
         "Access-Control-Max-Age":"86400"
       });
     const postOnly=new Set(["/api/terrain/analyze","/api/wadnr/query","/api/warm","/api/warm/stop",
+      "/api/wadnr/warm","/api/wadnr/warm/stop",
       "/api/usgs/check","/api/usgs/warm","/api/usgs/warm/stop"]);
     if(postOnly.has(p)&&req.method!=="POST")
       return send(res,405,"application/json",jsonBody({error:"method not allowed"}),{"Allow":"POST"});
@@ -1089,7 +1099,32 @@ const server = http.createServer(async (req,res)=>{
       });
     }
 
-    /* ---- WA DNR: which lidar projects cover this polygon? ---- */
+    /* Catalogue discovery is independent of the expensive file-intersection
+       query. Bounds identify candidates; only raster pixels prove coverage. */
+    if(p==="/api/wadnr/coverage"){
+      const bbox=validBbox((u.searchParams.get("bbox")||"").split(","));
+      if(!bbox)throw new HttpError(400,"bbox=w,s,e,n required");
+      try{
+        const value=await dnr.coverage(bbox);
+        return send(res,200,"application/json",Buffer.from(JSON.stringify(value)),{"Cache-Control":"no-store"});
+      }catch(error){
+        return send(res,503,"application/json",Buffer.from(JSON.stringify({state:"error",error:String(error.message||error)})),{"Cache-Control":"no-store","Retry-After":"30"});
+      }
+    }
+    if(p==="/api/wadnr/status")
+      return send(res,200,"application/json",Buffer.from(JSON.stringify(dnr.status())),{"Cache-Control":"no-store"});
+    if(p==="/api/wadnr/warm"){
+      const job=await readJson(req,{});
+      if(!validBbox(job.bbox)||job.bbox[1]<-85||job.bbox[3]>85)throw new HttpError(400,"bbox=w,s,e,n required");
+      try{return send(res,200,"application/json",jsonBody(dnr.startWarm(job.bbox)),{"Cache-Control":"no-store"});}
+      catch(error){throw new HttpError(400,String(error.message||error));}
+    }
+    if(p==="/api/wadnr/warm/status")
+      return send(res,200,"application/json",jsonBody({...dnr.warm,acquisition:dnr.status()}),{"Cache-Control":"no-store"});
+    if(p==="/api/wadnr/warm/stop")
+      return send(res,200,"application/json",jsonBody(dnr.stopWarm()),{"Cache-Control":"no-store"});
+
+    /* ---- WA DNR: which lidar files cover this polygon? ---- */
     if(p === "/api/wadnr/query" && req.method === "POST"){
       const geojson = (await readBody(req)).toString();
       let geometry;
@@ -1102,20 +1137,19 @@ const server = http.createServer(async (req,res)=>{
       if(hit) return send(res,200,hit.type,hit.body,{"X-Cache":"HIT"});
       let r=null;
       try{
-        r=await limitedUpstream(k,{host:WADNR_HOST,path:"/query",method:"POST",__timeout:10000,
+        r=await limitedUpstream(k,{host:WADNR_HOST,path:"/query",method:"POST",__timeout:30000,
           headers:{"Content-Type":"application/x-www-form-urlencoded",
                    "Content-Length":Buffer.byteLength(form),
                    "User-Agent":"clear-skies-portal"}},form,client.signal);
       }catch(error){ if(terrainAborted(error)) return }
-      if(r&&r.status===200&&r.body.length){
+      let valid=false;
+      try{valid=r?.status===200&&Array.isArray(JSON.parse(r.body));}catch{}
+      if(valid){
         cachePut(k,200,r.type,r.body);
         return send(res,200,r.type,r.body,{"X-Cache":"MISS"});
       }
-      /* WA coverage discovery is an optional refinement. A portal timeout is
-         equivalent to "no WA source right now" and must leave the national
-         terrain path usable rather than surfacing a noisy 500 in the map. */
-      return send(res,200,"application/json",Buffer.from("[]"),
-                  {"X-Cache":"ERROR","Cache-Control":"no-store"});
+      return send(res,503,"application/json",Buffer.from('{"state":"error","error":"DNR coverage lookup failed; coverage is unknown"}'),
+                  {"X-Cache":"ERROR","Cache-Control":"no-store","Retry-After":"30"});
     }
 
     /* ---- WA DNR: layer tree (project name -> raster layer ids) ---- */
@@ -1131,8 +1165,8 @@ const server = http.createServer(async (req,res)=>{
         cachePut(k,200,r.type,r.body);
         return send(res,200,r.type,r.body,{"X-Cache":"MISS"});
       }
-      return send(res,200,"application/json",Buffer.from('{"layers":[]}'),
-                  {"X-Cache":"ERROR","Cache-Control":"no-store"});
+      return send(res,503,"application/json",Buffer.from('{"state":"error","error":"DNR layer catalogue unavailable"}'),
+                  {"X-Cache":"ERROR","Cache-Control":"no-store","Retry-After":"30"});
     }
 
     /* ---- WA DNR: hillshade image for a bbox, restricted to given layers ---- */
@@ -1413,19 +1447,60 @@ const server = http.createServer(async (req,res)=>{
        look. Band-limiting is the point — without it the ridge-and-valley grain
        of ordinary dissected topography swamps whatever fine lineation is being
        asked about. */
-    if(p === "/api/usgs/fabric"){
+    if(p === "/api/usgs/fabric"||p==="/api/wadnr/fabric"){
       const bs=(u.searchParams.get("bbox")||"").split(",").map(Number);
       if(!validBbox(bs)||bs[2]-bs[0]>5||bs[3]-bs[1]>5)
         return send(res,400,"application/json",Buffer.from('{"error":"bbox=w,s,e,n in degrees"}'));
       const opt={ n:+u.searchParams.get("n")||0,
                   lo:+u.searchParams.get("lo")||0, hi:+u.searchParams.get("hi")||0 };
-      let out; try{ out=await terrainTask(`fabric:${key(JSON.stringify([bs,opt]))}`,"fabric",{bbox:bs,options:opt},
+      const action=p==="/api/wadnr/fabric"?"dnr-fabric":"fabric";
+      opt.strict=u.searchParams.get("strict")==="1";
+      let out; try{ out=await terrainTask(`${action}:${dnr.index.revision}:${key(JSON.stringify([bs,opt]))}`,action,{bbox:bs,options:opt},
         {priority:20,timeoutMs:45000,finishOnAbort:false},client.signal) }
       catch(e){
         if(terrainAborted(e)) return;
         return send(res,503,"application/json",Buffer.from(JSON.stringify({error:String(e.message||e)})));
       }
       return send(res,200,"application/json",Buffer.from(JSON.stringify(out)),{"Cache-Control":"no-store"});
+    }
+
+    /* Raw DNR metres, with transparent true no-data. Acquisition is detached
+       from tile rendering and has its own single-worker resource budget. */
+    if(p.startsWith("/api/wadnr/elev/")){
+      const m=p.match(/^\/api\/wadnr\/elev\/(\d+)\/(\d+)\/(\d+)\.png$/);
+      if(!m)throw new HttpError(400,"bad DNR elevation tile path");
+      const z=+m[1],x=+m[2],y=+m[3],limit=2**z;
+      if(z<0||z>18||x>=limit||y>=limit)throw new HttpError(400,"bad tile coordinates");
+      let state={state:"ready",revision:dnr.index.revision};
+      if(u.searchParams.get("acquire")!=="0"){
+        try{state=await dnr.ensureTile(z,x,y);}
+        catch(error){state={state:"error",error:String(error.message||error),revision:dnr.index.revision};}
+      }
+      const ck=key(`dnr-elevation-v1:${dnr.index.revision}:${z}/${x}/${y}`);
+      const hit=cacheGet(ck,TTL_TILE);
+      let out=hit?{png:hit.body,...hit.sourceMeta}:null;
+      if(!hit&&dnr.index.files.length){
+        try{out=await terrainTask(`dnr-elevation:${ck}`,"dnr-elevation",{z,x,y,size:256},{priority:50,timeoutMs:25000},client.signal);}
+        catch(error){
+          if(terrainAborted(error))return;
+          return send(res,503,"application/json",Buffer.from(JSON.stringify({state:"error",error:"DNR elevation tile could not be decoded"})),{"Cache-Control":"no-store","Retry-After":"5"});
+        }
+      }
+      const headers={"Cache-Control":"no-store","X-DNR-Status":state.state,
+        "X-DNR-Revision":String(dnr.index.revision),"X-Elevation-Source":"wadnr-dtm"};
+      if(!out){
+        if(state.state==="pending")
+          return send(res,202,"application/json",Buffer.from(JSON.stringify({...state,acquisition:dnr.status()})),{...headers,"X-Elevation-Source":"pending","Retry-After":"5"});
+        if(state.state==="error")
+          return send(res,503,"application/json",Buffer.from(JSON.stringify(state)),{...headers,"X-Elevation-Source":"unknown","Retry-After":"30"});
+        return send(res,200,"image/png",TRANSPARENT,{...headers,"X-Elevation-Source":"none","X-Coverage":"none"});
+      }
+      const sourceMeta={coverage:out.coverage,groundRes:out.groundRes,sources:out.sources};
+      if(!hit)cachePut(ck,200,"image/png",out.png,sourceMeta);
+      return send(res,200,"image/png",out.png,{...headers,
+        "X-Coverage":String(out.coverage),"X-Ground-Res":String(out.groundRes),
+        "X-DNR-Sources":encodeURIComponent(JSON.stringify(out.sources||[])),
+        "X-Cache":hit?"hit":"miss"});
     }
 
     /* Elevation, encoded rather than drawn, so a threshold can be moved in the
@@ -1610,7 +1685,7 @@ const server = http.createServer(async (req,res)=>{
         channel:CHANNEL, previewRef:CHANNEL==="preview"?PREVIEW_REF:undefined,
         /* What the page may ask of this engine. Without "wadnr-dpi" the page
            keeps to the 256 px WA DNR export every engine has handled. */
-        features:["wadnr-dpi","markup"]
+        features:["wadnr-dpi","wadnr-elevation","markup"],dnr:dnr.status()
       })),{"Cache-Control":"no-store"});
     }
 
@@ -1641,6 +1716,14 @@ const server = http.createServer(async (req,res)=>{
 });
 
 if(require.main===module){
+  let stopping=false;
+  const shutdown=()=>{
+    if(stopping)return;stopping=true;
+    server.close();
+    Promise.all([dnr.close(),terrainPool.close()]).finally(()=>process.exit(0));
+    setTimeout(()=>process.exit(0),5000).unref();
+  };
+  process.once("SIGTERM",shutdown);process.once("SIGINT",shutdown);
   server.listen(PORT,HOST,()=>{
     console.log(`Clear Skies Portal  ->  http://localhost:${PORT}`);
     console.log(`  serving ${ROOT}`);
@@ -1652,5 +1735,5 @@ module.exports={
   validateSnapshotImageUrl,
   resolveSnapshotImageRedirect,
   send,
-  closeServerResources:()=>terrainPool.close()
+  closeServerResources:()=>Promise.all([dnr.close(),terrainPool.close()])
 };

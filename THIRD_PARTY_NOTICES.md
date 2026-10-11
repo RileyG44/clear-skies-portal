@@ -13,4 +13,9 @@ The packages and exact versions are recorded in `package-lock.json`. Their upstr
 
 # Bundled data
 
+The terrain engine bundles GeoTIFF.js (MIT), proj4js (MIT), and yauzl (MIT)
+plus their dependencies in `vendor/dnr-runtime.cjs`. The exact dependency
+versions and complete license notices are generated alongside it in
+`vendor/dnr-runtime-licenses.txt`. This Node bundle is loaded only by DNR workers.
+
 - `nadi1-cordilleran.json` — derived from NADI-1, North American Deglacial Isochrones v1 (Dalton, A.S. et al. 2023, *Quaternary Science Reviews* 321, 108345, https://doi.org/10.1016/j.quascirev.2023.108345; data https://doi.org/10.5281/zenodo.8161764) — CC BY 4.0. Clipped to the Pacific Northwest and simplified; see `scripts/build-nadi1-cordilleran.py`.

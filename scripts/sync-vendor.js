@@ -4,6 +4,7 @@ const fs=require("fs");
 const path=require("path");
 
 const root=path.resolve(__dirname,"..");
+require("./build-dnr-runtime.js");
 const vendor=path.join(root,"vendor");
 fs.mkdirSync(vendor,{recursive:true});
 

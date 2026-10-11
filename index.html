@@ -991,8 +991,8 @@ body.pane-reordering,body.pane-reordering *{cursor:grabbing!important;user-selec
 }
 
 </style>
-<link rel="stylesheet" href="ui-theme.css?build=2026-10-11c">
-<link rel="stylesheet" href="ui-system.css?build=2026-10-11c">
+<link rel="stylesheet" href="ui-theme.css?build=2026-10-11d">
+<link rel="stylesheet" href="ui-system.css?build=2026-10-11d">
 <style>
 /* The redesign restructures the legacy DOM rather than replacing it, and the
    script that does so is the last thing on the page - so the browser paints the
@@ -1256,6 +1256,8 @@ html.csp-boot body{visibility:hidden}
               <option value="auto" selected>Best available</option>
               <option value="3dep">USGS 3DEP (national)</option>
               <option value="wadnr">WA DNR LiDAR</option>
+              <option value="wadnr-only">WA DNR elevation only (leave gaps blank)</option>
+              <option value="wadnr-hillshade">WA DNR published hillshade</option>
               <option value="usgs1m">USGS 1 m (offline-capable)</option>
             </select>
             <label for="terOp">Opacity <output id="terOpOut" for="terOp">70%</output></label>
@@ -1717,7 +1719,7 @@ html.csp-boot body{visibility:hidden}
   L.Renderer.prototype.onAdd=function(map){return onAdd.call(this,map||this._map)};
 })();
 </script>
-<script src="version.js?build=2026-10-11c"></script>
+<script src="version.js?build=2026-10-11d"></script>
 <script src="mosaic-core.js"></script>
 <script src="png-stream.js"></script>
 <script src="terrain-core.js"></script>
@@ -5656,6 +5658,41 @@ const api = p => API + p;
 
 let terLayer=null, terBase=null, PROXY=false, WA_LAYERS=null, waCover=null, terTimer=null;
 let probeToken=0, waLayersPromise=null, terrainQueryToken=0, serverHealth=null, serverProbeTimer=null;
+let waCoverageState="unknown",waCoverageError="",dnrStatus=null,dnrStatusTimer=null,dnrLastError="",dnrRenderedRevision=-1;
+const dnrElevationAvailable=()=>PROXY&&serverHealth?.features?.includes("wadnr-elevation");
+function elevationSourceOptions(){
+  const want=$("#terSrc").value,strict=want==="wadnr-only";
+  const dnr=dnrElevationAvailable()&&["auto","wadnr","wadnr-only"].includes(want);
+  if(dnr&&want!=="auto")scheduleDnrStatus();
+  return {nationalEndpoint:strict?null:"/api/elev/national",rawEndpoint:strict||want==="3dep"?null:"/api/usgs/elev",
+    dnrEndpoint:dnr?"/api/wadnr/elev":null,dnrAcquire:want!=="auto",
+    fallback:strict?null:"https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.png",
+    sourceKey:[want,dnr?`dnr:${dnrStatus?.revision||0}`:"",PROXY?API:"public"].join("|")};
+}
+function dnrAcquisitionText(){
+  const active=dnrStatus?.active;
+  if(!active)return dnrLastError?`DNR elevation unavailable · ${dnrLastError}`:"";
+  return active.state==="preparing"?`Preparing DNR elevation overviews · ${active.project}`:
+    `Downloading DNR elevation · ${active.project}${active.bytes?` · ${(active.bytes/1048576).toFixed(0)} MiB`:""}`;
+}
+function scheduleDnrStatus(){
+  if(dnrStatusTimer)return;
+  dnrStatusTimer=setTimeout(async()=>{
+    dnrStatusTimer=null;
+    if(!dnrElevationAvailable()||!["wadnr","wadnr-only"].includes($("#terSrc").value))return;
+    if($("#terStyle").value==="off"&&!elevationActive()&&!document.body.classList.contains("terrain-3d"))return;
+    try{
+      const response=await fetch(api("/api/wadnr/status"),{signal:AbortSignal.timeout(8000),cache:"no-store"});
+      if(response.ok){
+        const value=await response.json(),changed=value.revision!==dnrRenderedRevision;
+        dnrStatus=value;
+        if(changed){dnrRenderedRevision=value.revision;resetMeshSources();applyTerrain(true);if(elevationActive())applyElev();schedule3dStyle();}
+        scheduleTerrainStatus();paintTerrainInfo();
+      }
+    }catch{}
+    scheduleDnrStatus();
+  },5000);
+}
 let map3dLoading=null,map3dStyleTimer=null;
 
 /* Geometry and colour come from different tiles on purpose.
@@ -5686,15 +5723,20 @@ const DEM_ENGINE_MAX_ZOOM=17;
    running away (measured: see the commit that raised it). */
 const DEM_MESH_MAX_ZOOM=17;
 const public3dSources=new Map();
+const public3dDrapeSources=new Map();
 function public3dSourceText(){
-  if(PROXY)return `Mesh: national USGS 3DEP from the terrain engine, capped at zoom ${DEM_ENGINE_MAX_ZOOM}. The drape can contain finer elevation or published WA DNR hillshade. Mesh detail and drape detail are different.`;
-  const bounds=map3d?.getBounds(),ranks=new Set();
-  if(bounds)for(const entry of public3dSources.values()){
+  const bounds=map3d?.getBounds();
+  const collect=entries=>{
+    const ranks=new Set();
+    if(bounds)for(const entry of entries.values()){
     const n=2**entry.z,west=entry.x/n*360-180,east=(entry.x+1)/n*360-180;
     const north=Math.atan(Math.sinh(Math.PI*(1-2*entry.y/n)))*180/Math.PI,south=Math.atan(Math.sinh(Math.PI*(1-2*(entry.y+1)/n)))*180/Math.PI;
-    if(east>=bounds.getWest()&&west<=bounds.getEast()&&north>=bounds.getSouth()&&south<=bounds.getNorth())ranks.add(entry.rank);
-  }
-  return `Loaded 3D elevation tiles overlapping this view: ${ranks.size?[...ranks].sort((a,b)=>b-a).map(rank=>CSPPublicTerrain.SOURCES[rank].label).join(" + "):"waiting for data"}. Mesh sampling is capped at zoom ${DEM_MESH_MAX_ZOOM}; analytical drapes can request finer samples. This is loaded-tile provenance, not a survey coverage percentage.`;
+      if(east>=bounds.getWest()&&west<=bounds.getEast()&&north>=bounds.getSouth()&&south<=bounds.getNorth())
+        for(const rank of entry.ranks||[entry.rank])if(CSPPublicTerrain.SOURCES[rank])ranks.add(rank);
+    }
+    return ranks.size?[...ranks].sort((a,b)=>b-a).map(rank=>CSPPublicTerrain.SOURCES[rank].label).join(" + "):"waiting for data";
+  };
+  return `3D mesh: ${collect(public3dSources)}. Analytical drape: ${collect(public3dDrapeSources)}. Mesh sampling is capped at zoom ${PROXY?DEM_ENGINE_MAX_ZOOM:DEM_MESH_MAX_ZOOM}; loaded-tile sources are not survey coverage percentages.`;
 }
 function terrainDemTiles(){
   return [`cspmesh://dem/{z}/{x}/{y}.png?r=${meshRevision}`];
@@ -5714,11 +5756,16 @@ function terrainDemTiles(){
    tile simply stays. */
 const MESH_FAST_WAIT=300, MESH_FINE_MAX=256, MESH_OVERVIEW_MAX_ZOOM=15;
 const meshFine=new Map(), meshPending=new Map();
+const meshRanks=new Map();
 let meshRevision=0, meshRefineTimer=null, meshRefinedAt=0;
-function meshKey(z,x,y){ return `${z}/${x}/${y}` }
+function meshKey(z,x,y){ return `${$("#terSrc").value}:${PROXY?API:"public"}:${dnrStatus?.revision||0}:${z}/${x}/${y}` }
+function resetMeshSources(){
+  meshFine.clear();meshRanks.clear();public3dSources.clear();public3dDrapeSources.clear();
+  elevCacheClear();meshRevision++;map3dBuiltKey="";elevSpectrumRevision++;
+}
 function rememberMeshTile(key,buffer){
   meshFine.delete(key);meshFine.set(key,buffer);
-  while(meshFine.size>MESH_FINE_MAX) meshFine.delete(meshFine.keys().next().value);
+  while(meshFine.size>MESH_FINE_MAX){const oldest=meshFine.keys().next().value;meshFine.delete(oldest);meshRanks.delete(oldest);}
 }
 /* The 3DEP tile as Terrarium PNG bytes, or null where 3DEP has nothing. Not
    tied to MapLibre's abort: a tile scrolled away still finishes, so the swap
@@ -5729,11 +5776,17 @@ function meshFineTile(z,x,y){
   if(meshPending.has(key)) return meshPending.get(key);
   const job=(async()=>{
     if(PROXY){
+      if(dnrElevationAvailable()&&["auto","wadnr","wadnr-only"].includes($("#terSrc").value)){
+        const source=await engineElevationWithFallback({z,x,y},new AbortController().signal,true);
+        if(!source)return null;
+        meshRanks.set(key,source.ranks);
+        return terrariumPng(source.grid);
+      }
       for(let attempt=0;attempt<3;attempt++){
         const response=await fetch(api(`/api/elev/national/${z}/${x}/${y}.png`));
         if(response.ok){
           if(response.headers.get("X-Coverage")==="none") return null;
-          return response.arrayBuffer();
+          meshRanks.set(key,[2]);return response.arrayBuffer();
         }
         if(response.status!==503) return null;
         await new Promise(r=>setTimeout(r,Math.min(4000,(+response.headers.get("Retry-After")||2)*1000*(attempt+1))));
@@ -5743,7 +5796,7 @@ function meshFineTile(z,x,y){
     const url=CSPPublicTerrain.nationalUrl({z,x,y});
     const tile=await elevationRequests.request(url,signal=>fetchPublicElevation(url,signal),{priority:2,group:"national"});
     if(!tile) return null;
-    return terrariumPng(ElevationTileCore.resampleElevation(tile.grid,tile.width,tile.height,null,256,256));
+    meshRanks.set(key,[2]);return terrariumPng(ElevationTileCore.resampleElevation(tile.grid,tile.width,tile.height,null,256,256));
   })().then(buffer=>{ if(buffer) rememberMeshTile(key,buffer);return buffer },()=>null)
     .finally(()=>meshPending.delete(key));
   meshPending.set(key,job);
@@ -5792,20 +5845,25 @@ async function meshTile(z,x,y,signal){
   x=((x%limit)+limit)%limit;
   const key=meshKey(z,x,y);
   /* What each mesh tile is made of, for the source note in the 3D panel. */
-  const note=rank=>{ public3dSources.set(key,{z,x,y,rank});
+  const note=ranks=>{ public3dSources.set(key,{z,x,y,ranks:Array.isArray(ranks)?ranks:[ranks]});
     while(public3dSources.size>160) public3dSources.delete(public3dSources.keys().next().value);
     scheduleTerrainStatus() };
-  if(meshFine.has(key)){ note(2);return meshFine.get(key).slice(0) }
+  if(meshFine.has(key)){ note(meshRanks.get(key)||[2]);return meshFine.get(key).slice(0) }
   const fine=meshFineTile(z,x,y);
   const first=await Promise.race([fine,new Promise(r=>setTimeout(()=>r(undefined),MESH_FAST_WAIT))]);
-  if(first){ note(2);return first.slice(0) }
+  if(first){ note(meshRanks.get(key)||[2]);return first.slice(0) }
+  if($("#terSrc").value==="wadnr-only"){
+    const result=first===undefined?await fine:first;
+    if(result){note(meshRanks.get(key)||[5]);return result.slice(0);}
+    note([]);throw new Error("DNR does not cover this 3D mesh tile");
+  }
   if(first===null){
     /* 3DEP answered, with nothing: the overview is the best there is. */
     note(1);return meshOverviewTile(z,x,y,signal);
   }
   let overview;
   try{ overview=await meshOverviewTile(z,x,y,signal) }
-  catch(error){ if(signal?.aborted) throw error;const late=await fine;if(late){ note(2);return late.slice(0) }throw error }
+  catch(error){ if(signal?.aborted) throw error;const late=await fine;if(late){ note(meshRanks.get(key)||[2]);return late.slice(0) }throw error }
   note(1);fine.then(buffer=>{ if(buffer) scheduleMeshRefine() });
   return overview;
 }
@@ -5850,7 +5908,7 @@ function terrainSky(theme,light){
 }
 /* What the 3D style is made of. A slider can repaint in place; a change in
    this key (terrain style, terrain on/off, spectrum on/off) needs a new style. */
-function map3dStructureKey(){ return [$("#terStyle").value,elevationActive()?"elev":"-"].join("|") }
+function map3dStructureKey(){ return [$("#terStyle").value,$("#terSrc").value,elevationActive()?"elev":"-",PROXY?API:"public"].join("|") }
 let map3dBuiltKey="",elevSpectrumRevision=0;
 function terrainRasterStyle(){
   map3dBuiltKey=map3dStructureKey();
@@ -5866,7 +5924,7 @@ function terrainRasterStyle(){
     basemap:{type:"raster",tiles:[`${ESRI_CANVAS}/World_${theme==="dark"?"Dark":"Light"}_Gray_Base/MapServer/tile/{z}/{y}/{x}`],
       tileSize:256,maxzoom:16,attribution:"Esri, HERE, Garmin, © OpenStreetMap contributors"},
     dem:{type:"raster-dem",tiles:terrainDemTiles(),tileSize:256,maxzoom:PROXY?DEM_ENGINE_MAX_ZOOM:DEM_MESH_MAX_ZOOM,encoding:"terrarium",
-      attribution:"USGS 3DEP / AWS overview fallback (see terrain source status)"},
+      attribution:"WA DNR elevation / USGS 3DEP / AWS overview (see rendered source status)"},
     /* The same elevation again for the hillshade and relief tint. MapLibre
        warns that sharing the terrain source with a hillshade degrades
        rendering; the mesh tiles are cached in memory, so the second source
@@ -5957,8 +6015,8 @@ async function elevBitmap(z,x,y,signal){
   const wx=((x%limit)+limit)%limit;                   // but the world wraps in x
   if(!PROXY){
     const source=await publicElevationWithFallback({z,x:wx,y},signal);
-    public3dSources.set(`${z}/${wx}/${y}`,{z,x:wx,y,rank:source.rank});
-    while(public3dSources.size>160)public3dSources.delete(public3dSources.keys().next().value);
+    public3dDrapeSources.set(`${z}/${wx}/${y}`,{z,x:wx,y,rank:source.rank});
+    while(public3dDrapeSources.size>160)public3dDrapeSources.delete(public3dDrapeSources.keys().next().value);
     scheduleTerrainStatus();
     const image=new ImageData(256,256);
     for(let i=0;i<source.grid.length;i++){
@@ -5971,13 +6029,24 @@ async function elevBitmap(z,x,y,signal){
        canvas here was one more allocation per tile for Safari to count. */
     return createImageBitmap(image,{premultiplyAlpha:"none",colorSpaceConversion:"none"});
   }
+  if(dnrElevationAvailable()&&["auto","wadnr","wadnr-only"].includes($("#terSrc").value)){
+    const source=await engineElevationWithFallback({z,x:wx,y},signal,false);
+    if(!source)return null;
+    public3dDrapeSources.set(`${z}/${wx}/${y}`,{z,x:wx,y,ranks:source.ranks});
+    while(public3dDrapeSources.size>160)public3dDrapeSources.delete(public3dDrapeSources.keys().next().value);
+    scheduleTerrainStatus();
+    return imageBitmapFromBlob(new Blob([await terrariumPng(source.grid)],{type:"image/png"}));
+  }
   const url=elevTileUrl(z,wx,y);
   /* 503 here means the terrain pool is briefly saturated, not that the tile is
      missing — the server even sends Retry-After. Without a retry a pan through
      a cold area leaves permanent holes in the drape. */
   for(let attempt=0;;attempt++){
     const response=await fetch(url,{signal});
-    if(response.ok) return imageBitmapFromBlob(await response.blob());
+    if(response.ok){
+      public3dDrapeSources.set(`${z}/${wx}/${y}`,{z,x:wx,y,rank:response.headers.get("X-Elevation-Source")==="usgs-1m"?3:2});
+      return imageBitmapFromBlob(await response.blob());
+    }
     if(response.status!==503||attempt>=2) throw new Error(`elevation tile HTTP ${response.status}`);
     const wait=Math.min(4000,((+response.headers.get("Retry-After")||2)*1000)*(attempt+1));
     await new Promise(r=>setTimeout(r,wait));
@@ -6007,7 +6076,7 @@ function elevCachePut(k,v){
 function elevCacheClear(){ elevCache.clear() }
 
 async function skirtedElevation(z,x,y,signal){
-  const ck=`${z}/${x}/${y}`;
+  const ck=meshKey(z,x,y);
   const cached=elevCacheGet(ck);
   if(cached) return cached;
   const [centre,west,east,north,south]=await Promise.all([
@@ -6248,6 +6317,7 @@ function probeServer(){
     .then(j=>{ if(token===probeToken&&base===API){
       const wasConnected=PROXY;
       PROXY=!!(j&&j.ok); serverHealth=PROXY?j:null;
+      dnrStatus=j?.dnr||null;
       becameAvailable=PROXY&&!wasConnected;
       // A setup-link fragment is intentionally transient. Remember its target
       // only after it has answered a health check from this browser.
@@ -6257,7 +6327,7 @@ function probeServer(){
     .then(()=>{ if(token===probeToken){
       paintServerBox(); paintTerrainInfo(); scheduleServerProbe(PROXY?40000:15000);
       if(becameAvailable) document.dispatchEvent(new CustomEvent("csp:server",{detail:{online:true}}));
-      if(becameAvailable){ refreshTerrainCoverage(true);schedule3dStyle() }
+      if(becameAvailable){ refreshTerrainCoverage(true);applyElev();schedule3dStyle() }
     } return PROXY })
     .finally(()=>clearTimeout(timer));
 }
@@ -6288,29 +6358,17 @@ async function waLayerIndex(){
 /* which WA lidar projects cover the current view? */
 async function waCoverage(bounds=map.getBounds(),signal){
   if(!PROXY) return null;
-  const b=bounds;
-  const gj={type:"Polygon",coordinates:[[[b.getWest(),b.getSouth()],[b.getEast(),b.getSouth()],
-            [b.getEast(),b.getNorth()],[b.getWest(),b.getNorth()],[b.getWest(),b.getSouth()]]]};
-  const r=await fetch(api("/api/wadnr/query"),{method:"POST",body:JSON.stringify(gj),signal});
-  if(!r.ok) throw new Error(`Coverage HTTP ${r.status}`);
-  const rows=await r.json();
-  if(!Array.isArray(rows) || !rows.length) return null;
-  const idx=await waLayerIndex();
-  const projects={};
-  for(const d of rows){
-    const name=d.project_name||"", kind=d.dataset_name||"";
-    const yr=(/(\d{4})\s*$/.exec(name)||[])[1];
-    const p=(projects[name] ||= {name, year:yr?+yr:null, dtm:null, dsm:null, bytes:0});
-    p.bytes+=d.bytes||0;
-    const lid=idx[String(d.dataset_id)];
-    if(lid!=null){
-      if(/^DTM Hillshade$/i.test(kind)) p.dtm=lid;
-      if(/^DSM Hillshade$/i.test(kind)) p.dsm=lid;
+  const bbox=[bounds.getWest(),bounds.getSouth(),bounds.getEast(),bounds.getNorth()];
+  const r=await fetch(api("/api/wadnr/coverage?bbox="+bbox.join(",")),{signal});
+  if(!r.ok||r.headers.get("X-Cache")==="ERROR")throw new Error(`DNR catalogue lookup HTTP ${r.status}`);
+  const result=await r.json();
+  if(!Array.isArray(result.projects)||!["ready","stale"].includes(result.state))throw new Error("Invalid DNR coverage catalogue");
+  for(const project of result.projects)for(const id of [project.dtm,project.dsm])
+    if(id!=null){
+      const [w,s,e,n]=project.bounds,mx=lon=>lon*Math.PI/180*6378137,my=lat=>Math.log(Math.tan(Math.PI/4+lat*Math.PI/360))*6378137;
+      WA_EXTENT[id]=[mx(w),my(s),mx(e),my(n)];
     }
-  }
-  const list=Object.values(projects).filter(p=>p.dtm!=null||p.dsm!=null)
-                   .sort((a,b)=>(b.year||0)-(a.year||0)||a.name.localeCompare(b.name));
-  return list.length ? list : null;
+  return result;
 }
 
 const WA_MAX_PROJECTS = 14;   // a handful renders in ~1 s; the full 962 layers times out
@@ -6341,12 +6399,18 @@ function chooseTerrain(style){
   const waOK = closeEnough && PROXY && ids.length && WADNR_OK.has(style);
   const u1OK = closeEnough && PROXY; // coverage is decided per tile, never just at the map centre
   if(want==="3dep")  return {src:"3dep"};
-  if(want==="wadnr") return waOK ? {src:"wadnr", ids, projs:waProjects()} : {src:"3dep", forced:true,overview:!closeEnough};
-  if(want==="usgs1m") return u1OK ? {src:"usgs1m", cover:usgsCover} : {src:"3dep", forced:true,overview:!closeEnough};
-  /* Best available. The WA published DTM hillshade wins only for the matching
-     hillshade style. Analytic styles require an elevation raster: raw USGS 1 m
-     where present, otherwise the national 3DEP renderer. */
-  if(waOK) return {src:"wadnr", ids, projs:waProjects()};
+  if(want==="wadnr"||want==="wadnr-only"){
+    if(dnrElevationAvailable())return {src:"wadnr-elevation",strict:want==="wadnr-only",overview:!closeEnough};
+    return {src:"3dep",forced:true,reason:PROXY?"This terrain engine needs an update for DNR elevation.":"DNR elevation requires a connected terrain engine."};
+  }
+  if(want==="wadnr-hillshade"){
+    const reason=!PROXY?"Published DNR hillshade requires a connected terrain engine.":!closeEnough?"Published DNR hillshade starts at zoom 13.":!WADNR_OK.has(style)?"Published DNR hillshade supports only the Hillshade style. Select WA DNR LiDAR to derive this style from elevation.":waCoverageState==="error"?"DNR catalogue lookup failed; coverage is unknown.":"No published DNR hillshade candidate was found for this view.";
+    return waOK?{src:"wadnr",ids,projs:waProjects()}:{src:"3dep",forced:true,reason};
+  }
+  if(want==="usgs1m") return u1OK ? {src:"usgs1m", cover:usgsCover} : {src:"3dep", forced:true,overview:!closeEnough,reason:!PROXY?"Raw USGS elevation requires a connected terrain engine.":"Raw USGS elevation starts at zoom 13."};
+  // Best available uses cached DNR elevation, without starting large archive
+  // downloads merely because somebody pans over Washington.
+  if(dnrElevationAvailable())return {src:"wadnr-elevation",cachedOnly:true,overview:!closeEnough};
   if(u1OK) return {src:"usgs1m", cover:usgsCover};
   return {src:"3dep"};
 }
@@ -6480,7 +6544,8 @@ function formatSampleMeters(meters){
 }
 function sourceResolutionText(source){
   const native=source.nativeLabel||"Native spacing not reported";
-  return `Native: ${native} · displayed sampling: ${formatSampleMeters(source.sampleMeters)}`;
+  const corrections=[...new Set((source.surveys||[]).map(s=>s.verticalUnitBasis).filter(Boolean))];
+  return `Native: ${native} · displayed sampling: ${formatSampleMeters(source.sampleMeters)}${corrections.length?" · "+corrections.join("; "):""}`;
 }
 function renderTerrainSourcePanel(summaryArg,is3dArg,layerArg){
   const body=$("#terrainSourcePanelBody");if(!body)return;
@@ -6534,8 +6599,11 @@ function renderTerrainSourcePanel(summaryArg,is3dArg,layerArg){
   for(const item of visible){
     const row=rows.querySelector(`[data-id="${CSS.escape(item.id)}"]`);if(!row)continue;
     let basis=item.meta||"Source not reported";
-    if(item.id==="terrain"||item.id==="elevation-spectrum"||item.id==="elevation-bands")
-      basis=summary.sources.length?summary.sources.map(entry=>`${entry.label} (${sourceResolutionText(entry)})`).join(" · "):"Elevation source is still loading";
+    if(item.id==="terrain"||item.id==="elevation-spectrum"||item.id==="elevation-bands"){
+      const own=item.id==="terrain"?summary:CSPPublicTerrain.summarize(Object.values(elevLayer?._tiles||{}));
+      basis=own.sources.length?own.sources.map(entry=>`${entry.label} (${Math.round(entry.percent)}% · ${sourceResolutionText(entry)})`).join(" · "):"Elevation source is still loading";
+      if(item.id==="terrain"&&$("#terSrc").value.startsWith("wadnr"))basis=`Requested: ${$("#terSrc").selectedOptions[0].textContent} · Rendered: ${basis}`;
+    }
     if(item.id==="basemap")basis="Esri / OpenStreetMap reference basemap";
     const name=row.querySelector(".terrain-source-panel-name"),meta=row.querySelector(".terrain-source-panel-meta");
     if(name.textContent!==(item.name||"Unnamed layer")) name.textContent=item.name||"Unnamed layer";
@@ -6567,7 +6635,8 @@ function paintTerrainStatus(){
   terrainLoadStatus.dataset.state=loading?"loading":failed?"partial":"ready";
   const label=terrainSwap?"Preparing terrain":coverage<100?"Loading terrain":refining?"Refining terrain":failed?"Terrain available · some detail unavailable":"Terrain ready";
   const detail=sources.length?sources.map(source=>source.label).join(" + "):"Waiting for elevation";
-  const message=is3d?public3dSourceText():terrainSwapMessage||`${label} · ${coverage}% of loaded tile positions · ${detail}`;
+  const requested=$("#terSrc").value.startsWith("wadnr")?`Requested: ${$("#terSrc").selectedOptions[0].textContent} · `:"";
+  const message=is3d?public3dSourceText():terrainSwapMessage||`${requested}${label} · ${coverage}% of loaded tile positions · ${detail}${dnrAcquisitionText()?` · ${dnrAcquisitionText()}`:""}`;
   if(terrainLoadStatus.textContent!==message)terrainLoadStatus.textContent=message;
   const output=$("#terrainSourceSummary");
   output.innerHTML='<p><b>Currently displayed in 2D</b></p>'+sources.map(source=>`<p><a href="${source.url}" target="_blank" rel="noopener noreferrer">${esc(source.label)}</a> · ${source.percent<1?"<1":Math.round(source.percent)}% of rendered elevation samples<br><span class="terrain-resolution-note">${esc(sourceResolutionText(source))}</span></p>`).join("")+
@@ -6665,10 +6734,12 @@ function applyTerrain(force){
      re-fetched every terrain tile on screen. */
   const kind=pick.src==="wadnr"?"wadnr":"elevation";
   const rawOK=PROXY&&$("#terSrc").value!=="3dep";
-  const sourceSig=[kind,kind==="elevation"&&rawOK?"raw":"",$("#terSrc").value,PROXY?API||"same-origin":"overview"].join("|");
+  const sourceOptions=elevationSourceOptions();
+  const sourceSig=[kind,kind==="elevation"&&rawOK?"raw":"",sourceOptions.sourceKey].join("|");
   const sig=[style,sourceSig].join("|");
   if(!force&&sig===terSig&&terLayer){paintTerrainInfo(pick);return;}
-  if(!terrainSwap&&terLayer instanceof AnalyticTerrainLayer&&terLayer._cspSourceSig===sourceSig){
+  if(!terrainSwap&&terLayer instanceof AnalyticTerrainLayer&&kind==="elevation"){
+    terLayer.setSourceOptions(sourceOptions);terLayer._cspSourceSig=sourceSig;
     terrainSwapMessage="";scheduleTerrainStatus();
     terLayer.options.style=style;terLayer._cspStyle=style;
     terLayer._store.forEach(tile=>terLayer._paint(tile.cv,tile.elev,tile.coords));
@@ -6682,14 +6753,12 @@ function applyTerrain(force){
   }else if(rawOK){
     nextLayer=new AnalyticTerrainLayer({...TILE_OPTS,opacity:op,maxZoom:VIEW_MAX,maxNativeZoom:TERRAIN_OVERZOOM,rawNativeZoom:18,zIndex:440,
       className:`terrain-style-${style}`,style,sourceLabel:"usgs-1m",refineOverview:true,
-      nationalEndpoint:"/api/elev/national",rawEndpoint:"/api/usgs/elev",
-      fallback:"https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.png",fallbackNativeZoom:15,nationalNativeZoom:17,
-      attribution:"USGS 3DEP 1 m elevation + AWS Terrarium fallback"});
+      ...sourceOptions,fallbackNativeZoom:15,nationalNativeZoom:17,
+      attribution:"WA DNR elevation / USGS 3DEP / AWS overview (see rendered source status)"});
   }else{
     nextLayer=new AnalyticTerrainLayer({...TILE_OPTS,opacity:op,maxZoom:VIEW_MAX,maxNativeZoom:TERRAIN_OVERZOOM,rawNativeZoom:18,zIndex:440,
       className:`terrain-style-${style}`,style,sourceLabel:"national",refineOverview:true,
-      nationalEndpoint:"/api/elev/national",rawEndpoint:null,
-      fallback:"https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.png",fallbackNativeZoom:15,nationalNativeZoom:17,
+      ...sourceOptions,fallbackNativeZoom:15,nationalNativeZoom:17,
       attribution:"National elevation + AWS Terrarium fallback"});
   }
   if(nextBase) nextBase._cspStyle=style;
@@ -6719,7 +6788,12 @@ function paintTerrainInfo(pick){
   }
   pick = pick || chooseTerrain(style);
   let html="";
-  if(pick.src==="wadnr"){
+  if(pick.src==="wadnr-elevation"){
+    html+=`<div>Requested source: <b>${pick.cachedOnly?"Best available (cached DNR, USGS and overview)":"WA DNR bare-earth elevation"}</b>. All analytical styles derive from numeric elevation in metres; rendered sources and their percentages are shown above.</div>`;
+    if(!pick.cachedOnly)html+=`<div>${pick.strict?"DNR-only mode leaves unavailable pixels blank.":"USGS / global overview remains visible while DNR arrives and fills true gaps."} DNR archives download once in the background from zoom 13, within the engine's storage budget.</div>`;
+    if(pick.overview)html+=`<div>Zoom in to 13 or closer to acquire DNR elevation; cached DNR remains available.</div>`;
+    if(dnrAcquisitionText())html+=`<div>${esc(dnrAcquisitionText())}</div>`;
+  }else if(pick.src==="wadnr"){
     const ps=pick.projs||[], n=ps.length;
     const yrs=ps.map(p=>p.year).filter(Boolean);
     html += `<div class="row2"><span>Preferred source: <span class="src">WA DNR LiDAR</span></span>`
@@ -6736,7 +6810,7 @@ function paintTerrainInfo(pick){
               + `<span class="yr">${(x.size/1048576).toFixed(0)} MiB</span></div>`).join("");
   }else{
     html += `<div>USGS 3DEP elevation with global overview fallback. ${PROXY?"":"Elevation downloads directly from USGS and is decoded on your device."}`
-          + (pick.forced ? " Your selected survey is not available at this scale or for this style." : "")
+          + (pick.forced ? ` <b>Requested source could not be used:</b> ${esc(pick.reason||"The requested source is unavailable at this scale.")}` : "")
           + ` Native resolution varies by survey; use Rendered data &amp; source details to check what loaded. A private engine adds WA DNR published hillshades, raw archive access and offline downloads.</div>`;
 
   }
@@ -6753,7 +6827,10 @@ function paintTerrainInfo(pick){
             + `<span class="yr">${p.year||"?"}</span></div>`).join("")
           + (waCover.length>5 ? `<div style="margin-top:3px">+${waCover.length-5} more projects</div>` : "");
   }else if(PROXY && LOC){
-    html += `<div style="margin-top:7px">No WA DNR LiDAR index for this view (outside Washington, or not yet flown).</div>`;
+    html += waCoverageState==="error"
+      ? `<div style="margin-top:7px">DNR catalogue lookup failed; coverage is unknown. ${esc(waCoverageError)} A retry will run automatically.</div>`
+      : waCoverageState==="ready"?`<div style="margin-top:7px">No DNR catalogue candidates intersect this view.</div>`
+      : `<div style="margin-top:7px">DNR catalogue coverage is ${waCoverageState==="stale"?"using the last valid catalogue":"being checked"}.</div>`;
   }
   el.innerHTML=html;
 }
@@ -6797,7 +6874,7 @@ function paintTerrainLegend(style){
 }
 
 /* refresh coverage when the view or location changes, then re-pick the source */
-let coverBounds=null,coverageController=null;
+let coverBounds=null,coverageController=null,coverageRetryTimer=null;
 /* Federal 1 m coverage for the centre of the view. One 10 km cell answers for
    the whole screen at any usable zoom, so this is re-asked only when the centre
    leaves the cell that was last looked up. */
@@ -6814,28 +6891,34 @@ async function usgsCoverage(signal){
 }
 
 async function refreshTerrainCoverage(force){
+  clearTimeout(coverageRetryTimer);
   const token=++terrainQueryToken;coverageController?.abort();coverageController=null;
   if(!PROXY){waCover=null;usgsCover=null;coverBounds=null;applyTerrain();return;}
   const b=map.getBounds();
   if(!force&&coverBounds&&coverBounds.contains(b)){applyTerrain();return;}
   const controller=new AbortController();coverageController=controller;
-  const timeout=setTimeout(()=>controller.abort(),12000);
-  const queryBounds=b.pad(0.6);
+  const timeout=setTimeout(()=>controller.abort(),35000);
+  const queryBounds=b.pad(0.15);
+  waCoverageState="loading";
   try{
     const [wa,u1]=await Promise.all([waCoverage(queryBounds,controller.signal),usgsCoverage(controller.signal)]);
     if(token!==terrainQueryToken||controller.signal.aborted)return;
-    waCover=wa;usgsCover=u1;coverBounds=queryBounds;
+    waCover=wa?.projects||null;waCoverageState=wa?.state||"unknown";waCoverageError="";
+    dnrStatus=wa?.elevation||dnrStatus;usgsCover=u1;coverBounds=queryBounds;
+    if(waCoverageState==="stale"){coverBounds=null;coverageRetryTimer=setTimeout(()=>refreshTerrainCoverage(true),30000);}
   }catch(error){
     if(token!==terrainQueryToken)return;
     // A temporary provider failure is not evidence that a survey disappeared.
     coverBounds=null;
+    waCoverageState="error";waCoverageError=error.name==="AbortError"?"The lookup timed out.":String(error.message||error);
+    coverageRetryTimer=setTimeout(()=>refreshTerrainCoverage(true),30000);
   }finally{clearTimeout(timeout);}
   if(token!==terrainQueryToken)return;
   paintElevOut();applyTerrain();
 }
 
 $("#terStyle").onchange=()=>{ syncTerrainLookControls();saveTerrainPrefs(); applyTerrain(true);refreshTerrainCoverage(false);schedule3dStyle() };
-$("#terSrc").onchange=()=>{ saveTerrainPrefs(); applyTerrain(true);refreshTerrainCoverage(false);schedule3dStyle() };
+$("#terSrc").onchange=()=>{ saveTerrainPrefs();applyTerrain(true);applyElev();refreshTerrainCoverage(false);resetMeshSources();schedule3dStyle() };
 function terrainOpacity(){
   const value=+$("#terOp").value;
   return Math.max(0,Math.min(100,Number.isFinite(value)?value:70));
@@ -7860,6 +7943,11 @@ const TILE_BYTES = 18000;               // measured average across z13-z19
 function warmPreview(){
   const el=$("#terWarmMsg"); if(!el || warmPoll) return;
   if(!PROXY || $("#terStyle").value==="off") return;
+  if(["wadnr","wadnr-only"].includes($("#terSrc").value)&&dnrElevationAvailable()){
+    $("#terWarm").textContent="Download DNR elevation for this view";
+    el.textContent="Downloads official DNR bare-earth rasters and prepares numeric overviews. The first download can take several minutes; saved data is reused across terrain styles.";
+    return;
+  }
   const p=warmPlan();
   const size=fmtMB(p.tiles*TILE_BYTES);
   $("#terWarm").textContent=p.limited?"Download broad-area pass":"Download this view";
@@ -7911,6 +7999,26 @@ $("#terWarm").onclick=async ()=>{
   if(!PROXY){ msg.innerHTML='<span class="warn">Needs the local server (server.js).</span>'; return }
   const style=$("#terStyle").value;
   if(style==="off"){ msg.textContent="Pick a terrain layer first."; return }
+  if(["wadnr","wadnr-only"].includes($("#terSrc").value)&&dnrElevationAvailable()){
+    const b=map.getBounds(),bbox=[b.getWest(),b.getSouth(),b.getEast(),b.getNorth()];
+    try{
+      const r=await fetch(api("/api/wadnr/warm"),{method:"POST",body:JSON.stringify({bbox})});
+      const value=await r.json();if(!r.ok)throw new Error(value.error||`HTTP ${r.status}`);
+    }catch(error){msg.textContent=`Could not start DNR download: ${error.message}`;return;}
+    clearInterval(warmPoll);warmStatusPath="/api/wadnr/warm/status";
+    warmPoll=setInterval(async()=>{
+      try{
+        const r=await fetch(api(warmStatusPath));if(!r.ok)throw new Error(`HTTP ${r.status}`);
+        const s=await r.json();dnrStatus=s.acquisition;
+        msg.textContent=s.running?`DNR: ${s.done}/${s.total} areas complete. ${dnrAcquisitionText()}`:
+          s.error?`DNR download could not complete: ${s.error}`:
+          s.stop?"DNR view download stopped; the current raster finishes in the background.":
+          `DNR view checked: ${s.done} areas, ${fmtMB(s.bytes)} added. Actual DNR pixels are labeled in Layers; uncovered gaps keep their displayed source.`;
+        if(!s.running){clearInterval(warmPoll);warmPoll=null;applyTerrain(true);if(elevationActive())applyElev();}
+      }catch(error){clearInterval(warmPoll);warmPoll=null;msg.textContent=`DNR download status unavailable: ${error.message}`;}
+    },2000);
+    msg.textContent="Starting official DNR elevation download…";return;
+  }
   const plan=warmPlan(), b=plan.b, z0=plan.z0, z1=plan.z1, est=plan.tiles;
   if(est>WARM_MAX){
     msg.innerHTML=`<span class="warn">This viewport is still too large to cache safely.</span> `
@@ -8684,7 +8792,7 @@ function loadTerrainPrefs(){
    tiles. A bounded queue prevents three layers from saturating the engine. */
 /* The engine runs a render per core (two per worker while they wait on S3),
    so the page keeps it fed: six raw 1 m renders in flight instead of two. */
-const elevationRequests=new CSPTilePipeline.RequestPool({concurrency:12,groupLimits:{detail:6,national:6,overview:6,sharp:6},idleGroups:["sharp"]});
+const elevationRequests=new CSPTilePipeline.RequestPool({concurrency:14,groupLimits:{detail:6,national:6,overview:6,sharp:6,dnr:2},idleGroups:["sharp"]});
 function sourceSampleMeters(coords){
   const count=2**coords.z,latitude=Math.atan(Math.sinh(Math.PI*(1-2*(coords.y+.5)/count)));
   return 156543.03392804097*Math.cos(latitude)/count;
@@ -8742,6 +8850,9 @@ async function publicElevationWithFallback(coords,signal){
       return {...tile,grid:ElevationTileCore.resampleElevation(tile.grid,tile.width,tile.height,crop,256,256),rank:2};
     }
   }catch(error){if(signal?.aborted)throw error}
+  return overviewElevation(coords,signal);
+}
+async function overviewElevation(coords,signal){
   const z=Math.min(coords.z,15),factor=2**(coords.z-z),x=Math.floor(coords.x/factor),y=Math.floor(coords.y/factor);
   const url=`https://s3.amazonaws.com/elevation-tiles-prod/terrarium/${z}/${x}/${y}.png`;
   const tile=await elevationRequests.request(url,s=>fetchElevation(url,s),{signal,priority:1,group:"overview"});
@@ -8750,6 +8861,8 @@ async function publicElevationWithFallback(coords,signal){
   return {...tile,grid:ElevationTileCore.resampleElevation(tile.grid,tile.width,tile.height,crop,256,256),rank:1};
 }
 async function fetchElevation(url,signal){
+  const isDnr=url.includes("/api/wadnr/elev/");
+  let pendingChecks=0;
   for(let attempt=0;attempt<3;attempt++){
     if(signal.aborted) throw new DOMException("Aborted","AbortError");
     const controller=new AbortController(),abort=()=>controller.abort();
@@ -8757,7 +8870,18 @@ async function fetchElevation(url,signal){
     const timeout=setTimeout(abort,10000);
     try{
       const response=await fetch(url,{signal:controller.signal});
-      if(!response.ok||response.headers.get("X-CSP-Error")) throw new Error(`Elevation HTTP ${response.status}`);
+      if(isDnr&&response.status===202){
+        const value=await response.json();dnrStatus=value.acquisition||dnrStatus;
+        if(typeof scheduleTerrainStatus==="function")scheduleTerrainStatus();
+        clearTimeout(timeout);
+        if(++pendingChecks>60)return null;
+        await waitElevationRetry(5000,signal);attempt--;continue;
+      }
+      if(!response.ok||response.headers.get("X-CSP-Error")){
+        if(isDnr){try{const value=await response.json();dnrLastError=value.error||`DNR elevation HTTP ${response.status}`;}catch{}scheduleTerrainStatus();}
+        throw new Error(`Elevation HTTP ${response.status}`);
+      }
+      if(isDnr)dnrLastError="";
       if(response.headers.get("X-Coverage")==="none") return null;
       const blob=await response.blob();
       const bitmap=await createImageBitmap(blob,{colorSpaceConversion:"none",premultiplyAlpha:"none"});
@@ -8768,7 +8892,9 @@ async function fetchElevation(url,signal){
         const context=canvas.getContext("2d",{willReadFrequently:true});
         context.clearRect(0,0,canvas.width,canvas.height);context.drawImage(bitmap,0,0);
         const grid=ElevationTileCore.decodeTerrarium(context.getImageData(0,0,bitmap.width,bitmap.height).data,bitmap.width,bitmap.height);
-        return ElevationTileCore.hasElevation(grid)?{grid,width:bitmap.width,height:bitmap.height}:null;
+        let surveys=[];
+        if(isDnr)try{surveys=JSON.parse(decodeURIComponent(response.headers.get("X-DNR-Sources")||"[]"));}catch{}
+        return ElevationTileCore.hasElevation(grid)?{grid,width:bitmap.width,height:bitmap.height,surveys}:null;
       }finally{bitmap.close();}
     }catch(error){
       if(signal.aborted) throw new DOMException("Aborted","AbortError");
@@ -8781,6 +8907,45 @@ async function fetchElevation(url,signal){
       if(signal.aborted)abort();
     });
   }
+}
+function waitElevationRetry(ms,signal){
+  return new Promise((resolve,reject)=>{
+    const abort=()=>{clearTimeout(timer);reject(new DOMException("Aborted","AbortError"));};
+    const timer=setTimeout(()=>{signal.removeEventListener("abort",abort);resolve();},ms);
+    signal.addEventListener("abort",abort,{once:true});if(signal.aborted)abort();
+  });
+}
+async function engineElevationWithFallback(coords,signal,mesh=false){
+  const strict=$("#terSrc").value==="wadnr-only",requests=[];
+  if(["wadnr","wadnr-only"].includes($("#terSrc").value)&&coords.z>=13){
+    const url=api(`/api/wadnr/elev/${coords.z}/${coords.x}/${coords.y}.png?acquire=1`);
+    elevationRequests.request(url,async s=>{
+      const response=await fetch(url,{signal:s});
+      if(response.status===202){const value=await response.json();dnrStatus=value.acquisition||dnrStatus;}
+      else await response.body?.cancel();
+      scheduleDnrStatus();return null;
+    },{signal,priority:1,group:"dnr"}).catch(()=>{});
+  }
+  const request=(url,rank,group)=>elevationRequests.request(api(url),s=>fetchElevation(api(url),s),{signal,priority:rank===5?2:rank,group})
+    .then(source=>source?{source,rank}:null).catch(error=>{if(signal.aborted)throw error;return null;});
+  requests.push(request(`/api/wadnr/elev/${coords.z}/${coords.x}/${coords.y}.png?acquire=0&revision=${dnrStatus?.revision||0}`,5,"dnr"));
+  if(!strict){
+    requests.push(request(`/api/elev/national/${coords.z}/${coords.x}/${coords.y}.png`,2,"national"));
+    if(!mesh&&coords.z>=13)requests.push(request(`/api/usgs/elev/${coords.z}/${coords.x}/${coords.y}.png`,3,"detail"));
+    requests.push(overviewElevation(coords,signal).then(source=>({source,rank:1})).catch(error=>{if(signal.aborted)throw error;return null;}));
+  }
+  const results=await Promise.all(requests),progress=new CSPTilePipeline.ProgressiveGrid(256*256);
+  for(const result of results)if(result){
+    const source=result.source;
+    progress.accept(source.width===256&&source.height===256?source.grid:
+      ElevationTileCore.resampleElevation(source.grid,source.width,source.height,null,256,256),result.rank);
+  }
+  if(!progress.valid){
+    if(strict)return null;
+    return null;
+  }
+  if(strict&&mesh&&progress.valid<progress.grid.length)return null;
+  return {grid:progress.grid,ranks:[5,3,2,1].filter(rank=>progress.counts[rank]>0)};
 }
 const ElevLayer = L.GridLayer.extend({
   initialize:function(opts){ L.setOptions(this,opts); this._store=new Map(); this._pending=new Map();
@@ -8810,17 +8975,28 @@ const ElevLayer = L.GridLayer.extend({
     const coords=this._source(display),css=this.getTileSize(),dz=this._cspDz||0;
     const size=L.point(css.x*2**dz,css.y*2**dz),cv=document.createElement("canvas"),key=this._k(coords);
     cv.width=size.x;cv.height=size.y;cv._cspCoords={...coords};cv.dataset.cspZ=String(coords.z);
-    cv._cspRefining=true;cv._cspHasContent=false;
+    this._loadTile(coords,cv,done);
+    return cv;
+  },
+  _loadTile:function(coords,cv,done){
+    const size={x:cv.width,y:cv.height},key=this._k(coords),dz=this._cspDz||0;
+    this._pending.get(key)?.controller.abort();
+    cv._cspRefining=true;
+    if(!this.options.fallback){
+      cv.getContext("2d").clearRect(0,0,cv.width,cv.height);
+      cv._cspHasContent=false;cv._cspSourceCounts={};this._store.delete(key);
+    }
     const controller=new AbortController(),pending={controller,canvas:cv};this._pending.set(key,pending);
     const progress=new CSPTilePipeline.ProgressiveGrid(size.x*size.y);
     let settled=false;
-    const accept=(values,rank,label,sampleMeters,sharper=false)=>{
+    const accept=(values,rank,label,sampleMeters,sharper=false,surveys=[])=>{
       if(controller.signal.aborted||!progress.accept(values,rank,sharper))return;
       cv._cspHasContent=true;
       cv.dataset.cspQuality=String(Math.max(+cv.dataset.cspQuality||0,rank));
-      cv._cspSourceCounts={1:progress.counts[1],2:progress.counts[2],3:progress.counts[3]};
+      cv._cspSourceCounts={1:progress.counts[1],2:progress.counts[2],3:progress.counts[3],5:progress.counts[5]};
+      if(surveys.length){cv._cspSurveySources||={};cv._cspSurveySources[rank]=surveys;}
       cv._cspSourceResolution=cv._cspSourceResolution||{};if(Number.isFinite(sampleMeters))cv._cspSourceResolution[rank]=sampleMeters;
-      cv.dataset.cspElevationSource=[3,2,1].filter(rank=>progress.counts[rank]>0).map(rank=>CSPPublicTerrain.SOURCES[rank].label).join(" + ");
+      cv.dataset.cspElevationSource=[5,3,2,1].filter(rank=>progress.counts[rank]>0).map(rank=>CSPPublicTerrain.SOURCES[rank].label).join(" + ");
       this._store.set(key,{cv,elev:progress.grid,coords:{...coords}});
       this._paint(cv,progress.grid,coords);
       if(!settled){settled=true;done(null,cv);}
@@ -8830,13 +9006,13 @@ const ElevLayer = L.GridLayer.extend({
       const scale=2**(coords.z-native),x=Math.floor(coords.x/scale),y=Math.floor(coords.y/scale);
       const url=typeof template==="function"?template({z:native,x,y}):template.replace("{z}",native).replace("{x}",x).replace("{y}",y);
       const source=await elevationRequests.request(url,signal=>typeof template==="function"?fetchPublicElevation(url,signal):fetchElevation(url,signal),
-        {signal:controller.signal,priority:sharper?0:rank,group:sharper?"sharp":rank===3?"detail":rank===2?"national":"overview"});
+        {signal:controller.signal,priority:sharper?0:rank===5?2:rank,group:sharper?"sharp":rank===5?"dnr":rank===3?"detail":rank===2?"national":"overview"});
       if(!source||controller.signal.aborted)return;
       const crop=scale>1?{x:(coords.x%scale)*source.width/scale,y:(coords.y%scale)*source.height/scale,width:source.width/scale,height:source.height/scale}:null;
       const values=!crop&&source.width===size.x&&source.height===size.y?source.grid:
         ElevationTileCore.resampleElevation(source.grid,source.width,source.height,crop,size.x,size.y,{smooth:true});
       const sampleMeters=typeof sourceSampleMeters==="function"?sourceSampleMeters({z:native,x,y}):null;
-      accept(values,rank,label,sampleMeters,sharper);
+      accept(values,rank,label,sampleMeters,sharper,source.surveys||[]);
     };
     /* On high-density screens this tile holds the next zoom's data (dz), which
        is four times the tiles - and four times the raw-LiDAR renders on the
@@ -8846,11 +9022,13 @@ const ElevLayer = L.GridLayer.extend({
        and the next zoom's data follows at low priority, replacing it in
        place. Raw 1 m LiDAR starts at on-screen z13, as it always has. */
     const shown=coords.z-dz,sources=[];
+    if(PROXY&&this.options.dnrEndpoint)
+      sources.push([api(`${this.options.dnrEndpoint}/{z}/{x}/{y}.png?acquire=${this.options.dnrAcquire&&shown>=13?"1":"0"}&revision=${dnrStatus?.revision||0}`),18,5,"WA DNR elevation"]);
     if(PROXY&&this.options.rawEndpoint&&shown>=13)
       sources.push([api(`${this.options.rawEndpoint}/{z}/{x}/{y}.png`),this.options.rawNativeZoom??coords.z,3,"USGS 1 m"]);
-    if(PROXY&&(shown>=13||this.options.refineOverview))
+    if(PROXY&&this.options.nationalEndpoint&&(shown>=13||this.options.refineOverview))
       sources.push([api(`${this.options.nationalEndpoint}/{z}/{x}/{y}.png`),this.options.nationalNativeZoom??coords.z,2,"National elevation"]);
-    if(!PROXY)
+    if(!PROXY&&this.options.fallback)
       sources.push([CSPPublicTerrain.nationalUrl,18,2,"USGS 3DEP elevation"]);
     if(this.options.fallback)
       sources.push([this.options.fallback,this.options.fallbackNativeZoom??coords.z,1,"Overview elevation"]);
@@ -8868,7 +9046,16 @@ const ElevLayer = L.GridLayer.extend({
       if(this._pending.get(key)===pending)this._pending.delete(key);
       this.fire("tilerefine",{tile:cv,coords});
     });
-    return cv;
+  },
+  setSourceOptions:function(options){
+    if(this.options.sourceKey===options.sourceKey)return;
+    Object.assign(this.options,options);
+    // Keep existing canvases visible until their first replacement arrives.
+    // Repaint in place; source changes do not rebuild the Leaflet tile grid.
+    for(const tile of Object.values(this._tiles||{})){
+      if(tile.current===false||!tile.el?.width)continue;
+      this._loadTile(this._source(tile.coords),tile.el,()=>{});
+    }
   },
   _paint:function(cv, elev){
     const ctx=cv.getContext("2d"), w=cv.width, h=cv.height;
@@ -8955,8 +9142,7 @@ function waitForElevationLayer(layer,timeout=15000){
 }
 async function researchElevationSource(){
   if(elevLayer&&elevLayer._store.size){ await waitForElevationLayer(elevLayer,4500);return {layer:elevLayer,temporary:false} }
-  const layer=new ElevLayer({nationalEndpoint:"/api/elev/national",rawEndpoint:"/api/usgs/elev",
-    fallback:"https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.png",fallbackNativeZoom:15,nationalNativeZoom:17,
+  const layer=new ElevLayer({...elevationSourceOptions(),fallbackNativeZoom:15,nationalNativeZoom:17,
     render:elevationRenderSettings(),maxZoom:VIEW_MAX,maxNativeZoom:17,zIndex:1,opacity:0,keepBuffer:0,
     updateWhenIdle:true,updateWhenZooming:false,maxRetries:0});
   layer.addTo(map);await waitForElevationLayer(layer);return {layer,temporary:true};
@@ -9239,13 +9425,13 @@ function applyElev(){
   }
   const render=elevationRenderSettings();
   if(!elevLayer){
-    elevLayer=new ElevLayer({nationalEndpoint:"/api/elev/national",rawEndpoint:"/api/usgs/elev",
-                             fallback:"https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.png",
+    elevLayer=new ElevLayer({...elevationSourceOptions(),
                              fallbackNativeZoom:15,nationalNativeZoom:17,render,maxZoom:VIEW_MAX,maxNativeZoom:TERRAIN_OVERZOOM,rawNativeZoom:18,
                              zIndex:450,keepBuffer:1,updateWhenIdle:true,updateWhenZooming:false,maxRetries:0});
     elevLayer.on("tileload tilerefine tileerror load",()=>{scheduleTerrainStatus();paintElevOut()});
     elevLayer.addTo(map);
   }else{
+    elevLayer.setSourceOptions(elevationSourceOptions());
     elevLayer.setRender(render);
   }
   scheduleTerrainStatus();
@@ -9279,7 +9465,9 @@ async function runFabric(){
   el.innerHTML='<span class="spin"></span> measuring\u2026';
   let j;
   try{
-    const r=await fetch(api(`/api/usgs/fabric?bbox=${b.getWest().toFixed(5)},${b.getSouth().toFixed(5)},${b.getEast().toFixed(5)},${b.getNorth().toFixed(5)}&lo=${lo}&hi=${hi}`));
+    const want=$("#terSrc").value,dnr=dnrElevationAvailable()&&["auto","wadnr","wadnr-only"].includes(want);
+    const path=dnr?"/api/wadnr/fabric":"/api/usgs/fabric";
+    const r=await fetch(api(`${path}?bbox=${b.getWest().toFixed(5)},${b.getSouth().toFixed(5)},${b.getEast().toFixed(5)},${b.getNorth().toFixed(5)}&lo=${lo}&hi=${hi}&strict=${want==="wadnr-only"?1:0}`));
     j=await r.json();
   }catch(e){ el.innerHTML='<span class="warn">Measurement failed.</span>'; return }
   if(!j.ok){ el.innerHTML=`<span class="warn">${j.reason||"no result"}</span>`; return }
@@ -9542,7 +9730,7 @@ $("#q").addEventListener("blur",()=>setTimeout(acHide,120));
 document.addEventListener("click",e=>{ if(!e.target.closest("#iw")) acHide() });
 })();
 </script>
-<script src="markup.js?build=2026-10-11c"></script>
-<script src="ui-system.js?build=2026-10-11c"></script>
+<script src="markup.js?build=2026-10-11d"></script>
+<script src="ui-system.js?build=2026-10-11d"></script>
 </body>
 </html>

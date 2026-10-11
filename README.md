@@ -95,7 +95,7 @@ engine running on your Mac. On macOS, run this once from the checkout:
 
 ```
 scripts/install-mac-service.sh
-tailscale serve --bg 8765
+scripts/share-terrain-engine.sh
 ```
 
 The installer keeps the engine alive as your user, restarts it after a failed
@@ -103,6 +103,52 @@ health check, stores its runtime and cache under `~/Library/Application Support/
 ClearSkiesPortal`, and binds it only to `127.0.0.1`. Tailscale Serve is therefore
 the sole network bridge and remains tailnet-authenticated; do not use Funnel for
 this private analysis service. Check the bridge with `tailscale serve status`.
+
+The sharing script adds only Clear Skies API routes on HTTPS port 443. It
+preserves the root page and other services, so T3 Code can share the same Mac
+address. Replacing the root Serve target previously made Clear Skies health
+requests return another application's HTML even though the local engine was
+healthy. The API routes avoid that collision.
+On a shared Mac, setting `CSP_MAINTAIN_TAILSCALE=1` in the maintained service's
+environment also checks those routes during normal health checks and restores
+missing API handlers without changing other applications' handlers.
+
+### WA DNR elevation
+
+**WA DNR LiDAR** downloads official bare-earth DTM files on demand through the
+DNR portal's normal download workflow. Once prepared, the same numeric
+elevation supports hillshade, multidirectional lighting, slope, aspect,
+northness, tint, contours, elevation spectrum/bands, surface analysis, landform
+measurements, and the 3D mesh/drape. **WA DNR elevation only** leaves missing
+analytical pixels blank; 3D meshes require complete DNR tiles. **WA DNR
+published hillshade** retains the original fixed-light rendered image.
+
+Automatic source selection uses already cached DNR data and starts no archive
+downloads. Explicit DNR selection acquires small areas in a separate worker;
+USGS/global pixels can display during preparation and remain individually
+labeled. Layers reports actual contributing pixels, survey/dataset identifiers,
+native spacing, and display sampling. Selecting DNR is not proof of DNR coverage.
+Download this view acquires DNR rasters when DNR is explicitly selected.
+
+The first download can take minutes because DNR provides ZIP archives containing
+large TIFFs. A single ingestion worker streams downloads to disk and builds
+small numeric overviews; map requests use bounded windows and share cached
+requests. The default DNR cache budget is 4 GiB, the per-archive limit 2 GiB, and
+the normal 8 GiB free-disk reserve remains enforced. Configure
+`CSP_DNR_CACHE_GB` and `CSP_DNR_ARCHIVE_GB` if needed. View downloads are limited
+to 32 acquisition cells; zoom in if the view exceeds that bound. Completed
+rasters persist across restarts and styles. Existing imagery, markup, and USGS
+caches remain intact.
+
+Discovery now uses a cached official project catalogue; bounds identify
+candidates. The expensive file-intersection query runs only for acquisition.
+Provider errors return errors, never a successful empty coverage result.
+Horizontal and vertical units are read separately; unknown units or unsupported
+raster geometry produce an explicit error. Dataset 1543 (Columbia Valley Fema
+North 2020) has a conflicting TIFF metre tag: DNR's official metadata dataset
+1547 contains the survey report and WGS QA report specifying US survey feet.
+That documented correction is applied before overview generation and numeric
+sampling and is included in rendered provenance.
 
 On the hosted page, paste the shown Tailscale HTTPS URL in *Secure terrain engine*
 and choose **Connect**. **Copy private setup link** gives another signed-in

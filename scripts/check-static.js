@@ -383,7 +383,7 @@ assert(index.includes('id="srvCopyLink"'),"terrain engine needs a private setup-
 assert(index.includes('takeSharedServerBase'),"private setup links must be consumed from URL fragments");
 assert(index.includes('id="elevSpan"'),"elevation spectrum needs a configurable colour span");
 assert(index.includes('list="elevSpanPresets"'),"elevation span must accept custom feet values with presets");
-assert(index.includes('nationalEndpoint:"/api/elev/national",rawEndpoint:"/api/usgs/elev"'),
+assert(index.includes('new ElevLayer({...elevationSourceOptions()'),
        "elevation spectrum must progressively refine one shader layer");
 assert(!index.includes('elevRawLayer'),"elevation spectrum must not double-paint national and raw colour tiles");
 assert(index.includes('new CSPTilePipeline.ProgressiveGrid')&&index.includes('new CSPTilePipeline.RequestPool'),
@@ -432,7 +432,7 @@ assert(index.includes('const CompositeTerrainLayer = L.GridLayer.extend')&&index
        "terrain refinement must composite into one tile instead of stacking darkening layers");
 assert(index.includes('class TerrainGpuRenderer')&&index.includes('dataset.cspRenderer="webgl2"'),
        "hillshade, slope, and aspect must use one shared WebGL2 terrain renderer when available");
-assert(index.includes('rawEndpoint:null')&&index.includes('refineOverview:true'),
+assert(index.includes('rawEndpoint:strict||want==="3dep"?null:')&&index.includes('refineOverview:true'),
        "national analytical terrain must progressively refine a complete browser baseline without requesting raw lidar");
 assert(index.includes('const softError=response.headers.get("X-CSP-Error")'),
        "soft upstream tile failures must retry without painting a permanent empty tile");

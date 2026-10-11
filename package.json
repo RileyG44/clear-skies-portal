@@ -12,8 +12,8 @@
     "catalog:maxar": "node scripts/sync-maxar-catalog.js",
     "start": "node server.js",
     "dev": "node scripts/dev-server.js",
-    "check": "node --check server.js && node --check public-terrain.js && node --check public-terrain-worker.js && node --check terrain-pool.js && node --check terrain-worker.js && node --check terrain-core.js && node --check terrain-raster.js && node --check elevation-tile-core.js && node --check wa-archaeology.js && node --check glacial-research-core.js && node --check research-analysis.js && node --check research-worker.js && node --check point-cloud-core.js && node --check point-cloud-viewer.js && node --check cog.js && node --check png-stream.js && node --check markup.js && node --check usgs.js && node --check electron/main.js && node scripts/check-static.js",
-    "test": "node test-coordinate-search.js && node test-png-stream.js && node test-markup-server.js && node test-tile-pipeline.js && node test-public-terrain.js && node test-elevation-loading.js && node test-layer-transitions.js && node test-point-cloud.js && node test-maxar-catalog.js && node test-terrain-core.js && node test-terrain-raster.js && node test-wa-archaeology.js && node test-usgs-render.js && node test-mosaic.js && node test-elevation-bands.js && node test-elevation-tile-core.js && node test-glacial-research-core.js && node test-nadi1.js && node test-research-analysis.js && node test-cog.js && node test-terrain-pool.js && node test-server.js",
+    "check": "node --check server.js && node --check wadnr.js && node --check wadnr-ingest-worker.js && node --check dnr-raster-source.mjs && node --check public-terrain.js && node --check public-terrain-worker.js && node --check terrain-pool.js && node --check terrain-worker.js && node --check terrain-core.js && node --check terrain-raster.js && node --check elevation-tile-core.js && node --check wa-archaeology.js && node --check glacial-research-core.js && node --check research-analysis.js && node --check research-worker.js && node --check point-cloud-core.js && node --check point-cloud-viewer.js && node --check cog.js && node --check png-stream.js && node --check markup.js && node --check usgs.js && node --check electron/main.js && node scripts/check-static.js",
+    "test": "node test-coordinate-search.js && node test-png-stream.js && node test-markup-server.js && node test-tile-pipeline.js && node test-public-terrain.js && node test-elevation-loading.js && node test-layer-transitions.js && node test-point-cloud.js && node test-maxar-catalog.js && node test-terrain-core.js && node test-terrain-raster.js && node test-wa-archaeology.js && node test-usgs-render.js && node test-mosaic.js && node test-elevation-bands.js && node test-elevation-tile-core.js && node test-glacial-research-core.js && node test-nadi1.js && node test-research-analysis.js && node test-cog.js && node test-terrain-pool.js && node test-wadnr.js && node test-server.js",
     "verify": "npm run vendor && npm run check && npm test && npm audit --omit=optional",
     "app": "electron .",
     "minify": "node scripts/minify-site.js",
@@ -38,7 +38,10 @@
     "electron": "^43.4.1",
     "electron-builder": "^26.15.3",
     "esbuild": "^0.28.2",
-    "lucide-static": "^1.39.0"
+    "geotiff": "^3.0.5",
+    "lucide-static": "^1.39.0",
+    "proj4": "^2.22.0",
+    "yauzl": "^3.4.0"
   },
   "build": {
     "appId": "com.rileyg44.clear-skies-portal",
@@ -57,6 +60,8 @@
         "to": "app",
         "filter": [
           "server.js",
+          "wadnr.js",
+          "wadnr-ingest-worker.js",
           "terrain-pool.js",
           "terrain-worker.js",
           "usgs.js",
@@ -131,5 +136,8 @@
     "@tomickigrzegorz/leaflet-rotate": "^0.2.4",
     "lerc": "4.2.0",
     "maplibre-gl": "^6.6.0"
+  },
+  "overrides": {
+    "global-agent": "^4.1.3"
   }
 }
