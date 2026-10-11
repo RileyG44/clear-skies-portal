@@ -991,8 +991,8 @@ body.pane-reordering,body.pane-reordering *{cursor:grabbing!important;user-selec
 }
 
 </style>
-<link rel="stylesheet" href="ui-theme.css?build=2026-10-11a">
-<link rel="stylesheet" href="ui-system.css?build=2026-10-11a">
+<link rel="stylesheet" href="ui-theme.css?build=2026-10-11b">
+<link rel="stylesheet" href="ui-system.css?build=2026-10-11b">
 <style>
 /* The redesign restructures the legacy DOM rather than replacing it, and the
    script that does so is the last thing on the page - so the browser paints the
@@ -1131,9 +1131,6 @@ html.csp-boot body{visibility:hidden}
             </label>
             <label class="check fire" id="lb_fire" title="Active US wildfire perimeters and incidents (NIFC)">
               <input type="checkbox" id="fire"> Active fires
-            </label>
-            <label class="check" id="lb_natFirst" title="Always open on the newest low-cloud daylight true-colour scene, never a radar or night-lights layer">
-              <input type="checkbox" id="natFirst" checked> Open on natural colour
             </label>
             <label class="check" id="lb_mosaic" title="Keep neighbouring scenes filled as you pan. Slower.">
               <input type="checkbox" id="mosaic"> Auto-fill surroundings
@@ -1720,7 +1717,7 @@ html.csp-boot body{visibility:hidden}
   L.Renderer.prototype.onAdd=function(map){return onAdd.call(this,map||this._map)};
 })();
 </script>
-<script src="version.js?build=2026-10-11a"></script>
+<script src="version.js?build=2026-10-11b"></script>
 <script src="mosaic-core.js"></script>
 <script src="png-stream.js"></script>
 <script src="terrain-core.js"></script>
@@ -2562,7 +2559,7 @@ L.DomEvent.disableClickPropagation(mapThemeButton);
 L.DomEvent.disableScrollPropagation(mapThemeButton);
 // if nothing at all has drawn after 12 s, say so plainly
 setTimeout(()=>{ if(baseOK===0) showBlocked() }, 12000);
-let marker=null, overlay=null, overlayPending=null, footprint=null, sceneToken=0;
+let marker=null, overlay=null, overlayPending=null, footprint=null, sceneToken=0, sceneAbort=null;
 function stageMapLocation(e){
   acHide(); setLoc(e.latlng.lat,e.latlng.lng);
   const status=document.getElementById("status");
@@ -2965,7 +2962,8 @@ async function run(){
   const controller=new AbortController(); searchAbort=controller;
   const loc={...LOC};
   const win=dateWindow(), cloudMax=+$("#cloud").value;
-  ITEMS=[]; SEL=null; RESULT_SHOWN={}; render();
+  clearScene(false);
+  ITEMS=[]; RESULT_SHOWN={}; render();
   statusEl.dataset.kind="scenes",statusEl.innerHTML='<span class="spin"></span> Querying sources…';
   const chips={};
   SOURCES.forEach(s=>chips[s.key]=`<span class="chip" id="c_${s.key}">${s.name.split(" ")[0]} …</span>`);
@@ -2991,7 +2989,6 @@ async function run(){
   statusEl.dataset.kind="scenes",statusEl.innerHTML=Object.values(chips).join(" ")+` <span class="chip">${n} results</span>`;
   render();
   renderPasses();
-  autoSelect();
   refreshTerrainCoverage();
 }
 
@@ -3110,25 +3107,6 @@ function bestPhoto(pool){
   return tiers(photo.filter(x=>NATIVE_RGB.has(x.coll))) || tiers(photo);
 }
 
-function autoSelect(){
-  const vwant=$("#vis").value;
-  const viewable=ITEMS.filter(x=>x.tiles && (vwant==="all"||x.vis===vwant));
-  if(!viewable.length) return;
-
-  // Default behaviour: land on a picture of the ground. Never silently open on
-  // a night-lights or radar scene just because it happens to be the newest.
-  if(vwant==="all" && $("#natFirst").checked){
-    const pick=bestPhoto(viewable);
-    if(pick) return select(ITEMS.indexOf(pick));
-    statusEl.innerHTML += ' <span class="chip err">no daylight photo here</span>';
-    return;
-  }
-  const hires=viewable.filter(x=>(x.gsd??1e9)<=60);
-  const pick = newestOf(hires.filter(x=>x.cloud==null||x.cloud<40))
-            || newestOf(hires) || newestOf(viewable);
-  if(pick) select(ITEMS.indexOf(pick));
-}
-
 function render(){
   if(!ITEMS.length){
     resEl.innerHTML = LOC ? '<div class="empty">No imagery found.<br>Widen the date range or cloud filter.</div>'
@@ -3192,10 +3170,13 @@ function render(){
 
 async function select(i){
   const token=++sceneToken;
-  if(overlayPending){ map.removeLayer(overlayPending); overlayPending=null }
+  sceneAbort?.abort();
+  const controller=new AbortController(); sceneAbort=controller;
+  if(overlayPending){ clearTimeout(overlayPending._cspReadyTimer); map.removeLayer(overlayPending); overlayPending=null }
   SEL=i; render();
   const it=ITEMS[i];
   if(!it) return;
+  if(+$("#op").value===0) $("#op").value=+$("#op").dataset.lastVisible||100;
   showSceneControls();
   $("#ctlName").textContent=it.label+"  ·  "+it.src;
   $("#ctlDate").textContent=it.date.slice(0,10)+"  ("+ago(it.date)+")";
@@ -3221,7 +3202,7 @@ async function select(i){
     if(!map.getBounds().intersects(b)) map.fitBounds(b);
   }
   let url;
-  try{ url=await tileUrl(it) }
+  try{ url=await tileUrl(it,controller.signal) }
   catch(e){
     if(token===sceneToken) $("#ctlName").textContent+="  (imagery unavailable — kept previous scene)";
     return;
@@ -5091,13 +5072,12 @@ map.on("movestart zoomstart",()=>{
 
 /* checked toggles get the tinted "on" treatment */
 function syncChecks(){
-  [["viewable","lb_viewable"],["fire","lb_fire"],["mosaic","lb_mosaic"],["natFirst","lb_natFirst"]].forEach(([i,l])=>{
+  [["viewable","lb_viewable"],["fire","lb_fire"],["mosaic","lb_mosaic"]].forEach(([i,l])=>{
     const c=document.getElementById(i), b=document.getElementById(l);
     if(c&&b) b.classList.toggle("on", c.checked);
   });
 }
-["viewable","fire","mosaic","natFirst"].forEach(i=>document.getElementById(i).addEventListener("change",syncChecks));
-$("#natFirst").addEventListener("change", ()=>{ if(ITEMS.length) autoSelect() });
+["viewable","fire","mosaic"].forEach(i=>document.getElementById(i).addEventListener("change",syncChecks));
 syncChecks();
 
 
@@ -6511,7 +6491,8 @@ function renderTerrainSourcePanel(summaryArg,is3dArg,layerArg){
      rebuild would drop a slider out from under a drag. */
   if(!body.dataset.built){
     body.innerHTML='<p class="terrain-source-panel-status"></p><div class="terrain-source-panel-heading">Active layers</div><div class="tsp-rows"></div>'+
-      '<p class="terrain-source-panel-note">Terrain labels reflect loaded tile samples. Other layer rows show the configured provider or feed; they do not imply that every pixel has identical coverage.</p>';
+      '<p class="terrain-source-panel-note">Terrain labels reflect loaded tile samples. Other layer rows show the configured provider or feed; they do not imply that every pixel has identical coverage.</p>'+
+      '<div class="terrain-source-panel-heading">Map source references</div><div class="terrain-source-panel-note" id="mapSourceReferences"></div>';
     body.dataset.built="1";
     const rows=body.querySelector(".tsp-rows");
     rows.addEventListener("input",e=>{
@@ -6525,6 +6506,9 @@ function renderTerrainSourcePanel(summaryArg,is3dArg,layerArg){
       $("#elevSlide").dispatchEvent(new Event("change",{bubbles:true}));
     });
   }
+  const credits=[map.attributionControl?._container?.innerHTML,
+    is3d?$("#map3d .maplibregl-ctrl-attrib-inner")?.innerHTML:""].filter(Boolean);
+  body.querySelector("#mapSourceReferences").innerHTML=credits.join("<br>");
   const status=body.querySelector(".terrain-source-panel-status");
   status.textContent=is3d?public3dSourceText():summary.sources.length?`${summary.sources.map(source=>source.label).join(" + ")} · ${summary.coverage}% of tile positions rendered`:`${summary.coverage}% of tile positions rendered · waiting for elevation`;
   const rows=body.querySelector(".tsp-rows");
@@ -8000,16 +7984,26 @@ $("#mosaic").onchange=()=>{
 };
 $("#fillNow").onclick=()=>{ if(SEL!=null) fillMosaic(ITEMS[SEL], true) };
 
-$("#clr").onclick=()=>{ sceneToken++;
-                        if(overlayPending){map.removeLayer(overlayPending);overlayPending=null}
-                        if(overlay){map.removeLayer(overlay);overlay=null}
-                        if(footprint){map.removeLayer(footprint);footprint=null}
-                        MOSAIC_ON=false; $("#mosaic").checked=false;
-                        mosToken++;mosAbort?.abort();cancelPendingNeighbours(); hideMenu();
-                        hideSceneControls(); SEL=null; render() };
+/* Off releases imagery, its outline, and all pending mosaic work. Merely
+   setting opacity to zero leaves tile requests and map-move handlers active. */
+function clearScene(renderResults=true){
+  sceneToken++;
+  sceneAbort?.abort(); sceneAbort=null;
+  if(overlayPending){clearTimeout(overlayPending._cspReadyTimer);map.removeLayer(overlayPending);overlayPending=null}
+  if(overlay){map.removeLayer(overlay);overlay=null}
+  if(footprint){map.removeLayer(footprint);footprint=null}
+  clearTimeout(mosTimer); mosTimer=null;
+  clearMosaic();
+  MOSAIC_ON=false; $("#mosaic").checked=false; syncChecks();
+  const status=$("#mosStat"); if(status) status.textContent="";
+  hideMenu(); hideSceneControls(); SEL=null;
+  if(renderResults) render();
+  document.dispatchEvent(new CustomEvent("csp:layers-changed"));
+}
+$("#clr").onclick=()=>clearScene();
 $("#sort").onchange=render;
 $("#viewable").onchange=render;
-$("#vis").onchange=()=>{ render(); autoSelect(); };
+$("#vis").onchange=render;
 /* ---- date window UI ---------------------------------------------------- */
 let PREV_DAYS=365;                       // last preset used, to seed a custom range
 
@@ -8086,7 +8080,7 @@ function loadSearchPrefs(){
     if(/^\d{4}-\d{2}-\d{2}$/.test(p.dFrom||"")) $("#dFrom").value=p.dFrom;
     if(/^\d{4}-\d{2}-\d{2}$/.test(p.dTo||"")) $("#dTo").value=p.dTo;
     if(Number.isFinite(+p.opacity)) $("#op").value=Math.max(10,Math.min(100,+p.opacity));
-    for(const id of ["viewable","natFirst","mosaic","fire"]) if(typeof p[id]==="boolean") $("#"+id).checked=p[id];
+    for(const id of ["viewable","mosaic","fire"]) if(typeof p[id]==="boolean") $("#"+id).checked=p[id];
     MOSAIC_ON=$("#mosaic").checked;
   }catch(error){}
 }
@@ -8094,7 +8088,7 @@ function saveSearchPrefs(){
   try{ localStorage.setItem(SEARCH_PREF_KEY,JSON.stringify({
     days:$("#days").value,dFrom:$("#dFrom").value,dTo:$("#dTo").value,
     cloud:$("#cloud").value,vis:$("#vis").value,sort:$("#sort").value,
-    viewable:$("#viewable").checked,natFirst:$("#natFirst").checked,
+    viewable:$("#viewable").checked,
     mosaic:$("#mosaic").checked,fire:$("#fire").checked,opacity:+$("#op").value
   })) }catch(error){}
 }
@@ -8102,7 +8096,7 @@ loadSearchPrefs();syncChecks();
 initAlerts();
 syncDateUI();
 $("#cloud").onchange=()=>LOC&&run();
-for(const id of ["days","dFrom","dTo","cloud","vis","sort","viewable","natFirst","mosaic","fire"])
+for(const id of ["days","dFrom","dTo","cloud","vis","sort","viewable","mosaic","fire"])
   $("#"+id).addEventListener("change",saveSearchPrefs);
 $("#op").addEventListener("change",saveSearchPrefs);
 
@@ -9381,7 +9375,7 @@ $("#terLightReset").onclick=()=>{
    live render stack and never duplicates scientific state. */
 function cspActiveLayers(){
   const layers=[];
-  if(overlay){
+  if(overlay||overlayPending||footprint){
     layers.push({id:"scene",name:$("#ctlName").textContent||"Satellite scene",
       meta:[$("#ctlDate").textContent,"Satellite imagery"].filter(Boolean).join(" · "),
       opacity:+$("#op").value,visible:+$("#op").value>0,kind:"imagery"});
@@ -9422,7 +9416,7 @@ function cspInput(id,value,event="input"){
   if(event==="input") input.dispatchEvent(new Event("change",{bubbles:true}));
 }
 function cspSetLayerVisible(id,visible){
-  if(id==="scene") cspInput("#op",visible?(+$("#op").dataset.lastVisible||100):0);
+  if(id==="scene"){if(!visible) clearScene()}
   else if(id==="terrain"){
     if(!visible){$("#terStyle").dataset.lastVisible=$("#terStyle").value;cspInput("#terStyle","off","change")}
     else cspInput("#terStyle",$("#terStyle").dataset.lastVisible||"hs","change");
@@ -9542,7 +9536,7 @@ $("#q").addEventListener("blur",()=>setTimeout(acHide,120));
 document.addEventListener("click",e=>{ if(!e.target.closest("#iw")) acHide() });
 })();
 </script>
-<script src="markup.js?build=2026-10-11a"></script>
-<script src="ui-system.js?build=2026-10-11a"></script>
+<script src="markup.js?build=2026-10-11b"></script>
+<script src="ui-system.js?build=2026-10-11b"></script>
 </body>
 </html>

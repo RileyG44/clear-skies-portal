@@ -587,8 +587,10 @@ assert(index.includes('const leafZoomControl=L.control.zoom')&&index.includes('c
        "mobile must not render duplicate Leaflet zoom buttons when map pinch is available");
 assert(uiSystem.includes('id="cspMapSources"')&&uiSystem.includes('map.attributionControl')&&
        uiStyles.includes('body.csp-redesign .leaflet-control-attribution,')&&
-       uiStyles.includes('body.csp-redesign .maplibregl-ctrl-attrib{display:none!important}'),
-       "mobile attribution must be available from the sidebar without covering the map");
+       uiStyles.includes('body.csp-redesign .maplibregl-ctrl-attrib{display:none!important}')&&
+       uiStyles.indexOf('body.csp-redesign .maplibregl-ctrl-attrib{display:none!important}')<uiStyles.indexOf('@media(max-width:1050px)')&&
+       index.includes('id="mapSourceReferences"'),
+       "attribution must be available from the toolbar and sidebar without covering the desktop or phone map");
 /* The map runs under the status bar and around the Dynamic Island. On iOS 26
    innerHeight reads one status bar short in this mode while the page still
    fills the screen; offsetting #app by that "gap" pushed the sheet off the

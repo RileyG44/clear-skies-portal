@@ -584,7 +584,9 @@ body.csp-redesign .map-tool:hover{background:var(--ui-surface)!important;color:v
 body.csp-redesign .tool-popover{background:var(--ui-frost);border-color:var(--line);color:var(--ink)}
 body.csp-redesign .tool-popover-head{border-color:var(--line)}
 body.csp-redesign .tool-popover-title{color:var(--ink)}
-body.csp-redesign .leaflet-control-attribution{background:var(--ui-frost-weak)!important;color:var(--ui-text-muted)!important}
+/* Source references live in the toolbar popover and Map sources sidebar. */
+body.csp-redesign .leaflet-control-attribution,
+body.csp-redesign .maplibregl-ctrl-attrib{display:none!important}
 body.csp-redesign .leaflet-control-attribution a{color:var(--ui-text-2)!important}
 body.csp-redesign .leaflet-popup-content-wrapper,
 body.csp-redesign .leaflet-popup-tip{background:var(--ui-surface);color:var(--ui-text)}
@@ -763,10 +765,6 @@ body.csp-redesign .csp-locate-label{display:none}
   body.csp-redesign #serverPanel,
   body.csp-redesign #terrainSourcePanel,
   body.csp-redesign #ctl{touch-action:none}
-  /* Attribution remains available from Map sources in the sidebar instead of
-     covering imagery in the small mobile viewport. */
-  body.csp-redesign .leaflet-control-attribution,
-  body.csp-redesign .maplibregl-ctrl-attrib{display:none!important}
   body.csp-redesign .leaflet-control-zoom{display:none!important}
   body.csp-redesign #cspWorkspaceHeader{padding:12px 16px}
   body.csp-redesign #cspWorkspaceDescription{margin-bottom:0}
@@ -1753,15 +1751,6 @@ body.csp-redesign #cspGrabber{display:none}
    the other pages they read as that page's own status. Messages that are not
    about scenes (location, geocoding errors) still show everywhere. */
 body.csp-redesign:not([data-csp-route="satellite"]) #status[data-kind="scenes"]{display:none}
-
-/* Source credits wrap within the map beside an open sidebar instead of running
-   underneath it. */
-@media (min-width:761px){
-  body.csp-redesign:not(.collapsed) .leaflet-control-attribution{
-    max-width:calc(100vw - var(--side-w) - 48px - var(--safe-left) - var(--safe-right));
-    white-space:normal;text-align:right;
-  }
-}
 
 /* ---- installed app: map under the status bar -------------------------------
    Nothing is drawn behind the status bar; the map runs to the top edge. iOS 26

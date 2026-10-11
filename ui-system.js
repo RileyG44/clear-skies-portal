@@ -95,9 +95,8 @@ engineNav.innerHTML=`<button class="csp-nav-button" type="button"><img src="${ic
 foot.prepend(engineNav);
 engineNav.querySelector("button").addEventListener("click",()=>$("#serverToggle")?.click());
 
-/* Leaflet's attribution is required source information, but on a phone its
-   long inline string competes with the map itself. Keep it available in the
-   navigation rail, where it can expand only when someone needs it. */
+/* Keep source references available in the navigation rail while the map stays
+   clear at every screen size. The toolbar source popover also carries them. */
 const mapSources=document.createElement("details");mapSources.id="cspMapSources";
 mapSources.innerHTML=`<summary><img src="${icon("layers")}" alt=""><span>Map sources</span><img class="csp-sources-chevron" src="${icon("chevron-right")}" alt=""></summary><div id="cspMapSourcesContent" aria-live="polite"></div>`;
 engineNav.after(mapSources);
@@ -106,6 +105,9 @@ const syncMapSources=()=>{
   const attribution=typeof map!=="undefined"?map.attributionControl?._container:null;
   const markup=attribution?.innerHTML.trim();
   mapSourcesContent.innerHTML=markup||"Source details will appear when a map layer is active.";
+  const references=$("#mapSourceReferences");
+  if(references) references.innerHTML=[markup,
+    document.body.classList.contains("terrain-3d")?$("#map3d .maplibregl-ctrl-attrib-inner")?.innerHTML:""].filter(Boolean).join("<br>");
 };
 mapSources.addEventListener("toggle",()=>{if(mapSources.open) syncMapSources()});
 const attributionNode=typeof map!=="undefined"?map.attributionControl?._container:null;

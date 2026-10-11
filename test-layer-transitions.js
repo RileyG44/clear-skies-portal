@@ -35,6 +35,71 @@ async function main(){
   assert.equal((await ready).ready,true);assert.equal(candidate.opacity,0,'validation alone must not commit a mosaic layer');
   const partial=new Layer();partial._tiles.b={};const incomplete=context.waitForLayerTiles(partial,1);
   partial.emit('tileload');partial.emit('tileerror');partial.emit('load');assert.equal((await incomplete).ready,false);
-  console.log('layer transition checks passed (staging, content readiness, rollback, incomplete mosaics)');
+  map.layers.clear();timers.clear();
+  const section=(start,end)=>html.slice(html.indexOf(start),html.indexOf(end,html.indexOf(start)));
+  const controls=new Map(['#op','#mosaic','#mosStat','#ctlName','#ctlDate','#ctlLink'].map(id=>[id,{value:70,checked:true,dataset:{},textContent:''}]));
+  const primary=new Layer(),pending=new Layer(),outline=new Layer(),neighbour=new Layer(),backdrop=new Layer(),pendingNeighbour=new Layer(),reference=new Layer();
+  for(const layer of [primary,pending,outline,neighbour,backdrop,pendingNeighbour,reference])map.layers.add(layer);
+  pending._cspReadyTimer=context.setTimeout(()=>{throw Error('removed scene timer ran');});
+  let pendingCancelled=false;
+  pendingNeighbour._cspCancelWait=()=>{pendingCancelled=true;};
+  const sceneController=new AbortController(),mosaicController=new AbortController();
+  const scene={
+    map,$:id=>controls.get(id),AbortController,sceneToken:2,sceneAbort:sceneController,
+    overlay:primary,overlayPending:pending,footprint:outline,SEL:0,ITEMS:[],
+    NEIGH:[{layer:neighbour}],MOSAIC_BACKDROP:{layer:backdrop},PENDING_NEIGH:new Set([pendingNeighbour]),
+    MOSAIC_ON:true,MOSAIC_ONCE:true,mosToken:5,mosAbort:mosaicController,
+    mosTimer:context.setTimeout(()=>{throw Error('removed mosaic timer ran');}),
+    clearTimeout:context.clearTimeout,syncChecks:()=>{},hideMenu:()=>{},hideSceneControls:()=>{},
+    render:()=>{},document:{dispatchEvent:()=>{}},CustomEvent:class{},
+    cspInput:()=>{throw Error('Off must remove the scene, not change its opacity');}
+  };
+  vm.createContext(scene);
+  vm.runInContext(section('function cancelPendingNeighbours(','\n/* Whether the mosaic is live.')+
+    section('function clearScene(','\n$("#clr").onclick=')+
+    section('function cspSetLayerVisible(','\nfunction cspSetLayerOpacity('),scene);
+  scene.cspSetLayerVisible('scene',false);
+  assert.deepEqual([...map.layers],[reference],'Off removes scene, footprint, neighbours, backdrop, and staged layers only');
+  assert(sceneController.signal.aborted&&mosaicController.signal.aborted,'Off aborts scene metadata and mosaic requests');
+  assert(pendingCancelled,'Off cancels staged neighbour validation');
+  assert.equal(timers.size,0,'Off cancels scene readiness and delayed mosaic timers');
+  for(const key of ['overlay','overlayPending','footprint','sceneAbort','mosAbort','mosTimer','SEL'])assert.equal(scene[key],null,key+' is released');
+  assert.equal(scene.NEIGH.length,0);assert.equal(scene.PENDING_NEIGH.size,0);
+  assert.equal(scene.MOSAIC_ON,false);assert.equal(scene.MOSAIC_ONCE,false);
+
+  // A metadata response that arrives after Off must never install a new layer.
+  let resolveMetadata;
+  Object.assign(scene,{
+    ITEMS:[{label:'Test scene',src:'Test provider',date:'2026-10-11',tiles:{},geom:{}}],
+    showSceneControls:()=>{},ago:()=>'',safeHttpUrl:()=>'',L:{geoJSON:()=>new Layer()},
+    tileUrl:()=>new Promise(resolve=>{resolveMetadata=resolve;})
+  });
+  vm.runInContext(section('async function select(','\n/* ------------------------------------------------- side panel:'),scene);
+  const selecting=scene.select(0);
+  assert(scene.footprint&&map.hasLayer(scene.footprint),'explicit selection adds its outline');
+  const metadataController=scene.sceneAbort;
+  scene.cspSetLayerVisible('scene',false);
+  resolveMetadata('https://example.invalid/{z}/{x}/{y}.png');
+  await selecting;
+  assert(metadataController.signal.aborted);
+  assert.deepEqual([...map.layers],[reference],'late scene response cannot resurrect imagery after Off');
+
+  const result={id:'available-scene'},searchControls={'#cloud':{value:30}};
+  let cleared=false;
+  const search={
+    LOC:{lat:47,lng:-119},searchToken:0,searchAbort:null,AbortController,ITEMS:[],RESULT_SHOWN:{},
+    clearScene:renderResults=>{assert.equal(renderResults,false);cleared=true;},
+    dateWindow:()=>({}),$:id=>searchControls[id],render:()=>{},
+    statusEl:{dataset:{},innerHTML:''},SOURCES:[{key:'test',name:'Test provider'}],
+    stacSearch:async()=>[result],gibsItems:()=>[],renderPasses:()=>{},refreshTerrainCoverage:()=>{},
+    autoSelect:()=>{throw Error('search must never auto-select imagery');},
+    select:()=>{throw Error('search must never apply imagery');}
+  };
+  vm.createContext(search);
+  vm.runInContext(section('async function run(','\n/* ---------------------------------------------------------------- render */'),search);
+  await search.run();
+  assert(cleared,'new search clears any previous scene');
+  assert.equal(search.ITEMS[0],result,'scene catalog still loads in the background');
+  console.log('layer transition checks passed (staging, rollback, mosaic cleanup, scene Off, late responses, search without auto-selection)');
 }
 main().catch(error=>{console.error(error);process.exitCode=1;});
