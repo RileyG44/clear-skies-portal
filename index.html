@@ -991,8 +991,8 @@ body.pane-reordering,body.pane-reordering *{cursor:grabbing!important;user-selec
 }
 
 </style>
-<link rel="stylesheet" href="ui-theme.css?build=2026-10-10i">
-<link rel="stylesheet" href="ui-system.css?build=2026-10-10i">
+<link rel="stylesheet" href="ui-theme.css?build=2026-10-11a">
+<link rel="stylesheet" href="ui-system.css?build=2026-10-11a">
 <style>
 /* The redesign restructures the legacy DOM rather than replacing it, and the
    script that does so is the last thing on the page - so the browser paints the
@@ -1571,6 +1571,9 @@ html.csp-boot body{visibility:hidden}
       <button class="map-tool" id="mapModeToggle" data-tool="mapMode" type="button" title="Map view: 2D map" aria-label="Map view: 2D map" aria-haspopup="menu" aria-expanded="false" aria-controls="mapModeMenu">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14.106 5.553a2 2 0 0 0 1.788 0l3.659-1.83A1 1 0 0 1 21 4.619v12.764a1 1 0 0 1-.553.894l-4.553 2.277a2 2 0 0 1-1.788 0l-4.212-2.106a2 2 0 0 0-1.788 0l-3.659 1.83A1 1 0 0 1 3 19.381V6.618a1 1 0 0 1 .553-.894l4.553-2.277a2 2 0 0 1 1.788 0z"/><path d="M15 5.764v15"/><path d="M9 3.236v15"/></svg>
       </button>
+      <button class="map-tool" id="quickDraw" data-tool="draw" type="button" title="Draw on the map" aria-label="Draw on the map" aria-pressed="false">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M13 21h8"/><path d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z"/></svg>
+      </button>
       <button class="map-tool" id="snapshot" data-tool="snapshot" title="Save the current map viewport" aria-label="Save current map viewport as an image">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
           <path d="M4 7.5h3l1.35-2h7.3L17 7.5h3A1.5 1.5 0 0 1 21.5 9v9.5A1.5 1.5 0 0 1 20 20H4A1.5 1.5 0 0 1 2.5 18.5V9A1.5 1.5 0 0 1 4 7.5Z"/><circle cx="12" cy="13.5" r="3.5"/>
@@ -1717,7 +1720,7 @@ html.csp-boot body{visibility:hidden}
   L.Renderer.prototype.onAdd=function(map){return onAdd.call(this,map||this._map)};
 })();
 </script>
-<script src="version.js?build=2026-10-10i"></script>
+<script src="version.js?build=2026-10-11a"></script>
 <script src="mosaic-core.js"></script>
 <script src="png-stream.js"></script>
 <script src="terrain-core.js"></script>
@@ -3389,8 +3392,8 @@ $("#sideToggle").onclick=()=>setCollapsed(!document.body.classList.contains("col
    neighbouring tools use FLIP motion to settle into their new slots. */
 const sideToggleDock=$("#sideToggleDock"), dockEl=$("#mapDock"), serverPanel=$("#serverPanel"), serverToggle=$("#serverToggle"),
       terrainSourcePanel=$("#terrainSourcePanel"), terrainSourceToggle=$("#terrainSourceToggle");
-const DOCK_ORDER_KEY="clearskies.mapToolOrder.v1";
-const DOCK_DEFAULT=["mapModeToggle","snapshot","mapInfoToggle","terrainSourceToggle","mapTheme","bearingReset","serverToggle"];
+const DOCK_ORDER_KEY="clearskies.mapToolOrder.v2";
+const DOCK_DEFAULT=["mapModeToggle","quickDraw","mapInfoToggle","terrainSourceToggle","snapshot","mapTheme","bearingReset","serverToggle"];
 const allDockButtons=()=>[...dockEl.querySelectorAll(".map-tool")];
 const dockButtons=()=>allDockButtons().filter(el=>!el.hidden);
 function saveDockOrder(){
@@ -3444,7 +3447,17 @@ function setTerrainSourcePanel(open,restoreFocus=false){
 serverToggle.onclick=()=>setServerPanel(serverPanel.hidden);
 $("#srvClose").onclick=()=>setServerPanel(false,true);
 terrainSourceToggle.onclick=()=>setTerrainSourcePanel(terrainSourcePanel.hidden);
+/* Quick draw: straight into markup on the last layer drawn on (or a new one),
+   without opening the side menu. Pressed while drawing. */
+const quickDrawEl=$("#quickDraw");
+quickDrawEl.onclick=()=>window.CSPMarkup?.quickDraw();
+document.addEventListener("csp:markup-editing",e=>{
+  const on=!!e.detail?.editing;
+  quickDrawEl.setAttribute("aria-pressed",String(on));
+  quickDrawEl.title=on?"Stop drawing":"Draw on the map";quickDrawEl.setAttribute("aria-label",quickDrawEl.title);
+});
 $("#terrainSourceClose").onclick=()=>setTerrainSourcePanel(false,true);
+document.addEventListener("csp:layers-changed",()=>{ if(!terrainSourcePanel.hidden) renderTerrainSourcePanel?.() });
 document.addEventListener("pointerdown",e=>{
   if(!serverPanel.hidden&&!serverPanel.contains(e.target)&&!serverToggle.contains(e.target)) setServerPanel(false);
   if(!terrainSourcePanel.hidden&&!terrainSourcePanel.contains(e.target)&&!terrainSourceToggle.contains(e.target)) setTerrainSourcePanel(false);
@@ -6494,27 +6507,61 @@ function renderTerrainSourcePanel(summaryArg,is3dArg,layerArg){
   const is3d=is3dArg??document.body.classList.contains("terrain-3d");
   const layer=layerArg||(terrainSwap?terrainSwap.displayedLayer:(!terLayer?elevLayer:terLayer));
   const summary=summaryArg||CSPPublicTerrain.summarize(Object.values(layer?._tiles||{}));
-  body.replaceChildren();
-  const status=document.createElement("p");status.className="terrain-source-panel-status";
+  /* Built once and updated in place: this runs on every tile load, and a
+     rebuild would drop a slider out from under a drag. */
+  if(!body.dataset.built){
+    body.innerHTML='<p class="terrain-source-panel-status"></p><div class="terrain-source-panel-heading">Active layers</div><div class="tsp-rows"></div>'+
+      '<p class="terrain-source-panel-note">Terrain labels reflect loaded tile samples. Other layer rows show the configured provider or feed; they do not imply that every pixel has identical coverage.</p>';
+    body.dataset.built="1";
+    const rows=body.querySelector(".tsp-rows");
+    rows.addEventListener("input",e=>{
+      const input=e.target.closest("input[data-tsp]");if(!input)return;
+      const row=input.closest("[data-id]"),id=row.dataset.id;
+      if(input.dataset.tsp==="opacity"){ window.ClearSkiesPortalBridge.setLayerOpacity(id,+input.value); input.nextElementSibling.textContent=input.value+"%"; }
+      else if(input.dataset.tsp==="elevation"){ const slide=$("#elevSlide"); slide.value=input.value; slide.dispatchEvent(new Event("input",{bubbles:true})); input.nextElementSibling.textContent=elevationLabel(); }
+    });
+    rows.addEventListener("change",e=>{
+      const input=e.target.closest('input[data-tsp="elevation"]');if(!input)return;
+      $("#elevSlide").dispatchEvent(new Event("change",{bubbles:true}));
+    });
+  }
+  const status=body.querySelector(".terrain-source-panel-status");
   status.textContent=is3d?public3dSourceText():summary.sources.length?`${summary.sources.map(source=>source.label).join(" + ")} · ${summary.coverage}% of tile positions rendered`:`${summary.coverage}% of tile positions rendered · waiting for elevation`;
-  body.append(status);
-  const heading=document.createElement("div");heading.className="terrain-source-panel-heading";heading.textContent="Active layers";body.append(heading);
+  const rows=body.querySelector(".tsp-rows");
   const active=window.ClearSkiesPortalBridge?.activeLayers?.()||[];
   const visible=active.filter(item=>item.visible!==false);
-  if(!visible.length){const empty=document.createElement("p");empty.textContent="No research layers are active; the reference basemap remains available.";body.append(empty)}
-  visible.forEach(item=>{
-    const row=document.createElement("div");row.className="terrain-source-panel-row";
-    const name=document.createElement("div");name.className="terrain-source-panel-name";name.textContent=item.name||"Unnamed layer";
-    const source=document.createElement("div");source.className="terrain-source-panel-meta";
+  const signature=visible.map(item=>item.id).join("|");
+  if(rows.dataset.signature!==signature){
+    rows.dataset.signature=signature;rows.replaceChildren();
+    if(!visible.length){const empty=document.createElement("p");empty.textContent="No research layers are active; the reference basemap remains available.";rows.append(empty)}
+    for(const item of visible){
+      const row=document.createElement("div");row.className="terrain-source-panel-row";row.dataset.id=item.id;
+      row.innerHTML='<div class="terrain-source-panel-name"></div><div class="terrain-source-panel-meta"></div>'+
+        (item.noOpacity?"":'<label class="tsp-control"><span>Opacity</span><input type="range" min="0" max="100" step="1" data-tsp="opacity"><output></output></label>')+
+        (item.id==="elevation-spectrum"?'<label class="tsp-control"><span>Elevation</span><input type="range" min="-500" max="4500" step="1" data-tsp="elevation"><output></output></label>':"");
+      row.querySelectorAll("input").forEach(input=>input.setAttribute("aria-label",`${item.name} ${input.dataset.tsp}`));
+      rows.append(row);
+    }
+    requestAnimationFrame(()=>positionToolPopover(terrainSourcePanel,terrainSourceToggle));
+  }
+  for(const item of visible){
+    const row=rows.querySelector(`[data-id="${CSS.escape(item.id)}"]`);if(!row)continue;
     let basis=item.meta||"Source not reported";
     if(item.id==="terrain"||item.id==="elevation-spectrum"||item.id==="elevation-bands")
       basis=summary.sources.length?summary.sources.map(entry=>`${entry.label} (${sourceResolutionText(entry)})`).join(" · "):"Elevation source is still loading";
     if(item.id==="basemap")basis="Esri / OpenStreetMap reference basemap";
-    source.textContent=basis;row.append(name,source);body.append(row);
-  });
-  const note=document.createElement("p");note.className="terrain-source-panel-note";
-  note.textContent="Terrain labels reflect loaded tile samples. Other layer rows show the configured provider or feed; they do not imply that every pixel has identical coverage.";
-  body.append(note);
+    const name=row.querySelector(".terrain-source-panel-name"),meta=row.querySelector(".terrain-source-panel-meta");
+    if(name.textContent!==(item.name||"Unnamed layer")) name.textContent=item.name||"Unnamed layer";
+    if(meta.textContent!==basis) meta.textContent=basis;
+    const opacity=row.querySelector('[data-tsp="opacity"]');
+    if(opacity&&document.activeElement!==opacity){ opacity.value=Math.round(item.opacity);opacity.nextElementSibling.textContent=Math.round(item.opacity)+"%" }
+    const elevation=row.querySelector('[data-tsp="elevation"]');
+    if(elevation&&document.activeElement!==elevation){ elevation.value=$("#elevSlide").value;elevation.nextElementSibling.textContent=elevationLabel() }
+  }
+}
+function elevationLabel(){
+  const unit=$("#elevUnit").value;
+  return `${Math.round(+$("#elevSlide").value/ELEV_UNIT[unit]).toLocaleString()} ${unit}`;
 }
 let terrainStatusFrame=0,terrainSwapMessage="";
 function scheduleTerrainStatus(){
@@ -9439,6 +9486,8 @@ window.ClearSkiesPortalBridge={
   resetLayer:cspResetLayer,
   setLayerOrder:cspSetLayerOrder,
   refreshOverlayStatus:paintOverlayNote,
+  /* Markup draws on the 2D map; drawing from 3D or the point cloud returns there. */
+  ensure2d:()=>{ if(document.body.classList.contains("point-cloud-open")) pointCloudPanel?.close?.(); if(document.body.classList.contains("terrain-3d")) exitTerrain3d() },
   overlayCatalog:()=>OVERLAYS.map(o=>({id:o.id,name:o.id==="imagery"?"Global satellite basemap":o.name,group:o.group,via:o.via}))
 };
 
@@ -9493,7 +9542,7 @@ $("#q").addEventListener("blur",()=>setTimeout(acHide,120));
 document.addEventListener("click",e=>{ if(!e.target.closest("#iw")) acHide() });
 })();
 </script>
-<script src="markup.js?build=2026-10-10i"></script>
-<script src="ui-system.js?build=2026-10-10i"></script>
+<script src="markup.js?build=2026-10-11a"></script>
+<script src="ui-system.js?build=2026-10-11a"></script>
 </body>
 </html>

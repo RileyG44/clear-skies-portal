@@ -236,12 +236,27 @@ map-like zoom would be a tiled package or Cloud-Optimized GeoTIFF rather than on
 
 ## Markup layers
 
-**Markup** (under Layer groups) holds your own drawings in named layers: freehand pen,
-lines, arrows, areas, rectangles, circles, text and pins. Choose **New markup layer**,
-name it and pick a colour; the drawing bar appears over the map. **Select** a mark to
-move it with its centre handle, reshape it with its corner/vertex handles, recolour it,
-change its weight, edit its text or delete it; **Undo** (or Ctrl/⌘+Z) steps back.
-**Done** closes the bar.
+**Markup** (under Layer groups) holds your own drawings in named layers. Choose **New
+markup layer**, name it and pick its colour (the layer's tag and default ink), or press
+the pencil in the map-button column to draw straight away on the last layer you used.
+Click a layer's title to rename it; **Clear** empties a layer after asking, **Delete**
+removes it after asking.
+
+The drawing bar works like a paint program:
+
+- **Pen** and **Highlighter**, each with its own colour, width and transparency.
+- **Shapes**: line, arrow and double arrow; rectangle, rounded rectangle, oval, triangles,
+  diamond, polygons, stars, block arrow, heart, lightning and freeform. Shapes have an
+  outline colour, width (0 for none) and transparency, and a fill colour and
+  transparency, or no fill. Hold Shift for squares, circles and 15° lines.
+- **Text** and **Pin**, with colour, size and transparency.
+- **Eraser**: cuts pen and highlighter strokes where it passes; anything else it touches
+  is removed whole.
+- **Select**: click a mark to select it, drag to move it, drag the frame's handles to
+  resize (Shift keeps proportions) or the round handle to rotate. The bar restyles the
+  selection; **Edit points** reshapes polygons; duplicate (Ctrl/⌘+D) and delete
+  (Delete key) sit beside it. **Undo**/**Redo** (Ctrl/⌘+Z, Shift for redo) step through
+  changes. Keys: V select, H pan, P pen, I highlighter, E eraser, S shapes, T text.
 
 Marks are anchored to the ground: positions are latitude/longitude and every size is in
 metres, so they grow and shrink with the map like writing on a paper map and stay put
@@ -259,7 +274,9 @@ Where they live:
   QGIS or Google Earth.
 - **Between devices:** the engine copy is the shared one. The newer copy of a layer
   wins; a deleted layer goes to `markup/.trash/` and leaves a tombstone so an older
-  offline copy cannot bring it back.
+  offline copy cannot bring it back. An engine started from code older than markup
+  answers 404; the app says so and keeps the layers on the device until the engine is
+  updated and restarted.
 
 ## What's in the box
 

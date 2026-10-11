@@ -1,24 +1,29 @@
 /* Clear Skies Portal — markup (annotation) layers.
 
-   A markup layer is a named, coloured set of drawings: freehand pen, lines,
-   arrows, areas, rectangles, circles, text and pins. Each is anchored to the
-   ground: positions are latitude/longitude and every size (stroke width, text
-   height, pin height, circle radius) is in metres, so marks grow and shrink
-   with the map like ink on a paper map, and stay where they were put at any
-   zoom or rotation.
+   A markup layer is a named set of drawings: pen and highlighter strokes,
+   lines and arrows, shapes, text and pins. Each mark carries its own colour,
+   width and transparency; the layer's colour is only its identifier and the
+   default ink. Marks are anchored to the ground: positions are latitude /
+   longitude and every size (stroke width, text height, pin height) is in
+   metres, so they grow and shrink with the map like ink on a paper map.
 
    Storage. Each layer is one GeoJSON FeatureCollection with a `markup` header.
    The browser keeps every layer in IndexedDB, so markup works with no engine
-   at all (in the field, on the phone). When the terrain engine is reachable
-   the layers are also kept there as files (server.js /api/markup), which is
-   what shares them between devices: the newer copy of a layer wins, and a
-   deleted layer leaves a tombstone so an offline device cannot resurrect it.
-   Visibility and opacity are this device's view of a layer, not part of it.
+   at all. When the terrain engine is reachable the layers are also kept there
+   as files (server.js /api/markup), which is what shares them between
+   devices: the newer copy of a layer wins, and a deleted layer leaves a
+   tombstone so an offline device cannot resurrect it. Visibility and opacity
+   are this device's view of a layer, not part of it.
 
    Rendering. Each layer has its own pane (so layers stack and fade
    independently) with its own SVG renderer, inside the rotating pane. Text
    and pins are SVG too, drawn into the same renderer, which is what lets the
-   PNG exporter capture them with everything else. */
+   PNG exporter capture them with everything else.
+
+   Editing works like a drawing program: one selected mark at a time, moved by
+   dragging it, resized and rotated from a frame of handles, restyled from the
+   toolbar. Geometry edits happen in Web Mercator metres, where a small
+   rotation or scale keeps shapes true. */
 (function(){
 "use strict";
 const B=window.ClearSkiesPortalBridge,L=window.L;
@@ -26,9 +31,8 @@ if(!B||!B.map||!L) return;
 const map=B.map;
 const $=(s,r=document)=>r.querySelector(s);
 const SVGNS="http://www.w3.org/2000/svg";
-const PALETTE=["#ff3b30","#ff9500","#ffcc00","#34c759","#00c7be","#0a84ff","#5e5ce6","#bf5af2","#ffffff","#1c1c1e"];
-/* The layer colour picker: ten hue rows of five, light to dark, the most
-   used hues first. The middle column is each hue at full strength. */
+/* The colour picker: ten hue rows of five, light to dark, the most used hues
+   first. The middle column is each hue at full strength. */
 const COLOR_GRID=[
   ["#ffb3ae","#ff7a70","#ff3b30","#d70015","#8e0b0b"],   // red
   ["#ffd2a1","#ffb35c","#ff9500","#c96a00","#7a3e00"],   // orange
@@ -41,35 +45,81 @@ const COLOR_GRID=[
   ["#e8d2b8","#c9a77c","#a2845e","#7a5c3a","#4a3520"],   // earth
   ["#ffffff","#d1d1d6","#8e8e93","#3a3a3c","#000000"]    // neutral
 ].flat();
-const VIEW_KEY="clearskies.markup.view.v1";
+const DEFAULT_COLOR="#ff3b30";
+const VIEW_KEY="clearskies.markup.view.v1",STYLE_KEY="clearskies.markup.style.v1",LAST_KEY="clearskies.markup.last.v1";
 const icon=name=>`vendor/icons/${name}.svg`;
+const esc=s=>String(s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 
 /* ---------------------------------------------------------------- geometry */
-const mpp=(lat,zoom)=>40075016.686*Math.cos(lat*Math.PI/180)/Math.pow(2,zoom+8);
+const MERC=40075016.686;
+const mpp=(lat,zoom)=>MERC*Math.cos(lat*Math.PI/180)/Math.pow(2,zoom+8);
 const here=()=>mpp(map.getCenter().lat,map.getZoom());
 const proj=ll=>L.CRS.EPSG3857.project(L.latLng(ll));
 const unproj=p=>L.CRS.EPSG3857.unproject(L.point(p.x,p.y));
 const toLL=c=>L.latLng(c[1],c[0]);
 const toC=ll=>[+ll.lng.toFixed(7),+ll.lat.toFixed(7)];
+const cToP=c=>proj(toLL(c)),pToC=p=>toC(unproj(p));
 const rid=()=>Math.random().toString(36).slice(2,10)+Date.now().toString(36).slice(-4);
+const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
 function slug(name){
   const base=String(name).toLowerCase().normalize("NFKD").replace(/[^a-z0-9]+/g,"-").replace(/^-+|-+$/g,"").slice(0,40)||"layer";
   return `${base}-${Math.random().toString(36).slice(2,8)}`;
 }
-/* Arrow head as a ground-anchored triangle: Web Mercator metres are ground
-   metres stretched by 1/cos(lat), so the head is sized in the same frame. */
-function arrowHead(latlngs,widthM){
-  if(latlngs.length<2) return null;
-  const a=proj(latlngs[latlngs.length-2]),b=proj(latlngs[latlngs.length-1]);
-  const k=1/Math.cos(latlngs[latlngs.length-1].lat*Math.PI/180);
-  const dx=b.x-a.x,dy=b.y-a.y,len=Math.hypot(dx,dy);
+/* Arrow head as a ground-anchored triangle at the end of a→b: Web Mercator
+   metres are ground metres stretched by 1/cos(lat), so the head is sized in
+   the same frame. Returns the triangle and the point where the shaft should
+   stop, so a see-through arrow does not darken where shaft and head meet. */
+function arrowHead(a,b,widthM){
+  const A=proj(a),Bp=proj(b),k=1/Math.cos(b.lat*Math.PI/180);
+  const dx=Bp.x-A.x,dy=Bp.y-A.y,len=Math.hypot(dx,dy);
   if(!len) return null;
-  const ux=dx/len,uy=dy/len,h=Math.min(len*0.6,Math.max(widthM*5,widthM*2+4)*k),w=h*0.62;
-  const bx=b.x-ux*h,by=b.y-uy*h;
-  return [unproj(b),unproj({x:bx-uy*w,y:by+ux*w}),unproj({x:bx+uy*w,y:by-ux*w})];
+  const ux=dx/len,uy=dy/len,h=Math.min(len*0.6,Math.max(widthM*4.5,widthM*2+4)*k),w=h*0.6;
+  const bx=Bp.x-ux*h,by=Bp.y-uy*h;
+  return {tri:[unproj(Bp),unproj({x:bx-uy*w,y:by+ux*w}),unproj({x:bx+uy*w,y:by-ux*w})],stop:unproj({x:Bp.x-ux*h*0.75,y:Bp.y-uy*h*0.75})};
 }
 const luminance=hex=>{ const n=parseInt(hex.slice(1),16);return (0.299*(n>>16)+0.587*((n>>8)&255)+0.114*(n&255))/255 };
 const haloFor=color=>luminance(color)>0.82?"rgba(20,20,22,.8)":"rgba(255,255,255,.95)";
+
+/* Shapes, as outlines in a unit box (x right, y down) fitted to the box the
+   user drags. Lines are drawn end to end instead. */
+const regular=(n,inner)=>{ const out=[],count=inner?n*2:n;
+  for(let i=0;i<count;i++){ const a=-Math.PI/2+i*2*Math.PI/count,r=inner&&i%2?inner:1;out.push([.5+.5*r*Math.cos(a),.5+.5*r*Math.sin(a)]) }
+  return out };
+const SHAPES=[
+  {id:"line",label:"Line",line:true},
+  {id:"arrow",label:"Arrow",line:true},
+  {id:"arrow2",label:"Double arrow",line:true},
+  {id:"rect",label:"Rectangle",gen:()=>[[0,0],[1,0],[1,1],[0,1]]},
+  {id:"roundrect",label:"Rounded rectangle",gen:(w,h)=>{
+    const r=Math.min(w,h)*0.18,rx=r/w,ry=r/h,out=[],arc=(cx,cy,a0)=>{ for(let i=0;i<=8;i++){ const a=a0+i*Math.PI/16;out.push([cx+rx*Math.cos(a),cy+ry*Math.sin(a)]) } };
+    arc(1-rx,ry,-Math.PI/2);arc(1-rx,1-ry,0);arc(rx,1-ry,Math.PI/2);arc(rx,ry,Math.PI);return out }},
+  {id:"ellipse",label:"Oval",gen:()=>Array.from({length:72},(_,i)=>{ const a=i*Math.PI/36;return [.5+.5*Math.cos(a),.5+.5*Math.sin(a)] })},
+  {id:"triangle",label:"Triangle",gen:()=>[[.5,0],[1,1],[0,1]]},
+  {id:"rtriangle",label:"Right triangle",gen:()=>[[0,0],[1,1],[0,1]]},
+  {id:"diamond",label:"Diamond",gen:()=>[[.5,0],[1,.5],[.5,1],[0,.5]]},
+  {id:"pentagon",label:"Pentagon",gen:()=>regular(5)},
+  {id:"hexagon",label:"Hexagon",gen:()=>[[.25,0],[.75,0],[1,.5],[.75,1],[.25,1],[0,.5]]},
+  {id:"octagon",label:"Octagon",gen:()=>[[.3,0],[.7,0],[1,.3],[1,.7],[.7,1],[.3,1],[0,.7],[0,.3]]},
+  {id:"star",label:"Star",gen:()=>regular(5,.4)},
+  {id:"star4",label:"Four-point star",gen:()=>regular(4,.36)},
+  {id:"blockarrow",label:"Block arrow",gen:()=>[[0,.28],[.6,.28],[.6,0],[1,.5],[.6,1],[.6,.72],[0,.72]]},
+  {id:"heart",label:"Heart",gen:()=>{ const pts=Array.from({length:64},(_,i)=>{ const t=i*Math.PI/32;
+      return [16*Math.sin(t)**3,-(13*Math.cos(t)-5*Math.cos(2*t)-2*Math.cos(3*t)-Math.cos(4*t))] });
+    const xs=pts.map(p=>p[0]),ys=pts.map(p=>p[1]),x0=Math.min(...xs),x1=Math.max(...xs),y0=Math.min(...ys),y1=Math.max(...ys);
+    return pts.map(([x,y])=>[(x-x0)/(x1-x0),(y-y0)/(y1-y0)]) }},
+  {id:"lightning",label:"Lightning",gen:()=>[[.4,0],[.62,.3],[.53,.34],[.82,.6],[.72,.64],[1,1],[.48,.71],[.59,.67],[.22,.45],[.33,.4],[.02,.14]]},
+  {id:"freeform",label:"Freeform (tap points)"}
+];
+const shapeById=id=>SHAPES.find(s=>s.id===id)||SHAPES[3];
+function shapePreview(s){
+  if(s.line){
+    const heads={arrow:'<path d="M13 3h8v8"/>',arrow2:'<path d="M13 3h8v8"/><path d="M11 21H3v-8"/>'}[s.id]||"";
+    return `<svg viewBox="0 0 24 24" aria-hidden="true" class="mk-line-glyph"><path d="M3 21L21 3"/>${heads}</svg>`;
+  }
+  if(s.id==="freeform") return `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 18 7 5l7 4 6-3-2 13-8 1Z"/></svg>`;
+  const pts=s.gen(20,20).map(([x,y])=>`${(3+x*18).toFixed(1)},${(3+y*18).toFixed(1)}`).join(" ");
+  return `<svg viewBox="0 0 24 24" aria-hidden="true"><polygon points="${pts}"/></svg>`;
+}
 
 /* Text and pins: SVG in the layer's own renderer, sized in metres. */
 const MarkupPoint=L.Layer.extend({
@@ -77,12 +127,11 @@ const MarkupPoint=L.Layer.extend({
   onAdd(map){
     this._renderer=map.getRenderer(this);
     const g=this._el=document.createElementNS(SVGNS,"g");
-    g.setAttribute("class","csp-mk-point leaflet-interactive");
+    g.setAttribute("class","csp-mk-point");
     this._build();
     this._renderer._rootGroup.appendChild(g);
     this._renderer.on("update",this._reset,this);
     map.on("zoomend viewreset",this._reset,this);
-    g.addEventListener("click",event=>{ L.DomEvent.stop(event);this.fire("click",{originalEvent:event,latlng:this._latlng}) });
     this._reset();
   },
   onRemove(map){
@@ -92,9 +141,9 @@ const MarkupPoint=L.Layer.extend({
   },
   getLatLng(){ return this._latlng },
   getElement(){ return this._el },
-  setLatLng(ll){ this._latlng=L.latLng(ll);this._reset();return this },
   _build(){
     const g=this._el,o=this.options;g.replaceChildren();
+    g.setAttribute("opacity",String(o.opacity??1));
     const text=t=>{
       const el=document.createElementNS(SVGNS,"text");
       el.setAttribute("fill",o.color);el.setAttribute("stroke",haloFor(o.color));
@@ -102,8 +151,8 @@ const MarkupPoint=L.Layer.extend({
       el.setAttribute("font-family","-apple-system,BlinkMacSystemFont,'SF Pro Text','Inter Variable',system-ui,sans-serif");
       el.setAttribute("font-weight","650");
       const lines=String(t).split("\n");
-      lines.forEach((line,i)=>{ const span=document.createElementNS(SVGNS,"tspan");span.setAttribute("x",el.getAttribute("x")||"0");
-        span.setAttribute("dy",i?"1.2em":String(-(lines.length-1)*0.6)+"em");span.textContent=line||" ";el.append(span) });
+      lines.forEach((line,i)=>{ const span=document.createElementNS(SVGNS,"tspan");span.setAttribute("x","0");
+        span.setAttribute("dy",i?"1.2em":String(-(lines.length-1)*0.6)+"em");span.textContent=line||" ";el.append(span) });
       return el;
     };
     if(o.kind==="pin"){
@@ -123,12 +172,13 @@ const MarkupPoint=L.Layer.extend({
   _reset(){
     if(!this._map||!this._el) return;
     const pt=this._map.latLngToLayerPoint(this._latlng),px=this.options.size/mpp(this._latlng.lat,this._map.getZoom());
-    this._el.setAttribute("transform",`translate(${pt.x.toFixed(2)},${pt.y.toFixed(2)})`);
+    const rot=this.options.kind==="text"&&this.options.rot?` rotate(${(-this.options.rot*180/Math.PI).toFixed(2)})`:"";
+    this._el.setAttribute("transform",`translate(${pt.x.toFixed(2)},${pt.y.toFixed(2)})${rot}`);
     this._el.style.display=px<0.8?"none":"";
     if(this._pin){
       const k=px/24;
       this._pin.setAttribute("transform",`scale(${k}) translate(-12,-22.5)`);
-      if(this._label){ const fs=px*0.55;this._label.setAttribute("font-size",fs.toFixed(2));this._label.setAttribute("x",(px*0.38).toFixed(2));
+      if(this._label){ const fs=px*0.55;this._label.setAttribute("font-size",fs.toFixed(2));
         this._label.setAttribute("y",(-px*0.6).toFixed(2));this._label.setAttribute("stroke-width",(fs*0.22).toFixed(2));
         for(const span of this._label.children) span.setAttribute("x",(px*0.38).toFixed(2)) }
     }else if(this._label){
@@ -158,17 +208,30 @@ const idb=(()=>{
     setMeta:(key,value)=>run("meta","readwrite",s=>s.put(value,key)).catch(()=>{})
   };
 })();
-function readView(){ try{ return JSON.parse(localStorage.getItem(VIEW_KEY))||{} }catch(e){ return {} } }
+const store={
+  get(key,fallback){ try{ const v=JSON.parse(localStorage.getItem(key));return v??fallback }catch(e){ return fallback } },
+  set(key,value){ try{ localStorage.setItem(key,JSON.stringify(value)) }catch(e){} }
+};
+function readView(){ return store.get(VIEW_KEY,{}) }
 function writeView(){
   const view={};for(const [id,layer] of layers) view[id]={on:layer.visible,op:layer.opacity,rank:layer.rank};
-  try{ localStorage.setItem(VIEW_KEY,JSON.stringify(view)) }catch(e){}
+  store.set(VIEW_KEY,view);
 }
+
+/* ---------------------------------------------------------- drawing styles
+   What the next mark will look like. Widths are screen pixels at the moment
+   of drawing (stored on the mark in metres); opacities are percentages. */
+const STYLE_DEFAULT={ink:{color:null,width:4,opacity:100},highlight:{color:"#ffcc00",width:22,opacity:40},
+  fill:{color:"auto",opacity:20},text:{size:22},eraser:{size:28},shape:"rect"};
+const styles=(()=>{ const s=store.get(STYLE_KEY,{});
+  return {ink:{...STYLE_DEFAULT.ink,...s.ink,color:null},highlight:{...STYLE_DEFAULT.highlight,...s.highlight},fill:{...STYLE_DEFAULT.fill,...s.fill},
+    text:{...STYLE_DEFAULT.text,...s.text},eraser:{...STYLE_DEFAULT.eraser,...s.eraser},shape:SHAPES.some(x=>x.id===s.shape)?s.shape:STYLE_DEFAULT.shape} })();
+const saveStyles=()=>store.set(STYLE_KEY,styles);
 
 /* ------------------------------------------------------------------- layers */
 const layers=new Map();       // id -> layer state
-let editing=null,tool="pan",selected=null,penColor=null,penWidth=1;   // penWidth: index into WIDTHS
-const WIDTHS=[{label:"Fine",px:2},{label:"Medium",px:4},{label:"Bold",px:7}];
-const undoStacks=new Map();
+let editing=null,tool="pan",selected=null;
+const undoStacks=new Map(),redoStacks=new Map();
 
 function makeLayer(doc,view={}){
   const id=doc.markup.id,paneName=`csp-markup-${id}`;
@@ -191,26 +254,33 @@ function applyOrder(){
      sits above imagery and overlays, below map buttons. */
   for(const layer of layers.values()) layer.pane.style.zIndex=String(450+Math.max(0,Math.min(140,layer.rank)));
 }
+const LINES=new Set(["pen","highlight","line","arrow","arrow2"]),AREAS=new Set(["area","rect","shape","circle"]);
+const featureLat=f=>{ const g=f.geometry;return g.type==="Point"?g.coordinates[1]:(g.type==="Polygon"?g.coordinates[0][0][1]:g.coordinates[0][1]) };
+const strokePx=(f,zoom=map.getZoom())=>(f.properties.width||0)/mpp(featureLat(f),zoom);
 function featureLayers(layer,feature){
   const p=feature.properties,color=p.color||layer.doc.markup.color,g=feature.geometry;
-  const lat=g.type==="Point"?g.coordinates[1]:(g.type==="Polygon"?g.coordinates[0][0][1]:g.coordinates[0][1]);
-  const base={renderer:layer.renderer,pane:layer.paneName,color,opacity:1,lineCap:"round",lineJoin:"round",bubblingMouseEvents:false};
-  const weight=()=>Math.max(0.6,(p.width||2)/mpp(lat,map.getZoom()));
+  const opacity=p.opacity??(p.kind==="highlight"?0.4:1);
+  const base={renderer:layer.renderer,pane:layer.paneName,color,opacity,lineCap:"round",lineJoin:"round",interactive:false};
+  const weight=()=>Math.max(0.6,strokePx(feature));
   const out=[];
-  if(p.kind==="pen"||p.kind==="line"||p.kind==="arrow"){
-    const latlngs=g.coordinates.map(toLL);
-    out.push(L.polyline(latlngs,{...base,weight:weight()}));
-    if(p.kind==="arrow"){ const head=arrowHead(latlngs,p.width||2);if(head) out.push(L.polygon(head,{...base,weight:weight()*0.6,fill:true,fillColor:color,fillOpacity:1})) }
-  }else if(p.kind==="area"||p.kind==="rect"){
-    out.push(L.polygon(g.coordinates[0].slice(0,-1).map(toLL),{...base,weight:weight(),fill:true,fillColor:color,fillOpacity:p.fill??0.18}));
-  }else if(p.kind==="circle"){
-    out.push(L.circle(toLL(g.coordinates),{...base,radius:p.radius,weight:weight(),fill:true,fillColor:color,fillOpacity:p.fill??0.18}));
+  if(LINES.has(p.kind)){
+    let latlngs=g.coordinates.map(toLL);
+    const heads=[];
+    if((p.kind==="arrow"||p.kind==="arrow2")&&latlngs.length>=2){
+      const n=latlngs.length,end=arrowHead(latlngs[n-2],latlngs[n-1],p.width||2);
+      if(end){ heads.push(end.tri);latlngs=[...latlngs.slice(0,-1),end.stop] }
+      if(p.kind==="arrow2"){ const start=arrowHead(latlngs[1],latlngs[0],p.width||2);if(start){ heads.push(start.tri);latlngs=[start.stop,...latlngs.slice(1)] } }
+    }
+    const line=L.polyline(latlngs,{...base,weight:weight(),className:p.kind==="highlight"?"csp-mk-hl":""});line._mkWeight=weight;out.push(line);
+    for(const tri of heads){ const h=L.polygon(tri,{...base,weight:weight()*0.6,fill:true,fillColor:color,fillOpacity:opacity});h._mkWeight=()=>weight()*0.6;out.push(h) }
+  }else if(AREAS.has(p.kind)){
+    const fill=p.fillColor===null?{fill:false}:{fill:true,fillColor:p.fillColor||color,fillOpacity:p.fill??0.18};
+    const stroke=(p.width??1)>0?{stroke:true,weight:weight()}:{stroke:false};
+    const shape=p.kind==="circle"?L.circle(toLL(g.coordinates),{...base,radius:p.radius,...stroke,...fill})
+      :L.polygon(g.coordinates[0].slice(0,-1).map(toLL),{...base,...stroke,...fill});
+    shape._mkWeight=weight;out.push(shape);
   }else if(p.kind==="text"||p.kind==="pin"){
-    out.push(new MarkupPoint(toLL(g.coordinates),{renderer:layer.renderer,pane:layer.paneName,kind:p.kind,text:p.text||"",size:p.size||20,color}));
-  }
-  for(const item of out){
-    item._mkWeight=weight;
-    item.on("click",event=>{ if(editing===layer&&tool==="select"){ L.DomEvent.stop(event.originalEvent||event);select(feature.properties.fid) } });
+    out.push(new MarkupPoint(toLL(g.coordinates),{renderer:layer.renderer,pane:layer.paneName,kind:p.kind,text:p.text||"",size:p.size||20,color,opacity,rot:p.rot||0}));
   }
   return out;
 }
@@ -220,7 +290,6 @@ function renderFeature(layer,feature){
   const built=featureLayers(layer,feature);
   built.forEach(l=>layer.group.addLayer(l));
   layer.items.set(feature.properties.fid,{feature,layers:built});
-  if(selected?.layer===layer&&selected.fid===feature.properties.fid) markSelected(true);
 }
 function renderLayer(layer){
   layer.group.clearLayers();layer.items.clear();
@@ -228,7 +297,7 @@ function renderLayer(layer){
 }
 map.on("zoomend",()=>{
   for(const layer of layers.values()) for(const {layers:parts} of layer.items.values())
-    for(const part of parts) if(part._mkWeight&&part.setStyle) part.setStyle({weight:part instanceof L.Polygon&&part.options.fillOpacity===1?part._mkWeight()*0.6:part._mkWeight()});
+    for(const part of parts) if(part._mkWeight&&part.setStyle&&part.options.stroke!==false) part.setStyle({weight:part._mkWeight()});
 });
 
 /* -------------------------------------------------------------- persistence */
@@ -240,15 +309,19 @@ function touch(layer){
   clearTimeout(syncTimer);syncTimer=setTimeout(syncAll,900);
   changed();
 }
+const stackFor=(stacks,layer)=>{ const id=layer.doc.markup.id;if(!stacks.has(id)) stacks.set(id,[]);return stacks.get(id) };
 function pushUndo(layer){
-  const stack=undoStacks.get(layer.doc.markup.id)||[];
+  const stack=stackFor(undoStacks,layer);
   stack.push(JSON.stringify(layer.doc.features));if(stack.length>100) stack.shift();
-  undoStacks.set(layer.doc.markup.id,stack);
+  stackFor(redoStacks,layer).length=0;
 }
-function undo(){
+function dropUndo(layer){ stackFor(undoStacks,layer).pop() }
+function undoRedo(redo){
   if(!editing) return;
-  const stack=undoStacks.get(editing.doc.markup.id);if(!stack?.length) return;
-  editing.doc.features=JSON.parse(stack.pop());
+  const from=stackFor(redo?redoStacks:undoStacks,editing),to=stackFor(redo?undoStacks:redoStacks,editing);
+  if(!from.length) return;
+  to.push(JSON.stringify(editing.doc.features));
+  editing.doc.features=JSON.parse(from.pop());
   deselect();renderLayer(editing);touch(editing);paintBar();
 }
 async function pendingDeletes(){ return (await idb.getMeta("pendingDeletes"))||{} }
@@ -258,12 +331,17 @@ async function syncAll(){
   if(syncing){ syncAgain=true;return }
   syncing=true;status("syncing");
   try{
+    const listed=await fetch(B.api("/api/markup"),{cache:"no-store"});
+    /* An engine from before markup answers 404: nothing is wrong with the
+       layers, they just stay on this device until the engine is updated. */
+    if(listed.status===404){ status("unsupported");return }
+    if(!listed.ok) throw new Error(`markup list HTTP ${listed.status}`);
+    const list=await listed.json();
     const pending=await pendingDeletes();
     for(const [id,at] of Object.entries(pending)){
       const r=await fetch(B.api(`/api/markup/${id}/delete`),{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({at})});
       if(r.ok){ delete pending[id];await idb.setMeta("pendingDeletes",pending) }
     }
-    const list=await (await fetch(B.api("/api/markup"),{cache:"no-store"})).json();
     const remote=new Map((list.layers||[]).map(l=>[l.id,l]));
     for(const [id,at] of Object.entries(list.deleted||{})){
       const local=layers.get(id);
@@ -297,6 +375,7 @@ async function push(layer){
 function adopt(doc){
   if(!doc?.markup?.id) return;
   const local=layers.get(doc.markup.id);
+  if(local&&editing===local&&gesture) return;      // never pull a mark out from under the pointer
   idb.put(doc);
   if(local){ local.doc=doc;local.syncedAt=doc.markup.updated;if(selected?.layer===local) deselect();renderLayer(local) }
   else{ const view=readView()[doc.markup.id]||{};const layer=makeLayer(doc,view);layer.syncedAt=doc.markup.updated;layer.rank=nextRank();applyOrder() }
@@ -305,7 +384,7 @@ function removeLocal(id){
   const layer=layers.get(id);if(!layer) return;
   if(editing===layer) stopEditing();
   layer.group.remove();layer.renderer.remove?.();layer.pane.remove();
-  layers.delete(id);idb.del(id);undoStacks.delete(id);writeView();changed();
+  layers.delete(id);idb.del(id);undoStacks.delete(id);redoStacks.delete(id);writeView();changed();
 }
 function status(state){ if(state) lastStatus=state;changed() }
 document.addEventListener("csp:server",()=>syncAll());
@@ -319,8 +398,13 @@ function createLayer(name,color){
   idb.put(doc);syncAll();changed();
   return layer;
 }
-function renameLayer(layer,name){ if(!name.trim()) return;layer.doc.markup.name=name.trim().slice(0,120);touch(layer) }
-function recolorLayer(layer,color){ layer.doc.markup.color=color;touch(layer) }
+function renameLayer(layer,name){ if(!name.trim()||name.trim()===layer.doc.markup.name) return;layer.doc.markup.name=name.trim().slice(0,120);touch(layer);if(editing===layer) paintBar() }
+function clearLayer(layer){
+  if(!layer.doc.features.length) return;
+  pushUndo(layer);
+  if(selected?.layer===layer) deselect();
+  layer.doc.features=[];renderLayer(layer);touch(layer);if(editing===layer) paintBar();
+}
 async function deleteLayer(layer){
   const id=layer.doc.markup.id,at=Date.now();
   removeLocal(id);
@@ -330,59 +414,119 @@ async function deleteLayer(layer){
 
 /* ------------------------------------------------------------------ editing */
 const mapEl=map.getContainer();
+/* The drawing surface: present while a drawing tool is active, so strokes go
+   to the pen instead of panning the map. The wheel still zooms. */
 const capture=document.createElement("div");capture.id="mkCapture";capture.hidden=true;mapEl.append(capture);
 L.DomEvent.disableClickPropagation(capture);
-/* Leaflet starts its own drag from mousedown and touchstart; the drawing
-   surface keeps those to itself. The wheel is left to bubble, so zooming
-   still works while a drawing tool is active. */
 for(const type of ["mousedown","touchstart","dblclick"]) capture.addEventListener(type,event=>event.stopPropagation(),{passive:true});
+/* Selection frame and handles live in their own layer above the map. */
+const overlay=document.createElement("div");overlay.id="mkOverlay";mapEl.append(overlay);
+L.DomEvent.disableClickPropagation(overlay);
+const eraserRing=document.createElement("div");eraserRing.className="mk-eraser-ring";eraserRing.hidden=true;mapEl.append(eraserRing);
 const bar=document.createElement("div");bar.id="mkBar";bar.hidden=true;bar.setAttribute("role","toolbar");bar.setAttribute("aria-label","Markup tools");
 document.getElementById("app").append(bar);
 L.DomEvent.disableClickPropagation(bar);L.DomEvent.disableScrollPropagation(bar);
-const TOOLS=[["pan","hand","Pan the map"],["select","mouse-pointer-2","Select, move and edit"],["pen","pencil","Freehand pen"],["line","minus","Line"],
-  ["arrow","move-up-right","Arrow"],["area","pentagon","Area (tap points, then ✓)"],["rect","square","Rectangle"],["circle","circle","Circle"],
-  ["text","type","Text"],["pin","map-pin","Pin"]];
-let draft=null;          // in-progress drawing
+const pop=document.createElement("div");pop.id="mkPop";pop.hidden=true;pop.setAttribute("role","dialog");
+document.getElementById("app").append(pop);
+L.DomEvent.disableClickPropagation(pop);L.DomEvent.disableScrollPropagation(pop);
+
+const TOOLS=[
+  ["select","mouse-pointer-2","Select, move and resize (V)"],
+  ["pan","hand","Pan the map (H)"],
+  null,
+  ["pen","pencil","Pen (P)"],
+  ["highlight","highlighter","Highlighter (I)"],
+  ["eraser","eraser","Eraser (E)"],
+  ["shape","shapes","Shapes (S)"],
+  ["text","type","Text (T)"],
+  ["pin","map-pin","Pin"]
+];
+let draft=null;          // a mark being drawn
+let gesture=null;        // a selection being moved, resized or rotated
+let pointsMode=false;    // editing the points of a selected shape
+let lastLayerId=store.get(LAST_KEY,null);
+const notifyEditing=()=>document.dispatchEvent(new CustomEvent("csp:markup-editing",{detail:{editing:!!editing,layer:editing?.doc.markup.id||null}}));
 function startEditing(layer){
   if(editing&&editing!==layer) stopEditing();
+  B.ensure2d?.();
+  const newLayer=lastLayerId!==layer.doc.markup.id;
   editing=layer;layer.visible=true;applyView(layer);writeView();
-  penColor=penColor||layer.doc.markup.color;tool=tool==="pan"?"pen":tool;
+  lastLayerId=layer.doc.markup.id;store.set(LAST_KEY,lastLayerId);
+  /* The layer's colour is the default ink for that layer. */
+  if(newLayer||!styles.ink.color) styles.ink.color=layer.doc.markup.color;
+  tool=tool==="pan"||tool==="select"?"pen":tool;
   /* Lower the phone sheet once the tap that chose Draw has finished; doing it
      inside that tap let the same click land on the lowered sheet and raise it. */
   if(innerWidth<=760) setTimeout(()=>{ if(editing&&!document.body.classList.contains("collapsed")) $("#sideToggle")?.click() },60);
   document.body.classList.add("csp-markup-editing");
-  setTool(tool);changed();
+  setTool(tool);changed();notifyEditing();
 }
 function stopEditing(){
-  cancelDraft();deselect();editing=null;tool="pan";
-  capture.hidden=true;bar.hidden=true;document.body.classList.remove("csp-markup-editing");
-  map.dragging.enable();changed();
+  cancelDraft();deselect();closePop();editing=null;tool="pan";
+  capture.hidden=true;bar.hidden=true;eraserRing.hidden=true;document.body.classList.remove("csp-markup-editing");
+  map.dragging.enable();mapEl.classList.remove("mk-hover");changed();notifyEditing();
 }
 function setTool(next){
-  cancelDraft();if(next!=="select") deselect();
-  tool=next;
+  cancelDraft();closePop();
+  if(next!=="select") deselect();
+  tool=next;mapEl.classList.remove("mk-hover");
   const drawing=!["pan","select"].includes(tool);
   capture.hidden=!drawing;capture.dataset.tool=tool;
+  eraserRing.hidden=tool!=="eraser";
   paintBar();
+}
+/* A colour chip, a slider and the like, as small HTML pieces. */
+const chip=(act,color,label,none=false)=>`<button type="button" class="mk-chip${none?" mk-none":""}" data-pop="${act}" style="--c:${color||"transparent"}" aria-label="${label}" title="${label}"><span></span></button>`;
+const slider=(key,label,value,min,max,step,unit)=>`<label class="mk-slider" title="${label}"><span>${label}</span><input type="range" data-style="${key}" min="${min}" max="${max}" step="${step}" value="${value}" aria-label="${label}"><output>${value}${unit}</output></label>`;
+const sep=`<span class="mk-sep" aria-hidden="true"></span>`;
+function selectedFeature(){ return selected&&selected.layer===editing?editing.items.get(selected.fid)?.feature||null:null }
+function familyOf(kind){ return kind==="highlight"?"highlight":kind==="text"||kind==="pin"?"text":AREAS.has(kind)?"shape":kind==="eraser"?"eraser":LINES.has(kind)?"line":null }
+/* The options row reads from the selected mark when there is one, otherwise
+   from the style the current tool will draw with. */
+function currentStyle(){
+  const f=selectedFeature();
+  if(f){
+    const p=f.properties,color=p.color||editing.doc.markup.color;
+    return {family:familyOf(p.kind),color,width:Math.round(clamp(strokePx(f),0,80)),opacity:Math.round((p.opacity??(p.kind==="highlight"?.4:1))*100),
+      fillColor:p.fillColor===undefined?"auto":p.fillColor,fillOpacity:Math.round((p.fill??0.18)*100),size:Math.round(clamp((p.size||20)/mpp(featureLat(f),map.getZoom()),6,160))};
+  }
+  const family=tool==="shape"?(shapeById(styles.shape).line?"line":"shape"):familyOf(tool);
+  const ink=family==="highlight"?styles.highlight:styles.ink;
+  return {family,color:ink.color,width:ink.width,opacity:ink.opacity,fillColor:styles.fill.color,fillOpacity:styles.fill.opacity,size:styles.text.size,eraser:styles.eraser.size};
 }
 function paintBar(){
   if(!editing){ bar.hidden=true;return }
   bar.hidden=false;
-  const sel=selected&&selected.layer===editing?editing.items.get(selected.fid)?.feature:null;
-  const color=sel?(sel.properties.color||editing.doc.markup.color):penColor;
+  const f=selectedFeature(),s=currentStyle(),m=editing.doc.markup;
+  const shape=shapeById(styles.shape);
+  const tools=TOOLS.map(t=>t?`<button type="button" class="mk-tool" data-tool="${t[0]}" aria-pressed="${tool===t[0]}" title="${t[2]}" aria-label="${t[2].replace(/ \(.\)$/,"")}">${
+    t[0]==="shape"?`<span class="mk-shape-glyph">${shapePreview(shape)}</span><img class="mk-caret" src="${icon("chevron-down")}" alt="">`:`<img src="${icon(t[1])}" alt="">`}</button>`:sep).join("");
+  const undoCount=stackFor(undoStacks,editing).length,redoCount=stackFor(redoStacks,editing).length;
+  let opts="";
+  const fam=s.family;
+  if(fam==="eraser") opts=slider("eraser","Size",s.eraser,8,120,1,"px")+`<span class="mk-hint">Drag across marks to erase them</span>`;
+  else if(fam==="line"||fam==="highlight") opts=chip("color",s.color,"Colour")+slider("width","Width",s.width,1,fam==="highlight"?80:40,1,"px")+slider("opacity","Opacity",s.opacity,5,100,1,"%");
+  else if(fam==="shape") opts=chip("color",s.color,s.width?"Outline colour":"Outline colour (no outline)")+slider("width","Outline",s.width,0,40,1,"px")+slider("opacity","Opacity",s.opacity,5,100,1,"%")+sep+
+    chip("fill",s.fillColor==="auto"?s.color:s.fillColor,s.fillColor===null?"Fill: none":"Fill colour",s.fillColor===null)+(s.fillColor===null?"":slider("fillOpacity","Fill",s.fillOpacity,0,100,1,"%"));
+  else if(fam==="text") opts=chip("color",s.color,"Colour")+slider("size","Size",s.size,8,120,1,"px")+slider("opacity","Opacity",s.opacity,5,100,1,"%");
+  else opts=`<span class="mk-hint">${tool==="select"?"Click a mark to select it · drag to move · handles resize and rotate":"Drag to move around the map"}</span>`;
+  let actions="";
+  if(f){
+    const p=f.properties;
+    if(p.kind==="text"||p.kind==="pin") actions+=`<button type="button" class="mk-text-btn" data-act="edit-text">Edit text</button>`;
+    if(p.kind==="area"||p.kind==="shape"||p.kind==="rect") actions+=`<button type="button" class="mk-text-btn" data-act="points" aria-pressed="${pointsMode}">Edit points</button>`;
+    actions+=`<button type="button" class="mk-icon-btn" data-act="duplicate" title="Duplicate (Ctrl+D)" aria-label="Duplicate"><img src="${icon("copy")}" alt=""></button>
+      <button type="button" class="mk-icon-btn mk-danger" data-act="delete" title="Delete (Delete key)" aria-label="Delete selected"><img src="${icon("trash-2")}" alt=""></button>`;
+  }
   const pending=draft&&draft.kind==="area";
   bar.innerHTML=`
-    <div class="mk-row mk-tools">${TOOLS.map(([id,ic,label])=>`<button type="button" class="mk-tool" data-tool="${id}" aria-pressed="${tool===id}" title="${label}" aria-label="${label}"><img src="${icon(ic)}" alt=""></button>`).join("")}</div>
-    <div class="mk-row mk-style">
-      <span class="mk-layer-name"></span>
-      <div class="mk-swatches mk-scroll">${[...new Set([editing.doc.markup.color,...(color&&!PALETTE.includes(color)?[color]:[]),...PALETTE])].map(c=>`<button type="button" class="mk-swatch" data-color="${c}" style="--c:${c}" aria-pressed="${c===color}" aria-label="Colour ${c}"></button>`).join("")}</div>
-      <button type="button" class="mk-text-btn" data-act="width" title="Stroke width">${WIDTHS[penWidth].label}</button>
-      ${sel&&(sel.properties.kind==="text"||sel.properties.kind==="pin")?`<button type="button" class="mk-text-btn" data-act="edit-text">Edit text</button>`:""}
-      ${sel?`<button type="button" class="mk-icon-btn" data-act="delete" title="Delete" aria-label="Delete selected"><img src="${icon("trash-2")}" alt=""></button>`:""}
-      <button type="button" class="mk-icon-btn" data-act="undo" title="Undo" aria-label="Undo" ${undoStacks.get(editing.doc.markup.id)?.length?"":"disabled"}><img src="${icon("undo-2")}" alt=""></button>
-      <button type="button" class="mk-done" data-act="${pending?"finish":"done"}">${pending?"Finish area":"Done"}</button>
-    </div>`;
-  $(".mk-layer-name",bar).textContent=editing.doc.markup.name;
+    <div class="mk-tools">${tools}</div>
+    <div class="mk-history">
+      <button type="button" class="mk-icon-btn" data-act="undo" title="Undo (Ctrl+Z)" aria-label="Undo" ${undoCount?"":"disabled"}><img src="${icon("undo-2")}" alt=""></button>
+      <button type="button" class="mk-icon-btn" data-act="redo" title="Redo (Ctrl+Shift+Z)" aria-label="Redo" ${redoCount?"":"disabled"}><img src="${icon("redo-2")}" alt=""></button>
+    </div>
+    <div class="mk-finish"><button type="button" class="mk-done" data-act="${pending?"finish":"done"}">${pending?"Finish shape":"Done"}</button></div>
+    <div class="mk-opts"><span class="mk-layer-chip" title="Drawing on this layer"><span class="mk-dot" style="--c:${m.color}"></span><span class="mk-layer-name">${esc(m.name)}</span></span>${opts}${actions?sep+actions:""}</div>`;
   placeBar();
 }
 /* On a wide screen the bar is centred over the map, clear of the sidebar;
@@ -392,58 +536,183 @@ function placeBar(){
   if(innerWidth<=760){ bar.style.left="";return }
   const side=document.getElementById("side"),open=side&&!document.body.classList.contains("collapsed");
   const dock=document.getElementById("mapDock")?.getBoundingClientRect();
-  const left=open?side.getBoundingClientRect().right+12:12,right=dock&&dock.width?dock.left-12:innerWidth-12,width=bar.offsetWidth;
+  const left=open?side.getBoundingClientRect().right+12:12,right=dock&&dock.width?dock.left-12:innerWidth-12;
+  bar.style.maxWidth=Math.max(320,right-left)+"px";
+  const width=bar.offsetWidth;
   bar.style.left=Math.max(left+width/2,Math.min(right-width/2,(left+right)/2))+"px";
 }
-addEventListener("resize",placeBar);
+addEventListener("resize",()=>{ placeBar();closePop() });
 new MutationObserver(()=>requestAnimationFrame(placeBar)).observe(document.body,{attributes:true,attributeFilter:["class"]});
+
+/* Restyling: from the toolbar to the style the tool draws with and, when a
+   mark is selected, to that mark. A slider drag is one undo step. */
+let styleEdit=false;
+function applyStyle(key,value,final){
+  const f=selectedFeature(),s=currentStyle(),fam=s.family;
+  const ink=fam==="highlight"?styles.highlight:styles.ink;
+  if(key==="color") ink.color=value;
+  else if(key==="width") ink.width=value;
+  else if(key==="opacity") ink.opacity=value;
+  else if(key==="fill") styles.fill.color=value;
+  else if(key==="fillOpacity") styles.fill.opacity=value;
+  else if(key==="size") styles.text.size=value;
+  else if(key==="eraser"){ styles.eraser.size=value;sizeEraser() }
+  saveStyles();
+  if(f){
+    if(!styleEdit){ pushUndo(editing);styleEdit=true }
+    const p=f.properties,lat=featureLat(f),m=mpp(lat,map.getZoom());
+    if(key==="color") p.color=value;
+    else if(key==="width") p.width=+(value*m).toFixed(3);
+    else if(key==="opacity") p.opacity=value/100;
+    else if(key==="fill"){ p.fillColor=value==="auto"?(p.color||editing.doc.markup.color):value }
+    else if(key==="fillOpacity") p.fill=value/100;
+    else if(key==="size") p.size=+(value*m).toFixed(3);
+    renderFeature(editing,f);
+    if(final){ styleEdit=false;touch(editing);drawFrame() }
+  }
+}
+bar.addEventListener("input",event=>{
+  const input=event.target.closest("input[data-style]");if(!input) return;
+  const out=input.parentElement.querySelector("output"),unit=input.dataset.style==="opacity"||input.dataset.style==="fillOpacity"?"%":"px";
+  out.textContent=input.value+unit;
+  applyStyle(input.dataset.style,+input.value,false);
+});
+bar.addEventListener("change",event=>{
+  const input=event.target.closest("input[data-style]");if(!input) return;
+  applyStyle(input.dataset.style,+input.value,true);
+  /* Outline 0 and back changes which controls apply. */
+  if(input.dataset.style==="width") paintBar();
+});
 bar.addEventListener("click",event=>{
   const button=event.target.closest("button");if(!button||!editing) return;
-  if(button.dataset.tool){ setTool(button.dataset.tool);return }
-  if(button.dataset.color){
-    const c=button.dataset.color;penColor=c;
-    if(selected) mutate(f=>{ f.properties.color=c });
-    paintBar();return;
+  if(button.dataset.tool){
+    if(button.dataset.tool==="shape"){
+      if(tool==="shape"&&!pop.hidden&&pop.dataset.kind==="shape"){ closePop();return }
+      if(tool!=="shape") setTool("shape");
+      openPop("shape",bar.querySelector('[data-tool="shape"]'));return;
+    }
+    setTool(button.dataset.tool);return;
   }
+  if(button.dataset.pop){ pop.hidden||pop.dataset.kind!==button.dataset.pop?openPop(button.dataset.pop,button):closePop();return }
   const act=button.dataset.act;
-  if(act==="width"){
-    penWidth=(penWidth+1)%WIDTHS.length;
-    if(selected) mutate(f=>{ if(f.properties.width) f.properties.width=WIDTHS[penWidth].px*here(); if(f.properties.kind==="text"||f.properties.kind==="pin") f.properties.size=(f.properties.kind==="text"?[14,20,30]:[22,30,42])[penWidth]*here() });
-    paintBar();
-  }
-  else if(act==="undo") undo();
+  if(act==="undo") undoRedo(false);
+  else if(act==="redo") undoRedo(true);
   else if(act==="delete") deleteSelected();
+  else if(act==="duplicate") duplicateSelected();
   else if(act==="edit-text") editSelectedText();
+  else if(act==="points"){ pointsMode=!pointsMode;drawFrame();paintBar() }
   else if(act==="finish") finishArea();
   else if(act==="done") stopEditing();
 });
+
+/* Popovers from the toolbar: the colour grid and the shape gallery. */
+function closePop(){ pop.hidden=true;pop.dataset.kind="";bar.querySelectorAll("[data-pop][aria-expanded]").forEach(b=>b.removeAttribute("aria-expanded")) }
+function openPop(kind,anchor){
+  pop.dataset.kind=kind;
+  const s=currentStyle();
+  if(kind==="shape"){
+    const group=(title,items)=>`<div class="mk-pop-label">${title}</div><div class="mk-shape-grid">${items.map(x=>
+      `<button type="button" class="mk-shape-btn" data-shape="${x.id}" aria-pressed="${styles.shape===x.id}" title="${x.label}" aria-label="${x.label}">${shapePreview(x)}</button>`).join("")}</div>`;
+    pop.innerHTML=group("Lines",SHAPES.filter(x=>x.line))+group("Shapes",SHAPES.filter(x=>!x.line));
+  }else{
+    const current=kind==="fill"?s.fillColor:s.color;
+    pop.innerHTML=`<div class="mk-pop-label">${kind==="fill"?"Fill":s.family==="shape"?"Outline":"Colour"}</div>
+      ${kind==="fill"?`<div class="mk-pop-row"><button type="button" class="mk-text-btn" data-pick="none" aria-pressed="${current===null}">No fill</button><button type="button" class="mk-text-btn" data-pick="auto" aria-pressed="${current==="auto"}">Same as outline</button></div>`:""}
+      <div class="mk-color-grid">${COLOR_GRID.map(c=>`<button type="button" class="mk-swatch" data-pick="${c}" style="--c:${c}" aria-pressed="${c===current}" aria-label="Colour ${c}"></button>`).join("")}</div>
+      <label class="mk-custom"><span>Custom colour</span><input type="color" value="${/^#[0-9a-f]{6}$/i.test(current||"")?current:"#ff3b30"}"></label>`;
+    fadeGrid($(".mk-color-grid",pop));
+  }
+  pop.hidden=false;anchor.setAttribute("aria-expanded","true");
+  const a=anchor.getBoundingClientRect(),app=document.getElementById("app").getBoundingClientRect();
+  const w=pop.offsetWidth,h=pop.offsetHeight;
+  let left=clamp(a.left-app.left+a.width/2-w/2,8,app.width-w-8),top=a.bottom-app.top+8;
+  if(top+h>app.height-8) top=Math.max(8,a.top-app.top-h-8);
+  pop.style.left=left+"px";pop.style.top=top+"px";
+}
+pop.addEventListener("click",event=>{
+  const b=event.target.closest("button");if(!b) return;
+  if(b.dataset.shape){
+    styles.shape=b.dataset.shape;saveStyles();closePop();
+    if(tool!=="shape") setTool("shape");else{ cancelDraft();paintBar() }
+    return;
+  }
+  if(b.dataset.pick){
+    const v=b.dataset.pick==="none"?null:b.dataset.pick;
+    applyStyle(pop.dataset.kind==="fill"?"fill":"color",v,true);closePop();paintBar();
+  }
+});
+pop.addEventListener("change",event=>{
+  if(event.target.type!=="color") return;
+  applyStyle(pop.dataset.kind==="fill"?"fill":"color",event.target.value,true);closePop();paintBar();
+});
+document.addEventListener("pointerdown",event=>{ if(!pop.hidden&&!pop.contains(event.target)&&!event.target.closest("[data-pop],[data-tool='shape']")) closePop() },true);
+function fadeGrid(grid){
+  if(!grid) return;
+  const edges=()=>{ grid.classList.toggle("mk-at-top",grid.scrollTop<2);grid.classList.toggle("mk-at-end",grid.scrollTop+grid.clientHeight>=grid.scrollHeight-2) };
+  grid.addEventListener("scroll",edges,{passive:true});requestAnimationFrame(edges);
+}
+
+const KEYS={v:"select",h:"pan",p:"pen",i:"highlight",e:"eraser",s:"shape",t:"text"};
 document.addEventListener("keydown",event=>{
-  if(!editing||/^(input|textarea|select)$/i.test(event.target.tagName)) return;
-  if(event.key==="Escape"){ if(draft) cancelDraft();else if(selected) deselect();else stopEditing();paintBar() }
-  else if((event.key==="z"||event.key==="Z")&&(event.metaKey||event.ctrlKey)){ event.preventDefault();undo() }
+  if(!editing||/^(input|textarea|select)$/i.test(event.target.tagName)||event.target.isContentEditable) return;
+  const mod=event.metaKey||event.ctrlKey,k=event.key.toLowerCase();
+  if(event.key==="Escape"){ if(!pop.hidden) closePop();else if(draft) cancelDraft();else if(pointsMode){ pointsMode=false;drawFrame() }else if(selected) deselect();else stopEditing();paintBar() }
+  else if(mod&&k==="z"){ event.preventDefault();undoRedo(event.shiftKey) }
+  else if(mod&&k==="y"){ event.preventDefault();undoRedo(true) }
+  else if(mod&&k==="d"&&selected){ event.preventDefault();duplicateSelected() }
   else if((event.key==="Delete"||event.key==="Backspace")&&selected){ event.preventDefault();deleteSelected() }
   else if(event.key==="Enter"&&draft?.kind==="area") finishArea();
+  else if(!mod&&!event.altKey&&KEYS[k]){ setTool(KEYS[k]) }
 });
 
-/* Drawing on the capture surface. One pointer draws; the wheel still zooms. */
-const pointLL=event=>{ const r=mapEl.getBoundingClientRect();return map.containerPointToLatLng(L.point(event.clientX-r.left,event.clientY-r.top)) };
+/* --------------------------------------------------------------- drawing */
 const pointPx=event=>{ const r=mapEl.getBoundingClientRect();return L.point(event.clientX-r.left,event.clientY-r.top) };
+const pxLL=px=>map.containerPointToLatLng(px);
+const llPx=ll=>map.latLngToContainerPoint(ll);
 function addFeature(kind,geometry,extra={}){
   if(!editing) return;
   pushUndo(editing);
-  const feature={type:"Feature",geometry,properties:{fid:rid(),kind,color:penColor,...extra}};
+  const feature={type:"Feature",geometry,properties:{fid:rid(),kind,...extra}};
   editing.doc.features.push(feature);renderFeature(editing,feature);touch(editing);paintBar();
   return feature;
 }
-function previewStyle(){ return {renderer:editing.renderer,pane:editing.paneName,color:penColor,weight:WIDTHS[penWidth].px,opacity:.9,lineCap:"round",lineJoin:"round",interactive:false,fillColor:penColor,fillOpacity:.18} }
+function inkProps(family){
+  const ink=family==="highlight"?styles.highlight:styles.ink,m=here();
+  return {color:ink.color||editing.doc.markup.color,width:+(ink.width*m).toFixed(3),opacity:ink.opacity/100};
+}
+function fillProps(){
+  const ink=styles.ink.color||editing.doc.markup.color,f=styles.fill;
+  return f.color===null?{fillColor:null}:{fillColor:f.color==="auto"?ink:f.color,fill:f.opacity/100};
+}
+function previewStyle(family){
+  const ink=family==="highlight"?styles.highlight:styles.ink,color=ink.color||editing.doc.markup.color;
+  const fill=fillProps();
+  return {renderer:editing.renderer,pane:editing.paneName,color,weight:Math.max(ink.width,family==="shape"?0.0001:1),opacity:ink.opacity/100,lineCap:"round",lineJoin:"round",
+    interactive:false,stroke:family!=="shape"||ink.width>0,fill:family==="shape"&&fill.fillColor!==null,fillColor:fill.fillColor||color,fillOpacity:fill.fill??0,
+    className:family==="highlight"?"csp-mk-hl":""};
+}
 function cancelDraft(){ if(draft?.preview) draft.preview.forEach(p=>p.remove());draft=null }
+/* The direction of "screen right" on the ground, so a shape drawn on a
+   rotated map is recorded at the angle it was drawn. */
+function screenRot(){
+  const c=map.getSize().divideBy(2),a=proj(pxLL(c)),b=proj(pxLL(c.add([100,0])));
+  return Math.atan2(b.y-a.y,b.x-a.x);
+}
+function boxShape(shape,a,c,square){
+  let w=c.x-a.x,h=c.y-a.y;
+  if(square){ const s=Math.max(Math.abs(w),Math.abs(h));w=Math.sign(w||1)*s;h=Math.sign(h||1)*s }
+  const x0=Math.min(a.x,a.x+w),y0=Math.min(a.y,a.y+h),aw=Math.abs(w),ah=Math.abs(h);
+  return shape.gen(aw,ah).map(([x,y])=>pxLL(L.point(x0+x*aw,y0+y*ah)));
+}
 capture.addEventListener("pointerdown",event=>{
   if(!editing||event.button>0) return;
-  event.preventDefault();event.stopPropagation();
-  const ll=pointLL(event),px=pointPx(event);
+  event.preventDefault();event.stopPropagation();closePop();
+  const ll=pxLL(pointPx(event)),px=pointPx(event);
   if(tool==="text"||tool==="pin"){ placeText(tool,ll,px);return }
-  if(tool==="area"){
-    if(!draft){ draft={kind:"area",points:[ll],px:[px],preview:[L.polyline([ll],previewStyle()).addTo(map)]};paintBar() }
+  if(tool==="eraser"){ startErase(event);return }
+  const shape=tool==="shape"?shapeById(styles.shape):null;
+  if(shape?.id==="freeform"){
+    if(!draft){ draft={kind:"area",points:[ll],px:[px],preview:[L.polyline([ll],previewStyle("shape")).addTo(map)]};paintBar() }
     else{
       if(draft.px.length>=3&&px.distanceTo(draft.px[0])<14){ finishArea();return }
       draft.points.push(ll);draft.px.push(px);draft.preview[0].setLatLngs(draft.points);
@@ -451,46 +720,60 @@ capture.addEventListener("pointerdown",event=>{
     return;
   }
   capture.setPointerCapture?.(event.pointerId);
-  draft={kind:tool,start:ll,startPx:px,points:[ll],px:[px],pointerId:event.pointerId,preview:[]};
-  const style=previewStyle();
-  if(tool==="pen"||tool==="line"||tool==="arrow") draft.preview.push(L.polyline([ll],style).addTo(map));
-  else if(tool==="rect") draft.preview.push(L.polygon([ll,ll,ll,ll],style).addTo(map));
-  else if(tool==="circle") draft.preview.push(L.circle(ll,{...style,radius:1}).addTo(map));
+  const kind=tool==="shape"?(shape.line?shape.id:"shape"):tool;
+  draft={kind,shape,start:ll,startPx:px,points:[ll],px:[px],pointerId:event.pointerId,preview:[]};
+  const family=kind==="highlight"?"highlight":kind==="shape"?"shape":"line";
+  const style=previewStyle(family);
+  if(kind==="shape") draft.preview.push(L.polygon([ll,ll,ll],style).addTo(map));
+  else draft.preview.push(L.polyline([ll],style).addTo(map));
 });
 capture.addEventListener("pointermove",event=>{
+  if(tool==="eraser"){ moveEraserRing(event);if(erasing) eraseMove(event);return }
   if(!draft||draft.pointerId!==event.pointerId) return;
-  const ll=pointLL(event),px=pointPx(event),preview=draft.preview[0];
-  if(draft.kind==="pen"){
-    if(px.distanceTo(draft.px[draft.px.length-1])<2.5) return;
+  const ll=pxLL(pointPx(event)),px=pointPx(event),preview=draft.preview[0];
+  if(draft.kind==="pen"||draft.kind==="highlight"){
+    if(px.distanceTo(draft.px[draft.px.length-1])<2) return;
     draft.points.push(ll);draft.px.push(px);preview.setLatLngs(draft.points);
-  }else if(draft.kind==="line"||draft.kind==="arrow"){ draft.points=[draft.start,ll];draft.px=[draft.startPx,px];preview.setLatLngs(draft.points) }
-  else if(draft.kind==="rect"){
-    const a=draft.startPx,c=px,corners=[a,L.point(c.x,a.y),c,L.point(a.x,c.y)].map(p=>map.containerPointToLatLng(p));
-    draft.points=corners;draft.px=[a,c];preview.setLatLngs(corners);
-  }else if(draft.kind==="circle"){ draft.radius=map.distance(draft.start,ll);draft.px=[draft.startPx,px];preview.setRadius(draft.radius) }
+  }else if(draft.kind==="shape"){
+    draft.px=[draft.startPx,px];draft.square=event.shiftKey;
+    draft.points=boxShape(draft.shape,draft.startPx,px,event.shiftKey);preview.setLatLngs(draft.points);
+  }else{
+    let end=px;
+    if(event.shiftKey){ /* lines snap to 15° steps */
+      const d=px.subtract(draft.startPx),a=Math.round(Math.atan2(d.y,d.x)/(Math.PI/12))*(Math.PI/12),r=Math.hypot(d.x,d.y);
+      end=draft.startPx.add([r*Math.cos(a),r*Math.sin(a)]);
+    }
+    draft.points=[draft.start,pxLL(end)];draft.px=[draft.startPx,end];preview.setLatLngs(draft.points);
+  }
 });
+capture.addEventListener("pointerleave",()=>{ if(tool==="eraser"&&!erasing) eraserRing.hidden=true });
+capture.addEventListener("pointerenter",()=>{ if(tool==="eraser") eraserRing.hidden=false });
 const endStroke=event=>{
+  if(tool==="eraser"){ endErase();return }
   if(!draft||draft.pointerId!==event.pointerId) return;
   const d=draft;cancelDraft();
   const span=d.px.length>1?d.px[0].distanceTo(d.px[d.px.length-1]):0;
-  const width=WIDTHS[penWidth].px*here();
-  if(d.kind==="pen"&&d.points.length>1) addFeature("pen",{type:"LineString",coordinates:simplify(d.points,d.px).map(toC)},{width});
-  else if((d.kind==="line"||d.kind==="arrow")&&span>=4) addFeature(d.kind,{type:"LineString",coordinates:d.points.map(toC)},{width});
-  else if(d.kind==="rect"&&d.px.length>1&&Math.abs(d.px[0].x-d.px[1].x)>=4&&Math.abs(d.px[0].y-d.px[1].y)>=4){
-    const ring=d.points.map(toC);ring.push(ring[0]);addFeature("rect",{type:"Polygon",coordinates:[ring]},{width});
-  }else if(d.kind==="circle"&&span>=4) addFeature("circle",{type:"Point",coordinates:toC(d.start)},{width,radius:+d.radius.toFixed(2)});
+  if((d.kind==="pen"||d.kind==="highlight")&&d.points.length>1) addFeature(d.kind,{type:"LineString",coordinates:simplify(d.points,d.px).map(toC)},inkProps(d.kind==="highlight"?"highlight":"ink"));
+  else if((d.kind==="pen"||d.kind==="highlight")){ /* a tap is a dot */
+    const ll2=pxLL(d.px[0].add([0.5,0.5]));addFeature(d.kind,{type:"LineString",coordinates:[toC(d.points[0]),toC(ll2)]},inkProps(d.kind==="highlight"?"highlight":"ink"));
+  }
+  else if(["line","arrow","arrow2"].includes(d.kind)&&span>=4) addFeature(d.kind,{type:"LineString",coordinates:d.points.map(toC)},inkProps("ink"));
+  else if(d.kind==="shape"&&d.px.length>1&&Math.abs(d.px[0].x-d.px[1].x)>=4&&Math.abs(d.px[0].y-d.px[1].y)>=4){
+    const ring=d.points.map(toC);ring.push(ring[0]);
+    addFeature("shape",{type:"Polygon",coordinates:[ring]},{shape:d.shape.id,rot:+screenRot().toFixed(5),...inkProps("ink"),...fillProps(),width:+(styles.ink.width*here()).toFixed(3)});
+  }
 };
-capture.addEventListener("pointerup",endStroke);capture.addEventListener("pointercancel",()=>{ if(draft&&draft.kind!=="area") cancelDraft() });
+capture.addEventListener("pointerup",endStroke);capture.addEventListener("pointercancel",()=>{ if(draft&&draft.kind!=="area") cancelDraft();if(erasing) endErase() });
 capture.addEventListener("dblclick",event=>{ event.preventDefault();if(draft?.kind==="area") finishArea() });
 function finishArea(){
   if(!draft||draft.kind!=="area") return;
   const d=draft;cancelDraft();
-  if(d.points.length>=3){ const ring=d.points.map(toC);ring.push(ring[0]);addFeature("area",{type:"Polygon",coordinates:[ring]},{width:WIDTHS[penWidth].px*here()}) }
+  if(d.points.length>=3){ const ring=d.points.map(toC);ring.push(ring[0]);addFeature("area",{type:"Polygon",coordinates:[ring]},{...inkProps("ink"),...fillProps()}) }
   paintBar();
 }
-/* Drop points closer than ~1.5 screen px to the line through their
-   neighbours (Ramer–Douglas–Peucker on the screen trace). */
-function simplify(points,px,tol=1.5){
+/* Drop points closer than ~1 screen px to the line through their neighbours
+   (Ramer–Douglas–Peucker on the screen trace). */
+function simplify(points,px,tol=1){
   if(points.length<3) return points;
   const keep=new Uint8Array(points.length);keep[0]=keep[points.length-1]=1;
   const stack=[[0,points.length-1]];
@@ -505,9 +788,9 @@ function simplify(points,px,tol=1.5){
 
 /* Text entry in place: Enter commits (Shift+Enter for a new line), Escape
    cancels, an empty pin is a plain pin, an empty text is nothing. */
-function textEditor(px,initial,onDone){
+function textEditor(px,initial,color,onDone){
   const box=document.createElement("textarea");box.className="mk-text-input";box.value=initial||"";box.rows=1;
-  box.style.left=px.x+"px";box.style.top=px.y+"px";box.style.color=penColor;
+  box.style.left=px.x+"px";box.style.top=px.y+"px";box.style.color=color;
   mapEl.append(box);L.DomEvent.disableClickPropagation(box);
   let done=false;
   const finish=commit=>{ if(done) return;done=true;const value=box.value.replace(/\s+$/,"");box.remove();onDone(commit?value:null) };
@@ -520,30 +803,120 @@ function textEditor(px,initial,onDone){
   setTimeout(()=>box.focus({preventScroll:true}),0);
 }
 function placeText(kind,ll,px){
-  textEditor(px,"",value=>{
-    if(value===null) return;
+  const color=styles.ink.color||editing.doc.markup.color;
+  textEditor(px,"",color,value=>{
+    if(value===null||!editing) return;
     if(kind==="text"&&!value) return;
-    const size=(kind==="text"?[14,20,30]:[22,30,42])[penWidth]*here();
-    addFeature(kind,{type:"Point",coordinates:toC(ll)},{text:value,size:+size.toFixed(3)});
+    const size=(kind==="pin"?styles.text.size*1.4:styles.text.size)*here();
+    addFeature(kind,{type:"Point",coordinates:toC(ll)},{text:value,size:+size.toFixed(3),color,opacity:styles.ink.opacity/100});
   });
 }
 
+/* ------------------------------------------------------------------ eraser
+   Strokes (pen and highlighter) are cut where the eraser passes, like ink;
+   anything else the eraser touches is removed whole. */
+let erasing=null;
+function sizeEraser(){ const s=styles.eraser.size;eraserRing.style.width=eraserRing.style.height=s+"px" }
+function moveEraserRing(event){ const p=pointPx(event);eraserRing.hidden=false;eraserRing.style.transform=`translate(${p.x-styles.eraser.size/2}px,${p.y-styles.eraser.size/2}px)` }
+function startErase(event){
+  capture.setPointerCapture?.(event.pointerId);
+  pushUndo(editing);erasing={changed:false,last:pointPx(event)};
+  eraseAt(erasing.last);
+}
+function eraseMove(event){
+  const p=pointPx(event),last=erasing.last,r=styles.eraser.size/2,steps=Math.max(1,Math.ceil(p.distanceTo(last)/(r*0.5)));
+  for(let i=1;i<=steps;i++) eraseAt(last.add(p.subtract(last).multiplyBy(i/steps)));
+  erasing.last=p;
+}
+function endErase(){
+  if(!erasing) return;
+  const e=erasing;erasing=null;
+  if(e.changed){ touch(editing);paintBar() } else dropUndo(editing);
+}
+/* Parts of segment a→b outside the circle (c, r), as [t0,t1] intervals. */
+function outsideCircle(a,b,c,r){
+  const dx=b.x-a.x,dy=b.y-a.y,fx=a.x-c.x,fy=a.y-c.y,A=dx*dx+dy*dy,Bq=2*(fx*dx+fy*dy),C=fx*fx+fy*fy-r*r;
+  if(A<1e-9) return C<=0?[]:[[0,1]];
+  const disc=Bq*Bq-4*A*C;if(disc<=0) return [[0,1]];
+  const s=Math.sqrt(disc),t1=(-Bq-s)/(2*A),t2=(-Bq+s)/(2*A);
+  if(t2<=0||t1>=1) return [[0,1]];
+  const out=[];if(t1>0) out.push([0,t1]);if(t2<1) out.push([t2,1]);return out;
+}
+function eraseAt(c){
+  const layer=editing;if(!layer) return;
+  const r=styles.eraser.size/2;let changed=false;const next=[];
+  for(const f of layer.doc.features){
+    const p=f.properties;
+    if(p.kind==="pen"||p.kind==="highlight"){
+      const pts=f.geometry.coordinates.map(cc=>llPx(toLL(cc))),half=strokePx(f)/2,R=r+half;
+      const box=L.bounds(pts);if(c.x<box.min.x-R||c.x>box.max.x+R||c.y<box.min.y-R||c.y>box.max.y+R){ next.push(f);continue }
+      const pieces=[];let cur=[];
+      for(let i=0;i<pts.length-1;i++){
+        const a=pts[i],b=pts[i+1],keep=outsideCircle(a,b,c,R);
+        if(keep.length===1&&keep[0][0]===0&&keep[0][1]===1){ if(!cur.length) cur.push(f.geometry.coordinates[i]);cur.push(f.geometry.coordinates[i+1]);continue }
+        for(const [t0,t1] of keep){
+          const at=t=>toC(pxLL(L.point(a.x+(b.x-a.x)*t,a.y+(b.y-a.y)*t)));
+          if(t0===0){ if(!cur.length) cur.push(f.geometry.coordinates[i]) } else { if(cur.length>1) pieces.push(cur);cur=[at(t0)] }
+          cur.push(t1===1?f.geometry.coordinates[i+1]:at(t1));
+          if(t1<1){ pieces.push(cur);cur=[] }
+        }
+        if(!keep.length){ if(cur.length>1) pieces.push(cur);cur=[] }
+      }
+      if(cur.length>1) pieces.push(cur);
+      const unchanged=pieces.length===1&&pieces[0].length===f.geometry.coordinates.length&&pieces[0].every((q,i)=>q===f.geometry.coordinates[i]);
+      if(unchanged){ next.push(f);continue }
+      changed=true;
+      for(const piece of pieces){
+        const len=piece.reduce((s,q,i)=>i?s+llPx(toLL(q)).distanceTo(llPx(toLL(piece[i-1]))):0,0);
+        if(len<0.75) continue;
+        next.push({type:"Feature",geometry:{type:"LineString",coordinates:piece},properties:{...p,fid:rid()}});
+      }
+    }else if(hitFeature(f,c,r)){ changed=true }
+    else next.push(f);
+  }
+  if(changed){ layer.doc.features=next;renderLayer(layer);erasing.changed=true }
+}
+
+/* ---------------------------------------------------------------- hit tests */
+function distToSeg(p,a,b){
+  const dx=b.x-a.x,dy=b.y-a.y,l=dx*dx+dy*dy;
+  const t=l?clamp(((p.x-a.x)*dx+(p.y-a.y)*dy)/l,0,1):0;
+  return Math.hypot(p.x-(a.x+dx*t),p.y-(a.y+dy*t));
+}
+function inside(p,poly){
+  let c=false;
+  for(let i=0,j=poly.length-1;i<poly.length;j=i++){ const a=poly[i],b=poly[j];
+    if((a.y>p.y)!==(b.y>p.y)&&p.x<(b.x-a.x)*(p.y-a.y)/(b.y-a.y)+a.x) c=!c }
+  return c;
+}
+function pointElement(f){ return editing?.items.get(f.properties.fid)?.layers[0]?.getElement?.() }
+function hitFeature(f,p,slop=6){
+  const k=f.properties.kind,g=f.geometry;
+  if(k==="text"||k==="pin"){
+    const el=pointElement(f);if(!el) return false;
+    const r=el.getBoundingClientRect(),m=mapEl.getBoundingClientRect();
+    return p.x>=r.left-m.left-slop&&p.x<=r.right-m.left+slop&&p.y>=r.top-m.top-slop&&p.y<=r.bottom-m.top+slop;
+  }
+  const half=Math.max(0,strokePx(f))/2+slop;
+  if(k==="circle"){ const c=llPx(toLL(g.coordinates)),rr=f.properties.radius/mpp(featureLat(f),map.getZoom());const d=p.distanceTo(c);return d<=rr+half&&(f.properties.fillColor!==null||d>=rr-half) }
+  const pts=(g.type==="Polygon"?g.coordinates[0]:g.coordinates).map(c=>llPx(toLL(c)));
+  for(let i=0;i<pts.length-1;i++) if(distToSeg(p,pts[i],pts[i+1])<=half) return true;
+  if(pts.length===1) return p.distanceTo(pts[0])<=half;
+  /* A shape is picked up by its inside too, filled or not: an outline-only
+     box is still a box you can grab. */
+  return g.type==="Polygon"&&inside(p,pts);
+}
+function hitTest(p){
+  if(!editing) return null;
+  const fs=editing.doc.features;
+  for(let i=fs.length-1;i>=0;i--) if(hitFeature(fs[i],p)&&fs[i].geometry.type!=="Polygon") return fs[i];
+  for(let i=fs.length-1;i>=0;i--) if(hitFeature(fs[i],p)) return fs[i];
+  return null;
+}
+
 /* ---------------------------------------------------------------- selection */
-const handles=[];
-function deselect(){ markSelected(false);selected=null;clearHandles() }
-function select(fid){
-  deselect();selected={layer:editing,fid};markSelected(true);buildHandles();paintBar();
-}
-function markSelected(on){
-  if(!selected) return;
-  const item=selected.layer.items.get(selected.fid);if(!item) return;
-  for(const part of item.layers){ const el=part._path||part.getElement?.();el?.classList.toggle("csp-mk-selected",on) }
-}
-function mutate(fn){
-  if(!selected) return;
-  const item=editing.items.get(selected.fid);if(!item) return;
-  pushUndo(editing);fn(item.feature);renderFeature(editing,item.feature);touch(editing);buildHandles();
-}
+function deselect(){ selected=null;pointsMode=false;drawFrame() }
+function select(fid){ selected={layer:editing,fid};pointsMode=false;drawFrame();paintBar() }
 function deleteSelected(){
   if(!selected) return;
   pushUndo(editing);
@@ -551,116 +924,281 @@ function deleteSelected(){
   const item=editing.items.get(selected.fid);item?.layers.forEach(l=>editing.group.removeLayer(l));editing.items.delete(selected.fid);
   deselect();touch(editing);paintBar();
 }
+function duplicateSelected(){
+  const f=selectedFeature();if(!f) return;
+  const copy=JSON.parse(JSON.stringify(f));copy.properties.fid=rid();
+  const d=16*MERC/Math.pow(2,map.getZoom()+8);   // 16 px down and right, in Mercator metres
+  mapCoords(copy,c=>pToC({x:cToP(c).x+d,y:cToP(c).y-d}));
+  pushUndo(editing);editing.doc.features.push(copy);renderFeature(editing,copy);touch(editing);select(copy.properties.fid);
+}
 function editSelectedText(){
-  const item=editing.items.get(selected?.fid);if(!item) return;
-  const f=item.feature,px=map.latLngToContainerPoint(toLL(f.geometry.coordinates));
-  textEditor(px,f.properties.text,value=>{ if(value===null) return;if(f.properties.kind==="text"&&!value){ deleteSelected();return }
-    mutate(feature=>{ feature.properties.text=value });paintBar() });
+  const f=selectedFeature();if(!f) return;
+  const px=llPx(toLL(f.geometry.coordinates));
+  textEditor(px,f.properties.text,f.properties.color||editing.doc.markup.color,value=>{
+    if(value===null||!editing) return;
+    if(f.properties.kind==="text"&&!value){ deleteSelected();return }
+    pushUndo(editing);f.properties.text=value;renderFeature(editing,f);touch(editing);drawFrame();paintBar();
+  });
 }
-map.on("click",()=>{ if(editing&&tool==="select"&&selected){ deselect();paintBar() } });
+function mapCoords(f,fn){
+  const g=f.geometry;
+  if(g.type==="Point") g.coordinates=fn(g.coordinates);
+  else if(g.type==="LineString") g.coordinates=g.coordinates.map(fn);
+  else g.coordinates=[g.coordinates[0].map(fn)];
+}
+/* An old-style circle becomes an oval the first time it is reshaped. */
+function circleToShape(f){
+  const p=f.properties;if(p.kind!=="circle") return;
+  const c=cToP(f.geometry.coordinates),r=p.radius/Math.cos(featureLat(f)*Math.PI/180);
+  const ring=Array.from({length:72},(_,i)=>{ const a=i*Math.PI/36;return pToC({x:c.x+r*Math.cos(a),y:c.y+r*Math.sin(a)}) });ring.push(ring[0]);
+  f.geometry={type:"Polygon",coordinates:[ring]};p.kind="shape";p.shape="ellipse";p.rot=0;delete p.radius;
+}
 
-function clearHandles(){ while(handles.length) handles.pop().remove() }
-function handle(ll,kind,onDrag,onStart){
-  const marker=L.marker(ll,{draggable:true,keyboard:false,zIndexOffset:1000,
-    icon:L.divIcon({className:`csp-mk-handle csp-mk-handle-${kind}`,iconSize:kind==="move"?[30,30]:[18,18]})}).addTo(map);
-  marker.on("dragstart",()=>{ pushUndo(editing);onStart?.() });
-  marker.on("drag",event=>onDrag(event.target.getLatLng()));
-  marker.on("dragend",()=>{ touch(editing);buildHandles();paintBar() });
-  handles.push(marker);return marker;
+/* The frame: the mark's extent in its own orientation (rot, radians,
+   counter-clockwise from east on the ground). Handles sit on its corners and
+   edges; the rotate handle stands off the top edge. */
+const frameAxes=rot=>({u:{x:Math.cos(rot),y:Math.sin(rot)},d:{x:Math.sin(rot),y:-Math.cos(rot)}});
+function projectedPoints(f){
+  const g=f.geometry;
+  if(f.properties.kind==="circle"){ const c=cToP(g.coordinates),r=f.properties.radius/Math.cos(featureLat(f)*Math.PI/180);return [{x:c.x-r,y:c.y-r},{x:c.x+r,y:c.y+r}] }
+  return (g.type==="Point"?[g.coordinates]:g.type==="LineString"?g.coordinates:g.coordinates[0].slice(0,-1)).map(cToP);
 }
-function buildHandles(){
-  clearHandles();
-  const item=selected&&editing?.items.get(selected.fid);if(!item) return;
-  const f=item.feature,p=f.properties,g=f.geometry;
-  const redraw=()=>renderFeature(editing,f);
-  /* Moving the whole mark: every vertex is shifted by the handle's travel in
-     Web Mercator metres, so its shape is kept exactly. */
-  const moveAll=(anchor)=>{
-    let origin=null,coords=null;
-    return [ll=>{ const d=proj(ll),o=origin;if(!o) return;
-      const shift=c=>toC(unproj({x:proj(toLL(c)).x+d.x-o.x,y:proj(toLL(c)).y+d.y-o.y}));
-      if(g.type==="Point") g.coordinates=shift(coords);
-      else if(g.type==="LineString") g.coordinates=coords.map(shift);
-      else g.coordinates=[coords[0].map(shift)];
-      origin=d;coords=JSON.parse(JSON.stringify(g.coordinates));redraw() },
-      ()=>{ origin=proj(anchor);coords=JSON.parse(JSON.stringify(g.coordinates)) }];
-  };
-  if(g.type==="Point"){
-    const [drag,start]=moveAll(toLL(g.coordinates));
-    handle(toLL(g.coordinates),"move",drag,start);
-    if(p.kind==="circle"){
-      const center=toLL(g.coordinates),edge=unproj({x:proj(center).x+p.radius/Math.cos(center.lat*Math.PI/180),y:proj(center).y});
-      handle(edge,"vertex",ll=>{ p.radius=+map.distance(toLL(g.coordinates),ll).toFixed(2);redraw() });
-    }
+function frameOf(f){
+  const p=f.properties,rot=p.rot||0,{u,d}=frameAxes(rot);
+  if(p.kind==="text"||p.kind==="pin"){
+    /* Text and pins are measured where they are drawn, on screen. */
+    const el=pointElement(f);if(!el) return null;
+    const box=el.getBBox?.();const ctm=el.getScreenCTM?.();if(!box||!ctm) return null;
+    const m=mapEl.getBoundingClientRect(),pad=3;
+    const corner=(x,y)=>{ const q=new DOMPoint(x,y).matrixTransform(ctm);return L.point(q.x-m.left,q.y-m.top) };
+    return {screen:true,c:[corner(box.x-pad,box.y-pad),corner(box.x+box.width+pad,box.y-pad),corner(box.x+box.width+pad,box.y+box.height+pad),corner(box.x-pad,box.y+box.height+pad)]};
+  }
+  const pts=projectedPoints(f),o=pts[0];
+  let x0=Infinity,x1=-Infinity,y0=Infinity,y1=-Infinity;
+  for(const q of pts){ const x=(q.x-o.x)*u.x+(q.y-o.y)*u.y,y=(q.x-o.x)*d.x+(q.y-o.y)*d.y;x0=Math.min(x0,x);x1=Math.max(x1,x);y0=Math.min(y0,y);y1=Math.max(y1,y) }
+  const at=(x,y)=>({x:o.x+u.x*x+d.x*y,y:o.y+u.y*x+d.y*y});
+  return {o,u,d,rot,x0,x1,y0,y1,at,toLocal:q=>({x:(q.x-o.x)*u.x+(q.y-o.y)*u.y,y:(q.x-o.x)*d.x+(q.y-o.y)*d.y}),
+    c:[at(x0,y0),at(x1,y0),at(x1,y1),at(x0,y1)].map(q=>llPx(unproj(q)))};
+}
+const HANDLES=[["nw",0,0],["n",.5,0],["ne",1,0],["e",1,.5],["se",1,1],["s",.5,1],["sw",0,1],["w",0,.5]];
+function drawFrame(){
+  overlay.replaceChildren();
+  const f=selectedFeature();if(!f||!editing) return;
+  const k=f.properties.kind;
+  const dot=(cls,pt,data)=>{ const h=document.createElement("div");h.className=`mk-handle ${cls}`;h.style.transform=`translate(${pt.x}px,${pt.y}px)`;Object.assign(h.dataset,data);overlay.append(h);return h };
+  if(k==="line"||k==="arrow"||k==="arrow2"){
+    const cs=f.geometry.coordinates,pts=cs.map(c=>llPx(toLL(c)));
+    const svg=document.createElementNS(SVGNS,"svg");svg.setAttribute("class","mk-frame");
+    const line=document.createElementNS(SVGNS,"polyline");line.setAttribute("points",pts.map(q=>`${q.x},${q.y}`).join(" "));svg.append(line);overlay.append(svg);
+    dot("mk-h-end",pts[0],{h:"v0"});dot("mk-h-end",pts[pts.length-1],{h:`v${pts.length-1}`});
     return;
   }
-  const ring=g.type==="Polygon";
-  const pts=ring?g.coordinates[0].slice(0,-1):g.coordinates;
-  if(p.kind!=="pen") pts.forEach((c,i)=>handle(toLL(c),"vertex",ll=>{
-    if(p.kind==="rect"){
-      /* A rectangle stays a rectangle: the opposite corner is fixed and the
-         two neighbours slide along their edges. */
-      const P=g.coordinates[0].slice(0,-1).map(x=>proj(toLL(x))),o=P[(i+2)%4],n1=P[(i+1)%4],n3=P[(i+3)%4],q=proj(ll);
-      const unit=(a)=>{ const l=Math.hypot(a.x-o.x,a.y-o.y)||1;return {x:(a.x-o.x)/l,y:(a.y-o.y)/l} };
-      const u=unit(n1),v=unit(n3),a=(q.x-o.x)*u.x+(q.y-o.y)*u.y,b=(q.x-o.x)*v.x+(q.y-o.y)*v.y;
-      P[(i+1)%4]={x:o.x+u.x*a,y:o.y+u.y*a};P[(i+3)%4]={x:o.x+v.x*b,y:o.y+v.y*b};P[i]=q;
-      const next=P.map(x=>toC(unproj(x)));next.push(next[0]);g.coordinates=[next];
-    }else{
-      pts[i]=toC(ll);
-      if(ring){ const r=[...pts,pts[0]];g.coordinates=[r] }
-    }
-    redraw();
-  }));
-  const center=L.latLngBounds(pts.map(toLL)).getCenter();
-  const [drag,start]=moveAll(center);
-  handle(center,"move",drag,start);
+  const fr=frameOf(f);if(!fr) return;
+  const c=fr.c,svg=document.createElementNS(SVGNS,"svg");svg.setAttribute("class","mk-frame");
+  const poly=document.createElementNS(SVGNS,"polygon");poly.setAttribute("points",c.map(q=>`${q.x},${q.y}`).join(" "));svg.append(poly);
+  const top=c[0].add(c[1]).divideBy(2),mid=c[0].add(c[2]).divideBy(2),dir=top.subtract(mid),len=Math.hypot(dir.x,dir.y)||1;
+  const knob=top.add(dir.multiplyBy(26/len));
+  if(k!=="pin"){ const stem=document.createElementNS(SVGNS,"line");stem.setAttribute("x1",top.x);stem.setAttribute("y1",top.y);stem.setAttribute("x2",knob.x);stem.setAttribute("y2",knob.y);svg.append(stem) }
+  overlay.append(svg);
+  if(pointsMode&&f.geometry.type==="Polygon"){
+    f.geometry.coordinates[0].slice(0,-1).forEach((cc,i)=>dot("mk-h-vertex",llPx(toLL(cc)),{h:`v${i}`}));
+    return;
+  }
+  const lerp=(a,b,t)=>a.add(b.subtract(a).multiplyBy(t));
+  for(const [name,x,y] of HANDLES){
+    if((k==="text"||k==="pin")&&name.length===1) continue;    // text scales from its corners only
+    const pt=lerp(lerp(c[0],c[1],x),lerp(c[3],c[2],x),y);
+    dot(`mk-h-${name.length===1?"edge":"corner"}`,pt,{h:name,cursor:name});
+  }
+  if(k!=="pin") dot("mk-h-rotate",knob,{h:"rotate"});
 }
+map.on("move zoom viewreset rotate resize",()=>{ if(selected&&!gesture) requestAnimationFrame(drawFrame) });
+map.on("zoomend",()=>{ if(selected) drawFrame();if(editing) paintBarValues() });
+/* After zooming, the width and size sliders show the selected mark at the
+   new scale. */
+function paintBarValues(){ if(selectedFeature()&&!bar.contains(document.activeElement)) paintBar() }
+
+/* Pointer gestures in Select: grab a mark to move it, a handle to resize or
+   rotate it. They take the pointer before the map can start a pan. */
+function beginGesture(event,type,f,extra={}){
+  event.preventDefault();event.stopPropagation();
+  map.dragging.disable();
+  pushUndo(editing);
+  if(type!=="move"&&type!=="vertex") circleToShape(f);
+  gesture={type,f,id:event.pointerId,start:pointPx(event),startP:proj(pxLL(pointPx(event))),
+    snap:JSON.parse(JSON.stringify(f.geometry)),props:JSON.parse(JSON.stringify(f.properties)),moved:false,...extra};
+  gesture.frame=type==="move"||type==="vertex"?null:frameOf(f);
+  overlay.classList.add("mk-active");
+}
+function runGesture(event){
+  const G=gesture,f=G.f,p=f.properties,now=pointPx(event);
+  if(!G.moved&&now.distanceTo(G.start)<3) return;
+  G.moved=true;
+  f.geometry=JSON.parse(JSON.stringify(G.snap));
+  const P=proj(pxLL(now));
+  if(G.type==="move"){
+    const dx=P.x-G.startP.x,dy=P.y-G.startP.y;
+    mapCoords(f,c=>pToC({x:cToP(c).x+dx,y:cToP(c).y+dy}));
+  }else if(G.type==="vertex"){
+    const i=G.index,g=f.geometry;
+    if(g.type==="LineString"){
+      let end=now;
+      if(event.shiftKey&&g.coordinates.length===2){ const o=llPx(toLL(g.coordinates[1-i])),d=now.subtract(o),a=Math.round(Math.atan2(d.y,d.x)/(Math.PI/12))*(Math.PI/12),r=Math.hypot(d.x,d.y);end=o.add([r*Math.cos(a),r*Math.sin(a)]) }
+      g.coordinates[i]=toC(pxLL(end));
+    }else{ const ring=g.coordinates[0];ring[i]=toC(pxLL(now));if(i===0) ring[ring.length-1]=ring[0] }
+  }else if(G.type==="rotate"){
+    const fr=G.frame;
+    const cx=fr.screen?fr.c[0].add(fr.c[2]).divideBy(2):llPx(unproj(fr.at((fr.x0+fr.x1)/2,(fr.y0+fr.y1)/2)));
+    const a0=Math.atan2(G.start.y-cx.y,G.start.x-cx.x),a1=Math.atan2(now.y-cx.y,now.x-cx.x);
+    let rot=(G.props.rot||0)-(a1-a0);
+    if(event.shiftKey){ const step=Math.PI/12;rot=Math.round(rot/step)*step }
+    const delta=rot-(G.props.rot||0);
+    p.rot=+rot.toFixed(5);
+    if(p.kind!=="text"){
+      const C=proj(pxLL(cx)),cos=Math.cos(delta),sin=Math.sin(delta);
+      mapCoords(f,c=>{ const q=cToP(c),x=q.x-C.x,y=q.y-C.y;return pToC({x:C.x+x*cos-y*sin,y:C.y+x*sin+y*cos}) });
+    }
+  }else if(G.type==="resize"){
+    const fr=G.frame,h=G.handle,spec=HANDLES.find(x=>x[0]===h);
+    if(fr.screen){
+      /* Text and pins scale evenly, from the opposite corner (text) or the
+         pin's point (pins). */
+      const idx={nw:0,ne:1,se:2,sw:3}[h],A=fr.c[(idx+2)%4],H=fr.c[idx];
+      const v=H.subtract(A),s=Math.max(0.1,((now.x-A.x)*v.x+(now.y-A.y)*v.y)/(v.x*v.x+v.y*v.y||1));
+      p.size=+(G.props.size*s).toFixed(3);
+      if(p.kind==="text"){ const C0=llPx(toLL(G.snap.coordinates)),C1=A.add(C0.subtract(A).multiplyBy(s));f.geometry.coordinates=toC(pxLL(C1)) }
+    }else{
+      const [ ,hx,hy]=spec,ax=1-hx,ay=1-hy;
+      const lx=t=>fr.x0+(fr.x1-fr.x0)*t,ly=t=>fr.y0+(fr.y1-fr.y0)*t;
+      const A={x:lx(ax),y:ly(ay)},H={x:lx(hx),y:ly(hy)},Q=fr.toLocal(P);
+      let sx=hx===.5?1:(Q.x-A.x)/((H.x-A.x)||1),sy=hy===.5?1:(Q.y-A.y)/((H.y-A.y)||1);
+      const uniform=event.shiftKey&&hx!==.5&&hy!==.5;
+      if(uniform){ const s=(Math.abs(sx)+Math.abs(sy))/2;sx=Math.sign(sx||1)*s;sy=Math.sign(sy||1)*s }
+      const tiny=v=>Math.abs(v)<0.02?Math.sign(v||1)*0.02:v;sx=tiny(sx);sy=tiny(sy);
+      mapCoords(f,c=>{ const q=fr.toLocal(cToP(c));return pToC(fr.at(A.x+(q.x-A.x)*sx,A.y+(q.y-A.y)*sy)) });
+    }
+  }
+  renderFeature(editing,f);
+  requestAnimationFrame(drawFrame);
+}
+function endGesture(){
+  const G=gesture;gesture=null;overlay.classList.remove("mk-active");
+  map.dragging.enable();
+  if(!G) return;
+  if(G.moved) touch(editing);else dropUndo(editing);
+  drawFrame();paintBar();
+  suppressClickUntil=performance.now()+350;
+}
+let suppressClickUntil=0;
+/* Capture phase on the map: decide before Leaflet sees the press. */
+mapEl.addEventListener("pointerdown",event=>{
+  if(!editing||tool!=="select"||event.button>0||gesture) return;
+  if(event.target.closest("#mkBar,#mkPop,.mk-text-input,.leaflet-control,#mapDock")) return;
+  closePop();
+  const p=pointPx(event),handleEl=event.target.closest(".mk-handle");
+  const f=selectedFeature();
+  if(handleEl&&f){
+    const h=handleEl.dataset.h;
+    if(h==="rotate") beginGesture(event,"rotate",f);
+    else if(h.startsWith("v")) beginGesture(event,"vertex",f,{index:+h.slice(1)});
+    else beginGesture(event,"resize",f,{handle:h});
+    return;
+  }
+  const hit=hitTest(p);
+  if(!hit) return;               // empty map: pans as usual; a click deselects
+  if(selected?.fid!==hit.properties.fid) select(hit.properties.fid);
+  beginGesture(event,"move",hit);
+},true);
+for(const type of ["mousedown","touchstart"]) mapEl.addEventListener(type,event=>{ if(gesture) event.stopPropagation() },true);
+/* A tap also sends mouseover, which preventDefault cannot stop; it would open
+   a hover tooltip from a layer under the mark. */
+for(const type of ["mouseover","mousemove"]) mapEl.addEventListener(type,event=>{ if(gesture||performance.now()<suppressClickUntil) event.stopPropagation() },true);
+addEventListener("pointermove",event=>{ if(gesture&&event.pointerId===gesture.id) runGesture(event) });
+addEventListener("pointerup",event=>{ if(gesture&&event.pointerId===gesture.id) endGesture() });
+addEventListener("pointercancel",event=>{ if(gesture&&event.pointerId===gesture.id){ const G=gesture;G.f.geometry=G.snap;G.f.properties=G.props;renderFeature(editing,G.f);G.moved=false;endGesture() } });
+mapEl.addEventListener("dblclick",event=>{
+  if(!editing||tool!=="select") return;
+  const f=selectedFeature();
+  if(f&&(f.properties.kind==="text"||f.properties.kind==="pin")&&hitFeature(f,pointPx(event))){ event.stopPropagation();event.preventDefault();editSelectedText() }
+},true);
+mapEl.addEventListener("pointermove",event=>{
+  if(!editing||tool!=="select"||gesture||event.pointerType==="touch") return;
+  const over=!event.target.closest(".mk-handle")&&!!hitTest(pointPx(event));
+  mapEl.classList.toggle("mk-hover",over);
+},{passive:true});
+/* The click that ends a press on a mark is the mark's, not the map's: it must
+   not also open a popup from a layer underneath. */
+mapEl.addEventListener("click",event=>{
+  if(!editing||tool!=="select") return;
+  if(performance.now()<suppressClickUntil||hitTest(pointPx(event))){ event.stopPropagation();event.preventDefault() }
+},true);
+map.on("click",()=>{ if(performance.now()<suppressClickUntil) return;if(editing&&tool==="select"&&selected){ deselect();paintBar() } });
 
 /* ---------------------------------------------------------------- the panel */
-let panel=null;
-let changeTimer=null;
+let panel=null,changeTimer=null,confirm=null;
 function changed(){
   clearTimeout(changeTimer);
-  changeTimer=setTimeout(()=>{ if(panel?.isConnected) renderPanel(panel);document.dispatchEvent(new CustomEvent("csp:layers-changed")) },60);
+  changeTimer=setTimeout(()=>{
+    /* Never redraw the list under someone renaming a layer. */
+    if(panel?.isConnected&&!panel.querySelector(".mk-rename:focus,.mk-new-name:focus")) renderPanel(panel);
+    document.dispatchEvent(new CustomEvent("csp:layers-changed"));
+  },60);
 }
 function statusText(layer){
   const server=serverState();
   if(!server.online) return "Saved on this device";
-  if(layer.syncedAt===layer.doc.markup.updated) return "Saved on your PC";
-  return lastStatus==="error"?"Not saved to your PC yet":"Saving to your PC…";
+  if(lastStatus==="unsupported") return "Saved on this device · engine needs an update to keep markup";
+  if(layer.syncedAt===layer.doc.markup.updated) return "Saved to the engine";
+  return lastStatus==="error"?"Saved on this device · engine save failed":"Saving…";
 }
+const countText=n=>`${n} item${n===1?"":"s"}`;
 function renderPanel(container){
   panel=container;
   const list=[...layers.values()].sort((a,b)=>b.rank-a.rank);
   const server=serverState();
+  const creating=container.querySelector(".mk-new:not([hidden])");
+  const draftName=creating?$(".mk-new-name",container)?.value:"";
+  const draftColor=creating?container.querySelector('[data-new-color][aria-pressed="true"]')?.dataset.newColor:null;
   container.innerHTML=`
     <div class="csp-section-label">Markup layers</div>
     <div class="csp-card mk-panel">
       <div class="mk-new" hidden>
         <input class="mk-new-name" type="text" maxlength="120" placeholder="Layer name, e.g. Pangborn Bar" aria-label="New layer name">
-        <div class="mk-color-grid" role="radiogroup" aria-label="Layer colour">${COLOR_GRID.map((c,i)=>`<button type="button" class="mk-swatch" role="radio" data-new-color="${c}" style="--c:${c}" aria-pressed="${i===2}" aria-checked="${i===2}" aria-label="Colour ${c}"></button>`).join("")}</div>
-        <div class="mk-new-actions"><button type="button" class="mk-text-btn" data-act="cancel-new">Cancel</button><button type="button" class="mk-done" data-act="create">Create layer</button></div>
+        <div class="mk-pop-label">Layer colour <span>· the default ink and the layer's tag</span></div>
+        <div class="mk-color-grid" role="radiogroup" aria-label="Layer colour">${COLOR_GRID.map(c=>`<button type="button" class="mk-swatch" role="radio" data-new-color="${c}" style="--c:${c}" aria-pressed="${c===(draftColor||DEFAULT_COLOR)}" aria-checked="${c===(draftColor||DEFAULT_COLOR)}" aria-label="Colour ${c}"></button>`).join("")}</div>
+        <div class="mk-new-actions"><button type="button" class="mk-btn" data-act="cancel-new">Cancel</button><button type="button" class="mk-btn mk-btn-primary" data-act="create">Create layer</button></div>
       </div>
       <button type="button" class="mk-add" data-act="new"><img src="${icon("plus")}" alt=""><span>New markup layer</span></button>
       <div class="mk-list"></div>
-      <div class="mk-note">${server.online?"Layers are kept on your PC by the terrain engine and on this device, so they are here offline too.":"Layers are saved on this device. Connect the terrain engine to keep them on your PC and share them between devices."}</div>
+      <div class="mk-note">${!server.online?"Layers are saved on this device. Connect the terrain engine to keep them there too and share them between devices."
+        :lastStatus==="unsupported"?"This terrain engine was installed before markup existed, so layers stay on this device. Update the engine to the latest code to keep and share them."
+        :"Layers are kept by the terrain engine and on this device, so they are here offline too."}</div>
     </div>`;
+  if(creating){ $(".mk-new",container).hidden=false;$(".mk-add",container).hidden=true;$(".mk-new-name",container).value=draftName }
   const listEl=$(".mk-list",container);
-  if(!list.length){ const empty=document.createElement("div");empty.className="csp-empty-layers";empty.textContent="No markup layers yet.";listEl.append(empty) }
+  if(!list.length){ const empty=document.createElement("div");empty.className="mk-empty";empty.textContent="No markup layers yet.";listEl.append(empty) }
   for(const layer of list){
-    const m=layer.doc.markup,row=document.createElement("article");row.className="mk-layer";row.dataset.id=m.id;
+    const m=layer.doc.markup,n=layer.doc.features.length,active=editing===layer;
+    const row=document.createElement("article");row.className="mk-layer";row.dataset.id=m.id;row.classList.toggle("mk-active",active);
+    const ask=confirm?.id===m.id?confirm.act:null;
     row.innerHTML=`
       <span class="mk-dot" style="--c:${m.color}"></span>
-      <div class="mk-layer-main"><div class="mk-layer-title"></div><div class="mk-layer-meta"></div></div>
-      <label class="csp-switch" aria-label="Show ${m.name.replace(/"/g,"")}"><input type="checkbox" ${layer.visible?"checked":""}><span></span></label>
-      <div class="mk-layer-actions">
-        <button type="button" class="mk-text-btn mk-primary" data-act="edit">${editing===layer?"Drawing…":"Draw"}</button>
-        <button type="button" class="mk-text-btn" data-act="rename">Rename</button>
-        <button type="button" class="mk-text-btn" data-act="zoom" ${m&&layer.doc.features.length?"":"disabled"}>Zoom to</button>
-        <button type="button" class="mk-text-btn mk-danger" data-act="delete">Delete</button>
-      </div>`;
+      <div class="mk-layer-main">
+        <button type="button" class="mk-layer-title" data-act="rename" title="Rename"></button>
+        <div class="mk-layer-meta">${countText(n)} · ${esc(statusText(layer))}</div>
+      </div>
+      <label class="csp-switch" aria-label="Show ${esc(m.name)}"><input type="checkbox" ${layer.visible?"checked":""}><span></span></label>
+      ${ask?`<div class="mk-confirm" role="alert">
+          <p>${ask==="clear"?`Clear all ${countText(n)} from this layer? The layer stays.`:`Delete this layer and its ${countText(n)}?`}</p>
+          <div class="mk-actions"><button type="button" class="mk-btn" data-act="cancel-confirm">Cancel</button>
+          <button type="button" class="mk-btn mk-btn-danger" data-act="${ask}-yes">${ask==="clear"?"Clear":"Delete"}</button></div></div>`
+      :`<div class="mk-actions">
+        <button type="button" class="mk-btn mk-draw" data-act="edit" aria-pressed="${active}"><img src="${icon(active?"check":"pencil")}" alt=""><span>${active?"Drawing":"Draw"}</span></button>
+        <button type="button" class="mk-btn" data-act="zoom" ${n?"":"disabled"}>Zoom to</button>
+        <button type="button" class="mk-btn" data-act="clear" ${n?"":"disabled"}>Clear</button>
+        <button type="button" class="mk-btn mk-btn-danger-text" data-act="delete">Delete</button>
+      </div>`}`;
     $(".mk-layer-title",row).textContent=m.name;
-    $(".mk-layer-meta",row).textContent=`${layer.doc.features.length} item${layer.doc.features.length===1?"":"s"} · ${statusText(layer)}`;
     $(".csp-switch input",row).addEventListener("change",event=>setVisible(m.id,event.target.checked));
     listEl.append(row);
   }
@@ -669,36 +1207,34 @@ function renderPanel(container){
     const row=button.closest(".mk-layer"),layer=row&&layers.get(row.dataset.id),act=button.dataset.act;
     if(button.dataset.newColor){ container.querySelectorAll("[data-new-color]").forEach(b=>{ b.setAttribute("aria-pressed",String(b===button));b.setAttribute("aria-checked",String(b===button)) });return }
     if(act==="new"){ $(".mk-new",container).hidden=false;button.hidden=true;$(".mk-new-name",container).focus();return }
-    if(act==="cancel-new"){ renderPanel(container);return }
+    if(act==="cancel-new"){ $(".mk-new",container).hidden=true;renderPanel(container);return }
     if(act==="create"){
       const name=$(".mk-new-name",container).value.trim()||`Markup ${layers.size+1}`;
-      const color=container.querySelector('[data-new-color][aria-pressed="true"]')?.dataset.newColor||PALETTE[0];
-      const created=createLayer(name,color);penColor=color;startEditing(created);return;
+      const color=container.querySelector('[data-new-color][aria-pressed="true"]')?.dataset.newColor||DEFAULT_COLOR;
+      $(".mk-new",container).hidden=true;
+      const created=createLayer(name,color);startEditing(created);return;
     }
     if(!layer) return;
     if(act==="edit"){ if(editing===layer) stopEditing();else startEditing(layer) }
     else if(act==="zoom"){ const b=layer.group.getBounds();if(b.isValid()) map.fitBounds(b,{padding:[40,40],maxZoom:18}) }
-    else if(act==="rename"){
-      const title=$(".mk-layer-title",row),input=document.createElement("input");
-      input.type="text";input.value=layer.doc.markup.name;input.className="mk-rename";input.maxLength=120;title.replaceWith(input);input.focus();input.select();
-      const done=commit=>{ if(commit) renameLayer(layer,input.value);renderPanel(container) };
-      input.addEventListener("keydown",e=>{ if(e.key==="Enter") done(true);else if(e.key==="Escape") done(false) });
-      input.addEventListener("blur",()=>done(true));
-    }else if(act==="delete"){
-      /* No browser dialog: the button asks once more in place. */
-      if(button.dataset.confirm){ deleteLayer(layer);return }
-      button.dataset.confirm="1";button.textContent="Delete for good?";setTimeout(()=>{ if(button.isConnected){ delete button.dataset.confirm;button.textContent="Delete" } },4000);
-    }
+    else if(act==="rename") beginRename(button,layer);
+    else if(act==="clear"||act==="delete"){ confirm={id:layer.doc.markup.id,act};renderPanel(container);container.querySelector(`.mk-layer[data-id="${layer.doc.markup.id}"] [data-act="${act}-yes"]`)?.focus() }
+    else if(act==="cancel-confirm"){ confirm=null;renderPanel(container) }
+    else if(act==="clear-yes"){ confirm=null;clearLayer(layer);renderPanel(container) }
+    else if(act==="delete-yes"){ confirm=null;deleteLayer(layer) }
   };
-  /* The grid fades out below its fifth row; the fade lifts once it has
-     scrolled to the end, and a matching fade appears at the top once it has
-     scrolled away from it. */
-  const grid=$(".mk-color-grid",container);
-  if(grid){
-    const edges=()=>{ grid.classList.toggle("mk-at-top",grid.scrollTop<2);grid.classList.toggle("mk-at-end",grid.scrollTop+grid.clientHeight>=grid.scrollHeight-2) };
-    grid.addEventListener("scroll",edges,{passive:true});requestAnimationFrame(edges);
-  }
+  fadeGrid($(".mk-color-grid",container));
   $(".mk-new-name",container)?.addEventListener("keydown",event=>{ if(event.key==="Enter") container.querySelector('[data-act="create"]').click() });
+}
+/* Renaming in place: the title becomes a field of the same size and weight. */
+function beginRename(title,layer){
+  const input=document.createElement("input");
+  input.type="text";input.value=layer.doc.markup.name;input.className="mk-rename";input.maxLength=120;input.setAttribute("aria-label","Layer name");
+  title.replaceWith(input);input.focus();input.select();
+  let done=false;
+  const finish=commit=>{ if(done) return;done=true;if(commit) renameLayer(layer,input.value);renderPanel(panel) };
+  input.addEventListener("keydown",e=>{ if(e.key==="Enter"){ e.preventDefault();finish(true) } else if(e.key==="Escape"){ e.preventDefault();finish(false) } });
+  input.addEventListener("blur",()=>finish(true));
 }
 
 /* ----------------------------------------------- the Layers list and export */
@@ -716,15 +1252,25 @@ function setOrder(ids){
 function activeEntries(){
   return [...layers.values()].filter(l=>l.visible).sort((a,b)=>b.rank-a.rank).map(l=>({
     id:`markup:${l.doc.markup.id}`,name:l.doc.markup.name,
-    meta:`Markup · ${l.doc.features.length} item${l.doc.features.length===1?"":"s"}`,
+    meta:`Markup · ${countText(l.doc.features.length)}`,
     opacity:l.opacity,visible:true,kind:"markup"}));
 }
+/* The map's quick-draw button: back to the layer last drawn on, or the top
+   visible one, or a new layer when there is none. */
+function quickDraw(){
+  if(editing){ stopEditing();return false }
+  const all=[...layers.values()].sort((a,b)=>b.rank-a.rank);
+  const layer=layers.get(lastLayerId)||all.find(l=>l.visible)||all[0]||createLayer(`Markup ${layers.size+1}`,DEFAULT_COLOR);
+  startEditing(layer);return true;
+}
 
-window.CSPMarkup={renderPanel,activeEntries,setVisible,setOpacity,setOrder,
+window.CSPMarkup={renderPanel,activeEntries,setVisible,setOpacity,setOrder,quickDraw,
+  isEditing:()=>!!editing,
   resetLayer:id=>setOpacity(id,100),count:()=>[...layers.values()].filter(l=>l.visible).length,
-  sync:syncAll,_layers:layers};
+  sync:syncAll,_layers:layers,_select:fid=>{ if(editing){ setTool("select");select(fid) } }};
 
 /* ------------------------------------------------------------------- start */
+sizeEraser();
 (async()=>{
   const view=readView();
   for(const doc of await idb.all()) if(doc?.markup?.id&&!layers.has(doc.markup.id)) makeLayer(doc,view[doc.markup.id]||{});
