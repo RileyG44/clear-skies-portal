@@ -7,9 +7,9 @@
   'use strict';
   const SERVICE='https://elevation.nationalmap.gov/arcgis/rest/services/3DEPElevation/ImageServer';
   const SOURCES=Object.freeze({
-    1:{label:'AWS global terrain (overview)',url:'https://registry.opendata.aws/terrain-tiles/',nativeLabel:'~30 m source spacing (1 arc-second overview)'},
-    2:{label:'USGS 3DEP elevation',url:SERVICE,nativeLabel:'Provider mosaic varies; 1 m where available'},
-    3:{label:'USGS 1 m DEM',url:'https://www.usgs.gov/3d-elevation-program',nativeLabel:'1 m where the selected survey covers this point'},
+    1:{label:'AWS global terrain (overview)',url:'https://registry.opendata.aws/terrain-tiles/',nativeLabel:'~98 ft source spacing (1 arc-second overview)'},
+    2:{label:'USGS 3DEP elevation',url:SERVICE,nativeLabel:'Provider mosaic varies; 3.3 ft where available'},
+    3:{label:'USGS 3.3 ft DEM',url:'https://www.usgs.gov/3d-elevation-program',nativeLabel:'3.3 ft where the selected survey covers this point'},
     4:{label:'WA DNR published LiDAR hillshade',url:'https://lidarportal.dnr.wa.gov/',nativeLabel:'Project-native spacing varies; published hillshade'},
     5:{label:'WA DNR bare-earth elevation',url:'https://lidarportal.dnr.wa.gov/',nativeLabel:'Numeric DTM; survey spacing varies'}
   });
@@ -58,7 +58,7 @@
       return {...SOURCES[rank],rank:+rank,pixels:counts[rank],percent:100*counts[rank]/pixels,
         sampleMeters:resolutionSums[rank]?resolutionSums[rank]/counts[rank]:null,
         surveys:[...(surveys[rank]?.values()||[])],
-        ...(spacing.length?{nativeLabel:`${spacing.map(v=>`${v} m`).join(' / ')} survey spacing; elevations in metres`}:{})};
+        ...(spacing.length?{nativeLabel:`${spacing.map(v=>`${+(v/0.3048).toFixed(2)} ft`).join(' / ')} survey spacing`}:{})};
     });
     return {total,ready,refining,failed,sources,coverage:total?Math.round(100*ready/total):0};
   }

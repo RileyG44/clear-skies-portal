@@ -548,3 +548,7 @@ with `satportal` only as its working directory, so filtering on the path finds n
 Get-NetTCPConnection -LocalPort 8765 -State Listen |
   ForEach-Object { Stop-Process -Id $_.OwningProcess -Force }
 ```
+
+### Map annotation layers
+
+Use **Markup → New markup layer** or the pencil button to draw on either the 2D map or 3D terrain. Pen, highlighter, shapes, arrows, notes, and pins use geographic positions and fixed ground dimensions. Width and text size are entered in feet; orbiting or zooming does not change the saved position or size. In 3D the marks follow the terrain surface. The camera includes visible markup in PNGs, including large 2D exports. Hide a layer to exclude it from the image. Existing markup layers work in both views without conversion.

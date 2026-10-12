@@ -24,6 +24,6 @@ const summary=terrain.summarize(tiles);
 assert.equal(summary.coverage,50);assert.equal(summary.refining,true);
 assert.deepEqual(summary.sources.map(s=>[s.rank,s.percent]),[[2,75],[1,25]],'never attribute hidden, failed or retired pixels');
 assert.equal(summary.sources.find(s=>s.rank===2).sampleMeters,.75,'report the weighted displayed sample spacing');
-assert.match(summary.sources.find(s=>s.rank===1).nativeLabel,/30 m/,'keep provider-native resolution alongside display sampling');
+assert.match(summary.sources.find(s=>s.rank===1).nativeLabel,/98 ft/,'keep provider-native resolution alongside display sampling');
 assert.equal(terrain.summarize([]).sources.length,0);
 console.log('public terrain checks passed (raw elevation URL, masks, nodata, mixed sources, hidden tiles)');

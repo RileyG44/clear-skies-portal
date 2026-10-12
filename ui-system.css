@@ -2077,3 +2077,11 @@ body.csp-markup-editing .snap-sel{display:none}
 .mk-confirm p{margin:0;font-size:13px;line-height:1.35}
 .mk-confirm .mk-actions{grid-template-columns:1fr 1fr}
 .mk-note{font-size:12px;color:var(--ui-text-muted);padding:6px 4px 2px;line-height:1.4}
+
+/* Annotation tools sit above the terrain canvas as well as the 2D panes. */
+body.terrain-3d #mkCapture{z-index:950}
+body.terrain-3d #mkOverlay{z-index:960}
+body.terrain-3d .mk-eraser-ring{z-index:961}
+#mkDraft{position:absolute;inset:0;z-index:940;pointer-events:none}
+.mk-ground{display:flex;align-items:center;gap:5px;flex-shrink:0;font-size:12px;color:var(--ui-text-2)}
+.mk-ground input{width:84px;padding:5px 7px;border:1px solid var(--ui-border);border-radius:7px;background:var(--ui-surface);color:var(--ui-text);font:inherit}

@@ -88,7 +88,7 @@ async function rasterChecks(){
   const summary=publicTerrain.summarize([{el:{_cspHasContent:true,_cspSourceCounts:{5:100},
     _cspSurveySources:{5:out.sources},_cspSourceResolution:{5:out.groundRes}}}]);
   assert.equal(summary.sources[0].label,"WA DNR bare-earth elevation");
-  assert.match(summary.sources[0].nativeLabel,/metres/);
+  assert.match(summary.sources[0].nativeLabel,/5\.27 ft/,"survey spacing is displayed in feet");
   assert.equal(summary.sources[0].surveys[0].datasetId,10);
   assert.throws(()=>runtime.verticalMeters({ProjLinearUnitsGeoKey:9003}),/does not declare vertical/,"undeclared vertical units cannot be guessed from horizontal units");
   assert.throws(()=>runtime.verticalMeters({GTCitationGeoKey:"Unit Name = Foot_US"}),/does not declare vertical/);

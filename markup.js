@@ -53,7 +53,12 @@ const esc=s=>String(s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;"
 /* ---------------------------------------------------------------- geometry */
 const MERC=40075016.686;
 const mpp=(lat,zoom)=>MERC*Math.cos(lat*Math.PI/180)/Math.pow(2,zoom+8);
-const here=()=>mpp(map.getCenter().lat,map.getZoom());
+const view3d=()=>B.map3d?.()||null;
+/* MapLibre zoom uses a 512px world tile; Leaflet and annotation raster
+   addressing use 256px. Normalize only screen-size calculations. */
+const viewZoom=()=>{const v=view3d();return v?v.getZoom()+1:map.getZoom()};
+const here=()=>mpp((view3d()?.getCenter()||map.getCenter()).lat,viewZoom());
+const feet=m=>m/0.3048;
 const proj=ll=>L.CRS.EPSG3857.project(L.latLng(ll));
 const unproj=p=>L.CRS.EPSG3857.unproject(L.point(p.x,p.y));
 const toLL=c=>L.latLng(c[1],c[0]);
@@ -239,7 +244,7 @@ function makeLayer(doc,view={}){
   const pane=map.getPane(paneName)||map.createPane(paneName,parent);
   pane.classList.add("csp-markup-pane");
   const layer={doc,pane,paneName,renderer:L.svg({pane:paneName,padding:0.5}),group:L.featureGroup(),
-    items:new Map(),visible:view.on!==false,opacity:Number.isFinite(view.op)?view.op:100,rank:view.rank??0,syncedAt:null};
+    items:new Map(),visible:view.on!==false,opacity:Number.isFinite(view.op)?view.op:100,rank:view.rank??0,syncedAt:null,renderRevision:0};
   layer.group.addTo(map);
   layers.set(id,layer);
   renderLayer(layer);applyView(layer);
@@ -247,16 +252,17 @@ function makeLayer(doc,view={}){
 }
 function applyView(layer){
   layer.pane.style.display=layer.visible?"":"none";
-  layer.pane.style.opacity=String(layer.opacity/100);
+  layer.pane.style.opacity=String(layer.opacity/100);schedule3d();
 }
 function applyOrder(){
   /* Highest rank on top; the Layers list order sets the ranks. All markup
      sits above imagery and overlays, below map buttons. */
   for(const layer of layers.values()) layer.pane.style.zIndex=String(450+Math.max(0,Math.min(140,layer.rank)));
+  schedule3d();
 }
 const LINES=new Set(["pen","highlight","line","arrow","arrow2"]),AREAS=new Set(["area","rect","shape","circle"]);
 const featureLat=f=>{ const g=f.geometry;return g.type==="Point"?g.coordinates[1]:(g.type==="Polygon"?g.coordinates[0][0][1]:g.coordinates[0][1]) };
-const strokePx=(f,zoom=map.getZoom())=>(f.properties.width||0)/mpp(featureLat(f),zoom);
+const strokePx=(f,zoom=viewZoom())=>(f.properties.width||0)/mpp(featureLat(f),zoom);
 function featureLayers(layer,feature){
   const p=feature.properties,color=p.color||layer.doc.markup.color,g=feature.geometry;
   const opacity=p.opacity??(p.kind==="highlight"?0.4:1);
@@ -290,15 +296,150 @@ function renderFeature(layer,feature){
   const built=featureLayers(layer,feature);
   built.forEach(l=>layer.group.addLayer(l));
   layer.items.set(feature.properties.fid,{feature,layers:built});
+  layer.renderRevision++;schedule3d();
 }
 function renderLayer(layer){
-  layer.group.clearLayers();layer.items.clear();
+  layer.group.clearLayers();layer.items.clear();layer.renderRevision++;schedule3d();
   for(const feature of layer.doc.features) renderFeature(layer,feature);
 }
 map.on("zoomend",()=>{
   for(const layer of layers.values()) for(const {layers:parts} of layer.items.values())
     for(const part of parts) if(part._mkWeight&&part.setStyle&&part.options.stroke!==false) part.setStyle({weight:part._mkWeight()});
 });
+
+/* Ground rendering is shared by PNG exports and terrain raster tiles. Paths,
+   text and pins use geographic positions and ground dimensions; screen zoom,
+   pitch and bearing never rewrite the saved marks. */
+function drawGround(ctx,features,color,project,metresPerPixel){
+  for(const f of features){
+    const p=f.properties,g=f.geometry,ink=p.color||color,layerAlpha=ctx.globalAlpha;
+    const lat=featureLat(f),unit=metresPerPixel(lat),width=(p.width||0)/unit;
+    const point=c=>project(toLL(c));
+    const path=(coords,close=false)=>{ctx.beginPath();coords.forEach((c,i)=>{const q=point(c);i?ctx.lineTo(q.x,q.y):ctx.moveTo(q.x,q.y)});if(close)ctx.closePath()};
+    ctx.save();ctx.globalAlpha*=p.opacity??(p.kind==="highlight"?.4:1);
+    ctx.strokeStyle=ink;ctx.fillStyle=ink;ctx.lineWidth=width;ctx.lineCap="round";ctx.lineJoin="round";
+    if(LINES.has(p.kind)){
+      let cs=g.coordinates,heads=[];
+      if((p.kind==="arrow"||p.kind==="arrow2")&&cs.length>1){
+        const end=arrowHead(toLL(cs[cs.length-2]),toLL(cs[cs.length-1]),p.width||2);
+        if(end){heads.push(end.tri.map(toC));cs=[...cs.slice(0,-1),toC(end.stop)]}
+        if(p.kind==="arrow2"){const start=arrowHead(toLL(cs[1]),toLL(cs[0]),p.width||2);if(start){heads.push(start.tri.map(toC));cs=[toC(start.stop),...cs.slice(1)]}}
+      }
+      path(cs);if(width>0)ctx.stroke();
+      for(const h of heads){path(h,true);ctx.fill()}
+    }else if(AREAS.has(p.kind)){
+      if(p.kind==="circle"){const q=point(g.coordinates);ctx.beginPath();ctx.arc(q.x,q.y,p.radius/unit,0,Math.PI*2)}
+      else path(g.coordinates[0],true);
+      if(p.fillColor!==null){ctx.save();ctx.globalAlpha=layerAlpha*(p.fill??.18);ctx.fillStyle=p.fillColor||ink;ctx.fill("evenodd");ctx.restore()}
+      if(width>0)ctx.stroke();
+    }else if(p.kind==="text"||p.kind==="pin"){
+      const q=point(g.coordinates),size=(p.size||20)/unit;
+      ctx.translate(q.x,q.y);ctx.rotate(-(p.rot||0));ctx.scale(size/24,size/24);
+      ctx.lineJoin="round";
+      const label=(text,x,y,fs,align)=>{
+        ctx.font=`650 ${fs}px -apple-system, BlinkMacSystemFont, sans-serif`;ctx.textAlign=align;ctx.textBaseline="middle";
+        ctx.strokeStyle=haloFor(ink);ctx.fillStyle=ink;ctx.lineWidth=fs*.16;
+        const lines=String(text||"").split("\n");lines.forEach((t,i)=>{const Y=y+(i-(lines.length-1)/2)*fs*1.2;ctx.strokeText(t,x,Y);ctx.fillText(t,x,Y)});
+      };
+      if(p.kind==="pin"){
+        ctx.save();ctx.translate(-12,-22.5);ctx.fillStyle=ink;ctx.strokeStyle=haloFor(ink);ctx.lineWidth=1.2;
+        const pin=new Path2D("M12 1.5C7.6 1.5 4.5 4.8 4.5 9c0 5.6 7.5 13.5 7.5 13.5S19.5 14.6 19.5 9c0-4.2-3.1-7.5-7.5-7.5z");ctx.fill(pin);ctx.stroke(pin);
+        ctx.beginPath();ctx.arc(12,9,2.8,0,Math.PI*2);ctx.fillStyle=haloFor(ink);ctx.fill();ctx.restore();
+        if(p.text)label(p.text,24*.38,-24*.6,24*.55,"left");
+      }else label(p.text,0,0,24,"center");
+    }
+    ctx.restore();
+  }
+}
+function snapshotEntries(){return [...layers.values()].filter(l=>l.visible&&l.opacity>0&&l.doc.features.length).map(l=>({kind:"markup",id:l.doc.markup.id,el:l.pane}))}
+function drawSnapshotLayer(ctx,id,spec){
+  const layer=layers.get(id);if(!layer?.visible||!layer.opacity)return false;
+  const z=map.getZoom(),o=map.project(map.getCenter(),z);
+  const at=p=>map.latLngToContainerPoint(map.unproject(p,z)),a=at(o),b=at(o.add([256,0])),c=at(o.add([0,256])),k=spec.scale;
+  let surface=null,paint=ctx;
+  if(layer.opacity<100){surface=document.createElement("canvas");surface.width=ctx.canvas.width;surface.height=ctx.canvas.height;paint=surface.getContext("2d");if(!paint)throw new Error("The annotation drawing surface could not be allocated.")}
+  paint.save();paint.globalAlpha=1;
+  paint.setTransform(k*(b.x-a.x)/256,k*(b.y-a.y)/256,k*(c.x-a.x)/256,k*(c.y-a.y)/256,k*(a.x-spec.sel.x),k*(a.y-spec.sel.y));
+  drawGround(paint,layer.doc.features,layer.doc.markup.color,ll=>map.project(ll,z).subtract(o),lat=>mpp(lat,z));
+  paint.restore();
+  if(surface){ctx.save();ctx.setTransform(1,0,0,1,0,0);ctx.globalAlpha=layer.opacity/100;ctx.drawImage(surface,0,0);ctx.restore();surface.width=surface.height=0}
+  return true;
+}
+let terrainView=null,terrainModule=null,terrainTimer=null,terrainSyncing=false;
+const terrainIds=new Set();
+function schedule3d(){clearTimeout(terrainTimer);terrainTimer=setTimeout(sync3d,45)}
+function sync3d(){
+  const v=terrainView;if(!v||v!==view3d()||terrainSyncing||!v.getLayer("background"))return;
+  terrainSyncing=true;
+  try{
+    for(const id of [...terrainIds])if(!layers.has(id)){if(v.getLayer(`mk-${id}`))v.removeLayer(`mk-${id}`);if(v.getSource(`mk-${id}`))v.removeSource(`mk-${id}`);terrainIds.delete(id)}
+    for(const layer of [...layers.values()].sort((a,b)=>a.rank-b.rank)){
+      const id=layer.doc.markup.id,key=`mk-${id}`,url=`csp-markup://${id}/${layer.renderRevision}/{z}/{x}/{y}`;
+      let source=v.getSource(key);
+      if(!source){v.addSource(key,{type:"raster",tiles:[url],tileSize:256,minzoom:0,maxzoom:22,attribution:""});source=v.getSource(key);source._mkRevision=layer.renderRevision}
+      else if(source._mkRevision!==layer.renderRevision){source._mkRevision=layer.renderRevision;source.setTiles([url])}
+      if(!v.getLayer(key))v.addLayer({id:key,type:"raster",source:key,layout:{visibility:layer.visible&&layer.opacity>0?"visible":"none"},paint:{"raster-opacity":1,"raster-fade-duration":0}});
+      const visibility=layer.visible&&layer.opacity>0?"visible":"none";
+      if(v.getLayoutProperty(key,"visibility")!==visibility)v.setLayoutProperty(key,"visibility",visibility);
+      terrainIds.add(id);
+    }
+    const ordered=[...layers.values()].sort((a,b)=>a.rank-b.rank).map(l=>`mk-${l.doc.markup.id}`);
+    const current=v.getStyle().layers.filter(l=>l.id.startsWith("mk-")).map(l=>l.id);
+    if(current.join()!==ordered.join())for(const key of ordered)v.moveLayer(key);
+  }finally{terrainSyncing=false}
+}
+/* Cache geographic bounds once per layer revision, rather than project every
+   vertex of every drawing for every visible tile. Margins cover caps, heads,
+   rotated text and labelled pins. */
+const featureBounds=new WeakMap();
+function featuresForTile(layer,z,x,y){
+  const span=MERC/2**z,left=-MERC/2+x*span,top=MERC/2-y*span;
+  return layer.doc.features.filter(f=>{
+    let cached=featureBounds.get(f);
+    if(cached?.revision!==layer.renderRevision){
+      const g=f.geometry,p=f.properties,coords=g.type==="Point"?[g.coordinates]:g.type==="Polygon"?g.coordinates[0]:g.coordinates;
+      const lat=featureLat(f),stretch=1/Math.max(.001,Math.cos(lat*Math.PI/180));
+      let x0=Infinity,x1=-Infinity,y0=Infinity,y1=-Infinity;for(const c of coords){const p=cToP(c);x0=Math.min(x0,p.x);x1=Math.max(x1,p.x);y0=Math.min(y0,p.y);y1=Math.max(y1,p.y)}
+      const lines=String(p.text||"").split("\n"),textExtent=(p.size||20)*(Math.max(1,...lines.map(l=>l.length))+lines.length+2);
+      const margin=Math.max((p.width||2)*6+8,p.radius||0,(p.kind==="text"||p.kind==="pin")?textExtent:0)*stretch;
+      cached={revision:layer.renderRevision,x0:x0-margin,x1:x1+margin,y0:y0-margin,y1:y1+margin};
+      featureBounds.set(f,cached);
+    }
+    return cached.x1>=left&&cached.x0<=left+span&&cached.y1>=top-span&&cached.y0<=top;
+  });
+}
+async function prepare3d(){
+  const v=view3d();if(!v)return;
+  const deadline=performance.now()+8000;
+  while(view3d()===v){
+    sync3d();
+    const ready=snapshotEntries().every(item=>{const key=`mk-${item.id}`;return !!v.getSource(key)&&v.isSourceLoaded(key)});
+    if(ready)return;
+    if(performance.now()>deadline)throw new Error("Annotation layers are still loading. Wait a moment and save again.");
+    await new Promise(resolve=>setTimeout(resolve,50));
+  }
+  throw new Error("The map view changed while preparing the image.");
+}
+function attach3d(module,v){
+  if(!terrainModule){
+    module.addProtocol("csp-markup",async(params,abort)=>{
+      const match=/^csp-markup:\/\/([^/]+)\/\d+\/(\d+)\/(\d+)\/(\d+)/.exec(params.url);
+      if(!match)throw new Error("Invalid annotation tile");
+      const [,id,Z,X,Y]=match,z=+Z,x=+X,y=+Y,layer=layers.get(id),canvas=document.createElement("canvas");canvas.width=canvas.height=512;
+      const ctx=canvas.getContext("2d");ctx.scale(2,2);
+      if(layer){
+        drawGround(ctx,featuresForTile(layer,z,x,y),layer.doc.markup.color,ll=>map.project(ll,z).subtract([x*256,y*256]),lat=>mpp(lat,z));
+        if(layer.opacity<100){ctx.globalCompositeOperation="destination-in";ctx.globalAlpha=layer.opacity/100;ctx.fillStyle="#000";ctx.fillRect(0,0,256,256)}
+      }
+      const blob=await new Promise((resolve,reject)=>canvas.toBlob(b=>b?resolve(b):reject(new Error("Annotation tile could not be encoded")),"image/png"));
+      if(abort.signal.aborted)throw new DOMException("Cancelled","AbortError");
+      return {data:await blob.arrayBuffer()};
+    });terrainModule=module;
+  }
+  terrainView=v;terrainIds.clear();
+  v.on("styledata",schedule3d);v.on("load",schedule3d);v.on("move",()=>{if(selected&&!gesture)drawFrame();redrawDraft()});
+  v.on("moveend",paintBarValues);if(editing)paintBar();schedule3d();
+}
 
 /* -------------------------------------------------------------- persistence */
 let syncTimer=null,syncing=false,syncAgain=false,lastStatus="";
@@ -384,7 +525,7 @@ function removeLocal(id){
   const layer=layers.get(id);if(!layer) return;
   if(editing===layer) stopEditing();
   layer.group.remove();layer.renderer.remove?.();layer.pane.remove();
-  layers.delete(id);idb.del(id);undoStacks.delete(id);redoStacks.delete(id);writeView();changed();
+  layers.delete(id);schedule3d();idb.del(id);undoStacks.delete(id);redoStacks.delete(id);writeView();changed();
 }
 function status(state){ if(state) lastStatus=state;changed() }
 document.addEventListener("csp:server",()=>syncAll());
@@ -420,6 +561,24 @@ const capture=document.createElement("div");capture.id="mkCapture";capture.hidde
 L.DomEvent.disableClickPropagation(capture);
 for(const type of ["mousedown","touchstart","dblclick"]) capture.addEventListener(type,event=>event.stopPropagation(),{passive:true});
 /* Selection frame and handles live in their own layer above the map. */
+const draftCanvas=document.createElement("canvas");draftCanvas.id="mkDraft";mapEl.append(draftCanvas);
+let draftPainted=false;
+function redrawDraft(){
+  if(!view3d()||!draft||!editing){if(draftPainted){draftCanvas.getContext("2d").clearRect(0,0,draftCanvas.width,draftCanvas.height);draftPainted=false}return}
+  if(draftCanvas.width!==mapEl.clientWidth)draftCanvas.width=mapEl.clientWidth;
+  if(draftCanvas.height!==mapEl.clientHeight)draftCanvas.height=mapEl.clientHeight;
+  const ctx=draftCanvas.getContext("2d");ctx.clearRect(0,0,draftCanvas.width,draftCanvas.height);draftPainted=true;
+  const pts=draft.points.map(llPx),family=draft.kind==="highlight"?styles.highlight:styles.ink;
+  const widthM=family.groundWidth??family.width*here(),ll=draft.points[0],origin=proj(ll),east=unproj({x:origin.x+widthM/Math.cos(ll.lat*Math.PI/180),y:origin.y}),widthPx=llPx(ll).distanceTo(llPx(east));
+  ctx.strokeStyle=family.color||editing.doc.markup.color;ctx.lineWidth=Math.max(.01,widthPx);ctx.globalAlpha=family.opacity/100;ctx.lineCap="round";ctx.lineJoin="round";
+  ctx.beginPath();pts.forEach((p,i)=>i?ctx.lineTo(p.x,p.y):ctx.moveTo(p.x,p.y));
+  if(draft.kind==="shape"){ctx.closePath();const fill=fillProps();if(fill.fillColor!==null){ctx.save();ctx.globalAlpha=fill.fill;ctx.fillStyle=fill.fillColor;ctx.fill();ctx.restore()}}
+  if(widthM>0)ctx.stroke();
+  if((draft.kind==="arrow"||draft.kind==="arrow2")&&draft.points.length>1){
+    const ps=draft.points,heads=[arrowHead(ps[ps.length-2],ps[ps.length-1],widthM)];if(draft.kind==="arrow2")heads.push(arrowHead(ps[1],ps[0],widthM));
+    ctx.fillStyle=ctx.strokeStyle;for(const head of heads){if(!head)continue;ctx.beginPath();head.tri.map(llPx).forEach((p,i)=>i?ctx.lineTo(p.x,p.y):ctx.moveTo(p.x,p.y));ctx.closePath();ctx.fill()}
+  }
+}
 const overlay=document.createElement("div");overlay.id="mkOverlay";mapEl.append(overlay);
 L.DomEvent.disableClickPropagation(overlay);
 const eraserRing=document.createElement("div");eraserRing.className="mk-eraser-ring";eraserRing.hidden=true;mapEl.append(eraserRing);
@@ -448,7 +607,7 @@ let lastLayerId=store.get(LAST_KEY,null);
 const notifyEditing=()=>document.dispatchEvent(new CustomEvent("csp:markup-editing",{detail:{editing:!!editing,layer:editing?.doc.markup.id||null}}));
 function startEditing(layer){
   if(editing&&editing!==layer) stopEditing();
-  B.ensure2d?.();
+  B.ensureMap?.();
   const newLayer=lastLayerId!==layer.doc.markup.id;
   editing=layer;layer.visible=true;applyView(layer);writeView();
   lastLayerId=layer.doc.markup.id;store.set(LAST_KEY,lastLayerId);
@@ -464,12 +623,15 @@ function startEditing(layer){
 function stopEditing(){
   cancelDraft();deselect();closePop();editing=null;tool="pan";
   capture.hidden=true;bar.hidden=true;eraserRing.hidden=true;document.body.classList.remove("csp-markup-editing");
-  map.dragging.enable();mapEl.classList.remove("mk-hover");changed();notifyEditing();
+  map.dragging.enable();view3d()?.dragPan.enable();mapEl.classList.remove("mk-hover");changed();notifyEditing();
 }
 function setTool(next){
   cancelDraft();closePop();
   if(next!=="select") deselect();
   tool=next;mapEl.classList.remove("mk-hover");
+  const isLine=["pen","highlight"].includes(tool)||(tool==="shape"&&shapeById(styles.shape).line);
+  const ink=tool==="highlight"?styles.highlight:styles.ink;
+  if(isLine&&(ink.groundWidth??ink.width*here())<=0){ink.groundWidth=.03048;ink.width=ink.groundWidth/here();saveStyles()}
   const drawing=!["pan","select"].includes(tool);
   capture.hidden=!drawing;capture.dataset.tool=tool;
   eraserRing.hidden=tool!=="eraser";
@@ -488,7 +650,7 @@ function currentStyle(){
   if(f){
     const p=f.properties,color=p.color||editing.doc.markup.color;
     return {family:familyOf(p.kind),color,width:Math.round(clamp(strokePx(f),0,80)),opacity:Math.round((p.opacity??(p.kind==="highlight"?.4:1))*100),
-      fillColor:p.fillColor===undefined?"auto":p.fillColor,fillOpacity:Math.round((p.fill??0.18)*100),size:Math.round(clamp((p.size||20)/mpp(featureLat(f),map.getZoom()),6,160))};
+      fillColor:p.fillColor===undefined?"auto":p.fillColor,fillOpacity:Math.round((p.fill??0.18)*100),size:Math.round(clamp((p.size||20)/mpp(featureLat(f),viewZoom()),6,160))};
   }
   const family=tool==="shape"?(shapeById(styles.shape).line?"line":"shape"):familyOf(tool);
   const ink=family==="highlight"?styles.highlight:styles.ink;
@@ -499,16 +661,17 @@ function paintBar(){
   bar.hidden=false;
   const f=selectedFeature(),s=currentStyle(),m=editing.doc.markup;
   const shape=shapeById(styles.shape);
+  const ground=(key,label,px)=>{const metres=f?(f.properties[key]||0):(key==="size"?(tool==="pin"?styles.text.pinGroundSize??(styles.text.groundSize!=null?styles.text.groundSize*1.4:undefined):styles.text.groundSize):(s.family==="highlight"?styles.highlight:styles.ink).groundWidth)??px*here(),value=feet(metres);return `<label class="mk-ground"><span>${label}</span><input type="number" data-ground="${key}" min="${s.family==="shape"?0:.1}" step="any" value="${+value.toFixed(2)}" aria-label="${label} in feet"><span>ft</span></label>`};
   const tools=TOOLS.map(t=>t?`<button type="button" class="mk-tool" data-tool="${t[0]}" aria-pressed="${tool===t[0]}" title="${t[2]}" aria-label="${t[2].replace(/ \(.\)$/,"")}">${
     t[0]==="shape"?`<span class="mk-shape-glyph">${shapePreview(shape)}</span><img class="mk-caret" src="${icon("chevron-down")}" alt="">`:`<img src="${icon(t[1])}" alt="">`}</button>`:sep).join("");
   const undoCount=stackFor(undoStacks,editing).length,redoCount=stackFor(redoStacks,editing).length;
   let opts="";
   const fam=s.family;
   if(fam==="eraser") opts=slider("eraser","Size",s.eraser,8,120,1,"px")+`<span class="mk-hint">Drag across marks to erase them</span>`;
-  else if(fam==="line"||fam==="highlight") opts=chip("color",s.color,"Colour")+slider("width","Width",s.width,1,fam==="highlight"?80:40,1,"px")+slider("opacity","Opacity",s.opacity,5,100,1,"%");
-  else if(fam==="shape") opts=chip("color",s.color,s.width?"Outline colour":"Outline colour (no outline)")+slider("width","Outline",s.width,0,40,1,"px")+slider("opacity","Opacity",s.opacity,5,100,1,"%")+sep+
+  else if(fam==="line"||fam==="highlight") opts=chip("color",s.color,"Colour")+ground("width","Width",s.width)+slider("opacity","Opacity",s.opacity,5,100,1,"%");
+  else if(fam==="shape") opts=chip("color",s.color,s.width?"Outline colour":"Outline colour (no outline)")+ground("width","Outline",s.width)+slider("opacity","Opacity",s.opacity,5,100,1,"%")+sep+
     chip("fill",s.fillColor==="auto"?s.color:s.fillColor,s.fillColor===null?"Fill: none":"Fill colour",s.fillColor===null)+(s.fillColor===null?"":slider("fillOpacity","Fill",s.fillOpacity,0,100,1,"%"));
-  else if(fam==="text") opts=chip("color",s.color,"Colour")+slider("size","Size",s.size,8,120,1,"px")+slider("opacity","Opacity",s.opacity,5,100,1,"%");
+  else if(fam==="text") opts=chip("color",s.color,"Colour")+ground("size","Size",s.size)+slider("opacity","Opacity",s.opacity,5,100,1,"%");
   else opts=`<span class="mk-hint">${tool==="select"?"Click a mark to select it · drag to move · handles resize and rotate":"Drag to move around the map"}</span>`;
   let actions="";
   if(f){
@@ -526,7 +689,7 @@ function paintBar(){
       <button type="button" class="mk-icon-btn" data-act="redo" title="Redo (Ctrl+Shift+Z)" aria-label="Redo" ${redoCount?"":"disabled"}><img src="${icon("redo-2")}" alt=""></button>
     </div>
     <div class="mk-finish"><button type="button" class="mk-done" data-act="${pending?"finish":"done"}">${pending?"Finish shape":"Done"}</button></div>
-    <div class="mk-opts"><span class="mk-layer-chip" title="Drawing on this layer"><span class="mk-dot" style="--c:${m.color}"></span><span class="mk-layer-name">${esc(m.name)}</span></span>${opts}${actions?sep+actions:""}</div>`;
+    <div class="mk-opts"><span class="mk-layer-chip" title="Drawing on this layer"><span class="mk-dot" style="--c:${m.color}"></span><span class="mk-layer-name">${esc(m.name)}</span></span><span class="mk-hint">${view3d()?"On 3D terrain":"On the map"} · ground size stays fixed</span>${opts}${actions?sep+actions:""}</div>`;
   placeBar();
 }
 /* On a wide screen the bar is centred over the map, clear of the sidebar;
@@ -542,7 +705,8 @@ function placeBar(){
   bar.style.left=Math.max(left+width/2,Math.min(right-width/2,(left+right)/2))+"px";
 }
 addEventListener("resize",()=>{ placeBar();closePop() });
-new MutationObserver(()=>requestAnimationFrame(placeBar)).observe(document.body,{attributes:true,attributeFilter:["class"]});
+let last3dMode=!!view3d();
+new MutationObserver(()=>{const mode=!!view3d();if(mode!==last3dMode){last3dMode=mode;cancelDraft();deselect();if(editing)paintBar()}requestAnimationFrame(placeBar)}).observe(document.body,{attributes:true,attributeFilter:["class"]});
 
 /* Restyling: from the toolbar to the style the tool draws with and, when a
    mark is selected, to that mark. A slider drag is one undo step. */
@@ -560,7 +724,7 @@ function applyStyle(key,value,final){
   saveStyles();
   if(f){
     if(!styleEdit){ pushUndo(editing);styleEdit=true }
-    const p=f.properties,lat=featureLat(f),m=mpp(lat,map.getZoom());
+    const p=f.properties,lat=featureLat(f),m=mpp(lat,viewZoom());
     if(key==="color") p.color=value;
     else if(key==="width") p.width=+(value*m).toFixed(3);
     else if(key==="opacity") p.opacity=value/100;
@@ -571,6 +735,13 @@ function applyStyle(key,value,final){
     if(final){ styleEdit=false;touch(editing);drawFrame() }
   }
 }
+bar.addEventListener("change",event=>{
+  const input=event.target.closest("[data-ground]");if(!input||!editing)return;
+  const value=Number(input.value);if(!Number.isFinite(value)||value<Number(input.min)){paintBar();return;}
+  const key=input.dataset.ground,m=value*.3048,f=selectedFeature();
+  if(f){pushUndo(editing);f.properties[key]=m;renderFeature(editing,f);touch(editing);drawFrame()}
+  else{if(key==="size"){if(tool==="pin")styles.text.pinGroundSize=m;else styles.text.groundSize=m;styles.text.size=m/here()}else{const ink=currentStyle().family==="highlight"?styles.highlight:styles.ink;ink.groundWidth=m;ink.width=m/here()}saveStyles()}
+});
 bar.addEventListener("input",event=>{
   const input=event.target.closest("input[data-style]");if(!input) return;
   const out=input.parentElement.querySelector("output"),unit=input.dataset.style==="opacity"||input.dataset.style==="fillOpacity"?"%":"px";
@@ -666,9 +837,10 @@ document.addEventListener("keydown",event=>{
 });
 
 /* --------------------------------------------------------------- drawing */
+const onGround=px=>{const v=view3d();if(!v)return true;const ll=v.unproject([px.x,px.y]),q=v.project(ll);return Number.isFinite(ll.lat)&&Number.isFinite(ll.lng)&&Math.hypot(q.x-px.x,q.y-px.y)<12};
 const pointPx=event=>{ const r=mapEl.getBoundingClientRect();return L.point(event.clientX-r.left,event.clientY-r.top) };
-const pxLL=px=>map.containerPointToLatLng(px);
-const llPx=ll=>map.latLngToContainerPoint(ll);
+const pxLL=px=>{const v=view3d();if(!v)return map.containerPointToLatLng(px);const ll=v.unproject([px.x,px.y]);return L.latLng(ll.lat,ll.lng)};
+const llPx=ll=>{const v=view3d();return v?L.point(v.project([ll.lng,ll.lat])):map.latLngToContainerPoint(ll)};
 function addFeature(kind,geometry,extra={}){
   if(!editing) return;
   pushUndo(editing);
@@ -678,7 +850,7 @@ function addFeature(kind,geometry,extra={}){
 }
 function inkProps(family){
   const ink=family==="highlight"?styles.highlight:styles.ink,m=here();
-  return {color:ink.color||editing.doc.markup.color,width:+(ink.width*m).toFixed(3),opacity:ink.opacity/100};
+  return {color:ink.color||editing.doc.markup.color,width:ink.groundWidth??+(ink.width*m).toFixed(3),opacity:ink.opacity/100};
 }
 function fillProps(){
   const ink=styles.ink.color||editing.doc.markup.color,f=styles.fill;
@@ -687,15 +859,15 @@ function fillProps(){
 function previewStyle(family){
   const ink=family==="highlight"?styles.highlight:styles.ink,color=ink.color||editing.doc.markup.color;
   const fill=fillProps();
-  return {renderer:editing.renderer,pane:editing.paneName,color,weight:Math.max(ink.width,family==="shape"?0.0001:1),opacity:ink.opacity/100,lineCap:"round",lineJoin:"round",
+  return {renderer:editing.renderer,pane:editing.paneName,color,weight:Math.max(ink.groundWidth!=null?ink.groundWidth/here():ink.width,family==="shape"?0.0001:1),opacity:ink.opacity/100,lineCap:"round",lineJoin:"round",
     interactive:false,stroke:family!=="shape"||ink.width>0,fill:family==="shape"&&fill.fillColor!==null,fillColor:fill.fillColor||color,fillOpacity:fill.fill??0,
     className:family==="highlight"?"csp-mk-hl":""};
 }
-function cancelDraft(){ if(draft?.preview) draft.preview.forEach(p=>p.remove());draft=null }
+function cancelDraft(){ if(draft?.preview) draft.preview.forEach(p=>p.remove());draft=null;redrawDraft() }
 /* The direction of "screen right" on the ground, so a shape drawn on a
    rotated map is recorded at the angle it was drawn. */
 function screenRot(){
-  const c=map.getSize().divideBy(2),a=proj(pxLL(c)),b=proj(pxLL(c.add([100,0])));
+  const c=L.point(mapEl.clientWidth/2,mapEl.clientHeight/2),a=proj(pxLL(c)),b=proj(pxLL(c.add([100,0])));
   return Math.atan2(b.y-a.y,b.x-a.x);
 }
 function boxShape(shape,a,c,square){
@@ -707,6 +879,7 @@ function boxShape(shape,a,c,square){
 capture.addEventListener("pointerdown",event=>{
   if(!editing||event.button>0) return;
   event.preventDefault();event.stopPropagation();closePop();
+  if(!onGround(pointPx(event)))return;
   const ll=pxLL(pointPx(event)),px=pointPx(event);
   if(tool==="text"||tool==="pin"){ placeText(tool,ll,px);return }
   if(tool==="eraser"){ startErase(event);return }
@@ -715,7 +888,7 @@ capture.addEventListener("pointerdown",event=>{
     if(!draft){ draft={kind:"area",points:[ll],px:[px],preview:[L.polyline([ll],previewStyle("shape")).addTo(map)]};paintBar() }
     else{
       if(draft.px.length>=3&&px.distanceTo(draft.px[0])<14){ finishArea();return }
-      draft.points.push(ll);draft.px.push(px);draft.preview[0].setLatLngs(draft.points);
+      draft.points.push(ll);draft.px.push(px);draft.preview[0].setLatLngs(draft.points);redrawDraft();
     }
     return;
   }
@@ -727,9 +900,11 @@ capture.addEventListener("pointerdown",event=>{
   if(kind==="shape") draft.preview.push(L.polygon([ll,ll,ll],style).addTo(map));
   else draft.preview.push(L.polyline([ll],style).addTo(map));
 });
+capture.addEventListener("pointerdown",()=>requestAnimationFrame(redrawDraft));
+capture.addEventListener("pointermove",()=>requestAnimationFrame(redrawDraft));
 capture.addEventListener("pointermove",event=>{
   if(tool==="eraser"){ moveEraserRing(event);if(erasing) eraseMove(event);return }
-  if(!draft||draft.pointerId!==event.pointerId) return;
+  if(!draft||draft.pointerId!==event.pointerId||!onGround(pointPx(event))) return;
   const ll=pxLL(pointPx(event)),px=pointPx(event),preview=draft.preview[0];
   if(draft.kind==="pen"||draft.kind==="highlight"){
     if(px.distanceTo(draft.px[draft.px.length-1])<2) return;
@@ -760,7 +935,7 @@ const endStroke=event=>{
   else if(["line","arrow","arrow2"].includes(d.kind)&&span>=4) addFeature(d.kind,{type:"LineString",coordinates:d.points.map(toC)},inkProps("ink"));
   else if(d.kind==="shape"&&d.px.length>1&&Math.abs(d.px[0].x-d.px[1].x)>=4&&Math.abs(d.px[0].y-d.px[1].y)>=4){
     const ring=d.points.map(toC);ring.push(ring[0]);
-    addFeature("shape",{type:"Polygon",coordinates:[ring]},{shape:d.shape.id,rot:+screenRot().toFixed(5),...inkProps("ink"),...fillProps(),width:+(styles.ink.width*here()).toFixed(3)});
+    addFeature("shape",{type:"Polygon",coordinates:[ring]},{shape:d.shape.id,rot:+screenRot().toFixed(5),...inkProps("ink"),...fillProps(),width:styles.ink.groundWidth??+(styles.ink.width*here()).toFixed(3)});
   }
 };
 capture.addEventListener("pointerup",endStroke);capture.addEventListener("pointercancel",()=>{ if(draft&&draft.kind!=="area") cancelDraft();if(erasing) endErase() });
@@ -807,7 +982,7 @@ function placeText(kind,ll,px){
   textEditor(px,"",color,value=>{
     if(value===null||!editing) return;
     if(kind==="text"&&!value) return;
-    const size=(kind==="pin"?styles.text.size*1.4:styles.text.size)*here();
+    const size=kind==="pin"?styles.text.pinGroundSize??(styles.text.groundSize??styles.text.size*here())*1.4:styles.text.groundSize??styles.text.size*here();
     addFeature(kind,{type:"Point",coordinates:toC(ll)},{text:value,size:+size.toFixed(3),color,opacity:styles.ink.opacity/100});
   });
 }
@@ -893,12 +1068,13 @@ function pointElement(f){ return editing?.items.get(f.properties.fid)?.layers[0]
 function hitFeature(f,p,slop=6){
   const k=f.properties.kind,g=f.geometry;
   if(k==="text"||k==="pin"){
+    if(view3d()){const fr=frameOf(f);return !!fr&&inside(p,fr.c)}
     const el=pointElement(f);if(!el) return false;
     const r=el.getBoundingClientRect(),m=mapEl.getBoundingClientRect();
     return p.x>=r.left-m.left-slop&&p.x<=r.right-m.left+slop&&p.y>=r.top-m.top-slop&&p.y<=r.bottom-m.top+slop;
   }
   const half=Math.max(0,strokePx(f))/2+slop;
-  if(k==="circle"){ const c=llPx(toLL(g.coordinates)),rr=f.properties.radius/mpp(featureLat(f),map.getZoom());const d=p.distanceTo(c);return d<=rr+half&&(f.properties.fillColor!==null||d>=rr-half) }
+  if(k==="circle"){ const c=llPx(toLL(g.coordinates)),rr=f.properties.radius/mpp(featureLat(f),viewZoom());const d=p.distanceTo(c);return d<=rr+half&&(f.properties.fillColor!==null||d>=rr-half) }
   const pts=(g.type==="Polygon"?g.coordinates[0]:g.coordinates).map(c=>llPx(toLL(c)));
   for(let i=0;i<pts.length-1;i++) if(distToSeg(p,pts[i],pts[i+1])<=half) return true;
   if(pts.length===1) return p.distanceTo(pts[0])<=half;
@@ -920,14 +1096,14 @@ function select(fid){ selected={layer:editing,fid};pointsMode=false;drawFrame();
 function deleteSelected(){
   if(!selected) return;
   pushUndo(editing);
-  editing.doc.features=editing.doc.features.filter(f=>f.properties.fid!==selected.fid);
+  editing.doc.features=editing.doc.features.filter(f=>f.properties.fid!==selected.fid);editing.renderRevision++;schedule3d();
   const item=editing.items.get(selected.fid);item?.layers.forEach(l=>editing.group.removeLayer(l));editing.items.delete(selected.fid);
   deselect();touch(editing);paintBar();
 }
 function duplicateSelected(){
   const f=selectedFeature();if(!f) return;
   const copy=JSON.parse(JSON.stringify(f));copy.properties.fid=rid();
-  const d=16*MERC/Math.pow(2,map.getZoom()+8);   // 16 px down and right, in Mercator metres
+  const d=16*MERC/Math.pow(2,viewZoom()+8);   // 16 px down and right, in Mercator metres
   mapCoords(copy,c=>pToC({x:cToP(c).x+d,y:cToP(c).y-d}));
   pushUndo(editing);editing.doc.features.push(copy);renderFeature(editing,copy);touch(editing);select(copy.properties.fid);
 }
@@ -966,6 +1142,13 @@ function projectedPoints(f){
 function frameOf(f){
   const p=f.properties,rot=p.rot||0,{u,d}=frameAxes(rot);
   if(p.kind==="text"||p.kind==="pin"){
+    if(view3d()){
+      const c=cToP(f.geometry.coordinates),size=(p.size||20)/Math.cos(featureLat(f)*Math.PI/180),lines=String(p.text||"").split("\n");
+      const w=Math.max(1,...lines.map(x=>x.length))*.7*size,h=Math.max(1,lines.length)*1.2*size;
+      const box=p.kind==="pin"?[-size*.5,-size,w+size*.5,h*.5]:[-w/2,-h/2,w/2,h/2];
+      const corners=[[box[0],box[1]],[box[2],box[1]],[box[2],box[3]],[box[0],box[3]]].map(([x,y])=>llPx(unproj({x:c.x+u.x*x+d.x*y,y:c.y+u.y*x+d.y*y})));
+      return {screen:true,c:corners};
+    }
     /* Text and pins are measured where they are drawn, on screen. */
     const el=pointElement(f);if(!el) return null;
     const box=el.getBBox?.();const ctm=el.getScreenCTM?.();if(!box||!ctm) return null;
@@ -1022,7 +1205,7 @@ function paintBarValues(){ if(selectedFeature()&&!bar.contains(document.activeEl
    rotate it. They take the pointer before the map can start a pan. */
 function beginGesture(event,type,f,extra={}){
   event.preventDefault();event.stopPropagation();
-  map.dragging.disable();
+  map.dragging.disable();view3d()?.dragPan.disable();
   pushUndo(editing);
   if(type!=="move"&&type!=="vertex") circleToShape(f);
   gesture={type,f,id:event.pointerId,start:pointPx(event),startP:proj(pxLL(pointPx(event))),
@@ -1032,6 +1215,7 @@ function beginGesture(event,type,f,extra={}){
 }
 function runGesture(event){
   const G=gesture,f=G.f,p=f.properties,now=pointPx(event);
+  if(!onGround(now))return;
   if(!G.moved&&now.distanceTo(G.start)<3) return;
   G.moved=true;
   f.geometry=JSON.parse(JSON.stringify(G.snap));
@@ -1083,7 +1267,7 @@ function runGesture(event){
 }
 function endGesture(){
   const G=gesture;gesture=null;overlay.classList.remove("mk-active");
-  map.dragging.enable();
+  map.dragging.enable();view3d()?.dragPan.enable();
   if(!G) return;
   if(G.moved) touch(editing);else dropUndo(editing);
   drawFrame();paintBar();
@@ -1168,7 +1352,7 @@ function renderPanel(container){
         <div class="mk-color-grid" role="radiogroup" aria-label="Layer colour">${COLOR_GRID.map(c=>`<button type="button" class="mk-swatch" role="radio" data-new-color="${c}" style="--c:${c}" aria-pressed="${c===(draftColor||DEFAULT_COLOR)}" aria-checked="${c===(draftColor||DEFAULT_COLOR)}" aria-label="Colour ${c}"></button>`).join("")}</div>
         <div class="mk-new-actions"><button type="button" class="mk-btn" data-act="cancel-new">Cancel</button><button type="button" class="mk-btn mk-btn-primary" data-act="create">Create layer</button></div>
       </div>
-      <button type="button" class="mk-add" data-act="new"><img src="${icon("plus")}" alt=""><span>New markup layer</span></button>
+      <button type="button" class="mk-add" data-act="new"><img src="${icon("plus")}" alt=""><span>New markup layer · 2D &amp; 3D</span></button>
       <div class="mk-list"></div>
       <div class="mk-note">${!server.online?"Layers are saved on this device. Connect the terrain engine to keep them there too and share them between devices."
         :lastStatus==="unsupported"?"This terrain engine was installed before markup existed, so layers stay on this device. Update the engine to the latest code to keep and share them."
@@ -1185,7 +1369,7 @@ function renderPanel(container){
       <span class="mk-dot" style="--c:${m.color}"></span>
       <div class="mk-layer-main">
         <button type="button" class="mk-layer-title" data-act="rename" title="Rename"></button>
-        <div class="mk-layer-meta">${countText(n)} · ${esc(statusText(layer))}</div>
+        <div class="mk-layer-meta">2D &amp; 3D · ${countText(n)} · ${esc(statusText(layer))}</div>
       </div>
       <label class="csp-switch" aria-label="Show ${esc(m.name)}"><input type="checkbox" ${layer.visible?"checked":""}><span></span></label>
       ${ask?`<div class="mk-confirm" role="alert">
@@ -1216,7 +1400,7 @@ function renderPanel(container){
     }
     if(!layer) return;
     if(act==="edit"){ if(editing===layer) stopEditing();else startEditing(layer) }
-    else if(act==="zoom"){ const b=layer.group.getBounds();if(b.isValid()) map.fitBounds(b,{padding:[40,40],maxZoom:18}) }
+    else if(act==="zoom"){ const b=layer.group.getBounds();if(b.isValid()){if(view3d())view3d().fitBounds([[b.getWest(),b.getSouth()],[b.getEast(),b.getNorth()]],{padding:40,maxZoom:18});else map.fitBounds(b,{padding:[40,40],maxZoom:18})} }
     else if(act==="rename") beginRename(button,layer);
     else if(act==="clear"||act==="delete"){ confirm={id:layer.doc.markup.id,act};renderPanel(container);container.querySelector(`.mk-layer[data-id="${layer.doc.markup.id}"] [data-act="${act}-yes"]`)?.focus() }
     else if(act==="cancel-confirm"){ confirm=null;renderPanel(container) }
@@ -1243,7 +1427,7 @@ function setVisible(id,on){
   layer.visible=!!on;if(!on&&editing===layer) stopEditing();
   applyView(layer);writeView();changed();
 }
-function setOpacity(id,value){ const layer=layers.get(id);if(!layer) return;layer.opacity=Math.max(0,Math.min(100,+value||0));applyView(layer);writeView() }
+function setOpacity(id,value){ const layer=layers.get(id);if(!layer) return;layer.opacity=Math.max(0,Math.min(100,+value||0));layer.renderRevision++;applyView(layer);writeView() }
 function setOrder(ids){
   const markupIds=ids.filter(id=>layers.has(id));
   markupIds.forEach((id,index)=>{ layers.get(id).rank=markupIds.length-index });
@@ -1252,7 +1436,7 @@ function setOrder(ids){
 function activeEntries(){
   return [...layers.values()].filter(l=>l.visible).sort((a,b)=>b.rank-a.rank).map(l=>({
     id:`markup:${l.doc.markup.id}`,name:l.doc.markup.name,
-    meta:`Markup · ${countText(l.doc.features.length)}`,
+    meta:`Markup · 2D & 3D · ${countText(l.doc.features.length)}`,
     opacity:l.opacity,visible:true,kind:"markup"}));
 }
 /* The map's quick-draw button: back to the layer last drawn on, or the top
@@ -1264,7 +1448,7 @@ function quickDraw(){
   startEditing(layer);return true;
 }
 
-window.CSPMarkup={renderPanel,activeEntries,setVisible,setOpacity,setOrder,quickDraw,
+window.CSPMarkup={prepare3d,attach3d,snapshotEntries,drawSnapshotLayer,renderPanel,activeEntries,setVisible,setOpacity,setOrder,quickDraw,
   isEditing:()=>!!editing,
   resetLayer:id=>setOpacity(id,100),count:()=>[...layers.values()].filter(l=>l.visible).length,
   sync:syncAll,_layers:layers,_select:fid=>{ if(editing){ setTool("select");select(fid) } }};

@@ -991,8 +991,8 @@ body.pane-reordering,body.pane-reordering *{cursor:grabbing!important;user-selec
 }
 
 </style>
-<link rel="stylesheet" href="ui-theme.css?build=2026-10-11e">
-<link rel="stylesheet" href="ui-system.css?build=2026-10-11e">
+<link rel="stylesheet" href="ui-theme.css?build=2026-10-11f">
+<link rel="stylesheet" href="ui-system.css?build=2026-10-11f">
 <style>
 /* The redesign restructures the legacy DOM rather than replacing it, and the
    script that does so is the last thing on the page - so the browser paints the
@@ -1258,7 +1258,7 @@ html.csp-boot body{visibility:hidden}
               <option value="wadnr">WA DNR LiDAR</option>
               <option value="wadnr-only">WA DNR elevation only (leave gaps blank)</option>
               <option value="wadnr-hillshade">WA DNR published hillshade</option>
-              <option value="usgs1m">USGS 1 m (offline-capable)</option>
+              <option value="usgs1m">USGS 3.3 ft (offline-capable)</option>
             </select>
             <label for="terOp">Opacity <output id="terOpOut" for="terOp">70%</output></label>
             <input type="range" id="terOp" min="0" max="100" value="70">
@@ -1350,7 +1350,6 @@ html.csp-boot body{visibility:hidden}
                 <div class="elev-control-row">
                   <input type="number" id="elevVal" value="1100" step="10">
                   <select id="elevUnit" aria-label="Elevation unit">
-                    <option value="m">metres</option>
                     <option value="ft" selected>feet</option>
                     <option value="yd">yards</option>
                   </select>
@@ -1719,7 +1718,7 @@ html.csp-boot body{visibility:hidden}
   L.Renderer.prototype.onAdd=function(map){return onAdd.call(this,map||this._map)};
 })();
 </script>
-<script src="version.js?build=2026-10-11e"></script>
+<script src="version.js?build=2026-10-11f"></script>
 <script src="mosaic-core.js"></script>
 <script src="png-stream.js"></script>
 <script src="terrain-core.js"></script>
@@ -3646,8 +3645,8 @@ function snapshotElementFilter(el,mapEl){
   return "none";
 }
 function snapshotElementZ(el,mapEl){
-  let value=0,node=el;
-  while(node&&node!==mapEl){ const z=parseInt(getComputedStyle(node).zIndex,10);if(Number.isFinite(z)) value+=z;node=node.parentElement }
+  let value=[],node=el;
+  while(node&&node!==mapEl){const cs=getComputedStyle(node),z=parseInt(cs.zIndex,10);if(Number.isFinite(z)||cs.transform!=="none"||Number(cs.opacity)<1)value.unshift(Number.isFinite(z)?z:0);node=node.parentElement}
   return value;
 }
 async function snapshotBitmap(url,cache){
@@ -3790,7 +3789,7 @@ function snapshotMegapixels(w,h){ return (w*h/1e6).toFixed(w*h<10_000_000?1:0) }
 function snapshotGroundText(sel,scale){
   const c=map.containerPointToLatLng(L.point(sel.x+sel.w/2,sel.y+sel.h/2));
   const metres=156543.03392*Math.cos(c.lat*Math.PI/180)/Math.pow(2,map.getZoom())/scale;
-  return metres>=1000?`${(metres/1000).toFixed(1)} km/px`:metres>=10?`${Math.round(metres)} m/px`:`${metres.toFixed(metres>=1?1:2)} m/px`;
+  return res(metres)+"/px";
 }
 function snapshotLimitText(spec){
   if(spec.tooBig) return `Over the ${Math.round(SNAPSHOT_MAX_PIXELS/1e6).toLocaleString()} MP limit for this device`;
@@ -3904,8 +3903,8 @@ function snapshotDomMatrix(el,root){
 function snapshotDomItems(sel){
   const mapEl=$("#map"),box=mapEl.getBoundingClientRect();
   const left=box.left+sel.x,top=box.top+sel.y,right=left+sel.w,bottom=top+sel.h;
-  return [...mapEl.querySelectorAll("canvas.leaflet-tile,canvas.leaflet-zoom-animated,img.leaflet-image-layer,img.leaflet-marker-icon,.leaflet-overlay-pane svg,.leaflet-marker-pane svg,.csp-markup-pane svg")]
-    .filter(el=>!el.closest(".csp-tile-hold")&&!(el.parentElement&&el.parentElement.closest("svg")))
+  return [...mapEl.querySelectorAll("canvas.leaflet-tile,canvas.leaflet-zoom-animated,img.leaflet-image-layer,img.leaflet-marker-icon,.leaflet-overlay-pane svg,.leaflet-marker-pane svg")]
+    .filter(el=>!el.closest(".csp-tile-hold,.csp-markup-pane")&&!(el.parentElement&&el.parentElement.closest("svg")))
     .filter(el=>{ const r=el.getBoundingClientRect();return r.width>0&&r.height>0&&r.right>left&&r.left<right&&r.bottom>top&&r.top<bottom })
     .filter(el=>snapshotElementOpacity(el,mapEl)>0.001&&getComputedStyle(el).visibility!=="hidden");
 }
@@ -3949,7 +3948,7 @@ async function drawSnapshotDomItem(ctx,el,spec,cache,info=snapshotDomInfo(el)){
 function snapshotPaintOrder(items){
   const mapEl=$("#map");
   return items.map((item,index)=>({...item,index,z:snapshotElementZ(item.el,mapEl)}))
-    .sort((a,b)=>a.z-b.z||(a.el===b.el?0:(a.el.compareDocumentPosition(b.el)&Node.DOCUMENT_POSITION_FOLLOWING?-1:1))||a.index-b.index);
+    .sort((a,b)=>{let z=0;for(let i=0;i<Math.max(a.z.length,b.z.length);i++){z=(a.z[i]||0)-(b.z[i]||0);if(z)break}return z||(a.el===b.el?0:(a.el.compareDocumentPosition(b.el)&Node.DOCUMENT_POSITION_FOLLOWING?-1:1))||a.index-b.index});
 }
 async function composeSnapshot(spec){
   const mapEl=$("#map"),canvas=document.createElement("canvas");canvas.width=spec.width;canvas.height=spec.height;
@@ -3965,10 +3964,12 @@ async function composeSnapshot(spec){
     else{
       const items=snapshotPaintOrder([
         ...spec.plans.map(plan=>({kind:"tiles",plan,el:plan.layer.getContainer?.()||mapEl})),
-        ...snapshotDomItems(spec.sel).map(el=>({kind:"dom",el}))
+        ...snapshotDomItems(spec.sel).map(el=>({kind:"dom",el})),
+        ...(window.CSPMarkup?.snapshotEntries()||[])
       ]);
       for(const item of items){
         if(item.kind==="tiles"){ const r=await drawSnapshotRasterPlan(ctx,item.plan,spec,cache,progress);drawn+=r.drawn;failed+=r.failed }
+        else if(item.kind==="markup"){if(window.CSPMarkup.drawSnapshotLayer(ctx,item.id,spec))drawn++}
         else if(await drawSnapshotDomItem(ctx,item.el,spec,cache)) drawn++;
       }
     }
@@ -4014,7 +4015,8 @@ async function composeSnapshotStream(spec,write){
   }
   const items=snapshotPaintOrder([
     ...spec.plans.map(plan=>({kind:"tiles",plan,el:plan.layer.getContainer?.()||mapEl})),
-    ...snapshotDomItems(sel).map(el=>({kind:"dom",el}))
+    ...snapshotDomItems(sel).map(el=>({kind:"dom",el})),
+    ...(window.CSPMarkup?.snapshotEntries()||[])
   ]).map(item=>{
     if(item.kind!=="dom") return item;
     const info=snapshotDomInfo(item.el);if(!info) return null;
@@ -4059,7 +4061,8 @@ async function composeSnapshotStream(spec,write){
             const subset=planTiles.get(item.plan).filter(hits);if(!subset.length) continue;
             const r=await drawSnapshotRasterPlan(ctx,item.plan,blockSpec,cache,null,subset);
             drawn+=r.drawn;for(const t of r.failedTiles) failedUrls.add(t.url);
-          }else if(hits(item)&&await drawSnapshotDomItem(ctx,item.el,blockSpec,cache,item.info)) drawn++;
+          }else if(item.kind==="markup"){if(window.CSPMarkup.drawSnapshotLayer(ctx,item.id,blockSpec))drawn++}
+          else if(hits(item)&&await drawSnapshotDomItem(ctx,item.el,blockSpec,cache,item.info)) drawn++;
         }
         const pixels=ctx.getImageData(0,0,w,h).data;
         for(let r=0;r<h;r++) band.set(pixels.subarray(r*w*4,(r+1)*w*4),(r*W+x0)*4);
@@ -4095,7 +4098,8 @@ async function snapshotSink(name,useDisk){
 }
 /* MapLibre clears its drawing buffer after each frame, so the pixels are read
    inside the render event, before that happens. */
-function drawSnapshot3d(ctx,spec){
+async function drawSnapshot3d(ctx,spec){
+  await window.CSPMarkup?.prepare3d();
   return new Promise((resolve,reject)=>{
     const canvas=map3d.getCanvas(),mapBox=$("#map").getBoundingClientRect(),glBox=canvas.getBoundingClientRect();
     const kx=canvas.width/glBox.width,ky=canvas.height/glBox.height;
@@ -6218,6 +6222,7 @@ async function enterTerrain3d(){
       pixelRatio:MAP3D_COMPACT?Math.min(2,Number(devicePixelRatio)||1):undefined,
       maxZoom:22,maxPitch:85,renderWorldCopies:false,scrollZoom:false,canvasContextAttributes:{antialias:!MAP3D_COMPACT,powerPreference:"high-performance"},
       attributionControl:true,fadeDuration:0});
+    window.CSPMarkup?.attach3d(module,map3d);
     map3d.on("rotate",syncBearingButton);map3d.on("pitch",syncBearingButton);
     map3d.on("moveend",scheduleTerrainStatus);map3d.on("idle",scheduleTerrainStatus);
     map3d.on("load",()=>{setTerrainModeUi(true);map3d.resize();
@@ -6447,7 +6452,7 @@ function sunEffect(){
     return {live:false,why:`${label} is computed from the terrain\u2019s gradient, not from a light source, so the sun does not change it. The sliders still drive 3D relief.`};
   }
   if(verdict.reason==="prerendered")
-    return {live:false,why:"Published WA DNR LiDAR hillshade arrives already rendered, with its shadows baked in \u2014 the sun cannot be moved here. Set Source to National 3DEP or USGS 1 m to relight from elevation instead."};
+    return {live:false,why:"Published WA DNR LiDAR hillshade arrives already rendered, with its shadows baked in \u2014 the sun cannot be moved here. Set Source to National 3DEP or USGS 3.3 ft to relight from elevation instead."};
   return {live:true,why:"Hillshade and elevation tint relight instantly."};
 }
 function paintSunNote(){
@@ -6539,8 +6544,7 @@ $("#terrainInspectSource").onclick=async()=>{
 };
 function formatSampleMeters(meters){
   if(!Number.isFinite(meters)||meters<=0)return "sampling not reported";
-  if(meters<1)return `~${Math.max(1,Math.round(meters*100))} cm/pixel`;
-  return `~${meters<10?meters.toFixed(1):Math.round(meters)} m/pixel`;
+  return `~${res(meters)}/pixel`;
 }
 function sourceResolutionText(source){
   const native=source.nativeLabel||"Native spacing not reported";
@@ -6642,7 +6646,7 @@ function paintTerrainStatus(){
   const output=$("#terrainSourceSummary");
   output.innerHTML='<p><b>Currently displayed in 2D</b></p>'+sources.map(source=>`<p><a href="${source.url}" target="_blank" rel="noopener noreferrer">${esc(source.label)}</a> · ${source.percent<1?"<1":Math.round(source.percent)}% of rendered elevation samples<br><span class="terrain-resolution-note">${esc(sourceResolutionText(source))}</span></p>`).join("")+
     (!sources.length?'<p>No elevation samples displayed yet.</p>':'')+
-    '<p>Percentages describe the current loaded tile samples, not survey footprint area. USGS 3DEP mixes resolutions; a 1 m service capability does not mean every location has 1 m data. Zooming past a source’s detail does not create new information.</p>'+
+    '<p>Percentages describe the current loaded tile samples, not survey footprint area. USGS 3DEP mixes resolutions; a 3.3 ft service capability does not mean every location has 3.3 ft data. Zooming past a source’s detail does not create new information.</p>'+
     (is3d?'<p><b>3D</b> '+esc(public3dSourceText())+'</p>':'')+
     (layer instanceof CompositeTerrainLayer?'<p>WA DNR is a published, fixed-light hillshade. Listed nearby projects are coverage candidates; the export does not identify which individual project supplies every pixel.</p>':'');
   renderTerrainSourcePanel(summary,is3d,layer);
@@ -6728,7 +6732,7 @@ function applyTerrain(force){
   // is why panning used to blank the map. Only rebuild when the actual choice
   // changes; otherwise leave Leaflet alone and let it reuse its tiles.
   /* The signature names the kind of layer, not the view. National 3DEP and
-     raw USGS 1 m are one elevation layer - it asks for raw pixels only from
+     raw USGS 3.3 ft are one elevation layer - it asks for raw pixels only from
      z13, per tile - so crossing z13 no longer rebuilds it. The WA LiDAR layer
      reads the projects it may use at tile time (waLiveIds), so a pan that
      brings new projects into view no longer rebuilds it either. Each rebuild
@@ -6790,7 +6794,7 @@ function paintTerrainInfo(pick){
   pick = pick || chooseTerrain(style);
   let html="";
   if(pick.src==="wadnr-elevation"){
-    html+=`<div>Requested source: <b>${pick.cachedOnly?"Best available (cached DNR, USGS and overview)":"WA DNR bare-earth elevation"}</b>. All analytical styles derive from numeric elevation in metres; rendered sources and their percentages are shown above.</div>`;
+    html+=`<div>Requested source: <b>${pick.cachedOnly?"Best available (cached DNR, USGS and overview)":"WA DNR bare-earth elevation"}</b>. All analytical styles derive from numeric elevation; rendered sources and their percentages are shown above.</div>`;
     if(!pick.cachedOnly)html+=`<div>${pick.strict?"DNR-only mode leaves unavailable pixels blank.":"USGS / global overview remains visible while DNR arrives and fills true gaps."} DNR archives download once in the background from zoom 13, within the engine's storage budget.</div>`;
     if(pick.overview)html+=`<div>Zoom in to 13 or closer to acquire DNR elevation; cached DNR remains available.</div>`;
     if(dnrAcquisitionText())html+=`<div>${esc(dnrAcquisitionText())}</div>`;
@@ -6804,7 +6808,7 @@ function paintTerrainInfo(pick){
   }else if(pick.src==="usgs1m"){
     const h=(pick.cover&&pick.cover.hits)||[];
     const yrs=h.map(x=>x.year).filter(Boolean);
-    html += `<div class="row2"><span>Preferred source: <span class="src">USGS 1 m LiDAR</span></span>`
+    html += `<div class="row2"><span>Preferred source: <span class="src">USGS 3.3 ft LiDAR</span></span>`
           + `<span class="yr">${yrs.length?Math.max(...yrs):""}</span></div>`
           + `<div>Detailed elevation loads where available. National terrain fills survey gaps; the loading status above identifies the data actually displayed.</div>`
           + h.slice(0,3).map(x=>`<div class="row2"><span>${esc(x.project)}</span>`
@@ -6817,9 +6821,9 @@ function paintTerrainInfo(pick){
   }
   if(PROXY && usgsCover && pick.src!=="usgs1m"){
     html += usgsCover.hits && usgsCover.hits.length
-      ? `<div style="margin-top:7px">USGS <b>1 m DEM</b> covers the map centre`
-        + ` (${esc(usgsCover.cell)}) &mdash; pick <i>USGS 1 m</i> for slope, aspect and contours from real elevation.</div>`
-      : `<div style="margin-top:7px">No federal 1 m DEM for this cell (${esc(usgsCover.cell||"")}).</div>`;
+      ? `<div style="margin-top:7px">USGS <b>3.3 ft DEM</b> covers the map centre`
+        + ` (${esc(usgsCover.cell)}) &mdash; pick <i>USGS 3.3 ft</i> for slope, aspect and contours from real elevation.</div>`
+      : `<div style="margin-top:7px">No federal 3.3 ft DEM for this cell (${esc(usgsCover.cell||"")}).</div>`;
   }
   if(waCover && waCover.length){
     html += `<div style="margin-top:7px"><b>LiDAR projects in and around this view</b></div>`
@@ -6968,7 +6972,7 @@ const OVERLAYS = [
 
   { id:"s2cloudless", group:"Imagery", name:"Sentinel-2 cloudless", via:"EOX", sw:"#6a86a8", z:10,
     url:EOX_S2_CLOUDLESS, attr:EOX_ATTR, maxZoom:16, sharp:true,
-    note:`Cloud-free 10 m composite for ${EOX_S2_YEAR}, complete over all land. Coarser than the Esri mosaic but never cloudy and never missing.` },
+    note:`Cloud-free 33 ft composite for ${EOX_S2_YEAR}, complete over all land. Coarser than the Esri mosaic but never cloudy and never missing.` },
 
   /* Sparse, not global: the Open Data Program publishes on disaster
      activations only, so this indexes where sub-metre imagery exists at all
@@ -6978,7 +6982,7 @@ const OVERLAYS = [
   { id:"maxarvhr", group:"Imagery", name:"Maxar VHR coverage", via:"Maxar Open Data", sw:"#c88fb0", z:560,
     geoLoader:()=>loadMaxarFootprints(), popupKind:"maxar", nonCommercial:true,
     attr:"Maxar Open Data Program (CC-BY-NC-4.0)",
-    note:"Where 30-50 cm disaster imagery exists, with dates. Licensed CC-BY-NC-4.0 \u2014 non-commercial use only." },
+    note:"Where 12–20 inch disaster imagery exists, with dates. Licensed CC-BY-NC-4.0 \u2014 non-commercial use only." },
 
   { id:"roads", group:"Labels & reference", name:"Roads & streets", via:"Esri", sw:"#e0a060", z:520,
     url:"https://services.arcgisonline.com/ArcGIS/rest/services/Reference/World_Transportation/MapServer/tile/{z}/{y}/{x}",
@@ -7134,10 +7138,10 @@ const OVERLAYS = [
      problem and no revisit gap. MODIS NDSI is the satellite view alongside it,
      which does have both but sees the whole world. */
   { id:"snowdepth", group:"Conditions", name:"Snow depth", via:"NOHRSC · M2 cache", sw:"#7fc4ff", z:480, snow:"3", attr:"NOAA NOHRSC National Snow Analysis", maxZoom:14, defaultOpacity:70,
-    note:"Modeled snow depth in inches at about 1 km resolution across CONUS; NOAA refreshes the analysis four times daily." },
+    note:"Modeled snow depth in inches at about 0.6 mile resolution across CONUS; NOAA refreshes the analysis four times daily." },
 
   { id:"swe", group:"Conditions", name:"Snow water equivalent", via:"NOHRSC · M2 cache", sw:"#4f8fd0", z:479, snow:"7", attr:"NOAA NOHRSC National Snow Analysis", maxZoom:14, defaultOpacity:70,
-    note:"Modeled liquid-water content of the snowpack in inches at about 1 km resolution; not a point measurement." },
+    note:"Modeled liquid-water content of the snowpack in inches at about 0.6 mile resolution; not a point measurement." },
 
   { id:"snowcover", group:"Conditions", name:"Snow cover", via:"NASA GIBS", sw:"#cfe9ff", z:478, gibs:"MODIS_Terra_NDSI_Snow_Cover", attr:"NASA GIBS — MODIS Terra NDSI",
     maxZoom:8, defaultOpacity:65 },
@@ -7494,7 +7498,7 @@ function ovFeaturePopup(o,feature){
     const p=feature?.properties||{},url=safeHttpUrl(p.url);
     return `<b>${esc(p.title||"Maxar Open Data")}</b>`+
       `<br>${esc(maxarWhen(p))}`+
-      `<br>30\u201350 cm optical, Cloud-Optimised GeoTIFF`+
+      `<br>12\u201320 inch optical, Cloud-Optimised GeoTIFF`+
       `<br><b>CC-BY-NC-4.0 \u2014 non-commercial use only</b>`+
       `${url?`<br><a href="${esc(url)}" target="_blank" rel="noopener noreferrer">Open the STAC collection \u2192</a>`:""}`;
   }
@@ -7660,7 +7664,7 @@ function paintOverlayNote(){
   if(failed.length) lines.push(failed.map(o=>`${esc(o.name)}: ${esc(ovLayers[o.id]._cspError)}. Toggle it to retry.`).join("<br>"));
   if((inCatalog("snowdepth")&&ovOn.snowdepth&&ovLayers.snowdepth)||(inCatalog("swe")&&ovOn.swe&&ovLayers.swe))
     lines.push("NOHRSC depth and SWE are current modeled conditions in <b>inches</b>. The connected M2 serves its warm cache first; the browser falls back directly to NOAA without blanking the layer.");
-  if(inCatalog("snowcover")&&ovOn.snowcover&&ovLayers.snowcover) lines.push(`Snow cover is the completed MODIS pass for <b>${gibsDay()}</b>; it stretches its last 500 m native level instead of disappearing when you zoom farther in.`);
+  if(inCatalog("snowcover")&&ovOn.snowcover&&ovLayers.snowcover) lines.push(`Snow cover is the completed MODIS pass for <b>${gibsDay()}</b>; it stretches its last 1,640 ft native level instead of disappearing when you zoom farther in.`);
   if(notices.length) lines.push(notices.map(o=>`<b>${esc(o.name)}:</b> ${esc(o.note)}`).join("<br>"));
   if(!lines.length) lines.push(n
     ? "Drawn over the imagery. Drag the opacity slider if labels compete with the scene."
@@ -8766,7 +8770,7 @@ function loadTerrainPrefs(){
     const p=JSON.parse(localStorage.getItem(TERRAIN_PREF_KEY)||"null"); if(!p) return;
     const set=(id,value)=>{ const el=$(id); if(el&&value!=null&&[...el.options||[]].some(o=>o.value===String(value))) el.value=String(value) };
     set("#terStyle",p.style); set("#terSrc",p.source); set("#terDepth",p.depth); set("#terExtent",p.extent);
-    set("#fabBand",p.fabric); set("#elevUnit",p.elevationUnit);
+    set("#fabBand",p.fabric); $("#elevUnit").value="ft";
     const spanFt=Number.isFinite(+p.elevationSpanFt) ? +p.elevationSpanFt
       : Number.isFinite(+p.elevationSpan) ? +p.elevationSpan/0.3048 : 300;
     $("#elevSpan").value=Math.round(Math.max(10,Math.min(20000,spanFt)));
@@ -9026,7 +9030,7 @@ const ElevLayer = L.GridLayer.extend({
     if(PROXY&&this.options.dnrEndpoint)
       sources.push([api(`${this.options.dnrEndpoint}/{z}/{x}/{y}.png?acquire=${this.options.dnrAcquire&&shown>=13?"1":"0"}&revision=${dnrStatus?.revision||0}`),18,5,"WA DNR elevation"]);
     if(PROXY&&this.options.rawEndpoint&&shown>=13)
-      sources.push([api(`${this.options.rawEndpoint}/{z}/{x}/{y}.png`),this.options.rawNativeZoom??coords.z,3,"USGS 1 m"]);
+      sources.push([api(`${this.options.rawEndpoint}/{z}/{x}/{y}.png`),this.options.rawNativeZoom??coords.z,3,"USGS 3.3 ft"]);
     if(PROXY&&this.options.nationalEndpoint&&(shown>=13||this.options.refineOverview))
       sources.push([api(`${this.options.nationalEndpoint}/{z}/{x}/{y}.png`),this.options.nationalNativeZoom??coords.z,2,"National elevation"]);
     if(!PROXY&&this.options.fallback)
@@ -9667,6 +9671,7 @@ function cspSetLayerOrder(order){
 window.ClearSkiesPortalBridge={
   /* For markup.js: the map, the engine address, and whether it answers. */
   map,
+  map3d:()=>map3d,
   api,
   server:()=>({online:PROXY,base:API}),
   activeLayers:cspActiveLayers,
@@ -9675,7 +9680,8 @@ window.ClearSkiesPortalBridge={
   resetLayer:cspResetLayer,
   setLayerOrder:cspSetLayerOrder,
   refreshOverlayStatus:paintOverlayNote,
-  /* Markup draws on the 2D map; drawing from 3D or the point cloud returns there. */
+  /* Annotation tools stay on whichever map is visible. */
+  ensureMap:()=>{if(document.body.classList.contains("point-cloud-open"))pointCloudPanel?.close?.()},
   ensure2d:()=>{ if(document.body.classList.contains("point-cloud-open")) pointCloudPanel?.close?.(); if(document.body.classList.contains("terrain-3d")) exitTerrain3d() },
   overlayCatalog:()=>OVERLAYS.map(o=>({id:o.id,name:o.id==="imagery"?"Global satellite basemap":o.name,group:o.group,via:o.via}))
 };
@@ -9731,7 +9737,7 @@ $("#q").addEventListener("blur",()=>setTimeout(acHide,120));
 document.addEventListener("click",e=>{ if(!e.target.closest("#iw")) acHide() });
 })();
 </script>
-<script src="markup.js?build=2026-10-11e"></script>
-<script src="ui-system.js?build=2026-10-11e"></script>
+<script src="markup.js?build=2026-10-11f"></script>
+<script src="ui-system.js?build=2026-10-11f"></script>
 </body>
 </html>

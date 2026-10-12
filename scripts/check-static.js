@@ -310,7 +310,7 @@ assert(index.includes('<script src="png-stream.js"></script>')&&index.includes('
        "large exports must stream through the tested PNG encoder in bounded blocks");
 /* Markup layers: the user's own drawings, kept on this machine (gitignored)
    and in the browser, drawn in panes the PNG export captures. */
-assert(index.includes('<script src="markup.js?build=')&&index.includes('.csp-markup-pane svg')&&
+assert(index.includes('<script src="markup.js?build=')&&index.includes('window.CSPMarkup.drawSnapshotLayer(')&&index.includes('window.CSPMarkup?.snapshotEntries()')&&
        index.includes('window.CSPMarkup?.activeEntries()')&&index.includes('server:()=>({online:PROXY,base:API})'),
        "markup layers must load, list in Layers, reach the engine and appear in exports");
 assert(read(".gitignore").includes("\nmarkup/"),"markup layers are the user's files and must never be committed");
