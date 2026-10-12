@@ -992,8 +992,8 @@ body.pane-reordering,body.pane-reordering *{cursor:grabbing!important;user-selec
 }
 
 </style>
-<link rel="stylesheet" href="ui-theme.css?build=2026-10-11i">
-<link rel="stylesheet" href="ui-system.css?build=2026-10-11i">
+<link rel="stylesheet" href="ui-theme.css?build=2026-10-11j">
+<link rel="stylesheet" href="ui-system.css?build=2026-10-11j">
 <style>
 /* The redesign restructures the legacy DOM rather than replacing it, and the
    script that does so is the last thing on the page - so the browser paints the
@@ -1671,9 +1671,9 @@ html.csp-boot body{visibility:hidden}
           <button type="button" role="radio" data-scale="1">1×</button><button type="button" role="radio" data-scale="2">2×</button><button type="button" role="radio" data-scale="4">4×</button><button type="button" role="radio" data-scale="8">8×</button><button type="button" role="radio" data-scale="16">16×</button><button type="button" role="radio" data-scale="32">32×</button>
         </div>
         <span id="snapSelMeta" class="snap-sel-meta" aria-live="polite"></span>
+        <button type="button" id="snapSelReadout" class="snap-sel-toggle" aria-pressed="false" aria-label="Include map info in saved image" title="Include coordinates, elevation and color keys in the image"><span>Map info</span><span class="snap-sel-toggle-state" aria-hidden="true">Off</span></button>
         <button type="button" id="snapSelFull" class="snap-sel-text" title="Select the whole map view">Full view</button>
         <button type="button" id="snapSelSave" class="snap-sel-save">Save</button>
-        <label class="snapshot-readout-option"><input id="snapSelReadout" type="checkbox"> Include coordinates, elevation and color keys</label>
       </div>
     </div>
     <section id="ctl" hidden aria-label="Displayed imagery controls">
@@ -1721,7 +1721,7 @@ html.csp-boot body{visibility:hidden}
   L.Renderer.prototype.onAdd=function(map){return onAdd.call(this,map||this._map)};
 })();
 </script>
-<script src="version.js?build=2026-10-11i"></script>
+<script src="version.js?build=2026-10-11j"></script>
 <script src="mosaic-core.js"></script>
 <script src="png-stream.js"></script>
 <script src="terrain-core.js"></script>
@@ -9809,13 +9809,15 @@ function drawSnapshotReadout(ctx,spec,blockX=0,blockY=0){
   }
   ctx.restore();
 }
-for(const id of ["snapshotReadout","snapSelReadout"]){
-  try{$("#"+id).checked=localStorage.getItem("clearskies.snapshot.readout.v1")==="true"}catch(error){}
-  $("#"+id).addEventListener("change",event=>{
-    const enabled=event.target.checked;$("#snapshotReadout").checked=$("#snapSelReadout").checked=enabled;
-    try{localStorage.setItem("clearskies.snapshot.readout.v1",String(enabled))}catch(error){}
-  });
+function setSnapshotReadoutEnabled(enabled,persist=false){
+  $("#snapshotReadout").checked=enabled;
+  const button=$("#snapSelReadout");button.setAttribute("aria-pressed",String(enabled));
+  button.querySelector(".snap-sel-toggle-state").textContent=enabled?"On":"Off";
+  if(persist)try{localStorage.setItem("clearskies.snapshot.readout.v1",String(enabled))}catch(error){}
 }
+try{setSnapshotReadoutEnabled(localStorage.getItem("clearskies.snapshot.readout.v1")==="true")}catch(error){}
+$("#snapshotReadout").addEventListener("change",event=>setSnapshotReadoutEnabled(event.target.checked,true));
+$("#snapSelReadout").addEventListener("click",()=>setSnapshotReadoutEnabled(!$("#snapshotReadout").checked,true));
 function cursorTileSample(tile,ll){
   if(!tile?.elev||!tile.coords)return null;
   const {z,x,y}=tile.coords,p=map.project(ll,z),world=256*2**z;
@@ -9993,7 +9995,7 @@ $("#q").addEventListener("blur",()=>setTimeout(acHide,120));
 document.addEventListener("click",e=>{ if(!e.target.closest("#iw")) acHide() });
 })();
 </script>
-<script src="markup.js?build=2026-10-11i"></script>
-<script src="ui-system.js?build=2026-10-11i"></script>
+<script src="markup.js?build=2026-10-11j"></script>
+<script src="ui-system.js?build=2026-10-11j"></script>
 </body>
 </html>

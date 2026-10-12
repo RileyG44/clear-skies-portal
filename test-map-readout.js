@@ -15,7 +15,7 @@ assert.equal(env.cursorTileSample(tile,{x:400,y:256}),null,'tile boundary does n
 const ctx={calls:[],save(){},restore(){},setTransform(...args){this.calls.push(['transform',...args])},
   fillText(...args){this.calls.push(['text',...args])},fillRect(...args){this.calls.push(['rect',...args])},
   createLinearGradient(){return {addColorStop(){}}}};
-vm.runInNewContext(take('drawSnapshotReadout','cursorTileSample').split('for(const id of ["snapshotReadout"')[0],env);
+vm.runInNewContext(take('drawSnapshotReadout','cursorTileSample').split('function setSnapshotReadoutEnabled(')[0],env);
 const spec={width:2000,height:1200,scale:2,readout:{note:'Cursor location',coordinates:'47° N · 120° W',elevation:'Elevation ≈ 1,000 ft',keys:[{name:'Slope',bar:'linear-gradient(90deg,#fff 0%,#000 100%)',labels:['0°','90°']}]}};
 env.drawSnapshotReadout(ctx,spec);
 const normal=ctx.calls[0];assert.deepEqual(normal,['transform',2,0,0,2,24,1012]);

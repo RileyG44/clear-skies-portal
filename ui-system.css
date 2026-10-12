@@ -2107,5 +2107,8 @@ body:not(.collapsed) #mapReadout{visibility:hidden}
 body.point-cloud-open #mapReadout{display:none}
 @media(max-width:760px){#mapReadout{display:none}}
 .snapshot-readout-option{display:flex;align-items:center;gap:6px;font-size:11px;cursor:pointer}
-.snap-sel-bar{flex-wrap:wrap}
-.snap-sel-bar .snapshot-readout-option{flex-basis:100%;padding:3px 6px 2px}
+.snap-sel-bar .snap-sel-toggle{display:inline-flex;align-items:center;justify-content:center;gap:6px;flex:0 0 auto;white-space:nowrap;background:var(--ui-fill);font-weight:600}
+.snap-sel-bar .snap-sel-toggle:hover{background:var(--ui-fill-2)}
+.snap-sel-bar .snap-sel-toggle[aria-pressed="true"]{background:var(--lg-lens);color:var(--ui-accent);box-shadow:var(--lg-lens-rim)}
+.snap-sel-toggle-state{min-width:21px;font-size:10px;text-align:center;opacity:.8}
+.snap-sel-bar button:focus-visible{outline:2px solid var(--ui-accent);outline-offset:2px}
