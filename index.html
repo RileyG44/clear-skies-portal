@@ -4197,6 +4197,7 @@ function endSnapshotSelect(){
   if(snapSel.hidden) return;
   snapSel.hidden=true;snapDrag=null;document.body.classList.remove("snap-selecting");snapshotEl.setAttribute("aria-pressed","false");
   if(snapFocusReturn&&document.contains(snapFocusReturn)) snapFocusReturn.focus?.({preventScroll:true});
+  cursorSelectionClosed();
 }
 function snapPoint(event){ const b=snapBounds();return {x:event.clientX-b.left,y:event.clientY-b.top} }
 snapSel.addEventListener("pointerdown",event=>{
@@ -9913,13 +9914,23 @@ function setCursorStale(stale){
   cursorStale=stale;cursorLocationEl.classList.toggle("pending",stale);
   if(stale){cursorLocation=null;cursorElevation=null}
 }
+/* A camera move during a snapshot selection also drops the point captured
+   when the selection opened: it is no longer under the cursor, and the
+   export would still have labelled it "Cursor location". Without it the
+   export reads the selection centre, as it does when no cursor was over the
+   map. */
 function cursorCameraMoved(){
   if(cursorPointer)setCursorStale(true);
+  if(!snapSel.hidden)snapshotCursorLocation=null;
   clearTimeout(cursorSettleTimer);cursorSettleTimer=setTimeout(cursorCameraSettled,CURSOR_SETTLE_MS);
 }
+/* Every pending mark has this timer behind it, so this is also the cleanup:
+   after leaving 3D (or a failed start) it resolves the readout on the 2D map
+   rather than leaving it dimmed. A reading deferred by an open snapshot
+   selection is resolved when the selection closes. */
 function cursorCameraSettled(){
   cursorSettleTimer=null;
-  if(!map3d)return;
+  if(!map3d){if(cursorStale&&cursorPointer)updateCursorLocation();return}
   /* A drag held still between moves, or a camera ease between frames. */
   if(map3d.isMoving()){cursorSettleTimer=setTimeout(cursorCameraSettled,CURSOR_SETTLE_MS);return}
   if(cursorPointer)updateCursorLocation();
@@ -9928,7 +9939,13 @@ function cursorCameraSettled(){
    the finer DEM tiles for the new view arrive later, and a reading taken at
    the settle (or, before, at moveend) was left on the coarser surface -
    2-9 m off the final reading in a test at 85 degrees of pitch. Idle is
-   the frame that has them, so the reading is taken once more there. */
+   the frame that has them, so the reading is retaken there - on every idle,
+   deliberately: idle follows any finished repaint, and repaints at rest
+   include later DEM tiles and terrain exaggeration changes. Each costs one
+   unproject + project with the map otherwise quiet. */
+function cursorSelectionClosed(){
+  if(cursorStale&&cursorPointer&&!cursorSettleTimer)updateCursorLocation();
+}
 function cursorCameraIdle(){
   if(cursorPointer&&!cursorSettleTimer&&map3d&&!map3d.isMoving())updateCursorLocation();
 }

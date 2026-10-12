@@ -48,7 +48,7 @@ const pending=new Set(),gate={
   cursorCoordinates:ll=>`${ll.lat},${ll.lng}`,refreshCursorElevation(){},
   map:{containerPointToLatLng:p=>({lat:-p.y,lng:-p.x})},
   map3d:{isMoving:()=>moving,unproject:([x,y])=>(unprojects++,{lat:y/10,lng:x/10}),project:ll=>(projects++,sky?{x:-1e6,y:0}:{x:ll.lng*10,y:ll.lat*10})},
-  cursorLocation:null,cursorElevation:null,cursorPointer:null,cursorFrame:0
+  cursorLocation:null,cursorElevation:null,cursorPointer:null,cursorFrame:0,snapshotCursorLocation:null
 };
 vm.createContext(gate);vm.runInContext(gateSource,gate);
 const point=(x,y)=>{gate.cursorPointer={x,y};gate.updateCursorLocation()};
@@ -77,8 +77,33 @@ const idle=unprojects;gate.cursorCameraMoved();gate.cursorCameraIdle();
 assert.equal(unprojects,idle,'idle before the settle leaves it to the settle');
 runTimers();gate.cursorCameraIdle();
 assert.equal(unprojects,idle+2,'idle re-reads the still pointer once the finer terrain has rendered');
+gate.cursorCameraIdle();gate.cursorCameraIdle();
+assert.equal(unprojects,idle+4,'every idle re-reads (later DEM tiles, exaggeration changes)');
+/* Snapshot selection: a camera move drops the captured cursor point, and the
+   reading deferred by the open selection resolves when it closes. */
+gate.snapshotCursorLocation={lat:30,lng:40};gate.cursorCameraMoved();runTimers();
+assert.deepEqual({...gate.snapshotCursorLocation},{lat:30,lng:40},'moves with no selection open leave the export point alone');
+gate.snapSel.hidden=false;const selected=unprojects;gate.cursorCameraMoved();
+assert.equal(gate.snapshotCursorLocation,null,'a move during selection drops the stale export point');
+runTimers();assert.equal(unprojects,selected,'no reading while the selection is open');
+assert(pending.has('pending'),'and the readout stays pending');
+gate.snapSel.hidden=true;gate.cursorSelectionClosed();
+assert.equal(unprojects,selected+1,'closing the selection resolves the deferred reading');
+assert(!pending.has('pending'),'closing the selection clears the pending mark');
+gate.cursorSelectionClosed();assert.equal(unprojects,selected+1,'closing with nothing deferred reads nothing');
+gate.cursorCameraMoved();gate.cursorSelectionClosed();
+assert.equal(unprojects,selected+1,'a selection closed mid-motion leaves the reading to the settle');
+runTimers();assert.equal(unprojects,selected+2);
 sky=true;point(300,300);assert.equal(text['#cursorCoordinates'].textContent,'Cursor over sky');assert.equal(gate.cursorLocation,null);sky=false;
-gate.map3d=null;const flat=unprojects;gate.cursorCameraMoved();timers.clear();point(50,60);
+/* Leaving 3D with a reading pending: the settle resolves it on the 2D map. */
+const view3d=gate.map3d,flat=unprojects;gate.cursorCameraMoved();gate.map3d=null;runTimers();
+assert.deepEqual({...gate.cursorLocation},{lat:-280,lng:70},'exit resolves the pending reading on the 2D map');
+assert(!pending.has('pending'),'exit to 2D clears the pending mark');assert.equal(timers.size,0,'and leaves no timer');
+gate.map3d=view3d;gate.cursorCameraMoved();gate.snapSel.hidden=false;gate.map3d=null;runTimers();
+assert(pending.has('pending'),'exit with a selection open defers to the selection');
+gate.snapSel.hidden=true;gate.cursorSelectionClosed();assert(!pending.has('pending'),'and closing it resolves on the 2D map');
+point(50,60);
 assert.deepEqual({...gate.cursorLocation},{lat:-40,lng:-40},'2D readout is unchanged and ungated');
-assert.equal(unprojects,flat);assert(!pending.has('pending'),'2D clears a pending mark left by 3D');
-console.log('map readout checks passed (tile sampling, no-data, wrap, export option, streamed position, renderer palettes and units, 3D readout gated on camera motion)');
+assert.equal(unprojects,flat);assert(!pending.has('pending'));
+assert(take('endSnapshotSelect','snapPoint').includes('cursorSelectionClosed()'),'closing a snapshot selection resolves a deferred reading');
+console.log('map readout checks passed (tile sampling, no-data, wrap, export option, streamed position, renderer palettes and units, 3D readout gated on camera motion, selection and exit lifecycle)');
