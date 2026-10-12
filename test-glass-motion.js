@@ -40,13 +40,58 @@ assert.match(source,/function exitTerrain3d\(\)\{\s*reset3dGlassMotion\(\)/,'exi
 assert.match(source,/function setTerrainModeUi\(on,status\)\{\s*if\(!on\) reset3dGlassMotion\(\)/,'failed startup must clean up too');
 // Every non-none backdrop rule in the shipped chrome needs a targeted motion
 // override. This includes legacy hard-coded blur and collapsed phone fields.
-const motionCss=css.slice(css.indexOf('body.terrain-3d.map3d-moving{'));
-for(const selector of ['#side','#ac','.coord-menu','.map-tool','.tool-popover','#snapshotStatus','.snap-sel-size','.snap-sel-bar',
-  '#ctl','#menu','#blk','#pointCloudPanel','.pc-head','.pane-drag-ghost','.ovgrp','#newBuild','.leaflet-control-zoom',
-  '.leaflet-control-attribution','.leaflet-popup-content-wrapper','.leaflet-tooltip','#mapDock','#panes .grp',
-  '#side #q','#side #loc','#map3d .maplibregl-ctrl-attrib','#mkBar','#mkPop'])
-  assert(motionCss.includes(selector),`missing motion material for ${selector}`);
+const motionStart=css.indexOf('.csp-glass body.terrain-3d.map3d-moving{');
+assert(motionStart>=0,'motion materials must be scoped to the glass UI');
+const motionCss=css.slice(motionStart);
+// Read leaf rules inside media/supports blocks too; comments and @supports
+// conditions are not declarations. Expand selector lists and :is so adding a
+// blurred surface anywhere in shipped CSS requires a corresponding override.
+const rules=text=>Array.from(text.replace(/\/\*[\s\S]*?\*\//g,'').matchAll(/([^{}]+)\{([^{}]*)\}/g),m=>({selector:m[1].trim(),declarations:m[2]}));
+function selectors(text){
+  let depth=0,start=0,list=[];
+  for(let i=0;i<text.length;i++){
+    if(text[i]==='('||text[i]==='[') depth++;
+    else if(text[i]===')'||text[i]===']') depth--;
+    else if(text[i]===','&&!depth){list.push(text.slice(start,i).trim());start=i+1}
+  }
+  list.push(text.slice(start).trim());
+  return list.flatMap(selector=>{
+    const group=/:is\(([^()]*)\)/.exec(selector);
+    return group?selectors(group[1]).flatMap(part=>selectors(selector.slice(0,group.index)+part+selector.slice(group.index+group[0].length))):[selector];
+  });
+}
+const filterValues=rule=>Array.from(rule.declarations.matchAll(/(?:^|;)\s*(?:-webkit-)?backdrop-filter\s*:\s*([^;]+)/g),m=>m[1].trim());
+const motionRules=rules(motionCss),filterRule=motionRules.find(rule=>filterValues(rule).length===2);
+assert(filterRule,'motion must directly disable both backdrop properties');
+const targets=selectors(filterRule.selector).map(selector=>selector.replace(/^body\.terrain-3d\.map3d-moving\s+/,''));
+function covers(selector,target){
+  // The override's last compound must match the blurred element itself, not
+  // just one of its ancestors. A broader class covers additional classes on
+  // the same element (e.g. .leaflet-tooltip.csp-point-tip).
+  const actual=selector.split(/\s+|[>+~]/).filter(Boolean),required=target.split(/\s+/);
+  const matches=(compound,wanted)=>{
+    const tokens=value=>value.match(/[#.]?[\w-]+/g)||[];
+    return tokens(wanted).every(token=>tokens(compound).includes(token));
+  };
+  if(!matches(actual.pop()||'',required.pop())) return false;
+  let at=actual.length-1;
+  while(required.length){const wanted=required.pop();while(at>=0&&!matches(actual[at],wanted)) at--;if(at--<0) return false}
+  return true;
+}
+const styleBlocks=Array.from(source.matchAll(/<style\b[^>]*>([\s\S]*?)<\/style>/gi),m=>m[1]).join('\n');
+const styles=[['index.html',styleBlocks],['ui-system.css',css],['ui-theme.css',fs.readFileSync('ui-theme.css','utf8')]];
+let blurRules=0;
+for(const [file,text] of styles) for(const rule of rules(text)) if(filterValues(rule).some(value=>!/^none(?:\s*!important)?$/.test(value))){
+  blurRules++;
+  for(const selector of selectors(rule.selector)) assert(targets.some(target=>covers(selector,target)),`${file}: missing motion filter override for ${selector}`);
+}
+assert(blurRules>0,'coverage must discover the shipped blur rules');
+assert(!covers('#side .new-blur','#side'),'an ancestor override does not cover a newly blurred child');
+for(const rule of motionRules) if(/(?:^|;)\s*(?:background-color:|--glass-|--lg-|--sheet-|--ui-frost)/.test(rule.declarations))
+  assert(rule.selector.startsWith('.csp-glass body.'),'motion fills and material variables must leave classic colours intact');
+assert(motionCss.includes('.map-tool:not(:hover):not(.active):not([aria-pressed="true"])'),'motion must preserve hover and selected map-tool feedback');
+assert.match(motionCss,/@media \(max-width:760px\)\{[\s\S]*?\.csp-glass body\.csp-redesign\.terrain-3d\.map3d-moving #side\{transition:none!important\}/,'phone motion fills must switch without a background fade');
 assert(motionCss.includes('-webkit-backdrop-filter:none!important;backdrop-filter:none!important'), 'both browser filter properties must be overridden');
 assert(motionCss.includes('--map3d-motion-fill:var(--ui-surface);--map3d-motion-panel:var(--ui-rail)'), 'motion must reuse the themed opaque fallback palette');
 assert(!/transition:.*backdrop-filter/.test(motionCss),'backdrop filters must never animate');
-console.log('3D glass motion checks passed (continuous jumpTo, quiet interval, DOM writes, exit, 2D isolation and surface coverage)');
+console.log(`3D glass motion checks passed (continuous jumpTo, quiet interval, DOM writes, exit, 2D isolation, classic/state preservation and ${blurRules} blur rules)`);

@@ -2122,7 +2122,7 @@ body.point-cloud-open #mapReadout{display:none}
    material. Enumerate chrome rather than disabling filters on map descendants
    or doing a universal scan on each frame. Hard-coded legacy blurs need the
    same override as the variable-driven Liquid Glass surfaces. */
-body.terrain-3d.map3d-moving{
+.csp-glass body.terrain-3d.map3d-moving{
   --map3d-motion-fill:var(--canvas);
   --map3d-motion-panel:var(--canvas);
   --glass-blur:none;--lg-filter:none;--sheet-filter:none;
@@ -2132,17 +2132,24 @@ body.terrain-3d.map3d-moving{
   --sheet-glass-clear:var(--map3d-motion-panel);--sheet-glass:var(--map3d-motion-panel);--sheet-card:var(--map3d-motion-fill);
   --ui-frost:var(--map3d-motion-fill);--ui-frost-weak:var(--map3d-motion-fill);
 }
-body.csp-redesign.terrain-3d.map3d-moving{--map3d-motion-fill:var(--ui-surface);--map3d-motion-panel:var(--ui-rail)}
+.csp-glass body.csp-redesign.terrain-3d.map3d-moving{--map3d-motion-fill:var(--ui-surface);--map3d-motion-panel:var(--ui-rail)}
 body.terrain-3d.map3d-moving :is(#side,#ac,.coord-menu,.map-tool,.tool-popover,#snapshotStatus,.snap-sel-size,.snap-sel-bar,#ctl,#menu,#blk,#pointCloudPanel,.pc-head,.pane-drag-ghost,.ovgrp,#newBuild,.leaflet-control-zoom,.leaflet-control-zoom a,.leaflet-control-attribution,.leaflet-popup-content-wrapper,.leaflet-tooltip,#mapDock,#panes .grp,#side #q,#side #loc,#map3d .maplibregl-ctrl-attrib,#mkBar,#mkPop){
   -webkit-backdrop-filter:none!important;backdrop-filter:none!important;
 }
-body.terrain-3d.map3d-moving :is(#ac,.coord-menu,.map-tool,.tool-popover,#snapshotStatus,.snap-sel-bar,#ctl,#menu,#blk,#pointCloudPanel,.pc-head,.pane-drag-ghost,#newBuild,.leaflet-control-zoom,.leaflet-control-zoom a,.leaflet-control-attribution,.leaflet-popup-content-wrapper,.leaflet-tooltip,#mapDock,#map3d .maplibregl-ctrl-attrib,#mkBar,#mkPop){background-color:var(--map3d-motion-fill)!important}
-body.terrain-3d.map3d-moving :is(#side,.ovgrp,#panes .grp){background-color:var(--map3d-motion-panel)!important}
+/* Classic is already opaque. Glass controls keep their hover/selected fill
+   instead of replacing that feedback with the neutral motion material. */
+.csp-glass body.terrain-3d.map3d-moving :is(#ac,.coord-menu,.map-tool:not(:hover):not(.active):not([aria-pressed="true"]),.tool-popover,#snapshotStatus,.snap-sel-bar,#ctl,#menu,#blk,#pointCloudPanel,.pc-head,.pane-drag-ghost,#newBuild,.leaflet-control-zoom,.leaflet-control-zoom a:not(:hover),.leaflet-control-attribution,.leaflet-popup-content-wrapper,.leaflet-tooltip,#mapDock,#map3d .maplibregl-ctrl-attrib,#mkBar,#mkPop){background-color:var(--map3d-motion-fill)!important}
+.csp-glass body.terrain-3d.map3d-moving :is(#side,.ovgrp,#panes .grp){background-color:var(--map3d-motion-panel)!important}
 /* The selection-size label has white ink in every theme. */
-body.terrain-3d.map3d-moving .snap-sel-size{background-color:var(--ui-selection-size-solid)!important}
+.csp-glass body.terrain-3d.map3d-moving .snap-sel-size{background-color:var(--ui-selection-size-solid)!important}
 /* Buttons share their capsule's material; preserve the selected markup ink. */
-.csp-glass body.csp-redesign.terrain-3d.map3d-moving :is(#mapDock .map-tool,.leaflet-control-zoom a){background-color:transparent!important}
+.csp-glass body.csp-redesign.terrain-3d.map3d-moving :is(#mapDock .map-tool:not(:hover):not(.active):not([aria-pressed="true"]),.leaflet-control-zoom a:not(:hover)){background-color:transparent!important}
 .csp-glass body.csp-redesign.terrain-3d.map3d-moving #mapDock #quickDraw[aria-pressed="true"]{background-color:var(--ui-accent)!important}
+@media (max-width:760px){
+  /* Blur and its solid replacement switch together, including an expanded
+     phone sheet whose normal transition animates background-color. */
+  .csp-glass body.csp-redesign.terrain-3d.map3d-moving #side{transition:none!important}
+}
 @media (max-width:760px) and (orientation:portrait){
   .csp-glass body.csp-redesign.terrain-3d.map3d-moving.collapsed #side{background-color:transparent!important}
 }
