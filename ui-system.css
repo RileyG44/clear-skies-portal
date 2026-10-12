@@ -2096,6 +2096,8 @@ body.terrain-3d .mk-eraser-ring{z-index:961}
 /* The translucent menu must fully cover the readout without moving it. */
 body:not(.collapsed) #mapReadout{visibility:hidden}
 #mapReadout .cursor-location{white-space:nowrap}
+/* The 3D camera is moving; the reading resolves once it stops. */
+#mapReadout .cursor-location.pending{opacity:.45}
 #mapReadout .map-colour-keys{display:grid;gap:7px}
 #mapReadout .map-colour-key{display:grid;gap:2px}
 #mapReadout .key-name{font-weight:600;font-size:10px}

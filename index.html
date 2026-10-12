@@ -6230,7 +6230,7 @@ async function enterTerrain3d(){
       maxZoom:22,maxPitch:85,renderWorldCopies:false,scrollZoom:false,canvasContextAttributes:{antialias:!MAP3D_COMPACT,powerPreference:"high-performance"},
       attributionControl:true,fadeDuration:0});
     window.CSPMarkup?.attach3d(module,map3d);
-    map3d.on("moveend",()=>{if(cursorPointer)updateCursorLocation()});
+    map3d.on("move",cursorCameraMoved);map3d.on("idle",cursorCameraIdle);
     map3d.on("rotate",syncBearingButton);map3d.on("pitch",syncBearingButton);
     map3d.on("moveend",scheduleTerrainStatus);map3d.on("idle",scheduleTerrainStatus);
     map3d.on("load",()=>{setTerrainModeUi(true);map3d.resize();
@@ -9884,19 +9884,71 @@ function refreshCursorElevation(){
     }
   },220);
 }
+/* The 3D readout is resolved at rest, not per frame of motion. With terrain
+   on, MapLibre 6.6's unproject ray-marches the DEM on the CPU - up to 512
+   steps plus a 40-step bisection, against a coverage index every rendered
+   frame throws away and the next call rebuilds from all renderable tiles -
+   and the project() that tells ground from sky walks the frustum's covering
+   tiles again. (It does not read pixels back: the only readPixels in the
+   bundle is depthAtPoint, which only maplibregl.Marker uses, and this app
+   has none.) Measured in headless Chrome on an Apple-silicon Mac, the pair
+   costs 0.3 ms median and up to 1.6 ms after a rendered frame. Orbiting and
+   mouse panning are mouse moves, so that work ran inside every frame
+   MapLibre was trying to draw, and the wheel zoom's per-frame setZoom fires
+   a moveend each frame and ran it again from there. Now any camera motion
+   only dims the readout and drops the location, so nothing - the elevation
+   poll, a PNG export - can use a coordinate that is no longer under the
+   cursor, and 120 ms after the last move the same unproject + project as
+   before runs once for the pixel under the pointer. Hovering a still camera
+   is unchanged: one resolve per frame in which the pointer moved, for that
+   exact pixel. */
+const CURSOR_SETTLE_MS=120;
+let cursorMapBox=null,cursorSettleTimer=null,cursorStale=false;
+const cursorLocationEl=readoutRoot.querySelector(".cursor-location");
+/* #map fills the fixed #app, so its box only changes when the window does. */
+addEventListener("resize",()=>{cursorMapBox=null});
+if(window.ResizeObserver)new ResizeObserver(()=>{cursorMapBox=null}).observe($("#map"));
+function setCursorStale(stale){
+  if(stale===cursorStale)return;
+  cursorStale=stale;cursorLocationEl.classList.toggle("pending",stale);
+  if(stale){cursorLocation=null;cursorElevation=null}
+}
+function cursorCameraMoved(){
+  if(cursorPointer)setCursorStale(true);
+  clearTimeout(cursorSettleTimer);cursorSettleTimer=setTimeout(cursorCameraSettled,CURSOR_SETTLE_MS);
+}
+function cursorCameraSettled(){
+  cursorSettleTimer=null;
+  if(!map3d)return;
+  /* A drag held still between moves, or a camera ease between frames. */
+  if(map3d.isMoving()){cursorSettleTimer=setTimeout(cursorCameraSettled,CURSOR_SETTLE_MS);return}
+  if(cursorPointer)updateCursorLocation();
+}
+/* The terrain under a still pointer keeps refining after the camera stops:
+   the finer DEM tiles for the new view arrive later, and a reading taken at
+   the settle (or, before, at moveend) was left on the coarser surface -
+   2-9 m off the final reading in a test at 85 degrees of pitch. Idle is
+   the frame that has them, so the reading is taken once more there. */
+function cursorCameraIdle(){
+  if(cursorPointer&&!cursorSettleTimer&&map3d&&!map3d.isMoving())updateCursorLocation();
+}
 function updateCursorLocation(){
   cursorFrame=0;
   if(!cursorPointer||innerWidth<=760||document.body.classList.contains("point-cloud-open")||!snapSel.hidden)return;
-  const box=$("#map").getBoundingClientRect(),p=L.point(cursorPointer.x-box.left,cursorPointer.y-box.top);
+  const box=cursorMapBox||(cursorMapBox=$("#map").getBoundingClientRect()),p=L.point(cursorPointer.x-box.left,cursorPointer.y-box.top);
   if(p.x<0||p.y<0||p.x>box.width||p.y>box.height)return;
   let ll;
   if(map3d){
+    /* The settle resolves it; a pointer move must not push that back, or
+       a mouse that keeps moving after the camera stops would never see one. */
+    if(cursorSettleTimer)return;
+    if(map3d.isMoving()){cursorCameraMoved();return}
     ll=map3d.unproject([p.x,p.y]);const q=map3d.project(ll);
     if(!Number.isFinite(ll.lat)||Math.abs(ll.lat)>85.05113||Math.hypot(q.x-p.x,q.y-p.y)>4){
-      cursorLocation=null;cursorElevation=null;$("#cursorCoordinates").textContent="Cursor over sky";$("#cursorElevation").textContent="Elevation —";return;
+      setCursorStale(false);cursorLocation=null;cursorElevation=null;$("#cursorCoordinates").textContent="Cursor over sky";$("#cursorElevation").textContent="Elevation —";return;
     }
   }else ll=map.containerPointToLatLng(p);
-  cursorLocation={lat:ll.lat,lng:((ll.lng+180)%360+360)%360-180};
+  setCursorStale(false);cursorLocation={lat:ll.lat,lng:((ll.lng+180)%360+360)%360-180};
   $("#cursorCoordinates").textContent=cursorCoordinates(cursorLocation);refreshCursorElevation();
 }
 document.addEventListener("pointermove",event=>{
