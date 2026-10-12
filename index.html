@@ -5752,8 +5752,11 @@ function public3dSourceText(){
   };
   return `3D mesh: ${collect(public3dSources)}. Analytical drape: ${collect(public3dDrapeSources)}. Mesh sampling is capped at zoom ${PROXY?DEM_ENGINE_MAX_ZOOM:DEM_MESH_MAX_ZOOM}; loaded-tile sources are not survey coverage percentages.`;
 }
-function terrainDemTiles(){
-  return [`cspmesh://dem/{z}/{x}/{y}.png?r=${meshRevision}`];
+/* Each DEM source asks under its own host so a refinement can tell which
+   source still holds the overview for a tile (see meshStale). The revision
+   only moves on a genuine reset, where every tile really must change. */
+function terrainDemTiles(host="dem"){
+  return [`cspmesh://${host}/{z}/{x}/{y}.png?r=${meshRevision}`];
 }
 /* Progressive 3D mesh.
 
@@ -5765,16 +5768,16 @@ function terrainDemTiles(){
    seconds. Now each mesh tile is 3DEP if it arrives within MESH_FAST_WAIT,
    and otherwise the global Terrarium tile from Amazon's CDN (10 m 3DEP in the
    US, SRTM/GMTED elsewhere), which answers in about a tenth of a second. The
-   3DEP request keeps going; when it lands the tile is swapped in by reloading
-   the source from memory. Where 3DEP has no data (outside the US) the CDN
-   tile simply stays. */
+   3DEP request keeps going; when it lands that tile alone is reloaded and
+   answers from memory. Where 3DEP has no data (outside the US) the CDN tile
+   simply stays. */
 const MESH_FAST_WAIT=300, MESH_FINE_MAX=256, MESH_OVERVIEW_MAX_ZOOM=15;
 const meshFine=new Map(), meshPending=new Map();
 const meshRanks=new Map();
 let meshRevision=0, meshRefineTimer=null, meshRefinedAt=0;
 function meshKey(z,x,y){ return `${$("#terSrc").value}:${PROXY?API:"public"}:${dnrStatus?.revision||0}:${z}/${x}/${y}` }
 function resetMeshSources(){
-  meshFine.clear();meshRanks.clear();public3dSources.clear();public3dDrapeSources.clear();
+  meshFine.clear();meshRanks.clear();public3dSources.clear();public3dDrapeSources.clear();meshStaleClear();
   elevCacheClear();meshRevision++;map3dBuiltKey="";elevSpectrumRevision++;
 }
 function rememberMeshTile(key,buffer){
@@ -5841,19 +5844,48 @@ function terrariumPng(grid){
   }
   context.putImageData(image,0,0);return pngBuffer(canvas);
 }
-/* Swap arrived 3DEP tiles in: the source reloads, every tile answers from
-   memory (or from the CDN again if its 3DEP is still on the way). Batched, and
-   never more than about once a second, so a burst of arrivals is one reload. */
+/* Mesh tiles each DEM source is still showing the overview for, keyed like
+   meshFine, `ready` once their 3DEP is in memory.
+
+   Refinement used to bump meshRevision and setTiles on both sources. The new
+   URL made MapLibre drop and reload every DEM tile it held - re-decode, border
+   backfill, texture upload, terrain mesh and drapes rebuilt - about once a
+   second while 3DEP streamed in, which read as a periodic hitch and a faint
+   breathing of the ground. Map#refreshTiles reloads only the tiles named, and
+   keeps each one's old relief on screen until the new one is decoded.
+
+   It only reaches tiles in view, though, and setTiles had also emptied
+   MapLibre's off-screen cache; a tile that left the view holding the overview
+   would come back with it. So an entry stays until its source is served that
+   tile again - by the refresh that catches it back in view (moveend, or a DEM
+   tile load in 3D), or by a fresh request once MapLibre has dropped it. */
+const meshStale={dem:new Map(),demShade:new Map()}, MESH_STALE_MAX=1024;
+function meshStaleClear(){ for(const stale of Object.values(meshStale)) stale.clear() }
+function markMeshTile(source,key,tile,fine){
+  const stale=meshStale[source];if(!stale) return;
+  stale.delete(key);if(!fine) return;
+  const entry={tile,ready:false};stale.set(key,entry);
+  while(stale.size>MESH_STALE_MAX) stale.delete(stale.keys().next().value);
+  fine.then(buffer=>{ if(stale.get(key)!==entry) return;
+    if(buffer){ entry.ready=true;scheduleMeshRefine() }else stale.delete(key) });
+}
+/* Swap arrived 3DEP tiles in, those tiles only. Batched, and never more than
+   about once a second, so a burst of arrivals is one refresh. */
 function scheduleMeshRefine(){
   if(meshRefineTimer) return;
   const wait=Math.max(700,1200-(performance.now()-meshRefinedAt));
   meshRefineTimer=setTimeout(()=>{
     meshRefineTimer=null;meshRefinedAt=performance.now();
-    meshRevision++;
-    for(const id of ["dem","demShade"]){ const source=map3d?.getSource?.(id);if(source?.setTiles) source.setTiles(terrainDemTiles()) }
+    for(const [id,stale] of Object.entries(meshStale)){
+      const tiles=[];for(const entry of stale.values()) if(entry.ready) tiles.push(entry.tile);
+      if(tiles.length&&map3d?.getSource?.(id)) try{ map3d.refreshTiles(id,tiles) }catch(error){ console.warn("3D mesh refine:",error) }
+    }
   },wait);
 }
-async function meshTile(z,x,y,signal){
+function meshRefineAgain(){
+  if(!meshRefineTimer&&Object.values(meshStale).some(stale=>{ for(const entry of stale.values()) if(entry.ready) return true;return false })) scheduleMeshRefine();
+}
+async function meshTile(z,x,y,signal,source="dem"){
   const limit=2**z;
   if(z<0||y<0||y>=limit) throw new Error("mesh tile outside the world");
   x=((x%limit)+limit)%limit;
@@ -5862,23 +5894,23 @@ async function meshTile(z,x,y,signal){
   const note=ranks=>{ public3dSources.set(key,{z,x,y,ranks:Array.isArray(ranks)?ranks:[ranks]});
     while(public3dSources.size>160) public3dSources.delete(public3dSources.keys().next().value);
     scheduleTerrainStatus() };
-  if(meshFine.has(key)){ note(meshRanks.get(key)||[2]);return meshFine.get(key).slice(0) }
+  if(meshFine.has(key)){ markMeshTile(source,key);note(meshRanks.get(key)||[2]);return meshFine.get(key).slice(0) }
   const fine=meshFineTile(z,x,y);
   const first=await Promise.race([fine,new Promise(r=>setTimeout(()=>r(undefined),MESH_FAST_WAIT))]);
-  if(first){ note(meshRanks.get(key)||[2]);return first.slice(0) }
+  if(first){ markMeshTile(source,key);note(meshRanks.get(key)||[2]);return first.slice(0) }
   if($("#terSrc").value==="wadnr-only"){
-    const result=first===undefined?await fine:first;
+    const result=first===undefined?await fine:first;markMeshTile(source,key);
     if(result){note(meshRanks.get(key)||[5]);return result.slice(0);}
     note([]);throw new Error("DNR does not cover this 3D mesh tile");
   }
   if(first===null){
     /* 3DEP answered, with nothing: the overview is the best there is. */
-    note(1);return meshOverviewTile(z,x,y,signal);
+    markMeshTile(source,key);note(1);return meshOverviewTile(z,x,y,signal);
   }
   let overview;
   try{ overview=await meshOverviewTile(z,x,y,signal) }
-  catch(error){ if(signal?.aborted) throw error;const late=await fine;if(late){ note(meshRanks.get(key)||[2]);return late.slice(0) }throw error }
-  note(1);fine.then(buffer=>{ if(buffer) scheduleMeshRefine() });
+  catch(error){ if(signal?.aborted) throw error;const late=await fine;markMeshTile(source,key);if(late){ note(meshRanks.get(key)||[2]);return late.slice(0) }throw error }
+  markMeshTile(source,key,{z,x,y},fine);note(1);
   return overview;
 }
 function terrainTheme(){ return $("#map").dataset.basemapTheme==="dark"?"dark":"light" }
@@ -5937,13 +5969,13 @@ function terrainRasterStyle(){
   const sources={
     basemap:{type:"raster",tiles:[`${ESRI_CANVAS}/World_${theme==="dark"?"Dark":"Light"}_Gray_Base/MapServer/tile/{z}/{y}/{x}`],
       tileSize:256,maxzoom:16,attribution:"Esri, HERE, Garmin, © OpenStreetMap contributors"},
-    dem:{type:"raster-dem",tiles:terrainDemTiles(),tileSize:256,maxzoom:PROXY?DEM_ENGINE_MAX_ZOOM:DEM_MESH_MAX_ZOOM,encoding:"terrarium",
+    dem:{type:"raster-dem",tiles:terrainDemTiles("dem"),tileSize:256,maxzoom:PROXY?DEM_ENGINE_MAX_ZOOM:DEM_MESH_MAX_ZOOM,encoding:"terrarium",
       attribution:"WA DNR elevation / USGS 3DEP / AWS overview (see rendered source status)"},
     /* The same elevation again for the hillshade and relief tint. MapLibre
        warns that sharing the terrain source with a hillshade degrades
        rendering; the mesh tiles are cached in memory, so the second source
        costs no extra network. */
-    demShade:{type:"raster-dem",tiles:terrainDemTiles(),tileSize:256,maxzoom:PROXY?DEM_ENGINE_MAX_ZOOM:DEM_MESH_MAX_ZOOM,encoding:"terrarium"}
+    demShade:{type:"raster-dem",tiles:terrainDemTiles("shade"),tileSize:256,maxzoom:PROXY?DEM_ENGINE_MAX_ZOOM:DEM_MESH_MAX_ZOOM,encoding:"terrarium"}
   };
   const layers=[
     {id:"background",type:"background",paint:{"background-color":theme==="dark"?"#111416":"#dbe6eb"}},
@@ -6104,9 +6136,9 @@ async function encodeTileRgba(rgba){
 async function installMaplibreProtocols(module){
   if(maplibreProtocolReady) return;
   module.addProtocol("cspmesh",async(params,controller)=>{
-    const match=params.url.match(/^cspmesh:\/\/dem\/(\d+)\/(\d+)\/(\d+)\.png/);
+    const match=params.url.match(/^cspmesh:\/\/(dem|shade)\/(\d+)\/(\d+)\/(\d+)\.png/);
     if(!match) throw new Error("invalid mesh tile");
-    return {data:await meshTile(+match[1],+match[2],+match[3],controller.signal)};
+    return {data:await meshTile(+match[2],+match[3],+match[4],controller.signal,match[1]==="shade"?"demShade":"dem")};
   });
   module.addProtocol("cspterrain",async(params,controller)=>{
     const match=params.url.match(/^cspterrain:\/\/([^/]+)\/(\d+)\/(\d+)\/(\d+)\.png/);
@@ -6223,6 +6255,10 @@ async function enterTerrain3d(){
     map3d.on("load",()=>{setTerrainModeUi(true);map3d.resize();
       if(map3d.getPitch()<1) map3d.easeTo({pitch:MAP3D_PITCH,duration:matchMedia("(prefers-reduced-motion: reduce)").matches?0:1100})});
     map3d.on("error",event=>{if(event?.error) console.warn("3D terrain:",event.error)});
+    /* Overview tiles that come back into view, or finish decoding after their
+       3DEP already landed, still need their refresh (see meshStale). */
+    meshStaleClear();map3d.on("moveend",meshRefineAgain);
+    map3d.on("sourcedata",event=>{if(event.tile&&meshStale[event.sourceId]) meshRefineAgain()});
     if(!map3dWanted){ map3d.remove(); map3d=null; return null }   // left 3D while loading
     map.keyboard?.disable();return map3d;
   })().catch(error=>{console.warn(error);map3d?.remove();map3d=null;setTerrainModeUi(false,error.message||"3D terrain could not start.");throw error})
