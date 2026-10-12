@@ -79,3 +79,8 @@ assert.deepEqual(transformContext.transform,[0,2,-2,0,180,360],'rotation and cro
 snapshotEnv.drawSnapshotLayer(transformContext,'a',{scale:2,sel:{x:310,y:120}});
 assert.deepEqual(transformContext.transform,[0,2,-2,0,-420,160],'streamed blocks offset the same ground projection');
 console.log('markup snapshot checks passed (map rotation, crop and streamed block offsets)');
+
+const tileX=20000,tileY=32768,tileLeft=-circumference/2+tileX*circumference/n;
+const legacyCircle={geometry:{type:'Point',coordinates:[(tileLeft-103)/circumference*360,0]},properties:{kind:'circle',radius:100,width:10}};
+assert.equal(boundsEnv.featuresForTile({renderRevision:1,doc:{features:[legacyCircle]}},z,tileX,tileY).length,1,'legacy circle outline reaches a tile beyond the radius-only bounds');
+console.log('legacy circle tile-edge check passed');

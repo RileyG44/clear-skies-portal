@@ -401,7 +401,7 @@ function featuresForTile(layer,z,x,y){
       const lat=featureLat(f),stretch=1/Math.max(.001,Math.cos(lat*Math.PI/180));
       let x0=Infinity,x1=-Infinity,y0=Infinity,y1=-Infinity;for(const c of coords){const p=cToP(c);x0=Math.min(x0,p.x);x1=Math.max(x1,p.x);y0=Math.min(y0,p.y);y1=Math.max(y1,p.y)}
       const lines=String(p.text||"").split("\n"),textExtent=(p.size||20)*(Math.max(1,...lines.map(l=>l.length))+lines.length+2);
-      const margin=Math.max((p.width||2)*6+8,p.radius||0,(p.kind==="text"||p.kind==="pin")?textExtent:0)*stretch;
+      const margin=Math.max((p.width||2)*6+8,(p.radius||0)+(p.kind==="circle"?(p.width||2)*6+8:0),(p.kind==="text"||p.kind==="pin")?textExtent:0)*stretch;
       cached={revision:layer.renderRevision,x0:x0-margin,x1:x1+margin,y0:y0-margin,y1:y1+margin};
       featureBounds.set(f,cached);
     }
