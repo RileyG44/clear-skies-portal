@@ -210,6 +210,7 @@ body.terrain-3d #map>.leaflet-pane,body.terrain-3d #map>.leaflet-control-contain
 .about-disclosure[open] summary::before{transform:rotate(45deg) translate(-1px,-1px)}
 
 /* ---- elevation spectrum ------------------------------------------------ */
+#mapReadout{--map-readout-ink:#000;--map-readout-edge:rgb(0 0 0/.35)}
 .elev-spectrum-scale{display:grid;gap:4px;margin-top:1px}
 .elevRamp{height:9px;border-radius:999px;border:1px solid oklch(100% 0 0/.16);
   background:linear-gradient(90deg,#d8525a 0%,#f6a6a8 28%,#f7f7f2 50%,#9ec3f8 72%,#3278df 100%);
@@ -991,8 +992,8 @@ body.pane-reordering,body.pane-reordering *{cursor:grabbing!important;user-selec
 }
 
 </style>
-<link rel="stylesheet" href="ui-theme.css?build=2026-10-11f">
-<link rel="stylesheet" href="ui-system.css?build=2026-10-11f">
+<link rel="stylesheet" href="ui-theme.css?build=2026-10-11g">
+<link rel="stylesheet" href="ui-system.css?build=2026-10-11g">
 <style>
 /* The redesign restructures the legacy DOM rather than replacing it, and the
    script that does so is the last thing on the page - so the browser paints the
@@ -1644,6 +1645,7 @@ html.csp-boot body{visibility:hidden}
           </select>
         </div>
         <div id="snapshotMeta" role="status" aria-live="polite"></div>
+        <label class="snapshot-readout-option"><input id="snapshotReadout" type="checkbox"> Include coordinates, elevation and color keys</label>
         <div class="snapshot-export-note">Drag a rectangle over the map to choose what to save. Higher resolutions fetch finer source tiles for that area; where a source has no finer data it is enlarged, never invented.</div>
         <button class="ghost" id="snapshotSave" type="button">Select area on map</button>
       </div>
@@ -1671,6 +1673,7 @@ html.csp-boot body{visibility:hidden}
         <span id="snapSelMeta" class="snap-sel-meta" aria-live="polite"></span>
         <button type="button" id="snapSelFull" class="snap-sel-text" title="Select the whole map view">Full view</button>
         <button type="button" id="snapSelSave" class="snap-sel-save">Save</button>
+        <label class="snapshot-readout-option"><input id="snapSelReadout" type="checkbox"> Include coordinates, elevation and color keys</label>
       </div>
     </div>
     <section id="ctl" hidden aria-label="Displayed imagery controls">
@@ -1718,7 +1721,7 @@ html.csp-boot body{visibility:hidden}
   L.Renderer.prototype.onAdd=function(map){return onAdd.call(this,map||this._map)};
 })();
 </script>
-<script src="version.js?build=2026-10-11f"></script>
+<script src="version.js?build=2026-10-11g"></script>
 <script src="mosaic-core.js"></script>
 <script src="png-stream.js"></script>
 <script src="terrain-core.js"></script>
@@ -3975,6 +3978,7 @@ async function composeSnapshot(spec){
     }
   }finally{ for(const task of cache.values()) task.then(bitmap=>bitmap.close?.()).catch(()=>{}) }
   if(!drawn) throw new Error("No visible map layers were ready to export.");
+  drawSnapshotReadout(ctx,spec);
   setSnapSelMeta("Encoding PNG…",true);
   const blob=await new Promise((resolve,reject)=>canvas.toBlob(value=>value?resolve(value):reject(new Error("The browser could not encode an image this large.")),"image/png"));
   canvas.width=canvas.height=0;
@@ -4064,6 +4068,7 @@ async function composeSnapshotStream(spec,write){
           }else if(item.kind==="markup"){if(window.CSPMarkup.drawSnapshotLayer(ctx,item.id,blockSpec))drawn++}
           else if(hits(item)&&await drawSnapshotDomItem(ctx,item.el,blockSpec,cache,item.info)) drawn++;
         }
+        drawSnapshotReadout(ctx,spec,x0,y0);
         const pixels=ctx.getImageData(0,0,w,h).data;
         for(let r=0;r<h;r++) band.set(pixels.subarray(r*w*4,(r+1)*w*4),(r*W+x0)*4);
         report(y0+h*(col+1)/cols);
@@ -4178,6 +4183,7 @@ function layoutSnapSel(){
 }
 function startSnapshotSelect(){
   if(!snapSel.hidden) return;
+  snapshotCursorLocation=cursorLocation?{...cursorLocation}:null;
   setSnapshotPanel(false);
   if(innerWidth<=760&&!document.body.classList.contains("collapsed")) $("#sideToggle")?.click();
   snapFocusReturn=document.activeElement;
@@ -4271,6 +4277,7 @@ async function saveSnapshotSelection(){
     await snapshotSettled();
     const spec=snapshotSpec(clampSnapRect(snapRect),snapshotScale());
     if(!spec.ok) throw new Error(snapshotLimitText(spec)||"This selection cannot be exported.");
+    if($("#snapshotReadout").checked)spec.readout=await createSnapshotReadout(spec);
     setSnapSelMeta(`Preparing ${spec.width.toLocaleString()} × ${spec.height.toLocaleString()}…`,true);
     let result,blob;
     if(sink&&snapshotStreamNeeded(spec)){
@@ -6223,6 +6230,7 @@ async function enterTerrain3d(){
       maxZoom:22,maxPitch:85,renderWorldCopies:false,scrollZoom:false,canvasContextAttributes:{antialias:!MAP3D_COMPACT,powerPreference:"high-performance"},
       attributionControl:true,fadeDuration:0});
     window.CSPMarkup?.attach3d(module,map3d);
+    map3d.on("moveend",()=>{if(cursorPointer)updateCursorLocation()});
     map3d.on("rotate",syncBearingButton);map3d.on("pitch",syncBearingButton);
     map3d.on("moveend",scheduleTerrainStatus);map3d.on("idle",scheduleTerrainStatus);
     map3d.on("load",()=>{setTerrainModeUi(true);map3d.resize();
@@ -6847,8 +6855,8 @@ function paintTerrainLegend(style){
   let bar="",ticks="",caption="";
   if(style==="slope"){
     caption="Slope · Horn 3 × 3 · degrees";
-    bar="linear-gradient(90deg,#f2f4ee 0%,#b1d28b 7%,#f6da6f 21%,#f09649 43%,#d54650 64%,#762c69 86%,#321948 100%)";
-    ticks="<span>0°</span><span>15°</span><span>30°</span><span>45°</span><span>60°+</span>";
+    bar="linear-gradient(90deg,#f2f4ee 0%,#b1d28b 5.556%,#f6da6f 16.667%,#f09649 33.333%,#d54650 50%,#762c69 66.667%,#321948 100%)";
+    ticks="<span>0°</span><span>30°</span><span>60°</span><span>90°</span>";
   }else if(style==="aspect"){
     caption="Downslope aspect · compass azimuth · flats transparent";
     bar="linear-gradient(90deg,#4d78c8,#3ba5b0,#57a765,#c9ad4f,#d96b52,#c45b82,#8d65bb,#5e77c5,#4d78c8)";
@@ -6859,8 +6867,8 @@ function paintTerrainLegend(style){
     ticks="<span>north-facing</span><span>east / west</span><span>south-facing</span>";
   }else if(style==="tint"){
     caption="Elevation tint · feet";
-    bar="linear-gradient(90deg,#28465f 0%,#466e46 9%,#808c5c 28%,#a08c6c 50%,#beb4aa 75%,#f5f6fa 100%)";
-    ticks="<span>sea</span><span>3,500 ft</span><span>7,000 ft</span><span>10,500 ft+</span>";
+    bar=`linear-gradient(90deg,${CSPTerrain.ELEVATION_RAMPS.relief.filter(stop=>stop[0]<=3200).map(([m,rgb])=>`rgb(${rgb.slice(0,3).join(",")}) ${(m+500)/3700*100}%`).join(",")})`;
+    ticks="<span>−1,640 ft</span><span>4,430 ft</span><span>10,500 ft+</span>";
   }else if(style==="hsmulti"){
     caption="Mark / GDAL multidirectional hillshade";
     bar="linear-gradient(90deg,#222,#777,#c5c5c5,#fff)";
@@ -9196,10 +9204,10 @@ function researchColourRaster(result,product){
   const hsv=(h,s,v)=>{ h=((h%360)+360)%360;const c=v*s,x=c*(1-Math.abs((h/60)%2-1)),m=v-c;let r=0,g=0,b=0;
     if(h<60){r=c;g=x}else if(h<120){r=x;g=c}else if(h<180){g=c;b=x}else if(h<240){g=x;b=c}else if(h<300){r=x;b=c}else{r=c;b=x}
     return [(r+m)*255,(g+m)*255,(b+m)*255] };
-  for(let i=0;i<data.length;i++){
-    const value=data[i],o=i*4;if(!Number.isFinite(value)) continue;let rgb,alpha=.72;
-    if(product==="northness"&&secondary&&Number.isFinite(secondary[i])){
-      const aspect=(Math.atan2(secondary[i],value)*180/Math.PI+360)%360;rgb=hsv(aspect,0.72,0.96);alpha=.66;
+  const colourAt=(value,eastness)=>{
+    let rgb,alpha=.72;
+    if(product==="northness"&&Number.isFinite(eastness)){
+      const aspect=(Math.atan2(eastness,value)*180/Math.PI+360)%360;rgb=hsv(aspect,0.72,0.96);alpha=.66;
     }else if(product==="glacial"||product==="flood"){
       const t=Math.max(0,Math.min(1,value));rgb=product==="glacial"?hsv(205-165*t,.72,.92):hsv(292-112*t,.76,.94);alpha=t<.25?0:.18+.66*t;
     }else if(signed){
@@ -9207,9 +9215,25 @@ function researchColourRaster(result,product){
     }else{
       const t=Math.max(0,Math.min(1,(value-Math.min(0,lo||0))/span));rgb=hsv(215-165*t,.68,.94);alpha=.16+.66*t;
     }
+    return {rgb,alpha};
+  };
+  for(let i=0;i<data.length;i++){
+    const value=data[i],o=i*4;if(!Number.isFinite(value)) continue;
+    const {rgb,alpha}=colourAt(value,secondary?.[i]);
     image.data[o]=Math.round(rgb[0]);image.data[o+1]=Math.round(rgb[1]);image.data[o+2]=Math.round(rgb[2]);image.data[o+3]=Math.round(255*alpha);
   }
-  canvas.getContext("2d").putImageData(image,0,0);return {url:canvas.toDataURL("image/png"),lo,hi};
+  const directional=product==="northness",screen=product==="glacial"||product==="flood";
+  const start=directional?0:signed?-span:screen?0:Math.min(0,lo||0),end=directional?360:screen?1:signed?span:start+span;
+  const stops=Array.from({length:17},(_,i)=>{
+    const value=start+(end-start)*i/16,a=value*Math.PI/180;
+    const {rgb}=colourAt(directional?Math.cos(a):value,directional?Math.sin(a):undefined);
+    return `rgb(${rgb.map(Math.round).join(",")}) ${i/16*100}%`;
+  });
+  const tick=v=>["lrm","tpi","tri"].includes(product)?`${+(v/.3048).toFixed(1)} ft`:
+    product==="residual"?`${+v.toPrecision(3)} σ`:product==="curvature"?`${+(v*.3048).toPrecision(3)} /ft`:+v.toPrecision(3);
+  const legend={name:result.label,bar:`linear-gradient(90deg,${stops.join(",")})`,
+    labels:directional?["N","E","S","W","N"]:screen?["0","Candidate score","1"]:[tick(start),signed?"0":"",tick(end)]};
+  canvas.getContext("2d").putImageData(image,0,0);return {url:canvas.toDataURL("image/png"),lo,hi,legend};
 }
 function runResearchWorker(payload){
   if(researchWorker) researchWorker.terminate();
@@ -9269,6 +9293,8 @@ async function runSurfaceResearch(){
     const coloured=researchColourRaster(result,product);
     if(researchLayer) map.removeLayer(researchLayer);
     researchLayer=L.imageOverlay(coloured.url,raster.bounds,{opacity:researchOpacity()/100,zIndex:455,interactive:false,alt:result.label}).addTo(map);
+    researchLayer._cspLegend=coloured.legend;
+    document.dispatchEvent(new CustomEvent("csp:layers-changed"));
     const caution=result.notice?.warning||result.metadata?.caution||"Morphology is observational and must be checked against mapped geology and field evidence.";
     out.innerHTML=`<div class="fr"><span class="fk">Layer</span><span class="fv">${esc(result.label)}</span></div>`+
       `<div class="fr"><span class="fk">Sampling</span><span class="fv">${(raster.resolution*3.28084).toFixed(1)} ft/pixel · z${raster.z}</span></div>`+
@@ -9732,12 +9758,244 @@ function offerNewBuild(){
   document.getElementById("newBuildLater").onclick=()=>bar.remove();
 }
 
+/* Desktop cursor readout and keys use the same geographic grids and colour
+   definitions as the map. Camera exports freeze this model once per save. */
+async function createSnapshotReadout(spec){
+  const ll=snapshotCursorLocation||(()=>{
+    const p=[spec.sel.x+spec.sel.w/2,spec.sel.y+spec.sel.h/2];
+    return map3d?map3d.unproject(p):map.containerPointToLatLng(L.point(p));
+  })();
+  const location={lat:ll.lat,lng:((ll.lng+180)%360+360)%360-180};
+  let sample=cursorLoadedElevation(location);
+  if(!sample){
+    const {coords,key}=cursorTileAddress(location),cached=cursorTiles.get(key),value=cursorTileSample(cached?.tile,location);
+    if(value!==null)sample={value,source:cached.source};
+    else{
+      const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),18000);
+      try{
+        const tile=PROXY?await elevationRequests.request(api(`/api/elev/${coords.z}/${coords.x}/${coords.y}.png`),s=>fetchElevation(api(`/api/elev/${coords.z}/${coords.x}/${coords.y}.png`),s),{signal:controller.signal,priority:1,group:"cursor"}):await publicElevationWithFallback(coords,controller.signal);
+        const value=cursorTileSample(tile?{coords,elev:tile.grid,width:tile.width,height:tile.height}:null,location);
+        if(value!==null)sample={value};
+      }catch(error){}finally{clearTimeout(timer)}
+    }
+  }
+  await loadSnowColourKeys();
+  return {coordinates:cursorCoordinates(location),elevation:sample?`Elevation ≈ ${Math.round(sample.value/.3048).toLocaleString()} ft`:"Elevation unavailable",
+    note:snapshotCursorLocation?"Cursor location":"Selection center",keys:readoutColourKeys()};
+}
+function drawSnapshotReadout(ctx,spec,blockX=0,blockY=0){
+  const info=spec.readout;if(!info)return;
+  const keyHeight=key=>key.swatches?18+Math.ceil(key.swatches.length/3)*14:36;
+  const height=46+info.keys.reduce((sum,key)=>sum+keyHeight(key),0),width=260,pad=12;
+  const k=Math.min(spec.scale,(spec.width-8)/(width+2*pad),(spec.height-8)/(height+2*pad));
+  if(k<=0)return;
+  ctx.save();ctx.setTransform(k,0,0,k,pad*k-blockX,spec.height-(height+pad)*k-blockY);
+  ctx.globalAlpha=1;ctx.filter="none";ctx.fillStyle="#000";ctx.textAlign="left";ctx.textBaseline="top";
+  const text=(value,x,y,size=11,bold=false,max=width)=>{ctx.font=`${bold?600:400} ${size}px -apple-system,BlinkMacSystemFont,Segoe UI,sans-serif`;ctx.fillStyle="#000";ctx.fillText(String(value),x,y,max)};
+  text(info.note,0,0,9);text(info.coordinates,0,12);text(info.elevation,0,26);
+  let y=46;
+  for(const key of info.keys){
+    text(key.name,0,y,10,true);y+=14;
+    if(key.swatches){
+      key.swatches.forEach((s,i)=>{const x=(i%3)*width/3,Y=y+Math.floor(i/3)*14;ctx.drawImage(s.img,x,Y,12,9);text(s.label,x+15,Y,9,false,width/3-18)});
+      y+=Math.ceil(key.swatches.length/3)*14+4;continue;
+    }
+    const matches=[...key.bar.matchAll(/(#[\da-f]{3,8}|rgba?\([^)]*\))\s*(\d*\.?\d+%)?/gi)];
+    const gradient=ctx.createLinearGradient(0,0,width,0);
+    matches.forEach((m,i)=>gradient.addColorStop(m[2]?parseFloat(m[2])/100:i/Math.max(1,matches.length-1),m[1]));
+    ctx.fillStyle=gradient;ctx.fillRect(0,y,width,6);y+=9;
+    key.labels.forEach((label,i)=>{ctx.textAlign=i===0?"left":i===key.labels.length-1?"right":"center";text(label,i*width/Math.max(1,key.labels.length-1),y,9,false,width/Math.max(1,key.labels.length))});
+    ctx.textAlign="left";y+=13;
+  }
+  ctx.restore();
+}
+for(const id of ["snapshotReadout","snapSelReadout"]){
+  try{$("#"+id).checked=localStorage.getItem("clearskies.snapshot.readout.v1")==="true"}catch(error){}
+  $("#"+id).addEventListener("change",event=>{
+    const enabled=event.target.checked;$("#snapshotReadout").checked=$("#snapSelReadout").checked=enabled;
+    try{localStorage.setItem("clearskies.snapshot.readout.v1",String(enabled))}catch(error){}
+  });
+}
+function cursorTileSample(tile,ll){
+  if(!tile?.elev||!tile.coords)return null;
+  const {z,x,y}=tile.coords,p=map.project(ll,z),world=256*2**z;
+  const dx=((p.x-x*256)%world+world)%world,dy=p.y-y*256;
+  if(dx>=256||dy<0||dy>=256)return null;
+  const width=tile.cv?.width||tile.width||256,height=tile.cv?.height||tile.height||256;
+  const value=tile.elev[Math.floor(dy*height/256)*width+Math.floor(dx*width/256)];
+  return ElevationTileCore.isElevation(value)?value:null;
+}
+function cursorLoadedElevation(ll){
+  let best=null;
+  for(const layer of [elevLayer,terLayer,terBase])for(const tile of layer?._store?.values()||[]){
+    const value=cursorTileSample(tile,ll);
+    if(value!==null&&(!best||tile.coords.z>best.z))best={value,z:tile.coords.z,source:tile.cv?.dataset.cspElevationSource||"Loaded terrain"};
+  }
+  return best;
+}
+const readoutRoot=document.createElement("aside");readoutRoot.id="mapReadout";
+readoutRoot.setAttribute("aria-label","Cursor location and visible layer color keys");
+readoutRoot.innerHTML='<div class="cursor-location"><div id="cursorCoordinates">Move the cursor over the map</div><div id="cursorElevation">Elevation —</div></div><div class="map-colour-keys"></div>';
+$("#app").append(readoutRoot);
+let cursorLocation=null,cursorElevation=null,cursorPointer=null,cursorFrame=0,cursorTimer=null,cursorRequest=null,snapshotCursorLocation=null;
+const cursorTiles=new Map(),snowColourKeys=new Map();
+let snowKeysLoading=null;
+const snowKeysRetryAt=new Map();
+function cursorCoordinates(ll){
+  return `${Math.abs(ll.lat).toFixed(5)}° ${ll.lat<0?"S":"N"} · ${Math.abs(ll.lng).toFixed(5)}° ${ll.lng<0?"W":"E"}`;
+}
+function paintCursorElevation(sample){
+  cursorElevation=sample;
+  $("#cursorElevation").textContent=sample?`Elevation ≈ ${Math.round(sample.value/.3048).toLocaleString()} ft`:"Elevation unavailable";
+  $("#cursorElevation").title=sample?.source||"No elevation sample is available at this location";
+}
+function cursorTileAddress(ll){
+  const z=Math.max(0,Math.min(15,Math.floor(map3d?map3d.getZoom()+1:map.getZoom()))),p=map.project(ll,z),n=2**z;
+  const coords={z,x:((Math.floor(p.x/256)%n)+n)%n,y:Math.floor(p.y/256)};
+  return {coords,key:`${PROXY?API:"public"}/${$("#terSrc").value}/${z}/${coords.x}/${coords.y}`};
+}
+function refreshCursorElevation(){
+  if(!cursorLocation||innerWidth<=760||document.hidden)return;
+  const loaded=cursorLoadedElevation(cursorLocation);if(loaded){paintCursorElevation(loaded);return}
+  const {coords,key}=cursorTileAddress(cursorLocation),cached=cursorTiles.get(key);
+  if(cached&&Date.now()-cached.at<60000){
+    const value=cursorTileSample(cached.tile,cursorLocation);paintCursorElevation(value===null?null:{value,source:cached.source});return;
+  }
+  $("#cursorElevation").textContent="Elevation …";cursorElevation=null;
+  if(cursorRequest?.key===key)return;
+  clearTimeout(cursorTimer);
+  cursorTimer=setTimeout(async()=>{
+    cursorRequest?.controller.abort();
+    const controller=new AbortController(),request={key,controller};cursorRequest=request;
+    const timeout=setTimeout(()=>controller.abort(),20000);
+    try{
+      const tile=PROXY?await elevationRequests.request(api(`/api/elev/${coords.z}/${coords.x}/${coords.y}.png`),s=>fetchElevation(api(`/api/elev/${coords.z}/${coords.x}/${coords.y}.png`),s),{signal:controller.signal,priority:1,group:"cursor"}):await publicElevationWithFallback(coords,controller.signal);
+      cursorTiles.set(key,{at:Date.now(),tile:tile?{coords,elev:tile.grid,width:tile.width||256,height:tile.height||256}:null,source:PROXY?"USGS elevation":tile?.rank===1?"Global overview elevation":"USGS 3DEP elevation"});
+    }catch(error){if(!controller.signal.aborted)cursorTiles.set(key,{at:Date.now(),tile:null,source:""});}
+    finally{
+      clearTimeout(timeout);if(cursorRequest===request)cursorRequest=null;
+      while(cursorTiles.size>8)cursorTiles.delete(cursorTiles.keys().next().value);
+      if(cursorLocation&&cursorTileAddress(cursorLocation).key===key){
+        const loaded=cursorLoadedElevation(cursorLocation),cached=cursorTiles.get(key),value=cursorTileSample(cached?.tile,cursorLocation);
+        paintCursorElevation(loaded||(value===null?null:{value,source:cached.source}));
+      }
+    }
+  },220);
+}
+function updateCursorLocation(){
+  cursorFrame=0;
+  if(!cursorPointer||innerWidth<=760||document.body.classList.contains("point-cloud-open")||!snapSel.hidden)return;
+  const box=$("#map").getBoundingClientRect(),p=L.point(cursorPointer.x-box.left,cursorPointer.y-box.top);
+  if(p.x<0||p.y<0||p.x>box.width||p.y>box.height)return;
+  let ll;
+  if(map3d){
+    ll=map3d.unproject([p.x,p.y]);const q=map3d.project(ll);
+    if(!Number.isFinite(ll.lat)||Math.abs(ll.lat)>85.05113||Math.hypot(q.x-p.x,q.y-p.y)>4){
+      cursorLocation=null;cursorElevation=null;$("#cursorCoordinates").textContent="Cursor over sky";$("#cursorElevation").textContent="Elevation —";return;
+    }
+  }else ll=map.containerPointToLatLng(p);
+  cursorLocation={lat:ll.lat,lng:((ll.lng+180)%360+360)%360-180};
+  $("#cursorCoordinates").textContent=cursorCoordinates(cursorLocation);refreshCursorElevation();
+}
+document.addEventListener("pointermove",event=>{
+  if(event.pointerType&&event.pointerType!=="mouse")return;
+  if(!event.target.closest("#map")||event.target.closest("button,input,select,a,.leaflet-control,.tool-popover,#ctl"))return;
+  cursorPointer={x:event.clientX,y:event.clientY};if(!cursorFrame)cursorFrame=requestAnimationFrame(updateCursorLocation);
+},{passive:true});
+map.on("moveend",()=>{if(cursorPointer)updateCursorLocation()});
+setInterval(()=>{if(cursorLocation&&!document.hidden)refreshCursorElevation()},1000);
+function readoutColourKeys(){
+  const keys=[],is3d=!!map3d,style=$("#terStyle").value;
+  if(style!=="off"&&terrainOpacity()>0){
+    const legend=$("#terLegend"),bar=legend?.querySelector(".bar")?.style.backgroundImage;
+    if(bar)keys.push({name:$("#terStyle").selectedOptions[0].textContent,bar,labels:[...legend.querySelectorAll(".ticks span")].map(el=>el.textContent)});
+  }
+  if(is3d&&map3d.getLayer("terrain-relief")){
+    const ramp=hypsometricRamp().slice(3),top=ramp[ramp.length-2];
+    const stops=[];for(let i=0;i<ramp.length;i+=2)stops.push(`${ramp[i+1]} ${ramp[i]/top*100}%`);
+    keys.push({name:"3D relief elevation tint",bar:`linear-gradient(90deg,${stops.join(",")})`,labels:[0,top/2,top].map(v=>`${Math.round(v/.3048).toLocaleString()} ft`)});
+  }
+  if($("#elevSh").checked&&elevAlpha()>0){
+    const level=elevMetres(),span=elevSpanMetres();
+    const stops=Array.from({length:17},(_,i)=>`rgb(${elevRampRgb(level-span+i*span/8,level,span).join(",")}) ${i/16*100}%`);
+    keys.push({name:"Elevation spectrum",bar:`linear-gradient(90deg,${stops.join(",")})`,labels:[level-span,level,level+span].map(v=>`${Math.round(v/.3048).toLocaleString()} ft`)});
+  }
+  if(elevationActive()&&+$("#elevBandAlpha").value>0){
+    for(const side of ["Below","Above"])if($("#elev"+side+"On").checked){
+      keys.push({name:`${side} ${(+$("#elev"+side+"Val").value||0).toLocaleString()} ft`,bar:`linear-gradient(90deg,${$("#elev"+side+"Color").value},${$("#elev"+side+"Color").value})`,labels:[]});
+    }
+  }
+  if(!is3d&&researchLayer&&researchOpacity()>0&&researchLayer._cspLegend)keys.push(researchLayer._cspLegend);
+  for(const id of ["snowdepth","swe","snowcover"])if(!is3d&&ovOn[id]&&ovLayers[id]&&overlayOpacityPercent(OVERLAYS.find(o=>o.id===id))>0){
+    const key=snowColourKeys.get(id);if(key)keys.push(key);
+  }
+  return keys;
+}
+function loadSnowColourKeys(){
+  if(snowKeysLoading)return snowKeysLoading;
+  if(!["snowdepth","swe","snowcover"].some(id=>ovOn[id]&&!snowColourKeys.has(id)&&Date.now()>=(snowKeysRetryAt.get(id)||0)))return Promise.resolve();
+  snowKeysLoading=fetchSnowColourKeys().finally(()=>{snowKeysLoading=null});return snowKeysLoading;
+}
+async function fetchSnowColourKeys(){
+  await Promise.allSettled([fetchNoaaSnowKeys(),fetchNDSISnowKey()]);paintMapReadoutKeys();
+}
+async function fetchNDSISnowKey(){
+  if(!ovOn.snowcover||snowColourKeys.has("snowcover")||Date.now()<(snowKeysRetryAt.get("snowcover")||0))return;
+  snowKeysRetryAt.set("snowcover",Date.now()+60000);
+  const response=await fetch("https://gibs.earthdata.nasa.gov/colormaps/v1.3/MODIS_NDSI_Snow_Cover.xml",{signal:AbortSignal.timeout(10000)});
+  if(!response.ok)return;
+  const xml=new DOMParser().parseFromString(await response.text(),"application/xml");
+  const entries=[...xml.querySelectorAll('ColorMap[title="Normalized Difference Snow Index"] ColorMapEntry')].filter(e=>e.getAttribute("transparent")==="false"&&/^\[\d+\]$/.test(e.getAttribute("value")||""));
+  if(!entries.length)return;
+  const stops=entries.flatMap((e,i)=>{const c=`rgb(${e.getAttribute("rgb")})`;return [`${c} ${i/entries.length*100}%`,`${c} ${(i+1)/entries.length*100}%`]});
+  snowColourKeys.set("snowcover",{name:"Snow cover · NDSI",bar:`linear-gradient(90deg,${stops.join(",")})`,labels:["1","50","100"]});
+}
+async function fetchNoaaSnowKeys(){
+  if(!["snowdepth","swe"].some(id=>ovOn[id]&&!snowColourKeys.has(id)&&Date.now()>=(snowKeysRetryAt.get(id)||0)))return;
+  for(const id of ["snowdepth","swe"])snowKeysRetryAt.set(id,Date.now()+60000);
+  try{
+    const response=await fetch("https://mapservices.weather.noaa.gov/raster/rest/services/snow/NOHRSC_Snow_Analysis/MapServer/legend?f=json",{signal:AbortSignal.timeout(10000)});
+    if(!response.ok)return;const data=await response.json();
+    for(const [id,layerId,name] of [["snowdepth",3,"Snow depth · inches"],["swe",7,"Snow water equivalent · inches"]]){
+      const entries=data.layers?.find(l=>l.layerId===layerId)?.legend||[];
+      const swatches=await Promise.all(entries.filter(e=>e.imageData).map(async e=>{
+        const url=`data:${e.contentType||"image/png"};base64,${e.imageData}`,img=new Image();img.src=url;await img.decode();return {label:e.label,url,img};
+      }));
+      if(swatches.length)snowColourKeys.set(id,{name,swatches});
+    }
+    paintMapReadoutKeys();
+  }catch(error){} // A provider without a key must not be given an invented scale.
+}
+function paintMapReadoutKeys(){
+  const keys=readoutColourKeys();
+  $(".map-colour-keys",readoutRoot).innerHTML=keys.map(key=>`<div class="map-colour-key"><div class="key-name">${esc(key.name)}</div>${key.bar?
+    `<div class="key-ramp" style="background:${esc(key.bar)}"></div><div class="key-ticks">${key.labels.map(t=>`<span>${esc(t)}</span>`).join("")}</div>`:
+    `<div class="key-swatches">${key.swatches.map(s=>`<span class="key-swatch"><img src="${s.url}" alt="">${esc(s.label)}</span>`).join("")}</div>`}</div>`).join("");
+}
+function placeMapReadout(){
+  const side=$("#side"),app=$("#app").getBoundingClientRect(),open=innerWidth>760&&!document.body.classList.contains("collapsed");
+  const left=open?Math.max(12,side.getBoundingClientRect().right-app.left+12):12;
+  readoutRoot.style.left=left+"px";readoutRoot.style.width=Math.max(130,Math.min(260,app.width-left-70))+"px";
+  paintMapReadoutKeys();
+}
+let readoutRefresh=0;
+function scheduleMapReadout(){
+  if(readoutRefresh)return;readoutRefresh=requestAnimationFrame(()=>{readoutRefresh=0;placeMapReadout();loadSnowColourKeys()});
+}
+document.addEventListener("input",scheduleMapReadout);document.addEventListener("change",scheduleMapReadout);
+document.addEventListener("csp:layers-changed",scheduleMapReadout);
+map.on("layeradd layerremove",scheduleMapReadout);
+new ResizeObserver(scheduleMapReadout).observe($("#side"));
+new MutationObserver(scheduleMapReadout).observe(document.body,{attributes:true,attributeFilter:["class"]});
+new MutationObserver(scheduleMapReadout).observe($("#terLegend"),{childList:true,subtree:true});
+addEventListener("resize",scheduleMapReadout);scheduleMapReadout();
+
 $("#q").addEventListener("focus",()=>{ if(acList.length && $("#q").value.trim().length>=3) acRender() });
 $("#q").addEventListener("blur",()=>setTimeout(acHide,120));
 document.addEventListener("click",e=>{ if(!e.target.closest("#iw")) acHide() });
 })();
 </script>
-<script src="markup.js?build=2026-10-11f"></script>
-<script src="ui-system.js?build=2026-10-11f"></script>
+<script src="markup.js?build=2026-10-11g"></script>
+<script src="ui-system.js?build=2026-10-11g"></script>
 </body>
 </html>

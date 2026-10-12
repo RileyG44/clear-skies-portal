@@ -552,3 +552,5 @@ Get-NetTCPConnection -LocalPort 8765 -State Listen |
 ### Map annotation layers
 
 Use **Markup → New markup layer** or the pencil button to draw on either the 2D map or 3D terrain. Pen, highlighter, shapes, arrows, notes, and pins use geographic positions and fixed ground dimensions. Width and text size are entered in feet; orbiting or zooming does not change the saved position or size. In 3D the marks follow the terrain surface. The camera includes visible markup in PNGs, including large 2D exports. Hide a layer to exclude it from the image. Existing markup layers work in both views without conversion.
+
+On desktop, the lower-left map corner shows the cursor’s latitude/longitude and approximate ground elevation in feet, plus color keys for visible terrain, elevation, surface-analysis and snow layers. The readout stays clear of the sidebar. In the camera/export controls, **Include coordinates, elevation and color keys** adds these details to the saved image’s lower-left corner; the choice is remembered. The location is frozen when area selection starts, and a selection-center reading is used if no cursor location has been chosen.

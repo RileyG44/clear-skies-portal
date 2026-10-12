@@ -1,0 +1,34 @@
+'use strict';
+const assert=require('node:assert/strict'),fs=require('node:fs'),vm=require('node:vm');
+const source=fs.readFileSync('index.html','utf8');
+const take=(name,next)=>source.slice(source.indexOf('function '+name+'('),source.indexOf('function '+next+'('));
+const env={map:{project:ll=>({x:ll.x,y:ll.y})},ElevationTileCore:require('./elevation-tile-core.js')};
+vm.runInNewContext(take('cursorTileSample','cursorLoadedElevation'),env);
+const tile={coords:{z:1,x:1,y:0},width:2,height:2,elev:new Float32Array([0,-100,NaN,1000])};
+assert.equal(env.cursorTileSample(tile,{x:256,y:0}),0,'sea level is a valid elevation');
+assert.equal(env.cursorTileSample(tile,{x:400,y:0}),-100,'negative elevations remain negative');
+assert.equal(env.cursorTileSample(tile,{x:256,y:150}),null,'no-data stays unavailable');
+assert.equal(env.cursorTileSample(tile,{x:400,y:150}),1000,'grid dimensions are respected');
+assert.equal(env.cursorTileSample(tile,{x:-112,y:150}),1000,'wrapped longitude samples the same tile');
+assert.equal(env.cursorTileSample(tile,{x:255,y:150}),null,'a point outside a tile cannot use its elevation');
+assert.equal(env.cursorTileSample(tile,{x:400,y:256}),null,'tile boundary does not index the next row');
+const ctx={calls:[],save(){},restore(){},setTransform(...args){this.calls.push(['transform',...args])},
+  fillText(...args){this.calls.push(['text',...args])},fillRect(...args){this.calls.push(['rect',...args])},
+  createLinearGradient(){return {addColorStop(){}}}};
+vm.runInNewContext(take('drawSnapshotReadout','cursorTileSample').split('for(const id of ["snapshotReadout"')[0],env);
+const spec={width:2000,height:1200,scale:2,readout:{note:'Cursor location',coordinates:'47° N · 120° W',elevation:'Elevation ≈ 1,000 ft',keys:[{name:'Slope',bar:'linear-gradient(90deg,#fff 0%,#000 100%)',labels:['0°','90°']}]}};
+env.drawSnapshotReadout(ctx,spec);
+const normal=ctx.calls[0];assert.deepEqual(normal,['transform',2,0,0,2,24,1012]);
+ctx.calls=[];env.drawSnapshotReadout(ctx,spec,900,700);
+assert.deepEqual(ctx.calls[0],['transform',2,0,0,2,-876,312],'streamed blocks use full-image corner coordinates');
+ctx.calls=[];env.drawSnapshotReadout(ctx,{...spec,readout:null});assert.equal(ctx.calls.length,0,'disabled option paints nothing');
+const rendered=[];
+const researchEnv={document:{createElement:()=>({getContext:()=>({createImageData:(w,h)=>({data:new Uint8ClampedArray(w*h*4)}),putImageData:im=>rendered.push(im)}),toDataURL:()=>''})},researchQuantile:()=>1};
+vm.runInNewContext(take('researchColourRaster','runResearchWorker'),researchEnv);
+const result=researchEnv.researchColourRaster({width:3,height:1,label:'Local relief',data:new Float32Array([-1,0,1])},'lrm');
+assert.equal(result.legend.labels[0],'-3.3 ft');assert.equal(result.legend.labels[2],'3.3 ft');
+assert(result.legend.bar.includes('rgb(65,145,245) 0%'),'legend uses the renderer’s actual negative color');
+assert.deepEqual([...rendered[0].data.slice(0,3)],[65,145,245]);
+const normalized=researchEnv.researchColourRaster({width:1,height:1,label:'Anomaly',data:new Float32Array([1])},'residual');
+assert.equal(normalized.legend.labels[2],'1 σ','standardized anomalies must not be labelled as feet');
+console.log('map readout checks passed (tile sampling, no-data, wrap, export option, streamed position, renderer palettes and units)');
