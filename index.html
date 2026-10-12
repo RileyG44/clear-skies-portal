@@ -992,8 +992,8 @@ body.pane-reordering,body.pane-reordering *{cursor:grabbing!important;user-selec
 }
 
 </style>
-<link rel="stylesheet" href="ui-theme.css?build=2026-10-11g">
-<link rel="stylesheet" href="ui-system.css?build=2026-10-11g">
+<link rel="stylesheet" href="ui-theme.css?build=2026-10-11h">
+<link rel="stylesheet" href="ui-system.css?build=2026-10-11h">
 <style>
 /* The redesign restructures the legacy DOM rather than replacing it, and the
    script that does so is the last thing on the page - so the browser paints the
@@ -1721,7 +1721,7 @@ html.csp-boot body{visibility:hidden}
   L.Renderer.prototype.onAdd=function(map){return onAdd.call(this,map||this._map)};
 })();
 </script>
-<script src="version.js?build=2026-10-11g"></script>
+<script src="version.js?build=2026-10-11h"></script>
 <script src="mosaic-core.js"></script>
 <script src="png-stream.js"></script>
 <script src="terrain-core.js"></script>
@@ -9973,9 +9973,8 @@ function paintMapReadoutKeys(){
     `<div class="key-swatches">${key.swatches.map(s=>`<span class="key-swatch"><img src="${s.url}" alt="">${esc(s.label)}</span>`).join("")}</div>`}</div>`).join("");
 }
 function placeMapReadout(){
-  const side=$("#side"),app=$("#app").getBoundingClientRect(),open=innerWidth>760&&!document.body.classList.contains("collapsed");
-  const left=open?Math.max(12,side.getBoundingClientRect().right-app.left+12):12;
-  readoutRoot.style.left=left+"px";readoutRoot.style.width=Math.max(130,Math.min(260,app.width-left-70))+"px";
+  const app=$("#app").getBoundingClientRect();
+  readoutRoot.style.width=Math.max(130,Math.min(260,app.width-82))+"px";
   paintMapReadoutKeys();
 }
 let readoutRefresh=0;
@@ -9985,7 +9984,6 @@ function scheduleMapReadout(){
 document.addEventListener("input",scheduleMapReadout);document.addEventListener("change",scheduleMapReadout);
 document.addEventListener("csp:layers-changed",scheduleMapReadout);
 map.on("layeradd layerremove",scheduleMapReadout);
-new ResizeObserver(scheduleMapReadout).observe($("#side"));
 new MutationObserver(scheduleMapReadout).observe(document.body,{attributes:true,attributeFilter:["class"]});
 new MutationObserver(scheduleMapReadout).observe($("#terLegend"),{childList:true,subtree:true});
 addEventListener("resize",scheduleMapReadout);scheduleMapReadout();
@@ -9995,7 +9993,7 @@ $("#q").addEventListener("blur",()=>setTimeout(acHide,120));
 document.addEventListener("click",e=>{ if(!e.target.closest("#iw")) acHide() });
 })();
 </script>
-<script src="markup.js?build=2026-10-11g"></script>
-<script src="ui-system.js?build=2026-10-11g"></script>
+<script src="markup.js?build=2026-10-11h"></script>
+<script src="ui-system.js?build=2026-10-11h"></script>
 </body>
 </html>

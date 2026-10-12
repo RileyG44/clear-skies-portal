@@ -2085,7 +2085,7 @@ body.terrain-3d .mk-eraser-ring{z-index:961}
 #mkDraft{position:absolute;inset:0;z-index:940;pointer-events:none}
 .mk-ground{display:flex;align-items:center;gap:5px;flex-shrink:0;font-size:12px;color:var(--ui-text-2)}
 .mk-ground input{width:84px;padding:5px 7px;border:1px solid var(--ui-border);border-radius:7px;background:var(--ui-surface);color:var(--ui-text);font:inherit}
-/* Desktop map readout: transparent, non-interactive, clear of the sidebar. */
+/* Desktop map readout stays in the corner underneath the sidebar. */
 #mapReadout{
   position:absolute;z-index:1100;left:12px;bottom:14px;width:260px;
   display:grid;gap:7px;pointer-events:none;color:var(--map-readout-ink);background:transparent;
@@ -2093,6 +2093,8 @@ body.terrain-3d .mk-eraser-ring{z-index:961}
   font-variant-numeric:tabular-nums;
 }
 #mapReadout[hidden]{display:none}
+/* The translucent menu must fully cover the readout without moving it. */
+body:not(.collapsed) #mapReadout{visibility:hidden}
 #mapReadout .cursor-location{white-space:nowrap}
 #mapReadout .map-colour-keys{display:grid;gap:7px}
 #mapReadout .map-colour-key{display:grid;gap:2px}
