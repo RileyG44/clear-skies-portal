@@ -51,6 +51,12 @@ new vm.Script(read("sw.js"),{filename:"sw.js"});
 new vm.Script(read("mosaic-core.js"),{filename:"mosaic-core.js"});
 new vm.Script(read("terrain-core.js"),{filename:"terrain-core.js"});
 new vm.Script(read("terrain-raster.js"),{filename:"terrain-raster.js"});
+for(const asset of ["terrain-drape-core.js","terrain-drape-pool.js","terrain-drape-worker.js"]){
+  new vm.Script(read(asset),{filename:asset});
+  for(const file of ["server.js","sw.js","package.json",".github/workflows/ci.yml","scripts/minify-site.js","scripts/install-mac-service.sh"])
+    assert(read(file).includes(asset),`${file} must ship ${asset}`);
+}
+
 new vm.Script(read("elevation-bands.js"),{filename:"elevation-bands.js"});
 new vm.Script(read("elevation-tile-core.js"),{filename:"elevation-tile-core.js"});
 new vm.Script(read("wa-archaeology.js"),{filename:"wa-archaeology.js"});

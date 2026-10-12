@@ -70,7 +70,7 @@ const steps = () => [
   ["ui-theme.css", () => shrink("ui-theme.css", { loader: "css", opts: { minify: true } })],
   ["ui-system.css", () => shrink("ui-system.css", { loader: "css", opts: { minify: true } })],
   ["vendor/maplibre-gl.css", () => shrink("vendor/maplibre-gl.css", { loader: "css", opts: { minify: true } })],
-  ...["ui-system.js", "mosaic-core.js", "png-stream.js", "markup.js", "terrain-core.js", "terrain-raster.js", "elevation-bands.js",
+  ...["ui-system.js", "mosaic-core.js", "png-stream.js", "markup.js", "terrain-core.js", "terrain-raster.js", "terrain-drape-core.js", "terrain-drape-pool.js", "terrain-drape-worker.js", "elevation-bands.js",
     "elevation-tile-core.js", "public-terrain.js", "public-terrain-worker.js", "tile-pipeline.js",
     "wa-archaeology.js", "glacial-research-core.js", "research-analysis.js", "research-worker.js",
     "point-cloud-core.js", "point-cloud-viewer.js", "version.js"]

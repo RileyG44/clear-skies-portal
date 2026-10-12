@@ -16,12 +16,12 @@
 
   const D2R=Math.PI/180;
   const NODATA_LIMIT=-1e20;
-  const TINT_OF=terrain.createElevationColorizer("relief");
-  const SLOPE_OF=terrain.createElevationColorizer([
+  const TINT_OF=rampWriter("relief");
+  const SLOPE_OF=rampWriter([
     [0,"#f2f4ee"],[5,"#b1d28b"],[15,"#f6da6f"],[30,"#f09649"],
     [45,"#d54650"],[60,"#762c69"],[90,"#321948"]
   ]);
-  const ASPECT_OF=terrain.createElevationColorizer([
+  const ASPECT_OF=rampWriter([
     [0,"#4d78c8"],[45,"#3ba5b0"],[90,"#57a765"],[135,"#c9ad4f"],
     [180,"#d96b52"],[225,"#c45b82"],[270,"#8d65bb"],[315,"#5e77c5"],[360,"#4d78c8"]
   ]);
@@ -54,13 +54,33 @@
     return info.grid[sy*info.stride+sx];
   }
 
-  function gradientAt(info,x,y){
+  /* One reusable gradient and colour per tile, not one object/array per
+     pixel. Ramp interpolation keeps the scalar colourizer's rounding order. */
+  function rampWriter(ramp){
+    const stops=terrain.normalizeColorRamp(ramp);
+    return function(value,out,offset=0){
+      let low=0,high=stops.length-1;
+      if(value<=stops[0].value) high=low;
+      else if(value>=stops[high].value) low=high;
+      else while(high-low>1){ const middle=(low+high)>>1;if(value<stops[middle].value)high=middle;else low=middle }
+      const left=stops[low],right=stops[high],t=low===high?0:Math.max(0,Math.min(1,(value-left.value)/(right.value-left.value)));
+      for(let channel=0;channel<4;channel++)out[offset+channel]=Math.round(left.color[channel]+(right.color[channel]-left.color[channel])*t);
+    };
+  }
+  function gradientAt(info,x,y,out){
     const a=valueAt(info,x-1,y-1),b=valueAt(info,x,y-1),c=valueAt(info,x+1,y-1);
     const d=valueAt(info,x-1,y),f=valueAt(info,x+1,y);
     const g=valueAt(info,x-1,y+1),h=valueAt(info,x,y+1),k=valueAt(info,x+1,y+1);
-    if(![a,b,c,d,f,g,h,k].every(value=>valid(value,info.noData))) return null;
-    return {dzdx:((c+2*f+k)-(a+2*d+g))/(8*info.groundRes),
-            dzdy:((g+2*h+k)-(a+2*b+c))/(8*info.groundRes)};
+    const marker=info.noData;
+    if(!valid(a,marker)||!valid(b,marker)||!valid(c,marker)||!valid(d,marker)||
+       !valid(f,marker)||!valid(g,marker)||!valid(h,marker)||!valid(k,marker))return false;
+    out.dzdx=((c+2*f+k)-(a+2*d+g))/(8*info.groundRes);
+    out.dzdy=((g+2*h+k)-(a+2*b+c))/(8*info.groundRes);return true;
+  }
+  function aspectOf(gradient){
+    if(!Number.isFinite(gradient.dzdx)||!Number.isFinite(gradient.dzdy)||
+       Math.hypot(gradient.dzdx,gradient.dzdy)<=ASPECT_FLAT_GRADE)return null;
+    return terrain.normalizeDegrees(Math.atan2(-gradient.dzdx,gradient.dzdy)*(180/Math.PI));
   }
 
   function hasData(surface){
@@ -78,11 +98,11 @@
     const ambient=Math.max(0,Math.min(.6,Number.isFinite(+lighting.ambient)?+lighting.ambient:.12));
     const shadeDirect=terrain.createHillshade({azimuth,altitude,ambient});
     const shadeMulti=terrain.createMultidirectionalHillshade({altitude,ambient});
+    const gradient={dzdx:0,dzdy:0},colour=new Uint8ClampedArray(4);
     for(let y=0;y<info.height;y++) for(let x=0;x<info.width;x++){
       const value=valueAt(info,x,y),offset=(y*info.width+x)*4;
       if(!valid(value,info.noData)) continue;
-      const gradient=gradientAt(info,x,y);
-      if(!gradient) continue;
+      if(!gradientAt(info,x,y,gradient)) continue;
 
       if(Object.prototype.hasOwnProperty.call(CONTOUR_FT,style)){
         const feet=value*3.28084;
@@ -104,27 +124,25 @@
         continue;
       }
 
-      let colour;
-      if(style==="slope") colour=SLOPE_OF(Math.atan(Math.hypot(gradient.dzdx,gradient.dzdy))/D2R);
+      if(style==="slope") SLOPE_OF(Math.atan(Math.hypot(gradient.dzdx,gradient.dzdy))/D2R,out,offset);
       else if(style==="aspect"){
-        const aspect=terrain.aspectDegrees(gradient,{flatThreshold:ASPECT_FLAT_GRADE});
-        if(aspect===null) continue;
-        colour=ASPECT_OF(aspect);
+        const aspect=aspectOf(gradient);if(aspect===null)continue;ASPECT_OF(aspect,out,offset);
       }else if(style==="northness"){
-        const aspect=terrain.aspectDegrees(gradient,{flatThreshold:ASPECT_FLAT_GRADE});
-        if(aspect===null) continue;
-        const northness=Math.cos(aspect*D2R),neutral=[247,243,224],north=[55,137,92],south=[214,82,78];
-        const target=northness>=0?north:south,t=Math.abs(northness);
-        colour=[Math.round(neutral[0]+(target[0]-neutral[0])*t),
-                Math.round(neutral[1]+(target[1]-neutral[1])*t),
-                Math.round(neutral[2]+(target[2]-neutral[2])*t),255];
+        const aspect=aspectOf(gradient);if(aspect===null)continue;
+        const northness=Math.cos(aspect*D2R),t=Math.abs(northness);
+        out[offset]=Math.round(247+((northness>=0?55:214)-247)*t);
+        out[offset+1]=Math.round(243+((northness>=0?137:82)-243)*t);
+        out[offset+2]=Math.round(224+((northness>=0?92:78)-224)*t);out[offset+3]=255;
       }else if(style==="tint"){
-        colour=terrain.shadeTint(TINT_OF(value),shadeDirect(gradient.dzdx,gradient.dzdy));
+        TINT_OF(value,colour);
+        const multiplier=terrain.TINT_SHADE_FLOOR+terrain.TINT_SHADE_GAIN*shadeDirect(gradient.dzdx,gradient.dzdy);
+        out[offset]=Math.min(255,Math.round(colour[0]*multiplier));
+        out[offset+1]=Math.min(255,Math.round(colour[1]*multiplier));
+        out[offset+2]=Math.min(255,Math.round(colour[2]*multiplier));out[offset+3]=255;
       }else{
         const shade=(style==="hsmulti"?shadeMulti:shadeDirect)(gradient.dzdx,gradient.dzdy);
-        const byte=Math.round(shade*255);colour=[byte,byte,byte,255];
+        const byte=Math.round(shade*255);out[offset]=byte;out[offset+1]=byte;out[offset+2]=byte;out[offset+3]=255;
       }
-      out[offset]=colour[0];out[offset+1]=colour[1];out[offset+2]=colour[2];out[offset+3]=colour[3]===undefined?255:colour[3];
     }
     return out;
   }

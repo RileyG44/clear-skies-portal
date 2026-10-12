@@ -1728,6 +1728,8 @@ html.csp-boot body{visibility:hidden}
 <script src="terrain-raster.js"></script>
 <script src="elevation-bands.js"></script>
 <script src="elevation-tile-core.js"></script>
+<script src="terrain-drape-core.js"></script>
+<script src="terrain-drape-pool.js"></script>
 <script src="public-terrain.js"></script>
 <script src="tile-pipeline.js"></script>
 <script src="wa-archaeology.js"></script>
@@ -6021,104 +6023,74 @@ function scratch(size,which="tile"){
 const elevTileUrl=(z,x,y)=>PROXY?api(`/api/elev/${z}/${x}/${y}.png`)
   :`https://s3.amazonaws.com/elevation-tiles-prod/terrarium/${z}/${x}/${y}.png`;
 
-async function elevBitmap(z,x,y,signal){
-  const limit=Math.pow(2,z);
-  if(z<0||y<0||y>=limit) return null;                 // no wrap in y
-  const wx=((x%limit)+limit)%limit;                   // but the world wraps in x
-  if(!PROXY){
-    const source=await publicElevationWithFallback({z,x:wx,y},signal);
-    public3dDrapeSources.set(`${z}/${wx}/${y}`,{z,x:wx,y,rank:source.rank});
+/* Cache source tiles rather than assembled skirts: adjacent drapes share
+   four neighbours. The byte budget matches the old 48-skirt cache (~12.8 MB).
+   Palette/light revisions are deliberately absent from meshKey. RequestPool
+   deduplicates concurrent readers without letting one reader abort the others. */
+const ELEV_CACHE_BYTES=48*258*258*4;
+const newElevCache=()=>new CSPTilePipeline.RequestPool({concurrency:8,maxBytes:ELEV_CACHE_BYTES,ttl:Infinity});
+let elevCache=newElevCache();
+const drapeWorkers=new CSPTerrainDrapePool.Pool({
+  size:Math.max(1,Math.min(4,(navigator.hardwareConcurrency||2)-1)),
+  workerFactory:typeof Worker==="function"&&typeof OffscreenCanvas==="function"&&typeof createImageBitmap==="function"
+    ?()=>new Worker("./terrain-drape-worker.js"):null,
+  fallback:async(job,signal)=>{
+    if(signal?.aborted)throw new DOMException("aborted","AbortError");
+    if(job.op==="decode"){
+      const bitmap=await imageBitmapFromBlob(job.blob);
+      try{
+        const canvas=scratch(256,"drape-decode"),ctx=canvas.getContext("2d",{willReadFrequently:true});
+        ctx.clearRect(0,0,256,256);ctx.drawImage(bitmap,0,0,256,256);
+        return ElevationTileCore.decodeTerrarium(ctx.getImageData(0,0,256,256).data,256,256);
+      }finally{bitmap.close?.()}
+    }
+    const rgba=CSPTerrainDrape.render(job);
+    if(typeof createImageBitmap==="function")return createImageBitmap(new ImageData(rgba,256,256),CSPTerrainDrape.BITMAP_OPTIONS);
+    return encodeTileRgba(rgba);
+  }
+});
+function elevCacheClear(){
+  const old=elevCache;elevCache=newElevCache();
+  for(const job of old.jobs.values()){job.controller.abort();old._settle(job,new DOMException("aborted","AbortError"))}
+  old.queue=[];old.cache.clear();old.bytes=0;drapeWorkers.clear();
+}
+async function drapeElevation(z,x,y,signal){
+  const limit=2**z;if(z<0||y<0||y>=limit)return null;
+  const wx=((x%limit)+limit)%limit,key=meshKey(z,wx,y);
+  const tile=await elevCache.request(key,async signal=>{
+    if(!PROXY)return publicElevationWithFallback({z,x:wx,y},signal);
+    if(dnrElevationAvailable()&&["auto","wadnr","wadnr-only"].includes($("#terSrc").value))
+      return engineElevationWithFallback({z,x:wx,y},signal,false);
+    /* 503 is a briefly saturated terrain pool. Honor Retry-After and keep
+       retries abortable so abandoned viewports leave no work behind. */
+    for(let attempt=0;;attempt++){
+      const response=await fetch(elevTileUrl(z,wx,y),{signal});
+      if(response.ok){
+        const grid=await drapeWorkers.run({op:"decode",blob:await response.blob()},signal);
+        return {grid,rank:response.headers.get("X-Elevation-Source")==="usgs-1m"?3:2};
+      }
+      if(response.status!==503||attempt>=2)throw new Error(`elevation tile HTTP ${response.status}`);
+      await waitElevationRetry(Math.min(4000,((+response.headers.get("Retry-After")||2)*1000)*(attempt+1)),signal);
+    }
+  },{signal});
+  if(signal?.aborted)throw new DOMException("aborted","AbortError");
+  if(tile){
+    public3dDrapeSources.set(`${z}/${wx}/${y}`,{z,x:wx,y,...(tile.ranks?{ranks:tile.ranks}:{rank:tile.rank})});
     while(public3dDrapeSources.size>160)public3dDrapeSources.delete(public3dDrapeSources.keys().next().value);
     scheduleTerrainStatus();
-    const image=new ImageData(256,256);
-    for(let i=0;i<source.grid.length;i++){
-      const value=source.grid[i];if(!ElevationTileCore.isElevation(value))continue;
-      const encoded=Math.round((value+32768)*256),offset=i*4;
-      image.data[offset]=Math.floor(encoded/65536);image.data[offset+1]=Math.floor(encoded/256)%256;
-      image.data[offset+2]=encoded%256;image.data[offset+3]=255;
-    }
-    /* An ImageBitmap is freed by close() the moment the skirt is drawn; a
-       canvas here was one more allocation per tile for Safari to count. */
-    return createImageBitmap(image,{premultiplyAlpha:"none",colorSpaceConversion:"none"});
   }
-  if(dnrElevationAvailable()&&["auto","wadnr","wadnr-only"].includes($("#terSrc").value)){
-    const source=await engineElevationWithFallback({z,x:wx,y},signal,false);
-    if(!source)return null;
-    public3dDrapeSources.set(`${z}/${wx}/${y}`,{z,x:wx,y,ranks:source.ranks});
-    while(public3dDrapeSources.size>160)public3dDrapeSources.delete(public3dDrapeSources.keys().next().value);
-    scheduleTerrainStatus();
-    return imageBitmapFromBlob(new Blob([await terrariumPng(source.grid)],{type:"image/png"}));
+  return tile?.grid||null;
+}
+async function renderDrapeTile(style,z,x,y,signal){
+  // Missing neighbours retain the old centre-edge clamp. Cancellation is not
+  // missing coverage: it must propagate, including when all grids are cached.
+  const neighbour=(x,y)=>drapeElevation(z,x,y,signal).catch(error=>{if(signal?.aborted)throw error;return null});
+  const tiles=await Promise.all([drapeElevation(z,x,y,signal),neighbour(x-1,y),neighbour(x+1,y),neighbour(x,y-1),neighbour(x,y+1)]);
+  const job={style,tiles,groundRes:reliefResolution(tileGroundResolution({z,x,y}),style),lighting:terrainLighting()};
+  if(style==="spectrum"){
+    const settings=elevationRenderSettings();job.settings={...settings,bandState:settings.bandCompiled.state};delete job.settings.bandCompiled;
   }
-  const url=elevTileUrl(z,wx,y);
-  /* 503 here means the terrain pool is briefly saturated, not that the tile is
-     missing — the server even sends Retry-After. Without a retry a pan through
-     a cold area leaves permanent holes in the drape. */
-  for(let attempt=0;;attempt++){
-    const response=await fetch(url,{signal});
-    if(response.ok){
-      public3dDrapeSources.set(`${z}/${wx}/${y}`,{z,x:wx,y,rank:response.headers.get("X-Elevation-Source")==="usgs-1m"?3:2});
-      return imageBitmapFromBlob(await response.blob());
-    }
-    if(response.status!==503||attempt>=2) throw new Error(`elevation tile HTTP ${response.status}`);
-    const wait=Math.min(4000,((+response.headers.get("Retry-After")||2)*1000)*(attempt+1));
-    await new Promise(r=>setTimeout(r,wait));
-    if(signal?.aborted) throw new DOMException("aborted","AbortError");
-  }
-}
-
-/* A 258x258 elevation window: the tile plus a one-pixel skirt taken from its
-   four neighbours. Without the skirt the 3x3 gradient kernel clamps at the tile
-   border, so every boundary gets a slightly wrong slope and the analytical
-   styles show a grid of seams. The neighbours are already in the browser cache
-   because MapLibre fetched them for the DEM source, so this costs little.
-   Corners are left clamped: they affect one pixel each. */
-/* Decoded elevation, keyed by tile. A lighting change re-renders the analytical
-   styles from the same ground, so without this every slider drag re-ran a fetch,
-   a canvas decode and a Terrarium unpack for every visible tile. 258x258 floats
-   is ~266 KB, so the cap is what bounds the memory, not the count. */
-const elevCache=new Map(), ELEV_CACHE_MAX=48;
-function elevCacheGet(k){
-  if(!elevCache.has(k)) return null;
-  const v=elevCache.get(k); elevCache.delete(k); elevCache.set(k,v); return v;   // LRU touch
-}
-function elevCachePut(k,v){
-  elevCache.set(k,v);
-  while(elevCache.size>ELEV_CACHE_MAX) elevCache.delete(elevCache.keys().next().value);
-}
-function elevCacheClear(){ elevCache.clear() }
-
-async function skirtedElevation(z,x,y,signal){
-  const ck=meshKey(z,x,y);
-  const cached=elevCacheGet(ck);
-  if(cached) return cached;
-  const [centre,west,east,north,south]=await Promise.all([
-    elevBitmap(z,x,y,signal),
-    elevBitmap(z,x-1,y,signal).catch(()=>null),
-    elevBitmap(z,x+1,y,signal).catch(()=>null),
-    elevBitmap(z,x,y-1,signal).catch(()=>null),
-    elevBitmap(z,x,y+1,signal).catch(()=>null)
-  ]);
-  if(!centre) throw new Error("elevation tile unavailable");
-  const canvas=scratch(258,"skirt"),ctx=canvas.getContext("2d",{willReadFrequently:true});
-  ctx.clearRect(0,0,258,258);
-  ctx.drawImage(centre,0,0,256,256,1,1,256,256);
-  // Fall back to the centre's own edge when a neighbour is missing, which is
-  // the old clamping behaviour rather than a hole.
-  ctx.drawImage(west||centre , west ?255:0  ,0,1,256, 0  ,1,1,256);
-  ctx.drawImage(east||centre , east ?0  :255,0,1,256, 257,1,1,256);
-  ctx.drawImage(north||centre,0, north?255:0  ,256,1, 1,0  ,256,1);
-  ctx.drawImage(south||centre,0, south?0  :255,256,1, 1,257,256,1);
-  [centre,west,east,north,south].forEach(b=>b&&b.close?.());
-  const grid=ElevationTileCore.decodeTerrarium(ctx.getImageData(0,0,258,258).data,258,258);
-  // The four corners were never drawn; copy the nearest skirt cell so they do
-  // not decode as -32768 and darken the tile corners.
-  const at=(cx,cy)=>cy*258+cx;
-  grid[at(0,0)]     = grid[at(1,0)];
-  grid[at(257,0)]   = grid[at(256,0)];
-  grid[at(0,257)]   = grid[at(1,257)];
-  grid[at(257,257)] = grid[at(256,257)];
-  elevCachePut(ck,grid);
-  return grid;
+  return drapeWorkers.run(job,signal);
 }
 
 async function encodeTileRgba(rgba){
@@ -6138,17 +6110,12 @@ async function installMaplibreProtocols(module){
     const match=params.url.match(/^cspterrain:\/\/([^/]+)\/(\d+)\/(\d+)\/(\d+)\.png/);
     if(!match) throw new Error("invalid terrain tile request");
     const [,style,zs,xs,ys]=match,z=+zs,x=+xs,y=+ys;
-    const grid=await skirtedElevation(z,x,y,controller.signal);
-    const rgba=CSPTerrainRaster.renderRgba(style,{grid,size:256,n:258,
-      groundRes:reliefResolution(tileGroundResolution({z,x,y}),style),lighting:terrainLighting()});
-    return {data:await encodeTileRgba(rgba)};
+    return {data:await renderDrapeTile(style,z,x,y,controller.signal)};
   });
   module.addProtocol("cspelev",async(params,controller)=>{
     const match=params.url.match(/^cspelev:\/\/s\/(\d+)\/(\d+)\/(\d+)\.png/);
     if(!match) throw new Error("invalid elevation spectrum tile request");
-    const grid=await skirtedElevation(+match[1],+match[2],+match[3],controller.signal);
-    const rgba=elevationColours(grid,256*256,elevationRenderSettings(),new Uint8ClampedArray(256*256*4),256,258,259);
-    return {data:await encodeTileRgba(rgba)};
+    return {data:await renderDrapeTile("spectrum",+match[1],+match[2],+match[3],controller.signal)};
   });
   module.addProtocol("cspwa",async(params,controller)=>{
     const match=params.url.match(/^cspwa:\/\/([^/]+)\/(\d+)\/(\d+)\/(\d+)\.png/);
@@ -8915,7 +8882,8 @@ async function fetchElevation(url,signal){
       if(isDnr)dnrLastError="";
       if(response.headers.get("X-Coverage")==="none") return null;
       const blob=await response.blob();
-      const bitmap=await createImageBitmap(blob,{colorSpaceConversion:"none",premultiplyAlpha:"none"});
+      const bitmap=typeof createImageBitmap==="function"
+        ?await createImageBitmap(blob,{colorSpaceConversion:"none",premultiplyAlpha:"none"}):await imageBitmapFromBlob(blob);
       try{
         /* Decode through one shared canvas: draw and read back happen in the
            same task, so concurrent tiles cannot interleave. */
@@ -8926,7 +8894,7 @@ async function fetchElevation(url,signal){
         let surveys=[];
         if(isDnr)try{surveys=JSON.parse(decodeURIComponent(response.headers.get("X-DNR-Sources")||"[]"));}catch{}
         return ElevationTileCore.hasElevation(grid)?{grid,width:bitmap.width,height:bitmap.height,surveys}:null;
-      }finally{bitmap.close();}
+      }finally{bitmap.close?.();}
     }catch(error){
       if(signal.aborted) throw new DOMException("Aborted","AbortError");
       if(attempt===2) throw error;
@@ -9349,25 +9317,7 @@ let elevLayer=null;
    and `offset` let the 3D path read the 256x256 interior of a skirted 258
    grid in place. */
 function elevationColours(elev,count,settings,out,width=count,stride=width,offset=0){
-  for(let i=0;i<count;i++){
-    const v=elev[offset+Math.floor(i/width)*stride+(i%width)],o=i*4;
-    if(v!==v) continue;
-    let pr=0,pg=0,pb=0,pa=0;
-    const over=(r,g,b,a)=>{ pr=r*a+pr*(1-a);pg=g*a+pg*(1-a);pb=b*a+pb*(1-a);pa=a+pa*(1-a) };
-    if(settings.spectrumOn){
-      const d=(v-settings.level)/Math.max(1,settings.span),t=Math.min(1,Math.abs(d));
-      const smooth=t*t*(3-2*t),hi=d>=0,a=settings.spectrumAlpha*(.15+.85*t);
-      over((255+((hi?70:248)-255)*smooth)/255,
-           (255+((hi?160:92)-255)*smooth)/255,
-           (250+((hi?255:108)-250)*smooth)/255,a);
-    }
-    const band=settings.bandCompiled.rgba(v,"premultiplied"),ba=band[3]/255;
-    if(ba>0){ pr=band[0]/255+pr*(1-ba);pg=band[1]/255+pg*(1-ba);
-              pb=band[2]/255+pb*(1-ba);pa=ba+pa*(1-ba) }
-    if(pa>0){ out[o]=Math.round(pr/pa*255);out[o+1]=Math.round(pg/pa*255);
-              out[o+2]=Math.round(pb/pa*255);out[o+3]=Math.round(pa*255) }
-  }
-  return out;
+  return CSPTerrainDrape.elevationColours(elev,count,settings,out,width,stride,offset);
 }
 function elevMetres(){ return (+$("#elevVal").value||0) * ELEV_UNIT[$("#elevUnit").value] }
 function elevSpanMetres(){ return Math.max(3,(+$("#elevSpan").value||300)*0.3048) }
