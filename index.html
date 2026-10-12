@@ -6159,7 +6159,23 @@ async function installMaplibreProtocols(module){
   });
   maplibreProtocolReady=true;
 }
+/* A trackpad zoom calls setZoom/jumpTo each frame, which emits movestart and
+   moveend synchronously each time. Removing the glass override on moveend
+   would therefore re-enable the Retina backdrop blur every frame. Keep one
+   material for the whole gesture and restore it after 200 ms without a move;
+   only the first move and the quiet callback write to the DOM. */
+let map3dGlassTimer=null,map3dGlassMoving=false;
+function reset3dGlassMotion(){
+  clearTimeout(map3dGlassTimer);map3dGlassTimer=null;
+  if(map3dGlassMoving){map3dGlassMoving=false;document.body.classList.remove("map3d-moving")}
+}
+function mark3dGlassMotion(){
+  if(!map3d||!document.body.classList.contains("terrain-3d")) return;
+  if(!map3dGlassMoving){map3dGlassMoving=true;document.body.classList.add("map3d-moving")}
+  clearTimeout(map3dGlassTimer);map3dGlassTimer=setTimeout(reset3dGlassMotion,200);
+}
 function setTerrainModeUi(on,status){
+  if(!on) reset3dGlassMotion();
   document.body.classList.toggle("terrain-3d",on);$("#map3d").setAttribute("aria-hidden",String(!on));
   $("#terMode2d").setAttribute("aria-pressed",String(!on));$("#terMode3d").setAttribute("aria-pressed",String(on));
   $("#terModeNote").textContent=status||(on?"Orbit with right-drag or Control-drag. Two fingers rotate, pitch, and zoom.":"Rotate with right-drag or a two-finger twist. North reset is on the map.");
@@ -6231,6 +6247,7 @@ async function enterTerrain3d(){
       maxZoom:22,maxPitch:85,renderWorldCopies:false,scrollZoom:false,canvasContextAttributes:{antialias:!MAP3D_COMPACT,powerPreference:"high-performance"},
       attributionControl:true,fadeDuration:0});
     window.CSPMarkup?.attach3d(module,map3d);
+    map3d.on("movestart",mark3dGlassMotion);map3d.on("move",mark3dGlassMotion);
     map3d.on("move",cursorCameraMoved);map3d.on("idle",cursorCameraIdle);
     map3d.on("rotate",syncBearingButton);map3d.on("pitch",syncBearingButton);
     map3d.on("moveend",scheduleTerrainStatus);map3d.on("idle",scheduleTerrainStatus);
@@ -6244,7 +6261,7 @@ async function enterTerrain3d(){
   return map3dLoading;
 }
 function exitTerrain3d(){
-  map3dWanted=false;
+  reset3dGlassMotion();map3dWanted=false;
   clearTimeout(map3dLightTimer);
   elevCacheClear();
   if(!map3d){setTerrainModeUi(false);return}

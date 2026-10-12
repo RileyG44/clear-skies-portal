@@ -2114,3 +2114,35 @@ body.point-cloud-open #mapReadout{display:none}
 .snap-sel-bar .snap-sel-toggle[aria-pressed="true"]{background:var(--lg-lens);color:var(--ui-accent);box-shadow:var(--lg-lens-rim)}
 .snap-sel-toggle-state{min-width:21px;font-size:10px;text-align:center;opacity:.8}
 .snap-sel-bar button:focus-visible{outline:2px solid var(--ui-accent);outline-offset:2px}
+
+
+/* Moving WebGL pixels make every overlapping backdrop blur run again. Use
+   the Reduce Transparency / no-backdrop palette while the 3D camera moves;
+   the map, sheen, rims and layout stay intact, and rest restores the original
+   material. Enumerate chrome rather than disabling filters on map descendants
+   or doing a universal scan on each frame. Hard-coded legacy blurs need the
+   same override as the variable-driven Liquid Glass surfaces. */
+body.terrain-3d.map3d-moving{
+  --map3d-motion-fill:var(--canvas);
+  --map3d-motion-panel:var(--canvas);
+  --glass-blur:none;--lg-filter:none;--sheet-filter:none;
+  --glass-side:var(--map3d-motion-panel);--glass-panel:var(--map3d-motion-panel);
+  --glass-panel-strong:var(--map3d-motion-fill);--glass-control:var(--map3d-motion-fill);--glass-card:var(--map3d-motion-fill);
+  --lg-control:var(--map3d-motion-fill);--lg-popover:var(--map3d-motion-fill);
+  --sheet-glass-clear:var(--map3d-motion-panel);--sheet-glass:var(--map3d-motion-panel);--sheet-card:var(--map3d-motion-fill);
+  --ui-frost:var(--map3d-motion-fill);--ui-frost-weak:var(--map3d-motion-fill);
+}
+body.csp-redesign.terrain-3d.map3d-moving{--map3d-motion-fill:var(--ui-surface);--map3d-motion-panel:var(--ui-rail)}
+body.terrain-3d.map3d-moving :is(#side,#ac,.coord-menu,.map-tool,.tool-popover,#snapshotStatus,.snap-sel-size,.snap-sel-bar,#ctl,#menu,#blk,#pointCloudPanel,.pc-head,.pane-drag-ghost,.ovgrp,#newBuild,.leaflet-control-zoom,.leaflet-control-zoom a,.leaflet-control-attribution,.leaflet-popup-content-wrapper,.leaflet-tooltip,#mapDock,#panes .grp,#side #q,#side #loc,#map3d .maplibregl-ctrl-attrib,#mkBar,#mkPop){
+  -webkit-backdrop-filter:none!important;backdrop-filter:none!important;
+}
+body.terrain-3d.map3d-moving :is(#ac,.coord-menu,.map-tool,.tool-popover,#snapshotStatus,.snap-sel-bar,#ctl,#menu,#blk,#pointCloudPanel,.pc-head,.pane-drag-ghost,#newBuild,.leaflet-control-zoom,.leaflet-control-zoom a,.leaflet-control-attribution,.leaflet-popup-content-wrapper,.leaflet-tooltip,#mapDock,#map3d .maplibregl-ctrl-attrib,#mkBar,#mkPop){background-color:var(--map3d-motion-fill)!important}
+body.terrain-3d.map3d-moving :is(#side,.ovgrp,#panes .grp){background-color:var(--map3d-motion-panel)!important}
+/* The selection-size label has white ink in every theme. */
+body.terrain-3d.map3d-moving .snap-sel-size{background-color:var(--ui-selection-size-solid)!important}
+/* Buttons share their capsule's material; preserve the selected markup ink. */
+.csp-glass body.csp-redesign.terrain-3d.map3d-moving :is(#mapDock .map-tool,.leaflet-control-zoom a){background-color:transparent!important}
+.csp-glass body.csp-redesign.terrain-3d.map3d-moving #mapDock #quickDraw[aria-pressed="true"]{background-color:var(--ui-accent)!important}
+@media (max-width:760px) and (orientation:portrait){
+  .csp-glass body.csp-redesign.terrain-3d.map3d-moving.collapsed #side{background-color:transparent!important}
+}
