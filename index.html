@@ -6024,10 +6024,12 @@ const elevTileUrl=(z,x,y)=>PROXY?api(`/api/elev/${z}/${x}/${y}.png`)
   :`https://s3.amazonaws.com/elevation-tiles-prod/terrarium/${z}/${x}/${y}.png`;
 
 /* Cache source tiles rather than assembled skirts: adjacent drapes share
-   four neighbours. The byte budget matches the old 48-skirt cache (~12.8 MB).
+   four neighbours. Keep 160 source grids (~40 MiB): the old 48-skirt
+   budget evicted the visible desktop set plus its neighbour ring, so changing
+   the light refetched elevation. Typed arrays do not use Safari canvas memory.
    Palette/light revisions are deliberately absent from meshKey. RequestPool
    deduplicates concurrent readers without letting one reader abort the others. */
-const ELEV_CACHE_BYTES=48*258*258*4;
+const ELEV_CACHE_BYTES=160*256*256*4;
 const newElevCache=()=>new CSPTilePipeline.RequestPool({concurrency:8,maxBytes:ELEV_CACHE_BYTES,ttl:Infinity});
 let elevCache=newElevCache();
 const drapeWorkers=new CSPTerrainDrapePool.Pool({

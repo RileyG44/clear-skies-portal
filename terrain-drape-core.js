@@ -1,9 +1,9 @@
 /* Float elevation skirts and shared 2D/3D spectrum colouring. No canvas or
    Terrarium re-encoding: engine grids keep their original Float32 precision. */
 (function(root,factory){
-  if(typeof module==="object"&&module.exports)module.exports=factory(require("./terrain-raster.js"),require("./elevation-bands.js"));
-  else root.CSPTerrainDrape=factory(root.CSPTerrainRaster,root.ElevationBands);
-})(typeof globalThis!=="undefined"?globalThis:this,function(raster,bands){
+  if(typeof module==="object"&&module.exports)module.exports=factory(require("./terrain-raster.js"),require("./elevation-bands.js"),require("./elevation-tile-core.js"));
+  else root.CSPTerrainDrape=factory(root.CSPTerrainRaster,root.ElevationBands,root.ElevationTileCore);
+})(typeof globalThis!=="undefined"?globalThis:this,function(raster,bands,elevation){
   "use strict";
   function skirt(tiles,size=256){
     const [centre,west,east,north,south]=tiles,n=size+2;
@@ -18,6 +18,9 @@
     grid.set((south||centre).subarray(south?0:(size-1)*size,south?size:size*size),(n-1)*n+1);
     // Match the former canvas skirt's four corners: nearest north/south cell.
     grid[0]=grid[1];grid[n-1]=grid[n-2];grid[(n-1)*n]=grid[(n-1)*n+1];grid[n*n-1]=grid[n*n-2];
+    // Raw Float32 sources can carry finite nodata sentinels. Match the old
+    // Terrarium alpha mask before either derivatives or spectrum colouring.
+    for(let i=0;i<grid.length;i++)if(!elevation.isElevation(grid[i]))grid[i]=NaN;
     return grid;
   }
   function elevationColours(elev,count,settings,out,width=count,stride=width,offset=0){

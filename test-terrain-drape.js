@@ -46,6 +46,18 @@ const clamped=drape.skirt([centre,null,null,null,null],size);
 assert.equal(clamped[0],centre[0]);assert.equal(clamped[n*n-1],centre[size*size-1]);
 assert.equal(clamped[n],centre[0]);assert.equal(clamped[n+n-1],centre[size-1]);
 assert.equal(centre[0],skirt[n+1],"Float32 precision survives, without Terrarium rounding");
+// Mask invalid values in the centre, neighbour edges and clamped corners,
+// without mutating the cached source floats or losing valid ocean depths.
+const invalid=Float32Array.from([-20000,-32768,-1e30,Infinity,-Infinity,NaN,-19999,-11000,0,1,2,3,4,5,6,7]);
+const masked=drape.skirt([invalid,invalid,invalid,invalid,invalid],size);
+assert(masked.every(v=>Number.isNaN(v)||require("./elevation-tile-core.js").isElevation(v)));
+for(let i=0;i<invalid.length;i++)assert.equal(masked[(Math.floor(i/size)+1)*n+i%size+1],i<6?NaN:invalid[i]);
+assert.equal(invalid[0],-20000,"source cache is never modified");
+const emptySettings={spectrumOn:true,level:10,span:25,spectrumAlpha:.48,bandState:{bands:[]}};
+for(const style of [...raster.STYLES,"spectrum"]){
+  const rgba=drape.render({style,size,tiles:[new Float32Array(16).fill(-32768)],groundRes:1,settings:emptySettings});
+  assert(rgba.every(v=>v===0),`${style} masks finite nodata instead of colouring ground`);
+}
 for(const spectrumOn of [false,true])for(const outline of [false,true])for(const feather of [0,12]){
   const state=bands.sanitizeState({unit:"m",bands:[
     {id:"below",enabled:true,operator:"below",max:12,color:"#e34046",opacity:.52,feather,outline:{enabled:outline,width:8,color:"#ffffff",opacity:.88}},
@@ -101,6 +113,22 @@ async function integrationTests(){
   const cancelledHit=new AbortController();cancelledHit.abort();await assert.rejects(sandbox.source(4,3,4,cancelledHit.signal),{name:"AbortError"});
   const pending=sandbox.source(4,7,4,c2.signal),reset=assert.rejects(pending,{name:"AbortError"});sandbox.clear();await reset;
   assert(rendered>=4);
+  // The reviewed 1280x800 slope view has 42 drapes. A 7x6 working set
+  // plus its four-neighbour ring exceeds the old 48-source budget. Exercise
+  // the actual page cache and proxy loader, then change lighting and palette.
+  sandbox.clear();sandbox.PROXY=true;sandbox.dnrElevationAvailable=()=>false;
+  sandbox.elevTileUrl=(z,x,y)=>`/api/elev/${z}/${x}/${y}.png`;
+  sandbox.imageBitmapFromBlob=async()=>({close(){}});
+  sandbox.scratch=()=>({getContext:()=>({clearRect(){},drawImage(){},getImageData:()=>({data:[]})})});
+  sandbox.ElevationTileCore={decodeTerrarium:()=>new Float32Array(256*256).fill(1200)};
+  let requests=0;const lighting={azimuth:315};sandbox.terrainLighting=()=>lighting;
+  sandbox.fetch=async()=>{requests++;return {ok:true,headers:{get:()=>null},blob:async()=>({})}};
+  const desktop=[];for(let y=40;y<46;y++)for(let x=40;x<47;x++)desktop.push([8,x,y]);
+  const draw=style=>Promise.all(desktop.map(coords=>sandbox.renderTile(style,...coords,c2.signal)));
+  await draw("slope");assert.equal(requests,68,"42 drapes share 68 source tiles including neighbours");
+  const initialRequests=requests;lighting.azimuth=120;await draw("slope");
+  assert.equal(requests-initialRequests,0,"desktop light change must make zero elevation requests");
+  await draw("spectrum");assert.equal(requests-initialRequests,0,"desktop palette change must make zero elevation requests");
   // Engine grids and their mixed quality ranks reach the drape unchanged.
   sandbox.clear();sandbox.PROXY=true;sandbox.dnrElevationAvailable=()=>true;sandbox.$=()=>({value:"auto"});
   let engineLoads=0;
