@@ -8,7 +8,7 @@ const GIB=1073741824, HOUR=3600000, YOUNG_MS=10*60000;
 /* Atomic replacements and a sweep's final check/unlink share a nonblocking
    gate across terrain workers. Writers return their result without persisting
    if busy; nobody waits on the HTTP thread, and young replacements cannot be
-   removed between an async lstat and unlink. */
+   removed between the final lstat and unlink. */
 const writeGate=new SharedArrayBuffer(4);
 const acquire=gate=>Atomics.compareExchange(new Int32Array(gate),0,0,-1)===0;
 const release=gate=>Atomics.store(new Int32Array(gate),0,0);
@@ -151,26 +151,31 @@ async function sweep(dir,{capBytes=maxGiB()*GIB,lowWater=.9,now=Date.now(),young
     if(out.bytes<=plan.targetBytes&&!plan.pinnedOverCap)break;
     if(!canEvict()){out.interrupted=true;break}
     if(!dryRun){
-      if(!acquire(gate))continue;
+      if(!acquire(gate)){await yieldIO();continue}
       deleting.add(entry.key);
+      let removed=false,rootRemoved=false;
       try{
+        /* This runs in the sweep worker. Never await with the exclusive gate
+           held: synchronous re-check/unlink confines writer skips to this
+           entry, and the yield below gives writers a gap between entries. */
         let unchanged=true;
         for(const part of entry.parts){
-          const st=await lstat(part.file),old=part.stat;
+          const st=fs.lstatSync(part.file),old=part.stat;
           if(!st||!st.isFile()||st.ino!==old.ino||st.size!==old.size||st.mtimeMs!==old.mtimeMs||
              st.atimeMs!==old.atimeMs||Date.now()-st.mtimeMs<youngMs){unchanged=false;break}
         }
-        if(!unchanged||!canEvict())continue;
-        for(const part of entry.parts){
-          await fsp.unlink(part.file);
+        if(unchanged&&canEvict())for(const part of entry.parts){
+          fs.unlinkSync(part.file);removed=true;
           out.bytes-=part.stat.size;out.evictedBytes+=part.stat.size;categories[entry.category].evictedBytes+=part.stat.size;
-          if(entry.category==="root"&&!part.file.endsWith(".meta")){out.rootBodiesEvicted++;onEvict(entry.key)}
+          if(entry.category==="root"&&!part.file.endsWith(".meta")){out.rootBodiesEvicted++;rootRemoved=true}
         }
       }catch(e){if(e.code!=="ENOENT")out.errors.push(e.message)}finally{deleting.delete(entry.key);release(gate)}
+      if(rootRemoved)onEvict(entry.key);
+      if(removed){out.evictedCount++;categories[entry.category].evictedCount++}
     }else{out.bytes-=entry.bytes;out.evictedBytes+=entry.bytes;categories[entry.category].evictedBytes+=entry.bytes;
-      if(entry.category==="root"&&entry.parts.some(p=>!p.file.endsWith(".meta")))out.rootBodiesEvicted++}
-    out.evictedCount++;categories[entry.category].evictedCount++;
-    if(out.evictedCount%32===0)await yieldIO();
+      if(entry.category==="root"&&entry.parts.some(p=>!p.file.endsWith(".meta")))out.rootBodiesEvicted++;
+      out.evictedCount++;categories[entry.category].evictedCount++}
+    if(!dryRun||out.evictedCount%32===0)await yieldIO();
   }
   out.overCap=out.bytes>capBytes;return out;
 }

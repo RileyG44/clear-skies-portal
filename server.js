@@ -978,7 +978,7 @@ async function startUsgsWarm(job){
           const out=await terrainPool.run("terrarium-tiff",{body},
             {priority:5,timeoutMs:15000,signal:controller.signal});
           fetched=true;available=true;
-          if(out){cachePut(nationalKey,200,"image/png",out.png);tileBytes+=out.png.length}
+          if(out){cachePut(nationalKey,200,"image/png",out.png,{coverage:out.coverage});tileBytes+=out.png.length}
           else cachePut(nationalKey,204,"image/png",Buffer.alloc(0));
         };
         const loadRaw=async()=>{
@@ -987,7 +987,7 @@ async function startUsgsWarm(job){
           const out=await terrainPool.run("raw-elevation",{...t,size:256},
             {priority:5,timeoutMs:45000,signal:controller.signal});
           fetched=true;available=true;
-          if(out){cachePut(rawKey,200,"image/png",out.png);tileBytes+=out.png.length}
+          if(out){cachePut(rawKey,200,"image/png",out.png,{coverage:out.coverage});tileBytes+=out.png.length}
           else cachePut(rawKey,204,"image/png",Buffer.alloc(0));
         };
         const work=[loadNational()];
@@ -1392,7 +1392,7 @@ const server = http.createServer(async (req,res)=>{
         cachePut(ck,204,"image/png",Buffer.alloc(0));
         return send(res,200,"image/png",TRANSPARENT,{"X-Coverage":"none","X-Elevation-Source":"none","Cache-Control":"public, max-age=604800, immutable"});
       }
-      cachePut(ck,200,"image/png",out.png);
+      cachePut(ck,200,"image/png",out.png,{coverage:out.coverage});
       return send(res,200,"image/png",out.png,{"X-Coverage":String(out.coverage),"X-Elevation-Source":"3dep",
         "X-Cache":"miss","Cache-Control":"public, max-age=604800, immutable"});
     }
@@ -1411,6 +1411,20 @@ const server = http.createServer(async (req,res)=>{
       if(hit) return hit.status===204
         ? send(res,200,"image/png",SEA_LEVEL_DEM,{"X-Cache":"hit","X-Coverage":"none","X-Elevation-Source":"none","Cache-Control":"public, max-age=604800, immutable"})
         : send(res,hit.status,hit.type,hit.body,{"X-Cache":"hit","X-Elevation-Source":"cached","Cache-Control":"public, max-age=604800, immutable"});
+      /* Saved areas pin these exact 256 px Terrarium worker products, not
+         the underlying COG ranges. Reuse them before any raw/network work;
+         a raw no-coverage marker still falls through to the national DEM. */
+      const rawHit=z>=13?cacheGet(key(`usgselev:${z}/${x}/${y}`),TTL_TILE):null;
+      const saved=rawHit&&rawHit.status===200?rawHit:cacheGet(key(`elevation-national-v1:${z}/${x}/${y}`),TTL_TILE);
+      if(saved&&(saved.status===200||saved.status===204)){
+        cachePut(ck,saved.status,saved.type,saved.body,saved.sourceMeta);
+        if(saved.status===204)return send(res,200,"image/png",SEA_LEVEL_DEM,
+          {"X-Cache":"hit","X-Coverage":"none","X-Elevation-Source":"none","Cache-Control":"public, max-age=604800, immutable"});
+        const headers={"X-Cache":"hit","X-Elevation-Source":saved===rawHit?"usgs-1m":"3dep","Cache-Control":"public, max-age=604800, immutable"};
+        // Older saved bodies have no coverage metadata, just like older hits.
+        if(saved.sourceMeta&&saved.sourceMeta.coverage!=null)headers["X-Coverage"]=String(saved.sourceMeta.coverage);
+        return send(res,saved.status,saved.type,saved.body,headers);
+      }
       let out=null;
       try{
         let raw=null;
@@ -1525,7 +1539,7 @@ const server = http.createServer(async (req,res)=>{
       }
       if(!out){ cachePut(ck,204,"image/png",Buffer.alloc(0));
                 return send(res,200,"image/png",TRANSPARENT,{"X-Coverage":"none","Cache-Control":"public, max-age=604800, immutable"}) }
-      cachePut(ck,200,"image/png",out.png);
+      cachePut(ck,200,"image/png",out.png,{coverage:out.coverage});
       /* Mirror the tile route: say which project and what ground resolution were
          actually used, so the client can size its zoom ceiling to the source
          rather than to a fixed z. */

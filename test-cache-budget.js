@@ -93,6 +93,37 @@ async function warmKeyChecks(){
     assert.equal(budget.guardedWrite(gate,()=>{}),true);
     assert.equal((await budget.sweep(locked,{capBytes:1,gate})).evictedCount,1);
     assert.equal(budget.guardedWrite(gate,()=>budget.guardedWrite(gate,()=>{})),true,"independent writes may overlap");checks++;
+    /* Every asynchronous filesystem boundary must leave the gate available.
+       Schedule a real cache write at each deletion: the per-entry yield must
+       persist it before the next deletion, not once the sweep has finished. */
+    const gaps=temp(),gapGate=new SharedArrayBuffer(4),state=new Int32Array(gapGate);
+    for(let i=0;i<40;i++)await pair(gaps,sha1("gap-"+i),10);
+    const asyncStat=fsp.lstat,asyncUnlink=fsp.unlink,syncUnlink=fs.unlinkSync;
+    let persisted=0,removed=0;
+    fsp.lstat=async(...args)=>{assert.equal(Atomics.load(state,0),0,"async lstat must not hold gate");return asyncStat.apply(fsp,args)};
+    fsp.unlink=async(...args)=>{assert.equal(Atomics.load(state,0),0,"async unlink must not hold gate");return asyncUnlink.apply(fsp,args)};
+    fs.unlinkSync=(target,...args)=>{
+      assert.equal(Atomics.load(state,0),-1,"final unlink must exclude replacements");
+      const result=syncUnlink.call(fs,target,...args);
+      if(!target.endsWith(".meta")){
+        assert.equal(persisted,removed,"writers must persist between entries");removed++;
+        setImmediate(()=>{
+          assert(budget.guardedWrite(gapGate,()=>fs.writeFileSync(path.join(gaps,"writer.txt"),String(++persisted))));
+        });
+      }
+      return result;
+    };
+    try{
+      const gapsResult=await budget.sweep(gaps,{capBytes:1,gate:gapGate,onEvict:()=>assert.equal(Atomics.load(state,0),0)});
+      assert.equal(gapsResult.evictedCount,40);assert.equal(persisted,40);assert.equal(Atomics.load(state,0),0);
+    }finally{fsp.lstat=asyncStat;fsp.unlink=asyncUnlink;fs.unlinkSync=syncUnlink}
+    checks++;
+    const replaced=temp(),replacement=await file(replaced,sha1("replacement"),50);let firstCheck=true;
+    const race=await budget.sweep(replaced,{capBytes:1,canEvict:()=>{
+      if(firstCheck){firstCheck=false;fs.writeFileSync(replacement,Buffer.alloc(51))}return true;
+    }});
+    assert.equal(race.evictedCount,0,"final re-check must preserve a newly written body");
+    assert.equal(fs.statSync(replacement).size,51);checks++;
     /* Exercise fetchRange's real cache-hit path; an exact-length fixture
        avoids S3 and must update only its access time. */
     const rangeDir=temp(),usgs=require("./usgs.js"),rangeKey="fixture.tif",a0=0,b0=9;
