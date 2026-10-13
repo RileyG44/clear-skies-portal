@@ -84,7 +84,8 @@ that do not allow browser requests (WA DNR, Macrostrat, and SNODAS), for renderi
 raw USGS 1 m DEMs, and for resumable offline-area downloads. When the page itself
 comes from `server.js` or Electron, it connects automatically.
 
-The engine limits disposable disk cache files to 15 GiB (`CSP_CACHE_MAX_GB`).
+The engine limits disposable disk cache files to 15 GiB (`CSP_CACHE_MAX_GB`);
+the macOS service installer raises its own engine to 20 GiB.
 Background sweeps evict the least recently used tiles and USGS COG ranges down
 to 90% of that cap. Saved offline areas are pinned, even if they exceed the
 cap; the WA DNR store is separate and excluded. `CSP_CACHE_MIN_FREE_GB` (default

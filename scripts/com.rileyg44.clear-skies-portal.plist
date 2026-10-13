@@ -23,6 +23,8 @@
     <string>4</string>
     <key>CSP_CACHE_MIN_FREE_GB</key>
     <string>8</string>
+    <key>CSP_CACHE_MAX_GB</key>
+    <string>20</string>
   </dict>
   <key>RunAtLoad</key>
   <true/>
