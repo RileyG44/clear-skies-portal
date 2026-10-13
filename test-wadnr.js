@@ -132,6 +132,20 @@ function sourceChoiceChecks(){
   assert(auto.rawEndpoint&&auto.nationalEndpoint,"USGS remains the active default outside fetched areas");
   context.$=()=>({value:"3dep"});assert.equal(context.elevationSourceOptions().rawEndpoint,null);
   assert.equal(context.elevationSourceOptions().dnrAcquire,false);
+  // Exercise the real gating/masking helpers, not stubs: a fetched box that
+  // covers the west half of a z14 tile must mask the east half to NaN.
+  const helpers=html.slice(html.indexOf('const DNR_AREA_KEY='),html.indexOf("function elevationSourceOptions(){"));
+  const hctx={localStorage:{getItem:()=>JSON.stringify([{bbox:[-120.2,47.4,-120.15,47.5]}])},dnrElevationAvailable:()=>true};
+  vm.createContext(hctx);vm.runInContext(helpers+';this.__h={dnrAreas,tileBbox,bboxIntersects,bboxContains,maskDnrGrid,dnrTileAllowed}',hctx);Object.assign(hctx,hctx.__h);
+  assert.equal(hctx.dnrAreas.length,1);
+  assert.equal(hctx.bboxContains(hctx.dnrAreas[0].bbox,[-120.19,47.41,-120.16,47.49]),true);
+  const grid=new Float32Array(256*256).fill(100);
+  assert(hctx.bboxIntersects(hctx.tileBbox(14,2723,5731),hctx.dnrAreas[0].bbox),"fixture tile overlaps the fetched box");
+  const masked=hctx.maskDnrGrid(grid,256,256,{z:14,x:2723,y:5731});
+  assert(masked.some(v=>v===100)&&masked.some(v=>Number.isNaN(v)),"boundary tile is masked per-pixel, not dropped whole");
+  const empty=hctx.maskDnrGrid(new Float32Array(4).fill(7),2,2,{z:14,x:2800,y:5800});
+  assert(empty.every(v=>Number.isNaN(v)),"a tile outside every fetched area contributes no DNR pixels");
+  assert.equal(hctx.dnrTileAllowed({z:14,x:2800,y:5800}),false,"outside tiles never request DNR");
 }
 async function httpChecks(fixture){
   const dir=path.join(fixture.cacheDir,"wadnr");

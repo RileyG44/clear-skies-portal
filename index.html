@@ -5697,6 +5697,7 @@ function dnrAreasKey(){return dnrAreas.map(a=>a.bbox.map(v=>v.toFixed(5)).join("
 function tileBbox(z,x,y){const n=2**z,lon=xx=>xx/n*360-180,lat=yy=>Math.atan(Math.sinh(Math.PI*(1-2*yy/n)))*180/Math.PI;
   return [lon(x),lat(y+1),lon(x+1),lat(y)]}
 function bboxIntersects(a,b){return a[0]<b[2]&&a[2]>b[0]&&a[1]<b[3]&&a[3]>b[1]}
+function bboxContains(outer,inner){return outer[0]<=inner[0]&&outer[1]<=inner[1]&&outer[2]>=inner[2]&&outer[3]>=inner[3]}
 function dnrTileAllowed(coords){return dnrElevationAvailable()&&dnrAreas.some(a=>bboxIntersects(tileBbox(coords.z,coords.x,coords.y),a.bbox))}
 function maskDnrGrid(grid,w,h,coords){
   const tb=tileBbox(coords.z,coords.x,coords.y);
@@ -8191,7 +8192,7 @@ function warmPreview(){
 }
 
 /* ---- WA DNR fetched areas: explicit, map-anchored selection ------------- */
-let dnrSelRect=null,dnrSelHandles=[],dnrSelBbox=null,dnrAreaLayer=null,dnrFetchPoll=null;
+let dnrSelRect=null,dnrSelHandles=[],dnrSelBbox=null,dnrAreaLayer=null,dnrFetchPoll=null,dnrFetchToken=0;
 function dnrMsg(text){const el=$("#dnrAreaMsg");if(el)el.textContent=text}
 function paintDnrAreas(){
   if(dnrAreaLayer)map.removeLayer(dnrAreaLayer);
@@ -8238,8 +8239,10 @@ $("#dnrSelect").onclick=()=>{
 $("#dnrFetch").onclick=async()=>{
   if(!dnrSelBbox)return;
   const bbox=[...dnrSelBbox];
-  const cells=Math.max(1,Math.round(Math.abs(bbox[2]-bbox[0])/360*65536)*Math.round(Math.abs(bbox[3]-bbox[1])/360*65536));
+  const zn=65536,tx=lon=>Math.floor((lon+180)/360*zn),ty=lat=>Math.floor((1-Math.asinh(Math.tan(lat*Math.PI/180))/Math.PI)/2*zn);
+  const cells=Math.max(1,(tx(bbox[2])-tx(bbox[0])+1)*(ty(bbox[1])-ty(bbox[3])+1));
   if(cells>512&&!confirm(`This WA DNR area covers about ${cells.toLocaleString()} acquisition cells and may download several large surveys. Continue?`))return;
+  const token=++dnrFetchToken;
   const btn=$("#dnrFetch");btn.disabled=true;dnrMsg("Starting WA DNR download for the selected area…");
   try{
     const r=await fetch(api("/api/wadnr/warm"),{method:"POST",body:JSON.stringify({bbox})});
@@ -8247,20 +8250,26 @@ $("#dnrFetch").onclick=async()=>{
   }catch(error){btn.disabled=false;dnrMsg(`Could not start WA DNR download: ${error.message}`);return}
   clearInterval(dnrFetchPoll);
   dnrFetchPoll=setInterval(async()=>{
+    if(token!==dnrFetchToken){clearInterval(dnrFetchPoll);return}
     try{
       const r=await fetch(api("/api/wadnr/warm/status"));if(!r.ok)throw new Error(`HTTP ${r.status}`);
-      const s=await r.json();dnrStatus=s.acquisition;
+      const s=await r.json();if(token!==dnrFetchToken){clearInterval(dnrFetchPoll);return}
+      dnrStatus=s.acquisition;
+      const complete=!s.running&&!s.error&&!s.stop&&s.total>0&&s.done>=s.total;
       dnrMsg(s.running?`Downloading WA DNR: ${s.done}/${s.total} areas. ${dnrAcquisitionText()}`:
         s.error?`WA DNR download could not complete: ${s.error}`:
-        `WA DNR ready in the selected area (${fmtMB(s.bytes)} added). It now applies only inside that box.`);
+        complete?`WA DNR ready in the selected area (${fmtMB(s.bytes)} added). It now applies only inside that box.`:
+        "WA DNR download stopped before the whole area finished; nothing was applied. Fetch again to retry.");
       if(!s.running){clearInterval(dnrFetchPoll);dnrFetchPoll=null;btn.disabled=false;
-        if(!s.error){if(!dnrAreas.some(a=>a.bbox.every((v,i)=>v===bbox[i])))dnrAreas.push({bbox,at:Date.now()});
+        if(complete){if(!dnrAreas.some(a=>a.bbox.every((v,i)=>v===bbox[i])))dnrAreas.push({bbox,at:Date.now()});
           saveDnrAreas();clearDnrSelection();paintDnrAreas();resetMeshSources();applyTerrain(true);
           if(elevationActive())applyElev();schedule3dStyle();scheduleDnrStatus();}}
-    }catch(error){clearInterval(dnrFetchPoll);dnrFetchPoll=null;btn.disabled=false;dnrMsg(`WA DNR download status unavailable: ${error.message}`)}
+    }catch(error){if(token!==dnrFetchToken)return;clearInterval(dnrFetchPoll);dnrFetchPoll=null;btn.disabled=false;dnrMsg(`WA DNR download status unavailable: ${error.message}`)}
   },2000);
 };
 $("#dnrClear").onclick=()=>{
+  dnrFetchToken++;clearInterval(dnrFetchPoll);dnrFetchPoll=null;
+  const f=$("#dnrFetch");if(f)f.disabled=true;
   dnrAreas=[];saveDnrAreas();clearDnrSelection();paintDnrAreas();
   resetMeshSources();applyTerrain(true);if(elevationActive())applyElev();schedule3dStyle();
 };
@@ -9759,7 +9768,9 @@ async function runFabric(){
   let j;
   try{
     const view=[b.getWest(),b.getSouth(),b.getEast(),b.getNorth()];
-    const dnr=dnrElevationAvailable()&&dnrAreas.some(a=>bboxIntersects(view,a.bbox));
+    // DNR fabric has no per-pixel area mask, so it may only run when the
+    // whole measured view sits inside a fetched area.
+    const dnr=dnrElevationAvailable()&&dnrAreas.some(a=>bboxContains(a.bbox,view));
     const path=dnr?"/api/wadnr/fabric":"/api/usgs/fabric";
     const r=await fetch(api(`${path}?bbox=${view.map(v=>v.toFixed(5)).join(",")}&lo=${lo}&hi=${hi}&strict=0`));
     j=await r.json();
