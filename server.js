@@ -11,6 +11,7 @@ const crypto= require("crypto");
 const net   = require("net");
 const zlib  = require("zlib");
 const usgs  = require("./usgs.js");
+const cog   = require("./cog.js");
 const cacheBudgetCore=require("./cache-budget.js");
 const {TerrainPool,TerrainPoolError}=require("./terrain-pool.js");
 const researchAnalysis=require("./research-analysis.js");
@@ -1493,10 +1494,17 @@ const server = http.createServer(async (req,res)=>{
       if(action==="dnr-fabric"){
         try{const areas=JSON.parse(u.searchParams.get("areas")||"[]");
           if(Array.isArray(areas)){
-            // The fabric grid expands past the viewport; keep every fetched
-            // box that can intersect that footprint, not just the first few.
-            const pad=Math.max(bs[2]-bs[0],bs[3]-bs[1]);
-            opt.areas=areas.filter(a=>validBbox(a)&&a[0]<bs[2]+pad&&a[2]>bs[0]-pad&&a[1]<bs[3]+pad&&a[3]>bs[1]-pad).slice(0,256);
+            // Keep every fetched box intersecting the actual sampling
+            // footprint: the square UTM grid usgs.fabric builds from bs.
+            const zone=cog.utmZone((bs[0]+bs[2])/2);
+            const cs=bs.length?[[bs[0],bs[1]],[bs[2],bs[1]],[bs[0],bs[3]],[bs[2],bs[3]]].map(([x,y])=>cog.lonLatToUTM(x,y,zone)):[];
+            const minE=Math.min(...cs.map(p=>p.e)),maxE=Math.max(...cs.map(p=>p.e));
+            const minN=Math.min(...cs.map(p=>p.n)),maxN=Math.max(...cs.map(p=>p.n));
+            const fn=Math.max(48,Math.min(320,(opt.n|0)||192));
+            const res=Math.max((maxE-minE)/fn,(maxN-minN)/fn,1);
+            const fc=[[minE,minN],[minE+fn*res,minN],[minE,minN+fn*res],[minE+fn*res,minN+fn*res]].map(([x,y])=>cog.utmToLonLat(x,y,zone));
+            const fp=[Math.min(...fc.map(p=>p.lon)),Math.min(...fc.map(p=>p.lat)),Math.max(...fc.map(p=>p.lon)),Math.max(...fc.map(p=>p.lat))];
+            opt.areas=areas.filter(a=>validBbox(a)&&a[0]<fp[2]&&a[2]>fp[0]&&a[1]<fp[3]&&a[3]>fp[1]).slice(0,256);
           }}catch{}
       }
       opt.strict=u.searchParams.get("strict")==="1";
