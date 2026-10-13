@@ -116,4 +116,22 @@ assert(take('endSnapshotSelect','snapPoint').includes('cursorSelectionClosed()')
     assert.equal(flat.snapshotCursorLocation,null,`2D ${type} during selection drops the stale export point`);
   }
 }
-console.log('map readout checks passed (tile sampling, no-data, wrap, export option, streamed position, renderer palettes and units, 3D readout gated on camera motion, selection and exit lifecycle)');
+/* The export decides cursor-or-centre once, before it awaits elevation and
+   keys: a camera move during those awaits drops snapshotCursorLocation. */
+(async()=>{
+  const readoutStart=source.indexOf('async function createSnapshotReadout(');
+  const exportEnv={snapshotCursorLocation:{lat:30,lng:40},map3d:null,PROXY:false,cursorTiles:new Map(),setTimeout,clearTimeout,AbortController,
+    map:{containerPointToLatLng:()=>({lat:50,lng:60})},L:{point:p=>p},cursorLoadedElevation:()=>null,cursorTileSample:()=>null,
+    cursorTileAddress:()=>({coords:{z:1,x:0,y:0},key:'k'}),cursorCoordinates:ll=>`${ll.lat},${ll.lng}`,readoutColourKeys:()=>[]};
+  let elevation,keys;
+  exportEnv.publicElevationWithFallback=()=>new Promise(r=>elevation=r);exportEnv.loadSnowColourKeys=()=>new Promise(r=>keys=r);
+  vm.createContext(exportEnv);vm.runInContext(source.slice(readoutStart,source.indexOf('function drawSnapshotReadout(')),exportEnv);
+  const spec={sel:{x:0,y:0,w:10,h:10}},pendingExport=exportEnv.createSnapshotReadout(spec);
+  exportEnv.snapshotCursorLocation=null;elevation(null);await new Promise(r=>setImmediate(r));
+  exportEnv.snapshotCursorLocation=null;keys();
+  const info=await pendingExport;
+  assert.equal(info.coordinates,'30,40');assert.equal(info.note,'Cursor location','a move during the export cannot relabel the cursor point');
+  const centre=exportEnv.createSnapshotReadout(spec);elevation(null);await new Promise(r=>setImmediate(r));keys();
+  const fallback=await centre;assert.equal(fallback.coordinates,'50,60');assert.equal(fallback.note,'Selection center');
+  console.log('map readout checks passed (tile sampling, no-data, wrap, export option, streamed position, renderer palettes and units, 3D readout gated on camera motion, selection and exit lifecycle, export label frozen before its awaits)');
+})().catch(error=>{console.error(error);process.exit(1)});

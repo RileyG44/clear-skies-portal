@@ -9840,7 +9840,11 @@ function offerNewBuild(){
 /* Desktop cursor readout and keys use the same geographic grids and colour
    definitions as the map. Camera exports freeze this model once per save. */
 async function createSnapshotReadout(spec){
-  const ll=snapshotCursorLocation||(()=>{
+  /* Chosen once: a camera move while this awaits the elevation or the keys
+     drops snapshotCursorLocation, and reading it again for the label then
+     called the cursor's coordinates the selection centre. */
+  const cursor=snapshotCursorLocation;
+  const ll=cursor||(()=>{
     const p=[spec.sel.x+spec.sel.w/2,spec.sel.y+spec.sel.h/2];
     return map3d?map3d.unproject(p):map.containerPointToLatLng(L.point(p));
   })();
@@ -9860,7 +9864,7 @@ async function createSnapshotReadout(spec){
   }
   await loadSnowColourKeys();
   return {coordinates:cursorCoordinates(location),elevation:sample?`Elevation ≈ ${Math.round(sample.value/.3048).toLocaleString()} ft`:"Elevation unavailable",
-    note:snapshotCursorLocation?"Cursor location":"Selection center",keys:readoutColourKeys()};
+    note:cursor?"Cursor location":"Selection center",keys:readoutColourKeys()};
 }
 function drawSnapshotReadout(ctx,spec,blockX=0,blockY=0){
   const info=spec.readout;if(!info)return;
