@@ -8244,28 +8244,33 @@ $("#dnrFetch").onclick=async()=>{
   if(cells>512&&!confirm(`This WA DNR area covers about ${cells.toLocaleString()} acquisition cells and may download several large surveys. Continue?`))return;
   const token=++dnrFetchToken;
   const btn=$("#dnrFetch");btn.disabled=true;dnrMsg("Starting WA DNR download for the selected area…");
+  let jobId=null;
   try{
     const r=await fetch(api("/api/wadnr/warm"),{method:"POST",body:JSON.stringify({bbox})});
     const value=await r.json();if(!r.ok)throw new Error(value.error||`HTTP ${r.status}`);
+    jobId=value.id||null;
   }catch(error){btn.disabled=false;dnrMsg(`Could not start WA DNR download: ${error.message}`);return}
+  if(token!==dnrFetchToken)return; // cleared while the fetch was starting
   clearInterval(dnrFetchPoll);
-  dnrFetchPoll=setInterval(async()=>{
-    if(token!==dnrFetchToken){clearInterval(dnrFetchPoll);return}
+  const poll=setInterval(async()=>{
+    if(token!==dnrFetchToken){clearInterval(poll);return}
     try{
       const r=await fetch(api("/api/wadnr/warm/status"));if(!r.ok)throw new Error(`HTTP ${r.status}`);
-      const s=await r.json();if(token!==dnrFetchToken){clearInterval(dnrFetchPoll);return}
+      const s=await r.json();if(token!==dnrFetchToken){clearInterval(poll);return}
+      if(jobId&&s.id&&s.id!==jobId)return; // another fetch owns the status now
       dnrStatus=s.acquisition;
-      const complete=!s.running&&!s.error&&!s.stop&&s.total>0&&s.done>=s.total;
+      const complete=!s.running&&!s.error&&!s.stop&&s.total>0&&s.done>=s.total&&(!jobId||s.id===jobId);
       dnrMsg(s.running?`Downloading WA DNR: ${s.done}/${s.total} areas. ${dnrAcquisitionText()}`:
         s.error?`WA DNR download could not complete: ${s.error}`:
         complete?`WA DNR ready in the selected area (${fmtMB(s.bytes)} added). It now applies only inside that box.`:
         "WA DNR download stopped before the whole area finished; nothing was applied. Fetch again to retry.");
-      if(!s.running){clearInterval(dnrFetchPoll);dnrFetchPoll=null;btn.disabled=false;
+      if(!s.running){clearInterval(poll);if(dnrFetchPoll===poll)dnrFetchPoll=null;btn.disabled=false;
         if(complete){if(!dnrAreas.some(a=>a.bbox.every((v,i)=>v===bbox[i])))dnrAreas.push({bbox,at:Date.now()});
           saveDnrAreas();clearDnrSelection();paintDnrAreas();resetMeshSources();applyTerrain(true);
           if(elevationActive())applyElev();schedule3dStyle();scheduleDnrStatus();}}
-    }catch(error){if(token!==dnrFetchToken)return;clearInterval(dnrFetchPoll);dnrFetchPoll=null;btn.disabled=false;dnrMsg(`WA DNR download status unavailable: ${error.message}`)}
+    }catch(error){if(token!==dnrFetchToken)return;clearInterval(poll);if(dnrFetchPoll===poll)dnrFetchPoll=null;btn.disabled=false;dnrMsg(`WA DNR download status unavailable: ${error.message}`)}
   },2000);
+  dnrFetchPoll=poll;
 };
 $("#dnrClear").onclick=()=>{
   dnrFetchToken++;clearInterval(dnrFetchPoll);dnrFetchPoll=null;
@@ -9351,7 +9356,20 @@ const ElevLayer = L.GridLayer.extend({
   },
   setSourceOptions:function(options){
     if(this.options.sourceKey===options.sourceKey)return;
+    // A changed fetched-area set must drop DNR-derived pixels at once, even
+    // if their replacements later fail; other source changes keep the
+    // keep-visible-until-replacement behaviour below.
+    const dnrSeg=k=>{const m=/dnr:[^|]*/.exec(k||"");return m?m[0]:""};
+    const dnrChanged=dnrSeg(this.options.sourceKey)!==dnrSeg(options.sourceKey);
     Object.assign(this.options,options);
+    if(dnrChanged){
+      this._store.clear();
+      for(const tile of Object.values(this._tiles||{})){
+        const el=tile.el;if(!el?.width)continue;
+        el.getContext("2d")?.clearRect(0,0,el.width,el.height);
+        el._cspHasContent=false;el._cspSourceCounts={};el._cspSurveySources={};delete el.dataset.cspQuality;
+      }
+    }
     // Keep existing canvases visible until their first replacement arrives.
     // Repaint in place; source changes do not rebuild the Leaflet tile grid.
     for(const tile of Object.values(this._tiles||{})){
@@ -9768,11 +9786,12 @@ async function runFabric(){
   let j;
   try{
     const view=[b.getWest(),b.getSouth(),b.getEast(),b.getNorth()];
-    // DNR fabric has no per-pixel area mask, so it may only run when the
-    // whole measured view sits inside a fetched area.
-    const dnr=dnrElevationAvailable()&&dnrAreas.some(a=>bboxContains(a.bbox,view));
+    // The DNR fabric sampler masks each sample to fetched areas and fills
+    // the rest from USGS, so a partly-overlapping view is safe to measure.
+    const dnr=dnrElevationAvailable()&&dnrAreas.some(a=>bboxIntersects(view,a.bbox));
     const path=dnr?"/api/wadnr/fabric":"/api/usgs/fabric";
-    const r=await fetch(api(`${path}?bbox=${view.map(v=>v.toFixed(5)).join(",")}&lo=${lo}&hi=${hi}&strict=0`));
+    const areas=dnr?`&areas=${encodeURIComponent(JSON.stringify(dnrAreas.map(a=>a.bbox)))}`:"";
+    const r=await fetch(api(`${path}?bbox=${view.map(v=>v.toFixed(5)).join(",")}&lo=${lo}&hi=${hi}&strict=0${areas}`));
     j=await r.json();
   }catch(e){ el.innerHTML='<span class="warn">Measurement failed.</span>'; return }
   if(!j.ok){ el.innerHTML=`<span class="warn">${j.reason||"no result"}</span>`; return }

@@ -99,7 +99,7 @@ class DnrStore {
     const west=tx(bbox[0]),east=tx(bbox[2]),north=ty(bbox[3]),south=ty(bbox[1]);
     const total=(east-west+1)*(south-north+1);
     if(total>4096)throw new Error("A WA DNR fetch is limited to 4096 acquisition cells; split a larger area into multiple fetches");
-    const state=this.warm={running:true,total,done:0,bytes:0,error:null,stop:false};
+    const state=this.warm={id:`${Date.now().toString(36)}-${Math.random().toString(36).slice(2,8)}`,running:true,total,done:0,bytes:0,error:null,stop:false};
     const before=this.status().bytes;
     (async()=>{
       for(let y=north;y<=south;y++)for(let x=west;x<=east;x++){

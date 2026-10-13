@@ -15,7 +15,7 @@ function loadDnrIndex(){
   if(stamp!==dnrIndexStamp){dnrIndex=JSON.parse(fs.readFileSync(file,"utf8"));dnrIndexStamp=stamp;}
   return dnrIndex.files||[];
 }
-async function dnrFabricGrid(minE,minN,res,n,zone,strict){
+async function dnrFabricGrid(minE,minN,res,n,zone,strict,areas){
   const files=loadDnrIndex(),grid=new Float64Array(n*n).fill(NaN),sources=new Set();
   if(files.length){
     dnrRuntime ||= require("./vendor/dnr-runtime.cjs");
@@ -24,6 +24,9 @@ async function dnrFabricGrid(minE,minN,res,n,zone,strict){
     const scale=2**z,groups=new Map();
     for(let j=0;j<n;j++)for(let i=0;i<n;i++){
       const p=cog.utmToLonLat(minE+i*res,minN+j*res,zone);
+      // Fetched-area mask: samples outside every fetched box never take DNR
+      // values; the USGS fallback below fills those samples instead.
+      if(Array.isArray(areas)&&areas.length&&!areas.some(a=>p.lon>=a[0]&&p.lon<=a[2]&&p.lat>=a[1]&&p.lat<=a[3]))continue;
       const px=(p.lon+180)/360*scale,py=(1-Math.asinh(Math.tan(p.lat*Math.PI/180))/Math.PI)/2*scale;
       const x=Math.floor(px),y=Math.floor(py),key=x+"/"+y;
       if(!groups.has(key))groups.set(key,{x,y,points:[]});
@@ -104,7 +107,7 @@ async function execute(action,args){
   if(action==="raw-terrain") return usgs.renderTile(args.style,args.z,args.x,args.y,args.size||256);
   if(action==="fabric") return usgs.fabric(args.bbox,args.options||{});
   if(action==="dnr-fabric")return usgs.fabric(args.bbox,{...args.options,
-    sample:(e,n,res,size,zone)=>dnrFabricGrid(e,n,res,size,zone,args.options?.strict)});
+    sample:(e,n,res,size,zone)=>dnrFabricGrid(e,n,res,size,zone,args.options?.strict,args.options?.areas)});
   if(action==="terrarium-tiff") return terrariumFromTiff(args.body);
   if(action==="research-analysis") return researchAnalysis.encodeResult(researchAnalysis.run(args));
   throw new Error(`unknown terrain action: ${action}`);

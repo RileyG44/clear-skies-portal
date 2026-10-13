@@ -65,6 +65,7 @@ async function warmAreaChecks(){
   // 0.2 x 0.2 degrees is ~1,700 z16 cells: far beyond the old 32-cell
   // viewport cap, and an explicit fetch must be allowed to cover it.
   const warm=store.startWarm([-130,40,-129.8,40.2]);
+  assert(warm.id,"every warm job carries an id so clients can tell jobs apart");
   assert(warm.total>32&&warm.total<=4096,`explicit area fetch spans ${warm.total} cells`);
   for(let i=0;i<100&&store.warm.running;i++)await new Promise(r=>setTimeout(r,10));
   assert.equal(store.warm.error,null);assert.equal(store.warm.done,warm.total,"empty cells finish without downloads");

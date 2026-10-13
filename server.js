@@ -1490,6 +1490,10 @@ const server = http.createServer(async (req,res)=>{
       const opt={ n:+u.searchParams.get("n")||0,
                   lo:+u.searchParams.get("lo")||0, hi:+u.searchParams.get("hi")||0 };
       const action=p==="/api/wadnr/fabric"?"dnr-fabric":"fabric";
+      if(action==="dnr-fabric"){
+        try{const areas=JSON.parse(u.searchParams.get("areas")||"[]");
+          if(Array.isArray(areas))opt.areas=areas.filter(a=>validBbox(a)).slice(0,16);}catch{}
+      }
       opt.strict=u.searchParams.get("strict")==="1";
       let out; try{ out=await terrainTask(`${action}:${dnr.index.revision}:${key(JSON.stringify([bs,opt]))}`,action,{bbox:bs,options:opt},
         {priority:20,timeoutMs:45000,finishOnAbort:false},client.signal) }

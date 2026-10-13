@@ -106,7 +106,7 @@ async function main(){
   let cleared=0;dcanvas.getContext=()=>({clearRect:()=>cleared++});
   dnr._tiles={test:{current:true,coords:dc,el:dcanvas}};context.dnrStatus={revision:2};
   dnr.setSourceOptions({sourceKey:'strict:2',dnrEndpoint:'/api/wadnr/elev',dnrAcquire:true,rawEndpoint:null,nationalEndpoint:null,fallback:null});
-  assert.equal(cleared,1);assert.equal(dnr._store.has('15/41/42'),false,'strict mode immediately releases the prior mixed elevation data');
+  assert.ok(cleared>=1);assert.equal(dnr._store.has('15/41/42'),false,'a changed DNR area set immediately releases the prior mixed elevation data');
   await tick();
   deferred.get('engine/api/wadnr/elev/15/41/42.png?acquire=0&revision=2')({
     grid:new Float32Array([51,NaN,51,NaN]),width:2,height:2});await tick();
