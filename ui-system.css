@@ -2171,6 +2171,45 @@ body.csp-redesign #dnrClear[hidden]{display:none}
   body.csp-redesign #panes input[type=range]{min-height:44px}
 }
 
+/* The closed field and its open picker share the same material. Customizable
+   native selects keep browser keyboard, focus, and selection behavior. */
+@supports (appearance:base-select){
+  body.csp-redesign :is(#side,#pointCloudPanel,#snapshotPanel) select,
+  body.csp-redesign :is(#side,#pointCloudPanel,#snapshotPanel) select::picker(select){appearance:base-select}
+  body.csp-redesign :is(#side,#pointCloudPanel,#snapshotPanel) select{
+    display:flex;align-items:center;gap:10px;padding-right:12px;background-image:none;
+  }
+  body.csp-redesign :is(#side,#pointCloudPanel,#snapshotPanel) select::picker-icon{
+    content:"";width:7px;height:7px;flex:none;margin-left:auto;margin-right:3px;
+    border-right:1.5px solid var(--ui-text-muted);border-bottom:1.5px solid var(--ui-text-muted);
+    transform:rotate(45deg) translateY(-2px);
+  }
+  body.csp-redesign :is(#side,#pointCloudPanel,#snapshotPanel) select:open{border-color:var(--ui-accent);box-shadow:0 0 0 3px var(--ui-ring)}
+  body.csp-redesign :is(#side,#pointCloudPanel,#snapshotPanel) select:open::picker-icon{transform:rotate(225deg) translate(-1px,-1px)}
+  body.csp-redesign :is(#side,#pointCloudPanel,#snapshotPanel) select::picker(select){
+    padding:6px;border:1px solid var(--ui-line-strong);border-radius:14px;
+    background:var(--ui-surface);color:var(--ui-text);
+    box-shadow:0 8px 24px var(--ui-shadow-3),0 2px 6px var(--ui-shadow-2);
+    margin-block:6px;min-width:anchor-size(width);max-width:calc(100vw - 24px);
+    max-height:min(420px,65dvh);overflow-y:auto;overscroll-behavior:contain;
+    scrollbar-width:thin;font:inherit;
+  }
+  body.csp-redesign :is(#side,#pointCloudPanel,#snapshotPanel) select option{
+    display:flex;align-items:center;gap:12px;min-height:38px;padding:8px 12px;
+    position:relative;border-radius:8px;white-space:normal;line-height:1.4;
+    color:var(--ui-text);background:transparent;cursor:pointer;
+  }
+  body.csp-redesign :is(#side,#pointCloudPanel,#snapshotPanel) select option:checked{background:var(--ui-selected);font-weight:600}
+  body.csp-redesign :is(#side,#pointCloudPanel,#snapshotPanel) select option:is(:hover,:focus-visible){background:var(--ui-hover);outline:none}
+  body.csp-redesign :is(#side,#pointCloudPanel,#snapshotPanel) select option::checkmark{content:"✓";order:2;margin-left:auto;color:var(--ui-accent);font-size:15px;font-weight:650}
+  body.csp-redesign :is(#side,#pointCloudPanel,#snapshotPanel) select option:disabled{color:var(--ui-text-muted);cursor:default}
+  body.csp-redesign :is(#side,#pointCloudPanel,#snapshotPanel) select optgroup{padding:8px 4px 4px;color:var(--ui-text-muted);font-weight:600}
+  body.csp-redesign #terStyle option[value="c2"]{border-top:1px solid var(--ui-line);margin-top:4px;border-top-left-radius:0;border-top-right-radius:0}
+  @media(max-width:760px){
+    body.csp-redesign :is(#side,#pointCloudPanel,#snapshotPanel) select option{min-height:44px;font-size:16px}
+  }
+}
+
 /* The acquisition controls stay beside the map rectangle in every UI mode. */
 .dnr-announcement{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap}
 .dnr-selection-bar{position:fixed;z-index:1100;width:320px;max-width:calc(100vw - 20px);padding:12px;border:1px solid var(--ui-line-strong);border-radius:14px;background:var(--ui-surface);color:var(--ui-text);box-shadow:0 8px 30px var(--ui-shadow-2);font-size:13px;line-height:1.4}
