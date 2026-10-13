@@ -3,9 +3,10 @@
    A markup layer is a named set of drawings: pen and highlighter strokes,
    lines and arrows, shapes, text and pins. Each mark carries its own colour,
    width and transparency; the layer's colour is only its identifier and the
-   default ink. Marks are anchored to the ground: positions are latitude /
-   longitude and every size (stroke width, text height, pin height) is in
-   metres, so they grow and shrink with the map like ink on a paper map.
+   default ink. Surface marks use latitude/longitude and fixed ground sizes.
+   Floating marks also store an altitude and two fixed world axes; their
+   geometry encodes local coordinates in a plane, rendered by markup-3d.js.
+   Font controls use pixels at placement and retain a fixed physical size.
 
    Storage. Each layer is one GeoJSON FeatureCollection with a `markup` header.
    The browser keeps every layer in IndexedDB, so markup works with no engine
@@ -62,7 +63,7 @@ const feet=m=>m/0.3048;
 const proj=ll=>L.CRS.EPSG3857.project(L.latLng(ll));
 const unproj=p=>L.CRS.EPSG3857.unproject(L.point(p.x,p.y));
 const toLL=c=>L.latLng(c[1],c[0]);
-const toC=ll=>[+ll.lng.toFixed(7),+ll.lat.toFixed(7)];
+const toC=ll=>[+ll.lng.toFixed(10),+ll.lat.toFixed(10)];
 const cToP=c=>proj(toLL(c)),pToC=p=>toC(unproj(p));
 const rid=()=>Math.random().toString(36).slice(2,10)+Date.now().toString(36).slice(-4);
 const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
@@ -227,10 +228,10 @@ function writeView(){
    What the next mark will look like. Widths are screen pixels at the moment
    of drawing (stored on the mark in metres); opacities are percentages. */
 const STYLE_DEFAULT={ink:{color:null,width:4,opacity:100},highlight:{color:"#ffcc00",width:22,opacity:40},
-  fill:{color:"auto",opacity:20},text:{size:22},eraser:{size:28},shape:"rect"};
+  fill:{color:"auto",opacity:20},text:{size:22},eraser:{size:28},placement:{snap:true,textSnap:false,distance:300},shape:"rect"};
 const styles=(()=>{ const s=store.get(STYLE_KEY,{});
   return {ink:{...STYLE_DEFAULT.ink,...s.ink,color:null},highlight:{...STYLE_DEFAULT.highlight,...s.highlight},fill:{...STYLE_DEFAULT.fill,...s.fill},
-    text:{...STYLE_DEFAULT.text,...s.text},eraser:{...STYLE_DEFAULT.eraser,...s.eraser},shape:SHAPES.some(x=>x.id===s.shape)?s.shape:STYLE_DEFAULT.shape} })();
+    placement:{...STYLE_DEFAULT.placement,...s.placement},text:{...STYLE_DEFAULT.text,...s.text,size:s.text?.groundSize!=null?22:Math.round(clamp(Number(s.text?.size)||22,8,160))},eraser:{...STYLE_DEFAULT.eraser,...s.eraser},shape:SHAPES.some(x=>x.id===s.shape)?s.shape:STYLE_DEFAULT.shape} })();
 const saveStyles=()=>store.set(STYLE_KEY,styles);
 
 /* ------------------------------------------------------------------- layers */
@@ -262,9 +263,16 @@ function applyOrder(){
 }
 const LINES=new Set(["pen","highlight","line","arrow","arrow2"]),AREAS=new Set(["area","rect","shape","circle"]);
 const featureLat=f=>{ const g=f.geometry;return g.type==="Point"?g.coordinates[1]:(g.type==="Polygon"?g.coordinates[0][0][1]:g.coordinates[0][1]) };
-const strokePx=(f,zoom=viewZoom())=>(f.properties.width||0)/mpp(featureLat(f),zoom);
+const strokePx=(f,zoom=viewZoom())=>{
+  const p=f.properties;if(p.space3d&&view3d()){
+    const c=projectedPoints(f)[0],a=featurePx(f,unproj(c)),b=featurePx(f,unproj({x:c.x+(p.width||0)/Math.cos(p.space3d.anchor[1]*Math.PI/180),y:c.y}));
+    return a.distanceTo(b);
+  }
+  return (p.width||0)/mpp(featureLat(f),zoom);
+};
 function featureLayers(layer,feature){
   const p=feature.properties,color=p.color||layer.doc.markup.color,g=feature.geometry;
+  if(p.space3d)return [];
   const opacity=p.opacity??(p.kind==="highlight"?0.4:1);
   const base={renderer:layer.renderer,pane:layer.paneName,color,opacity,lineCap:"round",lineJoin:"round",interactive:false};
   const weight=()=>Math.max(0.6,strokePx(feature));
@@ -360,12 +368,12 @@ function drawSnapshotLayer(ctx,id,spec){
   if(layer.opacity<100){surface=document.createElement("canvas");surface.width=ctx.canvas.width;surface.height=ctx.canvas.height;paint=surface.getContext("2d");if(!paint)throw new Error("The annotation drawing surface could not be allocated.")}
   paint.save();paint.globalAlpha=1;
   paint.setTransform(k*(b.x-a.x)/256,k*(b.y-a.y)/256,k*(c.x-a.x)/256,k*(c.y-a.y)/256,k*(a.x-spec.sel.x),k*(a.y-spec.sel.y));
-  drawGround(paint,layer.doc.features,layer.doc.markup.color,ll=>map.project(ll,z).subtract(o),lat=>mpp(lat,z));
+  drawGround(paint,layer.doc.features.filter(f=>!f.properties.space3d),layer.doc.markup.color,ll=>map.project(ll,z).subtract(o),lat=>mpp(lat,z));
   paint.restore();
   if(surface){ctx.save();ctx.setTransform(1,0,0,1,0,0);ctx.globalAlpha=layer.opacity/100;ctx.drawImage(surface,0,0);ctx.restore();surface.width=surface.height=0}
   return true;
 }
-let terrainView=null,terrainModule=null,terrainTimer=null,terrainSyncing=false;
+let terrainView=null,terrainModule=null,terrainTimer=null,terrainSyncing=false,worldLayer=null;
 const terrainIds=new Set();
 function schedule3d(){clearTimeout(terrainTimer);terrainTimer=setTimeout(sync3d,45)}
 function sync3d(){
@@ -383,9 +391,11 @@ function sync3d(){
       if(v.getLayoutProperty(key,"visibility")!==visibility)v.setLayoutProperty(key,"visibility",visibility);
       terrainIds.add(id);
     }
+    if(!v.getLayer("csp-world-markup")&&window.CSPMarkup3D){worldLayer=window.CSPMarkup3D.createLayer(terrainModule,v,()=>[...layers.values()],drawGround);v.addLayer(worldLayer)}
+    worldLayer?.refresh();
     const ordered=[...layers.values()].sort((a,b)=>a.rank-b.rank).map(l=>`mk-${l.doc.markup.id}`);
     const current=v.getStyle().layers.filter(l=>l.id.startsWith("mk-")).map(l=>l.id);
-    if(current.join()!==ordered.join())for(const key of ordered)v.moveLayer(key);
+    if(current.join()!==ordered.join())for(const key of ordered)v.moveLayer(key,"csp-world-markup");
   }finally{terrainSyncing=false}
 }
 /* Cache geographic bounds once per layer revision, rather than project every
@@ -395,6 +405,7 @@ const featureBounds=new WeakMap();
 function featuresForTile(layer,z,x,y){
   const span=MERC/2**z,left=-MERC/2+x*span,top=MERC/2-y*span;
   return layer.doc.features.filter(f=>{
+    if(f.properties.space3d)return false;
     let cached=featureBounds.get(f);
     if(cached?.revision!==layer.renderRevision){
       const g=f.geometry,p=f.properties,coords=g.type==="Point"?[g.coordinates]:g.type==="Polygon"?g.coordinates[0]:g.coordinates;
@@ -436,8 +447,9 @@ function attach3d(module,v){
       return {data:await blob.arrayBuffer()};
     });terrainModule=module;
   }
-  terrainView=v;terrainIds.clear();
+  terrainView=v;worldLayer=null;terrainIds.clear();
   v.on("styledata",schedule3d);v.on("load",schedule3d);v.on("move",()=>{if(selected&&!gesture)drawFrame();redrawDraft()});
+  v.on("render",()=>{if(selected&&!gesture)drawFrame();if(draft)redrawDraft()});
   v.on("moveend",paintBarValues);if(editing)paintBar();schedule3d();
 }
 
@@ -568,15 +580,15 @@ function redrawDraft(){
   if(draftCanvas.width!==mapEl.clientWidth)draftCanvas.width=mapEl.clientWidth;
   if(draftCanvas.height!==mapEl.clientHeight)draftCanvas.height=mapEl.clientHeight;
   const ctx=draftCanvas.getContext("2d");ctx.clearRect(0,0,draftCanvas.width,draftCanvas.height);draftPainted=true;
-  const pts=draft.points.map(llPx),family=draft.kind==="highlight"?styles.highlight:styles.ink;
-  const widthM=family.groundWidth??family.width*here(),ll=draft.points[0],origin=proj(ll),east=unproj({x:origin.x+widthM/Math.cos(ll.lat*Math.PI/180),y:origin.y}),widthPx=llPx(ll).distanceTo(llPx(east));
+  const screen=ll=>llPx(ll,draft.space3d),pts=draft.points.map(screen),family=draft.kind==="highlight"?styles.highlight:styles.ink;
+  const widthM=family.groundWidth??family.width*placementUnit(draft.space3d),ll=draft.points[0],origin=proj(ll),east=unproj({x:origin.x+widthM/Math.cos(ll.lat*Math.PI/180),y:origin.y}),widthPx=screen(ll).distanceTo(screen(east));
   ctx.strokeStyle=family.color||editing.doc.markup.color;ctx.lineWidth=Math.max(.01,widthPx);ctx.globalAlpha=family.opacity/100;ctx.lineCap="round";ctx.lineJoin="round";
   ctx.beginPath();pts.forEach((p,i)=>i?ctx.lineTo(p.x,p.y):ctx.moveTo(p.x,p.y));
   if(draft.kind==="shape"){ctx.closePath();const fill=fillProps();if(fill.fillColor!==null){ctx.save();ctx.globalAlpha=fill.fill;ctx.fillStyle=fill.fillColor;ctx.fill();ctx.restore()}}
   if(widthM>0)ctx.stroke();
   if((draft.kind==="arrow"||draft.kind==="arrow2")&&draft.points.length>1){
     const ps=draft.points,heads=[arrowHead(ps[ps.length-2],ps[ps.length-1],widthM)];if(draft.kind==="arrow2")heads.push(arrowHead(ps[1],ps[0],widthM));
-    ctx.fillStyle=ctx.strokeStyle;for(const head of heads){if(!head)continue;ctx.beginPath();head.tri.map(llPx).forEach((p,i)=>i?ctx.lineTo(p.x,p.y):ctx.moveTo(p.x,p.y));ctx.closePath();ctx.fill()}
+    ctx.fillStyle=ctx.strokeStyle;for(const head of heads){if(!head)continue;ctx.beginPath();head.tri.map(screen).forEach((p,i)=>i?ctx.lineTo(p.x,p.y):ctx.moveTo(p.x,p.y));ctx.closePath();ctx.fill()}
   }
 }
 const overlay=document.createElement("div");overlay.id="mkOverlay";mapEl.append(overlay);
@@ -650,7 +662,7 @@ function currentStyle(){
   if(f){
     const p=f.properties,color=p.color||editing.doc.markup.color;
     return {family:familyOf(p.kind),color,width:Math.round(clamp(strokePx(f),0,80)),opacity:Math.round((p.opacity??(p.kind==="highlight"?.4:1))*100),
-      fillColor:p.fillColor===undefined?"auto":p.fillColor,fillOpacity:Math.round((p.fill??0.18)*100),size:Math.round(clamp((p.size||20)/mpp(featureLat(f),viewZoom()),6,160))};
+      fillColor:p.fillColor===undefined?"auto":p.fillColor,fillOpacity:Math.round((p.fill??0.18)*100),size:Math.round(clamp(p.fontSize||(p.size||20)/mpp(featureLat(f),viewZoom()),6,160))};
   }
   const family=tool==="shape"?(shapeById(styles.shape).line?"line":"shape"):familyOf(tool);
   const ink=family==="highlight"?styles.highlight:styles.ink;
@@ -671,8 +683,16 @@ function paintBar(){
   else if(fam==="line"||fam==="highlight") opts=chip("color",s.color,"Colour")+ground("width","Width",s.width)+slider("opacity","Opacity",s.opacity,5,100,1,"%");
   else if(fam==="shape") opts=chip("color",s.color,s.width?"Outline colour":"Outline colour (no outline)")+ground("width","Outline",s.width)+slider("opacity","Opacity",s.opacity,5,100,1,"%")+sep+
     chip("fill",s.fillColor==="auto"?s.color:s.fillColor,s.fillColor===null?"Fill: none":"Fill colour",s.fillColor===null)+(s.fillColor===null?"":slider("fillOpacity","Fill",s.fillOpacity,0,100,1,"%"));
-  else if(fam==="text") opts=chip("color",s.color,"Colour")+ground("size","Size",s.size)+slider("opacity","Opacity",s.opacity,5,100,1,"%");
+  else if(fam==="text") opts=chip("color",s.color,"Colour")+((f?.properties.kind||tool)==="pin"?ground("size","Size",s.size):slider("size","Font size",s.size,8,160,1,"px"))+slider("opacity","Opacity",s.opacity,5,100,1,"%");
   else opts=`<span class="mk-hint">${tool==="select"?"Click a mark to select it · drag to move · handles resize and rotate":"Drag to move around the map"}</span>`;
+  if(view3d()&&fam&&fam!=="eraser"){
+    const snapped=f?!f.properties.space3d:placementSnaps();
+    opts+=sep+`<label class="mk-snap"><input type="checkbox" data-placement="snap" ${snapped?"checked":""}>Snap to surface</label>`;
+    if(!snapped){
+      const elevation=f?.properties.space3d?.anchor[2];
+      opts+=`<label class="mk-ground"><span>${f?"Elevation":"Distance"}</span><input type="number" data-placement="${f?"elevation":"distance"}" value="${+(f?feet(elevation):styles.placement.distance).toFixed(2)}" ${f?"":"min=1"} step="any" aria-label="${f?"Elevation above sea level":"Placement distance"} in feet"><span>ft</span></label>`;
+    }
+  }
   let actions="";
   if(f){
     const p=f.properties;
@@ -689,7 +709,7 @@ function paintBar(){
       <button type="button" class="mk-icon-btn" data-act="redo" title="Redo (Ctrl+Shift+Z)" aria-label="Redo" ${redoCount?"":"disabled"}><img src="${icon("redo-2")}" alt=""></button>
     </div>
     <div class="mk-finish"><button type="button" class="mk-done" data-act="${pending?"finish":"done"}">${pending?"Finish shape":"Done"}</button></div>
-    <div class="mk-opts"><span class="mk-layer-chip" title="Drawing on this layer"><span class="mk-dot" style="--c:${m.color}"></span><span class="mk-layer-name">${esc(m.name)}</span></span><span class="mk-hint">${view3d()?"On 3D terrain":"On the map"} · ground size stays fixed</span>${opts}${actions?sep+actions:""}</div>`;
+    <div class="mk-opts"><span class="mk-layer-chip" title="Drawing on this layer"><span class="mk-dot" style="--c:${m.color}"></span><span class="mk-layer-name">${esc(m.name)}</span></span><span class="mk-hint">${view3d()?"3D placement":"On the map"} · size and orientation stay fixed</span>${opts}${actions?sep+actions:""}</div>`;
   placeBar();
 }
 /* On a wide screen the bar is centred over the map, clear of the sidebar;
@@ -719,7 +739,7 @@ function applyStyle(key,value,final){
   else if(key==="opacity") ink.opacity=value;
   else if(key==="fill") styles.fill.color=value;
   else if(key==="fillOpacity") styles.fill.opacity=value;
-  else if(key==="size") styles.text.size=value;
+  else if(key==="size"){styles.text.size=value;delete styles.text.groundSize;}
   else if(key==="eraser"){ styles.eraser.size=value;sizeEraser() }
   saveStyles();
   if(f){
@@ -730,11 +750,51 @@ function applyStyle(key,value,final){
     else if(key==="opacity") p.opacity=value/100;
     else if(key==="fill"){ p.fillColor=value==="auto"?(p.color||editing.doc.markup.color):value }
     else if(key==="fillOpacity") p.fill=value/100;
-    else if(key==="size") p.size=+(value*m).toFixed(3);
+    else if(key==="size"){p.size=+(value*(p.size/(p.fontSize||((p.size||20)/m)))).toFixed(6);p.fontSize=value;}
     renderFeature(editing,f);
     if(final){ styleEdit=false;touch(editing);drawFrame() }
   }
 }
+/* Surface/space is a property of each mark, and a remembered default for
+   the current tool. Conversion preserves its current screen footprint. */
+function changePlacement(snap){
+  const f=selectedFeature(),text=(f?.properties.kind||tool)==="text";
+  const field=text?"textSnap":"snap";
+  if(!f){styles.placement[field]=snap;saveStyles();cancelDraft();paintBar();return;}
+  const old=f.properties.space3d;if(snap===!old)return;
+  const center=projectedPoints(f).reduce((a,q)=>({x:a.x+q.x,y:a.y+q.y}),{x:0,y:0}),count=projectedPoints(f).length;
+  center.x/=count;center.y/=count;
+  const px=featurePx(f,unproj(center)),space=snap?null:window.CSPMarkup3D?.createPlacement(view3d(),px,Math.max(1,styles.placement.distance)*.3048);
+  if(!snap&&!space)return;
+  let invalid=false;
+  const converted=JSON.parse(JSON.stringify(f));
+  mapCoords(converted,c=>{const screen=featurePx(f,toLL(c));if(!onGround(screen,space)){invalid=true;return c;}const ll=pxLL(screen,space);if(!ll){invalid=true;return c;}return toC(ll);});
+  if(invalid){paintBar();return;}
+  /* Transform a one-metre baseline through the current view. Placement-time
+     pixel scale would resize a sign after navigation, and screenRot would
+     erase the user's rotation. Preserve both with this actual baseline. */
+  const p=converted.properties,rot=f.properties.rot||0,latitude=old?.anchor[1]??featureLat(f),stretch=1/Math.cos(latitude*Math.PI/180);
+  const end=featurePx(f,unproj({x:center.x+Math.cos(rot)*stretch,y:center.y+Math.sin(rot)*stretch}));
+  const startLL=pxLL(px,space),endLL=pxLL(end,space);
+  if(!startLL||!endLL||!onGround(end,space)){paintBar();return;}
+  const a=proj(startLL),b=proj(endLL),dx=b.x-a.x,dy=b.y-a.y;
+  const ratio=Math.hypot(dx,dy)*Math.cos((space?.anchor[1]??startLL.lat)*Math.PI/180);
+  if(!Number.isFinite(ratio)||ratio<=0){paintBar();return;}
+  if(p.kind==="text"||p.kind==="pin")p.size*=ratio;
+  p.rot=Math.atan2(dy,dx);
+  if(p.width!=null)p.width*=ratio;
+  if(space)p.space3d=space;else delete p.space3d;
+  pushUndo(editing);f.geometry=converted.geometry;f.properties=p;
+  styles.placement[field]=snap;saveStyles();renderFeature(editing,f);touch(editing);drawFrame();paintBar();
+}
+bar.addEventListener("change",event=>{
+  const input=event.target.closest("[data-placement]");if(!input||!editing||!view3d())return;
+  const key=input.dataset.placement;
+  if(key==="snap"){changePlacement(input.checked);return;}
+  const value=Number(input.value);if(!Number.isFinite(value)||(key==="distance"&&value<1)){paintBar();return;}
+  if(key==="distance"){styles.placement.distance=value;saveStyles();return;}
+  const f=selectedFeature();if(key==="elevation"&&f?.properties.space3d){pushUndo(editing);f.properties.space3d.anchor[2]=value*.3048;renderFeature(editing,f);touch(editing);drawFrame();}
+});
 bar.addEventListener("change",event=>{
   const input=event.target.closest("[data-ground]");if(!input||!editing)return;
   const value=Number(input.value);if(!Number.isFinite(value)||value<Number(input.min)){paintBar();return;}
@@ -837,10 +897,18 @@ document.addEventListener("keydown",event=>{
 });
 
 /* --------------------------------------------------------------- drawing */
-const onGround=px=>{const v=view3d();if(!v)return true;const ll=v.unproject([px.x,px.y]),q=v.project(ll);return Number.isFinite(ll.lat)&&Number.isFinite(ll.lng)&&Math.hypot(q.x-px.x,q.y-px.y)<12};
+const onGround=(px,space=null)=>{if(space)return !!window.CSPMarkup3D?.screenToGround(view3d(),px,space);const v=view3d();if(!v)return true;const ll=v.unproject([px.x,px.y]),q=v.project(ll);return Number.isFinite(ll.lat)&&Number.isFinite(ll.lng)&&Math.hypot(q.x-px.x,q.y-px.y)<12};
 const pointPx=event=>{ const r=mapEl.getBoundingClientRect();return L.point(event.clientX-r.left,event.clientY-r.top) };
-const pxLL=px=>{const v=view3d();if(!v)return map.containerPointToLatLng(px);const ll=v.unproject([px.x,px.y]);return L.latLng(ll.lat,ll.lng)};
-const llPx=ll=>{const v=view3d();return v?L.point(v.project([ll.lng,ll.lat])):map.latLngToContainerPoint(ll)};
+const pxLL=(px,space=null)=>{if(space){const ll=window.CSPMarkup3D.screenToGround(view3d(),px,space);return ll?L.latLng(ll.lat,ll.lng):null;}const v=view3d();if(!v)return map.containerPointToLatLng(px);const ll=v.unproject([px.x,px.y]);return L.latLng(ll.lat,ll.lng)};
+const llPx=(ll,space=null)=>{if(space&&view3d()){const q=window.CSPMarkup3D.project(view3d(),[ll.lng,ll.lat],space);return L.point(q?.x??NaN,q?.y??NaN);}const v=view3d();return v?L.point(v.project([ll.lng,ll.lat])):map.latLngToContainerPoint(ll)};
+const featurePx=(f,ll)=>llPx(ll,f.properties.space3d);
+const featureLL=(f,px)=>pxLL(px,f.properties.space3d);
+const placementSnaps=()=>((selectedFeature()?.properties.kind||tool)==="text"?styles.placement.textSnap:styles.placement.snap);
+const placementUnit=space=>space?.metresPerPixel||here();
+function drawingSpace(px){
+  if(!view3d()||placementSnaps())return null;
+  return window.CSPMarkup3D?.createPlacement(view3d(),px,Math.max(1,styles.placement.distance)*.3048)||null;
+}
 function addFeature(kind,geometry,extra={}){
   if(!editing) return;
   pushUndo(editing);
@@ -848,8 +916,8 @@ function addFeature(kind,geometry,extra={}){
   editing.doc.features.push(feature);renderFeature(editing,feature);touch(editing);paintBar();
   return feature;
 }
-function inkProps(family){
-  const ink=family==="highlight"?styles.highlight:styles.ink,m=here();
+function inkProps(family,space=null){
+  const ink=family==="highlight"?styles.highlight:styles.ink,m=placementUnit(space);
   return {color:ink.color||editing.doc.markup.color,width:ink.groundWidth??+(ink.width*m).toFixed(3),opacity:ink.opacity/100};
 }
 function fillProps(){
@@ -866,26 +934,28 @@ function previewStyle(family){
 function cancelDraft(){ if(draft?.preview) draft.preview.forEach(p=>p.remove());draft=null;redrawDraft() }
 /* The direction of "screen right" on the ground, so a shape drawn on a
    rotated map is recorded at the angle it was drawn. */
-function screenRot(){
-  const c=L.point(mapEl.clientWidth/2,mapEl.clientHeight/2),a=proj(pxLL(c)),b=proj(pxLL(c.add([100,0])));
+function screenRot(c=L.point(mapEl.clientWidth/2,mapEl.clientHeight/2),space=null){
+  const a=proj(pxLL(c,space)),b=proj(pxLL(c.add([10,0]),space));
   return Math.atan2(b.y-a.y,b.x-a.x);
 }
-function boxShape(shape,a,c,square){
+function boxShape(shape,a,c,square,space=null){
   let w=c.x-a.x,h=c.y-a.y;
   if(square){ const s=Math.max(Math.abs(w),Math.abs(h));w=Math.sign(w||1)*s;h=Math.sign(h||1)*s }
   const x0=Math.min(a.x,a.x+w),y0=Math.min(a.y,a.y+h),aw=Math.abs(w),ah=Math.abs(h);
-  return shape.gen(aw,ah).map(([x,y])=>pxLL(L.point(x0+x*aw,y0+y*ah)));
+  return shape.gen(aw,ah).map(([x,y])=>pxLL(L.point(x0+x*aw,y0+y*ah),space));
 }
 capture.addEventListener("pointerdown",event=>{
   if(!editing||event.button>0) return;
   event.preventDefault();event.stopPropagation();closePop();
-  if(!onGround(pointPx(event)))return;
-  const ll=pxLL(pointPx(event)),px=pointPx(event);
-  if(tool==="text"||tool==="pin"){ placeText(tool,ll,px);return }
-  if(tool==="eraser"){ startErase(event);return }
+  if(tool==="eraser"){startErase(event);return;}
+  const px=pointPx(event),space=draft?.space3d||drawingSpace(px);
+  if(view3d()&&!placementSnaps()&&!space&&tool!=="eraser")return;
+  if(!onGround(px,space))return;
+  const ll=pxLL(px,space);
+  if(tool==="text"||tool==="pin"){ placeText(tool,ll,px,space);return }
   const shape=tool==="shape"?shapeById(styles.shape):null;
   if(shape?.id==="freeform"){
-    if(!draft){ draft={kind:"area",points:[ll],px:[px],preview:[L.polyline([ll],previewStyle("shape")).addTo(map)]};paintBar() }
+    if(!draft){ draft={kind:"area",space3d:space,points:[ll],px:[px],preview:[L.polyline([ll],previewStyle("shape")).addTo(map)]};paintBar() }
     else{
       if(draft.px.length>=3&&px.distanceTo(draft.px[0])<14){ finishArea();return }
       draft.points.push(ll);draft.px.push(px);draft.preview[0].setLatLngs(draft.points);redrawDraft();
@@ -894,7 +964,7 @@ capture.addEventListener("pointerdown",event=>{
   }
   capture.setPointerCapture?.(event.pointerId);
   const kind=tool==="shape"?(shape.line?shape.id:"shape"):tool;
-  draft={kind,shape,start:ll,startPx:px,points:[ll],px:[px],pointerId:event.pointerId,preview:[]};
+  draft={kind,shape,space3d:space,start:ll,startPx:px,points:[ll],px:[px],pointerId:event.pointerId,preview:[]};
   const family=kind==="highlight"?"highlight":kind==="shape"?"shape":"line";
   const style=previewStyle(family);
   if(kind==="shape") draft.preview.push(L.polygon([ll,ll,ll],style).addTo(map));
@@ -904,21 +974,21 @@ capture.addEventListener("pointerdown",()=>requestAnimationFrame(redrawDraft));
 capture.addEventListener("pointermove",()=>requestAnimationFrame(redrawDraft));
 capture.addEventListener("pointermove",event=>{
   if(tool==="eraser"){ moveEraserRing(event);if(erasing) eraseMove(event);return }
-  if(!draft||draft.pointerId!==event.pointerId||!onGround(pointPx(event))) return;
-  const ll=pxLL(pointPx(event)),px=pointPx(event),preview=draft.preview[0];
+  if(!draft||draft.pointerId!==event.pointerId||!onGround(pointPx(event),draft.space3d)) return;
+  const ll=pxLL(pointPx(event),draft.space3d),px=pointPx(event),preview=draft.preview[0];
   if(draft.kind==="pen"||draft.kind==="highlight"){
     if(px.distanceTo(draft.px[draft.px.length-1])<2) return;
     draft.points.push(ll);draft.px.push(px);preview.setLatLngs(draft.points);
   }else if(draft.kind==="shape"){
     draft.px=[draft.startPx,px];draft.square=event.shiftKey;
-    draft.points=boxShape(draft.shape,draft.startPx,px,event.shiftKey);preview.setLatLngs(draft.points);
+    draft.points=boxShape(draft.shape,draft.startPx,px,event.shiftKey,draft.space3d);preview.setLatLngs(draft.points);
   }else{
     let end=px;
     if(event.shiftKey){ /* lines snap to 15° steps */
       const d=px.subtract(draft.startPx),a=Math.round(Math.atan2(d.y,d.x)/(Math.PI/12))*(Math.PI/12),r=Math.hypot(d.x,d.y);
       end=draft.startPx.add([r*Math.cos(a),r*Math.sin(a)]);
     }
-    draft.points=[draft.start,pxLL(end)];draft.px=[draft.startPx,end];preview.setLatLngs(draft.points);
+    draft.points=[draft.start,pxLL(end,draft.space3d)];draft.px=[draft.startPx,end];preview.setLatLngs(draft.points);
   }
 });
 capture.addEventListener("pointerleave",()=>{ if(tool==="eraser"&&!erasing) eraserRing.hidden=true });
@@ -927,15 +997,16 @@ const endStroke=event=>{
   if(tool==="eraser"){ endErase();return }
   if(!draft||draft.pointerId!==event.pointerId) return;
   const d=draft;cancelDraft();
+  const space=d.space3d,placement=space?{space3d:space}:{};
   const span=d.px.length>1?d.px[0].distanceTo(d.px[d.px.length-1]):0;
-  if((d.kind==="pen"||d.kind==="highlight")&&d.points.length>1) addFeature(d.kind,{type:"LineString",coordinates:simplify(d.points,d.px).map(toC)},inkProps(d.kind==="highlight"?"highlight":"ink"));
+  if((d.kind==="pen"||d.kind==="highlight")&&d.points.length>1) addFeature(d.kind,{type:"LineString",coordinates:simplify(d.points,d.px).map(toC)},{...inkProps(d.kind==="highlight"?"highlight":"ink",space),...placement});
   else if((d.kind==="pen"||d.kind==="highlight")){ /* a tap is a dot */
-    const ll2=pxLL(d.px[0].add([0.5,0.5]));addFeature(d.kind,{type:"LineString",coordinates:[toC(d.points[0]),toC(ll2)]},inkProps(d.kind==="highlight"?"highlight":"ink"));
+    const ll2=pxLL(d.px[0].add([0.5,0.5]),space);addFeature(d.kind,{type:"LineString",coordinates:[toC(d.points[0]),toC(ll2)]},{...inkProps(d.kind==="highlight"?"highlight":"ink",space),...placement});
   }
-  else if(["line","arrow","arrow2"].includes(d.kind)&&span>=4) addFeature(d.kind,{type:"LineString",coordinates:d.points.map(toC)},inkProps("ink"));
+  else if(["line","arrow","arrow2"].includes(d.kind)&&span>=4) addFeature(d.kind,{type:"LineString",coordinates:d.points.map(toC)},{...inkProps("ink",space),...placement});
   else if(d.kind==="shape"&&d.px.length>1&&Math.abs(d.px[0].x-d.px[1].x)>=4&&Math.abs(d.px[0].y-d.px[1].y)>=4){
     const ring=d.points.map(toC);ring.push(ring[0]);
-    addFeature("shape",{type:"Polygon",coordinates:[ring]},{shape:d.shape.id,rot:+screenRot().toFixed(5),...inkProps("ink"),...fillProps(),width:styles.ink.groundWidth??+(styles.ink.width*here()).toFixed(3)});
+    addFeature("shape",{type:"Polygon",coordinates:[ring]},{shape:d.shape.id,rot:+screenRot(d.startPx,space).toFixed(5),...inkProps("ink",space),...fillProps(),...placement});
   }
 };
 capture.addEventListener("pointerup",endStroke);capture.addEventListener("pointercancel",()=>{ if(draft&&draft.kind!=="area") cancelDraft();if(erasing) endErase() });
@@ -943,7 +1014,8 @@ capture.addEventListener("dblclick",event=>{ event.preventDefault();if(draft?.ki
 function finishArea(){
   if(!draft||draft.kind!=="area") return;
   const d=draft;cancelDraft();
-  if(d.points.length>=3){ const ring=d.points.map(toC);ring.push(ring[0]);addFeature("area",{type:"Polygon",coordinates:[ring]},{...inkProps("ink"),...fillProps()}) }
+  const space=d.space3d,placement=space?{space3d:space}:{};
+  if(d.points.length>=3){ const ring=d.points.map(toC);ring.push(ring[0]);addFeature("area",{type:"Polygon",coordinates:[ring]},{...inkProps("ink",space),...fillProps(),...placement}) }
   paintBar();
 }
 /* Drop points closer than ~1 screen px to the line through their neighbours
@@ -965,7 +1037,7 @@ function simplify(points,px,tol=1){
    cancels, an empty pin is a plain pin, an empty text is nothing. */
 function textEditor(px,initial,color,onDone){
   const box=document.createElement("textarea");box.className="mk-text-input";box.value=initial||"";box.rows=1;
-  box.style.left=px.x+"px";box.style.top=px.y+"px";box.style.color=color;
+  box.style.fontSize=styles.text.size+"px";box.style.left=px.x+"px";box.style.top=px.y+"px";box.style.color=color;
   mapEl.append(box);L.DomEvent.disableClickPropagation(box);
   let done=false;
   const finish=commit=>{ if(done) return;done=true;const value=box.value.replace(/\s+$/,"");box.remove();onDone(commit?value:null) };
@@ -977,13 +1049,13 @@ function textEditor(px,initial,color,onDone){
   box.addEventListener("blur",()=>finish(true));
   setTimeout(()=>box.focus({preventScroll:true}),0);
 }
-function placeText(kind,ll,px){
-  const color=styles.ink.color||editing.doc.markup.color;
+function placeText(kind,ll,px,space=null){
+  const color=styles.ink.color||editing.doc.markup.color,unit=placementUnit(space),rot=screenRot(px,space),fontSize=styles.text.size;
   textEditor(px,"",color,value=>{
     if(value===null||!editing) return;
     if(kind==="text"&&!value) return;
-    const size=kind==="pin"?styles.text.pinGroundSize??(styles.text.groundSize??styles.text.size*here())*1.4:styles.text.groundSize??styles.text.size*here();
-    addFeature(kind,{type:"Point",coordinates:toC(ll)},{text:value,size:+size.toFixed(3),color,opacity:styles.ink.opacity/100});
+    const size=kind==="pin"?styles.text.pinGroundSize??(styles.text.groundSize??fontSize*unit)*1.4:fontSize*unit;
+    addFeature(kind,{type:"Point",coordinates:toC(ll)},{text:value,size:+size.toFixed(6),fontSize,rot:+rot.toFixed(6),...(space?{space3d:space}:{}),color,opacity:styles.ink.opacity/100});
   });
 }
 
@@ -1022,15 +1094,16 @@ function eraseAt(c){
   const r=styles.eraser.size/2;let changed=false;const next=[];
   for(const f of layer.doc.features){
     const p=f.properties;
+    if(p.space3d&&(!view3d()||window.CSPMarkup3D.isVisible?.(view3d(),p.space3d)===false)){next.push(f);continue;}
     if(p.kind==="pen"||p.kind==="highlight"){
-      const pts=f.geometry.coordinates.map(cc=>llPx(toLL(cc))),half=strokePx(f)/2,R=r+half;
+      const pts=f.geometry.coordinates.map(cc=>featurePx(f,toLL(cc))),half=strokePx(f)/2,R=r+half;
       const box=L.bounds(pts);if(c.x<box.min.x-R||c.x>box.max.x+R||c.y<box.min.y-R||c.y>box.max.y+R){ next.push(f);continue }
       const pieces=[];let cur=[];
       for(let i=0;i<pts.length-1;i++){
         const a=pts[i],b=pts[i+1],keep=outsideCircle(a,b,c,R);
         if(keep.length===1&&keep[0][0]===0&&keep[0][1]===1){ if(!cur.length) cur.push(f.geometry.coordinates[i]);cur.push(f.geometry.coordinates[i+1]);continue }
         for(const [t0,t1] of keep){
-          const at=t=>toC(pxLL(L.point(a.x+(b.x-a.x)*t,a.y+(b.y-a.y)*t)));
+          const at=t=>toC(featureLL(f,L.point(a.x+(b.x-a.x)*t,a.y+(b.y-a.y)*t)));
           if(t0===0){ if(!cur.length) cur.push(f.geometry.coordinates[i]) } else { if(cur.length>1) pieces.push(cur);cur=[at(t0)] }
           cur.push(t1===1?f.geometry.coordinates[i+1]:at(t1));
           if(t1<1){ pieces.push(cur);cur=[] }
@@ -1042,7 +1115,7 @@ function eraseAt(c){
       if(unchanged){ next.push(f);continue }
       changed=true;
       for(const piece of pieces){
-        const len=piece.reduce((s,q,i)=>i?s+llPx(toLL(q)).distanceTo(llPx(toLL(piece[i-1]))):0,0);
+        const len=piece.reduce((s,q,i)=>i?s+featurePx(f,toLL(q)).distanceTo(featurePx(f,toLL(piece[i-1]))):0,0);
         if(len<0.75) continue;
         next.push({type:"Feature",geometry:{type:"LineString",coordinates:piece},properties:{...p,fid:rid()}});
       }
@@ -1067,6 +1140,7 @@ function inside(p,poly){
 function pointElement(f){ return editing?.items.get(f.properties.fid)?.layers[0]?.getElement?.() }
 function hitFeature(f,p,slop=6){
   const k=f.properties.kind,g=f.geometry;
+  if(f.properties.space3d&&(!view3d()||window.CSPMarkup3D.isVisible(view3d(),f.properties.space3d)===false))return false;
   if(k==="text"||k==="pin"){
     if(view3d()){const fr=frameOf(f);return !!fr&&inside(p,fr.c)}
     const el=pointElement(f);if(!el) return false;
@@ -1074,8 +1148,8 @@ function hitFeature(f,p,slop=6){
     return p.x>=r.left-m.left-slop&&p.x<=r.right-m.left+slop&&p.y>=r.top-m.top-slop&&p.y<=r.bottom-m.top+slop;
   }
   const half=Math.max(0,strokePx(f))/2+slop;
-  if(k==="circle"){ const c=llPx(toLL(g.coordinates)),rr=f.properties.radius/mpp(featureLat(f),viewZoom());const d=p.distanceTo(c);return d<=rr+half&&(f.properties.fillColor!==null||d>=rr-half) }
-  const pts=(g.type==="Polygon"?g.coordinates[0]:g.coordinates).map(c=>llPx(toLL(c)));
+  if(k==="circle"){ const c=featurePx(f,toLL(g.coordinates)),rr=f.properties.radius/mpp(featureLat(f),viewZoom());const d=p.distanceTo(c);return d<=rr+half&&(f.properties.fillColor!==null||d>=rr-half) }
+  const pts=(g.type==="Polygon"?g.coordinates[0]:g.coordinates).map(c=>featurePx(f,toLL(c)));
   for(let i=0;i<pts.length-1;i++) if(distToSeg(p,pts[i],pts[i+1])<=half) return true;
   if(pts.length===1) return p.distanceTo(pts[0])<=half;
   /* A shape is picked up by its inside too, filled or not: an outline-only
@@ -1109,7 +1183,7 @@ function duplicateSelected(){
 }
 function editSelectedText(){
   const f=selectedFeature();if(!f) return;
-  const px=llPx(toLL(f.geometry.coordinates));
+  const px=featurePx(f,toLL(f.geometry.coordinates));
   textEditor(px,f.properties.text,f.properties.color||editing.doc.markup.color,value=>{
     if(value===null||!editing) return;
     if(f.properties.kind==="text"&&!value){ deleteSelected();return }
@@ -1141,12 +1215,13 @@ function projectedPoints(f){
 }
 function frameOf(f){
   const p=f.properties,rot=p.rot||0,{u,d}=frameAxes(rot);
+  if(p.space3d&&(!view3d()||window.CSPMarkup3D.isVisible(view3d(),p.space3d)===false))return null;
   if(p.kind==="text"||p.kind==="pin"){
     if(view3d()){
       const c=cToP(f.geometry.coordinates),size=(p.size||20)/Math.cos(featureLat(f)*Math.PI/180),lines=String(p.text||"").split("\n");
       const w=Math.max(1,...lines.map(x=>x.length))*.7*size,h=Math.max(1,lines.length)*1.2*size;
       const box=p.kind==="pin"?[-size*.5,-size,w+size*.5,h*.5]:[-w/2,-h/2,w/2,h/2];
-      const corners=[[box[0],box[1]],[box[2],box[1]],[box[2],box[3]],[box[0],box[3]]].map(([x,y])=>llPx(unproj({x:c.x+u.x*x+d.x*y,y:c.y+u.y*x+d.y*y})));
+      const corners=[[box[0],box[1]],[box[2],box[1]],[box[2],box[3]],[box[0],box[3]]].map(([x,y])=>featurePx(f,unproj({x:c.x+u.x*x+d.x*y,y:c.y+u.y*x+d.y*y})));
       return {screen:true,c:corners};
     }
     /* Text and pins are measured where they are drawn, on screen. */
@@ -1161,22 +1236,23 @@ function frameOf(f){
   for(const q of pts){ const x=(q.x-o.x)*u.x+(q.y-o.y)*u.y,y=(q.x-o.x)*d.x+(q.y-o.y)*d.y;x0=Math.min(x0,x);x1=Math.max(x1,x);y0=Math.min(y0,y);y1=Math.max(y1,y) }
   const at=(x,y)=>({x:o.x+u.x*x+d.x*y,y:o.y+u.y*x+d.y*y});
   return {o,u,d,rot,x0,x1,y0,y1,at,toLocal:q=>({x:(q.x-o.x)*u.x+(q.y-o.y)*u.y,y:(q.x-o.x)*d.x+(q.y-o.y)*d.y}),
-    c:[at(x0,y0),at(x1,y0),at(x1,y1),at(x0,y1)].map(q=>llPx(unproj(q)))};
+    c:[at(x0,y0),at(x1,y0),at(x1,y1),at(x0,y1)].map(q=>featurePx(f,unproj(q)))};
 }
 const HANDLES=[["nw",0,0],["n",.5,0],["ne",1,0],["e",1,.5],["se",1,1],["s",.5,1],["sw",0,1],["w",0,.5]];
 function drawFrame(){
   overlay.replaceChildren();
   const f=selectedFeature();if(!f||!editing) return;
   const k=f.properties.kind;
+  if(f.properties.space3d&&window.CSPMarkup3D.isVisible?.(view3d(),f.properties.space3d)===false)return;
   const dot=(cls,pt,data)=>{ const h=document.createElement("div");h.className=`mk-handle ${cls}`;h.style.transform=`translate(${pt.x}px,${pt.y}px)`;Object.assign(h.dataset,data);overlay.append(h);return h };
   if(k==="line"||k==="arrow"||k==="arrow2"){
-    const cs=f.geometry.coordinates,pts=cs.map(c=>llPx(toLL(c)));
+    const cs=f.geometry.coordinates,pts=cs.map(c=>featurePx(f,toLL(c)));
     const svg=document.createElementNS(SVGNS,"svg");svg.setAttribute("class","mk-frame");
     const line=document.createElementNS(SVGNS,"polyline");line.setAttribute("points",pts.map(q=>`${q.x},${q.y}`).join(" "));svg.append(line);overlay.append(svg);
     dot("mk-h-end",pts[0],{h:"v0"});dot("mk-h-end",pts[pts.length-1],{h:`v${pts.length-1}`});
     return;
   }
-  const fr=frameOf(f);if(!fr) return;
+  const fr=frameOf(f);if(!fr||fr.c.some(q=>!Number.isFinite(q.x)||!Number.isFinite(q.y))) return;
   const c=fr.c,svg=document.createElementNS(SVGNS,"svg");svg.setAttribute("class","mk-frame");
   const poly=document.createElementNS(SVGNS,"polygon");poly.setAttribute("points",c.map(q=>`${q.x},${q.y}`).join(" "));svg.append(poly);
   const top=c[0].add(c[1]).divideBy(2),mid=c[0].add(c[2]).divideBy(2),dir=top.subtract(mid),len=Math.hypot(dir.x,dir.y)||1;
@@ -1184,7 +1260,7 @@ function drawFrame(){
   if(k!=="pin"){ const stem=document.createElementNS(SVGNS,"line");stem.setAttribute("x1",top.x);stem.setAttribute("y1",top.y);stem.setAttribute("x2",knob.x);stem.setAttribute("y2",knob.y);svg.append(stem) }
   overlay.append(svg);
   if(pointsMode&&f.geometry.type==="Polygon"){
-    f.geometry.coordinates[0].slice(0,-1).forEach((cc,i)=>dot("mk-h-vertex",llPx(toLL(cc)),{h:`v${i}`}));
+    f.geometry.coordinates[0].slice(0,-1).forEach((cc,i)=>dot("mk-h-vertex",featurePx(f,toLL(cc)),{h:`v${i}`}));
     return;
   }
   const lerp=(a,b,t)=>a.add(b.subtract(a).multiplyBy(t));
@@ -1208,18 +1284,18 @@ function beginGesture(event,type,f,extra={}){
   map.dragging.disable();view3d()?.dragPan.disable();
   pushUndo(editing);
   if(type!=="move"&&type!=="vertex") circleToShape(f);
-  gesture={type,f,id:event.pointerId,start:pointPx(event),startP:proj(pxLL(pointPx(event))),
+  gesture={type,f,id:event.pointerId,start:pointPx(event),startP:proj(featureLL(f,pointPx(event))),
     snap:JSON.parse(JSON.stringify(f.geometry)),props:JSON.parse(JSON.stringify(f.properties)),moved:false,...extra};
   gesture.frame=type==="move"||type==="vertex"?null:frameOf(f);
   overlay.classList.add("mk-active");
 }
 function runGesture(event){
   const G=gesture,f=G.f,p=f.properties,now=pointPx(event);
-  if(!onGround(now))return;
+  if(!onGround(now,p.space3d))return;
   if(!G.moved&&now.distanceTo(G.start)<3) return;
   G.moved=true;
   f.geometry=JSON.parse(JSON.stringify(G.snap));
-  const P=proj(pxLL(now));
+  const P=proj(featureLL(f,now));
   if(G.type==="move"){
     const dx=P.x-G.startP.x,dy=P.y-G.startP.y;
     mapCoords(f,c=>pToC({x:cToP(c).x+dx,y:cToP(c).y+dy}));
@@ -1227,19 +1303,19 @@ function runGesture(event){
     const i=G.index,g=f.geometry;
     if(g.type==="LineString"){
       let end=now;
-      if(event.shiftKey&&g.coordinates.length===2){ const o=llPx(toLL(g.coordinates[1-i])),d=now.subtract(o),a=Math.round(Math.atan2(d.y,d.x)/(Math.PI/12))*(Math.PI/12),r=Math.hypot(d.x,d.y);end=o.add([r*Math.cos(a),r*Math.sin(a)]) }
-      g.coordinates[i]=toC(pxLL(end));
-    }else{ const ring=g.coordinates[0];ring[i]=toC(pxLL(now));if(i===0) ring[ring.length-1]=ring[0] }
+      if(event.shiftKey&&g.coordinates.length===2){ const o=featurePx(f,toLL(g.coordinates[1-i])),d=now.subtract(o),a=Math.round(Math.atan2(d.y,d.x)/(Math.PI/12))*(Math.PI/12),r=Math.hypot(d.x,d.y);end=o.add([r*Math.cos(a),r*Math.sin(a)]) }
+      g.coordinates[i]=toC(featureLL(f,end));
+    }else{ const ring=g.coordinates[0];ring[i]=toC(featureLL(f,now));if(i===0) ring[ring.length-1]=ring[0] }
   }else if(G.type==="rotate"){
     const fr=G.frame;
-    const cx=fr.screen?fr.c[0].add(fr.c[2]).divideBy(2):llPx(unproj(fr.at((fr.x0+fr.x1)/2,(fr.y0+fr.y1)/2)));
+    const cx=fr.screen?fr.c[0].add(fr.c[2]).divideBy(2):featurePx(f,unproj(fr.at((fr.x0+fr.x1)/2,(fr.y0+fr.y1)/2)));
     const a0=Math.atan2(G.start.y-cx.y,G.start.x-cx.x),a1=Math.atan2(now.y-cx.y,now.x-cx.x);
     let rot=(G.props.rot||0)-(a1-a0);
     if(event.shiftKey){ const step=Math.PI/12;rot=Math.round(rot/step)*step }
     const delta=rot-(G.props.rot||0);
     p.rot=+rot.toFixed(5);
     if(p.kind!=="text"){
-      const C=proj(pxLL(cx)),cos=Math.cos(delta),sin=Math.sin(delta);
+      const C=proj(featureLL(f,cx)),cos=Math.cos(delta),sin=Math.sin(delta);
       mapCoords(f,c=>{ const q=cToP(c),x=q.x-C.x,y=q.y-C.y;return pToC({x:C.x+x*cos-y*sin,y:C.y+x*sin+y*cos}) });
     }
   }else if(G.type==="resize"){
@@ -1249,8 +1325,8 @@ function runGesture(event){
          pin's point (pins). */
       const idx={nw:0,ne:1,se:2,sw:3}[h],A=fr.c[(idx+2)%4],H=fr.c[idx];
       const v=H.subtract(A),s=Math.max(0.1,((now.x-A.x)*v.x+(now.y-A.y)*v.y)/(v.x*v.x+v.y*v.y||1));
-      p.size=+(G.props.size*s).toFixed(3);
-      if(p.kind==="text"){ const C0=llPx(toLL(G.snap.coordinates)),C1=A.add(C0.subtract(A).multiplyBy(s));f.geometry.coordinates=toC(pxLL(C1)) }
+      p.size=+(G.props.size*s).toFixed(6);if(G.props.fontSize)p.fontSize=G.props.fontSize*s;
+      if(p.kind==="text"){ const C0=featurePx(f,toLL(G.snap.coordinates)),C1=A.add(C0.subtract(A).multiplyBy(s));f.geometry.coordinates=toC(featureLL(f,C1)) }
     }else{
       const [ ,hx,hy]=spec,ax=1-hx,ay=1-hy;
       const lx=t=>fr.x0+(fr.x1-fr.x0)*t,ly=t=>fr.y0+(fr.y1-fr.y0)*t;

@@ -32,7 +32,7 @@ fi
 
 install -d -m 700 "$AGENT_DIR" "$DATA_DIR" "$RUNTIME_DIR" "$LOG_DIR" "$CACHE_DIR"
 install -d -m 755 "$RUNTIME_DIR/vendor"
-for asset in server.js cache-budget.js wadnr.js wadnr-ingest-worker.js terrain-pool.js terrain-worker.js usgs.js cog.js mosaic-core.js terrain-core.js terrain-raster.js terrain-drape-core.js terrain-drape-pool.js terrain-drape-worker.js png-stream.js markup.js tile-pipeline.js \
+for asset in server.js cache-budget.js wadnr.js wadnr-ingest-worker.js terrain-pool.js terrain-worker.js usgs.js cog.js mosaic-core.js terrain-core.js terrain-raster.js terrain-drape-core.js terrain-drape-pool.js terrain-drape-worker.js png-stream.js markup.js markup-3d.js tile-pipeline.js \
              public-terrain.js public-terrain-worker.js ui-theme.css ui-system.css ui-system.js maxar-catalog.json nadi1-cordilleran.json \
              elevation-bands.js elevation-tile-core.js wa-archaeology.js glacial-research-core.js research-analysis.js research-worker.js point-cloud-core.js point-cloud-viewer.js point-cloud-catalog.json index.html version.js sw.js manifest.json \
              icon-180.png icon-192.png icon-512.png sources.json LICENSE; do
