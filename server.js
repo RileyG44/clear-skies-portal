@@ -11,6 +11,7 @@ const crypto= require("crypto");
 const net   = require("net");
 const zlib  = require("zlib");
 const usgs  = require("./usgs.js");
+const cacheBudgetCore=require("./cache-budget.js");
 const {TerrainPool,TerrainPoolError}=require("./terrain-pool.js");
 const researchAnalysis=require("./research-analysis.js");
 const {DnrStore}=require("./wadnr.js");
@@ -102,7 +103,7 @@ const SNAPSHOT_IMAGE_HOSTS = new Set([
 /* CPU-heavy COG decoding and every derived terrain product live outside the
    request loop. The managed, dedicated M2 install requests six workers; the
    pool still auto-sizes conservatively for ordinary manual launches. */
-const terrainPool=new TerrainPool({cacheDir:CACHE,maxQueue:MAX_RENDER_QUEUE});
+const terrainPool=new TerrainPool({cacheDir:CACHE,maxQueue:MAX_RENDER_QUEUE,cacheWriteGate:cacheBudgetCore.writeGate,onCacheWrite:bytes=>cacheBudget.noteWrite(bytes)});
 
 /* Analysis frames are cheap to regenerate and tied to the exact uploaded DEM,
    so keep only a short, bounded memory LRU. They do not belong in the long-
@@ -283,6 +284,14 @@ function cacheDiskStats(extraBytes=0){
   }catch(e){ return {freeGiB:null,minFreeGiB:CACHE_MIN_FREE_GIB,writable:true} }
 }
 let cacheCount=cacheEntryCount();
+/* Budget work stays off request paths. A dedicated worker scans/sorts/deletes. A warm job changes its eventual pin
+   set, so suspend eviction until its manifest is safely finalized. */
+const cacheBudget=new cacheBudgetCore.CacheBudget(CACHE,{
+  onEvict:()=>{cacheCount=Math.max(0,cacheCount-1)},
+  canEvict:()=>!warm.running&&!usgsWarm.running&&!usgs.warmState().running
+});
+usgs.setCacheWriteGate(cacheBudgetCore.writeGate);
+usgs.onCacheWrite(bytes=>cacheBudget.noteWrite(bytes));
 const CACHE_MEMORY_LIMIT=Math.max(32,Math.min(1024,Number(process.env.CSP_MEMORY_CACHE_MB)||256))*1024*1024;
 const CACHE_MEMORY_ENTRY_LIMIT=Math.max(1024,Math.min(65536,Number(process.env.CSP_MEMORY_CACHE_ENTRIES)||32768));
 const cacheMemory=new Map();let cacheMemoryBytes=0;
@@ -305,13 +314,15 @@ function memoryCacheGet(k,ttl){
   return {body:value.body,type:value.type,status:value.status,sourceMeta:value.sourceMeta};
 }
 function cacheGet(k, ttl){
-  const warm=memoryCacheGet(k,ttl);if(warm) return warm;
+  const warm=memoryCacheGet(k,ttl);if(warm){cacheBudgetCore.touchAccess(path.join(CACHE,k));return warm}
   const f = path.join(CACHE, k);
   try{
     const st = fs.statSync(f);
     if(Date.now() - st.mtimeMs > ttl) return null;
     const raw = JSON.parse(fs.readFileSync(f + ".meta", "utf8"));
-    const value={body: fs.readFileSync(f), ...raw};memoryCachePut(k,value,st.mtimeMs);return value;
+    const value={body: fs.readFileSync(f), ...raw};
+    cacheBudgetCore.touchAccess(f,st);
+    memoryCachePut(k,value,st.mtimeMs);return value;
   }catch(e){ return null }
 }
 function cachePut(k, status, type, body,sourceMeta){
@@ -324,11 +335,14 @@ function cachePut(k, status, type, body,sourceMeta){
   const bodyTmp=target+suffix, metaTmp=target+".meta"+suffix;
   const isNew=!fs.existsSync(target);
   try{
-    fs.writeFileSync(bodyTmp, body);
-    fs.writeFileSync(metaTmp, JSON.stringify({status,type,sourceMeta}));
-    fs.renameSync(bodyTmp,target);
-    fs.renameSync(metaTmp,target+".meta");
-    if(isNew) cacheCount++;
+    cacheBudgetCore.guardedWrite(cacheBudgetCore.writeGate,()=>{
+      fs.writeFileSync(bodyTmp, body);
+      fs.writeFileSync(metaTmp, JSON.stringify({status,type,sourceMeta}));
+      fs.renameSync(bodyTmp,target);
+      fs.renameSync(metaTmp,target+".meta");
+      if(isNew) cacheCount++;
+      cacheBudget.noteWrite(body.length+Buffer.byteLength(JSON.stringify({status,type,sourceMeta})));
+    });
     return true;
   }catch(e){
     try{ fs.unlinkSync(bodyTmp) }catch(e2){}
@@ -823,17 +837,8 @@ const warm = {running:false, stop:false, total:0, done:0, ok:0, bytes:0, label:"
 const warmState = () => ({running:warm.running, total:warm.total, done:warm.done,
                           ok:warm.ok, bytes:warm.bytes, label:warm.label,error:warm.error});
 
-function tileRange(bbox, z){          // bbox = [w,s,e,n] in degrees
-  const [w,s,e,n]=bbox, N=Math.pow(2,z);
-  const xt = lon => Math.floor((lon+180)/360*N);
-  const yt = lat => Math.floor((1-Math.log(Math.tan(lat*Math.PI/180)+1/Math.cos(lat*Math.PI/180))/Math.PI)/2*N);
-  return {x0:Math.max(0,xt(w)), x1:Math.min(N-1,xt(e)), y0:Math.max(0,yt(n)), y1:Math.min(N-1,yt(s))};
-}
-function mercBbox(z,x,y){
-  const R=20037508.342789244, N=Math.pow(2,z), sp=2*R/N;
-  const x0=-R+x*sp, y1=R-y*sp;
-  return `${x0},${y1-sp},${x0+sp},${y1}`;
-}
+const tileRange=cacheBudgetCore.tileRange;
+const mercBbox=cacheBudgetCore.mercBbox;
 
 /* The raw USGS 1 m archive is deliberately selective. For a spectrum overlay
    that works everywhere in the United States, fall back to the national 3DEP
@@ -906,21 +911,17 @@ async function startWarm(job){
   const worker = async ()=>{
     while(tiles.length && !warm.stop){
       const t=tiles.pop(); if(!t) break;
-      const bb=mercBbox(t.z,t.x,t.y);
+      const paths=cacheBudgetCore.exportWarmPaths(job,t);
       try{
         if(layers){
-          const qp=`?bbox=${bb}&bboxSR=3857&imageSR=3857&size=256,256&format=png32&transparent=true&dpi=96&f=image&layers=show:${layers}`;
-          const k=key("wadnr:export:"+qp);
+          const qp=paths.qp,k=paths.wadnr;
           if(!cacheGet(k,TTL_TILE)){
             const r=await upstream({host:WADNR_HOST, path:WADNR_MAP+"/export"+qp, method:"GET",
                                     headers:{"User-Agent":"clear-skies-portal"}, __timeout:TILE_MS});
             if(r.status===200 && isPng(r.body)){ cachePut(k,200,"image/png",r.body); warm.ok++; warm.bytes+=r.body.length }
           } else { warm.ok++ }
         }
-        const rr=encodeURIComponent(JSON.stringify({rasterFunction:rule}));
-        const dp=`/arcgis/rest/services/3DEPElevation/ImageServer/exportImage`
-               + `?bbox=${bb}&bboxSR=3857&imageSR=3857&size=256,256&format=png&transparent=true&f=image&renderingRule=${rr}`;
-        const dk=key("3dep:"+dp);
+        const dp=paths.dp,dk=paths.dep;
         if(!cacheGet(dk,TTL_TILE)){
           const r2=await upstream({host:"elevation.nationalmap.gov", path:dp, method:"GET",
                                    headers:{"User-Agent":"clear-skies-portal"}, __timeout:TILE_MS});
@@ -931,7 +932,6 @@ async function startWarm(job){
     }
   };
   await Promise.all(Array.from({length:3}, worker));
-  warm.running=false;
   /* record what was downloaded, and the catalogue state it matched */
   if(!warm.stop && warm.ok){
     try{
@@ -946,7 +946,7 @@ async function startWarm(job){
       });
     }catch(e){}
   }
-  warm.stop=false;
+  warm.running=false;warm.stop=false;
 }
 
 /* Raw-COG offline downloads share the M2 worker pool with interactive tiles.
@@ -967,8 +967,7 @@ async function startUsgsWarm(job){
   const lane=async()=>{
     while(tiles.length&&!usgsWarm.stop){
       const t=tiles.pop(); if(!t) break;
-      const nationalKey=key(`elevation-national-v1:${t.z}/${t.x}/${t.y}`);
-      const rawKey=key(`usgselev:${t.z}/${t.x}/${t.y}`);
+      const {national:nationalKey,raw:rawKey}=cacheBudgetCore.elevationWarmKeys(t);
       const controller=new AbortController();usgsWarm.controllers.add(controller);
       let fetched=false,available=false,tileBytes=0;
       try{
@@ -1012,11 +1011,10 @@ async function startUsgsWarm(job){
     }
   };
   await Promise.all(Array.from({length:Math.max(3,terrainPool.size-2)},lane));
-  usgsWarm.running=false;
   if(!usgsWarm.stop&&(usgsWarm.ok||usgsWarm.skipped)){
     try{ await usgs.finalizeWarm(job,usedKeys,usgsWarm) }catch(error){ usgsWarm.error=String(error.message||error) }
   }
-  usgsWarm.stop=false; usgsWarm.controllers.clear();
+  usgsWarm.running=false;usgsWarm.stop=false; usgsWarm.controllers.clear();
 }
 
 function stopUsgsWarm(){
@@ -1267,6 +1265,7 @@ const server = http.createServer(async (req,res)=>{
     if(p === "/api/warm" && req.method === "POST"){
       const job = validateWarmJob(await readJson(req,{}),"wadnr");
       if(warm.running) return send(res,409,"application/json",Buffer.from(JSON.stringify({error:"already running", ...warmState()})));
+      cacheBudget.invalidatePins();
       startWarm(job).catch(err=>{
         warm.running=false; warm.error=String(err.message||err); console.error(err);
       });
@@ -1550,6 +1549,7 @@ const server = http.createServer(async (req,res)=>{
       const job=validateWarmJob(await readJson(req,{}),"usgs");
       const st=usgsWarmState();
       if(st.running) return send(res,409,"application/json",Buffer.from(JSON.stringify({error:"already running",...st})));
+      cacheBudget.invalidatePins();
       startUsgsWarm(job).catch(err=>{ usgsWarm.running=false; usgsWarm.error=String(err.message||err); console.error(err) });
       return send(res,200,"application/json",Buffer.from(JSON.stringify(usgsWarmState())));
     }
@@ -1677,7 +1677,7 @@ const server = http.createServer(async (req,res)=>{
         memoryCache:{entries:cacheMemory.size,entryLimit:CACHE_MEMORY_ENTRY_LIMIT,
           MiB:+(cacheMemoryBytes/1048576).toFixed(1),limitMiB:CACHE_MEMORY_LIMIT/1048576},
         analysisCache:{entries:analysisCache.size,MiB:+(analysisCacheBytes/1048576).toFixed(1),limitMiB:ANALYSIS_CACHE_LIMIT/1048576},
-        cacheDisk:cacheDiskStats(),
+        cacheDisk:cacheDiskStats(),cacheBudget:cacheBudget.stats(),
         nationalCircuit:{failures:depCircuit.failures,coolingDown:Date.now()<depCircuit.openUntil,
                          retryInSec:Math.max(0,Math.ceil((depCircuit.openUntil-Date.now())/1000))},
         uptimeSec:Math.floor((Date.now()-STARTED)/1000),
@@ -1720,7 +1720,7 @@ if(require.main===module){
   const shutdown=()=>{
     if(stopping)return;stopping=true;
     server.close();
-    Promise.all([dnr.close(),terrainPool.close()]).finally(()=>process.exit(0));
+    Promise.all([cacheBudget.close(),dnr.close(),terrainPool.close()]).finally(()=>process.exit(0));
     setTimeout(()=>process.exit(0),5000).unref();
   };
   process.once("SIGTERM",shutdown);process.once("SIGINT",shutdown);
@@ -1735,5 +1735,5 @@ module.exports={
   validateSnapshotImageUrl,
   resolveSnapshotImageRedirect,
   send,
-  closeServerResources:()=>Promise.all([dnr.close(),terrainPool.close()])
+  closeServerResources:()=>Promise.all([cacheBudget.close(),dnr.close(),terrainPool.close()])
 };

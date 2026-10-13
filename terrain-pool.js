@@ -21,7 +21,7 @@ const abortError=()=>new TerrainPoolError("terrain request cancelled","ABORT_ERR
 const SHAREABLE=new Set(["raw-terrain","raw-elevation"]);
 
 class TerrainPool {
-  constructor({cacheDir,size,maxQueue=40,workerFile=path.join(__dirname,"terrain-worker.js"),jobsPerWorker,shareable=SHAREABLE}={}){
+  constructor({cacheDir,size,maxQueue=40,workerFile=path.join(__dirname,"terrain-worker.js"),jobsPerWorker,shareable=SHAREABLE,onCacheWrite=()=>{},cacheWriteGate}={}){
     const available=typeof os.availableParallelism==="function" ? os.availableParallelism() : os.cpus().length;
     const configured=Number(process.env.CSP_TERRAIN_WORKERS||size||0);
     /* Default: every core but one (up to 8). Each render is mostly waiting on
@@ -31,7 +31,7 @@ class TerrainPool {
     const perWorker=Number(jobsPerWorker??process.env.CSP_TERRAIN_JOBS_PER_WORKER??2);
     this.jobsPerWorker=Math.max(1,Math.min(4,Number.isInteger(perWorker)?perWorker:2));
     this.shareable=new Set(shareable);
-    this.cacheDir=cacheDir;
+    this.cacheDir=cacheDir;this.onCacheWrite=onCacheWrite;this.cacheWriteGate=cacheWriteGate;
     this.maxQueue=maxQueue;
     this.workerFile=workerFile;
     this.queue=[];
@@ -46,10 +46,13 @@ class TerrainPool {
 
   _spawn(slot){
     if(this.closed) return;
-    const worker=new Worker(this.workerFile,{workerData:{cacheDir:this.cacheDir},resourceLimits:{maxOldGenerationSizeMb:512}});
+    const worker=new Worker(this.workerFile,{workerData:{cacheDir:this.cacheDir,cacheWriteGate:this.cacheWriteGate},resourceLimits:{maxOldGenerationSizeMb:512}});
     slot.worker=worker; slot.jobs=new Set(); slot.replacing=false;
     if(!this.slots.includes(slot)) this.slots.push(slot);
-    worker.on("message",message=>this._finish(slot,message));
+    worker.on("message",message=>{
+      if(Number.isFinite(message.cacheBytesWritten)&&message.cacheBytesWritten>0){this.onCacheWrite(message.cacheBytesWritten);return}
+      this._finish(slot,message);
+    });
     worker.on("error",error=>this._workerFailed(slot,error));
     worker.on("exit",code=>{
       if(this.closed) return;

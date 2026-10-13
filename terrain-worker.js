@@ -50,6 +50,16 @@ async function dnrFabricGrid(minE,minN,res,n,zone,strict){
 }
 
 usgs.init(workerData.cacheDir);
+if(workerData.cacheWriteGate)usgs.setCacheWriteGate(workerData.cacheWriteGate);
+/* Batch range-write accounting rather than one IPC per COG block. The timer
+   flushes small jobs too, including aborted jobs whose ranges remain cached. */
+let cacheWritten=0,cacheWriteTimer=null;
+const flushCacheWrites=()=>{clearTimeout(cacheWriteTimer);cacheWriteTimer=null;
+  if(cacheWritten){parentPort.postMessage({cacheBytesWritten:cacheWritten});cacheWritten=0}};
+usgs.onCacheWrite(bytes=>{cacheWritten+=bytes;
+  if(cacheWritten>=8*1048576)flushCacheWrites();
+  else if(!cacheWriteTimer){cacheWriteTimer=setTimeout(flushCacheWrites,1000);cacheWriteTimer.unref()}
+});
 
 function terrariumFromTiff(value){
   const body=Buffer.from(value);

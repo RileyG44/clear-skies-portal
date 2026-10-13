@@ -84,6 +84,13 @@ that do not allow browser requests (WA DNR, Macrostrat, and SNODAS), for renderi
 raw USGS 1 m DEMs, and for resumable offline-area downloads. When the page itself
 comes from `server.js` or Electron, it connects automatically.
 
+The engine limits disposable disk cache files to 15 GiB (`CSP_CACHE_MAX_GB`).
+Background sweeps evict the least recently used tiles and USGS COG ranges down
+to 90% of that cap. Saved offline areas are pinned, even if they exceed the
+cap; the WA DNR store is separate and excluded. `CSP_CACHE_MIN_FREE_GB` (default
+8 GiB) still stops cache writes near the disk's free-space reserve. Cache usage,
+pinned bytes and the last sweep appear in `/api/health` under `cacheBudget`.
+
 Raw 1 m DEM discovery defaults to Washington so a fresh launch indexes tens of
 projects instead of the entire national archive. National rendered 3DEP still works
 everywhere. Set `CSP_USGS_STATES=ALL` before starting the engine for nationwide raw

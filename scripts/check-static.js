@@ -775,6 +775,11 @@ assert(index.includes("ovSliceData(o,result.data)")&&index.includes('id="ovTime_
        "a time-sliced overlay must draw one slice and expose its slider");
 for(const file of [".github/workflows/ci.yml","sw.js","server.js","scripts/install-mac-service.sh","scripts/minify-site.js"])
   assert(read(file).includes("nadi1-cordilleran.json"),`${file} must ship the NADI-1 ice-margin slices`);
+/* Server-only cache logic must ship with both runtime distributions without
+   becoming a browser asset or a service-worker precache entry. */
+for(const file of ["package.json","scripts/install-mac-service.sh"])
+  assert(read(file).includes("cache-budget.js"),`${file} must ship the cache budget`);
+assert(!read("sw.js").includes("cache-budget.js"),"cache budget is server-only");
 const installer=read("scripts/install-mac-service.sh");
 for(const asset of ["terrain-core.js","terrain-raster.js","elevation-bands.js","elevation-tile-core.js","wa-archaeology.js",
                     "glacial-research-core.js","research-analysis.js","research-worker.js"])

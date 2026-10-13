@@ -16,6 +16,10 @@ const path  = require("path");
 const zlib  = require("zlib");
 const cog   = require("./cog.js");
 const terrain = require("./terrain-core.js");
+const cacheBudget=require("./cache-budget.js");
+let cacheWrite=()=>{},cacheWriteGate=cacheBudget.writeGate;
+function setCacheWriteGate(gate){cacheWriteGate=gate}
+function onCacheWrite(callback){cacheWrite=callback}
 
 const S3_HOST = "prd-tnm.s3.amazonaws.com";
 const S3_BASE = "StagedProducts/Elevation/1m/Projects/";
@@ -304,14 +308,17 @@ function rangePath(key, a, b){
 const RANGE_PENDING = new Map();
 async function fetchRange(key, a, b){
   const f=rangePath(key,a,b);
-  try{ const buf=fs.readFileSync(f); if(buf.length===b-a+1) return {buf, cached:true} }catch(e){}
+  try{
+    const st=fs.statSync(f),buf=fs.readFileSync(f);
+    if(buf.length===b-a+1){cacheBudget.touchAccess(f,st);return {buf,cached:true}}
+  }catch(e){}
   if(RANGE_PENDING.has(f)) return RANGE_PENDING.get(f);
   const work=(async()=>{
     const r=await s3("/"+key,{Range:`bytes=${a}-${b}`});
     if(r.status!==206 && r.status!==200) throw new Error("range "+r.status);
     if(cacheWritable(r.body.length+4096)){
       const tmp=`${f}.${process.pid}.${Date.now()}.tmp`;
-      try{ fs.writeFileSync(tmp,r.body); fs.renameSync(tmp,f) }
+      try{ cacheBudget.guardedWrite(cacheWriteGate,()=>{fs.writeFileSync(tmp,r.body);fs.renameSync(tmp,f);cacheWrite(r.body.length)}) }
       catch(e){ try{ fs.unlinkSync(tmp) }catch(_){} }
     }
     return {buf:r.body, cached:false};
@@ -825,12 +832,7 @@ function areaSave(a){
   try{ fs.writeFileSync(path.join(areasDir(), a.id+".json"), JSON.stringify(a,null,1)) }catch(e){}
 }
 
-function tileRange(bbox,z){                        // bbox = [w,s,e,n] degrees
-  const [w,s,e,n]=bbox, N=Math.pow(2,z);
-  const xt=lon=>Math.floor((lon+180)/360*N);
-  const yt=lat=>Math.floor((1-Math.log(Math.tan(lat*Math.PI/180)+1/Math.cos(lat*Math.PI/180))/Math.PI)/2*N);
-  return {x0:Math.max(0,xt(w)), x1:Math.min(N-1,xt(e)), y0:Math.max(0,yt(n)), y1:Math.min(N-1,yt(s))};
-}
+const tileRange=cacheBudget.tileRange;
 function planTiles(bbox,z0,z1){
   const out=[];
   for(let z=z0; z<=z1; z++){
@@ -880,7 +882,7 @@ async function finalizeWarm(job,usedKeys,stats){
   }
   areaSave({
     id:require("crypto").createHash("sha1").update(JSON.stringify([bbox,z0,z1,style])).digest("hex").slice(0,12),
-    source:"usgs1m",label:job.label||`z${z0}-${z1}`,bbox,z0,z1,style,
+    source:"usgs1m",label:job.label||`z${z0}-${z1}`,bbox,z0,z1,style,raw:job.raw!==false,
     tiles:stats.total,ok:stats.ok,skipped:stats.skipped,bytes:stats.bytes,
     created:Date.now(),checked:Date.now(),sources,stale:false,changed:[]
   });
@@ -897,14 +899,14 @@ async function startWarm(job, tileCache){
     while(tiles.length && !warm.stop){
       const t=tiles.pop(); if(!t) break;
       try{
-        const pre = tileCache && tileCache.get(style,t.z,t.x,t.y);
+        const pre = tileCache && tileCache.get(style,t.z,t.x,t.y,cacheBudget.renderedWarmKey(style,t.z,t.x,t.y));
         if(pre){ warm.skipped++; warm.bytes+=pre.length; }
         else{
           const r=await renderTile(style,t.z,t.x,t.y,256);
           if(r){
             warm.ok++; warm.bytes+=r.png.length;
             r.meta.sources.forEach(sc=>usedKeys.add(sc.key));
-            if(tileCache) tileCache.put(style,t.z,t.x,t.y,r.png);
+            if(tileCache) tileCache.put(style,t.z,t.x,t.y,r.png,cacheBudget.renderedWarmKey(style,t.z,t.x,t.y));
           }
         }
       }catch(e){ warm.error=String(e.message||e) }
@@ -912,11 +914,10 @@ async function startWarm(job, tileCache){
     }
   };
   await Promise.all(Array.from({length:4}, worker));
-  warm.running=false;
   if(!warm.stop && (warm.ok||warm.skipped)){
     await finalizeWarm(job,usedKeys,warm);
   }
-  warm.stop=false;
+  warm.running=false;warm.stop=false;
 }
 
 /* Re-HEAD each recorded COG and compare. A changed ETag means the tile was
@@ -1092,3 +1093,6 @@ async function fabric(bbox, opt){
 module.exports = Object.assign(module.exports, { init, buildIndex, getIndex, findCells, cellOf, cellBounds, projectYear, scopeList, fabric, sampleUTMGrid, elevTile,
                    openCog, cogTile, fetchRange, renderTile, sampleGrid, utmGrid, encodePNG, renderRgba,
                    checkFresh, tileKey, tileUrl, s3head, S3_BASE });
+
+module.exports.onCacheWrite=onCacheWrite;
+module.exports.setCacheWriteGate=setCacheWriteGate;
