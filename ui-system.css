@@ -2146,6 +2146,18 @@ body.csp-redesign #panes .menu-card .fabbox{margin:16px 0 0;padding-top:16px}
 body.csp-redesign #panes #fabricResearchBox{margin-top:0}
 body.csp-redesign #panes #terrainDownloadBox > .elev-field{margin:16px 0 8px}
 body.csp-redesign #panes #terrainDownloadBox > .control-hint{margin-bottom:0}
+/* Every checkbox in the colour card sits on the same edge as the fields below
+   it; the row's hover padding hangs outside that edge instead of shifting it. */
+body.csp-redesign #panes .elevation-colour .check{margin-left:-9px;padding-left:8px}
+/* The view switch is its own section at the top; everything beneath it folds. */
+body.csp-redesign #panes #terView{margin:0 0 4px;padding:0 0 16px;border-bottom:1px solid var(--ui-line)}
+body.csp-redesign #panes #terView .terrain-mode{margin:0 0 8px}
+body.csp-redesign #panes #terView .terrain-mode-note{margin:0}
+body.csp-redesign #panes #terLidar{margin-top:0;border-top:0}
+body.csp-redesign #panes #terLidar > .terrain-fields{margin-top:8px}
+body.csp-redesign #panes .elevation-colour > .control-hint{margin-top:4px}
+body.csp-redesign #panes .elevation-colour > .fabbox{margin:16px 0 0;padding-top:16px}
+body.csp-redesign #panes .elevation-colour > .fabbox:last-child{padding-bottom:8px}
 body.csp-redesign #panes :is(#fabRun,#researchRun,#terWarm){width:100%;min-height:44px;margin-top:16px;border:1px solid var(--ui-line-strong);border-radius:10px}
 body.csp-redesign #panes #fabRun{color:var(--ui-text-2);background:var(--ui-surface)}
 body.csp-redesign #panes :is(#researchRun,#terWarm){color:var(--ui-control-ink);background:var(--ui-control);border-color:var(--ui-control)}
