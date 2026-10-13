@@ -95,7 +95,10 @@ function touchAccess(file,stat,now=Date.now()){
   const work=(async()=>{
     let handle;
     try{
-      handle=await fsp.open(file,fs.constants.O_RDONLY|fs.constants.O_NOFOLLOW);
+      /* Windows refuses futimes on a read-only handle (it needs attribute-write
+         access), so the touch silently failed there and LRU fell back to write
+         order. Opening for update changes neither contents nor mtime. */
+      handle=await fsp.open(file,process.platform==="win32"?fs.constants.O_RDWR:fs.constants.O_RDONLY|fs.constants.O_NOFOLLOW);
       const st=await handle.stat();if(!st.isFile()||now-st.atimeMs<HOUR)return false;
       await handle.utimes(now/1000,st.mtimeMs/1000);return true;
     }catch(e){return false}finally{if(handle)await handle.close()}
