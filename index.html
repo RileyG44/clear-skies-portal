@@ -994,8 +994,8 @@ body.pane-reordering,body.pane-reordering *{cursor:grabbing!important;user-selec
 }
 
 </style>
-<link rel="stylesheet" href="ui-theme.css?build=2026-10-13f">
-<link rel="stylesheet" href="ui-system.css?build=2026-10-13f">
+<link rel="stylesheet" href="ui-theme.css?build=2026-10-13g">
+<link rel="stylesheet" href="ui-system.css?build=2026-10-13g">
 <style>
 /* The redesign restructures the legacy DOM rather than replacing it, and the
    script that does so is the last thing on the page - so the browser paints the
@@ -1279,40 +1279,40 @@ html.csp-boot body{visibility:hidden}
               <div class="dnr-status-row"><div id="dnrAreaMsg" class="warmmsg" role="status" aria-live="polite">No downloaded areas</div>
                 <button class="linkbtn" id="dnrClear" type="button">Clear areas</button></div>
             </div>
-          </details>
-          <details class="terrain-appearance" id="terAppearance">
-            <summary>Layer appearance <span class="pane-n" id="terLookStyle">per layer</span></summary>
-            <div class="terrain-look-grid">
-              <label for="terContrast">Contrast</label>
-              <input type="range" id="terContrast" min="60" max="180" step="1" value="110">
-              <output id="terContrastOut" for="terContrast">110%</output>
-              <label for="terSaturation">Colour</label>
-              <input type="range" id="terSaturation" min="0" max="180" step="1" value="100">
-              <output id="terSaturationOut" for="terSaturation">100%</output>
-              <label for="terBrightness">Light</label>
-              <input type="range" id="terBrightness" min="75" max="150" step="1" value="106">
-              <output id="terBrightnessOut" for="terBrightness">106%</output>
+            <div class="terrain-subsection" id="terAppearance">
+              <h3 class="menu-section-title">Layer appearance <span class="pane-n" id="terLookStyle">per layer</span></h3>
+              <div class="terrain-look-grid">
+                <label for="terContrast">Contrast</label>
+                <input type="range" id="terContrast" min="60" max="180" step="1" value="110">
+                <output id="terContrastOut" for="terContrast">110%</output>
+                <label for="terSaturation">Colour</label>
+                <input type="range" id="terSaturation" min="0" max="180" step="1" value="100">
+                <output id="terSaturationOut" for="terSaturation">100%</output>
+                <label for="terBrightness">Light</label>
+                <input type="range" id="terBrightness" min="75" max="150" step="1" value="106">
+                <output id="terBrightnessOut" for="terBrightness">106%</output>
+              </div>
+              <button class="ghost terrain-look-reset" id="terLookReset" type="button">Reset this layer</button>
             </div>
-            <button class="ghost terrain-look-reset" id="terLookReset" type="button">Reset this layer</button>
-          </details>
-          <details class="terrain-appearance terrain-lighting" id="terLighting">
-            <summary>Terrain lighting <span class="pane-n">shared 2D + 3D</span></summary>
-            <div class="terrain-look-grid">
-              <label for="terSunAz">Sun azimuth</label>
-              <input type="range" id="terSunAz" min="0" max="359" step="1" value="315">
-              <output id="terSunAzOut" for="terSunAz">315&deg;</output>
-              <label for="terSunAlt">Sun altitude</label>
-              <input type="range" id="terSunAlt" min="5" max="90" step="1" value="45">
-              <output id="terSunAltOut" for="terSunAlt">45&deg;</output>
-              <label for="terAmbient">Ambient light</label>
-              <input type="range" id="terAmbient" min="0" max="60" step="1" value="12">
-              <output id="terAmbientOut" for="terAmbient">12%</output>
-              <label for="terExaggeration">3D relief</label>
-              <input type="range" id="terExaggeration" min="25" max="400" step="5" value="125">
-              <output id="terExaggerationOut" for="terExaggeration">1.25&times;</output>
+            <div class="terrain-subsection terrain-lighting" id="terLighting">
+              <h3 class="menu-section-title">Terrain lighting <span class="pane-n">shared 2D + 3D</span></h3>
+              <div class="terrain-look-grid">
+                <label for="terSunAz">Sun azimuth</label>
+                <input type="range" id="terSunAz" min="0" max="359" step="1" value="315">
+                <output id="terSunAzOut" for="terSunAz">315&deg;</output>
+                <label for="terSunAlt">Sun altitude</label>
+                <input type="range" id="terSunAlt" min="5" max="90" step="1" value="45">
+                <output id="terSunAltOut" for="terSunAlt">45&deg;</output>
+                <label for="terAmbient">Ambient light</label>
+                <input type="range" id="terAmbient" min="0" max="60" step="1" value="12">
+                <output id="terAmbientOut" for="terAmbient">12%</output>
+                <label for="terExaggeration">3D relief</label>
+                <input type="range" id="terExaggeration" min="25" max="400" step="5" value="125">
+                <output id="terExaggerationOut" for="terExaggeration">1.25&times;</output>
+              </div>
+              <div class="note" id="terLightNote">Hillshade and elevation tint relight instantly.</div>
+              <button class="ghost terrain-look-reset" id="terLightReset" type="button">Reset lighting</button>
             </div>
-            <div class="note" id="terLightNote">Hillshade and elevation tint relight instantly.</div>
-            <button class="ghost terrain-look-reset" id="terLightReset" type="button">Reset lighting</button>
           </details>
           <button class="linkbtn" id="terReset" type="button" style="margin-top:8px">Reset terrain panel</button>
           <details class="terrain-appearance terrain-offline" id="terrainDownloadBox">
@@ -1756,7 +1756,7 @@ html.csp-boot body{visibility:hidden}
   L.Renderer.prototype.onAdd=function(map){return onAdd.call(this,map||this._map)};
 })();
 </script>
-<script src="version.js?build=2026-10-13f"></script>
+<script src="version.js?build=2026-10-13g"></script>
 <script src="mosaic-core.js"></script>
 <script src="png-stream.js"></script>
 <script src="terrain-core.js"></script>
@@ -6774,7 +6774,7 @@ function updateTerrainLook(){
 const terrainLoadStatus=document.createElement("div");
 terrainLoadStatus.id="terrainLoadStatus";terrainLoadStatus.setAttribute("role","status");
 terrainLoadStatus.setAttribute("aria-live","polite");
-$("#terAppearance").before(terrainLoadStatus);
+$("#terLidar").after(terrainLoadStatus);
 const terrainSourceDetails=document.createElement("details");
 terrainSourceDetails.id="terrainSourceDetails";terrainSourceDetails.className="terrain-appearance";
 terrainSourceDetails.innerHTML='<summary>Rendered data &amp; source details</summary><div id="terrainSourceSummary"></div><button class="ghost" id="terrainInspectSource" type="button">Inspect USGS survey at map center</button><div id="terrainSurveyInfo"></div>';
@@ -10551,8 +10551,8 @@ $("#q").addEventListener("blur",()=>setTimeout(acHide,120));
 document.addEventListener("click",e=>{ if(!e.target.closest("#iw")) acHide() });
 })();
 </script>
-<script src="markup-3d.js?build=2026-10-13f"></script>
-<script src="markup.js?build=2026-10-13f"></script>
-<script src="ui-system.js?build=2026-10-13f"></script>
+<script src="markup-3d.js?build=2026-10-13g"></script>
+<script src="markup.js?build=2026-10-13g"></script>
+<script src="ui-system.js?build=2026-10-13g"></script>
 </body>
 </html>
