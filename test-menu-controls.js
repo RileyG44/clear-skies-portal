@@ -39,7 +39,7 @@ function spanChecks(){
   for(let position=0;position<=1000;position++){
     const feet=context.elevSpanFromPosition(position);assert(feet>=previous,'span never reverses direction');previous=feet;
   }
-  const panel=between('<div class="terdl dnr-module" id="dnrAreaPanel">','<details class="terrain-appearance" id="terAppearance">');
+  const panel=between('<div class="terdl dnr-module" id="dnrAreaPanel">','<div class="terrain-subsection" id="terAppearance">');
   assert.equal((panel.match(/<button/g)||[]).length,2,'the module contains only Select and housekeeping Clear');
   assert(!panel.includes('id="dnrFetch"'),'download confirmation belongs on the map');
   assert(between('<div id="dnrSelectionBar"','<section id="ctl"').includes('id="dnrFetch"'),'map toolbar owns confirmation');

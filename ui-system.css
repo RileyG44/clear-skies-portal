@@ -2155,6 +2155,15 @@ body.csp-redesign #panes #terView .terrain-mode{margin:0 0 8px}
 body.csp-redesign #panes #terView .terrain-mode-note{margin:0}
 body.csp-redesign #panes #terLidar{margin-top:0;border-top:0}
 body.csp-redesign #panes #terLidar > .terrain-fields{margin-top:8px}
+/* Appearance and lighting only change the LiDAR layer, so they sit inside it. */
+body.csp-redesign #panes #terLidar > .terrain-subsection{margin:0;padding:16px 0 0;border-top:0}
+body.csp-redesign #panes #terLidar > .terrain-subsection + .terrain-subsection{margin-top:16px;border-top:1px solid var(--ui-line)}
+body.csp-redesign #panes #terLidar > .terrain-subsection:last-child{padding-bottom:8px}
+body.csp-redesign #panes .terrain-subsection > .menu-section-title{display:flex;align-items:baseline;gap:8px}
+body.csp-redesign #panes .terrain-subsection > .menu-section-title .pane-n{margin-left:auto;font-size:12px;font-weight:400;text-align:right}
+body.csp-redesign #panes .terrain-subsection > .elev-field + .elev-field{margin-top:16px}
+body.csp-redesign #panes .terrain-subsection > .terrain-look-reset{margin-left:0;margin-right:0}
+body.csp-redesign #panes .terrain-subsection > .note{padding:8px 0 0}
 body.csp-redesign #panes .elevation-colour > .control-hint{margin-top:4px}
 body.csp-redesign #panes .elevation-colour > .fabbox{margin:16px 0 0;padding-top:16px}
 body.csp-redesign #panes .elevation-colour > .fabbox:last-child{padding-bottom:8px}

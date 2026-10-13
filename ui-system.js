@@ -187,23 +187,23 @@ function filterResearch(mode){
     element.classList.toggle("csp-route-hidden",element.dataset.cspResearchGroup!==mode);
   }
   const title=$(".pane-t",researchPane);
-  if(title) title.textContent=mode==="terrain"?"Elevation colour":mode==="geology"?"Identify geology":"Analysis tools";
+  if(title) title.textContent=mode==="terrain"?"Elevation Spectrum":mode==="geology"?"Identify geology":"Analysis tools";
 }
 
 /* Rendering belongs with the terrain layer; measurements keep their own cards. */
 const elevationColour=document.createElement("details");
 elevationColour.id="terElevationColour";elevationColour.className="terrain-appearance elevation-colour";
-elevationColour.innerHTML='<summary>Elevation colour <span class="pane-n" id="terElevationState">off</span></summary><p class="control-hint">Colour by height or highlight ground above and below a threshold.</p>';
+elevationColour.innerHTML='<summary>Elevation Spectrum <span class="pane-n" id="terElevationState">off</span></summary><p class="control-hint">Colour by height or highlight ground above and below a threshold.</p>';
 if(spectrumBox) elevationColour.append(spectrumBox);
 if(bandsBox) elevationColour.append(bandsBox);
-const terrainLighting=$("#terLighting");
-if(terrainLighting)terrainLighting.before(elevationColour);else $(".pane[data-pane=terrain] .pane-b")?.append(elevationColour);
+const terrainDownload=$("#terrainDownloadBox");
+if(terrainDownload)terrainDownload.before(elevationColour);else $(".pane[data-pane=terrain] .pane-b")?.append(elevationColour);
 $("#terrainDownloadBox")?.after(...[$("#terrainSourceDetails"),$("#terReset")].filter(Boolean));
 
 /* Terrain tools fold away when unused. Each closed row names what is active,
    and the panel remembers which rows were left open. */
 const TERRAIN_SECTIONS_KEY="clearskies.terrain-sections.v1";
-const terrainSections=["terLidar","terAppearance","terElevationColour","terLighting","terrainDownloadBox","terrainSourceDetails"];
+const terrainSections=["terLidar","terElevationColour","terrainDownloadBox","terrainSourceDetails"];
 let openTerrainSections=null;
 try{openTerrainSections=JSON.parse(localStorage.getItem(TERRAIN_SECTIONS_KEY))}catch(error){}
 for(const id of terrainSections){
