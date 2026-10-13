@@ -111,7 +111,14 @@ async function main(scenario="normal"){
   const release=(x,y)=>{const key=`${Z}/${x}/${y}`;released.set(key,true);fine.get(key)?.();fine.delete(key);};
 
   const warnings=[];
-  const app={...clock,performance:{now:()=>now},console:{...console,warn:(...args)=>warnings.push(args.join(" "))},
+  // This fixture holds fine responses indefinitely and releases them in a
+  // border-specific order. Admit its whole 3x3 view; test-mesh-loading.js
+  // independently checks the production six-request bound and cancellation.
+  const pipeline=require('./tile-pipeline');
+  const borderPipeline={...pipeline,RequestPool:class extends pipeline.RequestPool{
+    constructor(options){super({...options,concurrency:9});}
+  }};
+  const app={...clock,AbortController,DOMException,CSPTilePipeline:borderPipeline,waitElevationRetry:async()=>{},performance:{now:()=>now},console:{...console,warn:(...args)=>warnings.push(args.join(" "))},
     $:()=>({value:'auto'}),PROXY:true,API:'engine',api:p=>'engine'+p,dnrStatus:{revision:1},dnrElevationAvailable:()=>false,
     fetch:fetchStub,public3dSources:new Map(),public3dDrapeSources:new Map(),scheduleTerrainStatus:()=>{},elevCacheClear:()=>{},
     map3dBuiltKey:'',elevSpectrumRevision:0,maplibreProtocolReady:false};

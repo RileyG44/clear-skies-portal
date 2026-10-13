@@ -343,7 +343,7 @@ assert(Math.abs(reliefSandbox.lidar-1.024)<0.001&&reliefSandbox.continental>8&&r
        "zoomed-out hillshade must use the scaled z-factor: ~1x at lidar cells, ~9x at continental cells");
 assert(index.includes('const HIDPI=')&&index.includes('this._cspDz=HIDPI')&&index.includes('size=${EXPORT_PX},${EXPORT_PX}'),
        "terrain and exported map images must be drawn at the screen's pixel density");
-assert(index.includes('module.addProtocol("cspmesh"')&&index.includes('MESH_FAST_WAIT')&&index.includes('module.prewarm?.()'),
+assert(index.includes('module.addProtocol("cspmesh"')&&index.includes('Promise.any([')&&index.includes('const overview=meshOverviewTile(')&&index.includes('module.prewarm?.()'),
        "the 3D mesh must answer from the CDN overview when 3DEP is slow, and MapLibre must be prewarmed");
 assert(index.includes('if(data&&data.pinch&&!map3d){ pinchFrame(center,zoom);return this }')&&
        index.includes('pinchLive=false;commitView(center,zoom);\n      map.eachLayer(layer=>layer._cspEndDeferral?.());')&&

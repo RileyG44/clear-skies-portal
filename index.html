@@ -992,8 +992,8 @@ body.pane-reordering,body.pane-reordering *{cursor:grabbing!important;user-selec
 }
 
 </style>
-<link rel="stylesheet" href="ui-theme.css?build=2026-10-12h">
-<link rel="stylesheet" href="ui-system.css?build=2026-10-12h">
+<link rel="stylesheet" href="ui-theme.css?build=2026-10-12i">
+<link rel="stylesheet" href="ui-system.css?build=2026-10-12i">
 <style>
 /* The redesign restructures the legacy DOM rather than replacing it, and the
    script that does so is the last thing on the page - so the browser paints the
@@ -1721,7 +1721,7 @@ html.csp-boot body{visibility:hidden}
   L.Renderer.prototype.onAdd=function(map){return onAdd.call(this,map||this._map)};
 })();
 </script>
-<script src="version.js?build=2026-10-12h"></script>
+<script src="version.js?build=2026-10-12i"></script>
 <script src="mosaic-core.js"></script>
 <script src="png-stream.js"></script>
 <script src="terrain-core.js"></script>
@@ -5765,18 +5765,20 @@ function terrainDemTiles(host="dem"){
    finish its first frame. 3DEP answers in seconds per tile when it is not
    cached, and a tilted view asks for its tiles in waves (the near tiles decide
    which far ones are visible), so opening 3D over new ground took many
-   seconds. Now each mesh tile is 3DEP if it arrives within MESH_FAST_WAIT,
-   and otherwise the global Terrarium tile from Amazon's CDN (10 m 3DEP in the
-   US, SRTM/GMTED elsewhere), which answers in about a tenth of a second. The
-   3DEP request keeps going; when it lands that tile alone is reloaded and
+   seconds. Now each mesh tile races 3DEP against the global Terrarium tile
+   from Amazon's CDN (10 m 3DEP in the US, SRTM/GMTED elsewhere), displaying
+   whichever usable source arrives first. Visible 3DEP requests keep going;
+   when a finer tile lands that tile alone is reloaded and
    answers from memory. Where 3DEP has no data (outside the US) the CDN tile
    simply stays. */
-const MESH_FAST_WAIT=300, MESH_FINE_MAX=256, MESH_OVERVIEW_MAX_ZOOM=15;
+const MESH_FINE_MAX=256, MESH_OVERVIEW_MAX_ZOOM=15;
 const meshFine=new Map(), meshPending=new Map();
+const meshRequests=new CSPTilePipeline.RequestPool({concurrency:6,maxBytes:0});
 const meshRanks=new Map();
 let meshRevision=0, meshRefineTimer=null, meshRefinedAt=0;
 function meshKey(z,x,y){ return `${$("#terSrc").value}:${PROXY?API:"public"}:${dnrStatus?.revision||0}:${z}/${x}/${y}` }
 function resetMeshSources(){
+  for(const job of meshPending.values())job.controller.abort();meshPending.clear();
   meshFine.clear();meshRanks.clear();public3dSources.clear();public3dDrapeSources.clear();meshStaleClear();
   elevCacheClear();meshRevision++;map3dBuiltKey="";elevSpectrumRevision++;
 }
@@ -5784,38 +5786,44 @@ function rememberMeshTile(key,buffer){
   meshFine.delete(key);meshFine.set(key,buffer);
   while(meshFine.size>MESH_FINE_MAX){const oldest=meshFine.keys().next().value;meshFine.delete(oldest);meshRanks.delete(oldest);}
 }
-/* The 3DEP tile as Terrarium PNG bytes, or null where 3DEP has nothing. Not
-   tied to MapLibre's abort: a tile scrolled away still finishes, so the swap
-   has something to show when the view comes back. */
+/* Bound fine mesh work independently of overview loading. Shared DEM/shade
+   consumers keep the job alive; viewport pruning also catches background work
+   whose overview has already completed its MapLibre request. */
 function meshFineTile(z,x,y){
   const key=meshKey(z,x,y);
   if(meshFine.has(key)) return Promise.resolve(meshFine.get(key));
-  if(meshPending.has(key)) return meshPending.get(key);
-  const job=(async()=>{
+  if(meshPending.has(key)&&!meshPending.get(key).controller.signal.aborted) return meshPending.get(key);
+  const controller=new AbortController();
+  const job=meshRequests.request(key,async signal=>{
+    job.startedAt=performance.now();
     if(PROXY){
       if(dnrElevationAvailable()&&["auto","wadnr","wadnr-only"].includes($("#terSrc").value)){
-        const source=await engineElevationWithFallback({z,x,y},new AbortController().signal,true);
+        const source=await engineElevationWithFallback({z,x,y},signal,true);
         if(!source)return null;
         meshRanks.set(key,source.ranks);
         return terrariumPng(source.grid);
       }
       for(let attempt=0;attempt<3;attempt++){
-        const response=await fetch(api(`/api/elev/national/${z}/${x}/${y}.png`));
+        const response=await fetch(api(`/api/elev/national/${z}/${x}/${y}.png`),{signal});
         if(response.ok){
           if(response.headers.get("X-Coverage")==="none") return null;
           meshRanks.set(key,[2]);return response.arrayBuffer();
         }
         if(response.status!==503) return null;
-        await new Promise(r=>setTimeout(r,Math.min(4000,(+response.headers.get("Retry-After")||2)*1000*(attempt+1))));
+        await waitElevationRetry(Math.min(4000,(+response.headers.get("Retry-After")||2)*1000*(attempt+1)),signal);
       }
       return null;
     }
     const url=CSPPublicTerrain.nationalUrl({z,x,y});
-    const tile=await elevationRequests.request(url,signal=>fetchPublicElevation(url,signal),{priority:2,group:"national"});
+    const tile=await elevationRequests.request(url,signal=>fetchPublicElevation(url,signal),{signal,priority:2,group:"national"});
     if(!tile) return null;
     meshRanks.set(key,[2]);return terrariumPng(ElevationTileCore.resampleElevation(tile.grid,tile.width,tile.height,null,256,256));
-  })().then(buffer=>{ if(buffer) rememberMeshTile(key,buffer);return buffer },()=>null)
-    .finally(()=>meshPending.delete(key));
+  },{signal:controller.signal}).then(buffer=>{
+    if(controller.signal.aborted)throw new DOMException("Aborted","AbortError");
+    if(buffer)rememberMeshTile(key,buffer);return buffer;
+  },error=>{if(controller.signal.aborted||error.name==="AbortError")throw new DOMException("Aborted","AbortError");return null})
+    .finally(()=>{if(meshPending.get(key)===job)meshPending.delete(key);setTimeout(meshRefineAgain,0)});
+  Object.assign(job,{controller,z,x,y,consumers:new Set()});
   meshPending.set(key,job);
   return job;
 }
@@ -5885,9 +5893,11 @@ function markMeshTile(source,key,tile,fine){
   stale.delete(key);
   if(fine===true) return;
   if(!fine) return;
-  const entry={tile,ready:false};stale.set(key,entry);capMeshMap(stale,MESH_STALE_MAX);
+  const entry={tile,ready:false,pending:true};stale.set(key,entry);capMeshMap(stale,MESH_STALE_MAX);
   fine.then(buffer=>{ if(stale.get(key)!==entry) return;
-    if(buffer){ entry.ready=true;scheduleMeshRefine() }else stale.delete(key) });
+    entry.pending=false;
+    if(buffer){ entry.ready=true;scheduleMeshRefine() }else stale.delete(key)
+  },error=>{if(stale.get(key)!==entry)return;entry.pending=false;if(error.name!=="AbortError")stale.delete(key)});
 }
 /* Source-data events include ordinary reloads too: a fine tile can return as
    overview after its bytes leave the bounded cache. Track DEM identity, not
@@ -5983,7 +5993,56 @@ function scheduleMeshRefine(){
     }
   },wait);
 }
+function meshViewContains(){
+  const held=new Set();
+  for(const id of ["dem","demShade"]){
+    const manager=map3d?.style?.tileManagers?.[id];
+    for(const key of manager?.getIds?.()||[]){
+      const c=manager.getTileByID?.(key)?.tileID?.canonical;
+      if(c)held.add(`${c.z}/${c.x}/${c.y}`);
+    }
+  }
+  let bounds;try{
+    bounds=map3d?.getBounds?.();
+    if(bounds)[bounds.getWest(),bounds.getEast(),bounds.getSouth(),bounds.getNorth()];
+  }catch{bounds=null}
+  const lat=y=>Math.atan(Math.sinh(Math.PI*(1-2*y)))*180/Math.PI;
+  return tile=>{
+    if(held.has(`${tile.z}/${tile.x}/${tile.y}`)||!bounds)return true;
+    const n=2**tile.z,left=(tile.x-1)/n*360-180,right=(tile.x+2)/n*360-180;
+    const west=bounds.getWest();let east=bounds.getEast();if(east<west)east+=360;
+    const shift=360*Math.round(((west+east)/2-(left+right)/2)/360);
+    return lat(Math.max(0,tile.y-1)/n)>=bounds.getSouth()&&lat(Math.min(n,tile.y+2)/n)<=bounds.getNorth()&&
+      right+shift>=west&&left+shift<=east;
+  };
+}
+function pruneMeshRequests(){
+  if(!map3d)return;
+  const visible=meshViewContains();
+  for(const job of meshPending.values())if(!visible(job))job.controller.abort();
+}
+/* Put new demand first in the queue. Only stalled background work yields a
+   slot; healthy visible refinements keep their already-paid network progress. */
+function prioritizeMeshRequest(fine){
+  if(!fine.controller||meshRequests.active<meshRequests.concurrency)return;
+  const queued=meshRequests.jobs.get(meshKey(fine.z,fine.x,fine.y));
+  if(!queued||queued.started)return;
+  queued.priority=1;
+  for(const other of meshPending.values()){
+    if(other===fine||other.controller.signal.aborted)continue;
+    const active=meshRequests.jobs.get(meshKey(other.z,other.x,other.y));
+    if(active?.started&&performance.now()-other.startedAt>=4000&&[...other.consumers].every(c=>!c.foreground)){
+      other.controller.abort();break;
+    }
+  }
+}
 function meshRefineAgain(){
+  const visible=meshViewContains();
+  for(const [source,stale] of Object.entries(meshStale))for(const [key,entry] of stale){
+    if(map3d&&!entry.ready&&!entry.pending&&visible(entry.tile)&&meshRequests.active<meshRequests.concurrency){
+      const {z,x,y}=entry.tile;markMeshTile(source,key,entry.tile,meshFineTile(z,x,y));
+    }
+  }
   if(!meshRefineTimer&&Object.values(meshStale).some(stale=>{ for(const entry of stale.values()) if(entry.ready) return true;return false })) scheduleMeshRefine();
 }
 async function meshTile(z,x,y,signal,source="dem"){
@@ -6000,23 +6059,43 @@ async function meshTile(z,x,y,signal,source="dem"){
     /* Touch bytes actually used, without pinning visible tiles above the cap. */
     const buffer=meshFine.get(key);rememberMeshTile(key,buffer);markMeshTile(source,key,tile,true);note(meshRanks.get(key)||[2]);return buffer.slice(0);
   }
-  const fine=meshFineTile(z,x,y);
-  const first=await Promise.race([fine,new Promise(r=>setTimeout(()=>r(undefined),MESH_FAST_WAIT))]);
-  if(first){ markMeshTile(source,key,tile,true);note(meshRanks.get(key)||[2]);return first.slice(0) }
+  if(signal?.aborted)throw new DOMException("Aborted","AbortError");
+  const fine=meshFineTile(z,x,y),consumer={foreground:true};
+  fine.consumers?.add(consumer);
+  prioritizeMeshRequest(fine);
+  const abort=()=>{fine.consumers?.delete(consumer);if(fine.consumers&&!fine.consumers.size)fine.controller.abort()};
+  signal?.addEventListener("abort",abort,{once:true});
+  const cleanup=()=>{signal?.removeEventListener("abort",abort);fine.consumers?.delete(consumer)};
+  fine.then(cleanup,cleanup);
+  let abortWait;
+  const cancelled=new Promise((resolve,reject)=>{abortWait=()=>reject(new DOMException("Aborted","AbortError"));signal?.addEventListener("abort",abortWait,{once:true})});
+  const awaitTile=async promise=>{try{return await Promise.race([promise,cancelled])}finally{signal?.removeEventListener("abort",abortWait)}};
   if($("#terSrc").value==="wadnr-only"){
-    const result=first===undefined?await fine:first;markMeshTile(source,key,tile,!!result);
+    const result=await awaitTile(fine);
+    if(signal?.aborted)throw new DOMException("Aborted","AbortError");
+    markMeshTile(source,key,tile,!!result);
     if(result){note(meshRanks.get(key)||[5]);return result.slice(0);}
     note([]);throw new Error("DNR does not cover this 3D mesh tile");
   }
-  if(first===null){
-    /* 3DEP answered, with nothing: the overview is the best there is. */
-    markMeshTile(source,key,tile,false);note(1);return meshOverviewTile(z,x,y,signal);
-  }
-  let overview;
-  try{ overview=await meshOverviewTile(z,x,y,signal) }
-  catch(error){ if(signal?.aborted) throw error;const late=await fine;markMeshTile(source,key,tile,!!late);if(late){ note(meshRanks.get(key)||[2]);return late.slice(0) }throw error }
-  markMeshTile(source,key,tile,fine);note(1);
-  return overview;
+  // Start both immediately. Either useful response can put terrain on screen;
+  // a slow overview must never hold up fine data that has already arrived.
+  const overviewController=new AbortController(),cancelOverview=()=>overviewController.abort();
+  signal?.addEventListener("abort",cancelOverview,{once:true});
+  const overview=meshOverviewTile(z,x,y,overviewController.signal);
+  try{
+    const result=await awaitTile(Promise.any([
+      fine.then(buffer=>{if(!buffer)throw new Error("No fine elevation");return {buffer,fine:true}}),
+      overview.then(buffer=>({buffer,fine:false}))
+    ]));
+    if(signal?.aborted)throw new DOMException("Aborted","AbortError");
+    if(result.fine){overviewController.abort();markMeshTile(source,key,tile,true);note(meshRanks.get(key)||[2]);return result.buffer.slice(0)}
+    consumer.foreground=false;
+    if(fine.consumers&&[...fine.consumers].every(c=>!c.foreground)){
+      const queued=meshRequests.jobs.get(key);if(queued&&!queued.started)queued.priority=0;
+    }
+    markMeshTile(source,key,tile,fine);note(1);return result.buffer;
+  }catch(error){if(error instanceof AggregateError)throw error.errors.find(e=>e.name==="AbortError")||error.errors.at(-1);throw error}
+  finally{signal?.removeEventListener("abort",cancelOverview)}
 }
 function terrainTheme(){ return $("#map").dataset.basemapTheme==="dark"?"dark":"light" }
 /* A physical-relief tint, taken straight from the elevation the mesh is built
@@ -6365,6 +6444,7 @@ async function enterTerrain3d(){
        queues its neighbours' (see meshStale). */
     meshStaleClear();map3d.on("moveend",meshRefineAgain);
     map3d.on("sourcedata",meshSourceData);
+    map3d.on("moveend",pruneMeshRequests);
     if(!map3dWanted){ map3d.remove(); map3d=null; return null }   // left 3D while loading
     map.keyboard?.disable();return map3d;
   })().catch(error=>{console.warn(error);map3d?.remove();map3d=null;setTerrainModeUi(false,error.message||"3D terrain could not start.");throw error})
@@ -9060,6 +9140,10 @@ function waitElevationRetry(ms,signal){
 }
 async function engineElevationWithFallback(coords,signal,mesh=false){
   const strict=$("#terSrc").value==="wadnr-only",requests=[];
+  const controller=new AbortController(),abort=()=>controller.abort();
+  if(signal.aborted)throw new DOMException("Aborted","AbortError");
+  signal.addEventListener("abort",abort,{once:true});
+  const requestSignal=controller.signal;
   if(["wadnr","wadnr-only"].includes($("#terSrc").value)&&coords.z>=13){
     const url=api(`/api/wadnr/elev/${coords.z}/${coords.x}/${coords.y}.png?acquire=1`);
     elevationRequests.request(url,async s=>{
@@ -9069,26 +9153,33 @@ async function engineElevationWithFallback(coords,signal,mesh=false){
       scheduleDnrStatus();return null;
     },{signal,priority:1,group:"dnr"}).catch(()=>{});
   }
-  const request=(url,rank,group)=>elevationRequests.request(api(url),s=>fetchElevation(api(url),s),{signal,priority:rank===5?2:rank,group})
+  const request=(url,rank,group)=>elevationRequests.request(api(url),s=>fetchElevation(api(url),s),{signal:requestSignal,priority:rank===5?2:rank,group})
     .then(source=>source?{source,rank}:null).catch(error=>{if(signal.aborted)throw error;return null;});
   requests.push(request(`/api/wadnr/elev/${coords.z}/${coords.x}/${coords.y}.png?acquire=0&revision=${dnrStatus?.revision||0}`,5,"dnr"));
   if(!strict){
     requests.push(request(`/api/elev/national/${coords.z}/${coords.x}/${coords.y}.png`,2,"national"));
     if(!mesh&&coords.z>=13)requests.push(request(`/api/usgs/elev/${coords.z}/${coords.x}/${coords.y}.png`,3,"detail"));
-    requests.push(overviewElevation(coords,signal).then(source=>({source,rank:1})).catch(error=>{if(signal.aborted)throw error;return null;}));
+    requests.push(overviewElevation(coords,requestSignal).then(source=>({source,rank:1})).catch(error=>{if(signal.aborted)throw error;return null;}));
   }
-  const results=await Promise.all(requests),progress=new CSPTilePipeline.ProgressiveGrid(256*256);
-  for(const result of results)if(result){
-    const source=result.source;
-    progress.accept(source.width===256&&source.height===256?source.grid:
-      ElevationTileCore.resampleElevation(source.grid,source.width,source.height,null,256,256),result.rank);
-  }
-  if(!progress.valid){
-    if(strict)return null;
-    return null;
-  }
-  if(strict&&mesh&&progress.valid<progress.grid.length)return null;
-  return {grid:progress.grid,ranks:[5,3,2,1].filter(rank=>progress.counts[rank]>0)};
+  const progress=new CSPTilePipeline.ProgressiveGrid(256*256);
+  const ranks=strict?[5]:mesh?[5,2,1]:coords.z>=13?[5,2,3,1]:[5,2,1];
+  const pending=new Set(ranks);
+  try{
+    return await new Promise((resolve,reject)=>{
+      const finish=()=>{
+        if(signal.aborted){reject(new DOMException("Aborted","AbortError"));return}
+        const used=[5,3,2,1].filter(rank=>progress.counts[rank]>0);
+        // Complete coverage cannot benefit from remaining lower-ranked sources.
+        if(pending.size&&!(progress.valid===progress.grid.length&&Math.max(...pending)<Math.min(...used)))return;
+        resolve(!progress.valid||strict&&mesh&&progress.valid<progress.grid.length?null:{grid:progress.grid,ranks:used});
+      };
+      requests.forEach((request,i)=>request.then(result=>{
+        if(result){const source=result.source;progress.accept(source.width===256&&source.height===256?source.grid:
+          ElevationTileCore.resampleElevation(source.grid,source.width,source.height,null,256,256),result.rank)}
+        pending.delete(ranks[i]);finish();
+      },reject));
+    });
+  }finally{controller.abort();signal.removeEventListener("abort",abort)}
 }
 const ElevLayer = L.GridLayer.extend({
   initialize:function(opts){ L.setOptions(this,opts); this._store=new Map(); this._pending=new Map();
@@ -10183,7 +10274,7 @@ $("#q").addEventListener("blur",()=>setTimeout(acHide,120));
 document.addEventListener("click",e=>{ if(!e.target.closest("#iw")) acHide() });
 })();
 </script>
-<script src="markup.js?build=2026-10-12h"></script>
-<script src="ui-system.js?build=2026-10-12h"></script>
+<script src="markup.js?build=2026-10-12i"></script>
+<script src="ui-system.js?build=2026-10-12i"></script>
 </body>
 </html>

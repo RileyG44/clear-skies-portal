@@ -40,7 +40,7 @@ async function main(){
     refreshTiles(id,tiles){refreshes.push([id,Array.from(tiles,t=>`${t.z}/${t.x}/${t.y}`).sort()]);}
   };
   const context={
-    ...clock,performance:{now:()=>now},console,
+    ...clock,AbortController,DOMException,CSPTilePipeline:require('./tile-pipeline'),waitElevationRetry:async()=>{},performance:{now:()=>now},console,
     $:()=>({value:'auto'}),PROXY:true,API:'engine',api:path=>'engine'+path,dnrStatus:{revision:1},dnrElevationAvailable:()=>false,
     fetch:fetchStub,public3dSources:new Map(),public3dDrapeSources:new Map(),scheduleTerrainStatus:()=>{},elevCacheClear:()=>{},
     map3dBuiltKey:'x',elevSpectrumRevision:0,map3d,maplibreProtocolReady:false
@@ -62,7 +62,7 @@ async function main(){
      exactly those tiles on the source that holds them. */
   const a=request(tileUrl(demUrl,14,10,20)),b=request(tileUrl(demUrl,14,11,20)),c=request(tileUrl(shadeUrl,14,10,20));
   await clock.advance(300);
-  assert.deepEqual(new Uint8Array(await a),new Uint8Array([1]),'overview answers after MESH_FAST_WAIT');
+  assert.deepEqual(new Uint8Array(await a),new Uint8Array([1]),'overview answers while fine work is pending');
   await b;await c;
   assert.equal(refreshes.length,0,'nothing to refresh before 3DEP lands');
   fine.get(national(14,10,20))(new Uint8Array([2]));fine.get(national(14,11,20))(new Uint8Array([2]));
