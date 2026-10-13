@@ -70,6 +70,14 @@ async function warmAreaChecks(){
   for(let i=0;i<100&&store.warm.running;i++)await new Promise(r=>setTimeout(r,10));
   assert.equal(store.warm.error,null);assert.equal(store.warm.done,warm.total,"empty cells finish without downloads");
   assert.throws(()=>store.startWarm([-130,30,-120,45]),/4096/, "state-sized fetches stay bounded");
+  store.ensureTile=async()=>({state:"pending"});
+  const pending=store.startWarm([-130,40,-129.8,40.2]);
+  assert.equal(store.stopWarm(warm.id).cancelled,false,"an old client cannot cancel a newer download");
+  assert.equal(store.warm.stop,false,"a mismatched job id leaves the running job intact");
+  assert.equal(store.stopWarm(pending.id).cancelled,true,"the owner can cancel a running job");
+  for(let i=0;i<120&&store.warm.running;i++)await new Promise(r=>setTimeout(r,10));
+  assert.equal(store.warm.running,false,"a pending acquisition settles after cancellation");
+  assert(store.warm.done<store.warm.total,"cancellation stops scheduling the rest of the selected area");
   store.close();
 }
 async function rasterChecks(){

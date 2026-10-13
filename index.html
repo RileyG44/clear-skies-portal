@@ -994,8 +994,8 @@ body.pane-reordering,body.pane-reordering *{cursor:grabbing!important;user-selec
 }
 
 </style>
-<link rel="stylesheet" href="ui-theme.css?build=2026-10-13c">
-<link rel="stylesheet" href="ui-system.css?build=2026-10-13c">
+<link rel="stylesheet" href="ui-theme.css?build=2026-10-13d">
+<link rel="stylesheet" href="ui-system.css?build=2026-10-13d">
 <style>
 /* The redesign restructures the legacy DOM rather than replacing it, and the
    script that does so is the last thing on the page - so the browser paints the
@@ -1065,7 +1065,7 @@ html.csp-boot body{visibility:hidden}
       </div>
     </div>
 
-    <div id="status">Enter a location, or click anywhere on the map.</div>
+    <div id="status" data-kind="idle">Enter a location, or click anywhere on the map.</div>
 
     <div id="panes">
 
@@ -1233,15 +1233,17 @@ html.csp-boot body{visibility:hidden}
           <span class="pane-x">&#9662;</span>
         </div>
         <div class="pane-b">
+          <h3 class="menu-section-title">View</h3>
           <div class="terrain-mode" role="group" aria-label="Terrain view mode">
             <button id="terMode2d" type="button" aria-pressed="true">2D map</button>
             <button id="terMode3d" type="button" aria-pressed="false">3D terrain</button>
             <button id="terModePoints" type="button" aria-pressed="false">Point cloud</button>
           </div>
-          <div class="terrain-mode-note" id="terModeNote">Rotate with right-drag or a two-finger twist. North reset is on the map.</div>
-          <div class="fgrid">
+          <div class="terrain-mode-note" id="terModeNote">Drag to pan. Pinch to zoom. North reset is on the map.</div>
+          <h3 class="menu-section-title">Terrain layer</h3>
+          <div class="fgrid terrain-fields">
             <label for="terStyle">Layer</label>
-            <select id="terStyle">
+            <select id="terStyle" aria-describedby="terStyleHint">
               <option value="off" selected>Off</option>
               <option value="hs">Hillshade</option>
               <option value="hsmulti">Hillshade (multi-directional)</option>
@@ -1254,14 +1256,26 @@ html.csp-boot body{visibility:hidden}
               <option value="c10">Contours &mdash; 10 ft</option>
               <option value="c25">Contours &mdash; 25 ft</option>
             </select>
+            <p class="control-hint" id="terStyleHint"></p>
             <label for="terSrc">Source preference</label>
-            <select id="terSrc">
+            <select id="terSrc" aria-describedby="terSrcHint">
               <option value="auto" selected>Best available</option>
               <option value="3dep">USGS 3DEP (national)</option>
               <option value="usgs1m">USGS 3.3 ft (offline-capable)</option>
             </select>
-            <label for="terOp">Opacity <output id="terOpOut" for="terOp">70%</output></label>
-            <input type="range" id="terOp" min="0" max="100" value="70">
+            <p class="control-hint" id="terSrcHint">Uses fetched WA DNR in your selected areas and USGS elsewhere.</p>
+            <div class="elev-field terrain-opacity-control">
+              <div class="elev-label-row"><label for="terOp">Opacity</label><output id="terOpOut" for="terOp">70%</output></div>
+              <input type="range" id="terOp" min="0" max="100" value="70">
+            </div>
+          </div>
+          <div class="terdl dnr-module" id="dnrAreaPanel">
+            <h3 class="menu-section-title">WA DNR LiDAR</h3>
+            <p class="control-hint">Download Washington state LiDAR for an area you choose. USGS stays active elsewhere.</p>
+            <button class="ghost" id="dnrSelect" type="button" aria-describedby="dnrEngineHint">Select area on map</button>
+            <p class="control-hint" id="dnrEngineHint"></p>
+            <div class="dnr-status-row"><div id="dnrAreaMsg" class="warmmsg" role="status" aria-live="polite">No downloaded areas</div>
+              <button class="linkbtn" id="dnrClear" type="button">Clear areas</button></div>
           </div>
           <details class="terrain-appearance" id="terAppearance">
             <summary>Layer appearance <span class="pane-n" id="terLookStyle">per layer</span></summary>
@@ -1278,7 +1292,7 @@ html.csp-boot body{visibility:hidden}
             </div>
             <button class="ghost terrain-look-reset" id="terLookReset" type="button">Reset this layer</button>
           </details>
-          <details class="terrain-appearance terrain-lighting" id="terLighting" open>
+          <details class="terrain-appearance terrain-lighting" id="terLighting">
             <summary>Terrain lighting <span class="pane-n">shared 2D + 3D</span></summary>
             <div class="terrain-look-grid">
               <label for="terSunAz">Sun azimuth</label>
@@ -1298,34 +1312,28 @@ html.csp-boot body{visibility:hidden}
             <button class="ghost terrain-look-reset" id="terLightReset" type="button">Reset lighting</button>
           </details>
           <button class="linkbtn" id="terReset" type="button" style="margin-top:8px">Reset terrain panel</button>
-          <div class="terdl">
-            <div class="terrain-action-row">
-              <button class="ghost" id="terWarm">Download this view</button>
-              <select id="terDepth" title="How far in to download. Native matches the LiDAR\u2019s own resolution.">
+          <div class="terdl menu-card" id="terrainDownloadBox">
+            <h3 class="menu-section-title">Save terrain for offline use</h3>
+            <div class="elev-field">
+              <label for="terDepth">Detail</label>
+              <select id="terDepth" title="Native matches the LiDAR’s own resolution.">
                 <option value="screen">Screen +2</option>
                 <option value="native" selected>Native LiDAR</option>
                 <option value="max">Maximum</option>
               </select>
             </div>
-            <div class="terrain-action-row">
+            <p class="control-hint">Native matches the source’s own resolution.</p>
+            <div class="elev-field">
+              <label for="terExtent">Area to save</label>
               <select id="terExtent" title="How much ground to cover">
                 <option value="view" selected>This view</option>
                 <option value="pad50">View + 50% margin</option>
                 <option value="pad100">View + full screen margin</option>
               </select>
             </div>
+            <button class="ghost" id="terWarm">Download this view</button>
             <div id="terWarmMsg" class="warmmsg"></div>
             <div id="terStale" class="warmmsg" style="display:none"></div>
-          </div>
-          <div class="terdl" id="dnrAreaPanel">
-            <div class="terrain-action-row">
-              <button class="ghost" id="dnrSelect" type="button">Select WA DNR area</button>
-              <button class="ghost" id="dnrFetch" type="button" disabled>Fetch WA DNR</button>
-            </div>
-            <div class="terrain-action-row">
-              <button class="linkbtn" id="dnrClear" type="button">Clear fetched WA DNR areas</button>
-            </div>
-            <div id="dnrAreaMsg" class="warmmsg">WA DNR is off until you fetch it for an area. USGS stays active everywhere else.</div>
           </div>
           <div id="terLegend" class="terlegend" aria-live="polite"></div>
           <div id="terInfo" class="terinfo">Pick a layer to drape terrain over the map.</div>
@@ -1341,39 +1349,45 @@ html.csp-boot body{visibility:hidden}
           <span class="pane-x">&#9662;</span>
         </div>
         <div class="pane-b">
-          <div class="terrain-action-row">
-            <button class="ghost" id="fabRun">Measure landform fabric</button>
+          <div class="fabbox menu-card" id="fabricResearchBox">
+            <h3 class="menu-section-title">Landform fabric</h3>
+            <p class="control-hint">Find the direction and spacing of ridges and valleys, including possible glacial lineations.</p>
+            <div class="elev-field"><label for="fabBand">Landform spacing</label>
             <select id="fabBand" title="Which wavelength band to isolate. Narrower bands separate fine lineation from ordinary ridge-and-valley grain.">
               <option value="20,120">65&ndash;400 ft</option>
               <option value="50,300" selected>165&ndash;1,000 ft</option>
               <option value="150,800">500&ndash;2,600 ft</option>
             </select>
           </div>
-          <div id="fabOut" class="fabout"></div>
+            <p class="control-hint">Choose the size of landforms to measure. Smaller spacing isolates finer texture.</p>
+            <button class="ghost" id="fabRun">Measure landform fabric</button>
+            <div id="fabOut" class="fabout" role="status" aria-live="polite"></div>
+          </div>
           <div class="fabbox">
             <label class="check elev-toggle" id="lb_elevSh">
               <input type="checkbox" id="elevSh"> Elevation spectrum
             </label>
             <div class="elev-form">
               <div class="elev-field">
-                <label class="elev-label" for="elevVal">Reference elevation</label>
                 <div class="elev-control-row">
-                  <input type="number" id="elevVal" value="1100" step="10">
-                  <select id="elevUnit" aria-label="Elevation unit">
+                  <div class="elev-field"><label class="elev-label" for="elevVal">Reference elevation</label><input type="number" id="elevVal" value="1100" step="10"></div>
+                  <div class="elev-field"><label class="control-hint" for="elevUnit">Unit</label><select id="elevUnit" aria-label="Elevation unit">
                     <option value="ft" selected>feet</option>
                     <option value="yd">yards</option>
-                  </select>
+                  </select></div>
                 </div>
                 <input type="range" id="elevSlide" min="-500" max="4500" step="1" value="335" aria-label="Reference elevation">
               </div>
               <div class="elev-field">
                 <label class="elev-label" for="elevSpan">Colour span</label>
                 <div class="unit-field">
-                  <input type="number" id="elevSpan" list="elevSpanPresets" min="10" max="20000" step="10" value="300"
+                  <input type="number" id="elevSpan" list="elevSpanPresets" min="10" max="20000" step="1" value="300"
                          title="Enter any distance in feet from the reference where red and blue reach full strength"
                          aria-label="Custom elevation colour span in feet">
                   <span class="unit-suffix">ft</span>
                 </div>
+                <input type="range" id="elevSpanSlide" min="0" max="1000" step="1" value="447" aria-label="Colour span in feet" aria-describedby="elevSpanHint">
+                <p class="control-hint" id="elevSpanHint">Red and blue reach full strength this far from the reference. A smaller span makes subtle height changes stand out.</p>
               </div>
               <datalist id="elevSpanPresets">
                 <option value="50"><option value="150"><option value="300">
@@ -1397,8 +1411,9 @@ html.csp-boot body{visibility:hidden}
           <div class="fabbox" id="elevBandsBox">
             <div class="elev-section-head">
               <span class="elev-section-title">Elevation highlights</span>
-              <span class="elev-value">independent bands</span>
+
             </div>
+            <p class="control-hint">Colour the ground below or above a height you choose.</p>
             <div class="elev-band-list">
               <div class="elev-band-row">
                 <label class="check" id="lb_elevBelow"><input type="checkbox" id="elevBelowOn"> Below</label>
@@ -1436,18 +1451,19 @@ html.csp-boot body{visibility:hidden}
                 <input type="checkbox" id="elevBandOutline"> White threshold line
               </label>
             </div>
-            <div class="elev-band-note" id="elevBandOut">Enable either band; colours and thresholds repaint cached elevation instantly.</div>
+            <div class="elev-band-note" id="elevBandOut">Enable a below or above band to highlight ground at those heights.</div>
             <button class="linkbtn" id="elevBandsReset" type="button" style="margin-top:8px">Reset highlights</button>
           </div>
           <div class="fabbox" id="surfaceResearchBox">
             <div class="elev-section-head">
               <span class="elev-section-title">Surface analysis</span>
-              <span class="elev-value">observational screening</span>
+
             </div>
+            <p class="control-hint">Reveal landforms in the current map view using elevation.</p>
             <div class="elev-form">
               <div class="elev-field">
                 <label class="elev-label" for="researchProduct">Analysis</label>
-                <select id="researchProduct">
+                <select id="researchProduct" aria-describedby="researchProductHint">
                   <option value="lrm">Local relief model</option>
                   <option value="tpi">Terrain position index</option>
                   <option value="tri">Terrain ruggedness</option>
@@ -1457,14 +1473,16 @@ html.csp-boot body{visibility:hidden}
                   <option value="glacial">Glacial-margin candidate screen</option>
                   <option value="flood">Flood-channel candidate screen</option>
                 </select>
+                <p class="control-hint" id="researchProductHint"></p>
               </div>
-              <div class="terrain-action-row">
-                <button class="ghost" id="researchRun" type="button">Analyze this view</button>
+              <div class="elev-field">
+                <label for="researchScale">Scale</label>
                 <select id="researchScale" aria-label="Research analysis scale">
                   <option value="fine">Fine</option>
                   <option value="balanced" selected>Balanced</option>
                   <option value="broad">Broad</option>
                 </select>
+                <p class="control-hint">Fine reveals smaller features; broad compares a wider area around each point.</p>
               </div>
               <div class="elev-field">
                 <div class="elev-label-row">
@@ -1474,7 +1492,8 @@ html.csp-boot body{visibility:hidden}
                 <input type="range" id="researchOpacity" min="0" max="100" step="1" value="82">
               </div>
             </div>
-            <div id="researchOut" class="fabout">Uses cached elevation when available and analyzes it off the map thread; larger mobile jobs can use the connected M2 engine.</div>
+            <button class="ghost" id="researchRun" type="button">Analyze this view</button>
+            <div id="researchOut" class="fabout" role="status" aria-live="polite">Choose an analysis, then analyze the visible map.</div>
             <button class="linkbtn" id="researchReset" type="button" style="margin-top:8px">Reset analysis</button>
           </div>
           <div class="fabbox" id="geologyIdentifyBox">
@@ -1685,6 +1704,10 @@ html.csp-boot body{visibility:hidden}
         <button type="button" id="snapSelSave" class="snap-sel-save">Save</button>
       </div>
     </div>
+    <div id="dnrSelectionBar" class="dnr-selection-bar" role="region" aria-label="Download selected WA DNR area" hidden>
+      <div><strong>WA DNR area</strong><p id="dnrSelectionMsg">Drag to move; drag a corner to resize.</p><span id="dnrAnnouncement" class="dnr-announcement" role="status" aria-live="polite"></span></div>
+      <div class="dnr-selection-actions"><button class="ghost" id="dnrCancel" type="button">Cancel</button><button class="ghost" id="dnrFetch" type="button" disabled>Download WA DNR</button></div>
+    </div>
     <section id="ctl" hidden aria-label="Displayed imagery controls">
       <div id="ctlHead" title="Drag displayed imagery controls">
         <span class="grip" aria-hidden="true"></span>
@@ -1730,7 +1753,7 @@ html.csp-boot body{visibility:hidden}
   L.Renderer.prototype.onAdd=function(map){return onAdd.call(this,map||this._map)};
 })();
 </script>
-<script src="version.js?build=2026-10-13c"></script>
+<script src="version.js?build=2026-10-13d"></script>
 <script src="mosaic-core.js"></script>
 <script src="png-stream.js"></script>
 <script src="terrain-core.js"></script>
@@ -2576,12 +2599,13 @@ L.DomEvent.disableScrollPropagation(mapThemeButton);
 setTimeout(()=>{ if(baseOK===0) showBlocked() }, 12000);
 let marker=null, overlay=null, overlayPending=null, footprint=null, sceneToken=0, sceneAbort=null;
 function stageMapLocation(e){
+  if(document.body.classList.contains("dnr-selecting"))return;
   acHide(); setLoc(e.latlng.lat,e.latlng.lng);
   const status=document.getElementById("status");
-  if(status) status.textContent="Location selected. Double-click or double-tap the map to load imagery.";
+  if(status){status.dataset.kind="general";status.textContent="Location selected. Double-click or double-tap the map to load imagery.";}
 }
 map.on("click",stageMapLocation);
-map.on("dblclick",e=>{ stageMapLocation(e); run(); });
+map.on("dblclick",e=>{ if(document.body.classList.contains("dnr-selecting"))return;stageMapLocation(e);run(); });
 
 /* ---------------------------------------------------------------- state */
 let LOC=null, ITEMS=[], SEL=null, searchToken=0, searchAbort=null;
@@ -6388,7 +6412,7 @@ function setTerrainModeUi(on,status){
   if(!on) reset3dGlassMotion();
   document.body.classList.toggle("terrain-3d",on);$("#map3d").setAttribute("aria-hidden",String(!on));
   $("#terMode2d").setAttribute("aria-pressed",String(!on));$("#terMode3d").setAttribute("aria-pressed",String(on));
-  $("#terModeNote").textContent=status||(on?"Orbit with right-drag or Control-drag. Two fingers rotate, pitch, and zoom.":"Rotate with right-drag or a two-finger twist. North reset is on the map.");
+  $("#terModeNote").textContent=status||(on?(matchMedia("(pointer:coarse)").matches?"Two fingers rotate, pitch, and zoom.":"Orbit with right-drag or Control-drag. Two fingers rotate, pitch, and zoom."):"Drag to pan. Pinch to zoom. North reset is on the map.");
   syncBearingButton();
 }
 /* A real capability probe: MapLibre needs a WebGL2 context it can actually
@@ -6538,7 +6562,10 @@ function schedule3dStyle(){
 $("#terMode2d").onclick=exitTerrain3d;
 $("#terMode3d").onclick=()=>{ pointCloudPanel?.close();enterTerrain3d().catch(()=>{}) };
 pointCloudPanel=CSPPointCloud.install({map,onBearingChange:syncBearingButton,
-  beforeOpen:()=>{exitTerrain3d();if(compactSidebar())setCollapsed(true)},
+  beforeOpen:()=>{
+    if(document.body.classList.contains("dnr-selecting")&&!dnrBusy){clearDnrSelection();paintDnrAreas()}
+    exitTerrain3d();if(compactSidebar())setCollapsed(true)
+  },
   onLayoutChange:source=>syncFloatingPanels(source)});
 
 /* is the local proxy there? without it, WA DNR simply isn't reachable */
@@ -6804,7 +6831,7 @@ function renderTerrainSourcePanel(summaryArg,is3dArg,layerArg){
       const row=input.closest("[data-id]"),id=row.dataset.id;
       if(input.dataset.tsp==="opacity"){ window.ClearSkiesPortalBridge.setLayerOpacity(id,+input.value); input.nextElementSibling.textContent=input.value+"%"; }
       else if(input.dataset.tsp==="elevation"){ const slide=$("#elevSlide"); slide.value=input.value; slide.dispatchEvent(new Event("input",{bubbles:true})); input.nextElementSibling.textContent=elevationLabel(); }
-      else if(input.dataset.tsp==="span"){ const span=$("#elevSpan"); span.value=input.value; span.dispatchEvent(new Event("input",{bubbles:true})); input.nextElementSibling.textContent=Number(span.value).toLocaleString()+" ft"; }
+      else if(input.dataset.tsp==="span"){ const span=$("#elevSpan"); span.value=elevSpanFromPosition(input.value); span.dispatchEvent(new Event("input",{bubbles:true})); input.nextElementSibling.textContent=Number(span.value).toLocaleString()+" ft";input.setAttribute("aria-valuetext",Number(span.value).toLocaleString()+" feet"); }
     });
     rows.addEventListener("change",e=>{
       const input=e.target.closest("input[data-tsp]");if(!input)return;
@@ -6829,7 +6856,7 @@ function renderTerrainSourcePanel(summaryArg,is3dArg,layerArg){
       row.innerHTML='<div class="terrain-source-panel-name"></div><div class="terrain-source-panel-meta"></div>'+
         (item.noOpacity?"":'<label class="tsp-control"><span>Opacity</span><input type="range" min="0" max="100" step="1" data-tsp="opacity"><output></output></label>')+
         (item.id==="elevation-spectrum"?'<label class="tsp-control"><span>Elevation</span><input type="range" min="-500" max="4500" step="1" data-tsp="elevation"><output></output></label>'+
-          '<label class="tsp-control"><span>Color span</span><input type="range" min="10" max="20000" step="10" data-tsp="span" title="Distance in feet from the reference where red and blue reach full strength"><output></output></label>':"");
+          '<label class="tsp-control"><span>Color span</span><input type="range" min="0" max="1000" step="1" data-tsp="span" title="Distance in feet from the reference where red and blue reach full strength"><output></output></label>':"");
       row.querySelectorAll("input").forEach(input=>input.setAttribute("aria-label",`${item.name} ${input.dataset.tsp==="span"?"color span in feet":input.dataset.tsp}`));
       rows.append(row);
     }
@@ -6852,7 +6879,7 @@ function renderTerrainSourcePanel(summaryArg,is3dArg,layerArg){
     const elevation=row.querySelector('[data-tsp="elevation"]');
     if(elevation&&document.activeElement!==elevation){ elevation.value=$("#elevSlide").value;elevation.nextElementSibling.textContent=elevationLabel() }
     const span=row.querySelector('[data-tsp="span"]');
-    if(span&&document.activeElement!==span){ span.value=$("#elevSpan").value;span.nextElementSibling.textContent=Number($("#elevSpan").value).toLocaleString()+" ft" }
+    if(span&&document.activeElement!==span){ span.value=elevSpanPosition($("#elevSpan").value);span.setAttribute("aria-valuetext",Number($("#elevSpan").value).toLocaleString()+" feet");span.nextElementSibling.textContent=Number($("#elevSpan").value).toLocaleString()+" ft" }
   }
 }
 function elevationLabel(){
@@ -8193,93 +8220,226 @@ function warmPreview(){
 
 /* ---- WA DNR fetched areas: explicit, map-anchored selection ------------- */
 let dnrSelRect=null,dnrSelHandles=[],dnrSelBbox=null,dnrAreaLayer=null,dnrFetchPoll=null,dnrFetchToken=0;
-function dnrMsg(text){const el=$("#dnrAreaMsg");if(el)el.textContent=text}
+let dnrBusy=false,dnrLargeApproved=false,dnrSuccessTimer=null,dnrJobId=null,dnrPositionFrame=0;
+const dnrBar=$("#dnrSelectionBar"),dnrMoveBox=document.createElement("div");
+dnrMoveBox.className="dnr-move-box";dnrMoveBox.hidden=true;dnrMoveBox.tabIndex=0;
+dnrMoveBox.setAttribute("role","group");
+dnrMoveBox.setAttribute("aria-label","WA DNR selected area. Drag to move, drag corners to resize. Arrow keys move; Escape cancels.");
+map.getContainer().append(dnrMoveBox);
+function dnrMsg(text,state="selecting",announce=true){
+  const summary=state==="ready"?`WA DNR ready in ${dnrAreas.length} area${dnrAreas.length===1?"":"s"}`:
+    !dnrBar.hidden&&state==="selecting"?"Area selected on map":
+    !dnrBar.hidden&&state==="error"?"Download failed · retry on map":text;
+  if($("#dnrAreaMsg").textContent!==summary)$("#dnrAreaMsg").textContent=summary;
+  $("#dnrSelectionMsg").textContent=text;dnrBar.dataset.state=state;
+  if(announce&&$("#dnrAnnouncement").textContent!==text)$("#dnrAnnouncement").textContent=text;
+  scheduleDnrPosition();
+}
+function scheduleDnrPosition(){
+  if(dnrPositionFrame)return;
+  dnrPositionFrame=requestAnimationFrame(()=>{dnrPositionFrame=0;positionDnrSelection()});
+}
+function paintDnrAvailability(){
+  const select=$("#dnrSelect");if(!select)return;
+  select.disabled=!PROXY||dnrBusy;
+  $("#dnrEngineHint").textContent=!PROXY?"Connect the local terrain engine to download WA DNR LiDAR.":"";
+}
 function paintDnrAreas(){
   if(dnrAreaLayer)map.removeLayer(dnrAreaLayer);
   dnrAreaLayer=L.layerGroup(dnrAreas.map(a=>L.rectangle([[a.bbox[1],a.bbox[0]],[a.bbox[3],a.bbox[2]]],
     {color:"#0a84ff",weight:1,fillOpacity:.04,interactive:false}))).addTo(map);
-  dnrMsg(dnrAreas.length?`WA DNR active in ${dnrAreas.length} fetched area${dnrAreas.length>1?"s":""}. USGS stays active everywhere else.`:
-    "WA DNR is off until you fetch it for an area. USGS stays active everywhere else.");
+  $("#dnrAreaMsg").textContent=dnrAreas.length?`WA DNR ready in ${dnrAreas.length} area${dnrAreas.length>1?"s":""}`:"No downloaded areas";
+  $("#dnrClear").hidden=!dnrAreas.length;paintDnrAvailability();
 }
-function clearDnrSelection(){
+function positionDnrSelection(){
+  if(dnrBar.hidden)return;
+  const mr=map.getContainer().getBoundingClientRect();
+  let anchor={x:mr.width/2,y:mr.height/2};
+  if(dnrSelBbox){
+    const points=dnrCorners(dnrSelBbox).map(ll=>map.latLngToContainerPoint(ll));
+    anchor=points[1];
+    const left=Math.min(...points.map(p=>p.x)),top=Math.min(...points.map(p=>p.y));
+    const width=Math.max(...points.map(p=>p.x))-left,height=Math.max(...points.map(p=>p.y))-top;
+    Object.assign(dnrMoveBox.style,{left:left+"px",top:top+"px",width:width+"px",height:height+"px",
+      clipPath:`polygon(${points.map(p=>`${p.x-left}px ${p.y-top}px`).join(",")})`});
+  }
+  const br=dnrBar.getBoundingClientRect(),sr=$("#side").getBoundingClientRect();
+  const portrait=matchMedia("(max-width:760px) and (orientation:portrait)").matches;
+  const bottom=portrait&&sr.top>mr.top?Math.min(mr.bottom,sr.top)-10:mr.bottom-10;
+  const visibleLeft=!portrait&&!document.body.classList.contains("collapsed")?Math.max(mr.left,sr.right):mr.left;
+  const left=Math.max(visibleLeft+10,Math.min(mr.right-br.width-10,mr.left+anchor.x-br.width));
+  let top=mr.top+anchor.y+10;
+  if(top+br.height>bottom)top=mr.top+anchor.y-br.height-10;
+  top=Math.max(mr.top+10,Math.min(bottom-br.height,top));
+  Object.assign(dnrBar.style,{left:left+"px",top:top+"px"});
+}
+function clearDnrSelection({keepBar=false}={}){
   if(dnrSelRect)map.removeLayer(dnrSelRect);dnrSelRect=null;dnrSelBbox=null;
   for(const h of dnrSelHandles)map.removeLayer(h);dnrSelHandles=[];
-  const f=$("#dnrFetch");if(f)f.disabled=true;
-  document.body.classList.remove("dnr-selecting");
+  dnrMoveBox.hidden=true;$("#dnrFetch").disabled=true;
+  if(!keepBar)dnrBar.hidden=true;
+  dnrLargeApproved=false;document.body.classList.remove("dnr-selecting");
+}
+function dnrCorners(b){return [[b[1],b[0]],[b[1],b[2]],[b[3],b[2]],[b[3],b[0]]]}
+function updateDnrBounds(bbox,{announce=true}={}){
+  dnrSelBbox=bbox;dnrLargeApproved=false;
+  dnrSelRect.setBounds([[bbox[1],bbox[0]],[bbox[3],bbox[2]]]);
+  dnrCorners(bbox).forEach((ll,i)=>dnrSelHandles[i]?.setLatLng(ll));
+  $("#dnrFetch").textContent="Download WA DNR";
+  dnrMsg(`${Math.abs(bbox[2]-bbox[0]).toFixed(3)}° × ${Math.abs(bbox[3]-bbox[1]).toFixed(3)}° · Drag to move; drag a corner to resize.`,"selecting",announce);
+}
+function setDnrBusy(busy){
+  dnrBusy=busy;$("#dnrFetch").disabled=busy;$("#dnrCancel").disabled=false;$("#dnrClear").disabled=busy;
+  for(const handle of dnrSelHandles) busy?handle.dragging.disable():handle.dragging.enable();
+  dnrMoveBox.setAttribute("aria-disabled",String(busy));paintDnrAvailability();
 }
 function setDnrSelection(bbox){
-  dnrSelBbox=bbox;
-  if(!dnrSelRect){dnrSelRect=L.rectangle([[bbox[1],bbox[0]],[bbox[3],bbox[2]]],
-    {color:"#ff9f0a",weight:2,fillOpacity:.05,interactive:false}).addTo(map);}
-  else dnrSelRect.setBounds([[bbox[1],bbox[0]],[bbox[3],bbox[2]]]);
+  clearTimeout(dnrSuccessTimer);dnrBar.hidden=false;$("#dnrFetch").hidden=false;$("#dnrCancel").textContent="Cancel";
+  if(!dnrSelRect)dnrSelRect=L.rectangle([[bbox[1],bbox[0]],[bbox[3],bbox[2]]],
+    {color:"#ff9f0a",weight:2,fillOpacity:.05,interactive:false}).addTo(map);
   for(const h of dnrSelHandles)map.removeLayer(h);dnrSelHandles=[];
-  const corners=[[bbox[1],bbox[0]],[bbox[1],bbox[2]],[bbox[3],bbox[2]],[bbox[3],bbox[0]]];
-  corners.forEach((ll,i)=>{
-    const marker=L.marker(ll,{draggable:true,interactive:true,icon:L.divIcon({className:"dnr-handle",iconSize:[18,18]})}).addTo(map);
+  dnrSelBbox=bbox;
+  dnrCorners(bbox).forEach((ll,i)=>{
+    const marker=L.marker(ll,{draggable:true,interactive:true,keyboard:true,
+      title:"Drag to resize WA DNR area",icon:L.divIcon({className:"dnr-handle",iconSize:[44,44],iconAnchor:[22,22]})}).addTo(map);
     marker.on("drag",()=>{
       const p=marker.getLatLng(),b=[...dnrSelBbox];
       if(i===0){b[0]=p.lng;b[1]=p.lat}if(i===1){b[2]=p.lng;b[1]=p.lat}
       if(i===2){b[2]=p.lng;b[3]=p.lat}if(i===3){b[0]=p.lng;b[3]=p.lat}
-      if(b[0]<b[2]&&b[1]<b[3]){dnrSelBbox=b;dnrSelRect.setBounds([[b[1],b[0]],[b[3],b[2]]]);}
+      if(b[0]<b[2]&&b[1]<b[3])updateDnrBounds(b,{announce:false});
     });
-    marker.on("dragend",()=>{if(dnrSelBbox)setDnrSelection(dnrSelBbox)});
-    dnrSelHandles.push(marker);
+    marker.on("dragend",()=>updateDnrBounds(dnrSelBbox));dnrSelHandles.push(marker);
   });
-  const f=$("#dnrFetch");if(f)f.disabled=false;
-  dnrMsg(`Selected ${Math.abs(bbox[2]-bbox[0]).toFixed(3)}° × ${Math.abs(bbox[3]-bbox[1]).toFixed(3)}°. Drag a corner to resize, pan/zoom freely, then Fetch.`);
+  dnrMoveBox.hidden=false;setDnrBusy(false);updateDnrBounds(bbox);
 }
-$("#dnrSelect").onclick=()=>{
-  if(!PROXY){dnrMsg("WA DNR needs the local terrain engine connected.");return}
-  if(document.body.classList.contains("terrain-3d")){dnrMsg("Switch to the 2D map to select a WA DNR area.");return}
-  if(dnrSelRect){clearDnrSelection();paintDnrAreas();return}
+let dnrDrag=null;
+dnrMoveBox.addEventListener("pointerdown",event=>{
+  if(dnrBusy||!dnrSelBbox||event.button!==0)return;
+  event.preventDefault();event.stopPropagation();
+  dnrDrag={id:event.pointerId,start:map.mouseEventToLatLng(event),bbox:[...dnrSelBbox]};
+  dnrMoveBox.setPointerCapture(event.pointerId);
+});
+dnrMoveBox.addEventListener("pointermove",event=>{
+  if(!dnrDrag||event.pointerId!==dnrDrag.id)return;
+  event.preventDefault();event.stopPropagation();
+  const p=map.mouseEventToLatLng(event),dx=p.lng-dnrDrag.start.lng,dy=p.lat-dnrDrag.start.lat,b=dnrDrag.bbox;
+  if(b[1]+dy>-85&&b[3]+dy<85)updateDnrBounds([b[0]+dx,b[1]+dy,b[2]+dx,b[3]+dy],{announce:false});
+});
+for(const type of ["pointerup","pointercancel","lostpointercapture"])dnrMoveBox.addEventListener(type,()=>{if(dnrDrag&&dnrSelBbox)updateDnrBounds(dnrSelBbox);dnrDrag=null});
+L.DomEvent.disableClickPropagation(dnrMoveBox);L.DomEvent.disableScrollPropagation(dnrBar);
+L.DomEvent.disableClickPropagation(dnrBar);
+dnrMoveBox.addEventListener("keydown",event=>{
+  if(!dnrSelBbox||dnrBusy)return;
+  const shifts={ArrowLeft:[-10,0],ArrowRight:[10,0],ArrowUp:[0,-10],ArrowDown:[0,10]},shift=shifts[event.key];
+  if(!shift)return;event.preventDefault();event.stopPropagation();
+  const b=dnrSelBbox,p=map.latLngToContainerPoint([b[1],b[0]]),next=map.containerPointToLatLng(p.add(shift));
+  updateDnrBounds([next.lng,next.lat,b[2]+next.lng-b[0],b[3]+next.lat-b[1]]);
+});
+async function stopDnrJob(jobId){
+  if(!jobId||!serverHealth?.features?.includes("wadnr-job-cancel"))return;
+  // The engine checks ownership atomically; an old tab cannot stop a newer job.
+  const response=await fetch(api("/api/wadnr/warm/stop"),{method:"POST",body:JSON.stringify({id:jobId}),signal:AbortSignal.timeout(20000)});
+  if(!response.ok)throw new Error(`HTTP ${response.status}`);
+}
+function cancelDnrSelection(){
+  const jobId=dnrJobId,wasBusy=dnrBusy;
+  clearTimeout(dnrSuccessTimer);const cancelToken=++dnrFetchToken;clearTimeout(dnrFetchPoll);dnrFetchPoll=null;dnrJobId=null;
+  setDnrBusy(false);clearDnrSelection();paintDnrAreas();$("#dnrSelect").focus({preventScroll:true});
+  if(wasBusy){
+    const message=serverHealth?.features?.includes("wadnr-job-cancel")?"Download cancelled. No area was applied.":"Selection cancelled. The engine may finish its download; no area will be applied.";
+    dnrMsg(message);
+    stopDnrJob(jobId).catch(()=>{if(cancelToken===dnrFetchToken)dnrMsg("Selection cancelled. The engine could not be reached to stop the download; no area was applied.")});
+  }
+}
+$("#dnrCancel").onclick=cancelDnrSelection;
+document.addEventListener("keydown",event=>{if(event.key==="Escape"&&!dnrBar.hidden){event.preventDefault();cancelDnrSelection()}});
+$("#dnrSelect").onclick=event=>{
+  event.stopPropagation();
+  if(!PROXY||dnrBusy){paintDnrAvailability();return}
+  dnrFetchToken++; // A fresh selection also fences late cancellation messages.
+  if(document.body.classList.contains("terrain-3d"))exitTerrain3d();
+  pointCloudPanel?.close();
+  document.dispatchEvent(new CustomEvent("csp:dnr-select"));
   document.body.classList.add("dnr-selecting");
-  const b=map.getBounds().pad(-0.15);
-  setDnrSelection([b.getWest(),b.getSouth(),b.getEast(),b.getNorth()]);
+  // Keep the initial area above the phone sheet’s peek strip.
+  const size=map.getSize(),mr=map.getContainer().getBoundingClientRect(),sr=$("#side").getBoundingClientRect();
+  const portrait=matchMedia("(max-width:760px) and (orientation:portrait)").matches;
+  const visibleH=portrait?Math.max(160,size.y-100):size.y;
+  const left=!portrait&&!document.body.classList.contains("collapsed")?Math.max(0,sr.right-mr.left):0;
+  // A geographic rectangle rotates with the map. Fit all four projected
+  // corners inside the initial screen area so every resize handle is reachable.
+  const x0=left+(size.x-left)*.2,x1=left+(size.x-left)*.8,y0=visibleH*.2,y1=visibleH*.72;
+  const projected=[[x0,y0],[x1,y0],[x1,y1],[x0,y1]].map(p=>map.project(map.containerPointToLatLng(p)));
+  const west=Math.min(...projected.map(p=>p.x)),east=Math.max(...projected.map(p=>p.x));
+  const north=Math.min(...projected.map(p=>p.y)),south=Math.max(...projected.map(p=>p.y));
+  const center=L.point((west+east)/2,(north+south)/2),half=L.point((east-west)/2,(south-north)/2);
+  const toBbox=scale=>{
+    const nw=map.unproject(center.subtract(half.multiplyBy(scale))),se=map.unproject(center.add(half.multiplyBy(scale)));
+    return [nw.lng,se.lat,se.lng,nw.lat];
+  };
+  const points=dnrCorners(toBbox(1)).map(ll=>map.latLngToContainerPoint(ll));
+  const width=Math.max(...points.map(p=>p.x))-Math.min(...points.map(p=>p.x));
+  const height=Math.max(...points.map(p=>p.y))-Math.min(...points.map(p=>p.y));
+  setDnrSelection(toBbox(Math.min(1,(x1-x0)/width,(y1-y0)/height)));
+  requestAnimationFrame(()=>dnrMoveBox.focus({preventScroll:true}));
 };
 $("#dnrFetch").onclick=async()=>{
-  if(!dnrSelBbox)return;
+  if(!dnrSelBbox||dnrBusy)return;
+  if(!PROXY){dnrMsg("Connect the terrain engine, then retry this download.","error");return}
   const bbox=[...dnrSelBbox];
   const zn=65536,tx=lon=>Math.floor((lon+180)/360*zn),ty=lat=>Math.floor((1-Math.asinh(Math.tan(lat*Math.PI/180))/Math.PI)/2*zn);
   const cells=Math.max(1,(tx(bbox[2])-tx(bbox[0])+1)*(ty(bbox[1])-ty(bbox[3])+1));
-  if(cells>512&&!confirm(`This WA DNR area covers about ${cells.toLocaleString()} acquisition cells and may download several large surveys. Continue?`))return;
-  const token=++dnrFetchToken;
-  const btn=$("#dnrFetch");btn.disabled=true;dnrMsg("Starting WA DNR download for the selected area…");
+  if(cells>512&&!dnrLargeApproved){
+    dnrLargeApproved=true;$("#dnrFetch").textContent="Download anyway";
+    dnrMsg(`Large area: about ${cells.toLocaleString()} acquisition cells. Several large surveys may be downloaded. Resize to reduce it, or download anyway.`,"warning");return;
+  }
+  const token=++dnrFetchToken;dnrJobId=null;setDnrBusy(true);dnrMsg("Starting WA DNR download…","loading");
+  const failed=text=>{if(token!==dnrFetchToken)return;setDnrBusy(false);$("#dnrFetch").textContent="Retry download";dnrMsg(text,"error")};
   let jobId=null;
   try{
-    const r=await fetch(api("/api/wadnr/warm"),{method:"POST",body:JSON.stringify({bbox})});
+    const r=await fetch(api("/api/wadnr/warm"),{method:"POST",body:JSON.stringify({bbox}),signal:AbortSignal.timeout(20000)});
     const value=await r.json();if(!r.ok)throw new Error(value.error||`HTTP ${r.status}`);
     jobId=value.id||null;
-  }catch(error){btn.disabled=false;dnrMsg(`Could not start WA DNR download: ${error.message}`);return}
-  if(token!==dnrFetchToken)return; // cleared while the fetch was starting
-  clearInterval(dnrFetchPoll);
-  const poll=setInterval(async()=>{
-    if(token!==dnrFetchToken){clearInterval(poll);return}
+  }catch(error){failed(`Could not start download: ${error.message}`);return}
+  // A cancel can arrive before the engine returns its job id.
+  if(token!==dnrFetchToken){stopDnrJob(jobId).catch(()=>{});return}
+  dnrJobId=jobId;
+  clearTimeout(dnrFetchPoll);
+  const poll=async()=>{
+    if(token!==dnrFetchToken)return;
     try{
-      const r=await fetch(api("/api/wadnr/warm/status"));if(!r.ok)throw new Error(`HTTP ${r.status}`);
-      const s=await r.json();if(token!==dnrFetchToken){clearInterval(poll);return}
-      if(jobId&&s.id&&s.id!==jobId){ // superseded by another fetch: stop here
-        clearInterval(poll);if(dnrFetchPoll===poll)dnrFetchPoll=null;btn.disabled=false;
-        dnrMsg("This WA DNR fetch was superseded by another fetch, so its area was not applied.");return}
+      const r=await fetch(api("/api/wadnr/warm/status"),{signal:AbortSignal.timeout(20000)});if(!r.ok)throw new Error(`HTTP ${r.status}`);
+      const s=await r.json();if(token!==dnrFetchToken)return;
+      if(jobId&&s.id&&s.id!==jobId){failed("Another download replaced this one. Your area was not applied; retry to download it.");return}
       dnrStatus=s.acquisition;
       const complete=!s.running&&!s.error&&!s.stop&&s.total>0&&s.done>=s.total&&(!jobId||s.id===jobId);
-      dnrMsg(s.running?`Downloading WA DNR: ${s.done}/${s.total} areas. ${dnrAcquisitionText()}`:
-        s.error?`WA DNR download could not complete: ${s.error}`:
-        complete?`WA DNR ready in the selected area (${fmtMB(s.bytes)} added). It now applies only inside that box.`:
-        "WA DNR download stopped before the whole area finished; nothing was applied. Fetch again to retry.");
-      if(!s.running){clearInterval(poll);if(dnrFetchPoll===poll)dnrFetchPoll=null;btn.disabled=false;
-        if(complete){if(!dnrAreas.some(a=>a.bbox.every((v,i)=>v===bbox[i])))dnrAreas.push({bbox,at:Date.now()});
-          saveDnrAreas();clearDnrSelection();paintDnrAreas();resetMeshSources();applyTerrain(true);
-          if(elevationActive())applyElev();schedule3dStyle();scheduleDnrStatus();}}
-    }catch(error){if(token!==dnrFetchToken)return;clearInterval(poll);if(dnrFetchPoll===poll)dnrFetchPoll=null;btn.disabled=false;dnrMsg(`WA DNR download status unavailable: ${error.message}`)}
-  },2000);
-  dnrFetchPoll=poll;
+      if(s.running){dnrMsg(`Downloading WA DNR: ${s.done}/${s.total} areas. ${dnrAcquisitionText()}`,"loading");dnrFetchPoll=setTimeout(poll,2000);return}
+      dnrFetchPoll=null;setDnrBusy(false);
+      if(!complete){failed(s.error?`Download could not complete: ${s.error}`:"Download stopped before the area finished. Retry to complete it.");return}
+      if(!dnrAreas.some(a=>a.bbox.every((v,i)=>v===bbox[i])))dnrAreas.push({bbox,at:Date.now()});
+      saveDnrAreas();clearDnrSelection({keepBar:true});paintDnrAreas();
+      $("#dnrFetch").hidden=true;$("#dnrCancel").textContent="Done";
+      dnrMsg(`WA DNR ready in this area · ${fmtMB(s.bytes)} added.`,"ready");
+      resetMeshSources();applyTerrain(true);if(elevationActive())applyElev();schedule3dStyle();scheduleDnrStatus();
+      dnrSuccessTimer=setTimeout(()=>{dnrBar.hidden=true},5000);
+    }catch(error){failed(`Download status unavailable: ${error.message}`)}
+  };
+  dnrFetchPoll=setTimeout(poll,2000);
 };
 $("#dnrClear").onclick=()=>{
-  dnrFetchToken++;clearInterval(dnrFetchPoll);dnrFetchPoll=null;
-  const f=$("#dnrFetch");if(f)f.disabled=true;
+  if(dnrBusy)return;
+  dnrFetchToken++;clearTimeout(dnrFetchPoll);dnrFetchPoll=null;
   dnrAreas=[];saveDnrAreas();clearDnrSelection();paintDnrAreas();
   resetMeshSources();applyTerrain(true);if(elevationActive())applyElev();schedule3dStyle();
 };
+map.on("move zoom resize rotate",scheduleDnrPosition);
+new ResizeObserver(scheduleDnrPosition).observe($("#side"));
+new MutationObserver(()=>{
+  if(!dnrSelBbox)return;
+  const mode3d=document.body.classList.contains("terrain-3d")||$("#terModePoints").getAttribute("aria-pressed")==="true";
+  if(mode3d&&!dnrBusy){cancelDnrSelection();dnrMsg("Area selection closed. Select an area to return to the 2D map.");return}
+  if(dnrBusy){dnrMoveBox.hidden=mode3d;dnrBar.hidden=mode3d;document.body.classList.toggle("dnr-selecting",!mode3d);scheduleDnrPosition()}
+}).observe(document.body,{attributes:true,attributeFilter:["class"]});
 paintDnrAreas();
 
 /* ---- cached areas: has the lidar catalogue moved since we downloaded? --- */
@@ -8626,6 +8786,7 @@ console.log("Clear Skies Portal build "+CSP_BUILD);
 })();
 
 function paintServerBox(){
+  paintDnrAvailability();
   const dot=$("#srvDot"), st=$("#srvState"), meta=$("#srvMeta");
   const connect=$("#srvConnect"), copy=$("#srvCopyLink"), forget=$("#srvForget");
   const tool=$("#serverToggle");
@@ -9598,7 +9759,7 @@ async function runSurfaceResearch(){
     source=await researchElevationSource();if(token!==researchToken) return;
     const raster=researchElevationGrid(source.layer);
     const preferServer=shouldOffloadResearch(raster);
-    out.innerHTML=`<span class="spin"></span> analyzing elevation in the ${preferServer?"M2 terrain engine":"browser worker"}…`;
+    out.innerHTML='<span class="spin"></span> Analyzing elevation in this view…';
     const result=await runAdaptiveResearch({id:token,product,scale,grid:raster.grid,width:raster.width,height:raster.height,resolution:raster.resolution},preferServer);
     if(token!==researchToken) return;
     const coloured=researchColourRaster(result,product);
@@ -9612,7 +9773,6 @@ async function runSurfaceResearch(){
       `<div class="fr"><span class="fk">Elevation used</span><span class="fv">${esc(raster.provenance.join(" + "))}${raster.provisional?" (still refining at capture)":""}</span></div>`+
       `<div class="note">Sample spacing is not survey accuracy. Mixed sources and survey edges can affect terrain derivatives.</div>`+
       `<div class="fr"><span class="fk">Scale</span><span class="fv">${esc(scale)}</span></div>`+
-      `<div class="fr"><span class="fk">Engine</span><span class="fv">${esc(result.engine)}</span></div>`+
       `<div class="note">${esc(caution)}</div><button class="ghost" id="researchClear" type="button" style="width:100%;margin-top:8px">Clear analysis layer</button>`;
     $("#researchClear").onclick=()=>clearResearchLayer("Analysis layer cleared.");
     setCount("research",result.label);
@@ -9645,6 +9805,20 @@ function elevationColours(elev,count,settings,out,width=count,stride=width,offse
   return CSPTerrainDrape.elevationColours(elev,count,settings,out,width,stride,offset);
 }
 function elevMetres(){ return (+$("#elevVal").value||0) * ELEV_UNIT[$("#elevUnit").value] }
+// Both the menu and map panel use the same logarithmic span range.
+function elevSpanPosition(feet){
+  return Math.round(Math.log(Math.max(10,Math.min(20000,+feet||300))/10)/Math.log(2000)*1000);
+}
+function elevSpanFromPosition(position){
+  const feet=Math.exp(Math.log(10)+Math.max(0,Math.min(1000,+position))/1000*Math.log(2000));
+  const preset=[50,150,300,600,1200,2500].find(value=>Math.abs(feet-value)/value<.025);
+  return preset||Math.round(feet);
+}
+function syncElevSpanSlider(){
+  const input=$("#elevSpanSlide"),feet=Math.max(10,Math.min(20000,+$("#elevSpan").value||300));
+  if(document.activeElement!==input)input.value=elevSpanPosition(feet);
+  input.setAttribute("aria-valuetext",feet.toLocaleString()+" feet");
+}
 function elevSpanMetres(){ return Math.max(3,(+$("#elevSpan").value||300)*0.3048) }
 function inputPercent(id,fallback){
   const value=+$(id).value;
@@ -9711,16 +9885,15 @@ function paintElevOut(){
   if(!$("#elevSh").checked){ o.textContent=""; return }
   const loaded=CSPPublicTerrain.summarize(Object.values(elevLayer?._tiles||{}));
   const source=loaded.sources.length?`Displayed: ${loaded.sources.map(s=>s.label).join(" + ")}.`:'Elevation is loading; source details appear after tiles render.';
-  const accelerator=elevGpu.ready?"WebGL2 GPU shading is active.":"CPU shading fallback is active.";
-  o.textContent=`White at ${Math.round(m/0.3048).toLocaleString()} ft; red lower and blue higher, strongest by \u00b1${Math.round(elevSpanMetres()/0.3048).toLocaleString()} ft at ${$("#elevAlpha").value}% opacity. ${source} ${accelerator}`;
+  o.textContent=`White at ${Math.round(m/0.3048).toLocaleString()} ft; red lower and blue higher, strongest by \u00b1${Math.round(elevSpanMetres()/0.3048).toLocaleString()} ft at ${$("#elevAlpha").value}% opacity. ${source}`;
 }
 function paintElevationBandOut(){
   const out=$("#elevBandOut"),parts=[];
   if($("#elevBelowOn").checked) parts.push(`below ${(+$("#elevBelowVal").value||0).toLocaleString()} ft`);
   if($("#elevAboveOn").checked) parts.push(`above ${(+$("#elevAboveVal").value||0).toLocaleString()} ft`);
   out.textContent=parts.length
-    ? `Highlighting ${parts.join(" and ")} with ${(+$("#elevBandFeather").value||0).toLocaleString()} ft soft transitions. Cached Float32 elevation repaints locally; no tile refetch.`
-    : "Enable either band; colours and thresholds repaint cached elevation instantly.";
+    ? `Highlighting ${parts.join(" and ")} with ${(+$("#elevBandFeather").value||0).toLocaleString()} ft soft transitions. Colours update as you adjust the controls.`
+    : "Enable a below or above band to highlight ground at those heights.";
 }
 let elevPaintFrame=0;
 function scheduleElevPaint(){
@@ -9822,6 +9995,7 @@ async function runFabric(){
 }
 document.getElementById("fabRun").onclick=runFabric;
 loadTerrainPrefs();
+syncElevSpanSlider();
 syncTerrainOpacity();
 syncTerrainLookControls();
 syncTerrainLighting();
@@ -9832,8 +10006,14 @@ $("#elevSlide").addEventListener("input", syncElevFromSlider);
 $("#elevVal").addEventListener("input", syncElevFromBox);
 $("#elevVal").addEventListener("change",saveTerrainPrefs);
 $("#elevSlide").addEventListener("change",saveTerrainPrefs);
-$("#elevSpan").addEventListener("input",scheduleElevPaint);
-$("#elevSpan").addEventListener("change",()=>{ saveTerrainPrefs(); applyElev() });
+$("#elevSpan").addEventListener("input",()=>{syncElevSpanSlider();scheduleElevPaint()});
+$("#elevSpanSlide").addEventListener("input",()=>{
+  const span=$("#elevSpan");span.value=elevSpanFromPosition($("#elevSpanSlide").value);
+  $("#elevSpanSlide").setAttribute("aria-valuetext",Number(span.value).toLocaleString()+" feet");
+  span.dispatchEvent(new Event("input",{bubbles:true}));
+});
+$("#elevSpanSlide").addEventListener("change",()=>$("#elevSpan").dispatchEvent(new Event("change",{bubbles:true})));
+$("#elevSpan").addEventListener("change",()=>{ $("#elevSpan").value=Math.max(10,Math.min(20000,+$("#elevSpan").value||300));syncElevSpanSlider();saveTerrainPrefs();applyElev() });
 $("#elevAlpha").addEventListener("input",()=>{ $("#elevAlphaOut").textContent=$("#elevAlpha").value+"%"; scheduleElevPaint() });
 $("#elevAlpha").addEventListener("change",saveTerrainPrefs);
 $("#elevUnit").addEventListener("change", ()=>{        // keep the height, restate the number
@@ -9854,7 +10034,7 @@ $("#elevBandAlpha").addEventListener("change",saveTerrainPrefs);
 $("#elevSpectrumReset").onclick=()=>{
   $("#elevSh").checked=false;
   $("#elevUnit").value="ft";$("#elevVal").value=1100;$("#elevSlide").value=335;
-  $("#elevSpan").value=300;$("#elevAlpha").value=48;$("#elevAlphaOut").textContent="48%";
+  $("#elevSpan").value=300;syncElevSpanSlider();$("#elevAlpha").value=48;$("#elevAlphaOut").textContent="48%";
   saveTerrainPrefs();applyElev();
 };
 $("#elevBandsReset").onclick=()=>{
@@ -10368,8 +10548,8 @@ $("#q").addEventListener("blur",()=>setTimeout(acHide,120));
 document.addEventListener("click",e=>{ if(!e.target.closest("#iw")) acHide() });
 })();
 </script>
-<script src="markup-3d.js?build=2026-10-13c"></script>
-<script src="markup.js?build=2026-10-13c"></script>
-<script src="ui-system.js?build=2026-10-13c"></script>
+<script src="markup-3d.js?build=2026-10-13d"></script>
+<script src="markup.js?build=2026-10-13d"></script>
+<script src="ui-system.js?build=2026-10-13d"></script>
 </body>
 </html>

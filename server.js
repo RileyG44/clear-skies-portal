@@ -1120,8 +1120,10 @@ const server = http.createServer(async (req,res)=>{
     }
     if(p==="/api/wadnr/warm/status")
       return send(res,200,"application/json",jsonBody({...dnr.warm,acquisition:dnr.status()}),{"Cache-Control":"no-store"});
-    if(p==="/api/wadnr/warm/stop")
-      return send(res,200,"application/json",jsonBody(dnr.stopWarm()),{"Cache-Control":"no-store"});
+    if(p==="/api/wadnr/warm/stop"){
+      const job=await readJson(req,{});
+      return send(res,200,"application/json",jsonBody(dnr.stopWarm(job.id)),{"Cache-Control":"no-store"});
+    }
 
     /* ---- WA DNR: which lidar files cover this polygon? ---- */
     if(p === "/api/wadnr/query" && req.method === "POST"){
@@ -1744,7 +1746,7 @@ const server = http.createServer(async (req,res)=>{
         channel:CHANNEL, previewRef:CHANNEL==="preview"?PREVIEW_REF:undefined,
         /* What the page may ask of this engine. Without "wadnr-dpi" the page
            keeps to the 256 px WA DNR export every engine has handled. */
-        features:["wadnr-dpi","wadnr-elevation","markup"],dnr:dnr.status()
+        features:["wadnr-dpi","wadnr-elevation","wadnr-job-cancel","markup"],dnr:dnr.status()
       })),{"Cache-Control":"no-store"});
     }
 

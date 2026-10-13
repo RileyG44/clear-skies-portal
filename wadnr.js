@@ -116,7 +116,10 @@ class DnrStore {
       .finally(()=>{state.running=false;});
     return {...state};
   }
-  stopWarm(){this.warm.stop=true;return {...this.warm};}
+  stopWarm(expectedId){
+    if(expectedId!=null&&expectedId!==this.warm.id)return {...this.warm,cancelled:false};
+    this.warm.stop=true;return {...this.warm,cancelled:true};
+  }
   async ensureTile(z,x,y){
     const bbox=tileBounds(z,x,y),catalogue=await this.catalog();
     const projects=catalogue.projects.filter(p=>p.dtmDataset!=null&&intersects(p.bounds,bbox));
