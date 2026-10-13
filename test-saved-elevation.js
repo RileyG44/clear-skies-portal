@@ -99,7 +99,7 @@ async function main(){
     }
     assert(ready,"offline server must start\n"+logs);
     for(const c of cases.filter(c=>!c.fallback)){
-      const tile=`${c.z}/${c.x}/${c.y}`,key=budget.sha1("elevation-v3:"+tile);
+      const tile=`${c.z}/${c.x}/${c.y}`,key=budget.sha1("elevation-v4:"+tile);
       assert(!fs.existsSync(path.join(dir,key)),"generic elevation starts uncached");
       const first=await request(port,"/api/elev/"+tile+".png");
       assert.equal(first.status,200);assert.equal(first.headers["x-cache"],"hit");
@@ -111,7 +111,7 @@ async function main(){
         for(let i=0;i<rgba.length;i+=4)assert.deepEqual([...rgba.subarray(i,i+4)],[128,0,0,255],"no coverage is opaque sea-level geometry");
       }else assert.deepEqual(first.body,c.source==="usgs-1m"?raw:national,"saved Terrarium bytes are reused unchanged");
       const meta=JSON.parse(fs.readFileSync(path.join(dir,key+".meta"),"utf8"));
-      assert.equal(meta.status,c.source==="none"?204:200,"reuse also persists elevation-v3");
+      assert.equal(meta.status,c.source==="none"?204:200,"reuse also persists elevation-v4");
       const second=await request(port,"/api/elev/"+tile+".png");
       assert.deepEqual(second.body,first.body);assert.equal(second.headers["x-cache"],"hit");
       assert.equal(second.headers["x-elevation-source"],c.source==="none"?"none":"cached");
@@ -122,7 +122,7 @@ async function main(){
     assert.match(fs.readFileSync(log,"utf8"),/raw-elevation\nupstream\n/,"the fixture catches both forbidden paths");
     /* After the cold check: these trip the national circuit breaker. */
     for(const c of cases.filter(c=>c.fallback)){
-      const tile=`${c.z}/${c.x}/${c.y}`,key=budget.sha1("elevation-v3:"+tile);
+      const tile=`${c.z}/${c.x}/${c.y}`,key=budget.sha1("elevation-v4:"+tile);
       for(let attempt=0;attempt<2;attempt++){
         const res=await request(port,"/api/elev/"+tile+".png");
         assert.equal(res.status,200);assert.equal(res.headers["x-cache"],"saved-fallback");
@@ -131,7 +131,7 @@ async function main(){
         if(c.source==="none"){const {rgba}=pixels(res.body);assert.deepEqual([...rgba.subarray(0,4)],[128,0,0,255])}
         else assert.deepEqual(res.body,national);
       }
-      assert(!fs.existsSync(path.join(dir,key)),"a fallback never persists under elevation-v3, so 1 m is fetched again online");
+      assert(!fs.existsSync(path.join(dir,key)),"a fallback never persists under elevation-v4, so 1 m is fetched again online");
     }
     const attempts=fs.readFileSync(log,"utf8").split("\n").filter(line=>line==="raw-elevation").length;
     assert(attempts>=1+cases.filter(c=>c.fallback).length*2,"1 m lidar is attempted before every national fallback");

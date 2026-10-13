@@ -88,5 +88,20 @@ for(const [lon,lat] of [[-122.3,47.6],[-149.9,61.2],[-80.2,25.8],[-114.01,48.7]]
   assert.equal(east[0].file,"USGS_1M_11_x71y537_WA_CentralWildfire_D22.tif","same cell name, other zone");
   assert.equal((await usgs.cellCandidates(idx,"x28y537",10)).length,0,"a zoned cell never matches another zone");
   assert.equal(usgs.projectCell(idx.projects.WA_CentralWildfire_D22,"x40y520",10).zone,null,"zoneless names resolve per file");
+
+  // The newest project is opened alone first; holes are filled from up to three.
+  const calls=[],fake=results=>async(z,x,y,size,options)=>{calls.push(options.maxSources);return results[options.maxSources]??null};
+  assert.equal((await usgs.sampleBest(15,1,2,256,fake({1:{coverage:1,id:"best"}}))).id,"best");
+  assert.deepEqual(calls,[1],"a whole tile never opens fallback sources");
+  calls.length=0;
+  assert.equal((await usgs.sampleBest(15,1,2,256,fake({1:{coverage:0.57,id:"best"},3:{coverage:1,id:"filled"}}))).id,"filled",
+    "a newer project's holes are filled from an older one (Wenatchee)");
+  assert.deepEqual(calls,[1,3]);
+  assert.equal((await usgs.sampleBest(15,1,2,256,fake({1:null,3:{coverage:0.4,id:"older"}}))).id,"older",
+    "a best source with no data here still lets older projects answer");
+  assert.equal((await usgs.sampleBest(15,1,2,256,fake({1:{coverage:0.5,id:"best"},3:{coverage:0.5,id:"same"}}))).id,"best");
+  assert.equal(await usgs.sampleBest(15,1,2,256,fake({})),null,"no source anywhere is still no coverage");
+  await assert.rejects(usgs.sampleBest(15,1,2,256,async()=>{throw Error("1 m source read failed (1)")}),/read failed/,
+    "a failed read propagates instead of becoming a cached gap");
   console.log("USGS terrain render checks passed");
 })().catch(error=>{console.error(error);process.exit(1)});

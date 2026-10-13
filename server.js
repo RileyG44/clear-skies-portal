@@ -1406,7 +1406,9 @@ const server = http.createServer(async (req,res)=>{
       const z=+m[1], x=+m[2], y=+m[3], limit=Math.pow(2,z);
       if(z<0||z>22||x<0||y<0||x>=limit||y>=limit)
         return send(res,400,"text/plain",Buffer.from("bad tile coordinates"));
-      const ck=key(`elevation-v3:${z}/${x}/${y}`);
+      // v4: v3 cached national ground where a newer project's holes or a failed
+      // read hid 1 m data, and kept it for 90 days.
+      const ck=key(`elevation-v4:${z}/${x}/${y}`);
       const hit=cacheGet(ck,TTL_TILE);
       if(hit) return hit.status===204
         ? send(res,200,"image/png",SEA_LEVEL_DEM,{"X-Cache":"hit","X-Coverage":"none","X-Elevation-Source":"none","Cache-Control":"public, max-age=604800, immutable"})
@@ -1431,14 +1433,14 @@ const server = http.createServer(async (req,res)=>{
         if(saved.sourceMeta&&saved.sourceMeta.coverage!=null)headers["X-Coverage"]=String(saved.sourceMeta.coverage);
         return send(res,saved.status,saved.type,saved.body,headers);
       }
-      let out=null;
+      let out=null, rawFailed=false;
       try{
         let raw=null;
         /* A one-metre COG cannot add information to a continental/region-scale
            tile. Skip that expensive path below z13 and use the national DEM;
            close views still receive the newest raw project data. */
         if(z>=13) try{ raw=await terrainTask(`raw-elevation:${ck}`,"raw-elevation",{z,x,y,size:256},
-          {priority:55,timeoutMs:30000},client.signal) }catch(e){ if(terrainAborted(e)) throw e }
+          {priority:55,timeoutMs:30000},client.signal) }catch(e){ if(terrainAborted(e)) throw e; rawFailed=true }
         if(raw) out={...raw,source:"usgs-1m"};
         else{
           const body=await nationalElevationTiff(z,x,y,256,client.signal);
@@ -1462,14 +1464,17 @@ const server = http.createServer(async (req,res)=>{
         }
         return send(res,503,"image/png",TRANSPARENT,{"X-Cache":"BUSY","X-Elevation-Source":"fallback","Cache-Control":"no-store","Retry-After":"2"});
       }
+      /* A failed or timed-out 1 m read is not missing coverage: serve the
+         national stand-in now, but never store it as this tile's answer. */
+      const keep=rawFailed?"no-store":"public, max-age=604800, immutable";
       if(!out){
-        cachePut(ck,204,"image/png",Buffer.alloc(0));
+        if(!rawFailed) cachePut(ck,204,"image/png",Buffer.alloc(0));
         // Sea level, not transparent: this tile is terrain geometry.
-        return send(res,200,"image/png",SEA_LEVEL_DEM,{"X-Coverage":"none","X-Elevation-Source":"none","Cache-Control":"public, max-age=604800, immutable"});
+        return send(res,200,"image/png",SEA_LEVEL_DEM,{"X-Coverage":"none","X-Elevation-Source":"none","Cache-Control":keep});
       }
-      cachePut(ck,200,"image/png",out.png);
+      if(!rawFailed) cachePut(ck,200,"image/png",out.png);
       return send(res,200,"image/png",out.png,{"X-Coverage":String(out.coverage),"X-Elevation-Source":out.source,
-        "X-Cache":"miss","Cache-Control":"public, max-age=604800, immutable"});
+        "X-Cache":rawFailed?"raw-failed":"miss","Cache-Control":keep});
     }
 
     /* Landform fabric over the current view: orientation and strength of the

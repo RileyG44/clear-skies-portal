@@ -573,6 +573,7 @@ async function sampleGrid(z,x,y,size,options={}){
      that follows shows up as a cross-hatch once the hillshade takes gradients
      of it. Downsampling is safe; upsampling is not. */
   const opened=[];
+  let failed=0;           // unreadable sources: a gap they leave is unknown, not "no data"
   const PER_CELL = Math.max(1,Math.min(3,Number(options.maxSources)||3));
   for(const group of srcs){
     /* Quality first: a newer 2 m/5 m DEM must not silently replace an older
@@ -585,7 +586,7 @@ async function sampleGrid(z,x,y,size,options={}){
        candidate. openCog memoises per worker, so this is paid once per worker
        per product - measured, the 256 KB header probe dominates the cache. */
     const probed=await Promise.all(group.slice(0,8).map(async s=>{
-      try{ return {s,key:tileKey(s),t:await openCog(tileKey(s), s.size)} }catch(e){ return null }
+      try{ return {s,key:tileKey(s),t:await openCog(tileKey(s), s.size)} }catch(e){ failed++; return null }
     }));
     const available=[];
     for(const hit of probed){
@@ -617,7 +618,7 @@ async function sampleGrid(z,x,y,size,options={}){
     const jobs=[];
     for(let ty=ty0; ty<=ty1; ty++) for(let tx=tx0; tx<=tx1; tx++)
       jobs.push(cogTile(o.key,o.t,o.lvl,tx,ty)
-        .then(a=>{ if(a) o.tiles.set(tx+","+ty,a) }).catch(()=>{}));
+        .then(a=>{ if(a) o.tiles.set(tx+","+ty,a) }).catch(()=>{ failed++ }));
     await Promise.all(jobs);
   }
 
@@ -663,6 +664,10 @@ async function sampleGrid(z,x,y,size,options={}){
       break;
     }
   }
+  /* A failed read is not missing coverage. Returning the holes would be cached
+     as fact (a 90-day "no 1 m here", or national ground standing in for lidar),
+     so fail the tile instead and let the caller retry. */
+  if(failed && filled<n*n) throw new Error(`1 m source read failed (${failed})`);
   if(!filled) return null;
   return {grid, n, size, groundRes, coverage:filled/(n*n),
           sources:opened.filter(o=>o.tiles.size).map(o=>({project:o.s.project, cell:o.s.cell,
@@ -775,11 +780,22 @@ function render(style,S){
    Terrarium encoding: (R*256 + G + B/256) - 32768, which holds a centimetre of
    precision over the whole range. The tile carries no threshold, so it caches
    once and a slider can move over it freely. */
+/* Open only the best COG first: most tiles are whole in it, and two
+   speculative fallbacks cut cold raw-lidar work dramatically. But a newer
+   project can have holes an older one covers (WA_CentralWildfire_D22 over
+   WA_NorthCentral_2021_B21 near Wenatchee), so a tile the best source leaves
+   incomplete is re-sampled from up to three, instead of dropping those pixels
+   to national 3DEP. Headers and blocks are memoised, so the retry pays only
+   for the extra sources. */
+async function sampleBest(z,x,y,size,sample=sampleGrid){
+  const first=await sample(z,x,y,size,{maxSources:1});
+  if(first && first.coverage>=1) return first;
+  const wider=await sample(z,x,y,size,{maxSources:3});
+  return wider && (!first || wider.coverage>first.coverage) ? wider : first;
+}
+
 async function elevTile(z,x,y,size){
-  /* The national baseline remains underneath this refinement, so opening the
-     newest valid COG is enough. Avoiding two speculative fallback COGs cuts
-     cold raw-lidar work dramatically without turning a gap into a black tile. */
-  const S=await sampleGrid(z,x,y,size||256,{maxSources:1});
+  const S=await sampleBest(z,x,y,size||256);
   if(!S) return null;
   const {grid,n}=S; const w=size||256;
   const out=Buffer.alloc(w*w*4);
@@ -802,7 +818,7 @@ async function elevTile(z,x,y,size){
 }
 
 async function renderTile(style,z,x,y,size){
-  const S=await sampleGrid(z,x,y,size||256,{maxSources:1});
+  const S=await sampleBest(z,x,y,size||256);
   if(!S) return null;
   return {png:render(style,S), meta:{coverage:+S.coverage.toFixed(3), groundRes:+S.groundRes.toFixed(2),
                                      sources:S.sources}};
@@ -1106,7 +1122,7 @@ async function fabric(bbox, opt){
   };
 }
 
-module.exports = Object.assign(module.exports, { init, buildIndex, getIndex, findCells, cellCandidates, addTileKey, projectCell, cellOf, cellBounds, projectYear, scopeList, fabric, sampleUTMGrid, elevTile,
+module.exports = Object.assign(module.exports, { init, buildIndex, getIndex, findCells, cellCandidates, addTileKey, projectCell, sampleBest, cellOf, cellBounds, projectYear, scopeList, fabric, sampleUTMGrid, elevTile,
                    openCog, cogTile, fetchRange, renderTile, sampleGrid, utmGrid, encodePNG, renderRgba,
                    checkFresh, tileKey, tileUrl, s3head, S3_BASE });
 
