@@ -40,7 +40,8 @@ function take(src,start){
 
 async function vendored(){
   const dir=path.join(__dirname,'vendor');
-  const shared=await import(path.join(dir,'maplibre-gl-shared.mjs'));
+  // A file:// URL, not a bare path: Windows rejects "C:\..." as an ESM specifier.
+  const shared=await import(require('url').pathToFileURL(path.join(dir,'maplibre-gl-shared.mjs')).href);
   const main=fs.readFileSync(path.join(dir,'maplibre-gl.mjs'),'utf8');
   const imported=main.match(/^import\{([^}]*)\}from"\.\/maplibre-gl-shared\.mjs"/m);assert(imported,'shared import statement');
   const context={console};
