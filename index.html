@@ -994,8 +994,8 @@ body.pane-reordering,body.pane-reordering *{cursor:grabbing!important;user-selec
 }
 
 </style>
-<link rel="stylesheet" href="ui-theme.css?build=2026-10-13e">
-<link rel="stylesheet" href="ui-system.css?build=2026-10-13e">
+<link rel="stylesheet" href="ui-theme.css?build=2026-10-13f">
+<link rel="stylesheet" href="ui-system.css?build=2026-10-13f">
 <style>
 /* The redesign restructures the legacy DOM rather than replacing it, and the
    script that does so is the last thing on the page - so the browser paints the
@@ -1233,50 +1233,53 @@ html.csp-boot body{visibility:hidden}
           <span class="pane-x">&#9662;</span>
         </div>
         <div class="pane-b">
-          <h3 class="menu-section-title">View</h3>
-          <div class="terrain-mode" role="group" aria-label="Terrain view mode">
-            <button id="terMode2d" type="button" aria-pressed="true">2D map</button>
-            <button id="terMode3d" type="button" aria-pressed="false">3D terrain</button>
-            <button id="terModePoints" type="button" aria-pressed="false">Point cloud</button>
-          </div>
-          <div class="terrain-mode-note" id="terModeNote">Drag to pan. Pinch to zoom. North reset is on the map.</div>
-          <h3 class="menu-section-title">Terrain layer</h3>
-          <div class="fgrid terrain-fields">
-            <label for="terStyle">Layer</label>
-            <select id="terStyle" aria-describedby="terStyleHint">
-              <option value="off" selected>Off</option>
-              <option value="hs">Hillshade</option>
-              <option value="hsmulti">Hillshade (multi-directional)</option>
-              <option value="tint">Elevation tinted</option>
-              <option value="slope">Slope</option>
-              <option value="aspect">Aspect</option>
-              <option value="northness">North&ndash;south exposure</option>
-              <option value="c2">Contours &mdash; 2 ft</option>
-              <option value="c5">Contours &mdash; 5 ft</option>
-              <option value="c10">Contours &mdash; 10 ft</option>
-              <option value="c25">Contours &mdash; 25 ft</option>
-            </select>
-            <p class="control-hint" id="terStyleHint"></p>
-            <label for="terSrc">Source preference</label>
-            <select id="terSrc" aria-describedby="terSrcHint">
-              <option value="auto" selected>Best available</option>
-              <option value="3dep">USGS 3DEP (national)</option>
-              <option value="usgs1m">USGS 3.3 ft (offline-capable)</option>
-            </select>
-            <p class="control-hint" id="terSrcHint">Uses fetched WA DNR in your selected areas and USGS elsewhere.</p>
-            <div class="elev-field terrain-opacity-control">
-              <div class="elev-label-row"><label for="terOp">Opacity</label><output id="terOpOut" for="terOp">70%</output></div>
-              <input type="range" id="terOp" min="0" max="100" value="70">
+          <div class="terrain-view" id="terView">
+            <div class="terrain-mode" role="group" aria-label="Map view">
+              <button id="terMode2d" type="button" aria-pressed="true">2D map</button>
+              <button id="terMode3d" type="button" aria-pressed="false">3D terrain</button>
+              <button id="terModePoints" type="button" aria-pressed="false">Point cloud</button>
             </div>
+            <div class="terrain-mode-note" id="terModeNote">Drag to pan. Pinch to zoom. North reset is on the map.</div>
           </div>
-          <div class="terdl dnr-module" id="dnrAreaPanel">
-            <h3 class="menu-section-title">WA DNR LiDAR</h3>
-            <p class="control-hint">Download Washington state LiDAR for an area you choose. USGS stays active elsewhere.</p>
-            <button class="ghost" id="dnrSelect" type="button" aria-describedby="dnrEngineHint">Select area on map</button>
-            <p class="control-hint" id="dnrEngineHint"></p>
-            <div class="dnr-status-row"><div id="dnrAreaMsg" class="warmmsg" role="status" aria-live="polite">No downloaded areas</div>
-              <button class="linkbtn" id="dnrClear" type="button">Clear areas</button></div>
-          </div>
+          <details class="terrain-appearance terrain-layer-section" id="terLidar" open>
+            <summary>LiDAR Terrain Mode <span class="pane-n" id="terLidarState">off</span></summary>
+            <div class="fgrid terrain-fields">
+              <label for="terStyle">Layer</label>
+              <select id="terStyle" aria-describedby="terStyleHint">
+                <option value="off" selected>Off</option>
+                <option value="hs">Hillshade</option>
+                <option value="hsmulti">Hillshade (multi-directional)</option>
+                <option value="tint">Elevation tinted</option>
+                <option value="slope">Slope</option>
+                <option value="aspect">Aspect</option>
+                <option value="northness">North&ndash;south exposure</option>
+                <option value="c2">Contours &mdash; 2 ft</option>
+                <option value="c5">Contours &mdash; 5 ft</option>
+                <option value="c10">Contours &mdash; 10 ft</option>
+                <option value="c25">Contours &mdash; 25 ft</option>
+              </select>
+              <p class="control-hint" id="terStyleHint"></p>
+              <label for="terSrc">LiDAR source preference</label>
+              <select id="terSrc" aria-describedby="terSrcHint">
+                <option value="auto" selected>Best available</option>
+                <option value="3dep">USGS 3DEP (national)</option>
+                <option value="usgs1m">USGS 3.3 ft (offline-capable)</option>
+              </select>
+              <p class="control-hint" id="terSrcHint">Uses fetched WA DNR in your selected areas and USGS elsewhere.</p>
+              <div class="elev-field terrain-opacity-control">
+                <div class="elev-label-row"><label for="terOp">Opacity</label><output id="terOpOut" for="terOp">70%</output></div>
+                <input type="range" id="terOp" min="0" max="100" value="70">
+              </div>
+            </div>
+            <div class="terdl dnr-module" id="dnrAreaPanel">
+              <h3 class="menu-section-title">WA DNR LiDAR</h3>
+              <p class="control-hint">Download Washington state LiDAR for an area you choose. USGS stays active elsewhere.</p>
+              <button class="ghost" id="dnrSelect" type="button" aria-describedby="dnrEngineHint">Select area on map</button>
+              <p class="control-hint" id="dnrEngineHint"></p>
+              <div class="dnr-status-row"><div id="dnrAreaMsg" class="warmmsg" role="status" aria-live="polite">No downloaded areas</div>
+                <button class="linkbtn" id="dnrClear" type="button">Clear areas</button></div>
+            </div>
+          </details>
           <details class="terrain-appearance" id="terAppearance">
             <summary>Layer appearance <span class="pane-n" id="terLookStyle">per layer</span></summary>
             <div class="terrain-look-grid">
@@ -1312,8 +1315,8 @@ html.csp-boot body{visibility:hidden}
             <button class="ghost terrain-look-reset" id="terLightReset" type="button">Reset lighting</button>
           </details>
           <button class="linkbtn" id="terReset" type="button" style="margin-top:8px">Reset terrain panel</button>
-          <div class="terdl menu-card" id="terrainDownloadBox">
-            <h3 class="menu-section-title">Save terrain for offline use</h3>
+          <details class="terrain-appearance terrain-offline" id="terrainDownloadBox">
+            <summary>Save terrain for offline use</summary>
             <div class="elev-field">
               <label for="terDepth">Detail</label>
               <select id="terDepth" title="Native matches the LiDAR’s own resolution.">
@@ -1334,7 +1337,7 @@ html.csp-boot body{visibility:hidden}
             <button class="ghost" id="terWarm">Download this view</button>
             <div id="terWarmMsg" class="warmmsg"></div>
             <div id="terStale" class="warmmsg" style="display:none"></div>
-          </div>
+          </details>
           <div id="terLegend" class="terlegend" aria-live="polite"></div>
           <div id="terInfo" class="terinfo">Pick a layer to drape terrain over the map.</div>
         </div>
@@ -1753,7 +1756,7 @@ html.csp-boot body{visibility:hidden}
   L.Renderer.prototype.onAdd=function(map){return onAdd.call(this,map||this._map)};
 })();
 </script>
-<script src="version.js?build=2026-10-13e"></script>
+<script src="version.js?build=2026-10-13f"></script>
 <script src="mosaic-core.js"></script>
 <script src="png-stream.js"></script>
 <script src="terrain-core.js"></script>
@@ -10548,8 +10551,8 @@ $("#q").addEventListener("blur",()=>setTimeout(acHide,120));
 document.addEventListener("click",e=>{ if(!e.target.closest("#iw")) acHide() });
 })();
 </script>
-<script src="markup-3d.js?build=2026-10-13e"></script>
-<script src="markup.js?build=2026-10-13e"></script>
-<script src="ui-system.js?build=2026-10-13e"></script>
+<script src="markup-3d.js?build=2026-10-13f"></script>
+<script src="markup.js?build=2026-10-13f"></script>
+<script src="ui-system.js?build=2026-10-13f"></script>
 </body>
 </html>

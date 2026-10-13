@@ -191,14 +191,46 @@ function filterResearch(mode){
 }
 
 /* Rendering belongs with the terrain layer; measurements keep their own cards. */
-const elevationColour=document.createElement("div");
-elevationColour.className="menu-card elevation-colour";
-elevationColour.innerHTML='<h3 class="menu-section-title">Elevation colour</h3><p class="control-hint">Colour by height or highlight ground above and below a threshold.</p>';
+const elevationColour=document.createElement("details");
+elevationColour.id="terElevationColour";elevationColour.className="terrain-appearance elevation-colour";
+elevationColour.innerHTML='<summary>Elevation colour <span class="pane-n" id="terElevationState">off</span></summary><p class="control-hint">Colour by height or highlight ground above and below a threshold.</p>';
 if(spectrumBox) elevationColour.append(spectrumBox);
 if(bandsBox) elevationColour.append(bandsBox);
 const terrainLighting=$("#terLighting");
 if(terrainLighting)terrainLighting.before(elevationColour);else $(".pane[data-pane=terrain] .pane-b")?.append(elevationColour);
 $("#terrainDownloadBox")?.after(...[$("#terrainSourceDetails"),$("#terReset")].filter(Boolean));
+
+/* Terrain tools fold away when unused. Each closed row names what is active,
+   and the panel remembers which rows were left open. */
+const TERRAIN_SECTIONS_KEY="clearskies.terrain-sections.v1";
+const terrainSections=["terLidar","terAppearance","terElevationColour","terLighting","terrainDownloadBox","terrainSourceDetails"];
+let openTerrainSections=null;
+try{openTerrainSections=JSON.parse(localStorage.getItem(TERRAIN_SECTIONS_KEY))}catch(error){}
+for(const id of terrainSections){
+  const section=document.getElementById(id);if(!section) continue;
+  if(Array.isArray(openTerrainSections)) section.open=openTerrainSections.includes(id);
+  section.addEventListener("toggle",()=>{
+    if(section.open) syncTerrainSections();
+    try{localStorage.setItem(TERRAIN_SECTIONS_KEY,JSON.stringify(terrainSections.filter(name=>document.getElementById(name)?.open)))}catch(error){}
+  });
+}
+function syncTerrainSections(){
+  const lidar=$("#terLidarState"),style=$("#terStyle");
+  if(lidar&&style){
+    const text=style.value==="off"?"off":style.selectedOptions[0]?.textContent||style.value;
+    if(lidar.textContent!==text) lidar.textContent=text;
+  }
+  const colour=$("#terElevationState");
+  if(colour){
+    const on=[$("#elevSh")?.checked&&"Spectrum",($("#elevBelowOn")?.checked||$("#elevAboveOn")?.checked)&&"Highlights"].filter(Boolean);
+    const text=on.length?`${on.join(" + ")} on`:"off";
+    if(colour.textContent!==text) colour.textContent=text;
+  }
+}
+elevationColour.addEventListener("change",syncTerrainSections);
+$("#terStyle")?.addEventListener("change",syncTerrainSections);
+elevationColour.addEventListener("click",()=>setTimeout(syncTerrainSections));
+syncTerrainSections();
 for(const grid of $$(".terrain-look-grid")){
   while(grid.firstElementChild){
     const label=grid.firstElementChild,input=label.nextElementSibling,output=input?.nextElementSibling;
@@ -487,6 +519,7 @@ document.addEventListener("pointerdown",event=>{
 document.addEventListener("keydown",event=>{if(event.key==="Escape"&&!modeMenu.hidden) setModeMenu(false,{restore:true})});
 addEventListener("resize",placeModeMenu);
 function syncModeBar(){
+  syncTerrainSections();
   const mode=currentMode(),entry=MODES.find(item=>item.mode===mode);
   $$("[data-mode]",modeMenu).forEach(item=>item.setAttribute("aria-checked",String(item.dataset.mode===mode)));
   if(modeToggle&&modeToggle.dataset.mode!==mode){
