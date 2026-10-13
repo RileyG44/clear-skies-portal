@@ -30,6 +30,10 @@ const S3_BASE = "StagedProducts/Elevation/1m/Projects/";
 const TIF_RE = /^USGS_(?:1[Mm]_(?:(\d+)_)?|one_meter_)x(\d+)y(\d+)_(.+)\.tif$/;
 
 const INDEX_TTL = 30*24*3600*1000;      // the archive changes on a yearly rhythm
+/* v2 keys zoned filenames by zone. v1 kept one zone per project (the last file
+   listed), which hid every cell in the other zone of a project crossing a UTM
+   boundary: ~800 Washington tiles east of the Cascades, served as national 3DEP. */
+const INDEX_VERSION = 2;
 /* Which projects to index. The portal's project-specific source is WA DNR, so
    raw 1 m DEM discovery defaults to Washington too. This avoids nearly 1,000
    S3 catalogue round-trips on a fresh install. National rendered 3DEP remains
@@ -150,8 +154,24 @@ async function listProjects(prefix){
   return out;
 }
 
+/* Zoned filenames are keyed "<zone>/x..y..": a project that crosses a UTM
+   boundary holds cells in both zones, and one cell name can occur in each.
+   The zoneless conventions are keyed by cell alone and resolved per file. */
+function addTileKey(cells, zones, key, size){
+  const f=key.split("/").pop(), m=f.match(TIF_RE);
+  if(!m) return;
+  if(m[1]) zones.add(+m[1]);
+  cells[m[1]?`${+m[1]}/x${m[2]}y${m[3]}`:`x${m[2]}y${m[3]}`]={f, size:size||0};
+}
+function projectCell(pr, cell, zone){
+  const zoned=pr.cells[`${zone}/${cell}`];
+  if(zoned) return {c:zoned, zone};
+  const bare=pr.cells[cell];
+  return bare ? {c:bare, zone:null} : null;
+}
+
 async function listProjectTiles(proj){
-  const cells={}; let zone=null, tok="";
+  const cells={}, zones=new Set(); let tok="";
   do{
     const url=`/?list-type=2&prefix=${S3_BASE}${proj}/TIFF/&max-keys=1000`
             + (tok?`&continuation-token=${encodeURIComponent(tok)}`:"");
@@ -160,15 +180,11 @@ async function listProjectTiles(proj){
     const xml=r.body.toString();
     const keys=[...xml.matchAll(/<Key>([^<]+)<\/Key>/g)].map(m=>m[1]);
     const sizes=[...xml.matchAll(/<Size>(\d+)<\/Size>/g)].map(m=>+m[1]);
-    keys.forEach((k,i)=>{
-      const f=k.split("/").pop(), m=f.match(TIF_RE);
-      if(!m) return;
-      if(m[1]) zone=+m[1];
-      cells[`x${m[2]}y${m[3]}`]={f, size:sizes[i]||0};
-    });
+    keys.forEach((k,i)=>addTileKey(cells,zones,k,sizes[i]));
     const t=xml.match(/<NextContinuationToken>([^<]+)</); tok=t?t[1]:"";
   }while(tok);
-  return {cells, zone};
+  // A single zone is reported for display; lookups always use the cell keys.
+  return {cells, zone:zones.size===1?[...zones][0]:null};
 }
 
 function indexPath(){ return path.join(CACHE_DIR,"usgs","index.json") }
@@ -186,11 +202,14 @@ async function buildIndexNow(states, force){
   if(!force){
     try{
       const st=fs.statSync(f);
-      if(Date.now()-st.mtimeMs < INDEX_TTL){ INDEX=JSON.parse(fs.readFileSync(f,"utf8")); return INDEX }
+      if(Date.now()-st.mtimeMs < INDEX_TTL){
+        const cached=JSON.parse(fs.readFileSync(f,"utf8"));
+        if(cached.v===INDEX_VERSION){ INDEX=cached; return INDEX }
+      }
     }catch(e){}
   }
   if(INDEX && !force) return INDEX;
-  const out={built:Date.now(), scope:(states||scopeList()).join(",")||"ALL", projects:{}};
+  const out={v:INDEX_VERSION, built:Date.now(), scope:(states||scopeList()).join(",")||"ALL", projects:{}};
   const names=[];
   for(const st of (states||scopeList())) names.push(...await listProjects(st));
   const uniq=[...new Set(names)].filter(Boolean);
@@ -267,11 +286,10 @@ async function cellCandidates(idx, cell, zone){
   loadZones();
   const out=[]; let dirty=false;
   for(const p in idx.projects){
-    const pr=idx.projects[p];
-    if(pr.zone && pr.zone!==zone) continue;          // known zone must match
-    const c=pr.cells[cell];
-    if(!c) continue;
-    let z=pr.zone;
+    const hit=projectCell(idx.projects[p], cell, zone);   // a zoned key must match
+    if(!hit) continue;
+    const c=hit.c;
+    let z=hit.zone;
     if(z==null){
       const k=`${p}/${cell}`;
       if(ZONES.has(k)) z=ZONES.get(k);
@@ -857,9 +875,7 @@ async function sourcesForArea(bbox){
     const cell=cellOf(uu.e,uu.n);
     const cands=[];
     for(const p in idx.projects){
-      const pr=idx.projects[p];
-      if(pr.zone && pr.zone!==zone) continue;
-      const c=pr.cells[cell];
+      const hit=projectCell(idx.projects[p], cell, zone), c=hit&&hit.c;
       if(c) cands.push({project:p, cell, file:c.f, size:c.size, year:projectYear(p)});
     }
     cands.sort((q,r)=>r.year-q.year || r.size-q.size);
@@ -1090,7 +1106,7 @@ async function fabric(bbox, opt){
   };
 }
 
-module.exports = Object.assign(module.exports, { init, buildIndex, getIndex, findCells, cellOf, cellBounds, projectYear, scopeList, fabric, sampleUTMGrid, elevTile,
+module.exports = Object.assign(module.exports, { init, buildIndex, getIndex, findCells, cellCandidates, addTileKey, projectCell, cellOf, cellBounds, projectYear, scopeList, fabric, sampleUTMGrid, elevTile,
                    openCog, cogTile, fetchRange, renderTile, sampleGrid, utmGrid, encodePNG, renderRgba,
                    checkFresh, tileKey, tileUrl, s3head, S3_BASE });
 

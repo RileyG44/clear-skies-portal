@@ -67,4 +67,26 @@ for(const [lon,lat] of [[-122.3,47.6],[-149.9,61.2],[-80.2,25.8],[-114.01,48.7]]
   }
 }
 
-console.log("USGS terrain render checks passed");
+(async()=>{
+  // A project crossing a UTM boundary (WA_CentralWildfire_D22 has 266 zone-10
+  // and 65 zone-11 files) must keep the cells of both zones, including one
+  // cell name that occurs in each. The old index kept only the last zone seen.
+  const P="StagedProducts/Elevation/1m/Projects/WA_CentralWildfire_D22/TIFF/";
+  const cells={},zones=new Set();
+  for(const [f,size] of [["USGS_1M_10_x71y537_WA_CentralWildfire_D22.tif",10],
+                         ["USGS_1M_11_x28y537_WA_CentralWildfire_D22.tif",11],
+                         ["USGS_1M_11_x71y537_WA_CentralWildfire_D22.tif",12],
+                         ["USGS_one_meter_x40y520_WA_Old.tif",13]])
+    usgs.addTileKey(cells,zones,P+f,size);
+  assert.deepEqual([...zones].sort(),[10,11]);
+  const idx={projects:{WA_CentralWildfire_D22:{zone:null,cells}}};
+  const twisp=await usgs.cellCandidates(idx,"x71y537",10);
+  assert.equal(twisp.length,1,"Twisp's zone-10 cell is found");
+  assert.equal(twisp[0].file,"USGS_1M_10_x71y537_WA_CentralWildfire_D22.tif");
+  assert.equal(twisp[0].zone,10);
+  const east=await usgs.cellCandidates(idx,"x71y537",11);
+  assert.equal(east[0].file,"USGS_1M_11_x71y537_WA_CentralWildfire_D22.tif","same cell name, other zone");
+  assert.equal((await usgs.cellCandidates(idx,"x28y537",10)).length,0,"a zoned cell never matches another zone");
+  assert.equal(usgs.projectCell(idx.projects.WA_CentralWildfire_D22,"x40y520",10).zone,null,"zoneless names resolve per file");
+  console.log("USGS terrain render checks passed");
+})().catch(error=>{console.error(error);process.exit(1)});

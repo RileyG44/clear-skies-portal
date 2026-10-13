@@ -992,8 +992,8 @@ body.pane-reordering,body.pane-reordering *{cursor:grabbing!important;user-selec
 }
 
 </style>
-<link rel="stylesheet" href="ui-theme.css?build=2026-10-12i">
-<link rel="stylesheet" href="ui-system.css?build=2026-10-12i">
+<link rel="stylesheet" href="ui-theme.css?build=2026-10-13a">
+<link rel="stylesheet" href="ui-system.css?build=2026-10-13a">
 <style>
 /* The redesign restructures the legacy DOM rather than replacing it, and the
    script that does so is the last thing on the page - so the browser paints the
@@ -1721,7 +1721,7 @@ html.csp-boot body{visibility:hidden}
   L.Renderer.prototype.onAdd=function(map){return onAdd.call(this,map||this._map)};
 })();
 </script>
-<script src="version.js?build=2026-10-12i"></script>
+<script src="version.js?build=2026-10-13a"></script>
 <script src="mosaic-core.js"></script>
 <script src="png-stream.js"></script>
 <script src="terrain-core.js"></script>
@@ -5452,7 +5452,7 @@ const DepLayer = ResilientTileLayer.extend({
    zoom; 204 means no federal coverage for that tile and the layer underneath
    shows through. Needs server.js — the S3 bucket sets no CORS header. */
 const UsgsLayer = ResilientTileLayer.extend({
-  getTileUrl(c){ return `${API}/api/usgs/tile/${this.options.style}/${c.z}/${c.x}/${c.y}.png?rv=terrain-v3` }
+  getTileUrl(c){ return `${API}/api/usgs/tile/${this.options.style}/${c.z}/${c.x}/${c.y}.png?rv=terrain-v3&${RAW_COVERAGE_QUERY}` }
 });
 
 /* Layer count barely changes how long WA DNR takes per tile, but it changes
@@ -5669,6 +5669,10 @@ function takeSharedServerBase(){
 const SHARED_SERVER=takeSharedServerBase();
 let API = normaliseBase(SHARED_SERVER || localStorage.getItem("cspServer") || "");
 const api = p => API + p;
+/* Bumped when the engine's 1 m coverage changes under an unchanged tile URL
+   (2: projects crossing a UTM zone boundary were half-indexed). Those tiles
+   are immutable in the browser cache, so this query lets corrected ones in. */
+const RAW_COVERAGE_QUERY="ix=2";
 
 let terLayer=null, terBase=null, PROXY=false, WA_LAYERS=null, waCover=null, terTimer=null;
 let probeToken=0, waLayersPromise=null, terrainQueryToken=0, serverHealth=null, serverProbeTimer=null;
@@ -6236,7 +6240,7 @@ function scratch(size,which="tile"){
   if(c.width!==size||c.height!==size){ c.width=c.height=size }
   return c;
 }
-const elevTileUrl=(z,x,y)=>PROXY?api(`/api/elev/${z}/${x}/${y}.png`)
+const elevTileUrl=(z,x,y)=>PROXY?api(`/api/elev/${z}/${x}/${y}.png?${RAW_COVERAGE_QUERY}`)
   :`https://s3.amazonaws.com/elevation-tiles-prod/terrarium/${z}/${x}/${y}.png`;
 
 /* Cache source tiles rather than assembled skirts: adjacent drapes share
@@ -9158,7 +9162,7 @@ async function engineElevationWithFallback(coords,signal,mesh=false){
   requests.push(request(`/api/wadnr/elev/${coords.z}/${coords.x}/${coords.y}.png?acquire=0&revision=${dnrStatus?.revision||0}`,5,"dnr"));
   if(!strict){
     requests.push(request(`/api/elev/national/${coords.z}/${coords.x}/${coords.y}.png`,2,"national"));
-    if(!mesh&&coords.z>=13)requests.push(request(`/api/usgs/elev/${coords.z}/${coords.x}/${coords.y}.png`,3,"detail"));
+    if(!mesh&&coords.z>=13)requests.push(request(`/api/usgs/elev/${coords.z}/${coords.x}/${coords.y}.png?${RAW_COVERAGE_QUERY}`,3,"detail"));
     requests.push(overviewElevation(coords,requestSignal).then(source=>({source,rank:1})).catch(error=>{if(signal.aborted)throw error;return null;}));
   }
   const progress=new CSPTilePipeline.ProgressiveGrid(256*256);
@@ -9259,7 +9263,7 @@ const ElevLayer = L.GridLayer.extend({
     if(PROXY&&this.options.dnrEndpoint)
       sources.push([api(`${this.options.dnrEndpoint}/{z}/{x}/{y}.png?acquire=${this.options.dnrAcquire&&shown>=13?"1":"0"}&revision=${dnrStatus?.revision||0}`),18,5,"WA DNR elevation"]);
     if(PROXY&&this.options.rawEndpoint&&shown>=13)
-      sources.push([api(`${this.options.rawEndpoint}/{z}/{x}/{y}.png`),this.options.rawNativeZoom??coords.z,3,"USGS 3.3 ft"]);
+      sources.push([api(`${this.options.rawEndpoint}/{z}/{x}/{y}.png?${RAW_COVERAGE_QUERY}`),this.options.rawNativeZoom??coords.z,3,"USGS 3.3 ft"]);
     if(PROXY&&this.options.nationalEndpoint&&(shown>=13||this.options.refineOverview))
       sources.push([api(`${this.options.nationalEndpoint}/{z}/{x}/{y}.png`),this.options.nationalNativeZoom??coords.z,2,"National elevation"]);
     if(!PROXY&&this.options.fallback)
@@ -9980,7 +9984,7 @@ async function createSnapshotReadout(spec){
     else{
       const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),18000);
       try{
-        const tile=PROXY?await elevationRequests.request(api(`/api/elev/${coords.z}/${coords.x}/${coords.y}.png`),s=>fetchElevation(api(`/api/elev/${coords.z}/${coords.x}/${coords.y}.png`),s),{signal:controller.signal,priority:1,group:"cursor"}):await publicElevationWithFallback(coords,controller.signal);
+        const tile=PROXY?await elevationRequests.request(api(`/api/elev/${coords.z}/${coords.x}/${coords.y}.png?${RAW_COVERAGE_QUERY}`),s=>fetchElevation(api(`/api/elev/${coords.z}/${coords.x}/${coords.y}.png?${RAW_COVERAGE_QUERY}`),s),{signal:controller.signal,priority:1,group:"cursor"}):await publicElevationWithFallback(coords,controller.signal);
         const value=cursorTileSample(tile?{coords,elev:tile.grid,width:tile.width,height:tile.height}:null,location);
         if(value!==null)sample={value};
       }catch(error){}finally{clearTimeout(timer)}
@@ -10078,7 +10082,7 @@ function refreshCursorElevation(){
     const controller=new AbortController(),request={key,controller};cursorRequest=request;
     const timeout=setTimeout(()=>controller.abort(),20000);
     try{
-      const tile=PROXY?await elevationRequests.request(api(`/api/elev/${coords.z}/${coords.x}/${coords.y}.png`),s=>fetchElevation(api(`/api/elev/${coords.z}/${coords.x}/${coords.y}.png`),s),{signal:controller.signal,priority:1,group:"cursor"}):await publicElevationWithFallback(coords,controller.signal);
+      const tile=PROXY?await elevationRequests.request(api(`/api/elev/${coords.z}/${coords.x}/${coords.y}.png?${RAW_COVERAGE_QUERY}`),s=>fetchElevation(api(`/api/elev/${coords.z}/${coords.x}/${coords.y}.png?${RAW_COVERAGE_QUERY}`),s),{signal:controller.signal,priority:1,group:"cursor"}):await publicElevationWithFallback(coords,controller.signal);
       cursorTiles.set(key,{at:Date.now(),tile:tile?{coords,elev:tile.grid,width:tile.width||256,height:tile.height||256}:null,source:PROXY?"USGS elevation":tile?.rank===1?"Global overview elevation":"USGS 3DEP elevation"});
     }catch(error){if(!controller.signal.aborted)cursorTiles.set(key,{at:Date.now(),tile:null,source:""});}
     finally{
@@ -10274,7 +10278,7 @@ $("#q").addEventListener("blur",()=>setTimeout(acHide,120));
 document.addEventListener("click",e=>{ if(!e.target.closest("#iw")) acHide() });
 })();
 </script>
-<script src="markup.js?build=2026-10-12i"></script>
-<script src="ui-system.js?build=2026-10-12i"></script>
+<script src="markup.js?build=2026-10-13a"></script>
+<script src="ui-system.js?build=2026-10-13a"></script>
 </body>
 </html>

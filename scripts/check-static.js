@@ -715,8 +715,10 @@ assert(elevSandbox.lower[0]>elevSandbox.lower[2],"lower elevations must trend re
 assert(elevSandbox.upper[2]>elevSandbox.upper[0],"higher elevations must trend blue");
 const server=read("server.js");
 assert(server.includes('if(z>=13) try{ raw=await terrainTask'),"raw lidar elevation must be reserved for useful close zooms");
-assert(server.includes('const TERRAIN_RENDER_VERSION = "terrain-v3"')&&index.includes("?rv=terrain-v3`"),
+assert(server.includes('const TERRAIN_RENDER_VERSION = "terrain-v3"')&&index.includes("?rv=terrain-v3&${RAW_COVERAGE_QUERY}`"),
        "corrected terrain renders must use a new server-cache namespace");
+assert(read("usgs.js").includes("const INDEX_VERSION = 2;")&&index.includes('const RAW_COVERAGE_QUERY="ix=2";'),
+       "a corrected 1 m index must also bust the browser's immutable raw-derived tiles");
 assert(server.includes('function slot(signal,host)')&&server.includes('line.queue.splice(index,1)')&&server.includes('[WADNR_HOST]:MAX_INFLIGHT, [DEP_HOST]:'),
        "abandoned viewport requests must leave the upstream concurrency queue immediately");
 assert(server.includes('"X-CSP-Error":"upstream"'),
