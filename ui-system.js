@@ -34,8 +34,8 @@ side.style.width="580px";
 const ROUTES={
   layers:{title:"Layers",description:"Everything currently drawn on the map, in render order.",icon:"layers",panes:[],custom:"layers"},
   satellite:{title:"Satellite imagery",description:"Find dated scenes, tune the search, and control the image already on the map.",icon:"satellite",panes:["filters","summary","passes","results","overlays"],open:["filters","results"],overlayGroup:"Imagery",overlayTitle:"Satellite base layers",custom:"satellite"},
-  terrain:{title:"Terrain & LiDAR",description:"Render elevation, analytical terrain, 3D surfaces, and point clouds from the best available source.",icon:"mountain-snow",panes:["terrain","research"],open:["terrain","research"],researchMode:"terrain"},
-  analyze:{title:"Analyze",description:"Measure landform fabric and derive research rasters from cached elevation.",icon:"scan-search",panes:["research"],open:["research"],researchMode:"analyze"},
+  terrain:{title:"Terrain & LiDAR",description:"Choose how elevation is drawn, then fine-tune it.",icon:"mountain-snow",panes:["terrain"],open:["terrain"],researchMode:"terrain"},
+  analyze:{title:"Analyze",description:"Measure landform patterns or reveal features in the current view.",icon:"scan-search",panes:["research"],open:["research"],researchMode:"analyze"},
   export:{title:"Export",description:"Save the exact current extent at screen, detail, or archival resolution.",icon:"download",panes:[],custom:"export"},
   conditions:{title:"Conditions",description:"Weather, earthquakes, volcanoes, fire, snow, and other time-sensitive layers.",icon:"cloud-sun",panes:["alerts","overlays"],open:["alerts","overlays"],overlayGroup:"Conditions",overlayTitle:"Conditions layers"},
   geology:{title:"Geology & hazards",description:"Surface geology, faults, seismic context, landslides, and point identification.",icon:"triangle-alert",panes:["overlays","research"],open:["overlays","research"],overlayGroup:"Geology & hazards",overlayTitle:"Geology layers",researchMode:"geology"},
@@ -174,11 +174,11 @@ for(const [name,title] of Object.entries(PANE_TITLES)){
 const spectrumBox=$("#elevSh")?.closest(".fabbox");if(spectrumBox) spectrumBox.id="elevSpectrumBox";
 const bandsBox=$("#elevBandsBox"),surfaceBox=$("#researchProduct")?.closest(".fabbox"),geologyBox=$("#geologyIdentifyBox");
 const researchPane=$(".pane[data-pane='research']",panes),researchBody=$(".pane-b",researchPane);
-const fabricAction=$(":scope > .terrain-action-row",researchBody),fabricOutput=$("#fabOut");
+const fabricBox=$("#fabricResearchBox");
 
 for(const [group,elements] of Object.entries({
   terrain:[spectrumBox,bandsBox],
-  analyze:[fabricAction,fabricOutput,surfaceBox],
+  analyze:[fabricBox,surfaceBox],
   geology:[geologyBox]
 })) for(const element of elements) if(element) element.dataset.cspResearchGroup=group;
 
@@ -187,8 +187,40 @@ function filterResearch(mode){
     element.classList.toggle("csp-route-hidden",element.dataset.cspResearchGroup!==mode);
   }
   const title=$(".pane-t",researchPane);
-  if(title) title.textContent=mode==="terrain"?"Elevation tools":mode==="geology"?"Identify geology":"Analysis tools";
+  if(title) title.textContent=mode==="terrain"?"Elevation colour":mode==="geology"?"Identify geology":"Analysis tools";
 }
+
+/* Rendering belongs with the terrain layer; measurements keep their own cards. */
+const elevationColour=document.createElement("div");
+elevationColour.className="menu-card elevation-colour";
+elevationColour.innerHTML='<h3 class="menu-section-title">Elevation colour</h3><p class="control-hint">Colour by height or highlight ground above and below a threshold.</p>';
+if(spectrumBox) elevationColour.append(spectrumBox);
+if(bandsBox) elevationColour.append(bandsBox);
+const terrainLighting=$("#terLighting");
+if(terrainLighting)terrainLighting.before(elevationColour);else $(".pane[data-pane=terrain] .pane-b")?.append(elevationColour);
+$("#terrainDownloadBox")?.after(...[$("#terrainSourceDetails"),$("#terReset")].filter(Boolean));
+for(const grid of $$(".terrain-look-grid")){
+  while(grid.firstElementChild){
+    const label=grid.firstElementChild,input=label.nextElementSibling,output=input?.nextElementSibling;
+    if(!input||!output) break;
+    const field=document.createElement("div"),row=document.createElement("div");
+    field.className="elev-field";row.className="elev-label-row";
+    row.append(label,output);field.append(row,input);grid.before(field);
+  }
+  grid.remove();
+}
+const terrainHints={off:"Choose a layer to show the shape of the ground.",hs:"Shaded relief makes landforms easier to read.",hsmulti:"Light from several directions reveals landforms with fewer deep shadows.",tint:"Colour the ground by height, with shaded relief.",slope:"Show how steep the ground is.",aspect:"Colour each slope by the direction it faces.",northness:"Show how strongly slopes face north or south."};
+const researchHints={lrm:"Remove broad hills so smaller landforms stand out.",tpi:"Show ridges and hollows relative to surrounding ground.",tri:"Show how rough or broken the surface is.",residual:"Find bumps and dips that differ from the broader surface.",northness:"Show which way slopes face, along north–south and east–west axes.",curvature:"Show how slopes bend and where flow converges or spreads.",glacial:"Flag possible ice-margin landforms. Check candidates against geology and field evidence.",flood:"Flag possible flood channels. Check candidates against geology and field evidence."};
+function syncMenuHints(){
+  const style=$("#terStyle")?.value,source=$("#terSrc")?.value;
+  const setHint=(id,text)=>{const hint=$(id);if(hint)hint.textContent=text};
+  if(style!=null)setHint("#terStyleHint",terrainHints[style]||"Trace lines of equal height at the selected interval.");
+  if(source!=null)setHint("#terSrcHint",source==="auto"?"Uses fetched WA DNR in your selected areas and USGS elsewhere.":source==="3dep"?"National elevation coverage from USGS.":"Detailed USGS elevation where available; downloaded areas work offline.");
+  setHint("#researchProductHint",researchHints[$("#researchProduct")?.value]||"");
+}
+for(const id of ["terStyle","terSrc","researchProduct"]) $("#"+id)?.addEventListener("change",syncMenuHints);
+for(const id of ["terReset","researchReset"]) $("#"+id)?.addEventListener("click",()=>requestAnimationFrame(syncMenuHints));
+syncMenuHints();
 
 let overlayGroup=null;
 const overlayGroupSlug=group=>({
@@ -574,6 +606,7 @@ const goToDetent=detent=>{
   if(!isCollapsed()) toggleSheet();
 };
 setDetent("medium");
+document.addEventListener("csp:dnr-select",()=>{if(phoneSheet.matches) goToDetent("peek")});
 /* setCollapsed() makes the whole panel inert, which is right when it is hidden
    and wrong when it peeks: the search field is on screen and must work. The
    rows below the strip are hidden by CSS (visibility), so they stay out of the

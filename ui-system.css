@@ -2116,6 +2116,86 @@ body.point-cloud-open #mapReadout{display:none}
 .snap-sel-bar button:focus-visible{outline:2px solid var(--ui-accent);outline-offset:2px}
 
 
+/* Shared setting blocks: field, explanation, and value in the same places
+   across tools. These override glass field chrome without changing its shell. */
+body.csp-redesign :is(#side,#pointCloudPanel,#snapshotPanel) select{
+  appearance:none;-webkit-appearance:none;white-space:nowrap;text-overflow:ellipsis;
+  width:100%;min-width:0;max-width:100%;min-height:40px;padding:9px 34px 9px 12px;
+  border:1px solid var(--ui-line-strong);border-radius:10px;
+  background-color:var(--ui-surface);color:var(--ui-text);box-shadow:none;
+  background-image:linear-gradient(45deg,transparent 50%,var(--ui-text-muted) 50%),linear-gradient(135deg,var(--ui-text-muted) 50%,transparent 50%);
+  background-position:calc(100% - 18px) 52%,calc(100% - 12px) 52%;
+  background-size:6px 6px;background-repeat:no-repeat;
+}
+body.csp-redesign .menu-section-title{margin:0 0 8px;color:var(--ui-text);font-size:15px;font-weight:650;line-height:1.35}
+body.csp-redesign .control-hint{margin:0;color:var(--ui-text-muted);font-size:12.5px;line-height:1.45;overflow-wrap:anywhere}
+body.csp-redesign .control-hint:empty{display:none}
+body.csp-redesign #panes :is(.elev-form,.elev-field){gap:8px}
+body.csp-redesign #panes .elev-form{row-gap:16px}
+body.csp-redesign #panes :is(.elev-field > label,.elev-label-row > label,.fgrid > label){color:var(--ui-text-2);font-size:13px;font-weight:590}
+body.csp-redesign #panes :is(.elev-value,output){font-size:13px;font-variant-numeric:tabular-nums;color:var(--ui-text-muted)}
+body.csp-redesign #panes .elev-label-row{align-items:baseline;justify-content:space-between;gap:12px}
+body.csp-redesign #panes input[type=range]{width:100%;min-width:0;min-height:36px;margin:0}
+body.csp-redesign #panes .terrain-fields{display:grid;grid-template-columns:minmax(0,1fr);gap:8px}
+body.csp-redesign #panes .terrain-fields > label:not(:first-child){margin-top:8px}
+body.csp-redesign .terrain-opacity-control{margin-top:8px;grid-column:1/-1}
+body.csp-redesign .terrain-mode-note{margin-bottom:20px;font-size:12.5px;line-height:1.45;color:var(--ui-text-muted)}
+body.csp-redesign #panes :is(.menu-card,#surfaceResearchBox){margin:20px 0 0;padding:16px;border:1px solid var(--ui-line);border-radius:12px;background:var(--ui-surface)}
+body.csp-redesign #panes :is(.menu-card,#surfaceResearchBox) > .control-hint{margin-bottom:16px}
+body.csp-redesign #panes .menu-card .fabbox{margin:16px 0 0;padding-top:16px}
+body.csp-redesign #panes #fabricResearchBox{margin-top:0}
+body.csp-redesign #panes #terrainDownloadBox > .elev-field{margin:16px 0 8px}
+body.csp-redesign #panes #terrainDownloadBox > .control-hint{margin-bottom:0}
+body.csp-redesign #panes :is(#fabRun,#researchRun,#terWarm){width:100%;min-height:44px;margin-top:16px;border:1px solid var(--ui-line-strong);border-radius:10px}
+body.csp-redesign #panes #fabRun{color:var(--ui-text-2);background:var(--ui-surface)}
+body.csp-redesign #panes :is(#researchRun,#terWarm){color:var(--ui-control-ink);background:var(--ui-control);border-color:var(--ui-control)}
+body.csp-redesign #panes .linkbtn{color:var(--ui-text-muted);text-decoration:none;font-size:12.5px;min-height:40px;text-align:left}
+body.csp-redesign #panes .linkbtn:hover{color:var(--ui-text);text-decoration:underline}
+body.csp-redesign #panes :is(.terrain-look-reset,#terReset,#researchReset,#elevSpectrumReset,#elevBandsReset){width:100%;margin-top:16px!important;padding:10px 0;border:0;border-top:1px solid var(--ui-line);border-radius:0;background:transparent;box-shadow:none;color:var(--ui-text-muted);text-align:left;font-size:12.5px}
+body.csp-redesign #panes .terrain-appearance summary{min-height:44px;padding:4px 0;font-size:14px;font-weight:600;border-radius:0;background:transparent}
+body.csp-redesign #panes .terrain-appearance summary .pane-n{margin-left:auto;font-size:12px;font-weight:400;max-width:45%;text-align:right}
+body.csp-redesign #panes .terrain-appearance > .elev-field{margin-top:16px}
+body.csp-redesign #panes .elev-section-title{font-size:15px;font-weight:650}
+body.csp-redesign #panes .elev-section-head{margin-bottom:8px}
+body.csp-redesign #panes #dnrAreaPanel{margin-top:16px;padding:12px 0 16px;border-top:0;border-bottom:1px solid var(--ui-line)}
+body.csp-redesign #panes #dnrSelect{width:100%;min-height:44px;margin:12px 0 8px;border:1px solid var(--ui-line-strong);border-radius:10px;color:var(--ui-text-2);background:var(--ui-surface)}
+body.csp-redesign .dnr-status-row{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-top:4px}
+body.csp-redesign #dnrAreaMsg{margin:0;font-size:12.5px;line-height:1.45}
+body.csp-redesign #dnrClear{flex:none;padding:0}
+body.csp-redesign #dnrClear[hidden]{display:none}
+@media(max-width:760px){
+  body.csp-redesign #cspWorkspaceHeader{padding:10px 16px}
+  :root.csp-glass body.csp-redesign #cspWorkspaceTitle{font-size:22px}
+  body.csp-redesign :is(#side,#pointCloudPanel,#snapshotPanel) select{min-height:44px;font-size:16px}
+  body.csp-redesign #panes :is(.menu-card,#surfaceResearchBox){padding:12px}
+  body.csp-redesign #panes input[type=range]{min-height:44px}
+}
+
+/* The acquisition controls stay beside the map rectangle in every UI mode. */
+.dnr-announcement{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap}
+.dnr-selection-bar{position:fixed;z-index:1100;width:320px;max-width:calc(100vw - 20px);padding:12px;border:1px solid var(--ui-line-strong);border-radius:14px;background:var(--ui-surface);color:var(--ui-text);box-shadow:0 8px 30px var(--ui-shadow-2);font-size:13px;line-height:1.4}
+.dnr-selection-bar[hidden],.dnr-move-box[hidden]{display:none}
+.dnr-selection-bar strong{font-size:14px;font-weight:650}
+.dnr-selection-bar p{margin:5px 0 12px;color:var(--ui-text-muted);overflow-wrap:anywhere}
+.dnr-selection-actions{display:flex;gap:8px}
+.dnr-selection-actions button{min-height:44px;padding:8px 12px;border-radius:10px}
+.dnr-selection-actions #dnrFetch{flex:1;color:var(--ui-control-ink);background:var(--ui-control);border:1px solid var(--ui-control)}
+.dnr-selection-actions #dnrFetch[hidden]{display:none}
+.dnr-selection-bar[data-state="error"] p,.dnr-selection-bar[data-state="warning"] p{color:var(--ui-warn)}
+.dnr-selection-bar[data-state="ready"] p{color:var(--ui-text)}
+.dnr-move-box{position:absolute;z-index:450;cursor:move;touch-action:none;background:transparent}
+.dnr-move-box:focus-visible{outline:2px solid var(--ui-accent);outline-offset:4px}
+#map .dnr-handle{width:44px;height:44px;border:0;border-radius:0;background:transparent;box-shadow:none;touch-action:none}
+#map .dnr-handle::after{content:"";position:absolute;inset:13px;border-radius:50%;background:var(--ui-surface);border:2px solid var(--ui-text);box-shadow:0 1px 5px var(--ui-shadow-2)}
+/* The tool page already names these sections. Keep one heading per level
+   instead of putting the analysis cards inside another headed card. */
+body.csp-redesign[data-csp-route="terrain"] .pane[data-pane="terrain"] > .pane-h,
+body.csp-redesign[data-csp-route="analyze"] .pane[data-pane="research"] > .pane-h{display:none}
+body.csp-redesign[data-csp-route="analyze"] #panes .pane[data-pane="research"]{border:0;background:transparent;box-shadow:none}
+body.csp-redesign[data-csp-route="analyze"] #panes .pane[data-pane="research"] > .pane-b{padding:0!important}
+body.csp-redesign #panes .elev-control-row .elev-field > label{font-size:12px}
+body.csp-redesign:not([data-csp-route="satellite"]) #cspWorkspace #status[data-kind="idle"]{display:none}
+
 /* Moving WebGL pixels make every overlapping backdrop blur run again. Use
    the Reduce Transparency / no-backdrop palette while the 3D camera moves;
    the map, sheen, rims and layout stay intact, and rest restores the original
