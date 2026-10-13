@@ -5866,50 +5866,79 @@ function terrariumPng(grid){
    keep its old elevation along their shared edge, and two adjacent tiles that
    reload together can also leave the later one with its own clamped edge
    (its fresh flags get set against its old DEM). Either way: wrong edge
-   gradients and a seam in hillshade and mesh. setTiles hid this by reloading
-   everything; test-mesh-borders.js reproduces both with the vendored code.
-   So after each tile load this code caused (a refresh, or 3DEP replacing the
-   overview), meshBackfill redoes both sides of every shared border with the
+   gradients and a seam in hillshade and mesh; test-mesh-borders.js reproduces
+   both with the vendored code.
+   So after every decoded DEM replacement, including an overview reload after
+   the fine cache evicts a tile, meshBackfill redoes both shared borders with the
    loaded neighbours - whichever of two adjacent tiles lands last fixes both -
    and releases their draped textures. Neighbours not in view get a pending
-   reload, which runs the same pass when they come back. `overview` says the
-   tile on screen holds overview elevation, so only serving 3DEP in its place
-   counts as a refinement. */
+   reload, which runs the same pass when they come back. */
 const meshStale={dem:new Map(),demShade:new Map()}, MESH_STALE_MAX=1024;
-const meshRefined={dem:new Map(),demShade:new Map()}, meshReloading={dem:new Map(),demShade:new Map()};
-function meshStaleClear(){ for(const map of [meshStale,meshRefined,meshReloading].flatMap(Object.values)) map.clear() }
+const meshCompatibility=new Set(),meshCompatibilityPending=new Set();
+let meshSeenDem=new WeakMap(),meshCompatibilityWarned=false;
+function meshStaleClear(){ for(const map of Object.values(meshStale)) map.clear();meshCompatibility.clear();meshCompatibilityPending.clear();meshSeenDem=new WeakMap() }
 function capMeshMap(map,max){ while(map.size>max) map.delete(map.keys().next().value) }
 /* fine: the pending 3DEP when the overview was served, true when 3DEP (or DNR)
    was served, false for a final overview or an error. */
 function markMeshTile(source,key,tile,fine){
   const stale=meshStale[source];if(!stale) return;
-  const was=stale.get(key);stale.delete(key);
-  if(fine===true){ if(was?.overview){ meshRefined[source].set(`${tile.z}/${tile.x}/${tile.y}`,tile);capMeshMap(meshRefined[source],MESH_FINE_MAX) }return }
+  stale.delete(key);
+  if(fine===true) return;
   if(!fine) return;
-  const entry={tile,ready:false,overview:true};stale.set(key,entry);capMeshMap(stale,MESH_STALE_MAX);
+  const entry={tile,ready:false};stale.set(key,entry);capMeshMap(stale,MESH_STALE_MAX);
   fine.then(buffer=>{ if(stale.get(key)!==entry) return;
     if(buffer){ entry.ready=true;scheduleMeshRefine() }else stale.delete(key) });
 }
-/* A DEM tile finished loading. After a refresh or a refinement its new
-   elevation is in place: redo the borders it shares with its neighbours. */
+/* Source-data events include ordinary reloads too: a fine tile can return as
+   overview after its bytes leave the bounded cache. Track DEM identity, not
+   quality, so upgrades, downgrades and same-quality replacements all repair. */
 function meshSourceData(event){
-  const stale=meshStale[event.sourceId];
-  if(!event.tile||!stale) return;
-  const c=(event.coord||event.tile.tileID)?.canonical,id=c&&`${c.z}/${c.x}/${c.y}`;
-  const reloaded=!!id&&meshReloading[event.sourceId].delete(id),refined=!!id&&meshRefined[event.sourceId].delete(id);
-  if((reloaded||refined)&&event.tile.state==="loaded") for(const tile of meshBackfill(event.sourceId,event.tile,c)){
-    const key=meshKey(tile.z,tile.x,tile.y);
-    stale.set(key,{tile,ready:true,overview:!!stale.get(key)?.overview});capMeshMap(stale,MESH_STALE_MAX);
+  const stale=meshStale[event.sourceId],tile=event.tile;
+  if(!tile?.dem||!stale||tile.state!=="loaded") return;
+  const c=(event.coord||tile.tileID)?.canonical;if(!c) return;
+  const previous=meshSeenDem.get(tile);if(previous===tile.dem) return;
+  meshSeenDem.set(tile,tile.dem);
+  /* A compatibility reset creates fresh tile objects. Their first loads use
+     MapLibre's normal backfill; only another replacement needs another reset. */
+  if(meshCompatibility.has(event.sourceId)){
+    if(previous){ meshCompatibilityPending.add(event.sourceId);scheduleMeshRefine() }
+  }else{
+    const missing=meshBackfill(event.sourceId,tile,c);
+    if(missing===null){
+      meshCompatibility.add(event.sourceId);meshCompatibilityPending.add(event.sourceId);
+      if(!meshCompatibilityWarned){ console.warn("3D mesh borders: MapLibre internals unavailable; rebuilding DEM sources and terrain textures.");meshCompatibilityWarned=true }
+      scheduleMeshRefine();
+    }else for(const tile of missing){
+      const key=meshKey(tile.z,tile.x,tile.y);
+      stale.set(key,{tile,ready:true});capMeshMap(stale,MESH_STALE_MAX);
+    }
   }
   meshRefineAgain();
+}
+/* Public source replacement, rather than refreshTiles/setTiles: both reuse
+   tile objects whose neighbour flags may still describe the old DEM. Removing
+   the source discards that cache; recreating terrain also discards every drape
+   RTT without depending on releaseRTT. Keep source options and layer order. */
+function meshResetSource(sourceId){
+  const style=map3d.getStyle(),source=style.sources[sourceId];if(!source) return;
+  const terrain=map3d.getTerrain(),layers=style.layers||[];
+  /* The source cache is about to be discarded, including out-of-view holders:
+     their pending border reloads must not start another whole-source reset. */
+  meshStale[sourceId].clear();
+  if(terrain) map3d.setTerrain(null);
+  try{
+    for(const layer of layers) if(layer.source===sourceId) map3d.removeLayer(layer.id);
+    map3d.removeSource(sourceId);map3d.addSource(sourceId,source);
+    for(let i=layers.length-1;i>=0;i--) if(layers[i].source===sourceId) map3d.addLayer(layers[i],layers[i+1]?.id);
+  }finally{ if(terrain) map3d.setTerrain(terrain) }
 }
 /* MapLibre's own neighbour backfill (its `lo`), run in both directions without
    its done-flags, on tile internals: tile.dem (DEMData), the needs*Prepare
    texture flags, neighboringTiles, and terrain.tileManager.releaseRTT for the
    draped render-to-texture tiles. MapLibre 6.6 exposes no public way to do
-   this. Guarded: if any of it is missing, every neighbour simply gets a
-   reload instead. Returns the neighbours that still need one (not loaded in
-   view now: out of view, or in MapLibre's off-screen cache). */
+   this. Guarded: a missing internal requests a bounded source reset instead
+   (null), never a recursive neighbour reload. Returns neighbours not loaded in
+   view now: out of view, or in MapLibre's off-screen cache. */
 function meshBackfill(sourceId,tile,c){
   const limit=2**c.z,missing=new Map();
   for(let dy=-1;dy<=1;dy++)for(let dx=-1;dx<=1;dx++){
@@ -5917,7 +5946,8 @@ function meshBackfill(sourceId,tile,c){
     if(y>=0&&y<limit&&!(x===c.x&&y===c.y)) missing.set(`${x}/${y}`,{z:c.z,x,y});
   }
   const manager=map3d?.style?.tileManagers?.[sourceId];
-  if(!tile.dem?.backfillBorder||!manager?.getIds||!manager.getTileByID) return [...missing.values()];
+  if(typeof tile.dem?.backfillBorder!=="function"||typeof manager?.getIds!=="function"||typeof manager.getTileByID!=="function"||
+    (map3d.terrain&&typeof map3d.terrain.tileManager?.releaseRTT!=="function")) return null;
   let changed=false;
   for(const key of manager.getIds()){
     const other=manager.getTileByID(key),o=other?.tileID?.canonical;
@@ -5927,8 +5957,8 @@ function meshBackfill(sourceId,tile,c){
     if(Math.abs(dx)>1||Math.abs(dy)>1||(!dx&&!dy)) continue;
     /* Still on its first load: MapLibre backfills it from this tile when it lands. */
     if(!other.hasData?.()){ missing.delete(`${o.x}/${o.y}`);continue }
-    if(!other.dem?.backfillBorder) continue;
-    try{ tile.dem.backfillBorder(other.dem,dx,dy);other.dem.backfillBorder(tile.dem,-dx,-dy) }catch{ continue }
+    if(typeof other.dem?.backfillBorder!=="function") return null;
+    try{ tile.dem.backfillBorder(other.dem,dx,dy);other.dem.backfillBorder(tile.dem,-dx,-dy) }catch{ return null }
     for(const t of [tile,other]) t.needsHillshadePrepare=t.needsTerrainPrepare=t.needsColorReliefPrepare=true;
     if(tile.neighboringTiles?.[key]) tile.neighboringTiles[key].backfilled=true;
     if(other.neighboringTiles?.[tile.tileID.key]) other.neighboringTiles[tile.tileID.key].backfilled=true;
@@ -5947,9 +5977,9 @@ function scheduleMeshRefine(){
     meshRefineTimer=null;meshRefinedAt=performance.now();
     for(const [id,stale] of Object.entries(meshStale)){
       const tiles=[];for(const entry of stale.values()) if(entry.ready) tiles.push(entry.tile);
-      if(!tiles.length||!map3d?.getSource?.(id)) continue;
-      for(const tile of tiles) meshReloading[id].set(`${tile.z}/${tile.x}/${tile.y}`,tile);capMeshMap(meshReloading[id],MESH_STALE_MAX);
-      try{ map3d.refreshTiles(id,tiles) }catch(error){ console.warn("3D mesh refine:",error) }
+      const reset=meshCompatibilityPending.delete(id);
+      if((!tiles.length&&!reset)||!map3d?.getSource?.(id)) continue;
+      try{ if(reset||meshCompatibility.has(id)) meshResetSource(id);else map3d.refreshTiles(id,tiles) }catch(error){ console.warn("3D mesh refine:",error) }
     }
   },wait);
 }
@@ -5966,7 +5996,10 @@ async function meshTile(z,x,y,signal,source="dem"){
     while(public3dSources.size>160) public3dSources.delete(public3dSources.keys().next().value);
     scheduleTerrainStatus() };
   const tile={z,x,y};
-  if(meshFine.has(key)){ markMeshTile(source,key,tile,true);note(meshRanks.get(key)||[2]);return meshFine.get(key).slice(0) }
+  if(meshFine.has(key)){
+    /* Touch bytes actually used, without pinning visible tiles above the cap. */
+    const buffer=meshFine.get(key);rememberMeshTile(key,buffer);markMeshTile(source,key,tile,true);note(meshRanks.get(key)||[2]);return buffer.slice(0);
+  }
   const fine=meshFineTile(z,x,y);
   const first=await Promise.race([fine,new Promise(r=>setTimeout(()=>r(undefined),MESH_FAST_WAIT))]);
   if(first){ markMeshTile(source,key,tile,true);note(meshRanks.get(key)||[2]);return first.slice(0) }
