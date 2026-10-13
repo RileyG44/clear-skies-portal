@@ -10052,6 +10052,10 @@ document.addEventListener("pointermove",event=>{
   cursorPointer={x:event.clientX,y:event.clientY};if(!cursorFrame)cursorFrame=requestAnimationFrame(updateCursorLocation);
 },{passive:true});
 map.on("moveend",()=>{if(cursorPointer)updateCursorLocation()});
+/* The 2D view moving under an open snapshot selection drops the captured
+   cursor point too (see cursorCameraMoved): a wheel zoom paints through
+   zoomanim before it commits, and a twist only fires rotate. */
+map.on("zoomanim move rotate",()=>{if(!snapSel.hidden)snapshotCursorLocation=null});
 setInterval(()=>{if(cursorLocation&&!document.hidden)refreshCursorElevation()},1000);
 function readoutColourKeys(){
   const keys=[],is3d=!!map3d,style=$("#terStyle").value;

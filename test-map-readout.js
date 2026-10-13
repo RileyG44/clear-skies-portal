@@ -106,4 +106,14 @@ point(50,60);
 assert.deepEqual({...gate.cursorLocation},{lat:-40,lng:-40},'2D readout is unchanged and ungated');
 assert.equal(unprojects,flat);assert(!pending.has('pending'));
 assert(take('endSnapshotSelect','snapPoint').includes('cursorSelectionClosed()'),'closing a snapshot selection resolves a deferred reading');
+{
+  const hook=/map\.on\("zoomanim move rotate",[^\n]*\n/.exec(source);assert(hook,'2D view motion drops the snapshot cursor point');
+  const handlers={},flat={map:{on:(types,fn)=>types.split(' ').forEach(type=>handlers[type]=fn)},snapSel:{hidden:true},snapshotCursorLocation:{lat:30,lng:40}};
+  vm.createContext(flat);vm.runInContext(hook[0],flat);
+  handlers.move();assert.deepEqual({...flat.snapshotCursorLocation},{lat:30,lng:40},'2D motion with no selection open leaves the export point alone');
+  for(const type of ['zoomanim','move','rotate']){
+    flat.snapSel.hidden=false;flat.snapshotCursorLocation={lat:30,lng:40};handlers[type]();
+    assert.equal(flat.snapshotCursorLocation,null,`2D ${type} during selection drops the stale export point`);
+  }
+}
 console.log('map readout checks passed (tile sampling, no-data, wrap, export option, streamed position, renderer palettes and units, 3D readout gated on camera motion, selection and exit lifecycle)');
