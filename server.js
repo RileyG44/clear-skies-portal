@@ -1502,8 +1502,13 @@ const server = http.createServer(async (req,res)=>{
             const minN=Math.min(...cs.map(p=>p.n)),maxN=Math.max(...cs.map(p=>p.n));
             const fn=Math.max(48,Math.min(320,(opt.n|0)||192));
             const res=Math.max((maxE-minE)/fn,(maxN-minN)/fn,1);
-            const fc=[[minE,minN],[minE+fn*res,minN],[minE,minN+fn*res],[minE+fn*res,minN+fn*res]].map(([x,y])=>cog.utmToLonLat(x,y,zone));
-            const fp=[Math.min(...fc.map(p=>p.lon)),Math.min(...fc.map(p=>p.lat)),Math.max(...fc.map(p=>p.lon)),Math.max(...fc.map(p=>p.lat))];
+            // Projected edges curve between corners, so bound the whole
+            // perimeter lattice (plus a hair) rather than four corners.
+            const fc=[];
+            for(let i=0;i<=32;i++){const t=i/32*fn*res;
+              fc.push([minE+t,minN],[minE+t,minN+fn*res],[minE,minN+t],[minE+fn*res,minN+t]);}
+            const fl=fc.map(([x,y])=>cog.utmToLonLat(x,y,zone)),EPS=0.001;
+            const fp=[Math.min(...fl.map(p=>p.lon))-EPS,Math.min(...fl.map(p=>p.lat))-EPS,Math.max(...fl.map(p=>p.lon))+EPS,Math.max(...fl.map(p=>p.lat))+EPS];
             opt.areas=areas.filter(a=>validBbox(a)&&a[0]<fp[2]&&a[2]>fp[0]&&a[1]<fp[3]&&a[3]>fp[1]).slice(0,256);
           }}catch{}
       }
