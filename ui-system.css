@@ -2153,3 +2153,6 @@ body.terrain-3d.map3d-moving :is(#side,#ac,.coord-menu,.map-tool,.tool-popover,#
 @media (max-width:760px) and (orientation:portrait){
   .csp-glass body.csp-redesign.terrain-3d.map3d-moving.collapsed #side{background-color:transparent!important}
 }
+
+#mkBar .mk-snap{display:flex;align-items:center;gap:5px;white-space:nowrap;flex-shrink:0;font-size:12px;color:var(--ui-text-2)}
+#mkBar .mk-snap input{margin:0;accent-color:var(--ui-accent)}

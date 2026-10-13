@@ -57,6 +57,11 @@ for(const asset of ["terrain-drape-core.js","terrain-drape-pool.js","terrain-dra
     assert(read(file).includes(asset),`${file} must ship ${asset}`);
 }
 
+new vm.Script(read("markup-3d.js"),{filename:"markup-3d.js"});
+assert(index.indexOf('<script src="markup-3d.js?build=')<index.indexOf('<script src="markup.js?build='),"world renderer loads before markup tools");
+for(const file of ["server.js","sw.js","package.json",".github/workflows/ci.yml","scripts/minify-site.js","scripts/install-mac-service.sh"])
+  assert(read(file).includes("markup-3d.js"),`${file} must ship markup-3d.js`);
+
 new vm.Script(read("elevation-bands.js"),{filename:"elevation-bands.js"});
 new vm.Script(read("elevation-tile-core.js"),{filename:"elevation-tile-core.js"});
 new vm.Script(read("wa-archaeology.js"),{filename:"wa-archaeology.js"});
