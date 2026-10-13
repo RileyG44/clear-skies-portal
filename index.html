@@ -5858,16 +5858,85 @@ function terrariumPng(grid){
    MapLibre's off-screen cache; a tile that left the view holding the overview
    would come back with it. So an entry stays until its source is served that
    tile again - by the refresh that catches it back in view (moveend, or a DEM
-   tile load in 3D), or by a fresh request once MapLibre has dropped it. */
+   tile load in 3D), or by a fresh request once MapLibre has dropped it.
+
+   Neighbours need their borders redone too. Each DEM tile keeps a one-sample
+   border copied from its eight neighbours (MapLibre's backfill), marked done
+   per neighbour key. A reloaded tile rebuilds its own borders, but neighbours
+   keep its old elevation along their shared edge, and two adjacent tiles that
+   reload together can also leave the later one with its own clamped edge
+   (its fresh flags get set against its old DEM). Either way: wrong edge
+   gradients and a seam in hillshade and mesh. setTiles hid this by reloading
+   everything; test-mesh-borders.js reproduces both with the vendored code.
+   So after each tile load this code caused (a refresh, or 3DEP replacing the
+   overview), meshBackfill redoes both sides of every shared border with the
+   loaded neighbours - whichever of two adjacent tiles lands last fixes both -
+   and releases their draped textures. Neighbours not in view get a pending
+   reload, which runs the same pass when they come back. `overview` says the
+   tile on screen holds overview elevation, so only serving 3DEP in its place
+   counts as a refinement. */
 const meshStale={dem:new Map(),demShade:new Map()}, MESH_STALE_MAX=1024;
-function meshStaleClear(){ for(const stale of Object.values(meshStale)) stale.clear() }
+const meshRefined={dem:new Map(),demShade:new Map()}, meshReloading={dem:new Map(),demShade:new Map()};
+function meshStaleClear(){ for(const map of [meshStale,meshRefined,meshReloading].flatMap(Object.values)) map.clear() }
+function capMeshMap(map,max){ while(map.size>max) map.delete(map.keys().next().value) }
+/* fine: the pending 3DEP when the overview was served, true when 3DEP (or DNR)
+   was served, false for a final overview or an error. */
 function markMeshTile(source,key,tile,fine){
   const stale=meshStale[source];if(!stale) return;
-  stale.delete(key);if(!fine) return;
-  const entry={tile,ready:false};stale.set(key,entry);
-  while(stale.size>MESH_STALE_MAX) stale.delete(stale.keys().next().value);
+  const was=stale.get(key);stale.delete(key);
+  if(fine===true){ if(was?.overview){ meshRefined[source].set(`${tile.z}/${tile.x}/${tile.y}`,tile);capMeshMap(meshRefined[source],MESH_FINE_MAX) }return }
+  if(!fine) return;
+  const entry={tile,ready:false,overview:true};stale.set(key,entry);capMeshMap(stale,MESH_STALE_MAX);
   fine.then(buffer=>{ if(stale.get(key)!==entry) return;
     if(buffer){ entry.ready=true;scheduleMeshRefine() }else stale.delete(key) });
+}
+/* A DEM tile finished loading. After a refresh or a refinement its new
+   elevation is in place: redo the borders it shares with its neighbours. */
+function meshSourceData(event){
+  const stale=meshStale[event.sourceId];
+  if(!event.tile||!stale) return;
+  const c=(event.coord||event.tile.tileID)?.canonical,id=c&&`${c.z}/${c.x}/${c.y}`;
+  const reloaded=!!id&&meshReloading[event.sourceId].delete(id),refined=!!id&&meshRefined[event.sourceId].delete(id);
+  if((reloaded||refined)&&event.tile.state==="loaded") for(const tile of meshBackfill(event.sourceId,event.tile,c)){
+    const key=meshKey(tile.z,tile.x,tile.y);
+    stale.set(key,{tile,ready:true,overview:!!stale.get(key)?.overview});capMeshMap(stale,MESH_STALE_MAX);
+  }
+  meshRefineAgain();
+}
+/* MapLibre's own neighbour backfill (its `lo`), run in both directions without
+   its done-flags, on tile internals: tile.dem (DEMData), the needs*Prepare
+   texture flags, neighboringTiles, and terrain.tileManager.releaseRTT for the
+   draped render-to-texture tiles. MapLibre 6.6 exposes no public way to do
+   this. Guarded: if any of it is missing, every neighbour simply gets a
+   reload instead. Returns the neighbours that still need one (not loaded in
+   view now: out of view, or in MapLibre's off-screen cache). */
+function meshBackfill(sourceId,tile,c){
+  const limit=2**c.z,missing=new Map();
+  for(let dy=-1;dy<=1;dy++)for(let dx=-1;dx<=1;dx++){
+    const y=c.y+dy,x=((c.x+dx)%limit+limit)%limit;
+    if(y>=0&&y<limit&&!(x===c.x&&y===c.y)) missing.set(`${x}/${y}`,{z:c.z,x,y});
+  }
+  const manager=map3d?.style?.tileManagers?.[sourceId];
+  if(!tile.dem?.backfillBorder||!manager?.getIds||!manager.getTileByID) return [...missing.values()];
+  let changed=false;
+  for(const key of manager.getIds()){
+    const other=manager.getTileByID(key),o=other?.tileID?.canonical;
+    if(!o||other===tile||o.z!==c.z) continue;
+    let dx=o.x-c.x;const dy=o.y-c.y;
+    if(Math.abs(dx)>1) dx+=dx>0?-limit:limit;
+    if(Math.abs(dx)>1||Math.abs(dy)>1||(!dx&&!dy)) continue;
+    /* Still on its first load: MapLibre backfills it from this tile when it lands. */
+    if(!other.hasData?.()){ missing.delete(`${o.x}/${o.y}`);continue }
+    if(!other.dem?.backfillBorder) continue;
+    try{ tile.dem.backfillBorder(other.dem,dx,dy);other.dem.backfillBorder(tile.dem,-dx,-dy) }catch{ continue }
+    for(const t of [tile,other]) t.needsHillshadePrepare=t.needsTerrainPrepare=t.needsColorReliefPrepare=true;
+    if(tile.neighboringTiles?.[key]) tile.neighboringTiles[key].backfilled=true;
+    if(other.neighboringTiles?.[tile.tileID.key]) other.neighboringTiles[tile.tileID.key].backfilled=true;
+    map3d.terrain?.tileManager?.releaseRTT?.(other.tileID);
+    missing.delete(`${o.x}/${o.y}`);changed=true;
+  }
+  if(changed) map3d.triggerRepaint?.();
+  return [...missing.values()];
 }
 /* Swap arrived 3DEP tiles in, those tiles only. Batched, and never more than
    about once a second, so a burst of arrivals is one refresh. */
@@ -5878,7 +5947,9 @@ function scheduleMeshRefine(){
     meshRefineTimer=null;meshRefinedAt=performance.now();
     for(const [id,stale] of Object.entries(meshStale)){
       const tiles=[];for(const entry of stale.values()) if(entry.ready) tiles.push(entry.tile);
-      if(tiles.length&&map3d?.getSource?.(id)) try{ map3d.refreshTiles(id,tiles) }catch(error){ console.warn("3D mesh refine:",error) }
+      if(!tiles.length||!map3d?.getSource?.(id)) continue;
+      for(const tile of tiles) meshReloading[id].set(`${tile.z}/${tile.x}/${tile.y}`,tile);capMeshMap(meshReloading[id],MESH_STALE_MAX);
+      try{ map3d.refreshTiles(id,tiles) }catch(error){ console.warn("3D mesh refine:",error) }
     }
   },wait);
 }
@@ -5894,23 +5965,24 @@ async function meshTile(z,x,y,signal,source="dem"){
   const note=ranks=>{ public3dSources.set(key,{z,x,y,ranks:Array.isArray(ranks)?ranks:[ranks]});
     while(public3dSources.size>160) public3dSources.delete(public3dSources.keys().next().value);
     scheduleTerrainStatus() };
-  if(meshFine.has(key)){ markMeshTile(source,key);note(meshRanks.get(key)||[2]);return meshFine.get(key).slice(0) }
+  const tile={z,x,y};
+  if(meshFine.has(key)){ markMeshTile(source,key,tile,true);note(meshRanks.get(key)||[2]);return meshFine.get(key).slice(0) }
   const fine=meshFineTile(z,x,y);
   const first=await Promise.race([fine,new Promise(r=>setTimeout(()=>r(undefined),MESH_FAST_WAIT))]);
-  if(first){ markMeshTile(source,key);note(meshRanks.get(key)||[2]);return first.slice(0) }
+  if(first){ markMeshTile(source,key,tile,true);note(meshRanks.get(key)||[2]);return first.slice(0) }
   if($("#terSrc").value==="wadnr-only"){
-    const result=first===undefined?await fine:first;markMeshTile(source,key);
+    const result=first===undefined?await fine:first;markMeshTile(source,key,tile,!!result);
     if(result){note(meshRanks.get(key)||[5]);return result.slice(0);}
     note([]);throw new Error("DNR does not cover this 3D mesh tile");
   }
   if(first===null){
     /* 3DEP answered, with nothing: the overview is the best there is. */
-    markMeshTile(source,key);note(1);return meshOverviewTile(z,x,y,signal);
+    markMeshTile(source,key,tile,false);note(1);return meshOverviewTile(z,x,y,signal);
   }
   let overview;
   try{ overview=await meshOverviewTile(z,x,y,signal) }
-  catch(error){ if(signal?.aborted) throw error;const late=await fine;markMeshTile(source,key);if(late){ note(meshRanks.get(key)||[2]);return late.slice(0) }throw error }
-  markMeshTile(source,key,{z,x,y},fine);note(1);
+  catch(error){ if(signal?.aborted) throw error;const late=await fine;markMeshTile(source,key,tile,!!late);if(late){ note(meshRanks.get(key)||[2]);return late.slice(0) }throw error }
+  markMeshTile(source,key,tile,fine);note(1);
   return overview;
 }
 function terrainTheme(){ return $("#map").dataset.basemapTheme==="dark"?"dark":"light" }
@@ -6256,9 +6328,10 @@ async function enterTerrain3d(){
       if(map3d.getPitch()<1) map3d.easeTo({pitch:MAP3D_PITCH,duration:matchMedia("(prefers-reduced-motion: reduce)").matches?0:1100})});
     map3d.on("error",event=>{if(event?.error) console.warn("3D terrain:",event.error)});
     /* Overview tiles that come back into view, or finish decoding after their
-       3DEP already landed, still need their refresh (see meshStale). */
+       3DEP already landed, still need their refresh; a refined tile's load
+       queues its neighbours' (see meshStale). */
     meshStaleClear();map3d.on("moveend",meshRefineAgain);
-    map3d.on("sourcedata",event=>{if(event.tile&&meshStale[event.sourceId]) meshRefineAgain()});
+    map3d.on("sourcedata",meshSourceData);
     if(!map3dWanted){ map3d.remove(); map3d=null; return null }   // left 3D while loading
     map.keyboard?.disable();return map3d;
   })().catch(error=>{console.warn(error);map3d?.remove();map3d=null;setTerrainModeUi(false,error.message||"3D terrain could not start.");throw error})
