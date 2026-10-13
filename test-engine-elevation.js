@@ -4,13 +4,13 @@ const html=fs.readFileSync('index.html','utf8');
 const code=html.slice(html.indexOf('async function engineElevationWithFallback('),html.indexOf('\nconst ElevLayer'));
 const tick=()=>new Promise(resolve=>setImmediate(resolve));
 const tile=(value,gap=false)=>{const grid=new Float32Array(256*256).fill(value);if(gap)grid[0]=NaN;return {grid,width:256,height:256}};
-function fixture(strict=false){
+function fixture(dnrAllowed=true){
   const pending=new Map(),aborts=[];
   const request=(url,signal)=>new Promise((resolve,reject)=>{
     pending.set(url,resolve);signal.addEventListener('abort',()=>{aborts.push(url);reject(new DOMException('Aborted','AbortError'))},{once:true});
   });
   const context={AbortController,DOMException,CSPTilePipeline:require('./tile-pipeline'),ElevationTileCore:require('./elevation-tile-core'),
-    $:()=>({value:strict?'wadnr-only':'auto'}),api:x=>x,dnrStatus:{revision:0},
+    $:()=>({value:'auto'}),api:x=>x,dnrStatus:{revision:0},dnrTileAllowed:()=>dnrAllowed,maskDnrGrid:grid=>grid,
     elevationRequests:{request:(url,loader,{signal})=>request(url,signal)},fetchElevation:()=>{},
     overviewElevation:(coords,signal)=>request('overview',signal)};
   vm.runInNewContext(code,context);
@@ -34,14 +34,15 @@ async function main(){
   assert.equal(filled.grid[0],1);assert.equal(filled.grid[1],50);
   assert.deepEqual(Array.from(filled.ranks),[5,1]);
 
-  f=fixture(true);controller=new AbortController();
-  const strict=f.run(controller.signal);
-  f.pending.get('/api/wadnr/elev/12/1/1.png?acquire=0&revision=0')(tile(50,true));
-  assert.equal(await strict,null,'strict mesh never fills DNR gaps from another source');
+  f=fixture(false);controller=new AbortController();
+  const gated=f.run(controller.signal);
+  assert.equal(f.pending.has('/api/wadnr/elev/12/1/1.png?acquire=0&revision=0'),false,'no fetched area means no DNR request at all');
+  f.pending.get('/api/elev/national/12/1/1.png')(tile(20));
+  assert.deepEqual(Array.from((await gated).ranks),[2],'outside fetched areas USGS fills the mesh');
 
   f=fixture();controller=new AbortController();
   const cancelled=assert.rejects(f.run(controller.signal),{name:'AbortError'});controller.abort();await cancelled;
   assert.equal(f.aborts.length,3,'cancellation reaches every source');
-  console.log('engine elevation checks passed (early completion, gap filling, strict source, cancellation)');
+  console.log('engine elevation checks passed (early completion, gap filling, fetched-area gating, cancellation)');
 }
 main().catch(error=>{console.error(error);process.exitCode=1});

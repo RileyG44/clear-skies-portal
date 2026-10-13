@@ -11,6 +11,7 @@ const crypto= require("crypto");
 const net   = require("net");
 const zlib  = require("zlib");
 const usgs  = require("./usgs.js");
+const cog   = require("./cog.js");
 const cacheBudgetCore=require("./cache-budget.js");
 const {TerrainPool,TerrainPoolError}=require("./terrain-pool.js");
 const researchAnalysis=require("./research-analysis.js");
@@ -1490,6 +1491,27 @@ const server = http.createServer(async (req,res)=>{
       const opt={ n:+u.searchParams.get("n")||0,
                   lo:+u.searchParams.get("lo")||0, hi:+u.searchParams.get("hi")||0 };
       const action=p==="/api/wadnr/fabric"?"dnr-fabric":"fabric";
+      if(action==="dnr-fabric"){
+        try{const areas=JSON.parse(u.searchParams.get("areas")||"[]");
+          if(Array.isArray(areas)){
+            // Keep every fetched box intersecting the actual sampling
+            // footprint: the square UTM grid usgs.fabric builds from bs.
+            const zone=cog.utmZone((bs[0]+bs[2])/2);
+            const cs=bs.length?[[bs[0],bs[1]],[bs[2],bs[1]],[bs[0],bs[3]],[bs[2],bs[3]]].map(([x,y])=>cog.lonLatToUTM(x,y,zone)):[];
+            const minE=Math.min(...cs.map(p=>p.e)),maxE=Math.max(...cs.map(p=>p.e));
+            const minN=Math.min(...cs.map(p=>p.n)),maxN=Math.max(...cs.map(p=>p.n));
+            const fn=Math.max(48,Math.min(320,(opt.n|0)||192));
+            const res=Math.max((maxE-minE)/fn,(maxN-minN)/fn,1);
+            // Projected edges curve between corners, so bound the whole
+            // perimeter lattice (plus a hair) rather than four corners.
+            const fc=[];
+            for(let i=0;i<=32;i++){const t=i/32*fn*res;
+              fc.push([minE+t,minN],[minE+t,minN+fn*res],[minE,minN+t],[minE+fn*res,minN+t]);}
+            const fl=fc.map(([x,y])=>cog.utmToLonLat(x,y,zone)),EPS=0.001;
+            const fp=[Math.min(...fl.map(p=>p.lon))-EPS,Math.min(...fl.map(p=>p.lat))-EPS,Math.max(...fl.map(p=>p.lon))+EPS,Math.max(...fl.map(p=>p.lat))+EPS];
+            opt.areas=areas.filter(a=>validBbox(a)&&a[0]<fp[2]&&a[2]>fp[0]&&a[1]<fp[3]&&a[3]>fp[1]).slice(0,256);
+          }}catch{}
+      }
       opt.strict=u.searchParams.get("strict")==="1";
       let out; try{ out=await terrainTask(`${action}:${dnr.index.revision}:${key(JSON.stringify([bs,opt]))}`,action,{bbox:bs,options:opt},
         {priority:20,timeoutMs:45000,finishOnAbort:false},client.signal) }

@@ -199,13 +199,14 @@ async function main(){
     h.fine.get(h.national(14,300,20))(new Uint8Array([2]));assert.equal(await demand.promise,2);
   });
 
-  await check('DNR-only holders abort promptly without cancelling the other holder',async()=>{
-    const h=harness({source:'wadnr-only'});await h.install();
+  await check('aborting one holder does not cancel shared fine work for the other',async()=>{
+    const h=harness();await h.install();
     const a=h.request('dem',14,10,20),b=h.request('shade',14,10,20);
-    let settled=false;a.promise.catch(error=>{settled=error.name});await h.clock.advance(0);
+    let aFailed=false;a.promise.catch(()=>{aFailed=true});await h.clock.advance(0);
     a.controller.abort();await h.clock.advance(50);
-    assert.equal(settled,'AbortError');assert.equal(h.aborted.length,0,'other strict holder keeps fine work');
-    h.fine.get(h.national(14,10,20))(new Uint8Array([2]));assert.equal(await b.promise,2);
+    assert.equal(h.aborted.length,0,'other holder keeps fine work');
+    h.fine.get(h.national(14,10,20))(new Uint8Array([2]));await b.promise;
+    await h.clock.advance(50);assert.equal(aFailed,false,'a holder already served useful data is not retroactively aborted');
   });
 
   await check('503 backoff keeps the bound and stalled retry work yields to demand',async()=>{
