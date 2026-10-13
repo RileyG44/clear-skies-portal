@@ -1412,10 +1412,16 @@ const server = http.createServer(async (req,res)=>{
         ? send(res,200,"image/png",SEA_LEVEL_DEM,{"X-Cache":"hit","X-Coverage":"none","X-Elevation-Source":"none","Cache-Control":"public, max-age=604800, immutable"})
         : send(res,hit.status,hit.type,hit.body,{"X-Cache":"hit","X-Elevation-Source":"cached","Cache-Control":"public, max-age=604800, immutable"});
       /* Saved areas pin these exact 256 px Terrarium worker products, not
-         the underlying COG ranges. Reuse them before any raw/network work;
-         a raw no-coverage marker still falls through to the national DEM. */
+         the underlying COG ranges. Reuse one only where it is exactly what
+         this route would compute: the raw 1 m tile, or the national DEM where
+         raw is skipped (z<13) or known to have no coverage. A national tile
+         that merely happens to be cached must not stand in for 1 m lidar -
+         the 2D layer caches national almost everywhere, and caching it here
+         would serve coarser ground for 90 days. */
       const rawHit=z>=13?cacheGet(key(`usgselev:${z}/${x}/${y}`),TTL_TILE):null;
-      const saved=rawHit&&rawHit.status===200?rawHit:cacheGet(key(`elevation-national-v1:${z}/${x}/${y}`),TTL_TILE);
+      const nationalKey=key(`elevation-national-v1:${z}/${x}/${y}`);
+      const exactNational=z<13||(rawHit&&rawHit.status===204);
+      const saved=rawHit&&rawHit.status===200?rawHit:exactNational?cacheGet(nationalKey,TTL_TILE):null;
       if(saved&&(saved.status===200||saved.status===204)){
         cachePut(ck,saved.status,saved.type,saved.body,saved.sourceMeta);
         if(saved.status===204)return send(res,200,"image/png",SEA_LEVEL_DEM,
@@ -1442,6 +1448,18 @@ const server = http.createServer(async (req,res)=>{
         }
       }catch(e){
         if(terrainAborted(e)) return;
+        /* Offline (or upstream down) over a saved area whose COG ranges were
+           evicted: the saved national DEM is the best ground available. Serve
+           it, but never cache it under this key, so 1 m lidar is fetched again
+           once the network returns. */
+        const fallback=z>=13?cacheGet(nationalKey,TTL_TILE):null;
+        if(fallback&&fallback.status===204)return send(res,200,"image/png",SEA_LEVEL_DEM,
+          {"X-Cache":"saved-fallback","X-Coverage":"none","X-Elevation-Source":"none","Cache-Control":"no-store"});
+        if(fallback&&fallback.status===200){
+          const headers={"X-Cache":"saved-fallback","X-Elevation-Source":"3dep","Cache-Control":"no-store"};
+          if(fallback.sourceMeta&&fallback.sourceMeta.coverage!=null)headers["X-Coverage"]=String(fallback.sourceMeta.coverage);
+          return send(res,200,fallback.type,fallback.body,headers);
+        }
         return send(res,503,"image/png",TRANSPARENT,{"X-Cache":"BUSY","X-Elevation-Source":"fallback","Cache-Control":"no-store","Retry-After":"2"});
       }
       if(!out){

@@ -53,10 +53,12 @@ async function main(){
     const cases=[
       {raw:200,national:200,source:"usgs-1m",coverage:"0.75"},
       {raw:204,national:200,source:"3dep",coverage:"1"},
-      {national:200,source:"3dep",coverage:"1"},
+      /* No saved raw tile: a cached national DEM is not what this route would
+         compute (1 m comes first), so it is only an uncached offline fallback. */
+      {national:200,source:"3dep",coverage:"1",fallback:true},
       {raw:200,national:204,source:"usgs-1m",coverage:"0.75"},
       {raw:204,national:204,source:"none",coverage:"none"},
-      {national:204,source:"none",coverage:"none"},
+      {national:204,source:"none",coverage:"none",fallback:true},
       {z:12,raw:200,national:200,source:"3dep",coverage:"1"},
       {raw:200,national:200,source:"usgs-1m",legacy:true}
     ];
@@ -96,7 +98,7 @@ async function main(){
       await new Promise(resolve=>setTimeout(resolve,100));
     }
     assert(ready,"offline server must start\n"+logs);
-    for(const c of cases){
+    for(const c of cases.filter(c=>!c.fallback)){
       const tile=`${c.z}/${c.x}/${c.y}`,key=budget.sha1("elevation-v3:"+tile);
       assert(!fs.existsSync(path.join(dir,key)),"generic elevation starts uncached");
       const first=await request(port,"/api/elev/"+tile+".png");
@@ -118,7 +120,22 @@ async function main(){
     const cold=await request(port,"/api/elev/13/1500/1440.png");
     assert.equal(cold.status,503,"an unsaved tile retains its offline failure behavior");
     assert.match(fs.readFileSync(log,"utf8"),/raw-elevation\nupstream\n/,"the fixture catches both forbidden paths");
-    console.log("saved elevation: 8 offline cases passed (ranges evicted, workers and upstream forbidden)");
+    /* After the cold check: these trip the national circuit breaker. */
+    for(const c of cases.filter(c=>c.fallback)){
+      const tile=`${c.z}/${c.x}/${c.y}`,key=budget.sha1("elevation-v3:"+tile);
+      for(let attempt=0;attempt<2;attempt++){
+        const res=await request(port,"/api/elev/"+tile+".png");
+        assert.equal(res.status,200);assert.equal(res.headers["x-cache"],"saved-fallback");
+        assert.equal(res.headers["x-elevation-source"],c.source);assert.equal(res.headers["x-coverage"],c.coverage);
+        assert.equal(res.headers["cache-control"],"no-store","a fallback must not be cached by the browser");
+        if(c.source==="none"){const {rgba}=pixels(res.body);assert.deepEqual([...rgba.subarray(0,4)],[128,0,0,255])}
+        else assert.deepEqual(res.body,national);
+      }
+      assert(!fs.existsSync(path.join(dir,key)),"a fallback never persists under elevation-v3, so 1 m is fetched again online");
+    }
+    const attempts=fs.readFileSync(log,"utf8").split("\n").filter(line=>line==="raw-elevation").length;
+    assert(attempts>=1+cases.filter(c=>c.fallback).length*2,"1 m lidar is attempted before every national fallback");
+    console.log("saved elevation: 6 exact offline cases + 2 uncached fallbacks passed (ranges evicted, 1 m tried first)");
   }finally{
     if(child&&child.exitCode==null){const exited=new Promise(resolve=>child.once("exit",resolve));child.kill();await exited}
     fs.rmSync(dir,{recursive:true,force:true});
