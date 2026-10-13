@@ -8257,7 +8257,9 @@ $("#dnrFetch").onclick=async()=>{
     try{
       const r=await fetch(api("/api/wadnr/warm/status"));if(!r.ok)throw new Error(`HTTP ${r.status}`);
       const s=await r.json();if(token!==dnrFetchToken){clearInterval(poll);return}
-      if(jobId&&s.id&&s.id!==jobId)return; // another fetch owns the status now
+      if(jobId&&s.id&&s.id!==jobId){ // superseded by another fetch: stop here
+        clearInterval(poll);if(dnrFetchPoll===poll)dnrFetchPoll=null;btn.disabled=false;
+        dnrMsg("This WA DNR fetch was superseded by another fetch, so its area was not applied.");return}
       dnrStatus=s.acquisition;
       const complete=!s.running&&!s.error&&!s.stop&&s.total>0&&s.done>=s.total&&(!jobId||s.id===jobId);
       dnrMsg(s.running?`Downloading WA DNR: ${s.done}/${s.total} areas. ${dnrAcquisitionText()}`:
@@ -9363,6 +9365,8 @@ const ElevLayer = L.GridLayer.extend({
     const dnrChanged=dnrSeg(this.options.sourceKey)!==dnrSeg(options.sourceKey);
     Object.assign(this.options,options);
     if(dnrChanged){
+      for(const pending of this._pending.values())pending.controller.abort();
+      this._pending.clear();
       this._store.clear();
       for(const tile of Object.values(this._tiles||{})){
         const el=tile.el;if(!el?.width)continue;

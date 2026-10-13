@@ -1492,7 +1492,12 @@ const server = http.createServer(async (req,res)=>{
       const action=p==="/api/wadnr/fabric"?"dnr-fabric":"fabric";
       if(action==="dnr-fabric"){
         try{const areas=JSON.parse(u.searchParams.get("areas")||"[]");
-          if(Array.isArray(areas))opt.areas=areas.filter(a=>validBbox(a)).slice(0,16);}catch{}
+          if(Array.isArray(areas)){
+            // The fabric grid expands past the viewport; keep every fetched
+            // box that can intersect that footprint, not just the first few.
+            const pad=Math.max(bs[2]-bs[0],bs[3]-bs[1]);
+            opt.areas=areas.filter(a=>validBbox(a)&&a[0]<bs[2]+pad&&a[2]>bs[0]-pad&&a[1]<bs[3]+pad&&a[3]>bs[1]-pad).slice(0,256);
+          }}catch{}
       }
       opt.strict=u.searchParams.get("strict")==="1";
       let out; try{ out=await terrainTask(`${action}:${dnr.index.revision}:${key(JSON.stringify([bs,opt]))}`,action,{bbox:bs,options:opt},
