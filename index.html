@@ -499,6 +499,8 @@ body:not(.collapsed) #sideToggleDock{left:calc(var(--side-w) + 12px + var(--safe
 .snap-sel-save{background:var(--ui-accent,#0a84ff)!important;color:#fff!important;font-weight:650!important;padding:0 16px!important}
 .snap-sel-save:hover{filter:brightness(1.08)}
 body.snap-selecting #snapshotStatus{z-index:5001}
+.dnr-handle{width:18px;height:18px;margin:-9px 0 0 -9px;border-radius:50%;background:#fff;border:2px solid #111;box-shadow:0 1px 5px rgba(0,0,0,.4);cursor:nwse-resize}
+body.dnr-selecting #map{cursor:crosshair}
 @media (max-width:480px){.snap-sel-meta:not(.snap-warn){display:none}.snap-sel-bar{border-radius:22px}}
 #ctl{position:absolute;right:calc(54px + var(--safe-right));top:calc(12px + var(--safe-top));z-index:1310;
   background:var(--glass-card);backdrop-filter:blur(22px) saturate(1.3);-webkit-backdrop-filter:blur(22px) saturate(1.3);
@@ -992,8 +994,8 @@ body.pane-reordering,body.pane-reordering *{cursor:grabbing!important;user-selec
 }
 
 </style>
-<link rel="stylesheet" href="ui-theme.css?build=2026-10-13a">
-<link rel="stylesheet" href="ui-system.css?build=2026-10-13a">
+<link rel="stylesheet" href="ui-theme.css?build=2026-10-13b">
+<link rel="stylesheet" href="ui-system.css?build=2026-10-13b">
 <style>
 /* The redesign restructures the legacy DOM rather than replacing it, and the
    script that does so is the last thing on the page - so the browser paints the
@@ -1256,9 +1258,6 @@ html.csp-boot body{visibility:hidden}
             <select id="terSrc">
               <option value="auto" selected>Best available</option>
               <option value="3dep">USGS 3DEP (national)</option>
-              <option value="wadnr">WA DNR LiDAR</option>
-              <option value="wadnr-only">WA DNR elevation only (leave gaps blank)</option>
-              <option value="wadnr-hillshade">WA DNR published hillshade</option>
               <option value="usgs1m">USGS 3.3 ft (offline-capable)</option>
             </select>
             <label for="terOp">Opacity <output id="terOpOut" for="terOp">70%</output></label>
@@ -1317,6 +1316,16 @@ html.csp-boot body{visibility:hidden}
             </div>
             <div id="terWarmMsg" class="warmmsg"></div>
             <div id="terStale" class="warmmsg" style="display:none"></div>
+          </div>
+          <div class="terdl" id="dnrAreaPanel">
+            <div class="terrain-action-row">
+              <button class="ghost" id="dnrSelect" type="button">Select WA DNR area</button>
+              <button class="ghost" id="dnrFetch" type="button" disabled>Fetch WA DNR</button>
+            </div>
+            <div class="terrain-action-row">
+              <button class="linkbtn" id="dnrClear" type="button">Clear fetched WA DNR areas</button>
+            </div>
+            <div id="dnrAreaMsg" class="warmmsg">WA DNR is off until you fetch it for an area. USGS stays active everywhere else.</div>
           </div>
           <div id="terLegend" class="terlegend" aria-live="polite"></div>
           <div id="terInfo" class="terinfo">Pick a layer to drape terrain over the map.</div>
@@ -1721,7 +1730,7 @@ html.csp-boot body{visibility:hidden}
   L.Renderer.prototype.onAdd=function(map){return onAdd.call(this,map||this._map)};
 })();
 </script>
-<script src="version.js?build=2026-10-13a"></script>
+<script src="version.js?build=2026-10-13b"></script>
 <script src="mosaic-core.js"></script>
 <script src="png-stream.js"></script>
 <script src="terrain-core.js"></script>
@@ -5678,14 +5687,32 @@ let terLayer=null, terBase=null, PROXY=false, WA_LAYERS=null, waCover=null, terT
 let probeToken=0, waLayersPromise=null, terrainQueryToken=0, serverHealth=null, serverProbeTimer=null;
 let waCoverageState="unknown",waCoverageError="",dnrStatus=null,dnrStatusTimer=null,dnrLastError="",dnrRenderedRevision=-1;
 const dnrElevationAvailable=()=>PROXY&&serverHealth?.features?.includes("wadnr-elevation");
+/* WA DNR applies only inside areas the user explicitly fetched. Selecting a
+   source never starts a DNR download; panning never does either. */
+const DNR_AREA_KEY="clearskies.wadnrAreas.v1";
+let dnrAreas=(()=>{try{const v=JSON.parse(localStorage.getItem(DNR_AREA_KEY)||"[]");
+  return Array.isArray(v)?v.filter(a=>Array.isArray(a?.bbox)&&a.bbox.length===4&&a.bbox.every(Number.isFinite)&&a.bbox[0]<a.bbox[2]&&a.bbox[1]<a.bbox[3]):[]}catch{return[]}})();
+function saveDnrAreas(){try{localStorage.setItem(DNR_AREA_KEY,JSON.stringify(dnrAreas))}catch{}}
+function dnrAreasKey(){return dnrAreas.map(a=>a.bbox.map(v=>v.toFixed(5)).join(",")).join(";")}
+function tileBbox(z,x,y){const n=2**z,lon=xx=>xx/n*360-180,lat=yy=>Math.atan(Math.sinh(Math.PI*(1-2*yy/n)))*180/Math.PI;
+  return [lon(x),lat(y+1),lon(x+1),lat(y)]}
+function bboxIntersects(a,b){return a[0]<b[2]&&a[2]>b[0]&&a[1]<b[3]&&a[3]>b[1]}
+function dnrTileAllowed(coords){return dnrElevationAvailable()&&dnrAreas.some(a=>bboxIntersects(tileBbox(coords.z,coords.x,coords.y),a.bbox))}
+function maskDnrGrid(grid,w,h,coords){
+  const tb=tileBbox(coords.z,coords.x,coords.y);
+  if(dnrAreas.some(a=>a.bbox[0]<=tb[0]&&a.bbox[1]<=tb[1]&&a.bbox[2]>=tb[2]&&a.bbox[3]>=tb[3]))return grid;
+  const out=new Float32Array(grid),n=2**coords.z;
+  for(let r=0;r<h;r++){const lat=Math.atan(Math.sinh(Math.PI*(1-2*(coords.y+(r+.5)/h)/n)))*180/Math.PI;
+    for(let c=0;c<w;c++){const lon=(coords.x+(c+.5)/w)/n*360-180;
+      if(!dnrAreas.some(a=>lon>=a.bbox[0]&&lon<=a.bbox[2]&&lat>=a.bbox[1]&&lat<=a.bbox[3]))out[r*w+c]=NaN}}
+  return out}
 function elevationSourceOptions(){
-  const want=$("#terSrc").value,strict=want==="wadnr-only";
-  const dnr=dnrElevationAvailable()&&["auto","wadnr","wadnr-only"].includes(want);
-  if(dnr&&want!=="auto")scheduleDnrStatus();
-  return {nationalEndpoint:strict?null:"/api/elev/national",rawEndpoint:strict||want==="3dep"?null:"/api/usgs/elev",
-    dnrEndpoint:dnr?"/api/wadnr/elev":null,dnrAcquire:want!=="auto",
-    fallback:strict?null:"https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.png",
-    sourceKey:[want,dnr?`dnr:${dnrStatus?.revision||0}`:"",PROXY?API:"public"].join("|")};
+  const want=$("#terSrc").value;
+  const dnr=dnrElevationAvailable();
+  return {nationalEndpoint:"/api/elev/national",rawEndpoint:want==="3dep"?null:"/api/usgs/elev",
+    dnrEndpoint:dnr?"/api/wadnr/elev":null,dnrAcquire:false,
+    fallback:"https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.png",
+    sourceKey:[want,dnr?`dnr:${dnrStatus?.revision||0}:${dnrAreasKey()}`:"",PROXY?API:"public"].join("|")};
 }
 function dnrAcquisitionText(){
   const active=dnrStatus?.active;
@@ -5697,7 +5724,7 @@ function scheduleDnrStatus(){
   if(dnrStatusTimer)return;
   dnrStatusTimer=setTimeout(async()=>{
     dnrStatusTimer=null;
-    if(!dnrElevationAvailable()||!["wadnr","wadnr-only"].includes($("#terSrc").value))return;
+    if(!dnrElevationAvailable())return;
     if($("#terStyle").value==="off"&&!elevationActive()&&!document.body.classList.contains("terrain-3d"))return;
     try{
       const response=await fetch(api("/api/wadnr/status"),{signal:AbortSignal.timeout(8000),cache:"no-store"});
@@ -5801,7 +5828,7 @@ function meshFineTile(z,x,y){
   const job=meshRequests.request(key,async signal=>{
     job.startedAt=performance.now();
     if(PROXY){
-      if(dnrElevationAvailable()&&["auto","wadnr","wadnr-only"].includes($("#terSrc").value)){
+      if(dnrElevationAvailable()){
         const source=await engineElevationWithFallback({z,x,y},signal,true);
         if(!source)return null;
         meshRanks.set(key,source.ranks);
@@ -6074,13 +6101,6 @@ async function meshTile(z,x,y,signal,source="dem"){
   let abortWait;
   const cancelled=new Promise((resolve,reject)=>{abortWait=()=>reject(new DOMException("Aborted","AbortError"));signal?.addEventListener("abort",abortWait,{once:true})});
   const awaitTile=async promise=>{try{return await Promise.race([promise,cancelled])}finally{signal?.removeEventListener("abort",abortWait)}};
-  if($("#terSrc").value==="wadnr-only"){
-    const result=await awaitTile(fine);
-    if(signal?.aborted)throw new DOMException("Aborted","AbortError");
-    markMeshTile(source,key,tile,!!result);
-    if(result){note(meshRanks.get(key)||[5]);return result.slice(0);}
-    note([]);throw new Error("DNR does not cover this 3D mesh tile");
-  }
   // Start both immediately. Either useful response can put terrain on screen;
   // a slow overview must never hold up fine data that has already arrived.
   const overviewController=new AbortController(),cancelOverview=()=>overviewController.abort();
@@ -6281,7 +6301,7 @@ async function drapeElevation(z,x,y,signal){
   const wx=((x%limit)+limit)%limit,key=meshKey(z,wx,y);
   const tile=await elevCache.request(key,async signal=>{
     if(!PROXY)return publicElevationWithFallback({z,x:wx,y},signal);
-    if(dnrElevationAvailable()&&["auto","wadnr","wadnr-only"].includes($("#terSrc").value))
+    if(dnrElevationAvailable())
       return engineElevationWithFallback({z,x:wx,y},signal,false);
     /* 503 is a briefly saturated terrain pool. Honor Retry-After and keep
        retries abortable so abandoned viewports leave no work behind. */
@@ -6625,17 +6645,9 @@ function chooseTerrain(style){
   const waOK = closeEnough && PROXY && ids.length && WADNR_OK.has(style);
   const u1OK = closeEnough && PROXY; // coverage is decided per tile, never just at the map centre
   if(want==="3dep")  return {src:"3dep"};
-  if(want==="wadnr"||want==="wadnr-only"){
-    if(dnrElevationAvailable())return {src:"wadnr-elevation",strict:want==="wadnr-only",overview:!closeEnough};
-    return {src:"3dep",forced:true,reason:PROXY?"This terrain engine needs an update for DNR elevation.":"DNR elevation requires a connected terrain engine."};
-  }
-  if(want==="wadnr-hillshade"){
-    const reason=!PROXY?"Published DNR hillshade requires a connected terrain engine.":!closeEnough?"Published DNR hillshade starts at zoom 13.":!WADNR_OK.has(style)?"Published DNR hillshade supports only the Hillshade style. Select WA DNR LiDAR to derive this style from elevation.":waCoverageState==="error"?"DNR catalogue lookup failed; coverage is unknown.":"No published DNR hillshade candidate was found for this view.";
-    return waOK?{src:"wadnr",ids,projs:waProjects()}:{src:"3dep",forced:true,reason};
-  }
   if(want==="usgs1m") return u1OK ? {src:"usgs1m", cover:usgsCover} : {src:"3dep", forced:true,overview:!closeEnough,reason:!PROXY?"Raw USGS elevation requires a connected terrain engine.":"Raw USGS elevation starts at zoom 13."};
-  // Best available uses cached DNR elevation, without starting large archive
-  // downloads merely because somebody pans over Washington.
+  // Best available uses WA DNR only inside explicitly fetched areas, and
+  // never starts a DNR download merely because somebody pans over Washington.
   if(dnrElevationAvailable())return {src:"wadnr-elevation",cachedOnly:true,overview:!closeEnough};
   if(u1OK) return {src:"usgs1m", cover:usgsCover};
   return {src:"3dep"};
@@ -6828,7 +6840,7 @@ function renderTerrainSourcePanel(summaryArg,is3dArg,layerArg){
     if(item.id==="terrain"||item.id==="elevation-spectrum"||item.id==="elevation-bands"){
       const own=item.id==="terrain"?summary:CSPPublicTerrain.summarize(Object.values(elevLayer?._tiles||{}));
       basis=own.sources.length?own.sources.map(entry=>`${entry.label} (${Math.round(entry.percent)}% · ${sourceResolutionText(entry)})`).join(" · "):"Elevation source is still loading";
-      if(item.id==="terrain"&&$("#terSrc").value.startsWith("wadnr"))basis=`Requested: ${$("#terSrc").selectedOptions[0].textContent} · Rendered: ${basis}`;
+      if(item.id==="terrain"&&dnrAreas.length)basis=`WA DNR fetched areas: ${dnrAreas.length} · Rendered: ${basis}`;
     }
     if(item.id==="basemap")basis="Esri / OpenStreetMap reference basemap";
     const name=row.querySelector(".terrain-source-panel-name"),meta=row.querySelector(".terrain-source-panel-meta");
@@ -6861,7 +6873,7 @@ function paintTerrainStatus(){
   terrainLoadStatus.dataset.state=loading?"loading":failed?"partial":"ready";
   const label=terrainSwap?"Preparing terrain":coverage<100?"Loading terrain":refining?"Refining terrain":failed?"Terrain available · some detail unavailable":"Terrain ready";
   const detail=sources.length?sources.map(source=>source.label).join(" + "):"Waiting for elevation";
-  const requested=$("#terSrc").value.startsWith("wadnr")?`Requested: ${$("#terSrc").selectedOptions[0].textContent} · `:"";
+  const requested=dnrAreas.length?`WA DNR areas: ${dnrAreas.length} · `:"";
   const message=is3d?public3dSourceText():terrainSwapMessage||`${requested}${label} · ${coverage}% of loaded tile positions · ${detail}${dnrAcquisitionText()?` · ${dnrAcquisitionText()}`:""}`;
   if(terrainLoadStatus.textContent!==message)terrainLoadStatus.textContent=message;
   const output=$("#terrainSourceSummary");
@@ -7015,9 +7027,8 @@ function paintTerrainInfo(pick){
   pick = pick || chooseTerrain(style);
   let html="";
   if(pick.src==="wadnr-elevation"){
-    html+=`<div>Requested source: <b>${pick.cachedOnly?"Best available (cached DNR, USGS and overview)":"WA DNR bare-earth elevation"}</b>. All analytical styles derive from numeric elevation; rendered sources and their percentages are shown above.</div>`;
-    if(!pick.cachedOnly)html+=`<div>${pick.strict?"DNR-only mode leaves unavailable pixels blank.":"USGS / global overview remains visible while DNR arrives and fills true gaps."} DNR archives download once in the background from zoom 13, within the engine's storage budget.</div>`;
-    if(pick.overview)html+=`<div>Zoom in to 13 or closer to acquire DNR elevation; cached DNR remains available.</div>`;
+    html+=`<div>Requested source: <b>Best available (USGS, with WA DNR inside fetched areas)</b>. All analytical styles derive from numeric elevation; rendered sources and their percentages are shown above.</div>`;
+    html+=`<div>WA DNR applies only inside areas you fetched with <b>Select WA DNR area</b>; it never downloads from panning. ${dnrAreas.length?`${dnrAreas.length} fetched area${dnrAreas.length>1?"s":""} active.`:"No WA DNR areas fetched yet."}</div>`;
     if(dnrAcquisitionText())html+=`<div>${esc(dnrAcquisitionText())}</div>`;
   }else if(pick.src==="wadnr"){
     const ps=pick.projs||[], n=ps.length;
@@ -8169,11 +8180,6 @@ const TILE_BYTES = 18000;               // measured average across z13-z19
 function warmPreview(){
   const el=$("#terWarmMsg"); if(!el || warmPoll) return;
   if(!PROXY || $("#terStyle").value==="off") return;
-  if(["wadnr","wadnr-only"].includes($("#terSrc").value)&&dnrElevationAvailable()){
-    $("#terWarm").textContent="Download DNR elevation for this view";
-    el.textContent="Downloads official DNR bare-earth rasters and prepares numeric overviews. The first download can take several minutes; saved data is reused across terrain styles.";
-    return;
-  }
   const p=warmPlan();
   const size=fmtMB(p.tiles*TILE_BYTES);
   $("#terWarm").textContent=p.limited?"Download broad-area pass":"Download this view";
@@ -8183,6 +8189,82 @@ function warmPreview(){
     + (p.limited ? ` <span class="ok">\u2014 native z${p.requestedZ1} unlocks as you zoom in</span>` : "")
     + (!p.limited&&p.tiles>WARM_WARN ? ` <span class="warn">\u2014 large</span>` : "");
 }
+
+/* ---- WA DNR fetched areas: explicit, map-anchored selection ------------- */
+let dnrSelRect=null,dnrSelHandles=[],dnrSelBbox=null,dnrAreaLayer=null,dnrFetchPoll=null;
+function dnrMsg(text){const el=$("#dnrAreaMsg");if(el)el.textContent=text}
+function paintDnrAreas(){
+  if(dnrAreaLayer)map.removeLayer(dnrAreaLayer);
+  dnrAreaLayer=L.layerGroup(dnrAreas.map(a=>L.rectangle([[a.bbox[1],a.bbox[0]],[a.bbox[3],a.bbox[2]]],
+    {color:"#0a84ff",weight:1,fillOpacity:.04,interactive:false}))).addTo(map);
+  dnrMsg(dnrAreas.length?`WA DNR active in ${dnrAreas.length} fetched area${dnrAreas.length>1?"s":""}. USGS stays active everywhere else.`:
+    "WA DNR is off until you fetch it for an area. USGS stays active everywhere else.");
+}
+function clearDnrSelection(){
+  if(dnrSelRect)map.removeLayer(dnrSelRect);dnrSelRect=null;dnrSelBbox=null;
+  for(const h of dnrSelHandles)map.removeLayer(h);dnrSelHandles=[];
+  const f=$("#dnrFetch");if(f)f.disabled=true;
+  document.body.classList.remove("dnr-selecting");
+}
+function setDnrSelection(bbox){
+  dnrSelBbox=bbox;
+  if(!dnrSelRect){dnrSelRect=L.rectangle([[bbox[1],bbox[0]],[bbox[3],bbox[2]]],
+    {color:"#ff9f0a",weight:2,fillOpacity:.05,interactive:false}).addTo(map);}
+  else dnrSelRect.setBounds([[bbox[1],bbox[0]],[bbox[3],bbox[2]]]);
+  for(const h of dnrSelHandles)map.removeLayer(h);dnrSelHandles=[];
+  const corners=[[bbox[1],bbox[0]],[bbox[1],bbox[2]],[bbox[3],bbox[2]],[bbox[3],bbox[0]]];
+  corners.forEach((ll,i)=>{
+    const marker=L.marker(ll,{draggable:true,interactive:true,icon:L.divIcon({className:"dnr-handle",iconSize:[18,18]})}).addTo(map);
+    marker.on("drag",()=>{
+      const p=marker.getLatLng(),b=[...dnrSelBbox];
+      if(i===0){b[0]=p.lng;b[1]=p.lat}if(i===1){b[2]=p.lng;b[1]=p.lat}
+      if(i===2){b[2]=p.lng;b[3]=p.lat}if(i===3){b[0]=p.lng;b[3]=p.lat}
+      if(b[0]<b[2]&&b[1]<b[3]){dnrSelBbox=b;dnrSelRect.setBounds([[b[1],b[0]],[b[3],b[2]]]);}
+    });
+    marker.on("dragend",()=>{if(dnrSelBbox)setDnrSelection(dnrSelBbox)});
+    dnrSelHandles.push(marker);
+  });
+  const f=$("#dnrFetch");if(f)f.disabled=false;
+  dnrMsg(`Selected ${Math.abs(bbox[2]-bbox[0]).toFixed(3)}° × ${Math.abs(bbox[3]-bbox[1]).toFixed(3)}°. Drag a corner to resize, pan/zoom freely, then Fetch.`);
+}
+$("#dnrSelect").onclick=()=>{
+  if(!PROXY){dnrMsg("WA DNR needs the local terrain engine connected.");return}
+  if(document.body.classList.contains("terrain-3d")){dnrMsg("Switch to the 2D map to select a WA DNR area.");return}
+  if(dnrSelRect){clearDnrSelection();paintDnrAreas();return}
+  document.body.classList.add("dnr-selecting");
+  const b=map.getBounds().pad(-0.15);
+  setDnrSelection([b.getWest(),b.getSouth(),b.getEast(),b.getNorth()]);
+};
+$("#dnrFetch").onclick=async()=>{
+  if(!dnrSelBbox)return;
+  const bbox=[...dnrSelBbox];
+  const cells=Math.max(1,Math.round(Math.abs(bbox[2]-bbox[0])/360*65536)*Math.round(Math.abs(bbox[3]-bbox[1])/360*65536));
+  if(cells>512&&!confirm(`This WA DNR area covers about ${cells.toLocaleString()} acquisition cells and may download several large surveys. Continue?`))return;
+  const btn=$("#dnrFetch");btn.disabled=true;dnrMsg("Starting WA DNR download for the selected area…");
+  try{
+    const r=await fetch(api("/api/wadnr/warm"),{method:"POST",body:JSON.stringify({bbox})});
+    const value=await r.json();if(!r.ok)throw new Error(value.error||`HTTP ${r.status}`);
+  }catch(error){btn.disabled=false;dnrMsg(`Could not start WA DNR download: ${error.message}`);return}
+  clearInterval(dnrFetchPoll);
+  dnrFetchPoll=setInterval(async()=>{
+    try{
+      const r=await fetch(api("/api/wadnr/warm/status"));if(!r.ok)throw new Error(`HTTP ${r.status}`);
+      const s=await r.json();dnrStatus=s.acquisition;
+      dnrMsg(s.running?`Downloading WA DNR: ${s.done}/${s.total} areas. ${dnrAcquisitionText()}`:
+        s.error?`WA DNR download could not complete: ${s.error}`:
+        `WA DNR ready in the selected area (${fmtMB(s.bytes)} added). It now applies only inside that box.`);
+      if(!s.running){clearInterval(dnrFetchPoll);dnrFetchPoll=null;btn.disabled=false;
+        if(!s.error){if(!dnrAreas.some(a=>a.bbox.every((v,i)=>v===bbox[i])))dnrAreas.push({bbox,at:Date.now()});
+          saveDnrAreas();clearDnrSelection();paintDnrAreas();resetMeshSources();applyTerrain(true);
+          if(elevationActive())applyElev();schedule3dStyle();scheduleDnrStatus();}}
+    }catch(error){clearInterval(dnrFetchPoll);dnrFetchPoll=null;btn.disabled=false;dnrMsg(`WA DNR download status unavailable: ${error.message}`)}
+  },2000);
+};
+$("#dnrClear").onclick=()=>{
+  dnrAreas=[];saveDnrAreas();clearDnrSelection();paintDnrAreas();
+  resetMeshSources();applyTerrain(true);if(elevationActive())applyElev();schedule3dStyle();
+};
+paintDnrAreas();
 
 /* ---- cached areas: has the lidar catalogue moved since we downloaded? --- */
 async function checkStaleAreas(){
@@ -8225,26 +8307,6 @@ $("#terWarm").onclick=async ()=>{
   if(!PROXY){ msg.innerHTML='<span class="warn">Needs the local server (server.js).</span>'; return }
   const style=$("#terStyle").value;
   if(style==="off"){ msg.textContent="Pick a terrain layer first."; return }
-  if(["wadnr","wadnr-only"].includes($("#terSrc").value)&&dnrElevationAvailable()){
-    const b=map.getBounds(),bbox=[b.getWest(),b.getSouth(),b.getEast(),b.getNorth()];
-    try{
-      const r=await fetch(api("/api/wadnr/warm"),{method:"POST",body:JSON.stringify({bbox})});
-      const value=await r.json();if(!r.ok)throw new Error(value.error||`HTTP ${r.status}`);
-    }catch(error){msg.textContent=`Could not start DNR download: ${error.message}`;return;}
-    clearInterval(warmPoll);warmStatusPath="/api/wadnr/warm/status";
-    warmPoll=setInterval(async()=>{
-      try{
-        const r=await fetch(api(warmStatusPath));if(!r.ok)throw new Error(`HTTP ${r.status}`);
-        const s=await r.json();dnrStatus=s.acquisition;
-        msg.textContent=s.running?`DNR: ${s.done}/${s.total} areas complete. ${dnrAcquisitionText()}`:
-          s.error?`DNR download could not complete: ${s.error}`:
-          s.stop?"DNR view download stopped; the current raster finishes in the background.":
-          `DNR view checked: ${s.done} areas, ${fmtMB(s.bytes)} added. Actual DNR pixels are labeled in Layers; uncovered gaps keep their displayed source.`;
-        if(!s.running){clearInterval(warmPoll);warmPoll=null;applyTerrain(true);if(elevationActive())applyElev();}
-      }catch(error){clearInterval(warmPoll);warmPoll=null;msg.textContent=`DNR download status unavailable: ${error.message}`;}
-    },2000);
-    msg.textContent="Starting official DNR elevation download…";return;
-  }
   const plan=warmPlan(), b=plan.b, z0=plan.z0, z1=plan.z1, est=plan.tiles;
   if(est>WARM_MAX){
     msg.innerHTML=`<span class="warn">This viewport is still too large to cache safely.</span> `
@@ -9143,30 +9205,20 @@ function waitElevationRetry(ms,signal){
   });
 }
 async function engineElevationWithFallback(coords,signal,mesh=false){
-  const strict=$("#terSrc").value==="wadnr-only",requests=[];
+  const requests=[];
   const controller=new AbortController(),abort=()=>controller.abort();
   if(signal.aborted)throw new DOMException("Aborted","AbortError");
   signal.addEventListener("abort",abort,{once:true});
   const requestSignal=controller.signal;
-  if(["wadnr","wadnr-only"].includes($("#terSrc").value)&&coords.z>=13){
-    const url=api(`/api/wadnr/elev/${coords.z}/${coords.x}/${coords.y}.png?acquire=1`);
-    elevationRequests.request(url,async s=>{
-      const response=await fetch(url,{signal:s});
-      if(response.status===202){const value=await response.json();dnrStatus=value.acquisition||dnrStatus;}
-      else await response.body?.cancel();
-      scheduleDnrStatus();return null;
-    },{signal,priority:1,group:"dnr"}).catch(()=>{});
-  }
   const request=(url,rank,group)=>elevationRequests.request(api(url),s=>fetchElevation(api(url),s),{signal:requestSignal,priority:rank===5?2:rank,group})
     .then(source=>source?{source,rank}:null).catch(error=>{if(signal.aborted)throw error;return null;});
-  requests.push(request(`/api/wadnr/elev/${coords.z}/${coords.x}/${coords.y}.png?acquire=0&revision=${dnrStatus?.revision||0}`,5,"dnr"));
-  if(!strict){
-    requests.push(request(`/api/elev/national/${coords.z}/${coords.x}/${coords.y}.png`,2,"national"));
-    if(!mesh&&coords.z>=13)requests.push(request(`/api/usgs/elev/${coords.z}/${coords.x}/${coords.y}.png?${RAW_COVERAGE_QUERY}`,3,"detail"));
-    requests.push(overviewElevation(coords,requestSignal).then(source=>({source,rank:1})).catch(error=>{if(signal.aborted)throw error;return null;}));
-  }
+  const useDnr=dnrTileAllowed(coords);
+  if(useDnr)requests.push(request(`/api/wadnr/elev/${coords.z}/${coords.x}/${coords.y}.png?acquire=0&revision=${dnrStatus?.revision||0}`,5,"dnr"));
+  requests.push(request(`/api/elev/national/${coords.z}/${coords.x}/${coords.y}.png`,2,"national"));
+  if(!mesh&&coords.z>=13)requests.push(request(`/api/usgs/elev/${coords.z}/${coords.x}/${coords.y}.png?${RAW_COVERAGE_QUERY}`,3,"detail"));
+  requests.push(overviewElevation(coords,requestSignal).then(source=>({source,rank:1})).catch(error=>{if(signal.aborted)throw error;return null;}));
   const progress=new CSPTilePipeline.ProgressiveGrid(256*256);
-  const ranks=strict?[5]:mesh?[5,2,1]:coords.z>=13?[5,2,3,1]:[5,2,1];
+  const ranks=mesh?(useDnr?[5,2,1]:[2,1]):coords.z>=13?(useDnr?[5,2,3,1]:[2,3,1]):(useDnr?[5,2,1]:[2,1]);
   const pending=new Set(ranks);
   try{
     return await new Promise((resolve,reject)=>{
@@ -9175,11 +9227,13 @@ async function engineElevationWithFallback(coords,signal,mesh=false){
         const used=[5,3,2,1].filter(rank=>progress.counts[rank]>0);
         // Complete coverage cannot benefit from remaining lower-ranked sources.
         if(pending.size&&!(progress.valid===progress.grid.length&&Math.max(...pending)<Math.min(...used)))return;
-        resolve(!progress.valid||strict&&mesh&&progress.valid<progress.grid.length?null:{grid:progress.grid,ranks:used});
+        resolve(!progress.valid?null:{grid:progress.grid,ranks:used});
       };
       requests.forEach((request,i)=>request.then(result=>{
-        if(result){const source=result.source;progress.accept(source.width===256&&source.height===256?source.grid:
-          ElevationTileCore.resampleElevation(source.grid,source.width,source.height,null,256,256),result.rank)}
+        if(result){const source=result.source;let grid=source.width===256&&source.height===256?source.grid:
+          ElevationTileCore.resampleElevation(source.grid,source.width,source.height,null,256,256);
+          if(result.rank===5)grid=maskDnrGrid(grid,256,256,coords);
+          progress.accept(grid,result.rank)}
         pending.delete(ranks[i]);finish();
       },reject));
     });
@@ -9247,8 +9301,9 @@ const ElevLayer = L.GridLayer.extend({
         {signal:controller.signal,priority:sharper?0:rank===5?2:rank,group:sharper?"sharp":rank===5?"dnr":rank===3?"detail":rank===2?"national":"overview"});
       if(!source||controller.signal.aborted)return;
       const crop=scale>1?{x:(coords.x%scale)*source.width/scale,y:(coords.y%scale)*source.height/scale,width:source.width/scale,height:source.height/scale}:null;
-      const values=!crop&&source.width===size.x&&source.height===size.y?source.grid:
+      let values=!crop&&source.width===size.x&&source.height===size.y?source.grid:
         ElevationTileCore.resampleElevation(source.grid,source.width,source.height,crop,size.x,size.y,{smooth:true});
+      if(rank===5)values=maskDnrGrid(values,size.x,size.y,coords);
       const sampleMeters=typeof sourceSampleMeters==="function"?sourceSampleMeters({z:native,x,y}):null;
       accept(values,rank,label,sampleMeters,sharper,source.surveys||[]);
     };
@@ -9260,8 +9315,8 @@ const ElevLayer = L.GridLayer.extend({
        and the next zoom's data follows at low priority, replacing it in
        place. Raw 1 m LiDAR starts at on-screen z13, as it always has. */
     const shown=coords.z-dz,sources=[];
-    if(PROXY&&this.options.dnrEndpoint)
-      sources.push([api(`${this.options.dnrEndpoint}/{z}/{x}/{y}.png?acquire=${this.options.dnrAcquire&&shown>=13?"1":"0"}&revision=${dnrStatus?.revision||0}`),18,5,"WA DNR elevation"]);
+    if(PROXY&&this.options.dnrEndpoint&&dnrTileAllowed(coords))
+      sources.push([api(`${this.options.dnrEndpoint}/{z}/{x}/{y}.png?acquire=0&revision=${dnrStatus?.revision||0}`),18,5,"WA DNR elevation"]);
     if(PROXY&&this.options.rawEndpoint&&shown>=13)
       sources.push([api(`${this.options.rawEndpoint}/{z}/{x}/{y}.png?${RAW_COVERAGE_QUERY}`),this.options.rawNativeZoom??coords.z,3,"USGS 3.3 ft"]);
     if(PROXY&&this.options.nationalEndpoint&&(shown>=13||this.options.refineOverview))
@@ -9703,9 +9758,10 @@ async function runFabric(){
   el.innerHTML='<span class="spin"></span> measuring\u2026';
   let j;
   try{
-    const want=$("#terSrc").value,dnr=dnrElevationAvailable()&&["auto","wadnr","wadnr-only"].includes(want);
+    const view=[b.getWest(),b.getSouth(),b.getEast(),b.getNorth()];
+    const dnr=dnrElevationAvailable()&&dnrAreas.some(a=>bboxIntersects(view,a.bbox));
     const path=dnr?"/api/wadnr/fabric":"/api/usgs/fabric";
-    const r=await fetch(api(`${path}?bbox=${b.getWest().toFixed(5)},${b.getSouth().toFixed(5)},${b.getEast().toFixed(5)},${b.getNorth().toFixed(5)}&lo=${lo}&hi=${hi}&strict=${want==="wadnr-only"?1:0}`));
+    const r=await fetch(api(`${path}?bbox=${view.map(v=>v.toFixed(5)).join(",")}&lo=${lo}&hi=${hi}&strict=0`));
     j=await r.json();
   }catch(e){ el.innerHTML='<span class="warn">Measurement failed.</span>'; return }
   if(!j.ok){ el.innerHTML=`<span class="warn">${j.reason||"no result"}</span>`; return }
@@ -10278,7 +10334,7 @@ $("#q").addEventListener("blur",()=>setTimeout(acHide,120));
 document.addEventListener("click",e=>{ if(!e.target.closest("#iw")) acHide() });
 })();
 </script>
-<script src="markup.js?build=2026-10-13a"></script>
-<script src="ui-system.js?build=2026-10-13a"></script>
+<script src="markup.js?build=2026-10-13b"></script>
+<script src="ui-system.js?build=2026-10-13b"></script>
 </body>
 </html>

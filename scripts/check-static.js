@@ -438,8 +438,11 @@ assert(index.includes('const CompositeTerrainLayer = L.GridLayer.extend')&&index
        "terrain refinement must composite into one tile instead of stacking darkening layers");
 assert(index.includes('class TerrainGpuRenderer')&&index.includes('dataset.cspRenderer="webgl2"'),
        "hillshade, slope, and aspect must use one shared WebGL2 terrain renderer when available");
-assert(index.includes('rawEndpoint:strict||want==="3dep"?null:')&&index.includes('refineOverview:true'),
+assert(index.includes('rawEndpoint:want==="3dep"?null:')&&index.includes('refineOverview:true'),
        "national analytical terrain must progressively refine a complete browser baseline without requesting raw lidar");
+assert(!/<option value="wadnr/.test(index)&&index.includes('id="dnrSelect"')&&index.includes('id="dnrFetch"')
+       &&index.includes("dnrTileAllowed(coords)")&&index.includes("acquire=0&revision="),
+       "WA DNR must be fetched explicitly for a selected area and never downloaded from browsing");
 assert(index.includes('const softError=response.headers.get("X-CSP-Error")'),
        "soft upstream tile failures must retry without painting a permanent empty tile");
 assert(index.includes('zIndex:440')&&index.includes('zIndex:450'),

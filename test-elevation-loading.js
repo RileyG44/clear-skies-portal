@@ -18,7 +18,7 @@ async function main(){
   const context={L:{GridLayer:Grid,setOptions:(self,opts)=>{self.options=opts;},point:(x,y)=>({x,y})},HIDPI:false,
     releaseCanvas:canvas=>{ if(canvas&&canvas.width){ canvas.width=0;canvas.height=0 } },
     document:{createElement:()=>({dataset:{}})},AbortController,DOMException,Float32Array,Promise,
-    PROXY:true,RAW_COVERAGE_QUERY:'ix=2',dnrStatus:{revision:1},api:value=>'engine'+value,CSPTilePipeline:pipeline,ElevationTileCore:core,CSPPublicTerrain:require('./public-terrain'),
+    PROXY:true,RAW_COVERAGE_QUERY:'ix=2',dnrStatus:{revision:1},dnrTileAllowed:()=>true,maskDnrGrid:grid=>grid,api:value=>'engine'+value,CSPTilePipeline:pipeline,ElevationTileCore:core,CSPPublicTerrain:require('./public-terrain'),
     elevationRequests:new RequestPool(),fetchElevation:(url,signal)=>{
       calls.set(url,(calls.get(url)||0)+1);
       return new Promise((resolve,reject)=>{deferred.set(url,resolve);signal.addEventListener('abort',()=>reject(Object.assign(new Error('cancelled'),{name:'AbortError'})));});
@@ -95,7 +95,7 @@ async function main(){
   const dnr=new context.Layer({...opts,dnrEndpoint:'/api/wadnr/elev',dnrAcquire:true,sourceKey:'dnr:1'});
   dnr._paint=()=>{};
   const dc={z:15,x:41,y:42},dcanvas=dnr.createTile(dc,()=>{});await tick();
-  const du='engine/api/wadnr/elev/15/41/42.png?acquire=1&revision=1';
+  const du='engine/api/wadnr/elev/15/41/42.png?acquire=0&revision=1';
   deferred.get('engine/national/15/41/42.png')({grid:new Float32Array([20,20,20,20]),width:2,height:2});
   deferred.get(du)({grid:new Float32Array([50,NaN,50,NaN]),width:2,height:2,
     surveys:[{project:'DNR fixture',datasetId:10,nativeMeters:.5}]});await tick();
@@ -108,7 +108,7 @@ async function main(){
   dnr.setSourceOptions({sourceKey:'strict:2',dnrEndpoint:'/api/wadnr/elev',dnrAcquire:true,rawEndpoint:null,nationalEndpoint:null,fallback:null});
   assert.equal(cleared,1);assert.equal(dnr._store.has('15/41/42'),false,'strict mode immediately releases the prior mixed elevation data');
   await tick();
-  deferred.get('engine/api/wadnr/elev/15/41/42.png?acquire=1&revision=2')({
+  deferred.get('engine/api/wadnr/elev/15/41/42.png?acquire=0&revision=2')({
     grid:new Float32Array([51,NaN,51,NaN]),width:2,height:2});await tick();
   assert.deepEqual([...dnr._store.get('15/41/42').elev],[51,NaN,51,NaN],'new DNR revision bypasses stale request-cache pixels and strict gaps stay empty');
   console.log('elevation loading checks passed (actual layer, out-of-order responses, shared requests, pan cancellation, revisit, high density, sharpening)');

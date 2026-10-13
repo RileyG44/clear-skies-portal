@@ -98,7 +98,7 @@ class DnrStore {
     const ty=lat=>Math.floor((1-Math.asinh(Math.tan(lat*Math.PI/180))/Math.PI)/2*n);
     const west=tx(bbox[0]),east=tx(bbox[2]),north=ty(bbox[3]),south=ty(bbox[1]);
     const total=(east-west+1)*(south-north+1);
-    if(total>32)throw new Error("Zoom in: a DNR view download is limited to 32 acquisition cells");
+    if(total>4096)throw new Error("A WA DNR fetch is limited to 4096 acquisition cells; split a larger area into multiple fetches");
     const state=this.warm={running:true,total,done:0,bytes:0,error:null,stop:false};
     const before=this.status().bytes;
     (async()=>{

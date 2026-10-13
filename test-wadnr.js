@@ -56,6 +56,21 @@ async function acquisitionChecks(){
   assert.equal((await store.ensureTile(17,x,y)).state,"error","failed downloads back off rather than storming the upstream");
   store.close();
 }
+async function warmAreaChecks(){
+  const store=new DnrStore(path.join(root,"warm-area"),{request:async p=>{
+    if(p==="/project")return projects;
+    if(p.includes("/layers?"))return layers;
+    throw new Error("no DNR files outside catalogue coverage");
+  }});
+  // 0.2 x 0.2 degrees is ~1,700 z16 cells: far beyond the old 32-cell
+  // viewport cap, and an explicit fetch must be allowed to cover it.
+  const warm=store.startWarm([-130,40,-129.8,40.2]);
+  assert(warm.total>32&&warm.total<=4096,`explicit area fetch spans ${warm.total} cells`);
+  for(let i=0;i<100&&store.warm.running;i++)await new Promise(r=>setTimeout(r,10));
+  assert.equal(store.warm.error,null);assert.equal(store.warm.done,warm.total,"empty cells finish without downloads");
+  assert.throws(()=>store.startWarm([-130,30,-120,45]),/4096/, "state-sized fetches stay bounded");
+  store.close();
+}
 async function rasterChecks(){
   const {writeArrayBuffer}=await import("geotiff");
   const z=15,n=2**z,x=Math.floor((-118.53+180)/360*n),y=Math.floor((1-Math.asinh(Math.tan(47.742*Math.PI/180))/Math.PI)/2*n);
@@ -100,22 +115,23 @@ async function rasterChecks(){
 }
 function sourceChoiceChecks(){
   const html=fs.readFileSync(path.join(__dirname,"index.html"),"utf8");
+  assert(!/<option value="wadnr/.test(html),"WA DNR is an explicit area fetch, never a source dropdown default");
+  assert(html.includes('id="dnrSelect"')&&html.includes('id="dnrFetch"'),"terrain panel offers select-and-fetch for WA DNR areas");
   const fn=html.slice(html.indexOf("function chooseTerrain(style){"),html.indexOf("/* Presentation is independent",html.indexOf("function chooseTerrain(style){")));
-  const context={$:()=>({value:"wadnr"}),map:{getZoom:()=>15},PROXY:true,waIds:()=>[77],waProjects:()=>[],
+  const context={$:()=>({value:"auto"}),map:{getZoom:()=>15},PROXY:true,waIds:()=>[77],waProjects:()=>[],
     WADNR_OK:new Set(["hs"]),usgsCover:null,waCoverageState:"ready",dnrElevationAvailable:()=>true};
   vm.createContext(context);vm.runInContext(fn,context);
   for(const style of ["hs","hsmulti","slope","aspect","northness","tint","c2"])
-    assert.equal(context.chooseTerrain(style).src,"wadnr-elevation",`${style} can derive from DNR elevation`);
-  context.$=()=>({value:"wadnr-hillshade"});
-  assert.equal(context.chooseTerrain("hs").src,"wadnr");
-  assert.match(context.chooseTerrain("hsmulti").reason,/only the Hillshade style/);
-  context.$=()=>({value:"wadnr-only"});assert.equal(context.chooseTerrain("hs").strict,true);
+    assert.equal(context.chooseTerrain(style).src,"wadnr-elevation",`${style} can derive from fetched DNR elevation`);
+  assert.equal(context.chooseTerrain("hs").cachedOnly,true,"browsing alone never fetches DNR");
   const options=html.slice(html.indexOf("function elevationSourceOptions(){"),html.indexOf("function dnrAcquisitionText(){"));
-  context.API="";context.dnrStatus={revision:2};context.scheduleDnrStatus=()=>{};vm.runInContext(options,context);
-  const strict=context.elevationSourceOptions();
-  assert.equal(strict.rawEndpoint,null);assert.equal(strict.nationalEndpoint,null);assert.equal(strict.fallback,null);
+  context.API="";context.dnrStatus={revision:2};context.dnrAreasKey=()=>"";
+  vm.runInContext(options,context);
+  const auto=context.elevationSourceOptions();
+  assert.equal(auto.dnrAcquire,false,"automatic browsing must not trigger large DNR archives");
+  assert(auto.rawEndpoint&&auto.nationalEndpoint,"USGS remains the active default outside fetched areas");
   context.$=()=>({value:"3dep"});assert.equal(context.elevationSourceOptions().rawEndpoint,null);
-  context.$=()=>({value:"auto"});assert.equal(context.elevationSourceOptions().dnrAcquire,false,"automatic browsing must not trigger large DNR archives");
+  assert.equal(context.elevationSourceOptions().dnrAcquire,false);
 }
 async function httpChecks(fixture){
   const dir=path.join(fixture.cacheDir,"wadnr");
@@ -161,7 +177,7 @@ async function httpChecks(fixture){
   }
 }
 async function main(){
-  try{await catalogueChecks();await acquisitionChecks();const fixture=await rasterChecks();sourceChoiceChecks();await httpChecks(fixture);
+  try{await catalogueChecks();await acquisitionChecks();await warmAreaChecks();const fixture=await rasterChecks();sourceChoiceChecks();await httpChecks(fixture);
     console.log("DNR checks passed (catalogue, bounded acquisition, GeoTIFF, units, no-data, overviews, styles, HTTP provenance, strict fabric and DNR view downloads)");
   }finally{await runtime.close();fs.rmSync(root,{recursive:true,force:true});}
 }
