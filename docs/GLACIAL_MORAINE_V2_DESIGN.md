@@ -141,6 +141,34 @@ The calibration test regions are spent — do not score this build on them.
   thresholds in DEFAULT_CONFIG may be adjusted on train only, with validation
   as the check, and every change logged in the results file.
 
+## Build results (2026-10-13, branch glacial-calibration)
+
+Built as specced ( segment core / features / classifier / analysis, app
+product "moraine", synthetic tests 12/12). Cross-provider reviews found and
+the fix wave repaired: branched skeletons faking arcScore 1.00, prominence
+measured off-crest (negative on real moraine segments), broken asymmetry,
+kettle depth/scale defects, bbox-based evaluation touches, wrong baseline,
+and missing experiment fingerprinting.
+
+Object evaluation on train (297 views) and validation (54), exact segment
+membership, one fingerprint `896a8bbe…`:
+
+- Confuser false alarms: **pass by a wide margin.** Flagged area 0.5–1.8% of
+  confuser views vs the current screen's 14–26% pixel FAR, every type.
+- Object precision (likely): train 0.250, validation 0.000. Bar 0.5: **fail.**
+- Object recall (region-macro): train 0.058, validation 0.026. Bar 0.4: **fail.**
+- Official success bar: **FAIL.** Reported, not tuned around.
+
+Interpretation: the object screen abstains almost everywhere. It is safe
+(very low false positives) but finds little of the mapped moraine belts,
+because the object model is ridge-only while the labels are hummocky belts,
+and stage-1 candidates at a 5-cell radius poorly match 30–150 m landforms.
+Known next steps, in order: belt/zone object type scored on hummock and
+kettle density per km²; crest-following candidate generation at landform
+scale; mapped-geology evidence. Any future ship decision needs fresh
+held-out regions. The in-app product ships as an additional labelled
+screen only; the existing pixel screen and its parameters are unchanged.
+
 ## Out of scope for this build
 
 - Mapped-geology evidence layer (Macrostrat/DNR overlap) — designed above as
