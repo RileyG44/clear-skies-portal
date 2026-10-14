@@ -9,23 +9,24 @@
 }(typeof globalThis !== "undefined" ? globalThis : this, function (G) {
   "use strict";
 
-  /* Keep metadata on the module so each feature result has exactly the fields
-     specified in the design. Integration may copy this into its own metadata.
+  /* Keep approximation metadata on the module rather than each feature result.
+     Integration may copy this into its own metadata.
      Elevations and square, isotropic cell spacing are assumed to be metres. */
   var METADATA = Object.freeze({
     algorithm: "glacial-segment-features-v1",
     units: "metres, square metres, degrees, and dimensionless fractions",
     sideConvention: "+1 is (-tangentY,tangentX), the right side in east/south raster coordinates; -1 is the opposite; ties or no evidence use 0",
     approximations: Object.freeze({
-      profiles: "Equal weight per ordered skeleton vertex; tangent spans up to two neighbours each way. Bilinear samples at +/- mean width, floored to one cell, define shoulders. Missing profiles are skipped.",
-      asymmetry: "Median |positive crest-to-shoulder grades difference| / grades sum; steep side follows the median signed grade difference, rather than compass uphill/downhill labels.",
+      profiles: "Equal weight per ordered skeleton vertex; tangent spans up to two neighbours each way. Snap to the highest bilinear sample within +/- half mean width along the normal, at at most half-cell spacing. Shoulders are +/- mean width from that crest, with width floored to one cell. Missing profiles or shoulders at/above the crest are skipped.",
+      asymmetry: "Median absolute difference / sum of the two half-prominence crossing distances; steep side is the shorter flank, using the median signed distance difference.",
       halfWidth: "First half-prominence crossings of the linearly shoulder-detrended profile, sampled at at most half-cell spacing and interpolated; profiles without both crossings are skipped.",
       neighbourhoods: "LRM and annular TPI use a square box radius ceil(mean width / cell spacing), floored to one cell and capped at the view size; TPI excludes an inner radius floor(outer / 3).",
-      kettles: "8-connected negative-TPI blobs; depth is lowest finite exterior neighbour minus minimum blob elevation, a conservative local spill-rim proxy, not watershed filling. Blobs touching the view edge or no-data are rejected. Whole-blob area must be <5000 m2, depth >0.5 m.",
+      kettles: "Seed at TPI < -0.5 m and grow 8-connected blobs through TPI < 0. Depth is lowest finite exterior neighbour minus minimum blob elevation, a conservative local spill-rim proxy, not watershed filling. Blobs touching the view edge or no-data are rejected. Whole-blob area must be <5000 m2, depth >0.5 m. Densities are count per km of skeleton and per km2 of segment area.",
       dilation: "The polygon is the union of segment raster cells; centroid inclusion uses that footprint or Euclidean distance to pixel centres <= one mean width. Pixel-centre dilation has a subcell boundary approximation.",
-      apron: "Each apron is a nearest-skeleton side ribbon outside the segment, extending one length beyond a half-mean-width edge, clipped to the view and endpoint normals. Only pixels no higher than the nearest crest are downslope samples; slopes <3 degrees count as flat. Return the flatter side's fraction.",
+      apron: "Each apron is a nearest-skeleton side ribbon outside the segment, extending min(segment length, 300 m) beyond a half-mean-width edge, clipped to the view and endpoint normals. Only pixels no higher than the nearest skeleton elevation are downslope samples; slopes <3 degrees count as flat. Return the flatter side's fraction.",
       valley: "PCA major axis of the view's lowest-quartile elevation band approximates drainage. Score is local skeleton transversality times band anisotropy times centroid elevation affinity; subtract positive prominence to approximate underlying floor. No flow routing is performed.",
-      statistics: "Finite segment pixels only; linear-interpolated p95-p05 relief and mean absolute LRM. Unavailable measurements return zero, and therefore cannot supply positive morphological evidence."
+      statistics: "Finite segment pixels only; linear-interpolated p95-p05 relief and mean absolute LRM. Unavailable prominence returns NaN; other unavailable measurements return zero and cannot supply positive morphological evidence.",
+      context: "An immutable DEM view may share slope and low-band PCA once, and LRM/TPI rasters plus kettle blobs once per distinct width-derived radius. opts.segments prewarms all required radii; other radii are cached on first use. Recreate the context after changing the DEM."
     })
   });
 
@@ -133,40 +134,44 @@
     var prominences = [], asymmetries = [], differences = [], widths = [];
     var widthCells = widthM / cell;
     points.forEach(function (point) {
-      if (!Number.isFinite(point.crest) || !Math.hypot(point.tx, point.ty)) return;
-      var plus = sample(grid, w, h, point.x + point.nx * widthCells, point.y + point.ny * widthCells);
-      var minus = sample(grid, w, h, point.x - point.nx * widthCells, point.y - point.ny * widthCells);
-      if (!Number.isFinite(plus) || !Number.isFinite(minus)) return;
-      var prominence = point.crest - (plus + minus) / 2;
+      if (!Math.hypot(point.tx, point.ty)) return;
+      /* Stage-1 belt skeletons can lie on a flank. Keep the geometry used by
+         aprons intact, but recenter this profile on its local elevation crest. */
+      var crest = point.crest, offset = 0, steps = Math.max(1, Math.ceil(widthCells));
+      for (var step = -steps; step <= steps; step++) {
+        var distance = widthCells * step / (2 * steps);
+        var z = sample(grid, w, h, point.x + point.nx * distance, point.y + point.ny * distance);
+        if (Number.isFinite(z) && (!Number.isFinite(crest) || z > crest)) { crest = z; offset = distance; }
+      }
+      if (!Number.isFinite(crest)) return;
+      var snapped = { x: point.x + point.nx * offset, y: point.y + point.ny * offset,
+        nx: point.nx, ny: point.ny };
+      var plus = sample(grid, w, h, snapped.x + point.nx * widthCells, snapped.y + point.ny * widthCells);
+      var minus = sample(grid, w, h, snapped.x - point.nx * widthCells, snapped.y - point.ny * widthCells);
+      if (!Number.isFinite(plus) || !Number.isFinite(minus) || plus >= crest || minus >= crest) return;
+      var prominence = crest - (plus + minus) / 2;
       prominences.push(prominence);
-      if (!(prominence > 0)) return;
-      /* Shoulder grades, rather than maximum cell slopes, are less sensitive
-         to noise. Clip non-descending flanks to zero for 0..1 asymmetry. */
-      var plusGrade = Math.max(0, (point.crest - plus) / widthM);
-      var minusGrade = Math.max(0, (point.crest - minus) / widthM);
-      var sum = plusGrade + minusGrade, difference = plusGrade - minusGrade;
-      asymmetries.push(sum ? Math.abs(difference) / sum : 0);
-      differences.push(sum ? difference / sum : 0);
       var shoulders = { plus: plus, minus: minus };
-      var left = halfCrossing(grid, w, h, point, -1, widthCells, shoulders, prominence);
-      var right = halfCrossing(grid, w, h, point, 1, widthCells, shoulders, prominence);
-      if (Number.isFinite(left) && Number.isFinite(right)) widths.push((left + right) * cell);
+      var left = halfCrossing(grid, w, h, snapped, -1, widthCells, shoulders, prominence);
+      var right = halfCrossing(grid, w, h, snapped, 1, widthCells, shoulders, prominence);
+      if (Number.isFinite(left) && Number.isFinite(right) && left + right > 0) {
+        widths.push((left + right) * cell);
+        var difference = (left - right) / (left + right);
+        asymmetries.push(Math.abs(difference)); differences.push(difference);
+      }
     });
     var signedDifference = median(differences);
-    return { prominenceM: median(prominences), profileAsymmetry: median(asymmetries),
+    return { prominenceM: prominences.length ? median(prominences) : NaN, profileAsymmetry: median(asymmetries),
       steepSide: Math.abs(signedDifference) <= 1e-9 ? 0 : (signedDifference > 0 ? 1 : -1),
       widthAtHalfM: median(widths) };
   }
 
-  function kettles(grid, w, h, tpi, mask, pixels, widthCells, cell) {
-    /* Blob membership requires TPI below -0.5 m, not merely < 0: on flat
-       ground TPI is float noise (±1e-6 m), so a zero threshold merges every
-       pit into one view-sized blob that the area limit then rejects, and no
-       kettle is ever counted. The 0.5 m membership floor is the spec's
-       depth criterion applied before the spill-rim check below. */
+  function labelKettles(grid, w, h, tpi, cell) {
+    /* Require a meaningful seed, but include the shallow negative-TPI rim:
+       imposing the seed threshold on growth underestimates spill depth. */
     var DEPTH = 0.5;
     var visited = new Uint8Array(w * h), queue = new Uint32Array(w * h);
-    var count = 0, footprintTree = null;
+    var blobs = [];
     for (var start = 0; start < grid.length; start++) {
       if (visited[start] || !(tpi[start] < -DEPTH) || !Number.isFinite(Number(grid[start]))) continue;
       var head = 0, tail = 1, sumX = 0, sumY = 0;
@@ -180,7 +185,7 @@
           if ((!ox && !oy) || x + ox < 0 || y + oy < 0 || x + ox >= w || y + oy >= h) continue;
           var next = (y + oy) * w + x + ox, z = Number(grid[next]);
           if (!Number.isFinite(z) || !Number.isFinite(tpi[next])) { closed = false; continue; }
-          if (tpi[next] < -DEPTH) {
+          if (tpi[next] < 0) {
             if (!visited[next]) { visited[next] = 1; queue[tail++] = next; }
           } else boundary = Math.min(boundary, z);
         }
@@ -188,7 +193,16 @@
       /* Lowest exterior neighbour is a conservative surrogate spill elevation:
          open troughs and negative TPI beside a ridge do not become kettles. */
       if (!closed || tail * cell * cell >= 5000 || !Number.isFinite(boundary) || boundary - minimum <= 0.5) continue;
-      var cx = sumX / tail, cy = sumY / tail;
+      blobs.push({ x: sumX / tail, y: sumY / tail, pixelCount: tail,
+        areaM2: tail * cell * cell, depthM: boundary - minimum });
+    }
+    return blobs;
+  }
+
+  function kettles(w, blobs, mask, pixels, widthCells) {
+    var count = 0, footprintTree = null;
+    for (var i = 0; i < blobs.length; i++) {
+      var cx = blobs[i].x, cy = blobs[i].y;
       if (mask[Math.round(cy) * w + Math.round(cx)]) { count++; continue; }
       if (!footprintTree) footprintTree = tree(pixels.map(function (index) {
         return { x: index % w, y: Math.floor(index / w) };
@@ -200,7 +214,7 @@
 
   function aprons(grid, w, h, mask, slope, points, pathTree, bbox, widthM, lengthM, cell) {
     if (!points.length || !(lengthM > 0)) return { fraction: 0, side: 0 };
-    var radius = (lengthM + widthM / 2) / cell, totals = [0, 0], flats = [0, 0];
+    var radius = (Math.min(lengthM, 300) + widthM / 2) / cell, totals = [0, 0], flats = [0, 0];
     var x0 = Math.max(0, Math.floor(bbox[0] - radius)), x1 = Math.min(w - 1, Math.ceil(bbox[2] + radius));
     var y0 = Math.max(0, Math.floor(bbox[1] - radius)), y1 = Math.min(h - 1, Math.ceil(bbox[3] + radius));
     for (var y = y0; y <= y1; y++) for (var x = x0; x <= x1; x++) {
@@ -223,14 +237,13 @@
       side: Math.abs(plus - minus) <= 1e-9 ? 0 : (plus > minus ? 1 : -1) };
   }
 
-  function valleyScore(grid, w, h, centroid, pathTree, prominence) {
-    if (!pathTree) return 0;
+  function valleyContext(grid, w) {
     var elevations = [];
     for (var i = 0; i < grid.length; i++) if (Number.isFinite(Number(grid[i]))) elevations.push(Number(grid[i]));
     elevations.sort(function (a, b) { return a - b; });
-    if (!elevations.length) return 0;
+    if (!elevations.length) return null;
     var low = quantile(elevations, 0.25), range = quantile(elevations, 0.95) - quantile(elevations, 0.05);
-    if (!(range > 1e-9)) return 0;
+    if (!(range > 1e-9)) return null;
     var count = 0, meanX = 0, meanY = 0, xx = 0, yy = 0, xy = 0;
     /* Online covariance avoids cancellation when the low band is narrow. */
     for (var j = 0; j < grid.length; j++) {
@@ -240,28 +253,83 @@
       meanX += dx / count; meanY += dy / count;
       xx += dx * (x - meanX); yy += dy * (y - meanY); xy += dx * (y - meanY);
     }
-    if (count < 3 || !(xx + yy > 0)) return 0;
+    if (count < 3 || !(xx + yy > 0)) return null;
     var angle = 0.5 * Math.atan2(2 * xy, xx - yy);
     var anisotropy = clamp(Math.hypot(xx - yy, 2 * xy) / (xx + yy), 0, 1);
+    return { low: low, range: range, angle: angle, anisotropy: anisotropy };
+  }
+
+  function valleyScore(grid, w, h, centroid, pathTree, prominence, valley) {
+    if (!pathTree || !valley) return 0;
     var tangent = nearest(pathTree, centroid[0], centroid[1]).point;
-    var transverse = Math.abs(tangent.tx * Math.sin(angle) - tangent.ty * Math.cos(angle));
+    var transverse = Math.abs(tangent.tx * Math.sin(valley.angle) - tangent.ty * Math.cos(valley.angle));
     var elevation = sample(grid, w, h, centroid[0], centroid[1]);
     if (!Number.isFinite(elevation)) return 0;
     /* Removing ridge prominence approximates the valley floor beneath a crest.
        PCA anisotropy suppresses undefined drainage axes in broad flat bands;
        a planar hillside can still resemble a corridor, so this is a proxy. */
-    var affinity = clamp(1 - Math.max(0, elevation - Math.max(0, prominence) - low) / range, 0, 1);
-    return clamp(transverse * anisotropy * affinity, 0, 1);
+    var ridgeHeight = Number.isFinite(prominence) ? Math.max(0, prominence) : 0;
+    var affinity = clamp(1 - Math.max(0, elevation - ridgeHeight - valley.low) / valley.range, 0, 1);
+    return clamp(transverse * valley.anisotropy * affinity, 0, 1);
   }
 
-  function segmentFeatures(grid, w, h, segment, opts) {
+  function validateView(grid, w, h, opts) {
     if (!G || typeof G.localReliefModel !== "function" || typeof G.terrainPositionIndex !== "function" ||
         typeof G.slopeAspectComponents !== "function") throw new Error("CSPGlacialResearch is not loaded");
     if (!Number.isInteger(w) || !Number.isInteger(h) || w < 1 || h < 1 || !grid || grid.length !== w * h)
       throw new RangeError("grid length must equal positive integer width times height");
-    opts = opts || {};
     var cell = opts.cellMetres === undefined ? 1 : Number(opts.cellMetres);
     if (!Number.isFinite(cell) || cell <= 0) throw new RangeError("cellMetres must be positive and finite");
+    return cell;
+  }
+
+  function spatialOptions(cell) {
+    return { cellSize: cell, horizontalUnit: "m", verticalUnit: "m", rowAxis: "south", edgePolicy: "shrink" };
+  }
+
+  function widthRadius(width, cell, w, h) {
+    if (!Number.isFinite(width) || width < 0) throw new RangeError("meanWidthM must be finite and non-negative");
+    return Math.min(Math.max(w, h), Math.max(1, Math.ceil(Math.max(cell, width) / cell)));
+  }
+
+  function viewLayers(grid, w, h, cell, radius) {
+    var spatial = spatialOptions(cell);
+    var lrm = G.localReliefModel(grid, w, h, Object.assign({}, spatial, { radiusCells: radius })).data;
+    var tpi = G.terrainPositionIndex(grid, w, h, Object.assign({}, spatial,
+      { radiusCells: radius, innerRadiusCells: Math.floor(radius / 3) })).data;
+    return { lrm: lrm, tpi: tpi, kettleBlobs: labelKettles(grid, w, h, tpi, cell) };
+  }
+
+  var viewContexts = new WeakMap();
+
+  /* Pass {cellMetres, segments} to eagerly build every required width scale,
+     or {cellMetres, meanWidthM} for a single scale. Without either, start at
+     one cell and cache new scales on demand. A single fixed view radius would
+     change the legacy per-segment TPI/LRM and hence its feature values. */
+  function createViewContext(grid, w, h, opts) {
+    opts = opts || {};
+    var cell = validateView(grid, w, h, opts), layersByRadius = Object.create(null);
+    var widths = opts.segments ? Array.from(opts.segments, function (segment) { return Number(segment.meanWidthM); })
+      : [opts.meanWidthM === undefined ? cell : Number(opts.meanWidthM)];
+    widths.forEach(function (width) {
+      var radius = widthRadius(width, cell, w, h);
+      if (!layersByRadius[radius]) layersByRadius[radius] = viewLayers(grid, w, h, cell, radius);
+    });
+    var context = Object.freeze({ grid: grid, w: w, h: h, cellMetres: cell,
+      slope: G.slopeAspectComponents(grid, w, h, spatialOptions(cell)).slopeDegrees,
+      valley: valleyContext(grid, w), layersByRadius: layersByRadius });
+    viewContexts.set(context, true);
+    return context;
+  }
+
+  function segmentFeatures(grid, w, h, segment, opts) {
+    opts = opts || {};
+    var context = opts.context;
+    var cell = validateView(grid, w, h, { cellMetres: opts.cellMetres === undefined && context
+      ? context.cellMetres : opts.cellMetres });
+    if (context && (!viewContexts.has(context) || context.grid !== grid || context.w !== w ||
+        context.h !== h || context.cellMetres !== cell))
+      throw new RangeError("context must match grid, dimensions, and cellMetres");
     if (!segment || !segment.pixels || !Array.isArray(segment.skeleton) ||
         !segment.bbox || segment.bbox.length !== 4 || !segment.centroid || segment.centroid.length !== 2)
       throw new TypeError("segment needs pixels, an ordered skeleton, bbox, and centroid");
@@ -280,12 +348,13 @@
     /* Subcell/zero-width segments still need separated shoulder samples. The
        one-cell floor affects profile and neighborhood scales, not dilation. */
     var effectiveWidth = Math.max(cell, width);
-    var radius = Math.min(Math.max(w, h), Math.max(1, Math.ceil(effectiveWidth / cell)));
-    var spatial = { cellSize: cell, horizontalUnit: "m", verticalUnit: "m", rowAxis: "south", edgePolicy: "shrink" };
-    var lrm = G.localReliefModel(grid, w, h, Object.assign({}, spatial, { radiusCells: radius })).data;
-    var tpi = G.terrainPositionIndex(grid, w, h, Object.assign({}, spatial,
-      { radiusCells: radius, innerRadiusCells: Math.floor(radius / 3) })).data;
-    var slope = G.slopeAspectComponents(grid, w, h, spatial).slopeDegrees;
+    var radius = widthRadius(width, cell, w, h), layers;
+    if (context) {
+      if (!context.layersByRadius[radius]) context.layersByRadius[radius] = viewLayers(grid, w, h, cell, radius);
+      layers = context.layersByRadius[radius];
+    } else layers = viewLayers(grid, w, h, cell, radius);
+    var lrm = layers.lrm;
+    var slope = context ? context.slope : G.slopeAspectComponents(grid, w, h, spatialOptions(cell)).slopeDegrees;
     var slopeSum = 0, slopeCount = 0, roughnessSum = 0, roughnessCount = 0;
     pixels.forEach(function (pixel) {
       if (!Number.isFinite(Number(grid[pixel]))) return;
@@ -295,7 +364,8 @@
     });
     elevations.sort(function (a, b) { return a - b; });
     var profile = profiles(grid, w, h, points, effectiveWidth, cell);
-    var kettleCount = pixels.length ? kettles(grid, w, h, tpi, mask, pixels, width / cell, cell) : 0;
+    var kettleCount = pixels.length ? kettles(w, layers.kettleBlobs, mask, pixels, width / cell) : 0;
+    var areaM2 = pixels.length * cell * cell;
     var apron = aprons(grid, w, h, mask, slope, points, pathTree, segment.bbox, width, length, cell);
     return {
       prominenceM: profile.prominenceM,
@@ -304,14 +374,17 @@
       widthAtHalfM: profile.widthAtHalfM,
       kettleCount: kettleCount,
       kettleDensityPerKm: length > 0 ? kettleCount * 1000 / length : 0,
+      kettleDensityPerKm2: areaM2 > 0 ? kettleCount * 1000000 / areaM2 : 0,
       apronFlatFraction: apron.fraction,
       apronSide: apron.side,
-      valleyCrossingScore: valleyScore(grid, w, h, segment.centroid, pathTree, profile.prominenceM),
+      valleyCrossingScore: valleyScore(grid, w, h, segment.centroid, pathTree, profile.prominenceM,
+        context ? context.valley : valleyContext(grid, w)),
       meanSlopeDeg: slopeCount ? slopeSum / slopeCount : 0,
       reliefM: quantile(elevations, 0.95) - quantile(elevations, 0.05),
       roughness: roughnessCount ? roughnessSum / roughnessCount : 0
     };
   }
 
-  return Object.freeze({ VERSION: 1, METADATA: METADATA, segmentFeatures: segmentFeatures });
+  return Object.freeze({ VERSION: 1, METADATA: METADATA,
+    createViewContext: createViewContext, segmentFeatures: segmentFeatures });
 }));

@@ -34,35 +34,52 @@
     if(opts.config!=null&&(typeof opts.config!=="object"||Array.isArray(opts.config)))
       throw new TypeError("config must be an object");
     var config=Object.assign({},C.DEFAULT_CONFIG,opts.config);
+    if(!opts.config||!Object.prototype.hasOwnProperty.call(opts.config,"allowLikely"))
+      config.allowLikely=cellMetres<=5;
+    var stage1TpiFilter=opts.stage1TpiFilter===undefined?true:opts.stage1TpiFilter;
+    if(typeof stage1TpiFilter!=="boolean") throw new TypeError("stage1TpiFilter must be boolean");
     // Pass spacing and units only: do not tune stage-1 radii, weights, or mode.
     var stage1=G.scoreGlacialLobeMarginCandidates(grid,w,h,{
       cellSize:cellMetres,horizontalUnit:"m",verticalUnit:"m",rowAxis:"south",edgePolicy:"shrink"
     });
     var candidates=new Uint8Array(w*h);
+    var terrainPosition=stage1.evidence.terrainPosition;
     for(var i=0;i<candidates.length;i++)
-      if(Number.isFinite(stage1.score[i])&&stage1.score[i]>=threshold) candidates[i]=1;
+      if(Number.isFinite(stage1.score[i])&&stage1.score[i]>=threshold&&
+          (!stage1TpiFilter||terrainPosition[i]>0)) candidates[i]=1;
     var objects=S.extractSegments(candidates,w,h,{cellMetres:cellMetres});
+    var featureOpts={cellMetres:cellMetres};
+    var context=F.createViewContext(grid,w,h,featureOpts);
     // Keep each object's pixels for rasterization; publish compact geometry only.
     var entries=objects.map(function(segment){
-      return {segment:segment,features:F.segmentFeatures(grid,w,h,segment,{cellMetres:cellMetres})};
+      var geometryPasses=Number.isFinite(segment.lengthM)&&segment.lengthM>=config.minLengthM&&
+        Number.isFinite(segment.elongation)&&segment.elongation>=config.minElongation;
+      return {segment:segment,features:geometryPasses?
+        F.segmentFeatures(grid,w,h,segment,{cellMetres:cellMetres,context:context}):null};
     });
     var verdicts=C.classifySegments(entries,config);
-    var score=new Float32Array(w*h),mask=new Uint8Array(w*h);
+    var score=new Float32Array(w*h),mask=new Uint8Array(w*h),segmentRaster=new Int32Array(w*h);
     var segments=objects.map(function(segment,index){
       var verdict=verdicts[index],supported=verdict.verdict==="likely"||verdict.verdict==="possible";
       for(var p=0;p<segment.pixels.length;p++){
         var pixel=segment.pixels[p];
+        segmentRaster[pixel]=segment.id;
         score[pixel]=verdict.verdict==="likely"?1:verdict.verdict==="possible"?0.55:stage1.score[pixel]*0.3;
         if(supported) mask[pixel]=1;
       }
-      return {id:segment.id,verdict:verdict.verdict,score:verdict.score,bbox:segment.bbox,
+      var published={id:segment.id,verdict:verdict.verdict,score:verdict.score,bbox:segment.bbox,
         centroid:segment.centroid,lengthM:segment.lengthM,areaM2:segment.areaM2,
         pixelCount:segment.pixelCount,evidence:verdict.evidence};
+      ["branched","closedLoop","simpleCycle"].forEach(function(key){
+        if(Object.prototype.hasOwnProperty.call(segment,key)) published[key]=segment[key];
+      });
+      return published;
     });
-    return {score:score,mask:mask,segments:segments,metadata:Object.assign({},stage1.metadata,{
+    return {score:score,mask:mask,segmentRaster:segmentRaster,segments:segments,metadata:Object.assign({},stage1.metadata,{
       kind:"glacial-moraine-object-screen-v2",
       noDataRepresentation:"0 (background)",
       candidateThreshold:threshold,
+      stage1TpiFilter:stage1TpiFilter,
       minAreaM2:5000,
       config:config,
       stage1:stage1.metadata,

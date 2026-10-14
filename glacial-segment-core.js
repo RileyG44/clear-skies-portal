@@ -3,7 +3,8 @@
  * moraine object screen (v2). See docs/GLACIAL_MORAINE_V2_DESIGN.md.
  *
  * Turns a binary candidate mask into 8-connected segments with skeleton,
- * length, width, elongation, orientation, and arc-shape measures. Pure
+ * length, width, elongation, orientation, skeleton branch structure, and
+ * arc-shape measures (zeroed for closed or branched skeletons). Pure
  * geometry: no elevation input, and nothing here says anything about origin.
  * Rasters are row-major; x is the column index, y the row index.
  */
@@ -15,7 +16,7 @@
 }(typeof globalThis !== "undefined" ? globalThis : this, function () {
   "use strict";
 
-  var VERSION = 1;
+  var VERSION = 2;
   var SQRT2 = Math.SQRT2;
   var DEG = Math.PI / 180;
 
@@ -32,6 +33,10 @@
     arcBendFallStartRad: 200 * DEG,
     arcBendFallEndRad: 330 * DEG
   });
+
+  // A skeleton with more than this share of its pixels off the chosen path
+  // (in its own piece) is branched: its arc measures are not shape evidence.
+  var BRANCHED_FRACTION = 0.05;
 
   var hasOwn = function (object, key) {
     return Object.prototype.hasOwnProperty.call(object, key);
@@ -150,7 +155,11 @@
   var NEIGHBOUR_DY = [0, 1, 1, 1, 0, -1, -1, -1];
 
   // Skeleton graph over the thinned crop: node ids are compact, adjacency is
-  // 8-connected with step costs 1 (orthogonal) and sqrt(2) (diagonal).
+  // 8-connected with step costs 1 (orthogonal) and sqrt(2) (diagonal). A
+  // diagonal link is dropped when the two pixels already share a 4-neighbour
+  // in the skeleton: thinning leaves such staircase corners, and keeping both
+  // links would turn every corner into a triangle of degree-3 "junctions".
+  // Connectivity is unchanged; degree then reads true line topology.
   function buildSkeletonGraph(buf, bw, bh) {
     var nodeOf = new Map(), cx = [], cy = [];
     for (var i = 0; i < buf.length; i++) {
@@ -161,16 +170,277 @@
     }
     var n = cx.length, adjacency = new Array(n);
     for (var node = 0; node < n; node++) {
-      var links = [];
+      var links = [], x = cx[node], y = cy[node];
       for (var d = 0; d < 8; d++) {
-        var nx = cx[node] + NEIGHBOUR_DX[d], ny = cy[node] + NEIGHBOUR_DY[d];
+        var nx = x + NEIGHBOUR_DX[d], ny = y + NEIGHBOUR_DY[d];
         if (nx < 0 || ny < 0 || nx >= bw || ny >= bh) continue;
         var other = nodeOf.get(ny * bw + nx);
-        if (other !== undefined) links.push(other, (d & 1) ? SQRT2 : 1);
+        if (other === undefined) continue;
+        if ((d & 1) && (buf[y * bw + nx] || buf[ny * bw + x])) continue;
+        links.push(other, (d & 1) ? SQRT2 : 1);
       }
       adjacency[node] = links;
     }
     return { count: n, x: cx, y: cy, adjacency: adjacency };
+  }
+
+  function nodeDegrees(graph) {
+    var degree = new Int32Array(graph.count);
+    for (var i = 0; i < graph.count; i++) degree[i] = graph.adjacency[i].length / 2;
+    return degree;
+  }
+
+  // Connected skeleton pieces: label per node, pixel count per label, and the
+  // largest label (first in node order on ties).
+  function skeletonPieces(graph) {
+    var label = new Int32Array(graph.count).fill(-1), sizes = [], best = -1, stack = [];
+    for (var seed = 0; seed < graph.count; seed++) {
+      if (label[seed] >= 0) continue;
+      var id = sizes.length, size = 0;
+      label[seed] = id;
+      stack.push(seed);
+      while (stack.length) {
+        var links = graph.adjacency[stack.pop()];
+        size++;
+        for (var k = 0; k < links.length; k += 2) {
+          if (label[links[k]] < 0) { label[links[k]] = id; stack.push(links[k]); }
+        }
+      }
+      sizes.push(size);
+      if (best < 0 || size > sizes[best]) best = id;
+    }
+    return { label: label, sizes: sizes, largest: best };
+  }
+
+  // Fill background holes inside the crop (4-connected background regions
+  // that do not reach the zero border) when they are small next to the ridge:
+  // area at most one wall width squared, with wall width ~ 2 * area /
+  // perimeter. Thresholding pinholes would otherwise put loops and spurs in
+  // the skeleton. Wide-open interiors (a ring around a depression) stay open
+  // so closed loops are still detected. Returns a new buffer.
+  function fillSmallHoles(buf, bw, bh, count) {
+    var size = bw * bh, outside = new Uint8Array(size), stack = [], perimeter = 0, i, k;
+    var STEP = [1, -1, bw, -bw];
+    for (i = 0; i < size; i++) {
+      if (!buf[i]) continue;
+      for (k = 0; k < 4; k++) if (!buf[i + STEP[k]]) perimeter++;
+    }
+    for (i = 0; i < bw; i++) { stack.push(i, size - bw + i); }
+    for (i = 0; i < bh; i++) { stack.push(i * bw, i * bw + bw - 1); }
+    for (k = 0; k < stack.length; k++) outside[stack[k]] = 1;
+    while (stack.length) {
+      var at = stack.pop(), ax = at % bw;
+      for (k = 0; k < 4; k++) {
+        var next = at + STEP[k];
+        if (next < 0 || next >= size || (k < 2 && Math.abs(next % bw - ax) !== 1)) continue;
+        if (outside[next] || buf[next]) continue;
+        outside[next] = 1;
+        stack.push(next);
+      }
+    }
+    var wall = perimeter ? 2 * count / perimeter : 1, maxHole = Math.max(1, wall * wall);
+    var filled = buf.slice(), seen = new Uint8Array(size), hole = [];
+    for (var seed = 0; seed < size; seed++) {
+      if (buf[seed] || outside[seed] || seen[seed]) continue;
+      hole.length = 0;
+      seen[seed] = 1;
+      stack.push(seed);
+      while (stack.length) {
+        var h = stack.pop();
+        hole.push(h);
+        for (k = 0; k < 4; k++) {
+          var nb = h + STEP[k];
+          if (buf[nb] || seen[nb] || outside[nb]) continue;
+          seen[nb] = 1;
+          stack.push(nb);
+        }
+      }
+      if (hole.length <= maxHole) for (k = 0; k < hole.length; k++) filled[hole[k]] = 1;
+    }
+    return filled;
+  }
+
+  // Exact Euclidean distance transform (Felzenszwalb–Huttenlocher): distance
+  // from each foreground cell centre to the nearest background cell centre.
+  function edt1d(f, n, d, v, z) {
+    var k = 0, q, s;
+    v[0] = 0; z[0] = -Infinity; z[1] = Infinity;
+    for (q = 1; q < n; q++) {
+      s = ((f[q] + q * q) - (f[v[k]] + v[k] * v[k])) / (2 * q - 2 * v[k]);
+      while (s <= z[k]) {
+        k--;
+        s = ((f[q] + q * q) - (f[v[k]] + v[k] * v[k])) / (2 * q - 2 * v[k]);
+      }
+      k++; v[k] = q; z[k] = s; z[k + 1] = Infinity;
+    }
+    k = 0;
+    for (q = 0; q < n; q++) {
+      while (z[k + 1] < q) k++;
+      d[q] = (q - v[k]) * (q - v[k]) + f[v[k]];
+    }
+  }
+
+  function distanceTransform(buf, bw, bh) {
+    var size = bw * bh, g = new Float64Array(size), x, y, i;
+    for (i = 0; i < size; i++) g[i] = buf[i] ? 1e20 : 0;
+    var n = Math.max(bw, bh), f = new Float64Array(n), d = new Float64Array(n);
+    var v = new Int32Array(n), z = new Float64Array(n + 1);
+    for (x = 0; x < bw; x++) {
+      for (y = 0; y < bh; y++) f[y] = g[y * bw + x];
+      edt1d(f, bh, d, v, z);
+      for (y = 0; y < bh; y++) g[y * bw + x] = d[y];
+    }
+    for (y = 0; y < bh; y++) {
+      var row = y * bw;
+      for (x = 0; x < bw; x++) f[x] = g[row + x];
+      edt1d(f, bw, d, v, z);
+      for (x = 0; x < bw; x++) g[row + x] = Math.sqrt(d[x]);
+    }
+    return g;
+  }
+
+  // Remove skeleton spurs: chains from an end pixel to a junction (degree >=
+  // 3) that barely leave the junction's inscribed disc. A spur's protrusion
+  // is its length plus its tip's distance value minus the junction's, i.e.
+  // how far the shape it describes reaches past the ridge body there; spurs
+  // protruding less than half the local width on each side of the junction
+  // (one local width in all) are thinning twigs from ragged edges, side
+  // bulges, and squared-off or split ends. At each junction the longest
+  // short spurs are kept as needed so the junction still has two links, so a
+  // forked end is trimmed to one prong instead of shortening the ridge.
+  // Repeats until stable, rebuilding the graph each pass. Returns the graph.
+  function pruneSpurs(skel, bw, bh, dist) {
+    var graph = buildSkeletonGraph(skel, bw, bh);
+    for (var pass = 0; pass < 8; pass++) {
+      var degree = nodeDegrees(graph), byJunction = new Map(), removed = 0;
+      for (var end = 0; end < graph.count; end++) {
+        if (degree[end] !== 1) continue;
+        var chain = [end], prev = -1, at = end, length = 0, stop = -1;
+        for (var steps = 0; steps < graph.count; steps++) {
+          var links = graph.adjacency[at], next = -1, cost = 0;
+          for (var k = 0; k < links.length; k += 2) {
+            if (links[k] !== prev) { next = links[k]; cost = links[k + 1]; break; }
+          }
+          if (next < 0) break;
+          length += cost;
+          if (degree[next] !== 2) { stop = next; break; }
+          chain.push(next);
+          prev = at;
+          at = next;
+        }
+        if (stop < 0 || degree[stop] < 3) continue;
+        if (!byJunction.has(stop)) byJunction.set(stop, []);
+        byJunction.get(stop).push({ chain: chain, length: length });
+      }
+      byJunction.forEach(function (spurs, junction) {
+        var radius = dist[graph.y[junction] * bw + graph.x[junction]];
+        var limit = widthFromDistance(radius);
+        var short = spurs.filter(function (spur) {
+          var tip = spur.chain[0];
+          return spur.length + dist[graph.y[tip] * bw + graph.x[tip]] - radius < limit;
+        }).sort(function (a, b) { return b.length - a.length; });
+        var keep = Math.max(0, 2 - (degree[junction] - short.length));
+        for (var s = keep; s < short.length; s++) {
+          var cut = short[s].chain;
+          for (var c = 0; c < cut.length; c++) skel[graph.y[cut[c]] * bw + graph.x[cut[c]]] = 0;
+          removed++;
+        }
+      });
+      if (!removed) break;
+      graph = buildSkeletonGraph(skel, bw, bh);
+    }
+    return graph;
+  }
+
+  // Ridge width from a centre-cell distance-transform value. The EDT to the
+  // nearest background cell centre reads half a cell past the cell-edge
+  // boundary on odd widths and a full cell on even ones (the skeleton sits on
+  // one of the two centre rows), so 2 * EDT over-reads by ~0.75 cell on
+  // average; subtracting half a cell leaves ~+0.25. Floor at one cell.
+  function widthFromDistance(value) {
+    return Math.max(1, 2 * value - 0.5);
+  }
+
+  // Branch structure of the analysed skeleton, given the chosen path.
+  //   branchCount: nodes with degree != 2 (ends, isolated pixels), with each
+  //     8-connected cluster of degree >= 3 pixels counted once as a junction.
+  //   branchFraction: pixels of the chosen path's piece that are not on the
+  //     path, over all skeleton pixels.
+  //   skeletonCoverage: pixels in the largest skeleton piece over all
+  //     skeleton pixels (below 1 when thinning splits the skeleton).
+  function branchStructure(graph, degree, pieces, pathNodes, bw) {
+    var n = graph.count;
+    if (!n) return { branchCount: 0, branchFraction: 0, skeletonCoverage: 0 };
+    var onPath = new Uint8Array(n), offPath = 0, count = 0, i, k;
+    for (i = 0; i < pathNodes.length; i++) onPath[pathNodes[i]] = 1;
+    for (i = 0; i < n; i++) {
+      if (pieces.label[i] === pieces.largest && !onPath[i]) offPath++;
+      if (degree[i] !== 2 && degree[i] < 3) count++;
+    }
+    // Junction clusters by 8-adjacency, so a staircase-split junction (two
+    // degree-3 pixels joined only through a dropped diagonal) counts once.
+    var junctionAt = new Map(), seen = new Uint8Array(n), stack = [];
+    for (i = 0; i < n; i++) if (degree[i] >= 3) junctionAt.set(graph.y[i] * bw + graph.x[i], i);
+    junctionAt.forEach(function (node) {
+      if (seen[node]) return;
+      count++;
+      seen[node] = 1;
+      stack.push(node);
+      while (stack.length) {
+        var at = stack.pop();
+        for (k = 0; k < 8; k++) {
+          var other = junctionAt.get((graph.y[at] + NEIGHBOUR_DY[k]) * bw + graph.x[at] + NEIGHBOUR_DX[k]);
+          if (other !== undefined && !seen[other]) { seen[other] = 1; stack.push(other); }
+        }
+      }
+    });
+    return {
+      branchCount: count,
+      branchFraction: offPath / n,
+      skeletonCoverage: pieces.sizes[pieces.largest] / n
+    };
+  }
+
+  // Ordered traversal of a simple cycle (every node degree 2), closed by
+  // repeating the start node so polyline length covers the whole loop.
+  function cycleOrder(graph) {
+    var path = [0], prev = -1, at = 0;
+    for (var steps = 0; steps < graph.count; steps++) {
+      var links = graph.adjacency[at], next = links[0] !== prev ? links[0] : links[2];
+      path.push(next);
+      if (next === 0) break;
+      prev = at;
+      at = next;
+    }
+    return path;
+  }
+
+  // Drop staircase corner pixels from an ordered pixel path: a pixel is
+  // skipped when its neighbours on the path are already 8-adjacent.
+  function cutCorners(points) {
+    if (points.length < 3) return points;
+    var out = [points[0]];
+    for (var i = 1; i < points.length - 1; i++) {
+      var a = out[out.length - 1], b = points[i + 1];
+      if (Math.max(Math.abs(a[0] - b[0]), Math.abs(a[1] - b[1])) <= 1) continue;
+      out.push(points[i]);
+    }
+    out.push(points[points.length - 1]);
+    return out;
+  }
+
+  // Centred moving average over `window` points; the window shrinks
+  // symmetrically near the ends so the end points stay fixed.
+  function smoothPath(points, window) {
+    var half = Math.floor(Math.max(1, window) / 2), n = points.length;
+    if (half < 1 || n < 3) return points;
+    var out = new Array(n);
+    for (var i = 0; i < n; i++) {
+      var reach = Math.min(half, i, n - 1 - i), sx = 0, sy = 0;
+      for (var j = i - reach; j <= i + reach; j++) { sx += points[j][0]; sy += points[j][1]; }
+      out[i] = [sx / (2 * reach + 1), sy / (2 * reach + 1)];
+    }
+    return out;
   }
 
   function dijkstra(graph, source) {
@@ -206,38 +476,26 @@
   // Ordered longest path through the skeleton. Uses the double-sweep
   // (farthest-from-farthest) geodesic diameter, restricted to the skeleton
   // piece with the most pixels: exact for tree skeletons, an approximation
-  // when thinning leaves small loops. Returns crop-local node ids.
-  function longestSkeletonPath(graph) {
-    if (!graph.count) return { nodes: [], closed: false };
-    // Pick the largest skeleton piece (thinning can occasionally split one).
-    var piece = new Int32Array(graph.count).fill(-1), bestPiece = -1, bestSize = 0, stack = [];
-    for (var seed = 0, label = 0; seed < graph.count; seed++) {
-      if (piece[seed] >= 0) continue;
-      var size = 0;
-      piece[seed] = label;
-      stack.push(seed);
-      while (stack.length) {
-        var node = stack.pop(), links = graph.adjacency[node];
-        size++;
-        for (var k = 0; k < links.length; k += 2) {
-          if (piece[links[k]] < 0) { piece[links[k]] = label; stack.push(links[k]); }
-        }
-      }
-      if (size > bestSize) { bestSize = size; bestPiece = label; }
-      label++;
-    }
+  // when thinning leaves small loops. A piece that is one simple cycle (the
+  // only piece, every node degree 2) is traversed in full instead, since its
+  // diameter would be half the loop. Returns crop-local node ids.
+  function longestSkeletonPath(graph, degree, pieces) {
+    if (!graph.count) return { nodes: [], closed: false, simpleCycle: false };
+    var simple = pieces.sizes.length === 1 && graph.count >= 4;
+    for (var j = 0; simple && j < graph.count; j++) if (degree[j] !== 2) simple = false;
+    if (simple) return { nodes: cycleOrder(graph), closed: true, simpleCycle: true };
     var start = -1;
     for (var i = 0; i < graph.count; i++) {
-      if (piece[i] !== bestPiece) continue;
+      if (pieces.label[i] !== pieces.largest) continue;
       if (start < 0) start = i;
-      if (graph.adjacency[i].length === 2) { start = i; break; }
+      if (degree[i] === 1) { start = i; break; }
     }
     var a = farthest(dijkstra(graph, start).dist);
     var sweep = dijkstra(graph, a), b = farthest(sweep.dist);
     var path = [];
     for (var at = b; at >= 0; at = sweep.prev[at]) path.push(at);
     path.reverse();
-    return { nodes: path, closed: endsJoinedOffPath(graph, path) };
+    return { nodes: path, closed: endsJoinedOffPath(graph, path), simpleCycle: false };
   }
 
   // A ring skeleton's longest geodesic path is only half the loop, which
@@ -373,20 +631,24 @@
     var meanX = sumX / count, meanY = sumY / count;
 
     // Thin a padded crop that holds only this segment's pixels, so other
-    // segments sharing the bounding box cannot affect its skeleton.
+    // segments sharing the bounding box cannot affect its skeleton. The
+    // skeleton and distance transform use a copy with small interior holes
+    // filled; `pixels`, area, centroid, and orientation keep the true mask.
     var bw = x1 - x0 + 3, bh = y1 - y0 + 3, buf = new Uint8Array(bw * bh);
-    var active = new Int32Array(count);
     for (k = 0; k < count; k++) {
-      var p = (Math.floor(pixels[k] / width) - y0 + 1) * bw + (pixels[k] % width) - x0 + 1;
-      buf[p] = 1;
-      active[k] = p;
+      buf[(Math.floor(pixels[k] / width) - y0 + 1) * bw + (pixels[k] % width) - x0 + 1] = 1;
     }
-    thinInPlace(buf, bw, active);
-    var graph = buildSkeletonGraph(buf, bw, bh);
-    var longest = longestSkeletonPath(graph);
+    var skel = fillSmallHoles(buf, bw, bh, count), dist = distanceTransform(skel, bw, bh), active = [];
+    for (k = 0; k < skel.length; k++) if (skel[k]) active.push(k);
+    thinInPlace(skel, bw, Int32Array.from(active));
+    var graph = pruneSpurs(skel, bw, bh, dist);
+    var degree = nodeDegrees(graph), pieces = skeletonPieces(graph);
+    var longest = longestSkeletonPath(graph, degree, pieces);
+    var branches = branchStructure(graph, degree, pieces, longest.nodes, bw);
     var path = longest.nodes.map(function (node) {
       return [graph.x[node] - 1 + x0, graph.y[node] - 1 + y0];
     });
+    path = cutCorners(path);
     if (!path.length) {
       // Zhang–Suen can erase some 2-pixel-thick shapes entirely; fall back
       // to the segment pixel nearest the centroid as a one-point skeleton.
@@ -401,17 +663,27 @@
     var first = path[0], last = path[path.length - 1];
     if (last[0] < first[0] || (last[0] === first[0] && last[1] < first[1])) path.reverse();
 
-    // Thinning erodes each skeleton end by about half the ridge width, so the
-    // raw skeleton under-reads length by ~one width. Solve L = S + A / L
-    // (length = skeleton + mean width, width = area / length) for L:
-    // L = (S + sqrt(S^2 + 4A)) / 2. A round blob (S ~ 0) gets L = sqrt(A),
-    // i.e. elongation ~1, and an ideal W x Lbar bar gets back Lbar.
+    // Width: 2 x the median distance-transform value along the path, which
+    // ignores spurs, junction bulges, and ragged edges that area / length
+    // folds in. Length: thinning erodes each open skeleton end by about half
+    // the ridge width, so add one width; a simple cycle has no ends and its
+    // full loop is the length.
+    var samples = new Float64Array(path.length);
+    for (k = 0; k < path.length; k++) samples[k] = dist[(path[k][1] - y0 + 1) * bw + path[k][0] - x0 + 1];
+    samples.sort();
+    var middle = samples.length >> 1;
+    var medianDist = samples.length % 2 ? samples[middle] : (samples[middle - 1] + samples[middle]) / 2;
+    var meanWidthPx = widthFromDistance(medianDist);
     var skeletonPx = polylineLength(path);
-    var lengthPx = (skeletonPx + Math.sqrt(skeletonPx * skeletonPx + 4 * count)) / 2;
-    var meanWidthPx = count / lengthPx;
-    var arc = arcMeasures(path, skeletonPx, meanWidthPx, cellMetres, settings);
-    // Closed rings (doughnut/kettle-rim shapes) are not margin arcs.
-    if (longest.closed) arc.arcScore = 0;
+    var lengthPx = longest.simpleCycle ? skeletonPx : skeletonPx + meanWidthPx;
+    // Turning angles come from the path smoothed over about one ridge width,
+    // so edge raggedness and staircase steps do not read as bends.
+    var arc = arcMeasures(smoothPath(path, Math.round(meanWidthPx)), skeletonPx, meanWidthPx, cellMetres, settings);
+    var branched = branches.branchFraction > BRANCHED_FRACTION;
+    // Closed rings (doughnut/kettle-rim shapes) are not margin arcs, and on a
+    // branched skeleton the chosen path can corner through a junction and fake
+    // a bend, so neither carries shape evidence.
+    if (longest.closed || branched) arc.arcScore = 0;
     return {
       pixels: pixels,
       pixelCount: count,
@@ -430,7 +702,12 @@
       turnConsistency: arc.turnConsistency,
       bendRadiusM: arc.bendRadiusM,
       arcStepM: arc.arcStepM,
-      closedLoop: longest.closed
+      closedLoop: longest.closed,
+      simpleCycle: longest.simpleCycle,
+      branchCount: branches.branchCount,
+      branchFraction: branches.branchFraction,
+      skeletonCoverage: branches.skeletonCoverage,
+      branched: branched
     };
   }
 
