@@ -994,8 +994,8 @@ body.pane-reordering,body.pane-reordering *{cursor:grabbing!important;user-selec
 }
 
 </style>
-<link rel="stylesheet" href="ui-theme.css?build=2026-10-13i">
-<link rel="stylesheet" href="ui-system.css?build=2026-10-13i">
+<link rel="stylesheet" href="ui-theme.css?build=2026-10-14a">
+<link rel="stylesheet" href="ui-system.css?build=2026-10-14a">
 <style>
 /* The redesign restructures the legacy DOM rather than replacing it, and the
    script that does so is the last thing on the page - so the browser paints the
@@ -1474,12 +1474,12 @@ html.csp-boot body{visibility:hidden}
                   <option value="northness">Aspect northness / eastness</option>
                   <option value="curvature">Profile / plan curvature</option>
                   <option value="glacial">Glacial-margin candidate screen</option>
-                  <option value="moraine">Glacial moraine candidates (object screen)</option>
+                  <option value="moraine">Glacial moraine leads (Beta)</option>
                   <option value="flood">Flood-channel candidate screen</option>
                 </select>
                 <p class="control-hint" id="researchProductHint"></p>
               </div>
-              <div class="elev-field">
+              <div class="elev-field" id="researchScaleField">
                 <label for="researchScale">Scale</label>
                 <select id="researchScale" aria-label="Research analysis scale">
                   <option value="fine">Fine</option>
@@ -1757,7 +1757,7 @@ html.csp-boot body{visibility:hidden}
   L.Renderer.prototype.onAdd=function(map){return onAdd.call(this,map||this._map)};
 })();
 </script>
-<script src="version.js?build=2026-10-13i"></script>
+<script src="version.js?build=2026-10-14a"></script>
 <script src="mosaic-core.js"></script>
 <script src="png-stream.js"></script>
 <script src="terrain-core.js"></script>
@@ -9715,7 +9715,7 @@ function researchColourRaster(result,product){
   const tick=v=>["lrm","tpi","tri"].includes(product)?`${+(v/.3048).toFixed(1)} ft`:
     product==="residual"?`${+v.toPrecision(3)} σ`:product==="curvature"?`${+(v*.3048).toPrecision(3)} /ft`:+v.toPrecision(3);
   const legend={name:result.label,bar:`linear-gradient(90deg,${stops.join(",")})`,
-    labels:directional?["N","E","S","W","N"]:product==="moraine"?["0","Possible (0.55)","Likely (1)"]:screen?["0","Candidate score","1"]:[tick(start),signed?"0":"",tick(end)]};
+    labels:directional?["N","E","S","W","N"]:product==="moraine"?["Low support","Possible lead","Strong lead"]:screen?["0","Candidate score","1"]:[tick(start),signed?"0":"",tick(end)]};
   canvas.getContext("2d").putImageData(image,0,0);return {url:canvas.toDataURL("image/png"),lo,hi,legend};
 }
 function runResearchWorker(payload){
@@ -9783,7 +9783,7 @@ async function runSurfaceResearch(){
       `<div class="fr"><span class="fk">Sampling</span><span class="fv">${(raster.resolution*3.28084).toFixed(1)} ft/pixel · z${raster.z}</span></div>`+
       `<div class="fr"><span class="fk">Elevation used</span><span class="fv">${esc(raster.provenance.join(" + "))}${raster.provisional?" (still refining at capture)":""}</span></div>`+
       `<div class="note">Sample spacing is not survey accuracy. Mixed sources and survey edges can affect terrain derivatives.</div>`+
-      `<div class="fr"><span class="fk">Scale</span><span class="fv">${esc(scale)}</span></div>`+
+      `<div class="fr"><span class="fk">Scale</span><span class="fv">${esc(product==="moraine"?"Automatic":scale)}</span></div>`+
       `<div class="note">${esc(caution)}</div><button class="ghost" id="researchClear" type="button" style="width:100%;margin-top:8px">Clear analysis layer</button>`;
     $("#researchClear").onclick=()=>clearResearchLayer("Analysis layer cleared.");
     setCount("research",result.label);
@@ -10559,8 +10559,8 @@ $("#q").addEventListener("blur",()=>setTimeout(acHide,120));
 document.addEventListener("click",e=>{ if(!e.target.closest("#iw")) acHide() });
 })();
 </script>
-<script src="markup-3d.js?build=2026-10-13i"></script>
-<script src="markup.js?build=2026-10-13i"></script>
-<script src="ui-system.js?build=2026-10-13i"></script>
+<script src="markup-3d.js?build=2026-10-14a"></script>
+<script src="markup.js?build=2026-10-14a"></script>
+<script src="ui-system.js?build=2026-10-14a"></script>
 </body>
 </html>

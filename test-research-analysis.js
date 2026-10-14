@@ -22,6 +22,16 @@ for(const product of A.PRODUCTS){
   assert(result.metadata&&result.metadata.kind);
 }
 
+const beta=A.run({product:"moraine",scale:"balanced",grid,width,height,resolution:2});
+assert.equal(beta.label,"Moraine leads (Beta)");
+assert.equal(beta.notice.beta,true);
+assert.equal(beta.notice.scoreIsProbability,false);
+assert.match(beta.notice.warning,/look-alikes/);
+const betaWire=A.decodeResult(A.encodeResult(beta));
+assert.equal(betaWire.notice.beta,true);
+assert.equal(betaWire.metadata.beta,true);
+assert.equal(betaWire.label,beta.label);
+
 const aspect=A.run({product:"northness",scale:"balanced",grid,width,height,resolution:2});
 assert(aspect.secondary instanceof Float32Array);
 let wire=A.encodeResult(aspect),decoded=A.decodeResult(wire);

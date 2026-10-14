@@ -242,13 +242,19 @@ for(const grid of $$(".terrain-look-grid")){
   grid.remove();
 }
 const terrainHints={off:"Choose a layer to show the shape of the ground.",hs:"Shaded relief makes landforms easier to read.",hsmulti:"Light from several directions reveals landforms with fewer deep shadows.",tint:"Colour the ground by height, with shaded relief.",slope:"Show how steep the ground is.",aspect:"Colour each slope by the direction it faces.",northness:"Show how strongly slopes face north or south."};
-const researchHints={lrm:"Remove broad hills so smaller landforms stand out.",tpi:"Show ridges and hollows relative to surrounding ground.",tri:"Show how rough or broken the surface is.",residual:"Find bumps and dips that differ from the broader surface.",northness:"Show which way slopes face, along north–south and east–west axes.",curvature:"Show how slopes bend and where flow converges or spreads.",glacial:"Flag possible ice-margin landforms. Check candidates against geology and field evidence.",flood:"Flag possible flood channels. Check candidates against geology and field evidence."};
+const researchHints={lrm:"Remove broad hills so smaller landforms stand out.",tpi:"Show ridges and hollows relative to surrounding ground.",tri:"Show how rough or broken the surface is.",residual:"Find bumps and dips that differ from the broader surface.",northness:"Show which way slopes face, along north–south and east–west axes.",curvature:"Show how slopes bend and where flow converges or spreads.",glacial:"Flag possible ice-margin landforms. Check candidates against geology and field evidence.",moraine:"Beta: find leads on moraine-like ridges and hummocky belts. Compare with Glacial margin; landslides and other terrain can look similar.",flood:"Flag possible flood channels. Check candidates against geology and field evidence."};
 function syncMenuHints(){
   const style=$("#terStyle")?.value,source=$("#terSrc")?.value;
   const setHint=(id,text)=>{const hint=$(id);if(hint)hint.textContent=text};
   if(style!=null)setHint("#terStyleHint",terrainHints[style]||"Trace lines of equal height at the selected interval.");
   if(source!=null)setHint("#terSrcHint",source==="auto"?"Uses fetched WA DNR in your selected areas and USGS elsewhere.":source==="3dep"?"National elevation coverage from USGS.":"Detailed USGS elevation where available; downloaded areas work offline.");
-  setHint("#researchProductHint",researchHints[$("#researchProduct")?.value]||"");
+  const product=$("#researchProduct")?.value;
+  setHint("#researchProductHint",researchHints[product]||"");
+  // The beta uses automatic landform scales; the shared Fine/Broad setting
+  // affects the other products only, so do not offer an ineffective control.
+  const scaleField=$("#researchScaleField"),scale=$("#researchScale");
+  if(scaleField)scaleField.hidden=product==="moraine";
+  if(scale)scale.disabled=product==="moraine";
 }
 for(const id of ["terStyle","terSrc","researchProduct"]) $("#"+id)?.addEventListener("change",syncMenuHints);
 for(const id of ["terReset","researchReset"]) $("#"+id)?.addEventListener("click",()=>requestAnimationFrame(syncMenuHints));

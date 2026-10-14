@@ -77,7 +77,14 @@
       if(!M) throw new Error("CSPGlacialMoraineAnalysis is not loaded");
       if(!Z||!ZF||!B) throw new Error("Glacial belt analysis dependencies are not loaded");
       result=M.analyzeMoraineCandidates(grid,width,height,options);
-      data=result.score;notice=result.metadata.screeningNotice;label="Glacial moraine candidates (object screen)";
+      data=result.score;
+      notice=Object.freeze(Object.assign({},result.metadata.screeningNotice,{
+        id:"glacial-moraine-leads-beta-v3",beta:true,
+        interpretation:"Experimental leads based on moraine-like ridges and hummocky belts; terrain shape does not establish glacial origin.",
+        warning:"Beta: experimental terrain-shape leads. Landslides and other look-alikes can appear. Compare with Glacial margin and check mapped geology or field evidence."
+      }));
+      result.metadata=Object.assign({},result.metadata,{beta:true,screeningNotice:notice});
+      label="Moraine leads (Beta)";
     }else if(product==="flood"){
       result=G.scoreFloodChannelCandidates(grid,width,height,Object.assign({},options,{radiusCells:radius}));
       data=result.score;notice=result.metadata.screeningNotice;label="Possible flood-channel morphology";
