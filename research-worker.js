@@ -1,6 +1,7 @@
 "use strict";
 
-importScripts("./glacial-research-core.js","./research-analysis.js");
+importScripts("./glacial-research-core.js","./glacial-segment-core.js","./glacial-segment-features.js",
+  "./glacial-moraine-classifier.js","./glacial-moraine-analysis.js","./research-analysis.js");
 
 const analysis=self.CSPResearchAnalysis;
 

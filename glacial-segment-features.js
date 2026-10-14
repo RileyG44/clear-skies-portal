@@ -159,10 +159,16 @@
   }
 
   function kettles(grid, w, h, tpi, mask, pixels, widthCells, cell) {
+    /* Blob membership requires TPI below -0.5 m, not merely < 0: on flat
+       ground TPI is float noise (±1e-6 m), so a zero threshold merges every
+       pit into one view-sized blob that the area limit then rejects, and no
+       kettle is ever counted. The 0.5 m membership floor is the spec's
+       depth criterion applied before the spill-rim check below. */
+    var DEPTH = 0.5;
     var visited = new Uint8Array(w * h), queue = new Uint32Array(w * h);
     var count = 0, footprintTree = null;
     for (var start = 0; start < grid.length; start++) {
-      if (visited[start] || !(tpi[start] < 0) || !Number.isFinite(Number(grid[start]))) continue;
+      if (visited[start] || !(tpi[start] < -DEPTH) || !Number.isFinite(Number(grid[start]))) continue;
       var head = 0, tail = 1, sumX = 0, sumY = 0;
       var minimum = Infinity, boundary = Infinity, closed = true;
       queue[0] = start; visited[start] = 1;
@@ -174,7 +180,7 @@
           if ((!ox && !oy) || x + ox < 0 || y + oy < 0 || x + ox >= w || y + oy >= h) continue;
           var next = (y + oy) * w + x + ox, z = Number(grid[next]);
           if (!Number.isFinite(z) || !Number.isFinite(tpi[next])) { closed = false; continue; }
-          if (tpi[next] < 0) {
+          if (tpi[next] < -DEPTH) {
             if (!visited[next]) { visited[next] = 1; queue[tail++] = next; }
           } else boundary = Math.min(boundary, z);
         }

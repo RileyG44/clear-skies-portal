@@ -1,17 +1,17 @@
 /* Shared browser/Node dispatcher and compact binary protocol for viewport DEM
-   research analysis. Heavy algorithms remain in glacial-research-core.js. */
+   research analysis. Heavy algorithms remain in the glacial modules. */
 (function(root,factory){
   "use strict";
   var api=typeof module==="object"&&module.exports
-    ? factory(require("./glacial-research-core.js"))
-    : factory(root&&root.CSPGlacialResearch);
+    ? factory(require("./glacial-research-core.js"),require("./glacial-moraine-analysis.js"))
+    : factory(root&&root.CSPGlacialResearch,root&&root.CSPGlacialMoraineAnalysis);
   if(typeof module==="object"&&module.exports) module.exports=api;
   if(root) root.CSPResearchAnalysis=api;
-})(typeof globalThis!=="undefined"?globalThis:this,function(G){
+})(typeof globalThis!=="undefined"?globalThis:this,function(G,M){
   "use strict";
 
   var VERSION=1,PROTOCOL_VERSION=1,HEADER_BYTES=24;
-  var PRODUCTS=Object.freeze(["lrm","tpi","tri","residual","northness","curvature","glacial","flood"]);
+  var PRODUCTS=Object.freeze(["lrm","tpi","tri","residual","northness","curvature","glacial","moraine","flood"]);
   var SCALES=Object.freeze({fine:4,balanced:10,broad:24});
   var LIMITS=Object.freeze({maxWidth:1024,maxHeight:1024,maxCells:524288,minResolution:0.01,maxResolution:100000});
 
@@ -71,6 +71,10 @@
     }else if(product==="glacial"){
       result=G.scoreGlacialLobeMarginCandidates(grid,width,height,Object.assign({},options,{radiusCells:radius}));
       data=result.score;notice=result.metadata.screeningNotice;label="Possible glacial-margin morphology";
+    }else if(product==="moraine"){
+      if(!M) throw new Error("CSPGlacialMoraineAnalysis is not loaded");
+      result=M.analyzeMoraineCandidates(grid,width,height,options);
+      data=result.score;notice=result.metadata.screeningNotice;label="Glacial moraine candidates (object screen)";
     }else if(product==="flood"){
       result=G.scoreFloodChannelCandidates(grid,width,height,Object.assign({},options,{radiusCells:radius}));
       data=result.score;notice=result.metadata.screeningNotice;label="Possible flood-channel morphology";

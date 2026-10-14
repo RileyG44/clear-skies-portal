@@ -12,7 +12,7 @@ const grid=Float32Array.from({length:width*height},(_,index)=>{
 });
 
 assert.equal(A.VERSION,1);
-assert.deepEqual(A.PRODUCTS,["lrm","tpi","tri","residual","northness","curvature","glacial","flood"]);
+assert.deepEqual(A.PRODUCTS,["lrm","tpi","tri","residual","northness","curvature","glacial","moraine","flood"]);
 for(const product of A.PRODUCTS){
   const result=A.run({product,scale:"fine",grid,width,height,resolution:2});
   assert.equal(result.data.length,width*height,product);
