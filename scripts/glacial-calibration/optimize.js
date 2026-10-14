@@ -136,29 +136,77 @@ function gridSearch(samples, trough, mode, sat, weightsList) {
 }
 let Samples = [];
 
-/* ---------- exact scoring ---------- */
-function exactTheta(views, theta) {
-  // returns per-region AP list, pooled pos recall & FAR functions of threshold
-  const regionAP = new Map();
-  const posScores = [], negViewScores = [];
+/* ---------- exact scoring (config-grouped) ---------- */
+// Finalists sharing (trough, radiusM, mode, sat) share one feature pass per
+// view. Threshold-dependent recall/FAR come from 0.01 score histograms.
+function exactGroup(views, thetas, normFor) {
+  const acc = thetas.map(() => ({
+    regionAP: new Map(), posBins: new Float64Array(101), posTotal: 0,
+    negFarBins: new Float64Array(101), negViews: 0,
+  }));
   for (const view of views) {
-    const score = view.class === "positive" && theta.baselineRadius
-      ? ev.combine(ev.normalize(ev.rawFeatures(view, 5 * view.cellMetres, theta.trough), theta.mode, theta.sat || {}), theta.weights)
-      : ev.scoreView(view, { weights: theta.weights, trough: theta.trough, radiusM: theta.radiusM, mode: theta.mode, sat: theta.sat || {} });
-    if (view.class === "positive") {
-      const ap = ev.viewAP(score, view);
-      if (ap !== null) {
-        if (!regionAP.has(view.region)) regionAP.set(view.region, []);
-        regionAP.get(view.region).push(ap);
+    const norm = normFor(view);
+    thetas.forEach((theta, ti) => {
+      const a = acc[ti];
+      const score = ev.combine(norm, theta.weights);
+      if (view.class === "positive") {
+        const ap = ev.viewAP(score, view);
+        if (ap !== null) {
+          if (!a.regionAP.has(view.region)) a.regionAP.set(view.region, []);
+          a.regionAP.get(view.region).push(ap);
+        }
+        for (let i = 0; i < score.length; i++)
+          if (view.pos[i] && !view.ign[i] && Number.isFinite(score[i])) {
+            a.posBins[Math.min(100, Math.floor(score[i] * 100))]++; a.posTotal++;
+          }
+      } else {
+        a.negViews++;
+        const bins = new Float64Array(101);
+        let total = 0;
+        for (let i = 0; i < score.length; i++)
+          if (Number.isFinite(score[i])) { bins[Math.min(100, Math.floor(score[i] * 100))]++; total++; }
+        if (total) {
+          let run = 0;
+          for (let b = 100; b >= 0; b--) { run += bins[b]; a.negFarBins[b] += run / total; }
+        }
       }
-      for (let i = 0; i < score.length; i++) if (view.pos[i] && !view.ign[i] && Number.isFinite(score[i])) posScores.push(score[i]);
-    } else negViewScores.push({ score, view });
+    });
   }
-  const regionMeans = Object.fromEntries([...regionAP].map(([r, a]) => [r, a.reduce((x, y) => x + y, 0) / a.length]));
-  const macroAP = Object.values(regionMeans).reduce((a, b) => a + b, 0) / Math.max(1, Object.keys(regionMeans).length);
-  const recallAt = t => posScores.length ? posScores.filter(s => s >= t).length / posScores.length : 0;
-  const farAt = t => negViewScores.length ? negViewScores.reduce((a, { score, view }) => a + ev.viewFAR(score, view, t), 0) / negViewScores.length : 0;
-  return { regionMeans, macroAP, recallAt, farAt };
+  return acc.map(a => {
+    const regionMeans = Object.fromEntries([...a.regionAP].map(([r, arr]) => [r, arr.reduce((x, y) => x + y, 0) / arr.length]));
+    const recallAt = t => {
+      if (!a.posTotal) return 0;
+      let s = 0; for (let b = Math.min(100, Math.round(t * 100)); b <= 100; b++) s += a.posBins[b];
+      return s / a.posTotal;
+    };
+    const farAt = t => a.negViews ? a.negFarBins[Math.min(100, Math.round(t * 100))] / a.negViews : 0;
+    return { regionMeans,
+      macroAP: Object.values(regionMeans).reduce((x, y) => x + y, 0) / Math.max(1, Object.keys(regionMeans).length),
+      recallAt, farAt };
+  });
+}
+
+function exactTheta(views, theta) {
+  if (theta.baselineRadius)
+    return exactGroup(views, [theta], v => ev.normalize(ev.rawFeatures(v, 5 * v.cellMetres, theta.trough), theta.mode, theta.sat || {}))[0];
+  return exactGroup(views, [theta], v => ev.normalize(ev.rawFeatures(v, theta.radiusM, theta.trough), theta.mode, theta.sat || {}))[0];
+}
+
+function exactFinalists(views, finalists) {
+  const groups = new Map();
+  for (const c of finalists) {
+    const key = JSON.stringify([c.trough, c.radiusM, c.mode, c.sat]);
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key).push(c);
+  }
+  const out = new Map();
+  for (const [key, thetas] of groups) {
+    const [trough, radiusM, mode, sat] = JSON.parse(key);
+    const res = exactGroup(views, thetas, v => ev.normalize(ev.rawFeatures(v, radiusM, trough), mode, sat || {}));
+    thetas.forEach((c, i) => out.set(c, res[i]));
+    console.log(`exact group ${key}: ${thetas.length} thetas done`);
+  }
+  return out;
 }
 
 function main() {
@@ -225,9 +273,10 @@ function main() {
   const baseline = exactTheta(train, { ...CURRENT, radiusM: 60, baselineRadius: true });
   const Rcur = baseline.recallAt(0.58), FARcur = baseline.farAt(0.58);
   console.log(`baseline exact macroAP=${baseline.macroAP.toFixed(4)} Rcur=${Rcur.toFixed(3)} FARcur=${FARcur.toFixed(4)}`);
+  const exactByTheta = exactFinalists(train, finalists);
   const exact = [];
   for (const c of finalists) {
-    const r = exactTheta(train, c);
+    const r = exactByTheta.get(c);
     // t_theta: lowest threshold on 0.01 grid whose pooled recall <= Rcur
     let tTheta = 1.0;
     for (let t = 0; t <= 1.0001; t += 0.01) if (r.recallAt(+t.toFixed(2)) <= Rcur) { tTheta = +t.toFixed(2); break; }
