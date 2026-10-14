@@ -3,11 +3,13 @@
 (function(root,factory){
   "use strict";
   var api=typeof module==="object"&&module.exports
-    ? factory(require("./glacial-research-core.js"),require("./glacial-moraine-analysis.js"))
-    : factory(root&&root.CSPGlacialResearch,root&&root.CSPGlacialMoraineAnalysis);
+    ? factory(require("./glacial-research-core.js"),require("./glacial-zone-core.js"),
+      require("./glacial-zone-features.js"),require("./glacial-belt-classifier.js"),require("./glacial-moraine-analysis.js"))
+    : factory(root&&root.CSPGlacialResearch,root&&root.CSPGlacialZones,
+      root&&root.CSPGlacialZoneFeatures,root&&root.CSPGlacialBeltClassifier,root&&root.CSPGlacialMoraineAnalysis);
   if(typeof module==="object"&&module.exports) module.exports=api;
   if(root) root.CSPResearchAnalysis=api;
-})(typeof globalThis!=="undefined"?globalThis:this,function(G,M){
+})(typeof globalThis!=="undefined"?globalThis:this,function(G,Z,ZF,B,M){
   "use strict";
 
   var VERSION=1,PROTOCOL_VERSION=1,HEADER_BYTES=24;
@@ -73,6 +75,7 @@
       data=result.score;notice=result.metadata.screeningNotice;label="Possible glacial-margin morphology";
     }else if(product==="moraine"){
       if(!M) throw new Error("CSPGlacialMoraineAnalysis is not loaded");
+      if(!Z||!ZF||!B) throw new Error("Glacial belt analysis dependencies are not loaded");
       result=M.analyzeMoraineCandidates(grid,width,height,options);
       data=result.score;notice=result.metadata.screeningNotice;label="Glacial moraine candidates (object screen)";
     }else if(product==="flood"){

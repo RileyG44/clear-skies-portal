@@ -4,12 +4,14 @@
   "use strict";
   var api=typeof module==="object"&&module.exports
     ? factory(require("./glacial-research-core.js"),require("./glacial-segment-core.js"),
-      require("./glacial-segment-features.js"),require("./glacial-moraine-classifier.js"))
+      require("./glacial-segment-features.js"),require("./glacial-moraine-classifier.js"),
+      require("./glacial-zone-core.js"),require("./glacial-zone-features.js"),require("./glacial-belt-classifier.js"))
     : factory(root&&root.CSPGlacialResearch,root&&root.CSPGlacialSegments,
-      root&&root.CSPGlacialSegmentFeatures,root&&root.CSPGlacialMoraineClassifier);
+      root&&root.CSPGlacialSegmentFeatures,root&&root.CSPGlacialMoraineClassifier,
+      root&&root.CSPGlacialZones,root&&root.CSPGlacialZoneFeatures,root&&root.CSPGlacialBeltClassifier);
   if(typeof module==="object"&&module.exports) module.exports=api;
   if(root) root.CSPGlacialMoraineAnalysis=api;
-})(typeof globalThis!=="undefined"?globalThis:this,function(G,S,F,C){
+})(typeof globalThis!=="undefined"?globalThis:this,function(G,S,F,C,Z,ZF,B){
   "use strict";
 
   var SCREENING_NOTICE=Object.freeze({
@@ -34,6 +36,8 @@
     if(opts.config!=null&&(typeof opts.config!=="object"||Array.isArray(opts.config)))
       throw new TypeError("config must be an object");
     var config=Object.assign({},C.DEFAULT_CONFIG,opts.config);
+    // Belt overrides belong to their own classifier, which has separate keys.
+    delete config.belt;
     if(!opts.config||!Object.prototype.hasOwnProperty.call(opts.config,"allowLikely"))
       config.allowLikely=cellMetres<=5;
     var stage1TpiFilter=opts.stage1TpiFilter===undefined?true:opts.stage1TpiFilter;
@@ -59,15 +63,23 @@
     });
     var verdicts=C.classifySegments(entries,config);
     var score=new Float32Array(w*h),mask=new Uint8Array(w*h),segmentRaster=new Int32Array(w*h);
-    var segments=objects.map(function(segment,index){
-      var verdict=verdicts[index],supported=verdict.verdict==="likely"||verdict.verdict==="possible";
-      for(var p=0;p<segment.pixels.length;p++){
-        var pixel=segment.pixels[p];
-        segmentRaster[pixel]=segment.id;
-        score[pixel]=verdict.verdict==="likely"?1:verdict.verdict==="possible"?0.55:stage1.score[pixel]*0.3;
+    function paint(pixels,id,verdict){
+      var supported=verdict==="likely"||verdict==="possible";
+      for(var p=0;p<pixels.length;p++){
+        var pixel=pixels[p];
+        // Compare at raster precision so equal contributions keep the first id.
+        var value=Math.fround(verdict==="likely"?1:verdict==="possible"?0.55:stage1.score[pixel]*0.3);
+        if(!segmentRaster[pixel]||value>score[pixel]){
+          segmentRaster[pixel]=id;
+          score[pixel]=value;
+        }
         if(supported) mask[pixel]=1;
       }
-      var published={id:segment.id,verdict:verdict.verdict,score:verdict.score,bbox:segment.bbox,
+    }
+    var segments=objects.map(function(segment,index){
+      var verdict=verdicts[index];
+      paint(segment.pixels,segment.id,verdict.verdict);
+      var published={id:segment.id,objectType:segment.objectType||"ridge",verdict:verdict.verdict,score:verdict.score,bbox:segment.bbox,
         centroid:segment.centroid,lengthM:segment.lengthM,areaM2:segment.areaM2,
         pixelCount:segment.pixelCount,evidence:verdict.evidence};
       ["branched","closedLoop","simpleCycle"].forEach(function(key){
@@ -75,6 +87,39 @@
       });
       return published;
     });
+    var belt={zones:0,likely:0,possible:0};
+    if(opts.belt!==false){
+      if(!Z||!ZF||!B) throw new Error("Glacial belt analysis dependencies are not loaded");
+      var zones=Z.extractZones(candidates,w,h,{cellMetres:cellMetres});
+      var supportedRidges=segments.filter(function(segment){
+        return segment.verdict==="likely"||segment.verdict==="possible";
+      });
+      var zoneEntries=zones.map(function(zone){
+        var features=ZF.zoneFeatures(grid,w,h,zone,{
+          cellMetres:cellMetres,context:context,stageScore:stage1.score,segments:objects
+        });
+        var membership=new Set(zone.zonePixels);
+        features.ridgeSupport=supportedRidges.reduce(function(count,segment){
+          var x=Math.round(segment.centroid[0]),y=Math.round(segment.centroid[1]);
+          return count+(x>=0&&x<w&&y>=0&&y<h&&membership.has(y*w+x)?1:0);
+        },0);
+        return {zone:zone,features:features};
+      });
+      var beltConfig=opts.beltConfig!==undefined?opts.beltConfig:opts.config&&opts.config.belt;
+      var beltVerdicts=B.classifyZones(zoneEntries,beltConfig);
+      belt.zones=zones.length;
+      zones.forEach(function(zone,index){
+        var verdict=beltVerdicts[index];
+        // Belt ids occupy 100000 + zone.id, separate from ordinary ridge ids.
+        var id=100000+zone.id;
+        paint(zone.zonePixels,id,verdict.verdict);
+        if(verdict.verdict==="likely"||verdict.verdict==="possible") belt[verdict.verdict]++;
+        segments.push({id:id,objectType:"belt",verdict:verdict.verdict,score:verdict.score,
+          bbox:zone.bbox,centroid:zone.centroid,areaM2:zone.areaM2,pixelCount:zone.pixelCount,
+          // A broad belt has no single crest length; retain the public field.
+          lengthM:null,evidence:verdict.evidence});
+      });
+    }
     return {score:score,mask:mask,segmentRaster:segmentRaster,segments:segments,metadata:Object.assign({},stage1.metadata,{
       kind:"glacial-moraine-object-screen-v2",
       noDataRepresentation:"0 (background)",
@@ -82,6 +127,7 @@
       stage1TpiFilter:stage1TpiFilter,
       minAreaM2:5000,
       config:config,
+      belt:belt,
       stage1:stage1.metadata,
       featureMetadata:F.METADATA,
       rasterValues:{likely:1,possible:0.55,unsupported:"stage-1 score * 0.3",background:0},
