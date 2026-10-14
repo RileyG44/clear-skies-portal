@@ -25,6 +25,13 @@
   // belt (typical spacing tens of metres) without bridging separate belts;
   // 20,000 m² keeps zones at belt scale rather than single-hummock scale.
   // Both are judgement calls, not calibrated.
+  // Closing is whole-cell: radiusCells = ceil(closeRadiusM / cellMetres), so
+  // the effective closing radius is radiusCells * cellMetres >= closeRadiusM
+  // (e.g. 12.03125 m cells: ceil(60 / 12.03125) = 5 cells = 60.16 m, bridging
+  // gaps up to ~120 m as intended). When cellMetres > closeRadiusM (and
+  // closeRadiusM > 0) radiusCells is 1, so the effective radius is one whole
+  // cell (cellMetres) — larger than requested; sub-cell closing is impossible
+  // on a raster. closeRadiusM = 0 gives radiusCells = 0 (no closing).
   var DEFAULT_OPTIONS = Object.freeze({
     closeRadiusM: 60,
     minAreaM2: 20000
@@ -215,6 +222,14 @@
     var boxArea = (bbox[2] - bbox[0] + 1) * (bbox[3] - bbox[1] + 1);
     var hullArea = Math.min(orientedArea, boxArea);
 
+    var touchesEdge = false;
+    for (k = 0; k < count; k++) {
+      p = zonePixels[k];
+      x = p % width;
+      y = (p - x) / width;
+      if (x === 0 || x === width - 1 || y === 0 || y === height - 1) { touchesEdge = true; break; }
+    }
+
     var cellArea = cellMetres * cellMetres;
     return {
       objectType: "belt",
@@ -228,7 +243,8 @@
       elongation: Math.sqrt(major / minor),
       orientationRad: angle,
       solidity: Math.min(1, count / hullArea),
-      perimeterM: perimeterEdges * cellMetres
+      perimeterM: perimeterEdges * cellMetres,
+      touchesEdge: touchesEdge
     };
   }
 
@@ -237,7 +253,9 @@
   // (ties: first zone pixel in raster order). ids are 1-based in that order.
   // `pixels` / `pixelCount` are the ORIGINAL mask cells inside the zone (so
   // touch and membership tests stay honest); `zonePixels` / `zonePixelCount`
-  // / `areaM2` are the closed zone. Pixel arrays are sorted Uint32Array
+  // / `areaM2` are the closed zone. `touchesEdge` is true when any zonePixel
+  // lies on the view border (x = 0, x = width - 1, y = 0, or y = height - 1).
+  // Pixel arrays are sorted Uint32Array
   // raster indices; centroids and bboxes are in pixel (x, y) units of the
   // closed zone; metric fields use cellMetres (square cells assumed).
   function extractZones(mask, width, height, options) {
@@ -253,7 +271,11 @@
     if (minAreaM2 < 0) throw new RangeError("minAreaM2 must be non-negative");
     var minPixels = minAreaM2 / (cellMetres * cellMetres);
 
-    var closed = fillHoles(closeMask(mask, width, height, closeRadiusM / cellMetres), width, height);
+    // Whole-cell closing radius (see DEFAULT_OPTIONS note): ceil guarantees
+    // the effective radius covers closeRadiusM; when cellMetres >
+    // closeRadiusM this is 1 cell, so closing still applies at one-cell scale.
+    var radiusCells = Math.ceil(closeRadiusM / cellMetres);
+    var closed = fillHoles(closeMask(mask, width, height, radiusCells), width, height);
     var total = width * height, visited = new Uint8Array(total), queue = new Int32Array(total);
     var found = [];
     for (var seed = 0; seed < total; seed++) {

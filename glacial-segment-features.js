@@ -21,12 +21,12 @@
       asymmetry: "Median absolute difference / sum of the two half-prominence crossing distances; steep side is the shorter flank, using the median signed distance difference.",
       halfWidth: "First half-prominence crossings of the linearly shoulder-detrended profile, sampled at at most half-cell spacing and interpolated; profiles without both crossings are skipped.",
       neighbourhoods: "LRM and annular TPI use a square box radius ceil(mean width / cell spacing), floored to one cell and capped at the view size; TPI excludes an inner radius floor(outer / 3).",
-      kettles: "Seed at TPI < -0.5 m and grow 8-connected blobs through TPI < 0. Depth is lowest finite exterior neighbour minus minimum blob elevation, a conservative local spill-rim proxy, not watershed filling. Blobs touching the view edge or no-data are rejected. Whole-blob area must be <5000 m2, depth >0.5 m. Densities are count per km of skeleton and per km2 of segment area.",
+      kettles: "With a view context, priority-flood fills the DEM using 8-connected drainage to view edges and no-data cells. Count 8-connected components of fill depth >0.5 m with area <5000 m2; connected submerged basins remain one depression. Without context, retain TPI < -0.5 m seeds grown through TPI <0, with the legacy exterior spill-rim depth >0.5 m and edge/no-data rejection. Densities are count per km of skeleton and per km2 of segment area.",
       dilation: "The polygon is the union of segment raster cells; centroid inclusion uses that footprint or Euclidean distance to pixel centres <= one mean width. Pixel-centre dilation has a subcell boundary approximation.",
       apron: "Each apron is a nearest-skeleton side ribbon outside the segment, extending min(segment length, 300 m) beyond a half-mean-width edge, clipped to the view and endpoint normals. Only pixels no higher than the nearest skeleton elevation are downslope samples; slopes <3 degrees count as flat. Return the flatter side's fraction.",
       valley: "PCA major axis of the view's lowest-quartile elevation band approximates drainage. Score is local skeleton transversality times band anisotropy times centroid elevation affinity; subtract positive prominence to approximate underlying floor. No flow routing is performed.",
       statistics: "Finite segment pixels only; linear-interpolated p95-p05 relief and mean absolute LRM. Unavailable prominence returns NaN; other unavailable measurements return zero and cannot supply positive morphological evidence.",
-      context: "An immutable DEM view may share slope and low-band PCA once, and LRM/TPI rasters plus kettle blobs once per distinct width-derived radius. opts.segments prewarms all required radii; other radii are cached on first use. Recreate the context after changing the DEM."
+      context: "An immutable DEM view shares slope, low-band PCA, filledGrid and depressionBlobs once, and LRM/TPI rasters per distinct width-derived radius. Depression centroids include fractional x/y and a nearest-cell centroidIndex; maxDepthM is maximum fill depth. opts.cellMetres supplies square cell spacing; when absent, areaM2 is numerically pixelCount (area in cells, assuming unit spacing), and the 5000 cutoff is in cells. opts.segments prewarms radii; others are cached on first use. Recreate the context after changing the DEM."
     })
   });
 
@@ -199,10 +199,86 @@
     return blobs;
   }
 
+  /* Priority-flood: finite cells bordering no-data are outlets at their own
+     elevation, equivalent to seeding missing cells at -Infinity. No drainage
+     surface is invented across gaps. Each finite cell enters the binary
+     min-heap once, giving O(n log n) time and O(n) storage. */
+  function fillDepressions(grid, w, h, cell) {
+    var n = w * h, filled = new Float64Array(n), visited = new Uint8Array(n);
+    var heap = new Uint32Array(n), heapSize = 0;
+    function push(index) {
+      var position = heapSize++;
+      while (position > 0) {
+        var parent = Math.floor((position - 1) / 2);
+        if (filled[heap[parent]] <= filled[index]) break;
+        heap[position] = heap[parent]; position = parent;
+      }
+      heap[position] = index;
+    }
+    function pop() {
+      var first = heap[0], last = heap[--heapSize], position = 0;
+      while (position * 2 + 1 < heapSize) {
+        var child = position * 2 + 1;
+        if (child + 1 < heapSize && filled[heap[child + 1]] < filled[heap[child]]) child++;
+        if (filled[last] <= filled[heap[child]]) break;
+        heap[position] = heap[child]; position = child;
+      }
+      if (heapSize) heap[position] = last;
+      return first;
+    }
+    for (var i = 0; i < n; i++) filled[i] = Number(grid[i]);
+    for (var seed = 0; seed < n; seed++) {
+      if (!Number.isFinite(filled[seed])) continue;
+      var sx = seed % w, sy = Math.floor(seed / w);
+      var outlet = sx === 0 || sy === 0 || sx === w - 1 || sy === h - 1;
+      for (var dy = -1; dy <= 1 && !outlet; dy++) for (var dx = -1; dx <= 1; dx++) {
+        if (!Number.isFinite(filled[(sy + dy) * w + sx + dx])) { outlet = true; break; }
+      }
+      if (outlet) { visited[seed] = 1; push(seed); }
+    }
+    while (heapSize) {
+      var index = pop(), x = index % w, y = Math.floor(index / w);
+      for (var oy = -1; oy <= 1; oy++) for (var ox = -1; ox <= 1; ox++) {
+        var nx = x + ox, ny = y + oy;
+        if ((!ox && !oy) || nx < 0 || ny < 0 || nx >= w || ny >= h) continue;
+        var next = ny * w + nx;
+        if (visited[next] || !Number.isFinite(filled[next])) continue;
+        visited[next] = 1;
+        filled[next] = Math.max(filled[next], filled[index]);
+        push(next);
+      }
+    }
+    visited.fill(0);
+    var queue = new Uint32Array(n), blobs = [], cellArea = cell * cell;
+    for (var start = 0; start < n; start++) {
+      if (visited[start] || !(filled[start] - Number(grid[start]) > 0.5)) continue;
+      var head = 0, tail = 1, sumX = 0, sumY = 0, maxDepth = 0;
+      queue[0] = start; visited[start] = 1;
+      while (head < tail) {
+        var current = queue[head++], cx = current % w, cy = Math.floor(current / w);
+        sumX += cx; sumY += cy;
+        maxDepth = Math.max(maxDepth, filled[current] - Number(grid[current]));
+        for (var by = -1; by <= 1; by++) for (var bx = -1; bx <= 1; bx++) {
+          var qx = cx + bx, qy = cy + by;
+          if ((!bx && !by) || qx < 0 || qy < 0 || qx >= w || qy >= h) continue;
+          var neighbour = qy * w + qx;
+          if (visited[neighbour] || !(filled[neighbour] - Number(grid[neighbour]) > 0.5)) continue;
+          visited[neighbour] = 1; queue[tail++] = neighbour;
+        }
+      }
+      if (tail * cellArea >= 5000) continue;
+      var centroidX = sumX / tail, centroidY = sumY / tail;
+      blobs.push({ centroidIndex: Math.round(centroidY) * w + Math.round(centroidX),
+        x: centroidX, y: centroidY, pixelCount: tail, areaM2: tail * cellArea, maxDepthM: maxDepth });
+    }
+    return { filledGrid: filled, depressionBlobs: blobs };
+  }
+
   function kettles(w, blobs, mask, pixels, widthCells) {
     var count = 0, footprintTree = null;
     for (var i = 0; i < blobs.length; i++) {
-      var cx = blobs[i].x, cy = blobs[i].y;
+      var cx = blobs[i].x === undefined ? blobs[i].centroidIndex % w : blobs[i].x;
+      var cy = blobs[i].y === undefined ? Math.floor(blobs[i].centroidIndex / w) : blobs[i].y;
       if (mask[Math.round(cy) * w + Math.round(cx)]) { count++; continue; }
       if (!footprintTree) footprintTree = tree(pixels.map(function (index) {
         return { x: index % w, y: Math.floor(index / w) };
@@ -292,12 +368,13 @@
     return Math.min(Math.max(w, h), Math.max(1, Math.ceil(Math.max(cell, width) / cell)));
   }
 
-  function viewLayers(grid, w, h, cell, radius) {
+  function viewLayers(grid, w, h, cell, radius, context) {
     var spatial = spatialOptions(cell);
     var lrm = G.localReliefModel(grid, w, h, Object.assign({}, spatial, { radiusCells: radius })).data;
     var tpi = G.terrainPositionIndex(grid, w, h, Object.assign({}, spatial,
       { radiusCells: radius, innerRadiusCells: Math.floor(radius / 3) })).data;
-    return { lrm: lrm, tpi: tpi, kettleBlobs: labelKettles(grid, w, h, tpi, cell) };
+    return { lrm: lrm, tpi: tpi,
+      kettleBlobs: context ? context.depressionBlobs : labelKettles(grid, w, h, tpi, cell) };
   }
 
   var viewContexts = new WeakMap();
@@ -309,15 +386,17 @@
   function createViewContext(grid, w, h, opts) {
     opts = opts || {};
     var cell = validateView(grid, w, h, opts), layersByRadius = Object.create(null);
+    var depressions = fillDepressions(grid, w, h, cell);
     var widths = opts.segments ? Array.from(opts.segments, function (segment) { return Number(segment.meanWidthM); })
       : [opts.meanWidthM === undefined ? cell : Number(opts.meanWidthM)];
     widths.forEach(function (width) {
       var radius = widthRadius(width, cell, w, h);
-      if (!layersByRadius[radius]) layersByRadius[radius] = viewLayers(grid, w, h, cell, radius);
+      if (!layersByRadius[radius]) layersByRadius[radius] = viewLayers(grid, w, h, cell, radius, depressions);
     });
     var context = Object.freeze({ grid: grid, w: w, h: h, cellMetres: cell,
       slope: G.slopeAspectComponents(grid, w, h, spatialOptions(cell)).slopeDegrees,
-      valley: valleyContext(grid, w), layersByRadius: layersByRadius });
+      valley: valleyContext(grid, w), layersByRadius: layersByRadius,
+      filledGrid: depressions.filledGrid, depressionBlobs: depressions.depressionBlobs });
     viewContexts.set(context, true);
     return context;
   }
@@ -350,7 +429,7 @@
     var effectiveWidth = Math.max(cell, width);
     var radius = widthRadius(width, cell, w, h), layers;
     if (context) {
-      if (!context.layersByRadius[radius]) context.layersByRadius[radius] = viewLayers(grid, w, h, cell, radius);
+      if (!context.layersByRadius[radius]) context.layersByRadius[radius] = viewLayers(grid, w, h, cell, radius, context);
       layers = context.layersByRadius[radius];
     } else layers = viewLayers(grid, w, h, cell, radius);
     var lrm = layers.lrm;
@@ -364,7 +443,8 @@
     });
     elevations.sort(function (a, b) { return a - b; });
     var profile = profiles(grid, w, h, points, effectiveWidth, cell);
-    var kettleCount = pixels.length ? kettles(w, layers.kettleBlobs, mask, pixels, width / cell) : 0;
+    var kettleBlobs = context && context.depressionBlobs ? context.depressionBlobs : layers.kettleBlobs;
+    var kettleCount = pixels.length ? kettles(w, kettleBlobs, mask, pixels, width / cell) : 0;
     var areaM2 = pixels.length * cell * cell;
     var apron = aprons(grid, w, h, mask, slope, points, pathTree, segment.bbox, width, length, cell);
     return {

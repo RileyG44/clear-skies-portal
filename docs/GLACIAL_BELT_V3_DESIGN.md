@@ -58,7 +58,8 @@ opts, computing shared layers once.
 - `roughness` — mean |LRM| inside the zone (from context).
 - `reliefM` — p95−p05 elevation inside the zone.
 - `ridgeSupport` — number of ridge segments (from the v2 ridge path) whose
-  centroid lies in the zone and whose verdict is likely/possible; computed
+  centroid and at least one original pixel lie in the zone, whose verdict is
+  likely, and whose orientation is within 30° for elongated zones; computed
   by the analysis, not this module (documented input via opts).
 - `textureScore` 0..1 — documented combination: hummock and kettle density
   each mapped through a saturating ramp with physical knees
@@ -118,3 +119,43 @@ FAR per type. Test split remains refused.
 
 Mapped-geology evidence; learned classifiers; new held-out regions (still
 required before any default-on ship decision); changing ridge thresholds.
+
+
+## Review corrections before evaluation (2026-10-13)
+
+The review found that TPI-sign flooding merged inter-hummock lows and
+missed real pits. The revised shared context computes a priority-flood
+filled DEM with view edges and no-data as drainage outlets. Kettles are
+8-connected fill-depth >0.5 m components smaller than 5000 m². Hummocks
+are resolved elevation maxima with TPI >0.5 m, a 10 m local window and
+15 m peak suppression. Texture is the geometric mean of the two density
+ramps, so one-sided texture alone cannot qualify as strong support.
+
+The classifier no longer awards stage-score evidence. Likely requires
+both hummock and kettle support (each at least three and the density
+floor), or geometric-mean texture >=0.6. Ridge/elongation context is capped
+at 0.20; only likely, overlapping, direction-compatible ridges contribute.
+Coarse cells (>5 m) cap both object paths at possible by default.
+
+Both ridge and belt entries retain original candidate pixel membership.
+Closed belt zonePixels remain the display footprint, but are excluded
+from evaluator touch, eligibility, recall and flagged-area membership.
+Missing DEM cells stay background in the display raster. Experiment
+identity includes pipeline dependencies and metric implementation, not
+just the analysis wrapper. Results use fresh output files; old metric
+versions are not merged.
+
+The initial synthetic block landslide was mislabeled pit-free: the improved
+flood detector and independent checks found 36 real closed depressions.
+It remains a known morphological confuser, with a false likely belt
+verdict. A separate negative fills those basins to their drainage spill
+level and must remain below likely. This corrects the terrain premise;
+it does not establish separation of real hummocky landslides and moraines.
+No classifier thresholds were tuned to remove the confuser. The original
+synthetic no-likely landslide acceptance criterion therefore remains
+unmet for a landslide containing closed pits.
+
+Evaluation results and final verification are recorded in
+`docs/GLACIAL_BELT_V3_RESULTS.md`. New held-out regions are still required
+before a default-on ship decision; the previously spent test split is
+not scored.

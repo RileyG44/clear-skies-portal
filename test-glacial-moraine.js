@@ -295,7 +295,7 @@ function lcg(seed) {
 // of the band centreline, each ringed by a 2 m rim 25 m out, as in rim-ridge
 // hummocks; bumps keep 50 m clear of them. The rims matter: a pit sitting in
 // the inter-hummock lowland has its negative-TPI blob grow into the connected
-// lows, so the kettle detector's spill-rim proxy (correctly) does not close it.
+// lows. Priority-flood now resolves these using actual drainage spill levels.
 const BELT = { cx: -40, cy: 100, radius: 150, halfWidth: 22, halfAngle: 0.5, pits: 8, bumps: 70 };
 const beltPits = Array.from({ length: BELT.pits }, (_, k) => {
   const a = ((k + 0.5) / BELT.pits * 2 - 1) * BELT.halfAngle * 0.9, d = (k % 2 ? 1 : -1) * 9;
@@ -324,7 +324,8 @@ const smoothHill = raster((x, y) => 100 + 0.01 * x + 30 * gauss(Math.hypot(x - 1
 // 7. Chaotic coarse landslide-like deposit: 40 flat-topped, randomly rotated
 // square blocks (40-90 m across, 6-18 m tall, logistic edges ~3.5 m) packed
 // without overlap inside a 4 m lobe on a 3% slope. Blocks combine by max, so
-// the deposit has no closed pits of its own.
+// overlapping block skirts enclose real inter-block depressions. Preserve
+// this original fixture as a known morphological confuser, not a pit-free test.
 const slideBlocks = [];
 for (let n = 0, next = lcg(7); slideBlocks.length < 40 && n < 5000; n++) {
   const x = 40 + 120 * next(), y = 40 + 120 * next();
@@ -333,7 +334,7 @@ for (let n = 0, next = lcg(7); slideBlocks.length < 40 && n < 5000; n++) {
   if (slideBlocks.some(b => Math.hypot(b.x - x, b.y - y) < 0.9 * (b.half + half))) continue;
   slideBlocks.push({ x, y, half, height: 6 + 12 * next(), turn: next() * Math.PI / 2 });
 }
-const landslide = raster((x, y) => {
+const enclosedBlockSlide = raster((x, y) => {
   let top = 0;
   for (const b of slideBlocks) {
     const c = Math.cos(b.turn), s = Math.sin(b.turn);
@@ -344,10 +345,16 @@ const landslide = raster((x, y) => {
   return 100 - 0.03 * x + 4 * lobe + top;
 });
 
+// A genuinely pit-free negative uses the same block deposit with every
+// closed depression filled to its drainage spill elevation. The original is
+// retained below: DEM texture alone cannot establish glacial origin.
+const blockContext = F.createViewContext(enclosedBlockSlide, W, H, { cellMetres: CELL });
+const landslide = new Float32Array(blockContext.filledGrid);
+
 // Manual composition mirroring the v3 analysis: the analysis's candidate mask
 // (stage-1 score >= 0.45 AND TPI > 0), the ridge path on it with a shared view
-// context, then zones from the same mask. ridgeSupport counts likely/possible
-// ridge segments whose centroid falls in the closed zone, as the analysis does.
+// context, then zones from the same mask. ridgeSupport counts likely ridges with overlapping pixels and compatible
+// axial orientation, matching the analysis contract.
 function composedBelt(grid) {
   const stage1 = G.scoreGlacialLobeMarginCandidates(grid, W, H, {
     cellSize: CELL, horizontalUnit: "m", verticalUnit: "m", rowAxis: "south", edgePolicy: "shrink"
@@ -363,9 +370,13 @@ function composedBelt(grid) {
   const ridges = ridgeEntries.map((entry, i) => Object.assign({}, entry, { result: ridgeVerdicts[i] }));
   const zones = Z.extractZones(mask, W, H, { cellMetres: CELL }).map(zone => {
     const members = new Set(zone.zonePixels);
-    const ridgeSupport = ridges.filter(({ segment: s, result: r }) =>
-      (r.verdict === "likely" || r.verdict === "possible") &&
-      members.has(Math.round(s.centroid[1]) * W + Math.round(s.centroid[0]))).length;
+    const ridgeSupport = ridges.filter(({ segment: s, result: r }) => {
+      const diff = Math.abs(s.orientationRad - zone.orientationRad) % Math.PI;
+      return r.verdict === "likely" &&
+        members.has(Math.round(s.centroid[1]) * W + Math.round(s.centroid[0])) &&
+        s.pixels.some(p => members.has(p)) &&
+        (zone.elongation < 2 || Math.min(diff, Math.PI - diff) <= Math.PI / 6);
+    }).length;
     const features = Object.assign(ZF.zoneFeatures(grid, W, H, zone, { cellMetres: CELL, context, stageScore: stage1.score }), { ridgeSupport });
     return { zone, features };
   });
@@ -413,6 +424,44 @@ check("belt composed: chaotic pit-free landslide blocks yield no likely belt zon
   for (const row of zones) assert.equal(row.features.kettleDensityPerKm2, 0, `terrain premise: no pits; ${describeZone(row)}`);
   assert.equal(zones.filter(row => row.result.verdict === "likely").length, 0, zoneSummary(zones));
   console.log(`  measured: ${zones.length} zone(s): ${zoneSummary(zones)}; ridge verdicts ${ridgeVerdictList(ridges)}`);
+});
+
+check("depression filling: block confuser contains real pits; filled negative drains", () => {
+  assert(blockContext.depressionBlobs.length > 0, "original blocks enclose real depressions");
+  const drained = F.createViewContext(landslide, W, H, { cellMetres: CELL });
+  assert.equal(drained.depressionBlobs.length, 0, "filled terrain must have no >0.5 m pits");
+  const result = analyze(enclosedBlockSlide, W, H, { cellSize: CELL });
+  console.log(`  known confuser: ${blockContext.depressionBlobs.length} closed depressions; ` +
+    `${result.segments.filter(s => s.objectType === "belt" && s.verdict === "likely").length} likely belt(s) ` +
+    `(diagnostic only; morphology does not establish origin)`);
+});
+
+check("priority flood: separate pits fill to spill level; no-data outlet drains one", () => {
+  const w = 31, h = 21, grid = new Float32Array(w * h).fill(10);
+  for (const cx of [8, 22]) for (let y = 8; y <= 12; y++)
+    for (let x = cx - 2; x <= cx + 2; x++) grid[y * w + x] = 6;
+  let context = F.createViewContext(grid, w, h, { cellMetres: 1 });
+  assert.equal(context.depressionBlobs.length, 2);
+  for (const pit of context.depressionBlobs) {
+    assert.equal(pit.pixelCount, 25);
+    assert.equal(pit.maxDepthM, 4);
+    assert.equal(context.filledGrid[pit.centroidIndex], 10);
+  }
+  grid[10 * w + 5] = NaN; // outlet immediately beside the first basin
+  context = F.createViewContext(grid, w, h, { cellMetres: 1 });
+  assert.equal(context.depressionBlobs.length, 1);
+  assert.equal(context.filledGrid[10 * w + 8], 6);
+});
+
+check("belt classifier: ridge context cannot make one-sided texture likely", () => {
+  const zone = { areaM2: 100000, elongation: 3, solidity: 0.7 };
+  const base = { raisedFraction: 0.6, reliefM: 10, roughness: 2,
+    ridgeSupport: 4, meanStageScore: 1 };
+  for (const [h, k] of [[100, 0], [0, 100]]) {
+    const result = B.classifyZone(zone, { ...base, hummockDensityPerKm2: h,
+      kettleDensityPerKm2: k, hummockCount: h / 10, kettleCount: k / 10, textureScore: 0 });
+    assert.notEqual(result.verdict, "likely");
+  }
 });
 
 // Zone-core units. Clusters are 4 x 4 grids of radius-3-cell disks at 9-cell
@@ -526,6 +575,21 @@ if (!beltIntegrated) {
     });
   }
 }
+
+check("analysis contracts: no-data remains background and coarse belts abstain", () => {
+  const grid = new Float32Array(hummockyBelt);
+  const missing = 100 * W + 110; grid[missing] = NaN;
+  const result = analyze(grid, W, H, { cellSize: CELL });
+  assert.equal(result.score[missing], 0);
+  assert.equal(result.mask[missing], 0);
+  assert.equal(result.segmentRaster[missing], 0);
+  assert(Array.from(result.score).every(Number.isFinite));
+  assert(result.segments.every(s => Array.isArray(s.pixels) || ArrayBuffer.isView(s.pixels)), "all objects publish original membership");
+  const coarse = analyze(hummockyBelt, W, H, { cellSize: 12 });
+  assert(coarse.segments.every(s => s.verdict !== "likely"));
+  const disabled = analyze(hummockyBelt, W, H, { cellSize: CELL, config: { belt: false } });
+  assert(disabled.segments.every(s => s.objectType === "ridge"));
+});
 
 const tail = pending.length ? `, ${pending.length} pending` : "";
 if (failures.length) {

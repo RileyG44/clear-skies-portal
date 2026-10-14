@@ -54,7 +54,7 @@
     var objects=S.extractSegments(candidates,w,h,{cellMetres:cellMetres});
     var featureOpts={cellMetres:cellMetres};
     var context=F.createViewContext(grid,w,h,featureOpts);
-    // Keep each object's pixels for rasterization; publish compact geometry only.
+    // Retain original membership for every object independent of raster winners.
     var entries=objects.map(function(segment){
       var geometryPasses=Number.isFinite(segment.lengthM)&&segment.lengthM>=config.minLengthM&&
         Number.isFinite(segment.elongation)&&segment.elongation>=config.minElongation;
@@ -67,8 +67,13 @@
       var supported=verdict==="likely"||verdict==="possible";
       for(var p=0;p<pixels.length;p++){
         var pixel=pixels[p];
+        // Closed morphology can bridge missing cells; no-data remains background.
+        if(!Number.isFinite(Number(grid[pixel]))) continue;
+        // stage1.score may be NaN over no-data; paint 0 there so the
+        // returned score raster never carries NaN.
+        var unsupportedScore=Number.isFinite(stage1.score[pixel])?stage1.score[pixel]*0.3:0;
         // Compare at raster precision so equal contributions keep the first id.
-        var value=Math.fround(verdict==="likely"?1:verdict==="possible"?0.55:stage1.score[pixel]*0.3);
+        var value=Math.fround(verdict==="likely"?1:verdict==="possible"?0.55:unsupportedScore);
         if(!segmentRaster[pixel]||value>score[pixel]){
           segmentRaster[pixel]=id;
           score[pixel]=value;
@@ -81,44 +86,83 @@
       paint(segment.pixels,segment.id,verdict.verdict);
       var published={id:segment.id,objectType:segment.objectType||"ridge",verdict:verdict.verdict,score:verdict.score,bbox:segment.bbox,
         centroid:segment.centroid,lengthM:segment.lengthM,areaM2:segment.areaM2,
-        pixelCount:segment.pixelCount,evidence:verdict.evidence};
+        pixelCount:segment.pixelCount,pixels:segment.pixels,evidence:verdict.evidence};
       ["branched","closedLoop","simpleCycle"].forEach(function(key){
         if(Object.prototype.hasOwnProperty.call(segment,key)) published[key]=segment[key];
       });
       return published;
     });
     var belt={zones:0,likely:0,possible:0};
-    if(opts.belt!==false){
+    // Extract the disable boolean before treating config.belt as overrides:
+    // config.belt === false disables, an object is classifier overrides.
+    var beltDisabled=opts.belt===false||!!(opts.config&&opts.config.belt===false);
+    var maxRidgeId=objects.reduce(function(max,segment){return Math.max(max,segment.id||0);},0);
+    var beltIdOffset=Math.max(100000,maxRidgeId+1);
+    if(!beltDisabled){
       if(!Z||!ZF||!B) throw new Error("Glacial belt analysis dependencies are not loaded");
       var zones=Z.extractZones(candidates,w,h,{cellMetres:cellMetres});
-      var supportedRidges=segments.filter(function(segment){
-        return segment.verdict==="likely"||segment.verdict==="possible";
-      });
       var zoneEntries=zones.map(function(zone){
         var features=ZF.zoneFeatures(grid,w,h,zone,{
           cellMetres:cellMetres,context:context,stageScore:stage1.score,segments:objects
         });
         var membership=new Set(zone.zonePixels);
-        features.ridgeSupport=supportedRidges.reduce(function(count,segment){
-          var x=Math.round(segment.centroid[0]),y=Math.round(segment.centroid[1]);
-          return count+(x>=0&&x<w&&y>=0&&y<h&&membership.has(y*w+x)?1:0);
+        var elongated=Number.isFinite(zone.elongation)&&zone.elongation>=2;
+        // Only likely ridges count, and only when both their centroid and
+        // at least one ridge pixel lie in the zone. For elongated zones
+        // (elongation >= 2) the ridge must also lie within ~30 degrees of
+        // the zone's axial orientation.
+        features.ridgeSupport=objects.reduce(function(count,segment,index){
+          if(verdicts[index].verdict!=="likely") return count;
+          var cx=Math.round(segment.centroid[0]),cy=Math.round(segment.centroid[1]);
+          if(!(cx>=0&&cx<w&&cy>=0&&cy<h&&membership.has(cy*w+cx))) return count;
+          var overlaps=false;
+          for(var rp=0;rp<segment.pixels.length;rp++)
+            if(membership.has(segment.pixels[rp])){overlaps=true;break;}
+          if(!overlaps) return count;
+          if(elongated){
+            if(!Number.isFinite(segment.orientationRad)||!Number.isFinite(zone.orientationRad)) return count;
+            var diff=Math.abs(segment.orientationRad-zone.orientationRad)%Math.PI;
+            if(diff>Math.PI/2) diff=Math.PI-diff;
+            if(diff>Math.PI/6) return count;
+          }
+          return count+1;
         },0);
         return {zone:zone,features:features};
       });
-      var beltConfig=opts.beltConfig!==undefined?opts.beltConfig:opts.config&&opts.config.belt;
+      var rawBeltConfig=opts.beltConfig!==undefined?opts.beltConfig:
+        (opts.config&&opts.config.belt&&typeof opts.config.belt==="object"?opts.config.belt:
+        (opts.belt&&typeof opts.belt==="object"?opts.belt:undefined));
+      var beltConfig;
+      if(rawBeltConfig==null){
+        beltConfig={allowLikely:cellMetres<=5};
+      } else if(typeof rawBeltConfig==="object"&&!Array.isArray(rawBeltConfig)){
+        beltConfig=Object.assign({},rawBeltConfig);
+        // Like the ridge path, likely is off by default on coarse cells
+        // unless explicitly set.
+        if(!Object.prototype.hasOwnProperty.call(beltConfig,"allowLikely"))
+          beltConfig.allowLikely=cellMetres<=5;
+      } else {
+        beltConfig=rawBeltConfig;
+      }
       var beltVerdicts=B.classifyZones(zoneEntries,beltConfig);
       belt.zones=zones.length;
       zones.forEach(function(zone,index){
         var verdict=beltVerdicts[index];
-        // Belt ids occupy 100000 + zone.id, separate from ordinary ridge ids.
-        var id=100000+zone.id;
+        // Belt ids occupy beltIdOffset + zone.id, clear of every ridge id.
+        var id=beltIdOffset+zone.id;
         paint(zone.zonePixels,id,verdict.verdict);
         if(verdict.verdict==="likely"||verdict.verdict==="possible") belt[verdict.verdict]++;
         segments.push({id:id,objectType:"belt",verdict:verdict.verdict,score:verdict.score,
           bbox:zone.bbox,centroid:zone.centroid,areaM2:zone.areaM2,pixelCount:zone.pixelCount,
           // A broad belt has no single crest length; retain the public field.
-          lengthM:null,evidence:verdict.evidence});
+          lengthM:null,evidence:verdict.evidence,
+          pixels:zone.pixels,zonePixels:zone.zonePixels,touchesEdge:zone.touchesEdge});
       });
+    }
+    var seenIds=new Set();
+    for(var si=0;si<segments.length;si++){
+      if(seenIds.has(segments[si].id)) throw new Error("Duplicate segment id: "+segments[si].id);
+      seenIds.add(segments[si].id);
     }
     return {score:score,mask:mask,segmentRaster:segmentRaster,segments:segments,metadata:Object.assign({},stage1.metadata,{
       kind:"glacial-moraine-object-screen-v2",
@@ -128,6 +172,7 @@
       minAreaM2:5000,
       config:config,
       belt:belt,
+      beltIdOffset:beltIdOffset,
       stage1:stage1.metadata,
       featureMetadata:F.METADATA,
       rasterValues:{likely:1,possible:0.55,unsupported:"stage-1 score * 0.3",background:0},

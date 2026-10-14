@@ -19,28 +19,27 @@
     kettleDensityKneePerKm2: 20
   });
   /* Approximation contract: neighbourhoods are square, shrink at view edges,
-     and exclude an inner square of floor(radius / 3) for TPI. Hummocks keep
-     connected peaks together and may be truncated at edges/no-data. Kettles
-     inherit the conservative local exterior spill-rim proxy, not watershed
-     filling. Blob centroids weight cell centres equally; nearest-cell zone
-     inclusion approximates the union of cell squares without overlap/dilation.
+     and exclude an inner square of floor(radius / 3) for TPI. Hummocks are
+     elevation peaks with a physical separation floor, not watershed objects.
+     Kettles use the view's drainage-connected priority-flood fill depths.
+     Nearest-cell centroid inclusion approximates the union of cell squares.
      Raised fraction includes missing-TPI cells in its denominator; remaining
      statistics use their own finite samples and return zero when unavailable.
-     Relief uses linear-interpolated percentiles. Texture equally averages two
+     Relief uses linear-interpolated percentiles. Texture is the geometric mean of two
      fixed, heuristic density ramps d/(d+knee), never view-normalized values. */
   var METADATA = Object.freeze({
     algorithm: "glacial-zone-features-v1",
     approximations: Object.freeze({
       neighbourhoods: "Fixed physical radius (default 30 m), rounded up to cells, floored to one cell and capped to the view; shared square-box LRM and annular TPI exclude inner radius floor(outer / 3). Shrinking windows and no-data handling follow segment features.",
-      hummocks: "Seed TPI > 0.5 m, grow 8-connected through finite TPI > 0, and count whole-view blobs of 100-20000 m2 inclusive. Connected peaks remain one blob; edge/no-data truncation is not reconstructed or rejected. Area and centroid use equal-weight cell centres.",
-      kettles: "Reuse the segment context's whole-view kettle blobs: TPI < -0.5 m seeds grown to zero, area <5000 m2 and local spill-rim depth >0.5 m; view-edge/no-data blobs are rejected. This is a conservative exterior-rim proxy, not watershed filling.",
-      membership: "Round each whole-blob centroid to the nearest raster cell and test exact closed-zone membership; this approximates inclusion by the union of cell squares. No bbox inclusion, overlap clipping, or segment-style dilation.",
+      hummocks: "Whole-view elevation maxima in a square window of radius max(2 cells, ceil(10 m / cell spacing)), with TPI >0.5 m. Process highest first and suppress within Euclidean distance <=15 m of a kept peak. Equal-height ties prefer the lowest raster index, including flat tops. This counts resolved peaks, not watershed hummocks: sub-window/sub-15 m peaks may merge; edge/no-data windows shrink to finite samples. No blob-area filter.",
+      kettles: "Reuse context.depressionBlobs: 8-connected components of priority-flood fill depth >0.5 m, with area <5000 m2. View edges and no-data are drainage outlets. Connected submerged basins remain one depression; this is a raster drainage approximation, not proof of glacial origin.",
+      membership: "Test each kept peak's raster index or depression centroidIndex against exact closed-zone membership. Depression centroids round equal-weight cell centres to the nearest cell. Whole-view peak suppression precedes zone inclusion, so a higher peak outside a zone can suppress one inside. No bbox inclusion, overlap clipping, or segment-style dilation.",
       statistics: "Deduplicate zonePixels (closed footprint, not original candidate pixels). Raised fraction uses all zone cells, so missing TPI supplies no raised evidence. Other statistics use finite samples of their own raster; absent stage scores or samples return zero. Relief is linearly interpolated p95-p05.",
-      texture: "Average d/(d+knee) for hummock and kettle densities, with default knees 100 and 20 blobs/km2 respectively. These physically fixed heuristic knees are configurable and use no per-view normalization."
+      texture: "Geometric mean sqrt(h/(h+kneeH) * k/(k+kneeK)), with default knees 100 hummocks/km2 and 20 kettles/km2. Either absent texture makes the score zero. These physically fixed heuristic knees are configurable and use no per-view normalization."
     })
   });
 
-  /* Cache labels by the shared layer object: one whole-view flood fill for all
+  /* Cache peaks by the shared layer object: one whole-view peak search for all
      zones using that scale. Recreate context after any DEM/layer mutation. */
   var hummocksByLayer = new WeakMap();
 
@@ -58,40 +57,78 @@
     return sorted[lower] * (1 - weight) + sorted[Math.ceil(position)] * weight;
   }
 
-  function hummockBlobs(grid, w, h, layers, cell) {
-    if (hummocksByLayer.has(layers)) return hummocksByLayer.get(layers);
-    var tpi = layers.tpi, visited = new Uint8Array(w * h);
-    var queue = new Uint32Array(w * h), blobs = [], cellArea = cell * cell;
-    for (var seed = 0; seed < w * h; seed++) {
-      /* Tiny positive residuals cannot initiate a component. Growth retains
-         the shallow rim, matching the fixed kettle seed/grow convention. */
-      if (visited[seed] || !Number.isFinite(tpi[seed]) || !(tpi[seed] > 0.5) ||
-          !Number.isFinite(Number(grid[seed]))) continue;
-      var head = 0, tail = 1, sumX = 0, sumY = 0;
-      queue[0] = seed; visited[seed] = 1;
-      while (head < tail) {
-        var index = queue[head++], x = index % w, y = Math.floor(index / w);
-        sumX += x; sumY += y;
-        for (var dy = -1; dy <= 1; dy++) for (var dx = -1; dx <= 1; dx++) {
-          var nx = x + dx, ny = y + dy;
-          if ((!dx && !dy) || nx < 0 || ny < 0 || nx >= w || ny >= h) continue;
-          var next = ny * w + nx;
-          if (visited[next] || !Number.isFinite(tpi[next]) || !(tpi[next] > 0) ||
-              !Number.isFinite(Number(grid[next]))) continue;
-          visited[next] = 1; queue[tail++] = next;
+  /* A separable monotone-deque maximum filter keeps even fine-resolution
+     physical windows O(n). Carry raster indices to break flat-top ties. */
+  function localMaxima(grid, w, h, radius) {
+    var source = null, deque = new Int32Array(Math.max(w, h));
+    for (var pass = 0; pass < 2; pass++) {
+      var output = new Int32Array(w * h); output.fill(-1);
+      var lines = pass ? w : h, length = pass ? h : w, stride = pass ? w : 1;
+      for (var line = 0; line < lines; line++) {
+        var base = pass ? line : line * w, head = 0, tail = 0, end = 0;
+        for (var position = 0; position < length; position++) {
+          while (head < tail && deque[head] < position - radius) head++;
+          var limit = Math.min(length - 1, position + radius);
+          while (end <= limit) {
+            var address = base + end * stride, index = source ? source[address] : address;
+            if (index >= 0 && Number.isFinite(Number(grid[index]))) {
+              while (head < tail) {
+                var previousAddress = base + deque[tail - 1] * stride;
+                var previous = source ? source[previousAddress] : previousAddress;
+                if (Number(grid[previous]) > Number(grid[index]) ||
+                    (Number(grid[previous]) === Number(grid[index]) && previous < index)) break;
+                tail--;
+              }
+              deque[tail++] = end;
+            }
+            end++;
+          }
+          if (head < tail) {
+            var bestAddress = base + deque[head] * stride;
+            output[base + position * stride] = source ? source[bestAddress] : bestAddress;
+          }
         }
       }
-      var area = tail * cellArea;
-      if (area >= 100 && area <= 20000)
-        blobs.push({ x: sumX / tail, y: sumY / tail });
+      source = output;
     }
-    hummocksByLayer.set(layers, blobs);
-    return blobs;
+    return source;
+  }
+
+  function hummockPeaks(grid, w, h, layers, cell) {
+    if (hummocksByLayer.has(layers)) return hummocksByLayer.get(layers);
+    var radius = Math.min(Math.max(w, h), Math.max(2, Math.ceil(10 / cell)));
+    var maxima = localMaxima(grid, w, h, radius), candidates = [], peaks = [];
+    for (var index = 0; index < w * h; index++) {
+      if (maxima[index] === index && layers.tpi[index] > 0.5) candidates.push(index);
+    }
+    candidates.sort(function (a, b) { return Number(grid[b]) - Number(grid[a]) || a - b; });
+    var separation = 15 / cell, bins = new Map();
+    candidates.forEach(function (index) {
+      var x = index % w, y = Math.floor(index / w);
+      var binX = Math.floor(x / separation), binY = Math.floor(y / separation);
+      for (var dy = -1; dy <= 1; dy++) for (var dx = -1; dx <= 1; dx++) {
+        var nearby = bins.get((binX + dx) + "," + (binY + dy)) || [];
+        for (var j = 0; j < nearby.length; j++) {
+          var px = nearby[j] % w, py = Math.floor(nearby[j] / w);
+          if ((x - px) * (x - px) + (y - py) * (y - py) <= separation * separation) return;
+        }
+      }
+      peaks.push({ centroidIndex: index });
+      var key = binX + "," + binY;
+      if (!bins.has(key)) bins.set(key, []);
+      bins.get(key).push(index);
+    });
+    hummocksByLayer.set(layers, peaks);
+    return peaks;
   }
 
   function countInside(blobs, pixels, w, h) {
     var count = 0;
     for (var i = 0; i < blobs.length; i++) {
+      if (blobs[i].centroidIndex !== undefined) {
+        if (pixels.has(blobs[i].centroidIndex)) count++;
+        continue;
+      }
       var x = Math.round(blobs[i].x), y = Math.round(blobs[i].y);
       if (x >= 0 && x < w && y >= 0 && y < h && pixels.has(y * w + x)) count++;
     }
@@ -141,7 +178,7 @@
     if (!context.layersByRadius[radius]) {
       /* The context has no public layer getter. An empty segment primes the
          exact radius through its public API, reusing slope/valley and its
-         original kettle detector; no synthetic segment feature is retained.
+         filled depression detector; no synthetic segment feature is retained.
          Empty pixels/path and zero length skip profiles, kettles and aprons.
          The resulting cache entry is shared with subsequent ridge/zone calls. */
       F.segmentFeatures(grid, w, h, { pixels: [], skeleton: [], bbox: [0, 0, w - 1, h - 1],
@@ -149,8 +186,8 @@
     }
     var layers = context.layersByRadius[radius];
     if (!layers || !layers.tpi || layers.tpi.length !== w * h ||
-        !layers.lrm || layers.lrm.length !== w * h || !Array.isArray(layers.kettleBlobs))
-      throw new TypeError("context layers need TPI, LRM, and kettle blobs");
+        !layers.lrm || layers.lrm.length !== w * h || !Array.isArray(context.depressionBlobs))
+      throw new TypeError("context needs TPI/LRM layers and depressionBlobs");
     var elevations = [], raised = 0, roughnessSum = 0, roughnessCount = 0;
     var scoreSum = 0, scoreCount = 0;
     pixels.forEach(function (index) {
@@ -165,21 +202,23 @@
       }
     });
     elevations.sort(function (a, b) { return a - b; });
-    var hummockCount = pixels.size ? countInside(hummockBlobs(grid, w, h, layers, cell), pixels, w, h) : 0;
-    var kettleCount = pixels.size ? countInside(layers.kettleBlobs, pixels, w, h) : 0;
+    var hummockCount = pixels.size ? countInside(hummockPeaks(grid, w, h, layers, cell), pixels, w, h) : 0;
+    var kettleCount = pixels.size ? countInside(context.depressionBlobs, pixels, w, h) : 0;
     var hummockDensity = area > 0 ? hummockCount * 1000000 / area : 0;
     var kettleDensity = area > 0 ? kettleCount * 1000000 / area : 0;
     /* ridgeSupport is supplied/attached by the analysis; it is deliberately
-       absent from this module's seven-field feature result. */
+       absent from this module's feature result. */
     return {
+      hummockCount: hummockCount,
+      kettleCount: kettleCount,
       hummockDensityPerKm2: hummockDensity,
       kettleDensityPerKm2: kettleDensity,
       raisedFraction: pixels.size ? raised / pixels.size : 0,
       meanStageScore: scoreCount ? scoreSum / scoreCount : 0,
       roughness: roughnessCount ? roughnessSum / roughnessCount : 0,
       reliefM: quantile(elevations, 0.95) - quantile(elevations, 0.05),
-      textureScore: (hummockDensity / (hummockDensity + hummockKnee) +
-        kettleDensity / (kettleDensity + kettleKnee)) / 2
+      textureScore: Math.sqrt(hummockDensity / (hummockDensity + hummockKnee) *
+        kettleDensity / (kettleDensity + kettleKnee))
     };
   }
 

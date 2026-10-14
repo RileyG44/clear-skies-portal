@@ -18,14 +18,33 @@
    evaluateView (the exported path) asserts the same before running
    analysis.
 
-   Exact-touch rule (review fix): segment membership comes ONLY from the
-   analysis result's segmentRaster (Int32Array of segment ids) or, when
-   no raster is present, from per-segment `pixels`. Bounding-box overlap
-   is never used for touch, area, or detection masks. A view whose result
-   offers neither is counted unevaluated (no official metrics for it).
-   Eligible segment area comes from exact pixel counts only (raster
-   count, pixel-list length, or an explicit pixelCount); bbox-derived
-   and areaM2-only areas cannot prove eligibility.
+   Exact-touch rule (review fix): segment membership comes ONLY from
+   per-segment pixel lists or the analysis result's segmentRaster
+   (Int32Array of segment ids). Bounding-box overlap is never used for
+   touch, area, or detection masks. A view whose result offers neither
+   is counted unevaluated (no official metrics for it).
+
+   Membership preference (v3 contract): a segment that carries its own
+   `pixels` list uses exactly that list as its membership for touch,
+   flagged area, and eligibility, in preference to segmentRaster
+   matches. Belt zones publish `pixels` = the ORIGINAL candidate-mask
+   cells inside the zone and `zonePixels` = the closed footprint; only
+   `pixels` is membership (zonePixels is never read), so a belt whose
+   closed footprint covers a positive pixel its candidate cells do not
+   reach does not touch. Segments without `pixels` keep the raster rule
+   (raster pixels whose value matches the segment). The raster carries
+   only the per-pixel winner, so it is never the sole membership for a
+   segment that publishes pixels. Each row records how many segments
+   used each source (membershipSource) and the rule (membershipRule).
+
+   Eligible segment area comes from exact membership counts only
+   (membership pixel count, or an explicit pixelCount when a segment has
+   no membership); bbox-derived and areaM2-only areas cannot prove
+   eligibility. Belt eligibility therefore uses the candidate-cell
+   membership count, not the zone's areaM2 (which the analysis computes
+   from zonePixels). The combined detection mask (flagged area, recall)
+   is the union of eligible segments' membership pixels, per-segment
+   pixels where published, raster matches otherwise.
 
    Touch target: positive pixels OR their label-uncertainty band, where
    the band is computed here from view.pos and view.uncertaintyM
@@ -63,15 +82,20 @@
        [--config '{"candidateThreshold":0.45}' | --config config.json]
        [--out output/glacial-calibration/results-objects.json]
        [--analysis ../../glacial-moraine-analysis.js] [--limit N]
-       [--candidate-threshold 0.45] [--skip-baseline]
+       [--candidate-threshold 0.45] [--skip-baseline] [--belt-off]
+
+   --belt-off forwards belt:false to the analysis call (v3 A/B: ridge
+   path only) and is part of the run fingerprint, so belt-on and
+   belt-off splits never merge. A belt segment returned while belt is
+   off is counted per row (beltSegmentsWhileBeltOff) and warned about.
 
    Pinned analysis API (glacial-moraine-analysis.js):
      analyzeMoraineCandidates(grid, w, h, opts)
-       opts: {cellSize, cellMetres, candidateThreshold, config}
+       opts: {cellSize, cellMetres, candidateThreshold, config, belt?}
        -> {score, mask, segmentRaster?, segments: [{id, verdict, score,
            bbox, centroid, lengthM, evidence, pixelCount?, areaM2?,
-           pixels?, objectType? ("belt" for zones, "ridge" or absent
-           for ridge segments)}], metadata}
+           pixels?, zonePixels? (ignored), objectType? ("belt" for
+           zones, "ridge" or absent for ridge segments)}], metadata}
    CommonJS direct export, a {analyzeMoraineCandidates} object, a UMD
    global-style export, and a factory(G, ...siblings) returning such an
    object are all accepted (see resolveAnalyze). */
@@ -86,6 +110,12 @@ const BASELINE_THRESHOLD = 0.58; // current screen threshold in the design doc
 const BASELINE_RADIUS_CELLS = 5; // core default radius; recorded, not passed
 const SUCCESS_BAR = { likelyPrecisionMin: 0.5, objectRecallMin: 0.4 };
 const VALID_SPLITS = new Set(["train", "validation"]);
+// Recorded in rows, summaries, and the fingerprint identity so results
+// scored under the older raster-first rule never merge with these.
+const MEMBERSHIP_RULE = "segment-pixels-preferred";
+const MEMBERSHIP_NOTE = "membership: a segment's own `pixels` list when published (belt zones: original " +
+  "candidate-mask cells, not the closed zonePixels footprint), else its segmentRaster matches; " +
+  "touch, flagged area, recall mask, and eligibility area (membership pixel count) all use it";
 
 const { loadViews, skeletonize } = require(path.join(__dirname, "evaluate.js"));
 const glacialCore = require(path.join(REPO_ROOT, "glacial-research-core.js"));
@@ -183,60 +213,65 @@ function touchTargetMask(view) {
 function segmentPixelIndices(seg) {
   for (const key of ["pixels", "pixelIndices", "indices", "pixelIndexes"]) {
     const v = seg && seg[key];
-    if (v && typeof v.length === "number" && v.length) return v;
+    if (v && typeof v.length === "number") return v;
   }
   return null;
 }
+// Distinct in-bounds pixel indices, so membership counts stay honest.
 function normalizePixels(raw, view) {
   if (!raw) return null;
-  const out = [];
+  const n = view.w * view.h, seen = new Set(), out = [];
+  const add = (i) => { if (i >= 0 && i < n && !seen.has(i)) { seen.add(i); out.push(i); } };
   for (let k = 0; k < raw.length; k++) {
     const v = raw[k];
-    if (typeof v === "number" && Number.isFinite(v)) out.push(v | 0);
-    else if (Array.isArray(v) && v.length >= 2) out.push((v[1] | 0) * view.w + (v[0] | 0));
+    if (typeof v === "number" && Number.isFinite(v)) add(v | 0);
+    else if (Array.isArray(v) && v.length >= 2) add((v[1] | 0) * view.w + (v[0] | 0));
     else if (v && typeof v === "object" && Number.isFinite(v.x) && Number.isFinite(v.y))
-      out.push((v.y | 0) * view.w + (v.x | 0));
+      add((v.y | 0) * view.w + (v.x | 0));
   }
-  return out.length ? out : null;
+  return out;
 }
-// Exact per-segment pixel lists from segmentRaster, or null if the view
-// has no exact source. Raster values are matched to segment ids; if no
-// id matches, 0-based then 1-based array positions are tried.
+// Exact per-segment pixel lists from segmentRaster. Zero is background;
+// every other value must match an explicit segment id. Array-position
+// guessing can turn background into an object's membership and is forbidden.
 function pixelsFromRaster(raster, segments, n) {
   const byValue = new Map();
   for (let i = 0; i < n; i++) {
     const v = raster[i];
+    if (v === 0) continue;
     if (!byValue.has(v)) byValue.set(v, []);
     byValue.get(v).push(i);
   }
-  const modes = {
-    id: segments.map((s) => (s && byValue.has(s.id) ? byValue.get(s.id) : null)),
-    index: segments.map((s, i) => (byValue.has(i) ? byValue.get(i) : null)),
-    index1: segments.map((s, i) => (byValue.has(i + 1) ? byValue.get(i + 1) : null)),
-  };
-  const score = (lists) => lists.reduce((a, l) => a + (l ? 1 : 0), 0);
-  const best = ["id", "index", "index1"].sort((a, b) => score(modes[b]) - score(modes[a]))[0];
   const map = new Map();
-  segments.forEach((s, i) => { if (modes[best][i]) map.set(s, modes[best][i]); });
+  segments.forEach(s => { if (s && s.id !== 0 && byValue.has(s.id)) map.set(s, byValue.get(s.id)); });
   return map;
 }
-// Returns {source, bySegment: Map<seg, number[]>} or null when neither
-// segmentRaster nor any segment pixel list is available for the view.
+// Per-segment exact membership. A segment's own pixel list wins over
+// raster matches (see the membership preference rule above); segments
+// without one use their segmentRaster matches. Returns {source,
+// bySegment: Map<seg, number[]>, sourceBySegment, membershipSource}
+// or null when the view has neither a segmentRaster nor any segment
+// pixel list.
 function exactSegmentPixels(result, segments, view) {
   const n = view.w * view.h;
   const raster = result && result.segmentRaster;
-  if (raster && typeof raster.length === "number" && raster.length === n && segments.length)
-    return { source: "segmentRaster", bySegment: pixelsFromRaster(raster, segments, n) };
-  if (raster && typeof raster.length === "number" && raster.length === n && !segments.length)
-    return { source: "segmentRaster", bySegment: new Map() };
-  let any = false;
-  const bySegment = new Map();
+  const hasRaster = !!(raster && typeof raster.length === "number" && raster.length === n);
+  const fromRaster = hasRaster && segments.length ? pixelsFromRaster(raster, segments, n) : new Map();
+  const bySegment = new Map(), sourceBySegment = new Map();
+  const membershipSource = { segmentPixels: 0, segmentRaster: 0, none: 0 };
   for (const seg of segments) {
-    const px = normalizePixels(segmentPixelIndices(seg), view);
-    if (px) { bySegment.set(seg, px); any = true; }
+    const own = normalizePixels(segmentPixelIndices(seg), view);
+    if (own) { bySegment.set(seg, own); sourceBySegment.set(seg, "segmentPixels"); membershipSource.segmentPixels++; }
+    else if (fromRaster.has(seg)) {
+      bySegment.set(seg, fromRaster.get(seg)); sourceBySegment.set(seg, "segmentRaster"); membershipSource.segmentRaster++;
+    } else membershipSource.none++;
   }
-  return any ? { source: "segmentPixels", bySegment } : null;
+  if (!hasRaster && !membershipSource.segmentPixels) return null;
+  const source = !hasRaster ? "segmentPixels"
+    : (membershipSource.segmentPixels ? "segmentPixels+segmentRaster" : "segmentRaster");
+  return { source, bySegment, sourceBySegment, membershipSource };
 }
+// Membership pixel count (belt: candidate cells, not zonePixels).
 function exactPixelCount(seg, exact) {
   if (exact && exact.bySegment.has(seg)) return exact.bySegment.get(seg).length;
   const px = seg && segmentPixelIndices(seg);
@@ -355,6 +390,8 @@ function evaluateView(view, analyze, config, opts) {
   const analysisOpts = { cellSize: view.cellMetres, cellMetres: view.cellMetres, config };
   if (opts.candidateThreshold != null) analysisOpts.candidateThreshold = opts.candidateThreshold;
   else if (config && config.candidateThreshold != null) analysisOpts.candidateThreshold = config.candidateThreshold;
+  const beltOff = opts.belt === false;
+  if (beltOff) analysisOpts.belt = false;
   const t0 = Date.now();
   const result = analyze(view.grid, w, h, analysisOpts) || {};
   const seconds = +((Date.now() - t0) / 1000).toFixed(2);
@@ -373,6 +410,9 @@ function evaluateView(view, analyze, config, opts) {
     segmentsUnsupported: segments.filter((s) => s && s.verdict === "unsupported").length,
     validGroundPixels, baselineFlaggedPixels: baseline.baselineFlaggedPixels,
     baselinePixelFAR: baseline.baselinePixelFAR, seconds,
+    belt: !beltOff,
+    beltSegmentsWhileBeltOff: beltOff ? segments.filter((s) => segmentObjectType(s) === "belt").length : null,
+    membershipRule: MEMBERSHIP_RULE, membershipNote: MEMBERSHIP_NOTE,
   };
 
   const exact = exactSegmentPixels(result, segments, view);
@@ -382,7 +422,7 @@ function evaluateView(view, analyze, config, opts) {
     const segmentsByObjectType = { ridge: 0, belt: 0, combined: segments.length };
     for (const s of segments) segmentsByObjectType[segmentObjectType(s)]++;
     return { row: { ...baseRow, evaluated: false, unevaluated: true, unevaluatedReason: reason,
-      exactSource: null, eligibleSegments: null, eligibleLikely: null, eligibleTouching: null,
+      exactSource: null, membershipSource: null, eligibleSegments: null, eligibleLikely: null, eligibleTouching: null,
       eligibleLikelyTouching: null, objectPrecision: null, likelyPrecision: null,
       flaggedPixels: null, flaggedAreaFraction: null, flaggedSegmentsPerView: null,
       skeletonPixels: null, skeletonHits: null, objectRecall: null,
@@ -440,11 +480,14 @@ function evaluateView(view, analyze, config, opts) {
       objectPrecision: eligT.length ? touchT / eligT.length : null,
       likelyPrecision: likT.length ? likTouchT / likT.length : null,
       flaggedPixels: fpT, flaggedAreaFraction: validGroundPixels ? fpT / validGroundPixels : null,
-      flaggedSegmentsPerView: eligT.length, skeletonPixels: null, skeletonHits: null, objectRecall: null };
+      flaggedSegmentsPerView: eligT.length, skeletonPixels: null, skeletonHits: null, objectRecall: null,
+      eligibleBySegmentPixels: eligT.filter((s) => exact.sourceBySegment.get(s) === "segmentPixels").length,
+      eligibleBySegmentRaster: eligT.filter((s) => exact.sourceBySegment.get(s) === "segmentRaster").length,
+      eligibilityAreaBasis: "membership pixel count" + (t === "belt" ? " (candidate-mask cells; zone areaM2/zonePixels not used)" : "") };
   }
 
   const row = { ...baseRow, evaluated: true, unevaluated: false, unevaluatedReason: null,
-    exactSource: exact.source, touchTargetPixels,
+    exactSource: exact.source, membershipSource: exact.membershipSource, touchTargetPixels,
     eligibleSegments: eligible.length, eligibleLikely: likelyEligible.length,
     eligibleTouching, eligibleLikelyTouching,
     objectPrecision: eligible.length ? eligibleTouching / eligible.length : null,
@@ -661,7 +704,12 @@ function summarize(rows, options) {
   const metricsPass = (likelyPrecision != null && likelyPrecision >= SUCCESS_BAR.likelyPrecisionMin) &&
     (objectRecallMacro != null && objectRecallMacro >= SUCCESS_BAR.objectRecallMin) && confuserTypesBelowBaseline;
   const status = incomplete ? "unevaluated" : "evaluated";
+  const membershipSource = { segmentPixels: 0, segmentRaster: 0, none: 0 };
+  for (const r of rowsE) if (r.membershipSource)
+    for (const k of Object.keys(membershipSource)) membershipSource[k] += r.membershipSource[k] || 0;
   return {
+    membershipRule: MEMBERSHIP_RULE, membershipNote: MEMBERSHIP_NOTE, membershipSource,
+    beltEligibilityAreaBasis: "membership pixel count (belt: original candidate-mask cells inside the zone, not zonePixels/areaM2)",
     views: allRows.length, evaluatedViews: rowsE.length, unevaluatedViews: unevaluatedRows.length,
     unevaluatedReasons: [...new Set(unevaluatedRows.map((r) => r.unevaluatedReason).filter(Boolean))],
     positiveViews: positives.length, confuserViews: confusers.length,
@@ -723,11 +771,31 @@ function canonicalJson(v) {
 }
 function sha256Hex(text) { return crypto.createHash("sha256").update(text).digest("hex"); }
 function fileHash(p) { try { return sha256Hex(fs.readFileSync(p)); } catch { return null; } }
-function computeFingerprint({ config, candidateThreshold, analysisPath, viewCount, limit, skipBaseline, split }) {
+function viewCorpusHashes() {
+  const directory = path.join(OUT_DIR, "views");
+  // Identity covers every cached view's compressed bytes in stable filename
+  // order. Hashing does not decode labels/DEM or score held-out test views.
+  if (!fs.existsSync(directory)) return { available: false, files: {} };
+  const files = Object.fromEntries(fs.readdirSync(directory).sort()
+    .filter(name => name.endsWith(".json.gz"))
+    .map(name => [name, sha256Hex(fs.readFileSync(path.join(directory, name)))]));
+  return { available: true, files };
+}
+function computeFingerprint({ config, candidateThreshold, analysisPath, viewCount, limit, skipBaseline, split, beltOff }) {
   const effectiveConfig = config || {};
   const analysisHash = fileHash(analysisPath);
+  // Hash the whole analysis pipeline and metric implementation: the wrapper
+  // alone is unchanged when feature extraction or classifier rules change.
+  const dependencyHashes = Object.fromEntries([
+    "glacial-research-core.js", "glacial-segment-core.js", "glacial-segment-features.js",
+    "glacial-moraine-classifier.js", "glacial-zone-core.js", "glacial-zone-features.js",
+    "glacial-belt-classifier.js", "scripts/glacial-calibration/evaluate.js",
+    "scripts/glacial-calibration/evaluate-objects.js", "output/glacial-calibration/manifest.json"
+  ].map(name => [name, fileHash(path.join(REPO_ROOT, name))]));
   const identity = { config: effectiveConfig, candidateThreshold, analysisModuleHash: analysisHash,
-    limit: limit != null ? limit : null, baseline: !skipBaseline };
+    dependencyHashes, viewCorpus: viewCorpusHashes(),
+    limit: limit != null ? limit : null, baseline: !skipBaseline, belt: !beltOff,
+    membershipRule: MEMBERSHIP_RULE };
   const hash = sha256Hex(canonicalJson(identity));
   const complete = limit == null && !skipBaseline;
   return { hash, fingerprint: hash, ...identity, analysisHash, analysisPath,
@@ -767,6 +835,7 @@ function main() {
   const outFile = opt("--out", DEFAULT_OUT);
   const analysisPath = path.resolve(opt("--analysis", DEFAULT_ANALYSIS));
   const skipBaseline = has("--skip-baseline");
+  const beltOff = has("--belt-off");
   const candidateThreshold = candidateRaw != null ? Number(candidateRaw)
     : (config && config.candidateThreshold != null ? Number(config.candidateThreshold) : 0.45);
 
@@ -778,10 +847,11 @@ function main() {
   const totalViews = views.length;
   if (limit != null) views = views.slice(0, limit);
   const fingerprint = computeFingerprint({ config, candidateThreshold, analysisPath,
-    viewCount: views.length, limit, skipBaseline, split });
+    viewCount: views.length, limit, skipBaseline, split, beltOff });
   fingerprint.totalViewsAvailable = totalViews;
 
   const cliOpts = { candidateThreshold: candidateRaw != null ? Number(candidateRaw) : null, skipBaseline };
+  if (beltOff) cliOpts.belt = false;
   const rows = []; let metadataSample = null;
   const t0 = Date.now();
   for (const view of views) {
@@ -793,6 +863,7 @@ function main() {
   const payload = {
     tool: "evaluate-objects", created: new Date().toISOString(), split, config,
     candidateThreshold, analysisPath, analysisModuleHash: fingerprint.analysisModuleHash,
+    belt: !beltOff, membershipRule: MEMBERSHIP_RULE, membershipNote: MEMBERSHIP_NOTE,
     fingerprint, fingerprints: { [split]: fingerprint },
     complete: fingerprint.complete, incomplete: fingerprint.incomplete,
     minSegmentAreaM2: MIN_SEGMENT_AREA_M2, baselineThreshold: BASELINE_THRESHOLD,
@@ -819,7 +890,7 @@ function main() {
             if (!prevFps[s] || prevFps[s].hash !== fingerprint.hash) {
               console.error(`error: refusing to merge splits with different fingerprints: ` +
                 `${s} fingerprint ${prevFps[s] ? prevFps[s].hash : "missing"} != ${split} fingerprint ${fingerprint.hash}; ` +
-                `config, candidateThreshold, analysis module, limit, or baseline settings differ. Start from a fresh results file.`);
+                `config, candidateThreshold, analysis pipeline dependencies, metrics, manifest, limit, baseline, belt on/off, or membership rule differ. Start from a fresh results file.`);
               process.exit(2);
             }
           }
@@ -846,7 +917,12 @@ function main() {
   console.log(`split=${split} views=${summary.views} (positive ${summary.positiveViews}, confuser ${summary.confuserViews}, unevaluated ${summary.unevaluatedViews})`);
   if (summary.unevaluatedViews)
     for (const r of summary.unevaluatedReasons) console.log(`  unevaluated: ${r}`);
-  console.log(`fingerprint=${fingerprint.hash} complete=${fingerprint.complete} baseline=${!skipBaseline} limit=${limit == null ? "none" : limit} views=${fingerprint.viewCount}`);
+  console.log(`fingerprint=${fingerprint.hash} complete=${fingerprint.complete} baseline=${!skipBaseline} belt=${beltOff ? "off" : "on"} limit=${limit == null ? "none" : limit} views=${fingerprint.viewCount}`);
+  const m = summary.membershipSource;
+  console.log(`membership (${MEMBERSHIP_RULE}): segments by own pixels=${m.segmentPixels} by raster=${m.segmentRaster} none=${m.none}`);
+  const beltWhileOff = rows.reduce((a, r) => a + (r.beltSegmentsWhileBeltOff || 0), 0);
+  if (beltWhileOff)
+    console.log(`  warning: --belt-off set but the analysis returned ${beltWhileOff} belt segment(s); it may not honour opts.belt === false`);
   console.log(`objectPrecision(likely+possible)=${fmt(summary.objectPrecision)}  ` +
     `likelyPrecision=${fmt(summary.likelyPrecision)}  objectRecall(region-macro)=${fmt(summary.objectRecall)}  objectRecallPooled=${fmt(summary.objectRecallPooled)}`);
   const barText = bar.status === "unevaluated" ? "unevaluated" : (bar.pass ? "PASS" : "FAIL");
@@ -876,4 +952,5 @@ function main() {
   console.log(`wrote ${outFile}`);
 }
 if (require.main === module) main();
-module.exports = { segmentAreaM2, segmentPixelIndices, segmentTouches, buildFlaggedMask, evaluateView, summarize, officialSuccessBar, computeFingerprint, parseConfig, resolveAnalyze, squaredDistanceTo, touchTargetMask, segmentObjectType, objectTypeOf: segmentObjectType, rasterTypeSplitStatus, OBJECT_TYPES, SUCCESS_BAR, MIN_SEGMENT_AREA_M2, BASELINE_THRESHOLD };
+module.exports = { segmentAreaM2, segmentPixelIndices, segmentTouches, buildFlaggedMask, evaluateView,
+  exactSegmentPixels, MEMBERSHIP_RULE, summarize, officialSuccessBar, computeFingerprint, parseConfig, resolveAnalyze, squaredDistanceTo, touchTargetMask, segmentObjectType, objectTypeOf: segmentObjectType, rasterTypeSplitStatus, OBJECT_TYPES, SUCCESS_BAR, MIN_SEGMENT_AREA_M2, BASELINE_THRESHOLD };

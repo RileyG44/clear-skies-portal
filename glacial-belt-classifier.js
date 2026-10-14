@@ -18,12 +18,12 @@
     minReliefM: 1,                // Hard reject p95-p05 elevation relief below 1 m.
     minHummockDensityPerKm2: 20,  // Distinct raised blobs per km2 for support.
     minKettleDensityPerKm2: 10,   // Closed depressions per km2 for support.
+    minTextureCount: 3,          // Minimum blobs on each side for density support.
     minTextureScore: 0.4,        // Physical density-ramp texture needed for support.
-    minMeanStageScore: 0.5,      // Mean stage-1 score inside the closed zone.
+    minLikelyTextureScore: 0.6,  // Alternative likely gate: strong geometric-mean texture.
     minBeltElongation: 2,         // Optional belt-shape support; never a reject.
     maxBeltElongation: 12,        // Upper inclusive end of plausible belt band.
-    highSolidity: 0.9,           // Smooth-blob penalty requires solidity >= this.
-    lowTextureScore: 0.2,        // Smooth-blob penalty requires texture <= this.
+    lowTextureScore: 0.1,        // Smooth penalty requires texture strictly below this.
     extremeRoughnessM: 15,       // Mean |LRM| in metres for weak landslide proxy.
     nearZeroKettleDensityPerKm2: 1, // Roughness penalty only with <= 1 pit per km2.
     hummockWeight: 0.25,          // Contribution for hummock density support.
@@ -31,8 +31,8 @@
     textureWeight: 0.25,          // Contribution for composite texture support.
     ridgeWeight: 0.15,            // Contribution for > 0 supported ridge segments.
     elongationWeight: 0.05,       // Small optional contribution for belt shape.
-    stageWeight: 0.10,            // Contribution for mean stage-1 score support.
-    smoothBlobPenalty: 0.35,      // Subtracted for high solidity with low texture.
+    maxContextWeight: 0.20,      // Cap on combined ridge and elongation contributions.
+    smoothBlobPenalty: 0.35,      // Subtracted when both counts < minTextureCount and texture is low.
     roughnessWithoutKettlesPenalty: 0.35, // Subtracted for extreme pit-free texture.
     likelyScore: 0.55,            // Inclusive likely score threshold.
     possibleScore: 0.25,          // Inclusive possible score threshold.
@@ -66,15 +66,16 @@
         throw new RangeError(key + " must be a finite non-negative number");
       }
     });
-    ["minRaisedFraction", "minTextureScore", "minMeanStageScore", "highSolidity",
-      "lowTextureScore", "likelyScore", "possibleScore"
+    ["minRaisedFraction", "minTextureScore", "minLikelyTextureScore",
+      "lowTextureScore", "maxContextWeight", "likelyScore", "possibleScore"
     ].forEach(function (key) {
       if (config[key] > 1) throw new RangeError(key + " must be at most 1");
     });
     if (config.minAreaM2 <= 0 || config.minReliefM <= 0 ||
         config.minRaisedFraction <= 0 || config.minHummockDensityPerKm2 <= 0 ||
         config.minKettleDensityPerKm2 <= 0 || config.minTextureScore <= 0 ||
-        config.minMeanStageScore <= 0 || config.extremeRoughnessM <= 0 ||
+        config.minTextureCount <= 0 || config.minLikelyTextureScore < config.minTextureScore ||
+        config.extremeRoughnessM <= 0 ||
         config.minBeltElongation < 1 || config.maxBeltElongation < config.minBeltElongation ||
         config.lowTextureScore >= config.minTextureScore ||
         config.nearZeroKettleDensityPerKm2 >= config.minKettleDensityPerKm2 ||
@@ -112,16 +113,29 @@
     physicalGate("raised-fraction", features.raisedFraction, config.minRaisedFraction, "", 1);
     physicalGate("relief", features.reliefM, config.minReliefM, " m");
 
-    var hummocks = finite(features.hummockDensityPerKm2) &&
+    // Older feature producers supply densities only. Counts come from the
+    // closed zone area; explicitly invalid counts stay unavailable.
+    function blobCount(count, density) {
+      if (count != null) return finite(count) && count >= 0 ? count : NaN;
+      return finite(density) && density >= 0 && finite(zone.areaM2) && zone.areaM2 > 0
+        ? density * zone.areaM2 / 1000000 : NaN;
+    }
+    var hummockCount = blobCount(features.hummockCount, features.hummockDensityPerKm2);
+    var kettleCount = blobCount(features.kettleCount, features.kettleDensityPerKm2);
+    var hummocks = finite(hummockCount) && hummockCount >= config.minTextureCount &&
+      finite(features.hummockDensityPerKm2) &&
       features.hummockDensityPerKm2 >= config.minHummockDensityPerKm2;
     contribute("hummocks", "Hummock density " + measurement(features.hummockDensityPerKm2, " per km2") +
-      "; support threshold >= " + config.minHummockDensityPerKm2 + " per km2",
+      "; count " + measurement(hummockCount) + "; support requires count >= " + config.minTextureCount +
+      " and density >= " + config.minHummockDensityPerKm2 + " per km2",
       hummocks ? config.hummockWeight : 0);
 
     var kettleValid = finite(features.kettleDensityPerKm2) && features.kettleDensityPerKm2 >= 0;
-    var kettles = kettleValid && features.kettleDensityPerKm2 >= config.minKettleDensityPerKm2;
+    var kettles = finite(kettleCount) && kettleCount >= config.minTextureCount &&
+      kettleValid && features.kettleDensityPerKm2 >= config.minKettleDensityPerKm2;
     contribute("kettles", "Closed-depression density " + measurement(features.kettleDensityPerKm2, " per km2") +
-      "; support threshold >= " + config.minKettleDensityPerKm2 + " per km2",
+      "; count " + measurement(kettleCount) + "; support requires count >= " + config.minTextureCount +
+      " and density >= " + config.minKettleDensityPerKm2 + " per km2",
       kettles ? config.kettleWeight : 0);
 
     var textureValid = inRange(features.textureScore, 0, 1);
@@ -130,6 +144,16 @@
       "; support threshold >= " + config.minTextureScore +
       "; supplied physical density-ramp combination, not a per-view percentile" +
       (textureValid ? "" : "; unavailable/out of [0,1]"), texture ? config.textureWeight : 0);
+
+    var likelyTexture = (hummocks && kettles) ||
+      (textureValid && features.textureScore >= config.minLikelyTextureScore);
+    var missingSides = [];
+    if (!hummocks) missingSides.push("hummock support");
+    if (!kettles) missingSides.push("kettle support");
+    record("likely-texture", "Likely requires both hummock and kettle support, or texture score >= " +
+      config.minLikelyTextureScore + ". " + (likelyTexture ? "Texture gate passed."
+        : "Missing " + missingSides.join(" and ") + "; texture score " + measurement(features.textureScore) +
+          " does not meet the alternative. Verdict capped at possible."), likelyTexture ? 1 : -1);
 
     var ridges = Number.isInteger(features.ridgeSupport) && features.ridgeSupport > 0;
     contribute("ridge-support", "Supported ridge segment count " + measurement(features.ridgeSupport) +
@@ -142,18 +166,18 @@
       "]; compact zones remain eligible for likely; elongation is never required",
       elongated ? config.elongationWeight : 0);
 
-    var stageValid = inRange(features.meanStageScore, 0, 1);
-    var stage = stageValid && features.meanStageScore >= config.minMeanStageScore;
-    contribute("stage-score", "Mean stage-1 score " + measurement(features.meanStageScore) +
-      "; support threshold >= " + config.minMeanStageScore +
-      (stageValid ? "" : "; unavailable/out of [0,1]"), stage ? config.stageWeight : 0);
+    var contextScore = (ridges ? config.ridgeWeight : 0) + (elongated ? config.elongationWeight : 0);
+    contribute("context-cap", "Combined ridge and belt-shape contribution " + contextScore +
+      "; capped at " + config.maxContextWeight, -Math.max(0, contextScore - config.maxContextWeight));
 
-    var smooth = inRange(zone.solidity, 0, 1) && zone.solidity >= config.highSolidity &&
-      textureValid && features.textureScore <= config.lowTextureScore;
-    contribute("smooth-blob", "Solidity " + measurement(zone.solidity) +
-      "; texture score " + measurement(features.textureScore) + "; smooth-blob penalty requires solidity >= " +
-      config.highSolidity + " and texture <= " + config.lowTextureScore +
-      "; solidity is the zone core's approximate hull ratio; smooth till plains/hills can mimic a belt",
+    var smooth = finite(hummockCount) && hummockCount < config.minTextureCount &&
+      finite(kettleCount) && kettleCount < config.minTextureCount &&
+      textureValid && features.textureScore < config.lowTextureScore;
+    contribute("smooth-blob", "Hummock count " + measurement(hummockCount) +
+      "; kettle count " + measurement(kettleCount) + "; texture score " + measurement(features.textureScore) +
+      "; smooth-zone penalty requires both counts < " + config.minTextureCount +
+      " and texture < " + config.lowTextureScore +
+      "; smooth till plains/hills can mimic a belt regardless of solidity",
       smooth ? -config.smoothBlobPenalty : 0);
 
     // Weakest rule: mean |LRM| depends on DEM resolution and analysis scale,
@@ -177,13 +201,13 @@
     if (hardRejects.length) {
       score = 0;
       decision = "Hard rejects override the score: " + hardRejects.join(", ") + "; returned score 0";
-    } else if (score + 1e-9 >= config.likelyScore && config.allowLikely) {
+    } else if (score + 1e-9 >= config.likelyScore && config.allowLikely && likelyTexture) {
       verdict = "likely";
-      decision = "Score >= likely threshold " + config.likelyScore + "; allowLikely=true";
+      decision = "Score >= likely threshold " + config.likelyScore + "; allowLikely=true; texture gate passed";
     } else if (score + 1e-9 >= config.possibleScore) {
       verdict = "possible";
       decision = "Score >= possible threshold " + config.possibleScore +
-        "; likely requires score >= " + config.likelyScore + " and allowLikely=true";
+        "; likely requires score >= " + config.likelyScore + ", allowLikely=true and the texture gate";
     } else {
       decision = "Score below possible threshold " + config.possibleScore;
     }
