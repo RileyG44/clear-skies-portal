@@ -1,6 +1,16 @@
 "use strict";
 /* Object-level evaluation of glacial-moraine-analysis v2 (design:
-   docs/GLACIAL_MORAINE_V2_DESIGN.md, "Offline validation").
+   docs/GLACIAL_MORAINE_V2_DESIGN.md, "Offline validation"), extended
+   for v3 belt/zone objects (docs/GLACIAL_BELT_V3_DESIGN.md,
+   "Evaluation"): segments carry objectType "belt" for zones and
+   "ridge" for ridge segments (absent objectType counts as ridge).
+   Precision, skeleton recall, and confuser flagged area are reported
+   per object type (ridge, belt, combined) through the same
+   exact-membership machinery; the official success bar stays on the
+   combined output. If a segmentRaster value (other than the 0
+   background) matches no segment id, that view's type split is
+   counted unevaluated and the row says so, while its combined
+   metrics are computed exactly as before.
 
    For --split train|validation ONLY. The calibration test regions are
    spent: --split test (and any other split) is refused before any view
@@ -60,7 +70,8 @@
        opts: {cellSize, cellMetres, candidateThreshold, config}
        -> {score, mask, segmentRaster?, segments: [{id, verdict, score,
            bbox, centroid, lengthM, evidence, pixelCount?, areaM2?,
-           pixels?}], metadata}
+           pixels?, objectType? ("belt" for zones, "ridge" or absent
+           for ridge segments)}], metadata}
    CommonJS direct export, a {analyzeMoraineCandidates} object, a UMD
    global-style export, and a factory(G, ...siblings) returning such an
    object are all accepted (see resolveAnalyze). */
@@ -270,6 +281,52 @@ function buildFlaggedMask(result, eligible, view, exact) {
   return out;
 }
 
+/* ---------------- object types (v3 belt/zone split) ---------------- */
+const OBJECT_TYPES = ["ridge", "belt"];
+// Belt zones carry objectType "belt"; ridge segments may carry
+// "ridge" or omit objectType entirely. Absent (and any non-"belt"
+// value) counts as ridge, so ridge + belt always partition segments.
+function segmentObjectType(seg) {
+  const raw = seg && seg.objectType != null ? String(seg.objectType).trim().toLowerCase() : "";
+  return raw === "belt" ? "belt" : "ridge";
+}
+// Type split needs raster ids to resolve to segments. Belt ids are
+// offset by the analysis so they cannot collide with ridge ids, but
+// the raster value still maps back to the segment whose id matches.
+// A non-background raster value matching no segment id makes the
+// view's type split unevaluated (combined metrics are unaffected:
+// they come from the segment list through the existing machinery).
+// Raster value 0 is the background sentinel (segment ids start at 1).
+function rasterTypeSplitStatus(result, segments, view) {
+  const raster = result && result.segmentRaster;
+  const n = view.w * view.h;
+  if (!raster || typeof raster.length !== "number" || raster.length !== n)
+    return { evaluated: true, reason: null, unmatchedValues: [] };
+  const ids = new Set();
+  for (const s of segments) if (s && s.id != null) ids.add(s.id);
+  const unmatched = [];
+  const seen = new Set();
+  for (let i = 0; i < n; i++) {
+    const v = raster[i];
+    if (v === 0 || ids.has(v) || seen.has(v)) continue;
+    seen.add(v); unmatched.push(v);
+  }
+  if (!unmatched.length) return { evaluated: true, reason: null, unmatchedValues: [] };
+  const shown = unmatched.slice(0, 5).join(", ") + (unmatched.length > 5 ? ", ..." : "");
+  return { evaluated: false, unmatchedValues: unmatched,
+    reason: `segmentRaster type split unevaluated: raster value(s) ${shown} match no segment id ` +
+      `(belt ids are offset but must still map back to a segment id); per-objectType metrics for this view are unevaluated` };
+}
+function emptyObjectTypeEntry(objectType, evaluated, reason) {
+  return { objectType, evaluated: !!evaluated, unevaluated: !evaluated,
+    unevaluatedReason: evaluated ? null : (reason || null),
+    segmentsTotal: null, segmentsLikely: null, segmentsPossible: null,
+    eligibleSegments: null, eligibleLikely: null, eligibleTouching: null,
+    eligibleLikelyTouching: null, objectPrecision: null, likelyPrecision: null,
+    flaggedPixels: null, flaggedAreaFraction: null, flaggedSegmentsPerView: null,
+    skeletonPixels: null, skeletonHits: null, objectRecall: null };
+}
+
 /* ---------------- baseline (actual current screen) ---------------- */
 function validGroundCount(view) {
   let c = 0;
@@ -322,11 +379,26 @@ function evaluateView(view, analyze, config, opts) {
   if (!exact) {
     const reason = "exact segment pixels unavailable: analysis result has neither a " +
       "segmentRaster matching the view nor per-segment pixels; bbox overlap is not used";
+    const segmentsByObjectType = { ridge: 0, belt: 0, combined: segments.length };
+    for (const s of segments) segmentsByObjectType[segmentObjectType(s)]++;
     return { row: { ...baseRow, evaluated: false, unevaluated: true, unevaluatedReason: reason,
       exactSource: null, eligibleSegments: null, eligibleLikely: null, eligibleTouching: null,
       eligibleLikelyTouching: null, objectPrecision: null, likelyPrecision: null,
       flaggedPixels: null, flaggedAreaFraction: null, flaggedSegmentsPerView: null,
-      skeletonPixels: null, skeletonHits: null, objectRecall: null }, metadata: result.metadata || null };
+      skeletonPixels: null, skeletonHits: null, objectRecall: null,
+      segmentsByObjectType, segmentsRidge: segmentsByObjectType.ridge, segmentsBelt: segmentsByObjectType.belt,
+      typeSplitEvaluated: false, typeSplitUnevaluated: true, typeSplitUnevaluatedReason: reason,
+      objectTypeSplitEvaluated: false, objectTypeSplitUnevaluated: true,
+      typeSplitUnmatchedRasterValues: [],
+      byObjectType: { ridge: emptyObjectTypeEntry("ridge", false, reason),
+        belt: emptyObjectTypeEntry("belt", false, reason),
+        combined: emptyObjectTypeEntry("combined", false, reason) },
+      ridgeObjectPrecision: null, beltObjectPrecision: null, combinedObjectPrecision: null,
+      ridgeLikelyPrecision: null, beltLikelyPrecision: null, combinedLikelyPrecision: null,
+      ridgeObjectRecall: null, beltObjectRecall: null, combinedObjectRecall: null,
+      ridgeFlaggedPixels: null, beltFlaggedPixels: null, ridgeFlaggedAreaFraction: null,
+      beltFlaggedAreaFraction: null, ridgeEligibleSegments: null, beltEligibleSegments: null },
+      metadata: result.metadata || null };
   }
 
   const isFlagVerdict = (s) => s && (s.verdict === "likely" || s.verdict === "possible");
@@ -342,6 +414,35 @@ function evaluateView(view, analyze, config, opts) {
   const flaggedMask = buildFlaggedMask(result, eligible, view, exact);
   let flaggedPixels = 0; for (let i = 0; i < n; i++) if (flaggedMask[i]) flaggedPixels++;
 
+  // Per-objectType split through the same exact machinery. Combined
+  // figures above/below are unchanged; ridge and belt partition the
+  // eligible list by segmentObjectType (absent objectType = ridge).
+  const typeSplit = rasterTypeSplitStatus(result, segments, view);
+  const segmentsByObjectType = { ridge: 0, belt: 0, combined: segments.length };
+  for (const s of segments) segmentsByObjectType[segmentObjectType(s)]++;
+  const byObjectType = {};
+  const flaggedMaskByType = {};
+  for (const t of OBJECT_TYPES) {
+    if (!typeSplit.evaluated) { byObjectType[t] = emptyObjectTypeEntry(t, false, typeSplit.reason); continue; }
+    const eligT = eligible.filter((s) => segmentObjectType(s) === t);
+    const likT = eligT.filter((s) => s.verdict === "likely");
+    const touchT = countTouch(eligT), likTouchT = countTouch(likT);
+    const maskT = buildFlaggedMask(result, eligT, view, exact);
+    flaggedMaskByType[t] = maskT;
+    let fpT = 0; for (let i = 0; i < n; i++) if (maskT[i]) fpT++;
+    const segsT = segments.filter((s) => segmentObjectType(s) === t);
+    byObjectType[t] = { objectType: t, evaluated: true, unevaluated: false, unevaluatedReason: null,
+      segmentsTotal: segsT.length,
+      segmentsLikely: segsT.filter((s) => s && s.verdict === "likely").length,
+      segmentsPossible: segsT.filter((s) => s && s.verdict === "possible").length,
+      eligibleSegments: eligT.length, eligibleLikely: likT.length,
+      eligibleTouching: touchT, eligibleLikelyTouching: likTouchT,
+      objectPrecision: eligT.length ? touchT / eligT.length : null,
+      likelyPrecision: likT.length ? likTouchT / likT.length : null,
+      flaggedPixels: fpT, flaggedAreaFraction: validGroundPixels ? fpT / validGroundPixels : null,
+      flaggedSegmentsPerView: eligT.length, skeletonPixels: null, skeletonHits: null, objectRecall: null };
+  }
+
   const row = { ...baseRow, evaluated: true, unevaluated: false, unevaluatedReason: null,
     exactSource: exact.source, touchTargetPixels,
     eligibleSegments: eligible.length, eligibleLikely: likelyEligible.length,
@@ -350,7 +451,23 @@ function evaluateView(view, analyze, config, opts) {
     likelyPrecision: likelyEligible.length ? eligibleLikelyTouching / likelyEligible.length : null,
     flaggedPixels, flaggedAreaFraction: validGroundPixels ? flaggedPixels / validGroundPixels : null,
     flaggedSegmentsPerView: eligible.length,
-    skeletonPixels: null, skeletonHits: null, objectRecall: null };
+    skeletonPixels: null, skeletonHits: null, objectRecall: null,
+    segmentsByObjectType, segmentsRidge: segmentsByObjectType.ridge, segmentsBelt: segmentsByObjectType.belt,
+    typeSplitEvaluated: typeSplit.evaluated, typeSplitUnevaluated: !typeSplit.evaluated,
+    typeSplitUnevaluatedReason: typeSplit.evaluated ? null : typeSplit.reason,
+    objectTypeSplitEvaluated: typeSplit.evaluated, objectTypeSplitUnevaluated: !typeSplit.evaluated,
+    typeSplitUnmatchedRasterValues: typeSplit.unmatchedValues,
+    byObjectType: null,
+    ridgeObjectPrecision: byObjectType.ridge.objectPrecision, beltObjectPrecision: byObjectType.belt.objectPrecision,
+    combinedObjectPrecision: eligible.length ? eligibleTouching / eligible.length : null,
+    ridgeLikelyPrecision: byObjectType.ridge.likelyPrecision, beltLikelyPrecision: byObjectType.belt.likelyPrecision,
+    combinedLikelyPrecision: likelyEligible.length ? eligibleLikelyTouching / likelyEligible.length : null,
+    ridgeObjectRecall: null, beltObjectRecall: null, combinedObjectRecall: null,
+    ridgeFlaggedPixels: byObjectType.ridge.flaggedPixels, beltFlaggedPixels: byObjectType.belt.flaggedPixels,
+    ridgeFlaggedAreaFraction: byObjectType.ridge.flaggedAreaFraction,
+    beltFlaggedAreaFraction: byObjectType.belt.flaggedAreaFraction,
+    ridgeEligibleSegments: byObjectType.ridge.eligibleSegments, beltEligibleSegments: byObjectType.belt.eligibleSegments,
+    ridgeEligibleLikely: byObjectType.ridge.eligibleLikely, beltEligibleLikely: byObjectType.belt.eligibleLikely };
 
   if (view.class === "positive") {
     const skel = skeletonize(view.pos, w, h);
@@ -368,7 +485,33 @@ function evaluateView(view, analyze, config, opts) {
     }
     row.skeletonPixels = total; row.skeletonHits = hits;
     row.objectRecall = total ? hits / total : null;
+    row.combinedObjectRecall = row.objectRecall;
+    // Skeleton recall per type against that type's flagged mask only.
+    for (const t of OBJECT_TYPES) {
+      const entry = byObjectType[t];
+      if (!entry.evaluated) continue;
+      let hitsT = 0;
+      const eligT = eligible.filter((s) => segmentObjectType(s) === t);
+      if (eligT.length) {
+        const d2 = squaredDistanceTo(flaggedMaskByType[t], w, h);
+        const limit = uncertaintyM * uncertaintyM, cell2 = view.cellMetres * view.cellMetres;
+        for (let i = 0; i < n; i++) if (skel[i] && d2[i] * cell2 <= limit + 1e-9) hitsT++;
+      }
+      entry.skeletonPixels = total; entry.skeletonHits = hitsT;
+      entry.objectRecall = total ? hitsT / total : null;
+    }
+    row.ridgeObjectRecall = byObjectType.ridge.objectRecall;
+    row.beltObjectRecall = byObjectType.belt.objectRecall;
   }
+  byObjectType.combined = { objectType: "combined", evaluated: true, unevaluated: false, unevaluatedReason: null,
+    segmentsTotal: segments.length, segmentsLikely: baseRow.segmentsLikely, segmentsPossible: baseRow.segmentsPossible,
+    eligibleSegments: row.eligibleSegments, eligibleLikely: row.eligibleLikely,
+    eligibleTouching: row.eligibleTouching, eligibleLikelyTouching: row.eligibleLikelyTouching,
+    objectPrecision: row.objectPrecision, likelyPrecision: row.likelyPrecision,
+    flaggedPixels: row.flaggedPixels, flaggedAreaFraction: row.flaggedAreaFraction,
+    flaggedSegmentsPerView: row.flaggedSegmentsPerView,
+    skeletonPixels: row.skeletonPixels, skeletonHits: row.skeletonHits, objectRecall: row.objectRecall };
+  row.byObjectType = byObjectType;
   return { row, metadata: result.metadata || null };
 }
 
@@ -424,6 +567,92 @@ function summarize(rows, options) {
       belowBaseline: baseMean != null ? areaMean < baseMean : null,
     };
   }
+  // Per-objectType summary (ridge / belt / combined). Combined uses
+  // the existing top-level fields above; ridge and belt pool only
+  // views whose type split was evaluated. Rows built before the
+  // per-type fields existed have no entry and count as unevaluated
+  // for the split (their combined figures are still used).
+  const typeEntryOf = (r, t) => (r && r.byObjectType && r.byObjectType[t]) || null;
+  const typeEvaluatedRows = (list, t) => list.filter((r) => {
+    const e = typeEntryOf(r, t);
+    return e && e.evaluated !== false && e.unevaluated !== true;
+  });
+  const sumEntry = (list, t, k) => list.reduce((a, r) => a + ((typeEntryOf(r, t) || {})[k] || 0), 0);
+  const typeSplitUnevaluatedRows = allRows.filter((r) => r && (r.typeSplitUnevaluated === true ||
+    (typeEntryOf(r, "ridge") && typeEntryOf(r, "ridge").unevaluated === true) || r.evaluated === false));
+  function summarizeObjectType(t) {
+    const rowsT = typeEvaluatedRows(rowsE, t), posT = typeEvaluatedRows(positives, t);
+    const eT = sumEntry(rowsT, t, "eligibleSegments"), eTP = sumEntry(rowsT, t, "eligibleTouching");
+    const lT = sumEntry(rowsT, t, "eligibleLikely"), lTP = sumEntry(rowsT, t, "eligibleLikelyTouching");
+    const sT = sumEntry(posT, t, "skeletonPixels"), sHitT = sumEntry(posT, t, "skeletonHits");
+    const byReg = new Map();
+    for (const r of posT) {
+      const key = r.region || "unknown", e = typeEntryOf(r, t);
+      if (!byReg.has(key)) byReg.set(key, { skeletonPixels: 0, skeletonHits: 0 });
+      const g = byReg.get(key);
+      g.skeletonPixels += e.skeletonPixels || 0; g.skeletonHits += e.skeletonHits || 0;
+    }
+    const recalls = [...byReg.values()].filter((g) => g.skeletonPixels > 0)
+      .map((g) => g.skeletonHits / g.skeletonPixels);
+    const macro = recalls.length ? recalls.reduce((a, b) => a + b, 0) / recalls.length : null;
+    const byRegOut = {};
+    for (const [k, g] of [...byReg].sort())
+      byRegOut[k] = { skeletonPixels: g.skeletonPixels, skeletonHits: g.skeletonHits,
+        objectRecall: g.skeletonPixels ? +(g.skeletonHits / g.skeletonPixels).toFixed(4) : null };
+    const lp = lT ? lTP / lT : null;
+    return { objectType: t, views: rowsT.length, evaluatedViews: rowsT.length,
+      positiveViews: posT.length, confuserViews: typeEvaluatedRows(confusers, t).length,
+      eligibleSegments: eT, eligibleLikely: lT, eligibleTouching: eTP, eligibleLikelyTouching: lTP,
+      objectPrecision: eT ? +(eTP / eT).toFixed(4) : null,
+      likelyPrecision: lp != null ? +lp.toFixed(4) : null,
+      objectRecall: macro != null ? +macro.toFixed(4) : null,
+      objectRecallPooled: sT ? +(sHitT / sT).toFixed(4) : null,
+      objectRecallByRegion: byRegOut, skeletonPixels: sT, skeletonHits: sHitT,
+      flaggedPixels: sumEntry(rowsT, t, "flaggedPixels"),
+      validGroundPixels: sum(rowsT, "validGroundPixels") };
+  }
+  const byObjectTypeSummary = { ridge: summarizeObjectType("ridge"), belt: summarizeObjectType("belt"),
+    combined: { objectType: "combined", views: rowsE.length, evaluatedViews: rowsE.length,
+      positiveViews: positives.length, confuserViews: confusers.length,
+      eligibleSegments: elig, eligibleLikely: lik, eligibleTouching: eligTP, eligibleLikelyTouching: likTP,
+      objectPrecision: elig ? +(eligTP / elig).toFixed(4) : null,
+      likelyPrecision: lik ? +((likTP / lik)).toFixed(4) : null,
+      objectRecall: objectRecallMacro != null ? +objectRecallMacro.toFixed(4) : null,
+      objectRecallPooled: skel ? +(skelHit / skel).toFixed(4) : null,
+      objectRecallByRegion, skeletonPixels: skel, skeletonHits: skelHit,
+      flaggedPixels: sum(rowsE, "flaggedPixels"), validGroundPixels: sum(rowsE, "validGroundPixels") } };
+  // Per-confuser flagged area split by object type.
+  function confuserStats(list, t) {
+    if (!list.length) return null;
+    const get = (r, k) => (t === "combined" ? (r[k] || 0) : ((typeEntryOf(r, t) || {})[k] || 0));
+    const areaKey = t === "combined" ? "flaggedAreaFraction" : "flaggedAreaFraction";
+    const areaMean = list.reduce((a, r) => a + get(r, areaKey), 0) / list.length;
+    const base = list.filter((r) => r.baselinePixelFAR != null);
+    const baseMean = base.length ? base.reduce((a, r) => a + r.baselinePixelFAR, 0) / base.length : null;
+    const validGround = sum(list, "validGroundPixels");
+    const fp = list.reduce((a, r) => a + get(r, "flaggedPixels"), 0);
+    const fs = list.reduce((a, r) => a + get(r, "eligibleSegments"), 0);
+    return { views: list.length, flaggedSegmentsTotal: fs,
+      flaggedSegmentsPerView: +(fs / list.length).toFixed(3),
+      flaggedAreaFraction: +areaMean.toFixed(5), flaggedPixels: fp, validGroundPixels: validGround,
+      baselineFlaggedPixels: sum(list, "baselineFlaggedPixels"),
+      flaggedAreaFractionPooled: validGround ? +(fp / validGround).toFixed(5) : null,
+      baselinePixelFAR: baseMean != null ? +baseMean.toFixed(5) : null,
+      belowBaseline: baseMean != null ? areaMean < baseMean : null };
+  }
+  const confuserByObjectType = { ridge: {}, belt: {}, combined: {} };
+  for (const [type, list] of [...byType].sort()) {
+    const ridgeStats = confuserStats(typeEvaluatedRows(list, "ridge"), "ridge");
+    const beltStats = confuserStats(typeEvaluatedRows(list, "belt"), "belt");
+    const combinedStats = confuserStats(list, "combined");
+    // confuserByType entries stay exactly as before; the split lives
+    // only in the new confuserByObjectType structure.
+    confuserByType[type] = { ...combinedStats };
+    confuserByObjectType.ridge[type] = ridgeStats;
+    confuserByObjectType.belt[type] = beltStats;
+    confuserByObjectType.combined[type] = { ...combinedStats,
+      byObjectType: { ridge: ridgeStats, belt: beltStats, combined: { ...combinedStats } } };
+  }
   const likelyPrecision = lik ? likTP / lik : null;
   const objectRecallPooled = skel ? skelHit / skel : null;
   const incomplete = options.complete === false || unevaluatedRows.length > 0;
@@ -444,6 +673,18 @@ function summarize(rows, options) {
     objectRecallByRegion, skeletonPixels: skel, skeletonHits: skelHit,
     validGroundPixels: sum(rowsE, "validGroundPixels"),
     confuserByType,
+    byObjectType: byObjectTypeSummary,
+    objectPrecisionByObjectType: { ridge: byObjectTypeSummary.ridge.objectPrecision,
+      belt: byObjectTypeSummary.belt.objectPrecision, combined: byObjectTypeSummary.combined.objectPrecision },
+    likelyPrecisionByObjectType: { ridge: byObjectTypeSummary.ridge.likelyPrecision,
+      belt: byObjectTypeSummary.belt.likelyPrecision, combined: byObjectTypeSummary.combined.likelyPrecision },
+    objectRecallByObjectType: { ridge: byObjectTypeSummary.ridge.objectRecall,
+      belt: byObjectTypeSummary.belt.objectRecall, combined: byObjectTypeSummary.combined.objectRecall },
+    confuserByObjectType, confuserByTypeAndObjectType: confuserByObjectType,
+    typeSplitUnevaluatedViews: typeSplitUnevaluatedRows.length,
+    typeSplitUnevaluatedReasons: [...new Set(typeSplitUnevaluatedRows
+      .map((r) => r.typeSplitUnevaluatedReason || (r.byObjectType && r.byObjectType.ridge &&
+        r.byObjectType.ridge.unevaluatedReason) || r.unevaluatedReason).filter(Boolean))],
     successBar: {
       bar: { likelyPrecisionMin: SUCCESS_BAR.likelyPrecisionMin, objectRecallMin: SUCCESS_BAR.objectRecallMin,
         confuserFlaggedArea: "below current screen pixel FAR at 0.58, per confuser type" },
@@ -617,7 +858,22 @@ function main() {
     (off.reason ? ` (${off.reason})` : ""));
   for (const [type, t] of Object.entries(summary.confuserByType))
     console.log(`  confuser ${type}: ${t.flaggedSegmentsPerView}/view, flaggedArea=${fmt(t.flaggedAreaFraction)} vs baseline FAR=${fmt(t.baselinePixelFAR)} [${yn(t.belowBaseline)}]`);
+  if (summary.byObjectType) {
+    for (const t of ["ridge", "belt", "combined"]) {
+      const s = summary.byObjectType[t];
+      console.log(`  objectType ${t}: objectPrecision=${fmt(s.objectPrecision)} likelyPrecision=${fmt(s.likelyPrecision)} ` +
+        `objectRecall(region-macro)=${fmt(s.objectRecall)} objectRecallPooled=${fmt(s.objectRecallPooled)}`);
+    }
+    if (summary.typeSplitUnevaluatedViews)
+      console.log(`  type split unevaluated views: ${summary.typeSplitUnevaluatedViews}`);
+    for (const [type] of Object.entries(summary.confuserByType)) {
+      const b = (summary.confuserByObjectType && summary.confuserByObjectType.combined[type] &&
+        summary.confuserByObjectType.combined[type].byObjectType) || {};
+      const part = (x) => (x ? `${fmt(x.flaggedAreaFraction)} (${x.flaggedPixels}px)` : "n/a");
+      console.log(`  confuser ${type} flagged area by objectType: ridge=${part(b.ridge)} belt=${part(b.belt)} combined=${part(b.combined)}`);
+    }
+  }
   console.log(`wrote ${outFile}`);
 }
 if (require.main === module) main();
-module.exports = { segmentAreaM2, segmentPixelIndices, segmentTouches, buildFlaggedMask, evaluateView, summarize, officialSuccessBar, computeFingerprint, parseConfig, resolveAnalyze, squaredDistanceTo, touchTargetMask, SUCCESS_BAR, MIN_SEGMENT_AREA_M2, BASELINE_THRESHOLD };
+module.exports = { segmentAreaM2, segmentPixelIndices, segmentTouches, buildFlaggedMask, evaluateView, summarize, officialSuccessBar, computeFingerprint, parseConfig, resolveAnalyze, squaredDistanceTo, touchTargetMask, segmentObjectType, objectTypeOf: segmentObjectType, rasterTypeSplitStatus, OBJECT_TYPES, SUCCESS_BAR, MIN_SEGMENT_AREA_M2, BASELINE_THRESHOLD };
