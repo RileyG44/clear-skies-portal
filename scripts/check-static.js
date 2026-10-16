@@ -303,14 +303,16 @@ assert(/paneState\.min=ALL_COLLAPSED\(\);/.test(index),
 assert(index.includes('register("sw.js",{updateViaCache:"none"})'),
        "service-worker imports must bypass stale HTTP cache during update checks");
 assert(index.includes('id="snapshot"'),"map snapshot control must be present");
-assert(index.includes('id="snapshotPanel"')&&index.includes('id="snapshotScale"')&&index.includes('id="snapshotSave"'),
-       "map export must expose a direct PNG-resolution chooser");
+assert(index.includes('id="snapshotPanel"')&&index.includes('id="snapshotScale"')&&index.includes('id="snapshotCapture"')&&index.includes('id="snapshotSelect"'),
+       "map export must expose a direct PNG-resolution chooser with Capture and Select Area");
 assert(!index.includes('getDisplayMedia')&&index.includes('composeSnapshot')&&
-       index.includes('snapshotEl.onclick=()=>snapSel.hidden?startSnapshotSelect():endSnapshotSelect()'),
-       "the camera must open the on-map area selection and render directly instead of capturing the window");
-assert(index.includes('id="snapSel"')&&index.includes('id="snapSelBox"')&&index.includes('id="snapSelRes"')&&
+       index.includes('snapshotEl.onclick=()=>snapSel.hidden?setSnapshotPanel(snapshotPanel.hidden):endSnapshotSelect()')&&
+       index.includes('snapshotCaptureEl.onclick=captureSnapshotView;snapshotSelectEl.onclick=startSnapshotSelect')&&
+       index.includes('exportSnapshot(snapshotFullSelection)'),
+       "the camera must open export settings; Capture renders the whole view and Select Area opens the rectangle, both directly instead of capturing the window");
+assert(index.includes('id="snapSel"')&&index.includes('id="snapSelBox"')&&index.includes('id="snapSelSave"')&&!index.includes('id="snapSelRes"')&&
        ["nw","n","ne","e","se","s","sw","w"].every(h=>index.includes(`data-h="${h}"`)),
-       "the capture selection needs a movable box, eight resize handles and a resolution choice");
+       "the capture selection needs a movable box, eight resize handles and its own save, with resolution left to the camera panel");
 assert(index.includes('SNAPSHOT_SCALES=[1,2,4,8,16,32]')&&index.includes('snapshotLayerTileUrl')&&
        index.includes('SNAPSHOT_MAX_TILES=30000')&&index.includes('snapshotTilePlan')&&index.includes('SNAPSHOT_FETCH_CONCURRENCY=8'),
        "higher-resolution exports must request bounded source tiles for the selected area, a few at a time");

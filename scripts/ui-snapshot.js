@@ -1,8 +1,9 @@
 'use strict';
-/* Interaction and fidelity test for the map capture tool: the camera opens a
-   selection over the map, a drag draws a new rectangle, handles resize it, a
-   drag inside moves it, the resolution choice sets the output size, and Save
-   downloads a PNG. The 1x export is compared pixel by pixel with a screenshot
+/* Interaction and fidelity test for the map capture tool: the camera opens
+   export settings, Capture downloads the whole view, Select Area opens a
+   selection, a drag draws a new rectangle, handles resize it, a drag inside
+   moves it, the panel's resolution sets the output size, and the rectangle's
+   Capture downloads a PNG. The 1x export is compared pixel by pixel with a screenshot
    of the same rectangle, north-up and with the map rotated, so a placement
    error in the tile maths shows up as a failure rather than as a soft image.
    Provider tiles are replaced with a generated test pattern.
@@ -73,8 +74,18 @@ const pngSize = buf => ({ w: buf.readUInt32BE(16), h: buf.readUInt32BE(20) });
     });
 
     await page.click('#snapshot');
+    ok('camera opens export settings' + tag, await page.$eval('#snapshotPanel', e => !e.hidden));
+    // Capture saves the whole map view straight from the panel, no rectangle.
+    await page.selectOption('#snapshotScale', '1');
+    const mapBox = await page.$eval('#map', e => ({ w: e.clientWidth, h: e.clientHeight }));
+    const [whole] = await Promise.all([page.waitForEvent('download', { timeout: 60000 }).catch(() => null), page.click('#snapshotCapture')]);
+    const wholeFile = whole ? await whole.path() : null, wholeSize = wholeFile ? pngSize(fs.readFileSync(wholeFile)) : null;
+    ok('Capture saves the whole view' + tag, wholeSize && wholeSize.w === mapBox.w && wholeSize.h === mapBox.h, wholeSize ? `${wholeSize.w}x${wholeSize.h}` : 'no download');
+    ok('Capture skips the area selection' + tag, await page.$eval('#snapSel', e => e.hidden));
+    await page.click('#snapshot');
+    await page.click('#snapshotSelect');
     await page.waitForTimeout(300);
-    ok('camera opens the selection' + tag, await page.$eval('#snapSel', e => !e.hidden));
+    ok('Select Area opens the selection' + tag, await page.$eval('#snapSel', e => !e.hidden));
     const def = await selRect();
     ok('a default selection is proposed' + tag, def.w > 200 && def.h > 150, `${def.w}x${def.h}`);
 
@@ -99,7 +110,8 @@ const pngSize = buf => ({ w: buf.readUInt32BE(16), h: buf.readUInt32BE(20) });
     await page.addStyleTag({ content: '#snapSel{visibility:visible!important}' });
 
     for (const scale of [1, 4]) {
-      await page.click(`#snapSelRes [data-scale="${scale}"]`);
+      // Resolution is chosen in the camera panel; the rectangle is kept between visits.
+      if (scale !== 1) { await page.click('#snapshot'); await page.selectOption('#snapshotScale', String(scale)); await page.click('#snapshotSelect'); await page.waitForTimeout(250); }
       const [download] = await Promise.all([page.waitForEvent('download', { timeout: 60000 }).catch(() => null), page.click('#snapSelSave')]);
       const file = download ? await download.path() : null, png = file ? fs.readFileSync(file) : null, size = png ? pngSize(png) : null;
       ok(`${scale}x saves a ${r.w * scale}x${r.h * scale} PNG${tag}`, size && size.w === r.w * scale && size.h === r.h * scale, size ? `${size.w}x${size.h}` : 'no download');
@@ -117,8 +129,8 @@ const pngSize = buf => ({ w: buf.readUInt32BE(16), h: buf.readUInt32BE(20) });
            borders differently; that is edge pixels, not placement. */
         ok('1x export matches the screen' + tag, diff < (bearing ? 0.02 : 0.005), `${(diff * 100).toFixed(2)}% of pixels differ`);
       }
-      await page.click('#snapshot'); await page.waitForTimeout(250);
     }
+    await page.click('#snapshot'); await page.click('#snapshotSelect'); await page.waitForTimeout(250);
     await page.keyboard.press('Escape');
     ok('Escape cancels' + tag, await page.$eval('#snapSel', e => e.hidden));
     await ctx.close();

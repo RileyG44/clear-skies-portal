@@ -33,6 +33,13 @@ const layer=(id,updated,features=1)=>({type:"FeatureCollection",markup:{id,name:
     assert.equal(stale.status,409,"an older copy does not overwrite a newer one");
     assert.equal((await stale.json()).markup.updated,1000,"and gets the newer copy back");
     assert.equal((await post("/api/markup/camp-a1",layer("camp-a1",1100,2))).status,200,"a newer copy replaces it");
+    const described=layer("camp-a1",1150,2);described.markup.description="Field notes\nNorth rim <research>";
+    assert.equal((await post("/api/markup/camp-a1",described)).status,200,"descriptions are saved with the layer");
+    assert.equal((await (await fetch(base+"/api/markup/camp-a1")).json()).markup.description,described.markup.description);
+    for(const description of [null,42,"x".repeat(1001)]){
+      const bad=layer("camp-a1",1160);bad.markup.description=description;
+      assert.equal((await post("/api/markup/camp-a1",bad)).status,400,"description must be bounded text");
+    }
 
     assert.equal((await post("/api/markup/camp-a1",layer("other",1200))).status,400,"id must match the address");
     assert.equal((await post("/api/markup/Bad_ID",layer("Bad_ID",1200))).status,400,"ids are lowercase slugs");

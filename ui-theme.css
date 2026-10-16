@@ -410,3 +410,35 @@
 /* Ink on an accent-filled control (the Done button, markup handles). The same
    in every theme: the accent is always a saturated blue. */
 :root{--ui-on-accent:#ffffff}
+
+/* Switches and sliders: a recessed groove with a solid round knob, the "on"
+   knob and the slider fill in one colour chosen in Settings. A saved choice is
+   written inline on <html> (index.html's boot script, then ui-system.js), which
+   outranks the default here. Dark follows the reference set exactly: a black
+   groove, a grey resting knob, a faint light halo around a held thumb. */
+:root{
+  --csp-control-on:#4cd964;
+  --csp-switch-track:rgba(120,120,128,.16);
+  --csp-switch-rim-off:rgba(60,60,67,.2);
+  --csp-switch-rim-on:color-mix(in srgb,var(--csp-control-on) 62%,transparent);
+  --csp-switch-knob:#ffffff;
+  --csp-switch-knob-sheen:none;
+  --csp-knob-shadow:0 1px 3px rgba(0,0,0,.24),0 0 0 .5px rgba(0,0,0,.06);
+  --csp-slider-track:rgba(60,60,67,.2);
+  --csp-slider-halo:rgba(0,0,0,.07);
+  --csp-slider-thumb:#ffffff;
+  /* Settings swatches: a hairline rim, and the spectrum on the custom one. */
+  --csp-swatch-rim:inset 0 0 0 .5px rgba(0,0,0,.18);
+  --csp-swatch-spectrum:conic-gradient(from 90deg,#ff453a,#ff9f0a,#ffd60a,#4cd964,#64d2ff,#0a84ff,#bf5af2,#ff375f,#ff453a);
+}
+:root[data-ui-theme="dark"]{
+  --csp-switch-track:#000000;
+  --csp-switch-rim-off:rgba(255,255,255,.16);
+  --csp-switch-rim-on:color-mix(in srgb,var(--csp-control-on) 48%,transparent);
+  --csp-switch-knob:#9499a4;
+  --csp-switch-knob-sheen:linear-gradient(180deg,rgba(255,255,255,.1),rgba(0,0,0,.1));
+  --csp-knob-shadow:0 1px 3px rgba(0,0,0,.5);
+  --csp-slider-track:#000000;
+  --csp-slider-halo:rgba(255,255,255,.09);
+  --csp-swatch-rim:inset 0 0 0 .5px rgba(255,255,255,.16);
+}

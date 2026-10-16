@@ -452,14 +452,13 @@ body:not(.collapsed) #sideToggleDock{left:calc(var(--side-w) + 12px + var(--safe
 .tool-popover-state{font-size:10.5px;color:var(--ink-3)}
 .tool-close{width:28px;height:28px;min-height:28px;padding:0;border:0;border-radius:7px;background:transparent;color:var(--ink-3);font-size:17px;line-height:1}
 .tool-close:hover{background:var(--hover);color:var(--ink)}
-#snapshotPanel{width:min(360px,calc(100vw - 20px))}
+#snapshotPanel{width:min(340px,calc(100vw - 20px))}
 .snapshot-export-body{display:grid;gap:10px;padding:12px}
 .snapshot-export-choice{display:grid;gap:5px}
-.snapshot-export-choice label{font-size:10px;font-weight:650;letter-spacing:.045em;text-transform:uppercase;color:var(--ink-3)}
+.snapshot-export-choice label{font-size:12px;font-weight:600;color:var(--ink-3)}
 #snapshotScale{width:100%;min-height:34px}
-#snapshotMeta{min-height:32px;color:var(--ink-2);font-size:11px;line-height:1.42}
-.snapshot-export-note{color:var(--ink-3);font-size:10.5px;line-height:1.42}
-#snapshotSave{width:100%;min-height:36px}
+#snapshotMeta{min-height:32px;color:var(--ink-2);font-size:12px;line-height:1.42}
+.snapshot-export-note{color:var(--ink-3);font-size:12px;line-height:1.42}
 #snapshotStatus{position:absolute;right:52px;top:52px;z-index:1320;max-width:min(330px,calc(100vw - 20px));
   padding:7px 9px;border:1px solid var(--glass-line);border-radius:var(--radius-chip);background:var(--glass-card);color:var(--ink-2);
   font-size:11px;line-height:1.35;box-shadow:var(--shadow-raised);backdrop-filter:blur(16px) saturate(1.2);-webkit-backdrop-filter:blur(16px) saturate(1.2)}
@@ -994,8 +993,8 @@ body.pane-reordering,body.pane-reordering *{cursor:grabbing!important;user-selec
 }
 
 </style>
-<link rel="stylesheet" href="ui-theme.css?build=2026-10-14a">
-<link rel="stylesheet" href="ui-system.css?build=2026-10-14a">
+<link rel="stylesheet" href="ui-theme.css?build=2026-10-16c">
+<link rel="stylesheet" href="ui-system.css?build=2026-10-16c">
 <style>
 /* The redesign restructures the legacy DOM rather than replacing it, and the
    script that does so is the last thing on the page - so the browser paints the
@@ -1015,6 +1014,7 @@ html.csp-boot body{visibility:hidden}
 (function(){
   var root=document.documentElement;
   root.classList.add("csp-boot");
+  try{var accent=localStorage.getItem("clearskies.controlAccent.v1");if(/^#[0-9a-f]{6}$/i.test(accent||""))root.style.setProperty("--csp-control-on",accent)}catch(e){}
   var reveal=function(){root.classList.remove("csp-boot")};
   var timer=setTimeout(reveal,4000);
   root.addEventListener("csp:ready",function(){clearTimeout(timer);reveal()},{once:true});
@@ -1677,9 +1677,15 @@ html.csp-boot body{visibility:hidden}
           </select>
         </div>
         <div id="snapshotMeta" role="status" aria-live="polite"></div>
-        <label class="snapshot-readout-option"><input id="snapshotReadout" type="checkbox"> Include coordinates, elevation and color keys</label>
-        <div class="snapshot-export-note">Drag a rectangle over the map to choose what to save. Higher resolutions fetch finer source tiles for that area; where a source has no finer data it is enlarged, never invented.</div>
-        <button class="ghost" id="snapshotSave" type="button">Select area on map</button>
+        <label class="snapshot-readout-option">
+          <span class="snapshot-readout-text"><span>Map info</span><small>Coordinates, elevation and color keys</small></span>
+          <span class="csp-switch"><input id="snapshotReadout" type="checkbox" role="switch"><span></span></span>
+        </label>
+        <div class="snapshot-export-note">Capture saves the whole view; Select Area lets you draw the rectangle to save. Higher resolutions fetch finer source tiles; where a source has no finer data it is enlarged, never invented.</div>
+        <div class="snapshot-export-actions">
+          <button class="snapshot-action snapshot-action-primary" id="snapshotCapture" type="button">Capture</button>
+          <button class="snapshot-action" id="snapshotSelect" type="button">Select Area</button>
+        </div>
       </div>
     </section>
     <section class="tool-popover" id="terrainSourcePanel" role="dialog" aria-modal="false" aria-labelledby="terrainSourcePanelTitle" hidden>
@@ -1697,15 +1703,10 @@ html.csp-boot body{visibility:hidden}
         <i data-h="se"></i><i data-h="s"></i><i data-h="sw"></i><i data-h="w"></i>
         <span id="snapSelSize" class="snap-sel-size"></span>
       </div>
-      <div id="snapSelBar" class="snap-sel-bar" role="toolbar" aria-label="Save map area">
+      <div id="snapSelBar" class="snap-sel-bar" role="toolbar" aria-label="Capture selected area">
         <button type="button" id="snapSelCancel" class="snap-sel-icon" aria-label="Cancel" title="Cancel (Esc)">&times;</button>
-        <div id="snapSelRes" class="snap-sel-res" role="radiogroup" aria-label="Resolution">
-          <button type="button" role="radio" data-scale="1">1×</button><button type="button" role="radio" data-scale="2">2×</button><button type="button" role="radio" data-scale="4">4×</button><button type="button" role="radio" data-scale="8">8×</button><button type="button" role="radio" data-scale="16">16×</button><button type="button" role="radio" data-scale="32">32×</button>
-        </div>
         <span id="snapSelMeta" class="snap-sel-meta" aria-live="polite"></span>
-        <button type="button" id="snapSelReadout" class="snap-sel-toggle" aria-pressed="false" aria-label="Include map info in saved image" title="Include coordinates, elevation and color keys in the image"><span>Map info</span><span class="snap-sel-toggle-state" aria-hidden="true">Off</span></button>
-        <button type="button" id="snapSelFull" class="snap-sel-text" title="Select the whole map view">Full view</button>
-        <button type="button" id="snapSelSave" class="snap-sel-save">Save</button>
+        <button type="button" id="snapSelSave" class="snap-sel-save">Capture</button>
       </div>
     </div>
     <div id="dnrSelectionBar" class="dnr-selection-bar" role="region" aria-label="Download selected WA DNR area" hidden>
@@ -1757,7 +1758,7 @@ html.csp-boot body{visibility:hidden}
   L.Renderer.prototype.onAdd=function(map){return onAdd.call(this,map||this._map)};
 })();
 </script>
-<script src="version.js?build=2026-10-14a"></script>
+<script src="version.js?build=2026-10-16c"></script>
 <script src="mosaic-core.js"></script>
 <script src="png-stream.js"></script>
 <script src="terrain-core.js"></script>
@@ -3459,17 +3460,25 @@ function positionToolPopover(panel,anchor){
   const w=panel.offsetWidth, h=panel.offsetHeight;
   let left=a.right-app.left+gap;
   if(left+w>app.width-pad.right) left=a.left-app.left-w-gap;
-  left=Math.max(pad.left,Math.min(left,app.width-w-pad.right));
+  // Keep the dock gap even when an expanded sidebar leaves too little room;
+  // overlapping the sidebar is preferable to pushing controls off-screen.
+  const minLeft=Math.min(pad.left,Math.max(10,a.left-app.left-w-gap));
+  left=Math.max(10,Math.min(Math.max(minLeft,left),app.width-w-pad.right));
   const top=Math.max(pad.top,Math.min(a.top-app.top,app.height-h-pad.bottom));
   panel.style.right="auto";panel.style.left=Math.round(left)+"px"; panel.style.top=Math.round(top)+"px";
 }
+function announceToolPopover(panel){
+  document.dispatchEvent(new CustomEvent("csp:tool-popover-open",{detail:{id:panel.id}}));
+}
 function setServerPanel(open,restoreFocus=false){
+  if(open) announceToolPopover(serverPanel);
   serverPanel.hidden=!open;
   serverToggle.setAttribute("aria-expanded",String(open));
   if(open) requestAnimationFrame(()=>positionToolPopover(serverPanel,serverToggle));
   else if(restoreFocus) serverToggle.focus({preventScroll:true});
 }
 function setTerrainSourcePanel(open,restoreFocus=false){
+  if(open) announceToolPopover(terrainSourcePanel);
   terrainSourcePanel.hidden=!open;
   terrainSourceToggle.setAttribute("aria-expanded",String(open));
   if(open){ renderTerrainSourcePanel?.(); requestAnimationFrame(()=>positionToolPopover(terrainSourcePanel,terrainSourceToggle)); }
@@ -3481,14 +3490,27 @@ terrainSourceToggle.onclick=()=>setTerrainSourcePanel(terrainSourcePanel.hidden)
 /* Quick draw: straight into markup on the last layer drawn on (or a new one),
    without opening the side menu. Pressed while drawing. */
 const quickDrawEl=$("#quickDraw");
+quickDrawEl.setAttribute("aria-haspopup","dialog");
+quickDrawEl.setAttribute("aria-controls","mkBar");
+quickDrawEl.setAttribute("aria-expanded","false");
 quickDrawEl.onclick=()=>window.CSPMarkup?.quickDraw();
+quickDrawEl.addEventListener("click",event=>{
+  if(event.detail===0&&quickDrawEl.getAttribute("aria-expanded")==="true")
+    document.querySelector('#mkBar [data-tool][aria-pressed="true"]')?.focus({preventScroll:true});
+});
 document.addEventListener("csp:markup-editing",e=>{
-  const on=!!e.detail?.editing;
+  const on=!!e.detail?.editing,expanded=on&&!!e.detail?.expanded;
   quickDrawEl.setAttribute("aria-pressed",String(on));
-  quickDrawEl.title=on?"Stop drawing":"Draw on the map";quickDrawEl.setAttribute("aria-label",quickDrawEl.title);
+  quickDrawEl.setAttribute("aria-expanded",String(expanded));
+  quickDrawEl.title=on?(expanded?"Hide markup tools":"Show markup tools"):"Draw on the map";quickDrawEl.setAttribute("aria-label",quickDrawEl.title);
 });
 $("#terrainSourceClose").onclick=()=>setTerrainSourcePanel(false,true);
 document.addEventListener("csp:layers-changed",()=>{ if(!terrainSourcePanel.hidden) renderTerrainSourcePanel?.() });
+document.addEventListener("csp:tool-popover-open",e=>{
+  if(e.detail.id!==serverPanel.id) setServerPanel(false);
+  if(e.detail.id!==terrainSourcePanel.id) setTerrainSourcePanel(false);
+  if(e.detail.id!=="snapshotPanel") setSnapshotPanel(false);
+});
 document.addEventListener("pointerdown",e=>{
   if(!serverPanel.hidden&&!serverPanel.contains(e.target)&&!serverToggle.contains(e.target)) setServerPanel(false);
   if(!terrainSourcePanel.hidden&&!terrainSourcePanel.contains(e.target)&&!terrainSourceToggle.contains(e.target)) setTerrainSourcePanel(false);
@@ -3735,7 +3757,7 @@ L.DomEvent.disableScrollPropagation(snapshotEl);
    what the source publishes. Everything is placed through the map's own
    projection, so a rotated map exports exactly the rectangle that was drawn. */
 const snapshotPanel=$("#snapshotPanel"), snapshotScaleEl=$("#snapshotScale"),
-      snapshotSaveEl=$("#snapshotSave"), snapshotMetaEl=$("#snapshotMeta");
+      snapshotCaptureEl=$("#snapshotCapture"), snapshotSelectEl=$("#snapshotSelect"), snapshotMetaEl=$("#snapshotMeta");
 let snapshotExporting=false, snapshotProgressAt=0;
 const SNAPSHOT_SCALES=[1,2,4,8,16,32], SNAPSHOT_SCALE_KEY="clearskies.snapshot-scale.v1";
 /* Exports are rendered in blocks and written as a streamed PNG (png-stream.js),
@@ -3847,15 +3869,21 @@ function snapshotLimitText(spec){
   if(map3d&&spec.scale>snapshotMax3dScale()) return "3D saves at screen resolution";
   return "";
 }
+/* The 3D view is saved from its own canvas, so a resolution above the screen's
+   is stepped down to the finest it can deliver rather than refused. */
+function snapshotFit3dScale(){
+  if(map3d&&snapshotScale()>snapshotMax3dScale()) snapshotScaleEl.value=String(SNAPSHOT_SCALES.filter(v=>v<=snapshotMax3dScale()).pop());
+}
 function updateSnapshotPreview(){
   let spec;
+  snapshotSelectEl.disabled=snapshotExporting;
+  snapshotCaptureEl.textContent=snapshotExporting?"Exporting…":"Capture";
   try{ spec=snapshotSpec(snapshotFullSelection(),snapshotScale()) }
-  catch(error){ snapshotMetaEl.textContent=error.message;return }
+  catch(error){ snapshotMetaEl.textContent=error.message;snapshotCaptureEl.disabled=true;return }
   const limit=snapshotLimitText(spec);
   snapshotMetaEl.textContent=`The whole view at ${spec.scale}× is ${spec.width.toLocaleString()} × ${spec.height.toLocaleString()} px (${snapshotMegapixels(spec.width,spec.height)} MP, ${snapshotGroundText(spec.sel,spec.scale)}).`
-    +(limit?` ${limit} — select a smaller area.`:"");
-  snapshotSaveEl.disabled=snapshotExporting;
-  snapshotSaveEl.textContent=snapshotExporting?"Exporting…":"Select area on map";
+    +(limit?` ${limit} — choose a lower resolution or Select Area.`:"");
+  snapshotCaptureEl.disabled=snapshotExporting||!spec.ok;
 }
 function snapshotWrappedX(x,z){ const n=Math.pow(2,z);return ((x%n)+n)%n }
 function snapshotLayerTileUrl(layer,rawCoords){
@@ -4007,7 +4035,7 @@ async function composeSnapshot(spec){
   ctx.fillRect(0,0,spec.width,spec.height);
   const cache=new Map();let settled=0,drawn=0,failed=0;
   const progress=()=>{ settled++;if(performance.now()-snapshotProgressAt>130){ snapshotProgressAt=performance.now();
-    setSnapSelMeta(`Fetching ${settled.toLocaleString()} / ${spec.tiles.toLocaleString()} tiles…`,true) } };
+    snapshotReport(`Fetching ${settled.toLocaleString()} / ${spec.tiles.toLocaleString()} tiles…`,true) } };
   try{
     if(map3d) drawn+=await drawSnapshot3d(ctx,spec);
     else{
@@ -4025,7 +4053,7 @@ async function composeSnapshot(spec){
   }finally{ for(const task of cache.values()) task.then(bitmap=>bitmap.close?.()).catch(()=>{}) }
   if(!drawn) throw new Error("No visible map layers were ready to export.");
   drawSnapshotReadout(ctx,spec);
-  setSnapSelMeta("Encoding PNG…",true);
+  snapshotReport("Encoding PNG…",true);
   const blob=await new Promise((resolve,reject)=>canvas.toBlob(value=>value?resolve(value):reject(new Error("The browser could not encode an image this large.")),"image/png"));
   canvas.width=canvas.height=0;
   return {blob,drawn,failed};
@@ -4082,7 +4110,7 @@ async function composeSnapshotStream(spec,write){
   let drawn=0,fetched=0;
   const progress=()=>{ fetched++ };
   const report=rows=>{ if(performance.now()-snapshotProgressAt>150){ snapshotProgressAt=performance.now();
-    setSnapSelMeta(`Rendering ${Math.floor(rows/H*100)}% · ${fetched.toLocaleString()} tiles`,true) } };
+    snapshotReport(`Rendering ${Math.floor(rows/H*100)}% · ${fetched.toLocaleString()} tiles`,true) } };
   /* Every layer's tiles for a band are requested together (each source with
      its own few-at-a-time pool), and the next band's while this one is drawn
      and compressed, so a big export is limited by the network, not by
@@ -4127,7 +4155,7 @@ async function composeSnapshotStream(spec,write){
       }
     }
     if(!drawn) throw new Error("No visible map layers were ready to export.");
-    setSnapSelMeta("Finishing PNG…",true);
+    snapshotReport("Finishing PNG…",true);
     await png.finish();
   }catch(error){ png.abort(error);throw error }
   finally{ for(const task of cache.values()) task.then(bitmap=>bitmap.close?.()).catch(()=>{});canvas.width=canvas.height=0 }
@@ -4180,6 +4208,11 @@ const snapSel=$("#snapSel"),snapBox=$("#snapSelBox"),snapBar=$("#snapSelBar"),sn
 let snapRect=null,snapDrag=null,snapFocusReturn=null;
 const SNAP_MIN=16;
 function setSnapSelMeta(text,warn=false){ snapMeta.textContent=text;snapMeta.classList.toggle("snap-warn",!!warn) }
+/* Export progress shows on the selection bar while an area is being saved,
+   and in the status note by the camera for a whole-view capture. */
+function snapshotReport(text,warn=false,timeout=0){
+  if(snapSel.hidden) setSnapshotStatus(text,timeout);else setSnapSelMeta(text,warn);
+}
 function snapBounds(){ const r=$("#map").getBoundingClientRect();return {left:r.left,top:r.top,w:r.width,h:r.height} }
 function snapDefaultRect(){
   const b=snapBounds(),inset=scenePanelInsets();
@@ -4205,17 +4238,12 @@ function layoutSnapSel(){
   snapBox.classList.toggle("snap-size-inside",r.y<30);
   let spec=null;
   try{ spec=snapshotSpec(r,scale) }catch(error){}
-  snapSize.textContent=spec?`${spec.width.toLocaleString()} × ${spec.height.toLocaleString()}`:"";
-  for(const button of snapBar.querySelectorAll("[data-scale]")){
-    const v=Number(button.dataset.scale);let ok=true,why="";
-    try{ const s=snapshotSpec(r,v);ok=s.ok;why=snapshotLimitText(s) }catch(error){ ok=false }
-    button.setAttribute("aria-checked",String(v===scale));
-    button.disabled=snapshotExporting||(!ok&&v!==scale);
-    button.title=why||`${v}× — ${Math.round(r.w*v).toLocaleString()} × ${Math.round(r.h*v).toLocaleString()} px`;
-  }
+  snapSize.textContent=spec?`${spec.width.toLocaleString()} × ${spec.height.toLocaleString()} · ${scale}×`:"";
+  /* Resolution and map info were chosen in the camera panel; the bar only
+     speaks up when this rectangle cannot be saved at that resolution. */
   if(!snapshotExporting){
     const limit=spec?snapshotLimitText(spec):"";
-    setSnapSelMeta(limit||(spec?`${snapshotMegapixels(spec.width,spec.height)} MP · ${snapshotGroundText(r,scale)}`:""),!!limit);
+    setSnapSelMeta(limit,!!limit);
   }
   snapSaveBtn.disabled=snapshotExporting||!spec||!spec.ok;
   /* The bar sits under the selection, above it when there is no room, and
@@ -4232,8 +4260,8 @@ function startSnapshotSelect(){
   snapshotCursorLocation=cursorLocation?{...cursorLocation}:null;
   setSnapshotPanel(false);
   if(innerWidth<=760&&!document.body.classList.contains("collapsed")) $("#sideToggle")?.click();
-  snapFocusReturn=document.activeElement;
-  if(map3d&&snapshotScale()>snapshotMax3dScale()) snapshotScaleEl.value=String(SNAPSHOT_SCALES.filter(v=>v<=snapshotMax3dScale()).pop());
+  snapFocusReturn=snapshotEl;
+  snapshotFit3dScale();
   snapSel.hidden=false;document.body.classList.add("snap-selecting");snapshotEl.setAttribute("aria-pressed","true");
   /* Measured after the phone sheet has had its frame to drop to the peek. */
   requestAnimationFrame(()=>{ snapRect=snapRect?clampSnapRect(snapRect):snapDefaultRect();layoutSnapSel();snapBox.focus({preventScroll:true}) });
@@ -4298,34 +4326,43 @@ snapSel.addEventListener("keydown",event=>{
   const step=event.shiftKey?10:1,move={ArrowLeft:[-step,0],ArrowRight:[step,0],ArrowUp:[0,-step],ArrowDown:[0,step]}[event.key];
   if(move&&event.target===snapBox){ event.preventDefault();snapRect={...snapRect,x:snapRect.x+move[0],y:snapRect.y+move[1]};layoutSnapSel() }
 });
-snapBar.addEventListener("click",event=>{
-  const scale=event.target.closest?.("[data-scale]");
-  if(scale&&!scale.disabled) setSnapshotScale(Number(scale.dataset.scale));
-});
 $("#snapSelCancel").onclick=()=>{ if(!snapshotExporting) endSnapshotSelect() };
-$("#snapSelFull").onclick=()=>{ snapRect=snapshotFullSelection();layoutSnapSel() };
 snapSaveBtn.onclick=()=>saveSnapshotSelection();
 addEventListener("resize",()=>layoutSnapSel());
 map.on("zoomend moveend",()=>layoutSnapSel());
-async function saveSnapshotSelection(){
-  if(snapshotExporting||snapSel.hidden||!snapRect) return;
+function saveSnapshotSelection(){
+  if(snapSel.hidden||!snapRect) return;
+  exportSnapshot(()=>clampSnapRect(snapRect));
+}
+/* Capture: the whole map view at the chosen resolution, straight from the
+   panel. It renders from the same tile plan as a selection, so the sidebar
+   and buttons floating over the map are never part of the image. */
+function captureSnapshotView(){
+  if(snapshotExporting||!snapSel.hidden) return;
+  snapshotFit3dScale();
+  snapshotCursorLocation=cursorLocation?{...cursorLocation}:null;
+  setSnapshotPanel(false,true);setSnapshotStatus("",0);
+  exportSnapshot(snapshotFullSelection);
+}
+async function exportSnapshot(selection){
+  if(snapshotExporting) return;
   snapshotExporting=true;snapshotEl.disabled=true;layoutSnapSel();snapshotProgressAt=0;
   try{
     /* The save dialog has to open inside the click that asked for it, so a
        large desktop export picks its destination before anything else. */
     const name=snapshotFilename();
-    const early=snapshotSpec(clampSnapRect(snapRect),snapshotScale());
+    const early=snapshotSpec(selection(),snapshotScale());
     if(!early.ok) throw new Error(snapshotLimitText(early)||"This selection cannot be exported.");
     let sink=null;
     if(snapshotStreamNeeded(early)){
       try{ sink=await snapshotSink(name,SNAPSHOT_DISK) }
-      catch(error){ if(error?.name==="AbortError"){ setSnapSelMeta("Save cancelled.",false);return } throw error }
+      catch(error){ if(error?.name==="AbortError"){ snapshotReport("Save cancelled.",false,5000);return } throw error }
     }
     await snapshotSettled();
-    const spec=snapshotSpec(clampSnapRect(snapRect),snapshotScale());
+    const spec=snapshotSpec(selection(),snapshotScale());
     if(!spec.ok) throw new Error(snapshotLimitText(spec)||"This selection cannot be exported.");
     if($("#snapshotReadout").checked)spec.readout=await createSnapshotReadout(spec);
-    setSnapSelMeta(`Preparing ${spec.width.toLocaleString()} × ${spec.height.toLocaleString()}…`,true);
+    snapshotReport(`Preparing ${spec.width.toLocaleString()} × ${spec.height.toLocaleString()}…`,true);
     let result,blob;
     if(sink&&snapshotStreamNeeded(spec)){
       try{ result=await composeSnapshotStream(spec,sink.write);blob=await sink.close() }
@@ -4335,7 +4372,7 @@ async function saveSnapshotSelection(){
     const delivered=blob?await deliverSnapshot(blob,name):(setSnapshotStatus(`Saved ${sink.name} (${spec.width.toLocaleString()} × ${spec.height.toLocaleString()} px).`,8000),true);
     if(delivered&&result.failed) setSnapshotStatus(`Saved; ${result.failed} source tile${result.failed===1?" was":"s were"} unavailable and left blank.`,7000);
   }catch(error){
-    setSnapSelMeta(error?.message||"The map could not be saved.",true);
+    if(!snapSel.hidden) setSnapSelMeta(error?.message||"The map could not be saved.",true);
     setSnapshotStatus((error?.message||"Map export could not be completed.")+" Try a lower resolution or a smaller area.",8000);
   }finally{
     snapshotExporting=false;snapshotEl.disabled=false;layoutSnapSel();updateSnapshotPreview();
@@ -4344,22 +4381,31 @@ async function saveSnapshotSelection(){
 
 function positionSnapshotPanel(){
   positionToolPopover(snapshotPanel,snapshotEl);
-  if(!matchMedia("(max-width:760px)").matches) return;
-  const app=$("#app").getBoundingClientRect(),anchor=snapshotEl.getBoundingClientRect(),inset=scenePanelInsets(),gap=8;
-  const desired=anchor.bottom-app.top+gap,max=app.height-snapshotPanel.offsetHeight-inset.bottom;
-  snapshotPanel.style.top=Math.round(Math.max(inset.top,Math.min(desired,max)))+"px";
 }
 function setSnapshotPanel(open,restoreFocus=false){
-  if(snapshotPanel.classList.contains("csp-inline-export")) return;
+  if(open){ announceToolPopover(snapshotPanel);snapshotFit3dScale() }
   snapshotPanel.hidden=!open;snapshotEl.setAttribute("aria-expanded",String(open));
   if(open){ updateSnapshotPreview();requestAnimationFrame(positionSnapshotPanel) }
   else if(restoreFocus) snapshotEl.focus({preventScroll:true});
 }
 window.cspStartSnapshotSelect=startSnapshotSelect;
+window.cspOpenSnapshotPanel=()=>setSnapshotPanel(true);
 snapshotEl.setAttribute("aria-pressed","false");
-snapshotEl.onclick=()=>snapSel.hidden?startSnapshotSelect():endSnapshotSelect();
+snapshotEl.setAttribute("aria-haspopup","dialog");
+snapshotEl.setAttribute("aria-controls","snapshotPanel");
+snapshotEl.onclick=()=>snapSel.hidden?setSnapshotPanel(snapshotPanel.hidden):endSnapshotSelect();
+snapshotEl.addEventListener("click",event=>{
+  if(event.detail===0&&!snapshotPanel.hidden)snapshotScaleEl.focus({preventScroll:true});
+});
+document.addEventListener("pointerdown",event=>{
+  if(!snapshotPanel.hidden&&!snapshotPanel.contains(event.target)&&!snapshotEl.contains(event.target)) setSnapshotPanel(false);
+});
+document.addEventListener("keydown",event=>{
+  if(event.key==="Escape"&&!snapshotPanel.hidden){event.preventDefault();setSnapshotPanel(false,true)}
+});
 snapshotScaleEl.oninput=snapshotScaleEl.onchange=()=>setSnapshotScale(Number(snapshotScaleEl.value));
-snapshotSaveEl.onclick=startSnapshotSelect;$("#snapshotClose").onclick=()=>setSnapshotPanel(false,true);
+snapshotCaptureEl.onclick=captureSnapshotView;snapshotSelectEl.onclick=startSnapshotSelect;
+$("#snapshotClose").onclick=()=>setSnapshotPanel(false,true);
 map.on("moveend",()=>{ if(!snapshotExporting) updateSnapshotPreview() });
 L.DomEvent.disableClickPropagation(snapshotPanel);L.DomEvent.disableScrollPropagation(snapshotPanel);
 
@@ -10185,6 +10231,8 @@ function cspSetLayerOrder(order){
 window.ClearSkiesPortalBridge={
   /* For markup.js: the map, the engine address, and whether it answers. */
   map,
+  positionToolPopover,
+  announceToolPopover,
   map3d:()=>map3d,
   api,
   server:()=>({online:PROXY,base:API}),
@@ -10303,13 +10351,10 @@ function drawSnapshotReadout(ctx,spec,blockX=0,blockY=0){
 }
 function setSnapshotReadoutEnabled(enabled,persist=false){
   $("#snapshotReadout").checked=enabled;
-  const button=$("#snapSelReadout");button.setAttribute("aria-pressed",String(enabled));
-  button.querySelector(".snap-sel-toggle-state").textContent=enabled?"On":"Off";
   if(persist)try{localStorage.setItem("clearskies.snapshot.readout.v1",String(enabled))}catch(error){}
 }
 try{setSnapshotReadoutEnabled(localStorage.getItem("clearskies.snapshot.readout.v1")==="true")}catch(error){}
 $("#snapshotReadout").addEventListener("change",event=>setSnapshotReadoutEnabled(event.target.checked,true));
-$("#snapSelReadout").addEventListener("click",()=>setSnapshotReadoutEnabled(!$("#snapshotReadout").checked,true));
 function cursorTileSample(tile,ll){
   if(!tile?.elev||!tile.coords)return null;
   const {z,x,y}=tile.coords,p=map.project(ll,z),world=256*2**z;
@@ -10559,8 +10604,8 @@ $("#q").addEventListener("blur",()=>setTimeout(acHide,120));
 document.addEventListener("click",e=>{ if(!e.target.closest("#iw")) acHide() });
 })();
 </script>
-<script src="markup-3d.js?build=2026-10-14a"></script>
-<script src="markup.js?build=2026-10-14a"></script>
-<script src="ui-system.js?build=2026-10-14a"></script>
+<script src="markup-3d.js?build=2026-10-16c"></script>
+<script src="markup.js?build=2026-10-16c"></script>
+<script src="ui-system.js?build=2026-10-16c"></script>
 </body>
 </html>

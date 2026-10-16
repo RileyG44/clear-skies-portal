@@ -467,8 +467,9 @@ function pushUndo(layer){
   const stack=stackFor(undoStacks,layer);
   stack.push(JSON.stringify(layer.doc.features));if(stack.length>100) stack.shift();
   stackFor(redoStacks,layer).length=0;
+  if(editing===layer)syncHistoryButtons();
 }
-function dropUndo(layer){ stackFor(undoStacks,layer).pop() }
+function dropUndo(layer){ stackFor(undoStacks,layer).pop();if(editing===layer)syncHistoryButtons() }
 function undoRedo(redo){
   if(!editing) return;
   const from=stackFor(redo?redoStacks:undoStacks,editing),to=stackFor(redo?undoStacks:redoStacks,editing);
@@ -546,7 +547,7 @@ setInterval(()=>{ if(serverState().online&&!document.hidden) syncAll() },60000);
 /* ------------------------------------------------------------- public: CRUD */
 function nextRank(){ return Math.max(0,...[...layers.values()].map(l=>l.rank+1)) }
 function createLayer(name,color){
-  const doc={type:"FeatureCollection",markup:{id:slug(name),name:name.trim().slice(0,120)||"Markup",color,created:Date.now(),updated:Date.now()},features:[]};
+  const doc={type:"FeatureCollection",markup:{id:slug(name),name:name.trim().slice(0,120)||"Markup",description:"",color,created:Date.now(),updated:Date.now()},features:[]};
   const layer=makeLayer(doc,{on:true,op:100});layer.rank=nextRank();applyOrder();writeView();
   idb.put(doc);syncAll();changed();
   return layer;
@@ -594,10 +595,11 @@ function redrawDraft(){
 const overlay=document.createElement("div");overlay.id="mkOverlay";mapEl.append(overlay);
 L.DomEvent.disableClickPropagation(overlay);
 const eraserRing=document.createElement("div");eraserRing.className="mk-eraser-ring";eraserRing.hidden=true;mapEl.append(eraserRing);
-const bar=document.createElement("div");bar.id="mkBar";bar.hidden=true;bar.setAttribute("role","toolbar");bar.setAttribute("aria-label","Markup tools");
+const bar=document.createElement("div");bar.id="mkBar";bar.className="tool-popover csp-markup-popover";bar.hidden=true;
+bar.setAttribute("role","dialog");bar.setAttribute("aria-modal","false");bar.setAttribute("aria-labelledby","mkBarTitle");
 document.getElementById("app").append(bar);
 L.DomEvent.disableClickPropagation(bar);L.DomEvent.disableScrollPropagation(bar);
-const pop=document.createElement("div");pop.id="mkPop";pop.hidden=true;pop.setAttribute("role","dialog");
+const pop=document.createElement("div");pop.id="mkPop";pop.className="tool-popover";pop.hidden=true;pop.setAttribute("role","dialog");
 document.getElementById("app").append(pop);
 L.DomEvent.disableClickPropagation(pop);L.DomEvent.disableScrollPropagation(pop);
 
@@ -615,8 +617,17 @@ const TOOLS=[
 let draft=null;          // a mark being drawn
 let gesture=null;        // a selection being moved, resized or rotated
 let pointsMode=false;    // editing the points of a selected shape
+let toolsOpen=false;     // dismissing the popover must not turn off the pen
+let layerDetailsDraft=null,groundEdit=null;
 let lastLayerId=store.get(LAST_KEY,null);
-const notifyEditing=()=>document.dispatchEvent(new CustomEvent("csp:markup-editing",{detail:{editing:!!editing,layer:editing?.doc.markup.id||null}}));
+const notifyEditing=()=>document.dispatchEvent(new CustomEvent("csp:markup-editing",{detail:{editing:!!editing,expanded:!!editing&&toolsOpen,layer:editing?.doc.markup.id||null}}));
+function setToolsOpen(open,restoreFocus=false){
+  if(!open){finishLayerDetails(true,false);finishGroundEdit()}
+  toolsOpen=!!editing&&open;
+  if(toolsOpen) B.announceToolPopover?.(bar);else closePop();
+  paintBar();notifyEditing();
+  if(restoreFocus) document.getElementById("quickDraw")?.focus({preventScroll:true});
+}
 function startEditing(layer){
   if(editing&&editing!==layer) stopEditing();
   B.ensureMap?.();
@@ -630,14 +641,26 @@ function startEditing(layer){
      inside that tap let the same click land on the lowered sheet and raise it. */
   if(innerWidth<=760) setTimeout(()=>{ if(editing&&!document.body.classList.contains("collapsed")) $("#sideToggle")?.click() },60);
   document.body.classList.add("csp-markup-editing");
+  toolsOpen=true;
+  B.announceToolPopover?.(bar);
   setTool(tool);changed();notifyEditing();
 }
-function stopEditing(){
-  cancelDraft();deselect();closePop();editing=null;tool="pan";
+function stopEditing(restoreFocus=false){
+  finishLayerDetails(true,false);finishGroundEdit();
+  cancelDraft();deselect();closePop();editing=null;tool="pan";toolsOpen=false;
   capture.hidden=true;bar.hidden=true;eraserRing.hidden=true;document.body.classList.remove("csp-markup-editing");
   map.dragging.enable();view3d()?.dragPan.enable();mapEl.classList.remove("mk-hover");changed();notifyEditing();
+  if(restoreFocus) document.getElementById("quickDraw")?.focus({preventScroll:true});
 }
+document.addEventListener("csp:tool-popover-open",event=>{if(editing&&event.detail.id!==bar.id)stopEditing()});
+/* A tap on the drawing surface dismisses the controls, not the pen. The
+   dock remains available to reopen them without obstructing the next stroke. */
+mapEl.addEventListener("pointerdown",event=>{
+  if(toolsOpen&&!event.target.closest(".tool-popover,#mapDock,#sideToggleDock,.leaflet-control,#ctl"))setToolsOpen(false);
+},{capture:true,passive:true});
 function setTool(next){
+  finishLayerDetails(true,false);finishGroundEdit();
+  const switched=next!==tool;
   cancelDraft();closePop();
   if(next!=="select") deselect();
   tool=next;mapEl.classList.remove("mk-hover");
@@ -648,9 +671,70 @@ function setTool(next){
   capture.hidden=!drawing;capture.dataset.tool=tool;
   eraserRing.hidden=tool!=="eraser";
   paintBar();
+  if(switched&&!matchMedia("(prefers-reduced-motion: reduce)").matches)
+    bar.querySelector(`[data-tool="${next}"]`)?.animate([{scale:.94},{scale:1.015,offset:.65},{scale:1}],{duration:200,easing:"cubic-bezier(.2,.8,.2,1)"});
+}
+/* Layer details are edited in place, with no permanent form chrome. A draft
+   stays attached to its original layer even when the active layer changes. */
+function layerContextHtml(){
+  const m=editing.doc.markup,draft=layerDetailsDraft?.layer===editing?layerDetailsDraft:null;
+  const picker=`<label class="mk-layer-picker" title="Switch markup layer"><img src="${icon("layers")}" alt=""><img class="mk-caret" src="${icon("chevron-down")}" alt=""><select aria-label="Active markup layer" data-layer-select>${[...layers.values()].sort((a,b)=>b.rank-a.rank).map(layer=>`<option value="${esc(layer.doc.markup.id)}" ${layer===editing?"selected":""}>${esc(layer.doc.markup.name)}</option>`).join("")}</select></label>`;
+  return `<div class="mk-context-row"><span class="mk-dot" style="--c:${m.color}"></span><div class="mk-context-title">${draft
+    ?`<input class="mk-meta-input mk-layer-name" data-layer-detail="name" maxlength="120" aria-label="Markup layer name" value="${esc(draft.name)}">`
+    :`<button type="button" class="mk-context-text mk-layer-name" data-edit-detail="name" title="Edit layer name">${esc(m.name)}</button>`}</div><div class="mk-context-actions">${draft
+    ?`<button type="button" class="mk-detail-button" data-act="save-layer-details" aria-label="Save layer details" title="Save layer details"><img src="${icon("check")}" alt=""></button><button type="button" class="mk-detail-button" data-act="cancel-layer-details" aria-label="Cancel layer edits" title="Cancel layer edits">&times;</button>`
+    :`<button type="button" class="mk-detail-button" data-act="edit-layer-details" aria-label="Edit layer details" title="Edit name and description"><img src="${icon("pen-line")}" alt=""></button>`}${picker}</div></div>${draft
+    ?`<textarea class="mk-meta-input mk-layer-description" data-layer-detail="description" rows="2" maxlength="1000" aria-label="Markup layer description" placeholder="Add a description">${esc(draft.description)}</textarea>`
+    :`<button type="button" class="mk-context-text mk-layer-description${m.description?"":" mk-placeholder"}" data-edit-detail="description" title="Edit layer description">${esc(m.description||"Add a description")}</button>`}`;
+}
+function paintLayerContext(){
+  const context=bar.querySelector(".mk-context");if(context&&editing){context.innerHTML=layerContextHtml();placeBar()}
+}
+function beginLayerDetails(field="name"){
+  if(!editing)return;
+  if(!layerDetailsDraft)layerDetailsDraft={layer:editing,name:editing.doc.markup.name,description:editing.doc.markup.description||""};
+  paintLayerContext();
+  const input=bar.querySelector(`[data-layer-detail="${field}"]`);input?.focus();input?.select();
+}
+function finishLayerDetails(commit,repaint=true){
+  if(!layerDetailsDraft)return;
+  const {layer,name,description}=layerDetailsDraft;layerDetailsDraft=null;
+  if(commit){
+    const m=layer.doc.markup,nextName=name.trim().slice(0,120)||m.name,nextDescription=description.trim().slice(0,1000);
+    if(m.name!==nextName||(m.description||"")!==nextDescription){m.name=nextName;m.description=nextDescription;touch(layer)}
+  }
+  if(repaint)paintLayerContext();
+}
+/* A logarithmic slider covers sub-foot marks and large landscape annotations;
+   the feet field remains exact and can extend the slider beyond its range. */
+function widthRangePosition(value,min,max){
+  return Math.round(1000*Math.log((Math.max(min,Math.min(max,value))+.1)/(min+.1))/Math.log((max+.1)/(min+.1)));
+}
+function widthRangeFeet(position,min,max){
+  return +(Math.exp(Math.max(0,Math.min(1000,position))/1000*Math.log((max+.1)/(min+.1)))*(min+.1)-.1).toFixed(4);
+}
+function syncWidthRange(value,fromRange=false){
+  const range=bar.querySelector("[data-ground-range]"),number=bar.querySelector('[data-ground="width"]');if(!range||!number)return;
+  const min=Number(number.min),max=Math.max(10000,Number(range.dataset.feetMax)||0,value);
+  range.dataset.feetMax=max;
+  if(fromRange)number.value=value;else range.value=widthRangePosition(value,min,max);
+  range.setAttribute("aria-valuetext",`${value.toLocaleString()} feet`);
+}
+function finishGroundEdit(){if(groundEdit){touch(groundEdit.layer);groundEdit=null;drawFrame()}}
+function applyGroundValue(key,value,final){
+  if(!editing||!Number.isFinite(value))return;
+  const m=value*.3048,f=selectedFeature();
+  if(f){
+    if(groundEdit?.feature!==f){finishGroundEdit();pushUndo(editing);groundEdit={layer:editing,feature:f}}
+    f.properties[key]=m;renderFeature(editing,f);drawFrame();if(final)finishGroundEdit();
+  }else{
+    if(key==="size"){if(tool==="pin")styles.text.pinGroundSize=m;else styles.text.groundSize=m;styles.text.size=m/here()}
+    else{const ink=currentStyle().family==="highlight"?styles.highlight:styles.ink;ink.groundWidth=m;ink.width=m/here()}
+    saveStyles();
+  }
 }
 /* A colour chip, a slider and the like, as small HTML pieces. */
-const chip=(act,color,label,none=false)=>`<button type="button" class="mk-chip${none?" mk-none":""}" data-pop="${act}" style="--c:${color||"transparent"}" aria-label="${label}" title="${label}"><span></span></button>`;
+const chip=(act,color,label,none=false)=>`<div class="mk-color-option"><span>${label}</span><button type="button" class="mk-chip${none?" mk-none":""}" data-pop="${act}" style="--c:${color||"transparent"}" aria-label="${label}" title="${label}"><span></span></button></div>`;
 const slider=(key,label,value,min,max,step,unit)=>`<label class="mk-slider" title="${label}"><span>${label}</span><input type="range" data-style="${key}" min="${min}" max="${max}" step="${step}" value="${value}" aria-label="${label}"><output>${value}${unit}</output></label>`;
 const sep=`<span class="mk-sep" aria-hidden="true"></span>`;
 function selectedFeature(){ return selected&&selected.layer===editing?editing.items.get(selected.fid)?.feature||null:null }
@@ -669,13 +753,19 @@ function currentStyle(){
   return {family,color:ink.color,width:ink.width,opacity:ink.opacity,fillColor:styles.fill.color,fillOpacity:styles.fill.opacity,size:styles.text.size,eraser:styles.eraser.size};
 }
 function paintBar(){
-  if(!editing){ bar.hidden=true;return }
+  if(!editing||!toolsOpen){ bar.hidden=true;return }
+  // Background source/view refreshes must not replace the field being typed in.
+  if(layerDetailsDraft?.layer===editing&&bar.contains(document.activeElement)&&document.activeElement.matches("[data-layer-detail]"))return;
   bar.hidden=false;
   const f=selectedFeature(),s=currentStyle(),m=editing.doc.markup;
   const shape=shapeById(styles.shape);
-  const ground=(key,label,px)=>{const metres=f?(f.properties[key]||0):(key==="size"?(tool==="pin"?styles.text.pinGroundSize??(styles.text.groundSize!=null?styles.text.groundSize*1.4:undefined):styles.text.groundSize):(s.family==="highlight"?styles.highlight:styles.ink).groundWidth)??px*here(),value=feet(metres);return `<label class="mk-ground"><span>${label}</span><input type="number" data-ground="${key}" min="${s.family==="shape"?0:.1}" step="any" value="${+value.toFixed(2)}" aria-label="${label} in feet"><span>ft</span></label>`};
+  const ground=(key,label,px)=>{
+    const metres=f?(f.properties[key]||0):(key==="size"?(tool==="pin"?styles.text.pinGroundSize??(styles.text.groundSize!=null?styles.text.groundSize*1.4:undefined):styles.text.groundSize):(s.family==="highlight"?styles.highlight:styles.ink).groundWidth)??px*here(),value=+feet(metres).toFixed(4),min=s.family==="shape"?0:.1,max=Math.max(10000,value);
+    const number=`<label class="mk-ground"><span>${label}</span><input type="number" data-ground="${key}" min="${min}" step="any" value="${value}" aria-label="${label} in feet"><span>ft</span></label>`;
+    return key!=="width"?number:`<div class="mk-width-control">${number}<input class="mk-width-range" type="range" data-ground-range="width" min="0" max="1000" step="1" value="${widthRangePosition(value,min,max)}" data-feet-max="${max}" aria-label="${label}" aria-valuetext="${value} feet"></div>`;
+  };
   const tools=TOOLS.map(t=>t?`<button type="button" class="mk-tool" data-tool="${t[0]}" aria-pressed="${tool===t[0]}" title="${t[2]}" aria-label="${t[2].replace(/ \(.\)$/,"")}">${
-    t[0]==="shape"?`<span class="mk-shape-glyph">${shapePreview(shape)}</span><img class="mk-caret" src="${icon("chevron-down")}" alt="">`:`<img src="${icon(t[1])}" alt="">`}</button>`:sep).join("");
+    t[0]==="shape"?`<span class="mk-shape-icons"><span class="mk-shape-glyph">${shapePreview(shape)}</span><img class="mk-caret" src="${icon("chevron-down")}" alt=""></span>`:`<img src="${icon(t[1])}" alt="">`}<span class="mk-tool-label">${{select:"Select",pan:"Pan",pen:"Pen",highlight:"Highlight",eraser:"Eraser",shape:"Shapes",text:"Text",pin:"Pin"}[t[0]]}</span></button>`:sep).join("");
   const undoCount=stackFor(undoStacks,editing).length,redoCount=stackFor(redoStacks,editing).length;
   let opts="";
   const fam=s.family;
@@ -703,27 +793,31 @@ function paintBar(){
   }
   const pending=draft&&draft.kind==="area";
   bar.innerHTML=`
-    <div class="mk-tools">${tools}</div>
-    <div class="mk-history">
+    <div class="tool-popover-head"><div class="tool-popover-title" id="mkBarTitle">Markup</div><button type="button" class="tool-close" data-act="close" aria-label="Close markup tools">&times;</button></div>
+    <div class="mk-context">${layerContextHtml()}</div>
+    <div class="mk-tools" role="toolbar" aria-label="Markup tools">${tools}</div>
+    <div class="mk-opts">${opts}${actions?`<div class="mk-selection-actions">${actions}</div>`:""}</div>
+    <div class="mk-footer"><div class="mk-history">
       <button type="button" class="mk-icon-btn" data-act="undo" title="Undo (Ctrl+Z)" aria-label="Undo" ${undoCount?"":"disabled"}><img src="${icon("undo-2")}" alt=""></button>
       <button type="button" class="mk-icon-btn" data-act="redo" title="Redo (Ctrl+Shift+Z)" aria-label="Redo" ${redoCount?"":"disabled"}><img src="${icon("redo-2")}" alt=""></button>
     </div>
-    <div class="mk-finish"><button type="button" class="mk-done" data-act="${pending?"finish":"done"}">${pending?"Finish shape":"Done"}</button></div>
-    <div class="mk-opts"><span class="mk-layer-chip" title="Drawing on this layer"><span class="mk-dot" style="--c:${m.color}"></span><span class="mk-layer-name">${esc(m.name)}</span></span><span class="mk-hint">${view3d()?"3D placement":"On the map"} · size and orientation stay fixed</span>${opts}${actions?sep+actions:""}</div>`;
+    <div class="mk-finish"><button type="button" class="mk-done" data-act="${pending?"finish":"done"}">${pending?"Finish shape":"Done"}</button></div></div>`;
   placeBar();
 }
-/* On a wide screen the bar is centred over the map, clear of the sidebar;
-   on a phone the stylesheet spans it across the top. */
+/* Use the same dock anchor and safe-area positioning as Layers and the
+   terrain engine, rather than a separate screen-spanning toolbar. */
 function placeBar(){
   if(bar.hidden) return;
-  if(innerWidth<=760){ bar.style.left="";return }
-  const side=document.getElementById("side"),open=side&&!document.body.classList.contains("collapsed");
-  const dock=document.getElementById("mapDock")?.getBoundingClientRect();
-  const left=open?side.getBoundingClientRect().right+12:12,right=dock&&dock.width?dock.left-12:innerWidth-12;
-  bar.style.maxWidth=Math.max(320,right-left)+"px";
-  const width=bar.offsetWidth;
-  bar.style.left=Math.max(left+width/2,Math.min(right-width/2,(left+right)/2))+"px";
+  B.positionToolPopover?.(bar,document.getElementById("quickDraw"));
 }
+function syncHistoryButtons(){
+  if(!editing)return;
+  for(const [act,stacks] of [["undo",undoStacks],["redo",redoStacks]]){
+    const button=bar.querySelector(`[data-act="${act}"]`);if(button)button.disabled=!stackFor(stacks,editing).length;
+  }
+}
+new ResizeObserver(placeBar).observe(document.getElementById("mapDock"));
+new MutationObserver(placeBar).observe(document.getElementById("mapDock"),{childList:true});
 addEventListener("resize",()=>{ placeBar();closePop() });
 let last3dMode=!!view3d();
 new MutationObserver(()=>{const mode=!!view3d();if(mode!==last3dMode){last3dMode=mode;cancelDraft();deselect();if(editing)paintBar()}requestAnimationFrame(placeBar)}).observe(document.body,{attributes:true,attributeFilter:["class"]});
@@ -798,9 +892,30 @@ bar.addEventListener("change",event=>{
 bar.addEventListener("change",event=>{
   const input=event.target.closest("[data-ground]");if(!input||!editing)return;
   const value=Number(input.value);if(!Number.isFinite(value)||value<Number(input.min)){paintBar();return;}
-  const key=input.dataset.ground,m=value*.3048,f=selectedFeature();
-  if(f){pushUndo(editing);f.properties[key]=m;renderFeature(editing,f);touch(editing);drawFrame()}
-  else{if(key==="size"){if(tool==="pin")styles.text.pinGroundSize=m;else styles.text.groundSize=m;styles.text.size=m/here()}else{const ink=currentStyle().family==="highlight"?styles.highlight:styles.ink;ink.groundWidth=m;ink.width=m/here()}saveStyles()}
+  applyGroundValue(input.dataset.ground,value,true);if(input.dataset.ground==="width")syncWidthRange(value);
+});
+bar.addEventListener("input",event=>{
+  const input=event.target;
+  if(input.dataset.layerDetail&&layerDetailsDraft)layerDetailsDraft[input.dataset.layerDetail]=input.value;
+  if(input.matches('[data-ground="width"]')&&input.value!==""&&Number.isFinite(input.valueAsNumber))syncWidthRange(input.valueAsNumber);
+  if(input.matches("[data-ground-range]")){
+    const number=bar.querySelector('[data-ground="width"]'),value=widthRangeFeet(+input.value,+number.min,+input.dataset.feetMax);
+    syncWidthRange(value,true);applyGroundValue("width",value,false);
+  }
+});
+bar.addEventListener("change",event=>{
+  const input=event.target;
+  if(input.matches("[data-ground-range]"))applyGroundValue("width",Number(bar.querySelector('[data-ground="width"]').value),true);
+  if(input.matches("[data-layer-select]")){
+    const layer=layers.get(input.value);if(layer&&layer!==editing){finishLayerDetails(true,false);startEditing(layer)}
+  }
+});
+bar.addEventListener("keydown",event=>{
+  if(!event.target.matches("[data-layer-detail]"))return;
+  if(event.key==="Escape"){event.preventDefault();event.stopPropagation();finishLayerDetails(false);bar.querySelector('[data-act="edit-layer-details"]')?.focus()}
+  else if(event.key==="Enter"&&(event.target.dataset.layerDetail==="name"||event.ctrlKey||event.metaKey)){
+    event.preventDefault();finishLayerDetails(true);bar.querySelector('[data-act="edit-layer-details"]')?.focus();
+  }
 });
 bar.addEventListener("input",event=>{
   const input=event.target.closest("input[data-style]");if(!input) return;
@@ -816,6 +931,11 @@ bar.addEventListener("change",event=>{
 });
 bar.addEventListener("click",event=>{
   const button=event.target.closest("button");if(!button||!editing) return;
+  if(button.dataset.editDetail){beginLayerDetails(button.dataset.editDetail);return}
+  if(button.dataset.act==="edit-layer-details"){beginLayerDetails();return}
+  if(button.dataset.act==="save-layer-details"||button.dataset.act==="cancel-layer-details"){
+    finishLayerDetails(button.dataset.act==="save-layer-details");bar.querySelector('[data-act="edit-layer-details"]')?.focus();return;
+  }
   if(button.dataset.tool){
     if(button.dataset.tool==="shape"){
       if(tool==="shape"&&!pop.hidden&&pop.dataset.kind==="shape"){ closePop();return }
@@ -833,13 +953,15 @@ bar.addEventListener("click",event=>{
   else if(act==="edit-text") editSelectedText();
   else if(act==="points"){ pointsMode=!pointsMode;drawFrame();paintBar() }
   else if(act==="finish") finishArea();
-  else if(act==="done") stopEditing();
+  else if(act==="close") setToolsOpen(false,true);
+  else if(act==="done") stopEditing(true);
 });
 
 /* Popovers from the toolbar: the colour grid and the shape gallery. */
 function closePop(){ pop.hidden=true;pop.dataset.kind="";bar.querySelectorAll("[data-pop][aria-expanded]").forEach(b=>b.removeAttribute("aria-expanded")) }
 function openPop(kind,anchor){
   pop.dataset.kind=kind;
+  pop.setAttribute("aria-label",kind==="shape"?"Shapes":kind==="fill"?"Fill colour":"Colour");
   const s=currentStyle();
   if(kind==="shape"){
     const group=(title,items)=>`<div class="mk-pop-label">${title}</div><div class="mk-shape-grid">${items.map(x=>
@@ -885,9 +1007,13 @@ function fadeGrid(grid){
 
 const KEYS={v:"select",h:"pan",p:"pen",i:"highlight",e:"eraser",s:"shape",t:"text"};
 document.addEventListener("keydown",event=>{
-  if(!editing||/^(input|textarea|select)$/i.test(event.target.tagName)||event.target.isContentEditable) return;
+  if(!editing) return;
+  if(event.key==="Escape"&&bar.contains(event.target)){
+    event.preventDefault();if(!pop.hidden)closePop();else setToolsOpen(false,true);return;
+  }
+  if(/^(input|textarea|select)$/i.test(event.target.tagName)||event.target.isContentEditable) return;
   const mod=event.metaKey||event.ctrlKey,k=event.key.toLowerCase();
-  if(event.key==="Escape"){ if(!pop.hidden) closePop();else if(draft) cancelDraft();else if(pointsMode){ pointsMode=false;drawFrame() }else if(selected) deselect();else stopEditing();paintBar() }
+  if(event.key==="Escape"){ if(!pop.hidden) closePop();else if(draft) cancelDraft();else if(pointsMode){ pointsMode=false;drawFrame() }else if(selected) deselect();else if(toolsOpen)setToolsOpen(false,true);else stopEditing(true);paintBar() }
   else if(mod&&k==="z"){ event.preventDefault();undoRedo(event.shiftKey) }
   else if(mod&&k==="y"){ event.preventDefault();undoRedo(true) }
   else if(mod&&k==="d"&&selected){ event.preventDefault();duplicateSelected() }
@@ -1518,7 +1644,7 @@ function activeEntries(){
 /* The map's quick-draw button: back to the layer last drawn on, or the top
    visible one, or a new layer when there is none. */
 function quickDraw(){
-  if(editing){ stopEditing();return false }
+  if(editing){ setToolsOpen(!toolsOpen);return true }
   const all=[...layers.values()].sort((a,b)=>b.rank-a.rank);
   const layer=layers.get(lastLayerId)||all.find(l=>l.visible)||all[0]||createLayer(`Markup ${layers.size+1}`,DEFAULT_COLOR);
   startEditing(layer);return true;

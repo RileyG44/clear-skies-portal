@@ -44,6 +44,59 @@ Invalid ranges or
 minutes/seconds of 60 or greater show an error instead of searching for a place.
 Regression tests live in `test-coordinate-search.js` and run with `npm test`.
 
+## Map tool popovers
+
+Markup, camera export, Layers, Map view and the terrain engine use dock-anchored
+popovers. Opening another tool closes the previous one. The panels share the
+theme's glass surface and stay inside the viewport, including mobile safe areas.
+
+The drawing button opens the markup tools. Drawing on the map dismisses the
+controls without turning off the pen; press the drawing button to reopen them.
+The close button hides the controls, while **Done** ends drawing mode. Opening a
+different dock popover also ends drawing mode without deleting the annotations.
+
+Click the layer name or description, or its pencil icon, to edit those details
+in place. Save with the checkmark or Enter (Command/Ctrl+Enter in a multiline
+description); Escape cancels. Descriptions are optional, limited to 1,000
+characters, and persist with the layer in IndexedDB and on the terrain engine.
+The small layer selector switches the active drawing layer and saves any pending
+details to their original layer before switching.
+
+Stroke and outline widths have a logarithmic slider alongside exact feet entry.
+The number field can extend the slider beyond 10,000 ft. Dragging the slider
+updates a selected mark live and remains one undo operation. Keyboard steps keep
+focus, and shape outlines can be reduced to zero.
+
+Popover entrances/exits and tool selection use brief native browser animations,
+following [Apple's motion guidance](https://developer.apple.com/design/human-interface-guidelines/motion)
+and [spring-animation principles](https://developer.apple.com/videos/play/wwdc2023/10158/),
+not SwiftUI APIs. Reduced Motion disables the spatial feedback and exit delay;
+browsers without discrete display transitions keep the simple fallback.
+
+The camera opens export settings first: a resolution, a **Map info** switch, and
+two side-by-side actions. **Capture** saves the whole map view at that
+resolution straight away. **Select Area** opens only the draggable rectangle,
+with Cancel and Capture beside it; resolution and map info come from the panel.
+The sidebar's Export entry opens the same settings, rather than relocating the
+live controls.
+
+Switches and sliders share one style: an outlined groove (black in dark mode)
+with a round knob slightly larger than it, and a thin slider groove with a
+white thumb that gains a soft halo while hovered or dragged. The "on" colour is
+chosen under **Settings** at the bottom of the sidebar, next to Terrain engine
+and Map sources: ten preset swatches or any colour from the system picker, with
+a live preview. The choice is stored in this browser
+(`clearskies.controlAccent.v1`) and applied before first paint.
+
+Browser regressions: `node scripts/ui-map-popovers.js` covers light/dark desktop,
+mobile, narrow phones, landscape, editing, layer switching, drawing, keyboard
+focus, panel transitions, Reduced Motion, the camera's two actions and the
+Settings colour (including after a reload). `test-markup-controls.js` exercises
+metadata drafts, slider math, exact units and one-step width undo in `npm test`.
+`node scripts/ui-snapshot.js` checks whole-view Capture, area selection and exported pixels.
+Both accept a local server URL and the optional `PLAYWRIGHT_MODULE` environment
+variable; browser tooling is not an application dependency.
+
 ## Run it in a Codespace
 
 Press **`.`** on the GitHub repo page, or *Code → Codespaces → Create codespace*.

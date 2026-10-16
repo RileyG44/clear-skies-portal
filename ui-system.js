@@ -41,7 +41,8 @@ const ROUTES={
   geology:{title:"Geology & hazards",description:"Surface geology, faults, seismic context, landslides, and point identification.",icon:"triangle-alert",panes:["overlays","research"],open:["overlays","research"],overlayGroup:"Geology & hazards",overlayTitle:"Geology layers",researchMode:"geology"},
   past:{title:"Past landscapes",description:"Ice-age lakes, glaciers, archaeology, and reconstructed environments.",icon:"history",panes:["overlays"],open:["overlays"],overlayGroup:"Past landscapes",overlayTitle:"Past landscape layers"},
   markup:{title:"Markup",description:"Draw, write and pin notes on the map, in layers you can switch on and off together or apart.",icon:"pen-line",panes:[],custom:"markup"},
-  labels:{title:"Labels & reference",description:"Roads, trails, places, water, boundaries, and reference labels.",icon:"tags",panes:["overlays"],open:["overlays"],overlayGroup:"Labels & reference",overlayTitle:"Reference layers"}
+  labels:{title:"Labels & reference",description:"Roads, trails, places, water, boundaries, and reference labels.",icon:"tags",panes:["overlays"],open:["overlays"],overlayGroup:"Labels & reference",overlayTitle:"Reference layers"},
+  settings:{title:"Settings",description:"Personal preferences for this browser. They are saved on this device only.",icon:"settings",panes:[],custom:"settings"}
 };
 
 const oldHeader=$(":scope > header",side),searchbox=$(":scope > .searchbox",side),foot=$(":scope > .foot",side),drag=$("#drag",side);
@@ -100,6 +101,10 @@ engineNav.querySelector("button").addEventListener("click",()=>$("#serverToggle"
 const mapSources=document.createElement("details");mapSources.id="cspMapSources";
 mapSources.innerHTML=`<summary><img src="${icon("layers")}" alt=""><span>Map sources</span><img class="csp-sources-chevron" src="${icon("chevron-right")}" alt=""></summary><div id="cspMapSourcesContent" aria-live="polite"></div>`;
 engineNav.after(mapSources);
+const settingsNav=document.createElement("div");settingsNav.id="cspSettingsNav";
+settingsNav.innerHTML=`<button class="csp-nav-button" type="button" data-route="settings"><img src="${icon("settings")}" alt=""><span>Settings</span></button>`;
+mapSources.before(settingsNav);
+settingsNav.querySelector("button").addEventListener("click",()=>activateRoute("settings"));
 const mapSourcesContent=$("#cspMapSourcesContent",mapSources);
 const syncMapSources=()=>{
   const attribution=typeof map!=="undefined"?map.attributionControl?._container:null;
@@ -145,7 +150,8 @@ const SEARCH_ROUTES=new Map([
   ["conditions","conditions"],["weather","conditions"],["earthquakes","conditions"],["fire","conditions"],["snow","conditions"],
   ["geology","geology"],["hazards","geology"],["faults","geology"],["landslides","geology"],
   ["past landscapes","past"],["glaciers","past"],["ice age","past"],["archaeology","past"],
-  ["labels","labels"],["reference","labels"],["roads","labels"],["boundaries","labels"],["markup","markup"],["annotate","markup"],["annotations","markup"],["draw","markup"],["drawing","markup"],["notes","markup"]
+  ["labels","labels"],["reference","labels"],["roads","labels"],["boundaries","labels"],["markup","markup"],["annotate","markup"],["annotations","markup"],["draw","markup"],["drawing","markup"],["notes","markup"],
+  ["settings","settings"],["preferences","settings"],["accent","settings"],["accent color","settings"],["color","settings"]
 ]);
 function routeFromSearch(){
   const value=$("#q")?.value.trim().toLocaleLowerCase().replace(/\s+/g," ");
@@ -278,10 +284,8 @@ function annotateOverlayGroups(){
 }
 new MutationObserver(annotateOverlayGroups).observe($("#ovList"),{childList:true});
 
-const snapshotPanel=$("#snapshotPanel"),snapshotHome=snapshotPanel?.parentElement;
-/* The camera button goes straight to choosing an area on the map (the page's
-   own handler); the Export view keeps the resolution choice and a button
-   that starts the same selection. */
+/* Export and the camera share one dock-anchored panel. Do not reparent its
+   live controls into the sidebar: that used to strand the camera's panel. */
 
 const visited=new Set();
 let currentRoute="layers";
@@ -295,7 +299,6 @@ function openDefaultPanes(route){
 }
 
 function clearCustom(){
-  if(snapshotPanel?.parentElement===customView) customView.removeChild(snapshotPanel);
   customView.replaceChildren();
 }
 
@@ -413,7 +416,11 @@ function renderSatelliteView(){
 
 function renderExportView(){
   clearCustom();
-  if(snapshotPanel){snapshotPanel.hidden=false;snapshotPanel.classList.add("csp-inline-export");customView.append(snapshotPanel);$("#snapshotScale")?.dispatchEvent(new Event("change",{bubbles:true}))}
+  const imageLabel=document.createElement("div");imageLabel.className="csp-section-label";imageLabel.textContent="Map image";
+  const imageCard=document.createElement("div");imageCard.className="csp-card";
+  const imageRow=document.createElement("button");imageRow.className="csp-available-row";imageRow.type="button";
+  imageRow.innerHTML=`<strong>Export map image</strong><img src="${icon("chevron-right")}" alt="" width="15" height="15"><span>Capture the whole view, or select an area on the map</span>`;
+  imageRow.addEventListener("click",()=>window.cspOpenSnapshotPanel?.());imageCard.append(imageRow);customView.append(imageLabel,imageCard);
   const label=document.createElement("div");label.className="csp-section-label";label.textContent="Offline terrain";
   const card=document.createElement("div");card.className="csp-card";
   const row=document.createElement("button");row.className="csp-available-row";row.type="button";
@@ -421,10 +428,78 @@ function renderExportView(){
   row.addEventListener("click",()=>{$("#terWarm")?.click();activateRoute("terrain")});card.append(row);customView.append(label,card);
 }
 
+/* Settings. The switch-and-slider colour is one custom property on <html>; the
+   boot script in index.html applies a saved choice before first paint, and
+   this keeps it, the swatches and the storage in step afterwards. */
+const CONTROL_ACCENT_KEY="clearskies.controlAccent.v1",CONTROL_ACCENT_DEFAULT="#4cd964";
+const CONTROL_ACCENTS=[["Green","#4cd964"],["Mint","#00c7be"],["Teal","#30b0c7"],["Blue","#0a84ff"],["Indigo","#5e5ce6"],
+  ["Purple","#bf5af2"],["Pink","#ff375f"],["Red","#ff453a"],["Orange","#ff9f0a"],["Yellow","#ffd60a"]];
+const validAccent=value=>/^#[0-9a-f]{6}$/i.test(String(value||""))?String(value).toLowerCase():null;
+function controlAccent(){
+  try{return validAccent(localStorage.getItem(CONTROL_ACCENT_KEY))||CONTROL_ACCENT_DEFAULT}catch(error){return CONTROL_ACCENT_DEFAULT}
+}
+function setControlAccent(value,persist=true){
+  const accent=validAccent(value)||CONTROL_ACCENT_DEFAULT;
+  document.documentElement.style.setProperty("--csp-control-on",accent);
+  if(persist)try{
+    if(accent===CONTROL_ACCENT_DEFAULT)localStorage.removeItem(CONTROL_ACCENT_KEY);else localStorage.setItem(CONTROL_ACCENT_KEY,accent);
+  }catch(error){}
+  syncAccentPicker();
+}
+function syncAccentPicker(){
+  const picker=$("#cspAccentPicker",customView);if(!picker) return;
+  const accent=controlAccent(),preset=CONTROL_ACCENTS.find(([,hex])=>hex===accent);
+  const swatches=$$("[data-accent]",picker);
+  swatches.forEach(button=>{
+    const on=button.dataset.accent===accent;
+    button.setAttribute("aria-checked",String(on));button.tabIndex=on||(!preset&&button===swatches[0])?0:-1;
+  });
+  const custom=$("[data-accent-custom]",picker);
+  custom.value=accent;custom.closest(".csp-accent-custom").classList.toggle("is-selected",!preset);
+  custom.closest(".csp-accent-custom").style.setProperty("--swatch",accent);
+  $("#cspAccentName",customView).textContent=preset?preset[0]:`Custom ${accent.toUpperCase()}`;
+  $(".csp-setting-foot",customView).hidden=accent===CONTROL_ACCENT_DEFAULT;
+}
+function renderSettingsView(){
+  clearCustom();
+  const label=document.createElement("div");label.className="csp-section-label";label.textContent="Switches and sliders";
+  const card=document.createElement("div");card.className="csp-card csp-settings-card";
+  card.innerHTML=`
+    <div class="csp-setting-row">
+      <div class="csp-setting-text"><strong id="cspAccentLabel">Accent color</strong><span>Fills every switch knob and slider when it is on.</span></div>
+      <span class="csp-accent-name" id="cspAccentName" aria-live="polite"></span>
+    </div>
+    <div class="csp-accent-picker" id="cspAccentPicker">
+      <div class="csp-accent-presets" role="radiogroup" aria-labelledby="cspAccentLabel">
+        ${CONTROL_ACCENTS.map(([name,hex])=>`<button type="button" class="csp-accent-swatch" role="radio" aria-checked="false" data-accent="${hex}" style="--swatch:${hex}" aria-label="${name}" title="${name}"></button>`).join("")}
+      </div>
+      <label class="csp-accent-swatch csp-accent-custom" title="Choose any color"><input type="color" data-accent-custom aria-label="Custom accent color"></label>
+    </div>
+    <div class="csp-setting-preview">
+      <label class="csp-setting-row"><span>Preview</span><span class="csp-switch"><input type="checkbox" checked aria-label="Preview switch"><span></span></span></label>
+      <input type="range" min="0" max="100" step="1" value="62" aria-label="Preview slider">
+    </div>
+    <div class="csp-setting-foot"><button type="button" class="linkbtn" data-accent-reset>Reset to green</button></div>`;
+  customView.append(label,card);
+  const picker=$("#cspAccentPicker",card),presets=$(".csp-accent-presets",card);
+  presets.addEventListener("click",event=>{const swatch=event.target.closest("[data-accent]");if(swatch) setControlAccent(swatch.dataset.accent)});
+  presets.addEventListener("keydown",event=>{
+    const step={ArrowRight:1,ArrowDown:1,ArrowLeft:-1,ArrowUp:-1}[event.key],swatches=$$("[data-accent]",presets);
+    const index=swatches.indexOf(event.target);if(!step||index<0) return;
+    event.preventDefault();const next=swatches[(index+step+swatches.length)%swatches.length];
+    setControlAccent(next.dataset.accent);next.focus();
+  });
+  $("[data-accent-custom]",picker).addEventListener("input",event=>setControlAccent(event.target.value));
+  $("[data-accent-reset]",card).addEventListener("click",()=>{setControlAccent(CONTROL_ACCENT_DEFAULT);$(".csp-accent-swatch[aria-checked='true']",presets)?.focus()});
+  syncAccentPicker();syncRangeFill($("input[type=range]",card));
+}
+setControlAccent(controlAccent(),false);
+
 function renderCustom(route){
   if(route.custom==="layers") renderLayersView();
   else if(route.custom==="satellite") renderSatelliteView();
   else if(route.custom==="export") renderExportView();
+  else if(route.custom==="settings") renderSettingsView();
   else if(route.custom==="markup"){ clearCustom();const box=document.createElement("div");customView.append(box);window.CSPMarkup?.renderPanel(box) }
   else clearCustom();
 }
@@ -492,6 +567,7 @@ function placeModeMenu(){
 }
 function setModeMenu(open,{focus=false,restore=false}={}){
   if(!modeToggle) return;
+  if(open) bridge.announceToolPopover?.(modeMenu);
   modeMenu.hidden=!open;
   modeToggle.setAttribute("aria-expanded",String(open));
   if(open){
@@ -523,6 +599,7 @@ document.addEventListener("pointerdown",event=>{
   if(!modeMenu.hidden&&!modeMenu.contains(event.target)&&!modeToggle?.contains(event.target)) setModeMenu(false);
 },true);
 document.addEventListener("keydown",event=>{if(event.key==="Escape"&&!modeMenu.hidden) setModeMenu(false,{restore:true})});
+document.addEventListener("csp:tool-popover-open",event=>{if(event.detail.id!==modeMenu.id)setModeMenu(false)});
 addEventListener("resize",placeModeMenu);
 function syncModeBar(){
   syncTerrainSections();
@@ -587,14 +664,28 @@ setInterval(()=>{ if(document.visibilityState==="visible") scheduleLayerRefresh(
    input events, so a periodic sweep catches those; it only writes when the
    value changed. */
 function syncRangeFill(input){
+  if(!input) return;
   const min=+input.min||0,max=input.max===""?100:+input.max,value=+input.value;
-  const fill=max>min?`${Math.round((value-min)/(max-min)*1000)/10}%`:"0%";
+  const ratio=max>min?Math.max(0,Math.min(1,(value-min)/(max-min))):0;
+  const fill=`${Math.round(ratio*1000)/10}%`,share=String(Math.round(ratio*10000)/10000);
   if(input.style.getPropertyValue("--csp-fill")!==fill) input.style.setProperty("--csp-fill",fill);
+  if(input.style.getPropertyValue("--csp-fill-n")!==share) input.style.setProperty("--csp-fill-n",share);
 }
 const syncAllRangeFills=()=>{for(const input of document.querySelectorAll('input[type="range"]')) syncRangeFill(input)};
 document.addEventListener("input",event=>{if(event.target.matches?.('input[type="range"]')) syncRangeFill(event.target)},true);
 document.addEventListener("click",()=>requestAnimationFrame(syncAllRangeFills),true);
 setInterval(()=>{ if(document.visibilityState==="visible") syncAllRangeFills() },1000);
+/* Panels that rebuild their sliders (markup tools, layer cards, popovers) are
+   filled as the new inputs arrive rather than at the next sweep. */
+const rangeArrivals=new MutationObserver(records=>{
+  for(const record of records) for(const node of record.addedNodes){
+    if(node.nodeType!==1) continue;
+    if(node.matches('input[type="range"]')) syncRangeFill(node);
+    else node.querySelectorAll('input[type="range"]').forEach(syncRangeFill);
+  }
+});
+for(const root of [side,$("#mkBar"),$("#pointCloudPanel"),$("#terrainSourcePanel")].filter(Boolean))
+  rangeArrivals.observe(root,{childList:true,subtree:true});
 syncAllRangeFills();
 
 /* Phone bottom sheet, modelled on the Maps sheet in iOS 26. Three resting

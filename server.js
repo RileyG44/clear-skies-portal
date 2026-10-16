@@ -210,6 +210,7 @@ function validMarkupLayer(doc,id){
     throw new HttpError(400,"markup layer must be a GeoJSON FeatureCollection with a markup header");
   if(meta.id!==id) throw new HttpError(400,"markup layer id does not match its address");
   if(typeof meta.name!=="string"||!meta.name.trim()||meta.name.length>120) throw new HttpError(400,"markup layer needs a name");
+  if(meta.description!==undefined&&(typeof meta.description!=="string"||meta.description.length>1000)) throw new HttpError(400,"markup description must be text up to 1000 characters");
   if(!/^#[0-9a-f]{6}$/i.test(String(meta.color||""))) throw new HttpError(400,"markup layer colour must be #rrggbb");
   if(!Number.isFinite(meta.updated)) throw new HttpError(400,"markup layer needs an updated time");
   if(doc.features.length>MAX_MARKUP_FEATURES) throw new HttpError(413,"too many markup features");
