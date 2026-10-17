@@ -75,6 +75,10 @@ assert(uiSystem.includes("csp-layer-rail")&&uiSystem.includes('data-action="edit
        "layer card actions must be icon tools in the left rail");
 assert(uiSystem.includes("descriptionEl.hidden=!route.description"),
        "workspace subtitles must hide when a route has none");
+assert(uiSystem.includes('custom:"appearance"')&&uiSystem.includes("renderAppearanceView")&&uiSystem.includes("THEME_PRESETS"),
+       "Appearance must be its own route with theme presets");
+assert(uiSystem.includes("renderSettingsView")&&uiSystem.includes("data-open-engine")&&!uiSystem.includes("cspEngineNav"),
+       "Settings must carry the terrain engine instead of a footer engine item");
 const versionSandbox={};
 vm.runInNewContext(read("version.js"),versionSandbox,{filename:"version.js"});
 assert.match(versionSandbox.CSP_BUILD,/^\d{4}-\d{2}-\d{2}[a-z]$/,"build version must be date plus revision letter");

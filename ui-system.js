@@ -42,7 +42,8 @@ const ROUTES={
   past:{title:"Past landscapes",description:"",icon:"history",panes:["overlays"],open:["overlays"],overlayGroup:"Past landscapes",overlayTitle:"Past landscape layers"},
   markup:{title:"Markup",description:"",icon:"pen-line",panes:[],custom:"markup"},
   labels:{title:"Labels & reference",description:"",icon:"tags",panes:["overlays"],open:["overlays"],overlayGroup:"Labels & reference",overlayTitle:"Reference layers"},
-  settings:{title:"Settings",description:"Personal preferences for this browser. They are saved on this device only.",icon:"settings",panes:[],custom:"settings"}
+  appearance:{title:"Appearance",description:"Personal preferences for this browser. They are saved on this device only.",icon:"sliders-horizontal",panes:[],custom:"appearance"},
+  settings:{title:"Settings",description:"Terrain engine, export defaults and accessibility for this browser.",icon:"settings",panes:[],custom:"settings"}
 };
 
 const oldHeader=$(":scope > header",side),searchbox=$(":scope > .searchbox",side),foot=$(":scope > .foot",side),drag=$("#drag",side);
@@ -91,18 +92,17 @@ function navGroup(label,items){
 navGroup("Map",["layers","satellite","terrain","analyze","export"]);
 navGroup("Layer groups",["conditions","geology","past","labels","markup"]);
 
-const engineNav=document.createElement("div");engineNav.id="cspEngineNav";
-engineNav.innerHTML=`<button class="csp-nav-button" type="button"><img src="${icon("settings-2")}" alt=""><span>Terrain engine</span><span class="csp-nav-dot"></span></button>`;
-foot.prepend(engineNav);
-engineNav.querySelector("button").addEventListener("click",()=>$("#serverToggle")?.click());
-
 /* Keep source references available in the navigation rail while the map stays
    clear at every screen size. The toolbar source popover also carries them. */
 const mapSources=document.createElement("details");mapSources.id="cspMapSources";
 mapSources.innerHTML=`<summary><img src="${icon("layers")}" alt=""><span>Map sources</span><img class="csp-sources-chevron" src="${icon("chevron-right")}" alt=""></summary><div id="cspMapSourcesContent" aria-live="polite"></div>`;
-engineNav.after(mapSources);
+foot.prepend(mapSources);
+const appearanceNav=document.createElement("div");appearanceNav.id="cspAppearanceNav";
+appearanceNav.innerHTML=`<button class="csp-nav-button" type="button" data-route="appearance"><img src="${icon("sliders-horizontal")}" alt=""><span>Appearance</span></button>`;
+mapSources.before(appearanceNav);
+appearanceNav.querySelector("button").addEventListener("click",()=>activateRoute("appearance"));
 const settingsNav=document.createElement("div");settingsNav.id="cspSettingsNav";
-settingsNav.innerHTML=`<button class="csp-nav-button" type="button" data-route="settings"><img src="${icon("settings")}" alt=""><span>Settings</span></button>`;
+settingsNav.innerHTML=`<button class="csp-nav-button" type="button" data-route="settings"><img src="${icon("settings")}" alt=""><span>Settings</span><span class="csp-nav-dot"></span></button>`;
 mapSources.before(settingsNav);
 settingsNav.querySelector("button").addEventListener("click",()=>activateRoute("settings"));
 const mapSourcesContent=$("#cspMapSourcesContent",mapSources);
@@ -151,7 +151,7 @@ const SEARCH_ROUTES=new Map([
   ["geology","geology"],["hazards","geology"],["faults","geology"],["landslides","geology"],
   ["past landscapes","past"],["glaciers","past"],["ice age","past"],["archaeology","past"],
   ["labels","labels"],["reference","labels"],["roads","labels"],["boundaries","labels"],["markup","markup"],["annotate","markup"],["annotations","markup"],["draw","markup"],["drawing","markup"],["notes","markup"],
-  ["settings","settings"],["preferences","settings"],["accent","settings"],["accent color","settings"],["color","settings"]
+  ["settings","settings"],["preferences","settings"],["terrain engine","settings"],["server","settings"],["appearance","appearance"],["theme","appearance"],["accent","appearance"],["accent color","appearance"],["color","appearance"],["font","appearance"]
 ]);
 function routeFromSearch(){
   const value=$("#q")?.value.trim().toLocaleLowerCase().replace(/\s+/g," ");
@@ -432,77 +432,263 @@ function renderExportView(){
   row.addEventListener("click",()=>{$("#terWarm")?.click();activateRoute("terrain")});card.append(row);customView.append(label,card);
 }
 
-/* Settings. The switch-and-slider colour is one custom property on <html>; the
-   boot script in index.html applies a saved choice before first paint, and
-   this keeps it, the swatches and the storage in step afterwards. */
+/* Appearance. Colours, font and text size are one saved bundle on <html>; the
+   boot script in index.html applies it before first paint, and this keeps the
+   controls, the inline properties and the storage in step afterwards. The
+   toggle colour keeps its original storage key so older saved choices load. */
+const APPEARANCE_KEY="clearskies.appearance.v1";
 const CONTROL_ACCENT_KEY="clearskies.controlAccent.v1",CONTROL_ACCENT_DEFAULT="#4cd964";
 const CONTROL_ACCENTS=[["Green","#4cd964"],["Mint","#00c7be"],["Teal","#30b0c7"],["Blue","#0a84ff"],["Indigo","#5e5ce6"],
   ["Purple","#bf5af2"],["Pink","#ff375f"],["Red","#ff453a"],["Orange","#ff9f0a"],["Yellow","#ffd60a"]];
-const validAccent=value=>/^#[0-9a-f]{6}$/i.test(String(value||""))?String(value).toLowerCase():null;
-function controlAccent(){
-  try{return validAccent(localStorage.getItem(CONTROL_ACCENT_KEY))||CONTROL_ACCENT_DEFAULT}catch(error){return CONTROL_ACCENT_DEFAULT}
-}
-function setControlAccent(value,persist=true){
-  const accent=validAccent(value)||CONTROL_ACCENT_DEFAULT;
-  document.documentElement.style.setProperty("--csp-control-on",accent);
-  if(persist)try{
-    if(accent===CONTROL_ACCENT_DEFAULT)localStorage.removeItem(CONTROL_ACCENT_KEY);else localStorage.setItem(CONTROL_ACCENT_KEY,accent);
+const TRACK_SWATCHES=[["Auto",null],["Light grey","#d1d1d6"],["Grey","#8e8e93"],["Charcoal","#3a3a3c"],["Black","#000000"],["White","#ffffff"]];
+const FONTS={
+  system:{name:"System",stack:"-apple-system,BlinkMacSystemFont,\"SF Pro Text\",\"Segoe UI\",sans-serif"},
+  inter:{name:"Inter",stack:"\"Inter Variable\",-apple-system,BlinkMacSystemFont,\"Segoe UI\",sans-serif"},
+  serif:{name:"Serif",stack:"Georgia,\"Times New Roman\",serif"},
+  mono:{name:"Mono",stack:"ui-monospace,\"SF Mono\",\"JetBrains Mono\",monospace"}
+};
+const THEME_PRESETS=[
+  {id:"meadow",name:"Meadow",toggle:"#4cd964",track:null,button:"#007aff"},
+  {id:"ocean",name:"Ocean",toggle:"#30b0c7",track:null,button:"#0a84ff"},
+  {id:"sunset",name:"Sunset",toggle:"#ff9f0a",track:null,button:"#ff453a"},
+  {id:"berry",name:"Berry",toggle:"#bf5af2",track:null,button:"#ff375f"},
+  {id:"graphite",name:"Graphite",toggle:"#98989d",track:"#3a3a3c",button:"#636366"}
+];
+const validColor=value=>/^#[0-9a-f]{6}$/i.test(String(value||""))?String(value).toLowerCase():null;
+const validAccent=validColor;
+function loadAppearance(){
+  const base={toggle:null,track:null,button:null,font:"system",fontColor:null,textSize:1,preset:"meadow"};
+  try{
+    const saved=JSON.parse(localStorage.getItem(APPEARANCE_KEY)||"{}");
+    if(saved&&typeof saved==="object"){
+      base.toggle=validColor(saved.toggle);base.track=validColor(saved.track);base.button=validColor(saved.button);
+      base.fontColor=validColor(saved.fontColor);
+      if(FONTS[saved.font]) base.font=saved.font;
+      if([0.92,1,1.12].includes(Number(saved.textSize))) base.textSize=Number(saved.textSize);
+      if(typeof saved.preset==="string") base.preset=saved.preset;
+    }
+    if(!base.toggle) base.toggle=validColor(localStorage.getItem(CONTROL_ACCENT_KEY));
   }catch(error){}
-  syncAccentPicker();
+  return base;
 }
-function syncAccentPicker(){
-  const picker=$("#cspAccentPicker",customView);if(!picker) return;
-  const accent=controlAccent(),preset=CONTROL_ACCENTS.find(([,hex])=>hex===accent);
-  const swatches=$$("[data-accent]",picker);
-  swatches.forEach(button=>{
-    const on=button.dataset.accent===accent;
-    button.setAttribute("aria-checked",String(on));button.tabIndex=on||(!preset&&button===swatches[0])?0:-1;
-  });
-  const custom=$("[data-accent-custom]",picker);
-  custom.value=accent;custom.closest(".csp-accent-custom").classList.toggle("is-selected",!preset);
-  custom.closest(".csp-accent-custom").style.setProperty("--swatch",accent);
-  $("#cspAccentName",customView).textContent=preset?preset[0]:`Custom ${accent.toUpperCase()}`;
-  $(".csp-setting-foot",customView).hidden=accent===CONTROL_ACCENT_DEFAULT;
+let appearance=loadAppearance();
+function controlAccent(){ return appearance.toggle||CONTROL_ACCENT_DEFAULT }
+function applyAppearance(persist=true){
+  const root=document.documentElement,toggle=appearance.toggle;
+  if(toggle) root.style.setProperty("--csp-control-on",toggle);else root.style.removeProperty("--csp-control-on");
+  if(appearance.track) root.style.setProperty("--csp-slider-track",appearance.track);else root.style.removeProperty("--csp-slider-track");
+  if(appearance.button) root.style.setProperty("--ui-accent",appearance.button);else root.style.removeProperty("--ui-accent");
+  if(appearance.fontColor) root.style.setProperty("--ui-text",appearance.fontColor);else root.style.removeProperty("--ui-text");
+  if(appearance.font&&appearance.font!=="system") root.style.setProperty("--csp-font-family",FONTS[appearance.font].stack);else root.style.removeProperty("--csp-font-family");
+  if(appearance.textSize&&appearance.textSize!==1) root.style.setProperty("--csp-text-zoom",String(appearance.textSize));else root.style.removeProperty("--csp-text-zoom");
+  if(persist)try{
+    const isDefault=!toggle&&!appearance.track&&!appearance.button&&!appearance.fontColor&&appearance.font==="system"&&appearance.textSize===1;
+    if(isDefault) localStorage.removeItem(APPEARANCE_KEY);else localStorage.setItem(APPEARANCE_KEY,JSON.stringify(appearance));
+    if(toggle&&toggle!==CONTROL_ACCENT_DEFAULT) localStorage.setItem(CONTROL_ACCENT_KEY,toggle);else localStorage.removeItem(CONTROL_ACCENT_KEY);
+  }catch(error){}
+  syncAppearancePicker();
 }
-function renderSettingsView(){
+function setAppearance(patch,fromPreset=false){
+  appearance={...appearance,...patch};
+  if(!fromPreset){
+    const match=THEME_PRESETS.find(p=>p.toggle===appearance.toggle&&p.track===appearance.track&&p.button===appearance.button);
+    appearance.preset=match?match.id:"custom";
+  }
+  applyAppearance();
+}
+function setControlAccent(value){ setAppearance({toggle:validColor(value)}) }
+function applyThemePreset(id){
+  const preset=THEME_PRESETS.find(p=>p.id===id);if(!preset) return;
+  setAppearance({toggle:preset.toggle,track:preset.track,button:preset.button,preset:preset.id},true);
+}
+function syncAppearancePicker(){
+  const view=customView;if(!view||!$("#cspAppearanceCard",view)) return;
+  const presetName=appearance.preset==="custom"?"Custom":(THEME_PRESETS.find(p=>p.id===appearance.preset)?.name||"Custom");
+  const presetEl=$("#cspPresetName",view);if(presetEl) presetEl.textContent=presetName;
+  $$("[data-theme-preset]",view).forEach(button=>button.setAttribute("aria-checked",String(button.dataset.themePreset===appearance.preset)));
+  const values={toggle:appearance.toggle||CONTROL_ACCENT_DEFAULT,track:appearance.track,button:appearance.button||"#007aff"};
+  for(const [key,value] of Object.entries(values)){
+    $$(`[data-color-for="${key}"] [data-color]`,view).forEach(button=>{
+      const swatchValue=button.dataset.color||null;
+      button.setAttribute("aria-checked",String(swatchValue===value||(key==="track"&&swatchValue===""&&value===null)));
+    });
+    const custom=$(`[data-color-custom="${key}"]`,view);
+    if(custom&&value) custom.value=value;
+    const nameEl=$(`#cspColorName-${key}`,view);
+    if(nameEl) nameEl.textContent=key==="track"&&!value?"Auto":(CONTROL_ACCENTS.find(([,hex])=>hex===value)?.[0]||value.toUpperCase());
+  }
+  /* the original accent picker's hooks, kept for the toggle colour */
+  const picker=$("#cspAccentPicker",view);
+  if(picker){
+    const preset=CONTROL_ACCENTS.find(([,hex])=>hex===values.toggle);
+    $$("[data-accent]",picker).forEach(button=>{
+      const on=button.dataset.accent===values.toggle;
+      button.setAttribute("aria-checked",String(on));button.tabIndex=on||(!preset&&button===$$("[data-accent]",picker)[0])?0:-1;
+    });
+    const custom=$("[data-accent-custom]",picker);
+    if(custom){custom.value=values.toggle;custom.closest(".csp-accent-custom")?.classList.toggle("is-selected",!preset);custom.closest(".csp-accent-custom")?.style.setProperty("--swatch",values.toggle)}
+    const nameEl=$("#cspAccentName",view);if(nameEl) nameEl.textContent=preset?preset[0]:`Custom ${values.toggle.toUpperCase()}`;
+  }
+  const fontSelect=$("[data-font-select]",view);if(fontSelect) fontSelect.value=appearance.font;
+  const fontColor=$("[data-font-color]",view);if(fontColor&&appearance.fontColor) fontColor.value=appearance.fontColor;
+  $$("[data-text-size]",view).forEach(button=>button.setAttribute("aria-pressed",String(Number(button.dataset.textSize)===appearance.textSize)));
+  const foot=$(".csp-setting-foot",view);
+  if(foot) foot.hidden=appearance.preset==="meadow"&&!appearance.fontColor&&appearance.font==="system"&&appearance.textSize===1;
+}
+function colorRow(key,label,desc,swatches,legacy=false){
+  return `<div class="csp-setting-row">
+      <div class="csp-setting-text"><strong>${label}</strong><span>${desc}</span></div>
+      <span class="csp-accent-name" id="cspColorName-${key}" aria-live="polite"></span>
+    </div>
+    <div class="csp-accent-picker" ${legacy?`id="cspAccentPicker"`:`data-color-for="${key}"`}>
+      <div class="csp-accent-presets" role="radiogroup" aria-label="${label}">
+        ${swatches.map(([name,hex])=>legacy
+          ?`<button type="button" class="csp-accent-swatch" role="radio" aria-checked="false" data-accent="${hex}" style="--swatch:${hex}" aria-label="${name}" title="${name}"></button>`
+          :`<button type="button" class="csp-accent-swatch" role="radio" aria-checked="false" data-color="${hex||""}" style="--swatch:${hex||"transparent"}" aria-label="${name}" title="${name}"></button>`).join("")}
+      </div>
+      ${legacy
+        ?`<label class="csp-accent-swatch csp-accent-custom" title="Choose any color"><input type="color" data-accent-custom aria-label="Custom ${label}"></label>`
+        :`<label class="csp-accent-swatch csp-accent-custom" title="Choose any color"><input type="color" data-color-custom="${key}" aria-label="Custom ${label}"></label>`}
+    </div>`;
+}
+function renderAppearanceView(){
   clearCustom();
-  const label=document.createElement("div");label.className="csp-section-label";label.textContent="Switches and sliders";
-  const card=document.createElement("div");card.className="csp-card csp-settings-card";
+  const label=document.createElement("div");label.className="csp-section-label";label.textContent="Theme";
+  const card=document.createElement("div");card.className="csp-card csp-settings-card";card.id="cspAppearanceCard";
   card.innerHTML=`
     <div class="csp-setting-row">
-      <div class="csp-setting-text"><strong id="cspAccentLabel">Accent color</strong><span>Fills every switch knob and slider when it is on.</span></div>
-      <span class="csp-accent-name" id="cspAccentName" aria-live="polite"></span>
+      <div class="csp-setting-text"><strong>Preset</strong><span>Sets the colours below together. Change any one and it becomes Custom.</span></div>
+      <span class="csp-accent-name" id="cspPresetName" aria-live="polite"></span>
     </div>
-    <div class="csp-accent-picker" id="cspAccentPicker">
-      <div class="csp-accent-presets" role="radiogroup" aria-labelledby="cspAccentLabel">
-        ${CONTROL_ACCENTS.map(([name,hex])=>`<button type="button" class="csp-accent-swatch" role="radio" aria-checked="false" data-accent="${hex}" style="--swatch:${hex}" aria-label="${name}" title="${name}"></button>`).join("")}
-      </div>
-      <label class="csp-accent-swatch csp-accent-custom" title="Choose any color"><input type="color" data-accent-custom aria-label="Custom accent color"></label>
+    <div class="csp-theme-presets" role="radiogroup" aria-label="Theme preset">
+      ${THEME_PRESETS.map(p=>`<button type="button" class="csp-theme-preset" role="radio" aria-checked="false" data-theme-preset="${p.id}"><span class="csp-theme-dots"><i style="--swatch:${p.toggle}"></i><i style="--swatch:${p.button}"></i></span>${p.name}</button>`).join("")}
+    </div>
+    ${colorRow("toggle","Toggle & slider colour","Fills every switch knob and the filled part of a slider when it is on.",CONTROL_ACCENTS,true)}
+    ${colorRow("track","Slider track colour","The part of the slider bar after the thumb. Auto follows light and dark mode.",TRACK_SWATCHES)}
+    ${colorRow("button","Button colour","Coloured buttons, like Capture in the camera pop-up, and links.",CONTROL_ACCENTS)}
+    <div class="csp-setting-row">
+      <div class="csp-setting-text"><strong>Font</strong><span>The typeface for menus and panels. Map labels keep their own.</span></div>
+      <select data-font-select aria-label="Font">${Object.entries(FONTS).map(([id,f])=>`<option value="${id}">${f.name}</option>`).join("")}</select>
+    </div>
+    <div class="csp-setting-row">
+      <div class="csp-setting-text"><strong>Text colour</strong><span>Overrides the main text colour in both light and dark mode.</span></div>
+      <span class="csp-font-color-control"><button type="button" class="linkbtn" data-font-color-auto>Auto</button><label class="csp-accent-swatch csp-accent-custom" title="Choose text colour"><input type="color" data-font-color aria-label="Text colour"></label></span>
+    </div>
+    <div class="csp-setting-row">
+      <div class="csp-setting-text"><strong>Text size</strong><span>Scales the sidebar and pop-up panels.</span></div>
+      <span class="csp-segmented" role="group" aria-label="Text size">
+        <button type="button" data-text-size="0.92" aria-pressed="false">Small</button><button type="button" data-text-size="1" aria-pressed="false">Default</button><button type="button" data-text-size="1.12" aria-pressed="false">Large</button>
+      </span>
     </div>
     <div class="csp-setting-preview">
       <label class="csp-setting-row"><span>Preview</span><span class="csp-switch"><input type="checkbox" checked aria-label="Preview switch"><span></span></span></label>
       <input type="range" min="0" max="100" step="1" value="62" aria-label="Preview slider">
+      <button type="button" class="snapshot-action snapshot-action-primary csp-preview-button">Capture</button>
     </div>
-    <div class="csp-setting-foot"><button type="button" class="linkbtn" data-accent-reset>Reset to green</button></div>`;
+    <div class="csp-setting-foot"><button type="button" class="linkbtn" data-appearance-reset>Reset appearance</button></div>`;
   customView.append(label,card);
-  const picker=$("#cspAccentPicker",card),presets=$(".csp-accent-presets",card);
-  presets.addEventListener("click",event=>{const swatch=event.target.closest("[data-accent]");if(swatch) setControlAccent(swatch.dataset.accent)});
-  presets.addEventListener("keydown",event=>{
-    const step={ArrowRight:1,ArrowDown:1,ArrowLeft:-1,ArrowUp:-1}[event.key],swatches=$$("[data-accent]",presets);
-    const index=swatches.indexOf(event.target);if(!step||index<0) return;
-    event.preventDefault();const next=swatches[(index+step+swatches.length)%swatches.length];
-    setControlAccent(next.dataset.accent);next.focus();
+  card.addEventListener("click",event=>{
+    const preset=event.target.closest("[data-theme-preset]");if(preset){applyThemePreset(preset.dataset.themePreset);return}
+    if(event.target.closest("[data-font-color-auto]")){setAppearance({fontColor:null});return}
+    if(event.target.closest("[data-appearance-reset]")){
+      appearance={toggle:null,track:null,button:null,font:"system",fontColor:null,textSize:1,preset:"meadow"};applyAppearance();return;
+    }
+    const size=event.target.closest("[data-text-size]");if(size){setAppearance({textSize:Number(size.dataset.textSize)});return}
+    const swatch=event.target.closest("[data-accent]");if(swatch){setControlAccent(swatch.dataset.accent);return}
+    const color=event.target.closest("[data-color]");if(color){
+      const group=color.closest("[data-color-for]");if(group) setAppearance({[group.dataset.colorFor]:color.dataset.color||null});return;
+    }
   });
-  $("[data-accent-custom]",picker).addEventListener("input",event=>setControlAccent(event.target.value));
-  $("[data-accent-reset]",card).addEventListener("click",()=>{setControlAccent(CONTROL_ACCENT_DEFAULT);$(".csp-accent-swatch[aria-checked='true']",presets)?.focus()});
-  syncAccentPicker();syncRangeFill($("input[type=range]",card));
+  card.addEventListener("keydown",event=>{
+    const group=event.target.closest?.(".csp-accent-presets");if(!group) return;
+    const step={ArrowRight:1,ArrowDown:1,ArrowLeft:-1,ArrowUp:-1}[event.key];if(!step) return;
+    const swatches=$$("button",group),index=swatches.indexOf(event.target);if(index<0) return;
+    event.preventDefault();swatches[(index+step+swatches.length)%swatches.length].click();swatches[(index+step+swatches.length)%swatches.length].focus();
+  });
+  card.addEventListener("input",event=>{
+    if(event.target.matches("[data-accent-custom]")) setControlAccent(event.target.value);
+    else if(event.target.matches("[data-color-custom]")) setAppearance({[event.target.dataset.colorCustom]:validColor(event.target.value)});
+    else if(event.target.matches("[data-font-color]")) setAppearance({fontColor:validColor(event.target.value)});
+    else if(event.target.matches("[data-font-select]")) setAppearance({font:event.target.value});
+  });
+  syncAppearancePicker();syncRangeFill($("input[type=range]",card));
 }
-setControlAccent(controlAccent(),false);
+const syncAccentPicker=syncAppearancePicker;
+applyAppearance(false);
+
+/* Settings: the terrain engine (its controls keep their home in the map dock
+   pop-up), export defaults, and accessibility. Appearance lives separately. */
+function renderSettingsView(){
+  clearCustom();
+  const engineLabel=document.createElement("div");engineLabel.className="csp-section-label";engineLabel.textContent="Terrain engine";
+  const engine=document.createElement("div");engine.className="csp-card csp-settings-card";
+  const srvState=$("#srvState")?.textContent.trim(),srvUrl=$("#srvUrl")?.value.trim(),srvOn=$("#srvDot")?.classList.contains("on");
+  engine.innerHTML=`
+    <div class="csp-setting-row">
+      <div class="csp-setting-text"><strong>Secure terrain engine</strong><span>${srvState||(srvOn?"Connected.":"Not connected. Your Mac self-heals locally; this saves and checks its Tailscale HTTPS address.")}</span></div>
+      <span class="csp-nav-dot ${srvOn?"on":"off"}" aria-hidden="true"></span>
+    </div>
+    ${srvUrl?`<div class="csp-setting-row"><span class="csp-setting-text"><span>Address</span></span><span class="csp-accent-name">${srvUrl.replace(/</g,"&lt;")}</span></div>`:""}
+    <div class="csp-setting-row">
+      <span class="csp-setting-text"><span>Connect, copy a private setup link, or forget this device.</span></span>
+      <button type="button" class="snapshot-action" data-open-engine>Open controls</button>
+    </div>`;
+  const exportLabel=document.createElement("div");exportLabel.className="csp-section-label";exportLabel.textContent="Export";
+  const exportCard=document.createElement("div");exportCard.className="csp-card csp-settings-card";
+  exportCard.innerHTML=`
+    <div class="csp-setting-row">
+      <div class="csp-setting-text"><strong>Default resolution</strong><span>Used the next time the camera pop-up opens.</span></div>
+      <select data-export-scale aria-label="Default export resolution">
+        ${[1,2,4,8,16,32].map(v=>`<option value="${v}">${v}×</option>`).join("")}
+      </select>
+    </div>
+    <label class="csp-setting-row">
+      <span class="csp-setting-text"><strong>Map info in exports</strong><span>Coordinates, elevation and colour keys, on by default.</span></span>
+      <span class="csp-switch"><input type="checkbox" data-export-readout role="switch"><span></span></span>
+    </label>`;
+  const accessLabel=document.createElement("div");accessLabel.className="csp-section-label";accessLabel.textContent="Accessibility & data";
+  const access=document.createElement("div");access.className="csp-card csp-settings-card";
+  access.innerHTML=`
+    <label class="csp-setting-row">
+      <span class="csp-setting-text"><strong>Reduce motion</strong><span>Calms pop-up and control animations, beyond the system setting.</span></span>
+      <span class="csp-switch"><input type="checkbox" data-reduce-motion role="switch"><span></span></span>
+    </label>
+    <div class="csp-setting-row">
+      <span class="csp-setting-text"><span>Clear Appearance, these settings, and saved panel choices on this device.</span></span>
+      <button type="button" class="linkbtn" data-reset-all>Reset all preferences</button>
+    </div>`;
+  customView.append(engineLabel,engine,exportLabel,exportCard,accessLabel,access);
+  $("[data-open-engine]",engine).addEventListener("click",()=>$("#serverToggle")?.click());
+  const scaleSelect=$("[data-export-scale]",exportCard);
+  try{scaleSelect.value=localStorage.getItem("clearskies.snapshot-scale.v1")||"2"}catch(error){}
+  if(!scaleSelect.value) scaleSelect.value="2";
+  scaleSelect.addEventListener("change",()=>{
+    try{localStorage.setItem("clearskies.snapshot-scale.v1",scaleSelect.value)}catch(error){}
+    const live=$("#snapshotScale");if(live){live.value=scaleSelect.value;live.dispatchEvent(new Event("change",{bubbles:true}))}
+  });
+  const readout=$("[data-export-readout]",exportCard),liveReadout=$("#snapshotReadout");
+  readout.checked=!!liveReadout?.checked;
+  readout.addEventListener("change",()=>{
+    if(liveReadout&&liveReadout.checked!==readout.checked){liveReadout.checked=readout.checked;liveReadout.dispatchEvent(new Event("change",{bubbles:true}))}
+  });
+  const motion=$("[data-reduce-motion]",access);
+  motion.checked=document.documentElement.classList.contains("csp-reduce-motion");
+  motion.addEventListener("change",()=>{
+    document.documentElement.classList.toggle("csp-reduce-motion",motion.checked);
+    try{if(motion.checked)localStorage.setItem("clearskies.reduceMotion.v1","1");else localStorage.removeItem("clearskies.reduceMotion.v1")}catch(error){}
+  });
+  $("[data-reset-all]",access).addEventListener("click",()=>{
+    try{for(const key of ["clearskies.appearance.v1","clearskies.controlAccent.v1","clearskies.snapshot-scale.v1","clearskies.snapshot.readout.v1","clearskies.reduceMotion.v1","clearskies.workspace.v1"]) localStorage.removeItem(key)}catch(error){}
+    location.reload();
+  });
+}
+try{if(localStorage.getItem("clearskies.reduceMotion.v1")==="1") document.documentElement.classList.add("csp-reduce-motion")}catch(error){}
 
 function renderCustom(route){
   if(route.custom==="layers") renderLayersView();
   else if(route.custom==="satellite") renderSatelliteView();
   else if(route.custom==="export") renderExportView();
+  else if(route.custom==="appearance") renderAppearanceView();
   else if(route.custom==="settings") renderSettingsView();
   else if(route.custom==="markup"){ clearCustom();const box=document.createElement("div");customView.append(box);window.CSPMarkup?.renderPanel(box) }
   else clearCustom();
@@ -649,7 +835,7 @@ function updateCounts(){
   if(maps) maps.hidden=coordinateUnavailable||!$("#coordGoogleMaps")?.href;
   if(earth) earth.hidden=coordinateUnavailable||!$("#coordGoogleEarth")?.href;
   coordinateActions.hidden=[copy,maps,earth].every(button=>!button||button.hidden);
-  const dot=$(".csp-nav-dot",engineNav),source=$("#srvDot");if(dot&&source) dot.className="csp-nav-dot "+(source.classList.contains("on")?"on":"off");
+  const dot=$(".csp-nav-dot",settingsNav),source=$("#srvDot");if(dot&&source) dot.className="csp-nav-dot "+(source.classList.contains("on")?"on":"off");
 }
 
 for(const element of [$("#coordCopy"),$("#coordOpen"),$("#coordGoogleMaps"),$("#coordGoogleEarth")]){

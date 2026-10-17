@@ -245,9 +245,9 @@ body.csp-redesign #cspNav .foot{
 
 body.csp-redesign #cspNav .foot-meta{padding:0 6px;min-height:28px}
 body.csp-redesign #cspNav .about-disclosure{display:none}
-body.csp-redesign #cspEngineNav{margin-bottom:2px}
+body.csp-redesign #cspAppearanceNav{margin-bottom:2px}
 body.csp-redesign #cspSettingsNav{margin-bottom:8px}
-body.csp-redesign :is(#cspEngineNav,#cspSettingsNav) .csp-nav-button{font-size:12px}
+body.csp-redesign :is(#cspAppearanceNav,#cspSettingsNav) .csp-nav-button{font-size:12px}
 body.csp-redesign #cspMapSources{margin:0 0 8px;border:1px solid var(--line);border-radius:10px;background:var(--ui-surface);overflow:hidden}
 body.csp-redesign #cspMapSources summary{display:grid;grid-template-columns:18px minmax(0,1fr) 14px;align-items:center;gap:9px;min-height:36px;padding:0 10px;cursor:pointer;list-style:none;color:var(--ink-2);font-size:12px;font-weight:500;touch-action:manipulation;user-select:none;-webkit-user-select:none}
 body.csp-redesign #cspMapSources summary::-webkit-details-marker{display:none}
@@ -1065,7 +1065,7 @@ body.csp-redesign .csp-locate-label{display:none}
 .csp-glass body.csp-redesign .csp-nav-button .csp-nav-count:empty{display:none}
 .csp-glass body.csp-redesign .csp-nav-button .csp-nav-dot{width:7px;height:7px;margin-right:4px}
 .csp-glass body.csp-redesign .csp-nav-button .csp-nav-dot.on{background:var(--ui-on);box-shadow:0 0 0 3px color-mix(in srgb,var(--ui-on) 22%,transparent)}
-.csp-glass body.csp-redesign :is(#cspEngineNav,#cspSettingsNav) .csp-nav-button{font-size:12.5px}
+.csp-glass body.csp-redesign :is(#cspAppearanceNav,#cspSettingsNav) .csp-nav-button{font-size:12.5px}
 
 .csp-glass body.csp-redesign #cspMapSources{border:0;border-radius:10px;background:var(--ui-fill)}
 .csp-glass body.csp-redesign #cspMapSources summary>img,
@@ -1873,7 +1873,7 @@ body.csp-redesign:not([data-csp-route="satellite"]) #status[data-kind="scenes"]{
     letter-spacing:.06em;
     text-transform:uppercase;
   }
-  .csp-glass body.csp-redesign :is(#cspEngineNav,#cspSettingsNav) .csp-nav-button{font-size:15px}
+  .csp-glass body.csp-redesign :is(#cspAppearanceNav,#cspSettingsNav) .csp-nav-button{font-size:15px}
 }
 
 /* ---- markup layers ----------------------------------------------------------
@@ -2382,6 +2382,25 @@ body.csp-redesign .csp-setting-preview{display:grid;gap:6px;padding:10px 12px;bo
 body.csp-redesign .csp-setting-preview .csp-setting-row>span:first-child{color:var(--ui-text-muted);font-size:12px}
 body.csp-redesign .csp-setting-preview input[type=range]{width:100%;margin:0}
 body.csp-redesign .csp-setting-foot{display:flex;justify-content:flex-end;min-height:20px}
+body.csp-redesign .csp-theme-presets{display:flex;flex-wrap:wrap;gap:8px}
+body.csp-redesign .csp-theme-preset{display:inline-flex;align-items:center;gap:7px;min-height:34px;padding:0 12px;border:1px solid var(--ui-line);border-radius:999px;background:transparent;color:var(--ui-text);font-size:12.5px;font-weight:550;cursor:pointer}
+body.csp-redesign .csp-theme-preset[aria-checked="true"]{border-color:var(--ui-accent);box-shadow:0 0 0 2px var(--ui-ring)}
+body.csp-redesign .csp-theme-dots{display:inline-flex}
+body.csp-redesign .csp-theme-dots i{width:14px;height:14px;border-radius:50%;background:var(--swatch);box-shadow:inset 0 0 0 .5px var(--ui-line)}
+body.csp-redesign .csp-theme-dots i+i{margin-left:-5px}
+body.csp-redesign .csp-segmented{display:inline-flex;gap:2px;padding:2px;border-radius:9px;background:var(--ui-fill)}
+body.csp-redesign .csp-segmented button{min-height:28px;padding:0 10px;border:0;border-radius:7px;background:transparent;color:var(--ui-text-muted);font-size:12px;font-weight:550;cursor:pointer}
+body.csp-redesign .csp-segmented button[aria-pressed="true"]{background:var(--ui-surface);color:var(--ui-text);box-shadow:0 1px 3px var(--ui-shadow-4)}
+body.csp-redesign .csp-font-color-control{display:inline-flex;align-items:center;gap:10px}
+body.csp-redesign .csp-preview-button{width:100%}
+body.csp-redesign .csp-settings-card select{min-height:32px}
+body.csp-redesign .csp-settings-card .snapshot-action{min-height:32px;padding:0 14px;border-radius:9px}
+/* Appearance overrides: font family and panel scale, chosen in Appearance.
+   Inline properties on <html> carry the saved values; defaults keep the
+   shipped look. Reduce Motion is the same opt-in, classed on <html>. */
+html.csp-glass body.csp-redesign,body.csp-redesign{font-family:var(--csp-font-family,-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI",sans-serif)}
+body.csp-redesign #side,body.csp-redesign .tool-popover{zoom:var(--csp-text-zoom,1)}
+html.csp-reduce-motion :is(*,*::before,*::after){animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important}
 body.csp-redesign .csp-setting-foot[hidden]{display:none}
 @media (pointer:coarse){body.csp-redesign .csp-accent-swatch{width:36px;height:36px}body.csp-redesign .csp-accent-custom::after{inset:10px}}
 @media (prefers-reduced-motion:reduce){

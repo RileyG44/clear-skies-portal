@@ -174,10 +174,17 @@ const inside=async(page,selector)=>{
         assert(await visible(page,'#snapshotPanel'),'camera remains available after leaving the Export route');
         assert.equal(await page.locator('#snapshotPanel').count(),1,'there is only one live set of export controls');
       }
-      // Settings: the sidebar footer opens it; a swatch recolours every switch
+      // Appearance: the sidebar footer opens it; a swatch recolours every switch
       // knob and slider fill, and the choice is applied again at boot.
+      await page.locator('#cspAppearanceNav button').evaluate(el=>el.click());
+      assert.equal(await page.evaluate(()=>document.body.dataset.cspRoute),'appearance','the footer item opens Appearance');
+      assert.equal(await page.locator('#cspAppearanceCard [data-theme-preset]').count(),5,'Appearance offers theme presets');
+      await page.locator('#cspAppearanceCard [data-theme-preset="sunset"]').evaluate(el=>el.click());
+      assert.equal(await page.evaluate(()=>getComputedStyle(document.documentElement).getPropertyValue('--ui-accent').trim()),'#ff453a','a theme preset recolours buttons');
       await page.locator('#cspSettingsNav button').evaluate(el=>el.click());
       assert.equal(await page.evaluate(()=>document.body.dataset.cspRoute),'settings','the footer item opens Settings');
+      assert(await page.locator('[data-open-engine]').isVisible(),'Settings carries the terrain engine controls');
+      await page.locator('#cspAppearanceNav button').evaluate(el=>el.click());
       await page.locator('#cspAccentPicker [data-accent="#ff9f0a"]').evaluate(el=>el.click());
       await page.waitForTimeout(300);
       const accent=await page.locator('#cspCustomView .csp-switch span').evaluate(el=>({

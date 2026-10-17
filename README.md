@@ -82,16 +82,25 @@ live controls.
 
 Switches and sliders share one style: an outlined groove (black in dark mode)
 with a round knob slightly larger than it, and a thin slider groove with a
-white thumb that gains a soft halo while hovered or dragged. The "on" colour is
-chosen under **Settings** at the bottom of the sidebar, next to Terrain engine
-and Map sources: ten preset swatches or any colour from the system picker, with
-a live preview. The choice is stored in this browser
-(`clearskies.controlAccent.v1`) and applied before first paint.
+white thumb that gains a soft halo while hovered or dragged. Their colours are
+chosen under **Appearance** at the bottom of the sidebar: five theme presets
+(Meadow, Ocean, Sunset, Berry, Graphite) set the toggle/slider colour, the
+slider track colour and the button colour together, and each can then be
+changed on its own with swatches or the system picker. Appearance also carries
+the font, text colour and text size. The bundle is stored in this browser
+(`clearskies.appearance.v1`, with the toggle colour mirrored to
+`clearskies.controlAccent.v1` for older builds) and applied before first paint.
+
+The separate **Settings** item below Appearance is the foundation for
+app-level preferences: the secure terrain engine (status and a shortcut to
+its dock controls, which hold the Tailscale address), the default export
+resolution and map-info choice, a Reduce Motion override, and a reset for
+all saved preferences on the device.
 
 Browser regressions: `node scripts/ui-map-popovers.js` covers light/dark desktop,
 mobile, narrow phones, landscape, editing, layer switching, drawing, keyboard
 focus, panel transitions, Reduced Motion, the camera's two actions and the
-Settings colour (including after a reload). `test-markup-controls.js` exercises
+Appearance colours and presets (including after a reload). `test-markup-controls.js` exercises
 metadata drafts, slider math, exact units and one-step width undo in `npm test`.
 `node scripts/ui-snapshot.js` checks whole-view Capture, area selection and exported pixels.
 Both accept a local server URL and the optional `PLAYWRIGHT_MODULE` environment

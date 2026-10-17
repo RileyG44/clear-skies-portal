@@ -993,8 +993,8 @@ body.pane-reordering,body.pane-reordering *{cursor:grabbing!important;user-selec
 }
 
 </style>
-<link rel="stylesheet" href="ui-theme.css?build=2026-10-16d">
-<link rel="stylesheet" href="ui-system.css?build=2026-10-16d">
+<link rel="stylesheet" href="ui-theme.css?build=2026-10-16e">
+<link rel="stylesheet" href="ui-system.css?build=2026-10-16e">
 <style>
 /* The redesign restructures the legacy DOM rather than replacing it, and the
    script that does so is the last thing on the page - so the browser paints the
@@ -1015,6 +1015,15 @@ html.csp-boot body{visibility:hidden}
   var root=document.documentElement;
   root.classList.add("csp-boot");
   try{var accent=localStorage.getItem("clearskies.controlAccent.v1");if(/^#[0-9a-f]{6}$/i.test(accent||""))root.style.setProperty("--csp-control-on",accent)}catch(e){}
+  try{var ap=JSON.parse(localStorage.getItem("clearskies.appearance.v1")||"{}"),ok=function(v){return /^#[0-9a-f]{6}$/i.test(v||"")?v:null};
+    if(ok(ap.toggle))root.style.setProperty("--csp-control-on",ap.toggle);
+    if(ok(ap.track))root.style.setProperty("--csp-slider-track",ap.track);
+    if(ok(ap.button))root.style.setProperty("--ui-accent",ap.button);
+    if(ok(ap.fontColor))root.style.setProperty("--ui-text",ap.fontColor);
+    var fonts={inter:"\"Inter Variable\",-apple-system,BlinkMacSystemFont,\"Segoe UI\",sans-serif",serif:"Georgia,\"Times New Roman\",serif",mono:"ui-monospace,\"SF Mono\",\"JetBrains Mono\",monospace"};
+    if(fonts[ap.font])root.style.setProperty("--csp-font-family",fonts[ap.font]);
+    if([0.92,1.12].indexOf(Number(ap.textSize))>=0)root.style.setProperty("--csp-text-zoom",String(ap.textSize));
+    if(localStorage.getItem("clearskies.reduceMotion.v1")==="1")root.classList.add("csp-reduce-motion")}catch(e){}
   var reveal=function(){root.classList.remove("csp-boot")};
   var timer=setTimeout(reveal,4000);
   root.addEventListener("csp:ready",function(){clearTimeout(timer);reveal()},{once:true});
@@ -1758,7 +1767,7 @@ html.csp-boot body{visibility:hidden}
   L.Renderer.prototype.onAdd=function(map){return onAdd.call(this,map||this._map)};
 })();
 </script>
-<script src="version.js?build=2026-10-16d"></script>
+<script src="version.js?build=2026-10-16e"></script>
 <script src="mosaic-core.js"></script>
 <script src="png-stream.js"></script>
 <script src="terrain-core.js"></script>
@@ -10604,8 +10613,8 @@ $("#q").addEventListener("blur",()=>setTimeout(acHide,120));
 document.addEventListener("click",e=>{ if(!e.target.closest("#iw")) acHide() });
 })();
 </script>
-<script src="markup-3d.js?build=2026-10-16d"></script>
-<script src="markup.js?build=2026-10-16d"></script>
-<script src="ui-system.js?build=2026-10-16d"></script>
+<script src="markup-3d.js?build=2026-10-16e"></script>
+<script src="markup.js?build=2026-10-16e"></script>
+<script src="ui-system.js?build=2026-10-16e"></script>
 </body>
 </html>
