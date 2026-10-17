@@ -32,16 +32,16 @@ side.style.width="580px";
 }
 
 const ROUTES={
-  layers:{title:"Layers",description:"Everything currently drawn on the map, in render order.",icon:"layers",panes:[],custom:"layers"},
-  satellite:{title:"Satellite imagery",description:"Find dated scenes, tune the search, and control the image already on the map.",icon:"satellite",panes:["filters","summary","passes","results","overlays"],open:["filters","results"],overlayGroup:"Imagery",overlayTitle:"Satellite base layers",custom:"satellite"},
-  terrain:{title:"Terrain & LiDAR",description:"Choose how elevation is drawn, then fine-tune it.",icon:"mountain-snow",panes:["terrain"],open:["terrain"],researchMode:"terrain"},
-  analyze:{title:"Analyze",description:"Measure landform patterns or reveal features in the current view.",icon:"scan-search",panes:["research"],open:["research"],researchMode:"analyze"},
-  export:{title:"Export",description:"Save the exact current extent at screen, detail, or archival resolution.",icon:"download",panes:[],custom:"export"},
-  conditions:{title:"Conditions",description:"Weather, earthquakes, volcanoes, fire, snow, and other time-sensitive layers.",icon:"cloud-sun",panes:["alerts","overlays"],open:["alerts","overlays"],overlayGroup:"Conditions",overlayTitle:"Conditions layers"},
-  geology:{title:"Geology & hazards",description:"Surface geology, faults, seismic context, landslides, and point identification.",icon:"triangle-alert",panes:["overlays","research"],open:["overlays","research"],overlayGroup:"Geology & hazards",overlayTitle:"Geology layers",researchMode:"geology"},
-  past:{title:"Past landscapes",description:"Ice-age lakes, glaciers, archaeology, and reconstructed environments.",icon:"history",panes:["overlays"],open:["overlays"],overlayGroup:"Past landscapes",overlayTitle:"Past landscape layers"},
-  markup:{title:"Markup",description:"Draw, write and pin notes on the map, in layers you can switch on and off together or apart.",icon:"pen-line",panes:[],custom:"markup"},
-  labels:{title:"Labels & reference",description:"Roads, trails, places, water, boundaries, and reference labels.",icon:"tags",panes:["overlays"],open:["overlays"],overlayGroup:"Labels & reference",overlayTitle:"Reference layers"},
+  layers:{title:"Layers",description:"",icon:"layers",panes:[],custom:"layers"},
+  satellite:{title:"Satellite imagery",description:"",icon:"satellite",panes:["filters","summary","passes","results","overlays"],open:["filters","results"],overlayGroup:"Imagery",overlayTitle:"Satellite base layers",custom:"satellite"},
+  terrain:{title:"Terrain & LiDAR",description:"",icon:"mountain-snow",panes:["terrain"],open:["terrain"],researchMode:"terrain"},
+  analyze:{title:"Analyze",description:"",icon:"scan-search",panes:["research"],open:["research"],researchMode:"analyze"},
+  export:{title:"Export",description:"",icon:"download",panes:[],custom:"export"},
+  conditions:{title:"Conditions",description:"",icon:"cloud-sun",panes:["alerts","overlays"],open:["alerts","overlays"],overlayGroup:"Conditions",overlayTitle:"Conditions layers"},
+  geology:{title:"Geology & hazards",description:"",icon:"triangle-alert",panes:["overlays","research"],open:["overlays","research"],overlayGroup:"Geology & hazards",overlayTitle:"Geology layers",researchMode:"geology"},
+  past:{title:"Past landscapes",description:"",icon:"history",panes:["overlays"],open:["overlays"],overlayGroup:"Past landscapes",overlayTitle:"Past landscape layers"},
+  markup:{title:"Markup",description:"",icon:"pen-line",panes:[],custom:"markup"},
+  labels:{title:"Labels & reference",description:"",icon:"tags",panes:["overlays"],open:["overlays"],overlayGroup:"Labels & reference",overlayTitle:"Reference layers"},
   settings:{title:"Settings",description:"Personal preferences for this browser. They are saved on this device only.",icon:"settings",panes:[],custom:"settings"}
 };
 
@@ -334,13 +334,12 @@ function buildLayerCard(layer,index,entries,compact=false){
   const card=document.createElement("article");card.className="csp-layer-card";card.dataset.layerId=layer.id;
   if(layer.locked) card.classList.add("csp-layer-locked");
   if(compact) card.classList.add("csp-layer-compact");
-  card.draggable=!layer.locked&&!compact;
+  card.draggable=false;
+  const rail=layer.locked||compact?"":`<div class="csp-layer-rail"><button class="csp-layer-handle" type="button" aria-label="Reorder ${layer.name}" title="Drag to reorder"></button><button class="csp-layer-tool" type="button" data-action="up" aria-label="Move ${layer.name} up" title="Move up" ${index===0?"disabled":""}><img src="${icon("chevron-up")}" alt=""></button><button class="csp-layer-tool" type="button" data-action="down" aria-label="Move ${layer.name} down" title="Move down" ${index===entries.length-2?"disabled":""}><img src="${icon("chevron-down")}" alt=""></button><button class="csp-layer-tool" type="button" data-action="edit" aria-label="Edit ${layer.name}" title="Edit"><img src="${icon("pencil")}" alt=""></button><button class="csp-layer-tool" type="button" data-action="reset" aria-label="Reset ${layer.name}" title="Reset"><img src="${icon("rotate-ccw")}" alt=""></button></div>`;
   card.innerHTML=`
-    <button class="csp-layer-handle" type="button" aria-label="Reorder ${layer.name}" ${layer.locked||compact?"hidden":""}></button>
-    <div class="csp-layer-main"><div class="csp-layer-name"></div><div class="csp-layer-meta"></div></div>
-    <label class="csp-switch" aria-label="Show ${layer.name}"><input type="checkbox" ${layer.visible?"checked":""} ${layer.locked?"disabled":""}><span></span></label>
-    ${layer.noOpacity?"":`<div class="csp-layer-opacity"><label>Opacity</label><input class="csp-layer-range" type="range" min="0" max="100" step="1" value="${Math.round(layer.opacity)}"><output>${Math.round(layer.opacity)}%</output></div>`}
-    ${layer.locked||compact?"":`<div class="csp-layer-actions"><span>Order</span><button class="csp-layer-move" type="button" data-action="up" aria-label="Move ${layer.name} up" title="Move up" ${index===0?"disabled":""}><img src="${icon("chevron-up")}" alt=""></button><button class="csp-layer-move" type="button" data-action="down" aria-label="Move ${layer.name} down" title="Move down" ${index===entries.length-2?"disabled":""}><img src="${icon("chevron-down")}" alt=""></button><button type="button" data-action="edit">Edit</button><button type="button" data-action="reset">Reset</button></div>`}`;
+    ${rail}
+    <div class="csp-layer-main"><div class="csp-layer-name"></div><div class="csp-layer-meta"></div>${layer.noOpacity?"":`<div class="csp-layer-opacity"><input class="csp-layer-range" type="range" min="0" max="100" step="1" value="${Math.round(layer.opacity)}"><output>${Math.round(layer.opacity)}%</output></div>`}</div>
+    <label class="csp-switch" aria-label="Show ${layer.name}"><input type="checkbox" ${layer.visible?"checked":""} ${layer.locked?"disabled":""}><span></span></label>`;
   $(".csp-layer-name",card).textContent=layer.name;
   $(".csp-layer-meta",card).textContent=layer.meta||"";
   $(".csp-switch input",card)?.addEventListener("change",event=>{bridge.setLayerVisible(layer.id,event.target.checked);scheduleLayerRefresh(0)});
@@ -359,13 +358,18 @@ function buildLayerCard(layer,index,entries,compact=false){
       [ids[from],ids[to]]=[ids[to],ids[from]];saveLayerOrder(ids);scheduleLayerRefresh(0);
     }
   });
-  $(".csp-layer-handle",card)?.addEventListener("keydown",event=>{
+  const handle=$(".csp-layer-handle",card);
+  handle?.addEventListener("keydown",event=>{
     if(event.key!=="ArrowUp"&&event.key!=="ArrowDown") return;
     event.preventDefault();const ids=entries.map(item=>item.id),from=ids.indexOf(layer.id),to=from+(event.key==="ArrowUp"?-1:1);
     if(to<0||to>=ids.length-1) return;[ids[from],ids[to]]=[ids[to],ids[from]];saveLayerOrder(ids);scheduleLayerRefresh(0);
   });
-  card.addEventListener("dragstart",event=>{event.dataTransfer.effectAllowed="move";event.dataTransfer.setData("text/plain",layer.id);card.classList.add("csp-dragging")});
-  card.addEventListener("dragend",()=>card.classList.remove("csp-dragging"));
+  /* Only the handle arms dragging; pressing anywhere else on the card selects,
+     toggles or slides without starting a reorder. */
+  handle?.addEventListener("pointerdown",()=>{card.draggable=true;window.addEventListener("pointerup",()=>{card.draggable=false},{once:true})});
+  card.querySelectorAll("img").forEach(img=>{img.draggable=false});
+  card.addEventListener("dragstart",event=>{if(!card.draggable){event.preventDefault();return}event.dataTransfer.effectAllowed="move";event.dataTransfer.setData("text/plain",layer.id);card.classList.add("csp-dragging")});
+  card.addEventListener("dragend",()=>{card.draggable=false;card.classList.remove("csp-dragging")});
   card.addEventListener("dragover",event=>{if(!layer.locked){event.preventDefault();event.dataTransfer.dropEffect="move"}});
   card.addEventListener("drop",event=>{
     event.preventDefault();const source=event.dataTransfer.getData("text/plain");if(!source||source===layer.id) return;
@@ -398,7 +402,7 @@ function availableLayersCard(){
 
 function renderLayersView(){
   clearCustom();
-  const activeLabel=document.createElement("div");activeLabel.className="csp-section-label";activeLabel.textContent="Active — drag to reorder";
+  const activeLabel=document.createElement("div");activeLabel.className="csp-section-label";activeLabel.textContent="Active layers";
   const active=document.createElement("div");active.className="csp-card";active.id="cspActiveLayerStack";
   customView.append(activeLabel,active);
   renderLayerStack(active);
@@ -510,7 +514,7 @@ function activateRoute(key,options={}){
   document.body.dataset.cspRoute=key;
   if(compactShell.matches&&!options.stayOnNav) document.body.dataset.cspView="detail";
   $$(".csp-nav-button[data-route]").forEach(button=>button.setAttribute("aria-current",button.dataset.route===key?"page":"false"));
-  $("#cspWorkspaceTitle").textContent=route.title;$("#cspWorkspaceDescription").textContent=route.description;
+  $("#cspWorkspaceTitle").textContent=route.title;const descriptionEl=$("#cspWorkspaceDescription");descriptionEl.textContent=route.description;descriptionEl.hidden=!route.description;
   $$(".pane",panes).forEach(pane=>pane.classList.toggle("csp-route-hidden",!route.panes.includes(pane.dataset.pane)));
   filterResearch(route.researchMode);
   annotateOverlayGroups();

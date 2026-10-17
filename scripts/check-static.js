@@ -69,6 +69,12 @@ new vm.Script(read("glacial-research-core.js"),{filename:"glacial-research-core.
 new vm.Script(read("research-analysis.js"),{filename:"research-analysis.js"});
 const uiSystem=read("ui-system.js"),uiStyles=read("ui-system.css");
 new vm.Script(uiSystem,{filename:"ui-system.js"});
+assert(uiSystem.includes("card.draggable=false")&&uiSystem.includes('handle?.addEventListener("pointerdown"'),
+       "layer cards must only become draggable from their handle");
+assert(uiSystem.includes("csp-layer-rail")&&uiSystem.includes('data-action="edit"')&&uiSystem.includes('icon("rotate-ccw")'),
+       "layer card actions must be icon tools in the left rail");
+assert(uiSystem.includes("descriptionEl.hidden=!route.description"),
+       "workspace subtitles must hide when a route has none");
 const versionSandbox={};
 vm.runInNewContext(read("version.js"),versionSandbox,{filename:"version.js"});
 assert.match(versionSandbox.CSP_BUILD,/^\d{4}-\d{2}-\d{2}[a-z]$/,"build version must be date plus revision letter");
