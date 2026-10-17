@@ -21,6 +21,7 @@ out/
 output/
 .playwright-cli/
 .codex/
+.codex-audits/
 
 # Environment / secrets
 .env

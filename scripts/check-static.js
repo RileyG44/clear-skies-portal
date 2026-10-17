@@ -617,7 +617,7 @@ assert(index.includes('content="width=device-width,initial-scale=1,maximum-scale
 assert(index.includes('const leafZoomControl=L.control.zoom')&&index.includes('compactMapViewport')&&
        uiStyles.includes('.leaflet-control-zoom{display:none!important}'),
        "mobile must not render duplicate Leaflet zoom buttons when map pinch is available");
-assert(uiSystem.includes('id="cspMapSources"')&&uiSystem.includes('map.attributionControl')&&
+assert(uiSystem.includes('id="cspMapSources"')&&uiSystem.includes('bridge.map?.attributionControl')&&
        uiStyles.includes('body.csp-redesign .leaflet-control-attribution,')&&
        uiStyles.includes('body.csp-redesign .maplibregl-ctrl-attrib{display:none!important}')&&
        uiStyles.indexOf('body.csp-redesign .maplibregl-ctrl-attrib{display:none!important}')<uiStyles.indexOf('@media(max-width:1050px)')&&

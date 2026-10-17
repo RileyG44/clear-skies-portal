@@ -95,7 +95,13 @@ The separate **Settings** item below Appearance is the foundation for
 app-level preferences: the secure terrain engine (status and a shortcut to
 its dock controls, which hold the Tailscale address), the default export
 resolution and map-info choice, a Reduce Motion override, and a reset for
-all saved preferences on the device.
+all saved preferences on the device. Map sources and live attribution are at
+the bottom of Settings and in the dock's Layers popover.
+
+Satellite imagery has its own place/coordinate search, map-centre search and
+quick filters beside the full scene filters. Filter values survive navigation
+between panels. The sidebar and panels use grouped rows, with a pointer halo
+and glass hover effect on desktop; Reduce Motion calms these effects.
 
 Browser regressions: `node scripts/ui-map-popovers.js` covers light/dark desktop,
 mobile, narrow phones, landscape, editing, layer switching, drawing, keyboard
@@ -103,7 +109,9 @@ focus, panel transitions, Reduced Motion, the camera's two actions and the
 Appearance colours and presets (including after a reload). `test-markup-controls.js` exercises
 metadata drafts, slider math, exact units and one-step width undo in `npm test`.
 `node scripts/ui-snapshot.js` checks whole-view Capture, area selection and exported pixels.
-Both accept a local server URL and the optional `PLAYWRIGHT_MODULE` environment
+`node scripts/ui-satellite-search.js` covers scene filters, custom dates, search
+keys, dismissed lookups, mobile focus, source credits and the classic fallback.
+All accept a local server URL and the optional `PLAYWRIGHT_MODULE` environment
 variable; browser tooling is not an application dependency.
 
 ## Run it in a Codespace

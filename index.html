@@ -993,8 +993,8 @@ body.pane-reordering,body.pane-reordering *{cursor:grabbing!important;user-selec
 }
 
 </style>
-<link rel="stylesheet" href="ui-theme.css?build=2026-10-16h">
-<link rel="stylesheet" href="ui-system.css?build=2026-10-16h">
+<link rel="stylesheet" href="ui-theme.css?build=2026-10-16i">
+<link rel="stylesheet" href="ui-system.css?build=2026-10-16i">
 <style>
 /* The redesign restructures the legacy DOM rather than replacing it, and the
    script that does so is the last thing on the page - so the browser paints the
@@ -1767,7 +1767,7 @@ html.csp-boot body{visibility:hidden}
   L.Renderer.prototype.onAdd=function(map){return onAdd.call(this,map||this._map)};
 })();
 </script>
-<script src="version.js?build=2026-10-16h"></script>
+<script src="version.js?build=2026-10-16i"></script>
 <script src="mosaic-core.js"></script>
 <script src="png-stream.js"></script>
 <script src="terrain-core.js"></script>
@@ -8757,6 +8757,44 @@ async function doSearch(){
     run();
   }catch(e){ statusEl.dataset.kind="general",statusEl.innerHTML=`<span class="chip err">${e.message}</span>` }
 }
+/* The Satellite panel's own search field drives the same location and scene
+   search as the main field; its suggestions come from the same geocoder and
+   coordinate parser, so a pasted Google Earth position works in both. */
+async function cspPlaceSuggestions(text,signal){
+  const t=String(text||"").trim();
+  try{ if(t.length<3||parseCoordinates(t)) return [] }catch(error){ return [] }
+  const r=await fetch(PHOTON+"/api/?limit=6&q="+encodeURIComponent(t),{signal});
+  if(!r.ok) throw new Error("geocoder "+r.status);
+  const seen=new Set();
+  return ((await r.json()).features||[]).filter(f=>f.geometry&&f.geometry.coordinates).map(f=>{
+    const s=splitName(f);
+    return {primary:s.primary,secondary:s.secondary,kind:kindOf(f),lat:f.geometry.coordinates[1],lng:f.geometry.coordinates[0],extent:f.properties.extent||null};
+  }).filter(place=>{
+    const key=[place.primary,place.secondary,place.kind].join("|").toLowerCase();
+    if(seen.has(key)) return false;
+    seen.add(key);return true;
+  });
+}
+function cspSearchPlace(place){
+  if(!place||!Number.isFinite(place.lat)||!Number.isFinite(place.lng)) return;
+  acCancel();acHide();
+  $("#q").value=place.secondary?`${place.primary}, ${place.secondary.split(",").map(x=>x.trim()).slice(0,2).join(", ")}`:place.primary;
+  setLoc(place.lat,place.lng,/*keepLabel*/true);
+  const e=place.extent;          // [minLon, maxLat, maxLon, minLat]
+  if(e) map.fitBounds([[e[3],e[0]],[e[1],e[2]]],{maxZoom:13});
+  else map.setView([place.lat,place.lng],12);
+  run();
+}
+function cspSearchText(text){
+  const t=String(text||"").trim();if(!t) return;
+  $("#q").value=t;updateCoordinateActions();
+  return doSearch();
+}
+function cspSearchMapCenter(){
+  const c=map3d?map3d.getCenter():map.getCenter();
+  setLoc(c.lat,c.lng,/*keepLabel*/false);
+  run();
+}
 $("#go").onclick=doSearch;
 $("#loc").onclick=geolocate;
 $("#q").addEventListener("input",()=>{ acInput();updateCoordinateActions() });
@@ -10254,7 +10292,13 @@ window.ClearSkiesPortalBridge={
   /* Annotation tools stay on whichever map is visible. */
   ensureMap:()=>{if(document.body.classList.contains("point-cloud-open"))pointCloudPanel?.close?.()},
   ensure2d:()=>{ if(document.body.classList.contains("point-cloud-open")) pointCloudPanel?.close?.(); if(document.body.classList.contains("terrain-3d")) exitTerrain3d() },
-  overlayCatalog:()=>OVERLAYS.map(o=>({id:o.id,name:o.id==="imagery"?"Global satellite basemap":o.name,group:o.group,via:o.via}))
+  overlayCatalog:()=>OVERLAYS.map(o=>({id:o.id,name:o.id==="imagery"?"Global satellite basemap":o.name,group:o.group,via:o.via})),
+  /* For the Satellite panel's scene search. */
+  placeSuggestions:cspPlaceSuggestions,
+  searchPlace:cspSearchPlace,
+  searchText:cspSearchText,
+  searchMapCenter:cspSearchMapCenter,
+  searchLabel:()=>LOC?$("#q").value.trim():""
 };
 
 if("serviceWorker" in navigator && (location.protocol==="https:" || location.hostname==="localhost"))
@@ -10613,8 +10657,8 @@ $("#q").addEventListener("blur",()=>setTimeout(acHide,120));
 document.addEventListener("click",e=>{ if(!e.target.closest("#iw")) acHide() });
 })();
 </script>
-<script src="markup-3d.js?build=2026-10-16h"></script>
-<script src="markup.js?build=2026-10-16h"></script>
-<script src="ui-system.js?build=2026-10-16h"></script>
+<script src="markup-3d.js?build=2026-10-16i"></script>
+<script src="markup.js?build=2026-10-16i"></script>
+<script src="ui-system.js?build=2026-10-16i"></script>
 </body>
 </html>

@@ -33,7 +33,7 @@ side.style.width="580px";
 
 const ROUTES={
   layers:{title:"Layers",description:"Everything currently drawn on the map, in render order.",icon:"layers",panes:[],custom:"layers"},
-  satellite:{title:"Satellite imagery",description:"Find dated scenes, tune the search, and control the image already on the map.",icon:"satellite",panes:["filters","summary","passes","results","overlays"],open:["filters","results"],overlayGroup:"Imagery",overlayTitle:"Satellite base layers",custom:"satellite"},
+  satellite:{title:"Satellite imagery",description:"Find dated scenes, tune the search, and control the image already on the map.",icon:"satellite",panes:[...(classicUi?["filters"]:[]),"summary","passes","results","overlays"],open:[...(classicUi?["filters"]:[]),"results"],overlayGroup:"Imagery",overlayTitle:"Satellite base layers",custom:"satellite"},
   terrain:{title:"Terrain & LiDAR",description:"Choose how elevation is drawn, then fine-tune it.",icon:"mountain-snow",panes:["terrain"],open:["terrain"],researchMode:"terrain"},
   analyze:{title:"Analyze",description:"Measure landform patterns or reveal features in the current view.",icon:"scan-search",panes:["research"],open:["research"],researchMode:"analyze"},
   export:{title:"Export",description:"Capture the whole view or a selected area as a PNG at your chosen resolution.",icon:"download",panes:[],custom:"export"},
@@ -92,31 +92,35 @@ function navGroup(label,items){
 navGroup("Map",["layers","satellite","terrain","analyze","export"]);
 navGroup("Layer groups",["conditions","geology","past","labels","markup"]);
 
-/* Keep source references available in the navigation rail while the map stays
-   clear at every screen size. The toolbar source popover also carries them. */
-const mapSources=document.createElement("details");mapSources.id="cspMapSources";
-mapSources.innerHTML=`<summary><img src="${icon("layers")}" alt=""><span>Map sources</span><img class="csp-sources-chevron" src="${icon("chevron-right")}" alt=""></summary><div id="cspMapSourcesContent" aria-live="polite"></div>`;
-foot.prepend(mapSources);
 const appearanceNav=document.createElement("div");appearanceNav.id="cspAppearanceNav";
 appearanceNav.innerHTML=`<button class="csp-nav-button" type="button" data-route="appearance"><img src="${icon("sliders-horizontal")}" alt=""><span>Appearance</span></button>`;
-mapSources.before(appearanceNav);
 appearanceNav.querySelector("button").addEventListener("click",()=>activateRoute("appearance"));
+/* The engine's live status dot belongs to the map toolbar, where it is always
+   in view; repeating it on this row only doubled it. */
 const settingsNav=document.createElement("div");settingsNav.id="cspSettingsNav";
-settingsNav.innerHTML=`<button class="csp-nav-button" type="button" data-route="settings"><img src="${icon("settings")}" alt=""><span>Settings</span><span class="csp-nav-dot"></span></button>`;
-mapSources.before(settingsNav);
+settingsNav.innerHTML=`<button class="csp-nav-button" type="button" data-route="settings"><img src="${icon("settings")}" alt=""><span>Settings</span></button>`;
 settingsNav.querySelector("button").addEventListener("click",()=>activateRoute("settings"));
+foot.prepend(appearanceNav,settingsNav);
+
+/* Source references are the last group on the Settings page; the toolbar's
+   Layers popover carries the same credits. The card is built once and kept, so
+   the attribution observer below can update it while it is detached. */
+const mapSources=document.createElement("div");mapSources.id="cspMapSources";mapSources.className="csp-card csp-map-sources";
+mapSources.innerHTML=`<div id="cspMapSourcesContent" aria-live="polite"></div>`;
 const mapSourcesContent=$("#cspMapSourcesContent",mapSources);
 const syncMapSources=()=>{
-  const attribution=typeof map!=="undefined"?map.attributionControl?._container:null;
+  const attribution=bridge.map?.attributionControl?._container;
   const markup=attribution?.innerHTML.trim();
-  mapSourcesContent.innerHTML=markup||"Source details will appear when a map layer is active.";
+  const credits=[markup,document.body.classList.contains("terrain-3d")?$("#map3d .maplibregl-ctrl-attrib-inner")?.innerHTML:""].filter(Boolean).join("<br>");
+  if(mapSourcesContent.innerHTML!==credits) mapSourcesContent.innerHTML=credits||"Source details will appear when a map layer is active.";
   const references=$("#mapSourceReferences");
-  if(references) references.innerHTML=[markup,
-    document.body.classList.contains("terrain-3d")?$("#map3d .maplibregl-ctrl-attrib-inner")?.innerHTML:""].filter(Boolean).join("<br>");
+  if(references&&references.innerHTML!==credits) references.innerHTML=credits;
 };
-mapSources.addEventListener("toggle",()=>{if(mapSources.open) syncMapSources()});
-const attributionNode=typeof map!=="undefined"?map.attributionControl?._container:null;
+const attributionNode=bridge.map?.attributionControl?._container;
 if(attributionNode) new MutationObserver(syncMapSources).observe(attributionNode,{childList:true,subtree:true,characterData:true});
+const attribution3d=$("#map3d");
+if(attribution3d) new MutationObserver(syncMapSources).observe(attribution3d,{childList:true,subtree:true,characterData:true});
+new MutationObserver(syncMapSources).observe(document.body,{attributes:true,attributeFilter:["class"]});
 syncMapSources();
 
 /* iOS can still honour a page-scale gesture in some embedded browser modes even
@@ -175,6 +179,33 @@ for(const [name,title] of Object.entries(PANE_TITLES)){
   const pane=$(`.pane[data-pane="${name}"]`,panes),label=$(".pane-t",pane),head=$(".pane-h",pane);
   if(label) label.textContent=title;
   if(head) head.setAttribute("aria-label",`Toggle ${title}`);
+}
+
+/* Rows in the T3 settings pattern. A legacy grid's label and the control after
+   it become one row (title leading, control trailing); an on/off checkbox
+   becomes a switch at the end of its row. The inputs themselves are moved,
+   not copied, so their ids, listeners and saved state are unchanged. */
+function wrapFieldRows(grid){
+  if(!grid||grid.dataset.cspRows) return;
+  grid.dataset.cspRows="1";
+  for(const label of $$(":scope > label",grid)){
+    const control=label.nextElementSibling;
+    if(!control||control.tagName==="LABEL") continue;
+    const row=document.createElement("div");row.className="csp-field-row";
+    label.before(row);row.append(label,control);
+  }
+}
+function toSwitchRow(label){
+  const input=label?.querySelector('input[type="checkbox"]');
+  if(!input||label.classList.contains("csp-switch-row")) return;
+  const control=document.createElement("span");control.className="csp-switch";
+  control.append(input,document.createElement("span"));
+  input.setAttribute("role","switch");
+  label.classList.add("csp-switch-row");label.append(control);
+}
+if(!classicUi){
+  wrapFieldRows($(".pane[data-pane='filters'] .fgrid",panes));
+  for(const label of $$(".pane[data-pane='filters'] .toggles > .check,.pane[data-pane='alerts'] .alert-sources > .check,.pane[data-pane='alerts'] .alert-options > .check",panes)) toSwitchRow(label);
 }
 
 const spectrumBox=$("#elevSh")?.closest(".fabbox");if(spectrumBox) spectrumBox.id="elevSpectrumBox";
@@ -292,13 +323,31 @@ let currentRoute="layers";
 function openDefaultPanes(route){
   if(visited.has(currentRoute)) return;
   for(const name of route.open||[]){
-    const pane=$(`.pane[data-pane="${name}"]`,panes);
-    if(pane?.classList.contains("min")) $(".pane-x",pane)?.click();
+    const pane=$(`.pane[data-pane="${name}"]`,panes),toggle=$(".pane-x",pane);
+    if(!pane?.classList.contains("min")||!toggle) continue;
+    /* Opened for the person, not by them: the pane's own toggle refocuses its
+       chevron when the fold animation ends, which would leave a focus ring on
+       a control nobody touched. Drop that one programmatic focus. */
+    const dropFocus=()=>toggle.blur();
+    toggle.addEventListener("focus",dropFocus,{once:true});
+    setTimeout(()=>toggle.removeEventListener("focus",dropFocus),1000);
+    toggle.click();
   }
   visited.add(currentRoute);
 }
 
+/* The scene filters live in the Search filters pane, and visit the Satellite
+   page's search card while it is shown. They go home before anything clears
+   the custom view, so code elsewhere that reads them (a map click starts a
+   search on any page) always finds them in the document. */
+const filtersBody=$(".pane[data-pane='filters'] .pane-b",panes);
+const filterParts=[$(".fgrid",filtersBody),$(".toggles",filtersBody)].filter(Boolean);
+function restoreFilters(){
+  if(filtersBody&&filterParts.some(part=>part.parentElement!==filtersBody)) filtersBody.append(...filterParts);
+}
 function clearCustom(){
+  satelliteSearch?.dispatchEvent(new Event("csp:search-dismiss"));
+  restoreFilters();
   customView.replaceChildren();
 }
 
@@ -382,7 +431,9 @@ function buildLayerCard(layer,index,entries,compact=false){
   return card;
 }
 
-function renderLayerStack(container,onlyScene=false){
+/* Where each card sat before a rebuild, so the new list can slide from there. */
+const layerCardTops=root=>new Map($$(".csp-layer-card",root).map(card=>[card.dataset.layerId,card.getBoundingClientRect().top]));
+function renderLayerStack(container,onlyScene=false,before=null){
   const entries=layerSort(bridge.activeLayers()).filter(layer=>!onlyScene||layer.id==="scene");
   container.replaceChildren();
   if(!entries.length){
@@ -390,6 +441,14 @@ function renderLayerStack(container,onlyScene=false){
   }
   entries.forEach((layer,index)=>container.append(buildLayerCard(layer,index,entries,onlyScene)));
   if(!onlyScene) bridge.setLayerOrder(entries.map(layer=>layer.id));
+  /* A reorder, a new layer or a removal moves cards rather than redrawing
+     them in place: each slides from its old row, new ones fade in. */
+  if(before?.size&&!calmMotion()) for(const card of $$(".csp-layer-card",container)){
+    const top=before.get(card.dataset.layerId);
+    if(top==null){card.animate([{opacity:0,transform:"scale(.98)"},{opacity:1,transform:"none"}],{duration:260,easing:"cubic-bezier(.32,.72,0,1)"});continue}
+    const dy=top-card.getBoundingClientRect().top;
+    if(Math.abs(dy)>1) card.animate([{transform:`translateY(${dy}px)`},{transform:"none"}],{duration:360,easing:"cubic-bezier(.32,.72,0,1)"});
+  }
 }
 
 function availableLayersCard(){
@@ -404,21 +463,139 @@ function availableLayersCard(){
 }
 
 function renderLayersView(){
+  const stack=$("#cspActiveLayerStack",customView),before=stack?layerCardTops(stack):null;
   clearCustom();
   const activeLabel=document.createElement("div");activeLabel.className="csp-section-label";activeLabel.textContent="Active layers";
   const active=document.createElement("div");active.className="csp-card";active.id="cspActiveLayerStack";
   customView.append(activeLabel,active);
-  renderLayerStack(active);
+  renderLayerStack(active,false,before);
   const availableLabel=document.createElement("div");availableLabel.className="csp-section-label";availableLabel.textContent="Add layers";
   customView.append(availableLabel,availableLayersCard());
 }
 
+/* Satellite: a scene search built for imagery. A place, address or pasted
+   coordinate (with the main field's geocoder suggestions), a button that
+   searches the map centre, quick filters for the common imagery questions,
+   and the full filters beneath them in the same card. Built once and kept,
+   so a background refresh of this page never takes the field from under a
+   person typing in it. */
+const SAT_QUICK=[
+  {id:"clear",label:"Under 10% cloud",select:"cloud",value:"10",off:"101",title:"Only scenes with less than 10% cloud"},
+  {id:"recent",label:"Last 30 days",select:"days",value:"30",off:"365",title:"Only scenes from the last 30 days"},
+  {id:"radar",label:"Radar",select:"vis",value:"sar",off:"all",title:"Radar (SAR) sees through cloud and at night"},
+  {id:"sharp",label:"Sharpest first",select:"sort",value:"res",off:"date",title:"Highest resolution scenes first"}
+];
+let satelliteSearch=null;
+function syncSatelliteChips(){
+  if(!satelliteSearch) return;
+  for(const chip of $$(".csp-sat-chip",satelliteSearch)){
+    const quick=SAT_QUICK.find(item=>item.id===chip.dataset.quick),select=$("#"+quick.select);
+    chip.setAttribute("aria-pressed",String(!!select&&select.value===quick.value));
+  }
+}
+function buildSatelliteSearch(){
+  const wrap=document.createElement("section");wrap.className="csp-sat-search";wrap.setAttribute("aria-label","Scene search");
+  wrap.innerHTML=`
+    <div class="csp-section-label">Scene search</div>
+    <div class="csp-card csp-sat-card">
+      <form class="csp-sat-field" role="search">
+        <img src="${icon("search")}" alt="">
+        <input type="search" id="cspSatQuery" placeholder="Place or coordinates" autocomplete="off" autocorrect="off" spellcheck="false" enterkeyhint="search"
+               aria-label="Find scenes by place or coordinates" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="cspSatSuggest">
+        <button type="button" class="csp-sat-center" title="Search at the map centre" aria-label="Search scenes at the map centre">${svg('<circle cx="12" cy="12" r="7"/><circle cx="12" cy="12" r="2"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/>')}</button>
+        <button type="submit" class="csp-sat-go" title="Search" aria-label="Search scenes">${svg('<path d="M5 12h14M13 6l6 6-6 6"/>')}</button>
+        <div class="csp-sat-suggest" id="cspSatSuggest" role="listbox" aria-label="Places" hidden></div>
+      </form>
+      <div class="csp-sat-chips" role="group" aria-label="Quick filters">
+        ${SAT_QUICK.map(quick=>`<button type="button" class="csp-sat-chip" data-quick="${quick.id}" aria-pressed="false" title="${quick.title}">${quick.label}</button>`).join("")}
+      </div>
+      <div class="csp-sat-filters"></div>
+    </div>`;
+  const form=$(".csp-sat-field",wrap),input=$("#cspSatQuery",wrap),list=$("#cspSatSuggest",wrap);
+  let places=[],active=-1,timer=0,request=null,generation=0;
+  const hide=()=>{
+    clearTimeout(timer);timer=0;request?.abort();request=null;generation++;
+    list.hidden=true;list.replaceChildren();places=[];active=-1;input.setAttribute("aria-expanded","false");input.removeAttribute("aria-activedescendant");
+  };
+  wrap.addEventListener("csp:search-dismiss",hide);
+  const note=text=>{list.innerHTML=`<div class="note">${text}</div>`;list.hidden=false;input.setAttribute("aria-expanded","true")};
+  const paint=()=>{
+    if(!places.length){hide();return}
+    list.replaceChildren(...places.map((place,index)=>{
+      const option=document.createElement("div");option.setAttribute("role","option");option.id=`cspSatOption${index}`;
+      option.setAttribute("aria-selected",String(index===active));
+      option.innerHTML=`<span class="p"></span><span class="s"></span><span class="t"></span>`;
+      option.children[0].textContent=place.primary;option.children[1].textContent=place.secondary||"";option.children[2].textContent=place.kind||"";
+      option.addEventListener("pointerdown",event=>{event.preventDefault();pick(index)});
+      return option;
+    }));
+    list.hidden=false;input.setAttribute("aria-expanded","true");
+    if(active>=0) input.setAttribute("aria-activedescendant",`cspSatOption${active}`);else input.removeAttribute("aria-activedescendant");
+  };
+  const pick=index=>{
+    const place=places[index];if(!place) return;
+    input.value=place.secondary?`${place.primary}, ${place.secondary.split(",").map(part=>part.trim()).slice(0,2).join(", ")}`:place.primary;
+    hide();bridge.searchPlace?.(place);
+  };
+  input.addEventListener("input",()=>{
+    hide();
+    const text=input.value.trim();
+    if(text.length<3) return;
+    const current=generation;
+    timer=setTimeout(async()=>{
+      timer=0;
+      request=new AbortController();
+      try{
+        const found=await bridge.placeSuggestions?.(text,request.signal);
+        if(current!==generation||input.value.trim()!==text||document.activeElement!==input||!wrap.isConnected) return;
+        places=found||[];active=-1;
+        if(places.length) paint();else if(found) hide();
+      }catch(error){
+        if(error?.name!=="AbortError"&&current===generation&&document.activeElement===input&&wrap.isConnected)
+          note("Place search is unavailable. You can still paste coordinates.");
+      }
+    },260);
+  });
+  input.addEventListener("keydown",event=>{
+    if(event.key==="ArrowDown"&&places.length){event.preventDefault();active=(active+1)%places.length;paint()}
+    else if(event.key==="ArrowUp"&&places.length){event.preventDefault();active=(active-1+places.length)%places.length;paint()}
+    else if(event.key==="Enter"&&active>=0){event.preventDefault();pick(active)}
+    else if(event.key==="Escape"&&(!list.hidden||timer||request)){event.preventDefault();event.stopPropagation();hide()}
+  });
+  input.addEventListener("blur",()=>setTimeout(()=>{if(document.activeElement!==input) hide()},120));
+  form.addEventListener("submit",event=>{
+    event.preventDefault();hide();
+    const text=input.value.trim();if(text) bridge.searchText?.(text);
+  });
+  $(".csp-sat-center",wrap).addEventListener("click",()=>{hide();bridge.searchMapCenter?.();input.value=bridge.searchLabel?.()||""});
+  $(".csp-sat-chips",wrap).addEventListener("click",event=>{
+    const chip=event.target.closest(".csp-sat-chip");if(!chip) return;
+    const quick=SAT_QUICK.find(item=>item.id===chip.dataset.quick),select=$("#"+quick.select);if(!select) return;
+    select.value=select.value===quick.value?quick.off:quick.value;
+    select.dispatchEvent(new Event("change",{bubbles:true}));
+    syncSatelliteChips();
+  });
+  document.addEventListener("change",event=>{if(SAT_QUICK.some(quick=>event.target.id===quick.select)) syncSatelliteChips()});
+  return wrap;
+}
 function renderSatelliteView(){
-  clearCustom();
+  if(classicUi) clearCustom();
+  else if(!satelliteSearch) satelliteSearch=buildSatelliteSearch();
+  if(!classicUi&&satelliteSearch.parentElement!==customView){
+    clearCustom();
+    customView.append(satelliteSearch);
+    $(".csp-sat-filters",satelliteSearch).append(...filterParts);
+    const input=$("#cspSatQuery",satelliteSearch);
+    if(input&&!input.value) input.value=bridge.searchLabel?.()||"";
+    syncSatelliteChips();
+  }
+  let shown=$("#cspSatelliteShown",customView);
+  if(!shown){shown=document.createElement("div");shown.id="cspSatelliteShown";customView.append(shown)}
   const entries=bridge.activeLayers().filter(layer=>layer.id==="scene");
+  shown.replaceChildren();
   if(!entries.length) return;
   const label=document.createElement("div");label.className="csp-section-label";label.textContent="Displayed now";
-  const card=document.createElement("div");card.className="csp-card";customView.append(label,card);renderLayerStack(card,true);
+  const card=document.createElement("div");card.className="csp-card";shown.append(label,card);renderLayerStack(card,true);
 }
 
 function renderExportView(){
@@ -680,7 +857,9 @@ function renderSettingsView(){
       <span class="csp-setting-text"><span>Clear Appearance, these settings, and saved panel choices on this device.</span></span>
       <button type="button" class="linkbtn" data-reset-all>Reset all preferences</button>
     </div>`;
-  customView.append(engineLabel,engine,exportLabel,exportCard,accessLabel,access);
+  const sourcesLabel=document.createElement("div");sourcesLabel.className="csp-section-label";sourcesLabel.textContent="Map sources";
+  customView.append(engineLabel,engine,exportLabel,exportCard,accessLabel,access,sourcesLabel,mapSources);
+  syncMapSources();
   $("[data-open-engine]",engine).addEventListener("click",()=>$("#serverToggle")?.click());
   const scaleSelect=$("[data-export-scale]",exportCard);
   try{scaleSelect.value=localStorage.getItem("clearskies.snapshot-scale.v1")||"2"}catch(error){}
@@ -724,8 +903,15 @@ function renderCustom(route){
   else clearCustom();
 }
 
+/* A page change settles in (see csp-route-enter in ui-system.css). Not on the
+   first page at launch, which the boot reveal already presents. */
+let routesShown=0;
+workspace.addEventListener("animationend",event=>{if(event.target===workspaceScroll) workspace.classList.remove("csp-route-enter")});
 function activateRoute(key,options={}){
   const route=ROUTES[key];if(!route) return;
+  if(routesShown++&&key!==currentRoute){
+    workspace.classList.remove("csp-route-enter");void workspace.offsetWidth;workspace.classList.add("csp-route-enter");
+  }
   currentRoute=key;overlayGroup=route.overlayGroup||null;
   document.body.dataset.cspRoute=key;
   if(compactShell.matches&&!options.stayOnNav) document.body.dataset.cspView="detail";
@@ -744,6 +930,58 @@ function activateRoute(key,options={}){
 }
 
 navScroll.addEventListener("click",event=>{const route=event.target.closest("[data-route]")?.dataset.route;if(route) activateRoute(route)});
+
+/* The navigation pane's light. A soft disc trails the pointer on a slightly
+   underdamped spring - it lags, overshoots a touch, and stretches along its
+   own velocity when it has to catch up - and the row under the pointer turns
+   into a small glass lens: a lifted capsule with a specular spot at the
+   pointer, its content magnified about that point. Mouse and pen only; with
+   Reduce Motion the light follows without lag or stretch and nothing scales. */
+const calmMotion=()=>matchMedia("(prefers-reduced-motion: reduce)").matches||document.documentElement.classList.contains("csp-reduce-motion");
+{
+  const finePointer=matchMedia("(hover:hover) and (pointer:fine)");
+  const layer=document.createElement("div");layer.className="csp-halo-layer";layer.setAttribute("aria-hidden","true");
+  const halo=document.createElement("div");halo.className="csp-cursor-halo";layer.append(halo);nav.prepend(layer);
+  const STIFFNESS=170,DAMPING=19;   // critical damping would be 2*sqrt(170) = 26
+  let target=null,position=null,velocity={x:0,y:0},frame=0,lastTime=0,lensRow=null;
+  const paint=()=>{
+    if(!position) return;
+    const speed=Math.hypot(velocity.x,velocity.y),stretch=calmMotion()?0:Math.min(speed/1500,.65);
+    const angle=Math.atan2(velocity.y,velocity.x);
+    halo.style.transform=`translate3d(${position.x.toFixed(1)}px,${position.y.toFixed(1)}px,0) rotate(${angle.toFixed(3)}rad) scale(${(1+stretch).toFixed(3)},${(1/(1+stretch*.55)).toFixed(3)})`;
+  };
+  const step=now=>{
+    frame=0;if(!target||!position) return;
+    const dt=Math.min(.034,lastTime?(now-lastTime)/1000:1/60);lastTime=now;
+    if(calmMotion()){position={...target};velocity={x:0,y:0};paint();return}
+    velocity.x+=(STIFFNESS*(target.x-position.x)-DAMPING*velocity.x)*dt;
+    velocity.y+=(STIFFNESS*(target.y-position.y)-DAMPING*velocity.y)*dt;
+    position.x+=velocity.x*dt;position.y+=velocity.y*dt;
+    const settled=Math.hypot(target.x-position.x,target.y-position.y)<.3&&Math.hypot(velocity.x,velocity.y)<4;
+    if(settled){velocity={x:0,y:0};lastTime=0}else frame=requestAnimationFrame(step);
+    paint();
+  };
+  const setLens=row=>{
+    if(row===lensRow) return;
+    lensRow?.classList.remove("csp-lens");
+    lensRow=row;row?.classList.add("csp-lens");
+  };
+  nav.addEventListener("pointermove",event=>{
+    if((event.pointerType!=="mouse"&&event.pointerType!=="pen")||!finePointer.matches) return;
+    const box=nav.getBoundingClientRect();
+    target={x:event.clientX-box.left,y:event.clientY-box.top};
+    if(!position) position={...target};
+    halo.classList.add("on");
+    if(!frame){lastTime=0;frame=requestAnimationFrame(step)}
+    const row=event.target.closest?.(".csp-nav-button");
+    setLens(row&&nav.contains(row)?row:null);
+    if(!row) return;
+    const rect=row.getBoundingClientRect(),x=event.clientX-rect.left,y=event.clientY-rect.top;
+    row.style.setProperty("--lx",`${x.toFixed(1)}px`);row.style.setProperty("--ly",`${y.toFixed(1)}px`);
+    if(!calmMotion()) for(const child of row.children) child.style.transformOrigin=`${(x-child.offsetLeft).toFixed(1)}px ${(y-child.offsetTop).toFixed(1)}px`;
+  });
+  nav.addEventListener("pointerleave",()=>{halo.classList.remove("on");setLens(null);target=null;position=null});
+}
 $("#cspBack").addEventListener("click",()=>{document.body.dataset.cspView="nav"});
 compactShell.addEventListener("change",event=>{if(!event.matches) delete document.body.dataset.cspView;else document.body.dataset.cspView="nav"});
 
@@ -865,7 +1103,6 @@ function updateCounts(){
   if(maps) maps.hidden=coordinateUnavailable||!$("#coordGoogleMaps")?.href;
   if(earth) earth.hidden=coordinateUnavailable||!$("#coordGoogleEarth")?.href;
   coordinateActions.hidden=[copy,maps,earth].every(button=>!button||button.hidden);
-  const dot=$(".csp-nav-dot",settingsNav),source=$("#srvDot");if(dot&&source) dot.className="csp-nav-dot "+(source.classList.contains("on")?"on":"off");
 }
 
 for(const element of [$("#coordCopy"),$("#coordOpen"),$("#coordGoogleMaps"),$("#coordGoogleEarth")]){
@@ -985,7 +1222,7 @@ if(sheetMode()&&!isCollapsed()){
   const detentHeights=()=>({peek:probeHeight("--sheet-peek"),medium:probeHeight("--sheet-medium"),large:probeHeight("--sheet-large")});
   /* Controls that own their own drags. A slider, a picker, the layer reorder
      handle and the suggestion list keep the gesture. */
-  const OWN_GESTURE='input[type="range"],select,textarea,[contenteditable="true"],.csp-layer-handle,#ac';
+  const OWN_GESTURE='input[type="range"],select,textarea,[contenteditable="true"],.csp-layer-handle,#ac,.csp-sat-suggest';
   const scrollerFor=target=>{
     for(let el=target;el&&el!==side;el=el.parentElement){
       const overflow=getComputedStyle(el).overflowY;
@@ -1125,26 +1362,28 @@ if(sheetMode()&&!isCollapsed()){
      suggestions have room, and the keyboard covers the lower part of the
      sheet rather than shoving the page up. iOS may still pan the document a
      little while the keyboard animates; undo that while the field has focus. */
-  q.addEventListener("focus",()=>{
+  const focusSearch=input=>{
     if(!sheetMode()) return;
     if(currentDetent()!=="large") openSheet("large");
     const until=performance.now()+900;
     const pin=()=>{
       if(window.scrollY||document.documentElement.scrollTop) window.scrollTo(0,0);
-      if(performance.now()<until&&document.activeElement===q) requestAnimationFrame(pin);
+      if(performance.now()<until&&document.activeElement===input) requestAnimationFrame(pin);
     };
     requestAnimationFrame(pin);
-  });
+  };
+  q.addEventListener("focus",()=>focusSearch(q));
+  side.addEventListener("focusin",event=>{if(event.target.id==="cspSatQuery") focusSearch(event.target)});
   window.visualViewport?.addEventListener("scroll",()=>{
-    if(sheetMode()&&document.activeElement===q&&window.scrollY) window.scrollTo(0,0);
+    if(sheetMode()&&document.activeElement?.matches("#q,#cspSatQuery")&&window.scrollY) window.scrollTo(0,0);
   });
   /* With the keyboard up, a tap anywhere outside the search row dismisses it.
      A tap on the map also lowers the sheet back to the capsule (the existing
      map handler does that). */
   document.addEventListener("pointerdown",event=>{
-    if(!sheetMode()||document.activeElement!==q) return;
-    if(event.target.closest(".search-row,#ac")) return;
-    q.blur();
+    if(!sheetMode()||!document.activeElement?.matches("#q,#cspSatQuery")) return;
+    if(event.target.closest(".search-row,#ac,.csp-sat-field")) return;
+    document.activeElement.blur();
   },true);
   grabber.addEventListener("keydown",event=>{
     const detent=currentDetent();

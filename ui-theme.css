@@ -442,3 +442,62 @@
   --csp-slider-halo:rgba(255,255,255,.09);
   --csp-swatch-rim:inset 0 0 0 .5px rgba(255,255,255,.16);
 }
+
+/* Panels after T3 Code's settings screen (2026-10-17): grouped cards on a
+   faint fill with a hairline border, quiet dividers between rows, bordered
+   fields, and glass menus. The navigation pane adds a cursor halo and a glass
+   lens over the row under the pointer. Light values sit on the frosted panel;
+   dark values follow T3's neutral-black canvas, where borders and fills of a
+   few percent white separate surfaces instead of grey slabs. */
+:root.csp-glass{
+  --t3-group-bg:rgba(255,255,255,.62);
+  --t3-group-border:rgba(0,0,0,.075);
+  --t3-group-shadow:rgba(0,0,0,.04);
+  --t3-divider:rgba(0,0,0,.065);
+  --t3-row-hover:rgba(0,0,0,.03);
+  --t3-input-bg:#ffffff;
+  --t3-input-border:rgba(0,0,0,.13);
+  --t3-input-border-hover:rgba(0,0,0,.22);
+  --t3-input-shade:rgba(0,0,0,.04);
+  --t3-menu-bg:rgba(255,255,255,.9);
+  --t3-menu-border:rgba(0,0,0,.1);
+  --t3-menu-shadow:0 16px 40px -18px rgba(0,0,0,.38),0 2px 6px rgba(0,0,0,.06);
+  --t3-menu-hover:rgba(0,0,0,.055);
+  --t3-menu-selected:rgba(0,0,0,.075);
+  --t3-chip-bg:rgba(0,0,0,.045);
+  --t3-chip-border:rgba(0,0,0,.08);
+  --nav-row-hover:rgba(0,0,0,.045);
+  --nav-row-selected:rgba(255,255,255,.94);
+  --nav-row-selected-rim:inset 0 0 0 .5px rgba(0,0,0,.07),0 1px 2px rgba(0,0,0,.07),0 2px 8px rgba(0,0,0,.04);
+  --halo-core:rgba(255,255,255,.8);
+  --halo-mid:rgba(255,255,255,.3);
+  --lens-fill:linear-gradient(180deg,rgba(255,255,255,.82),rgba(255,255,255,.52));
+  --lens-rim:inset 0 1px 0 rgba(255,255,255,1),inset 0 -.5px 0 rgba(0,0,0,.07),0 0 0 .5px rgba(0,0,0,.08),0 3px 10px rgba(0,0,0,.08);
+  --lens-specular:rgba(255,255,255,.95);
+}
+:root.csp-glass[data-ui-theme="dark"]{
+  --t3-group-bg:rgba(255,255,255,.035);
+  --t3-group-border:rgba(255,255,255,.075);
+  --t3-group-shadow:rgba(0,0,0,.25);
+  --t3-divider:rgba(255,255,255,.06);
+  --t3-row-hover:rgba(255,255,255,.03);
+  --t3-input-bg:rgba(255,255,255,.04);
+  --t3-input-border:rgba(255,255,255,.1);
+  --t3-input-border-hover:rgba(255,255,255,.18);
+  --t3-input-shade:rgba(255,255,255,.05);
+  --t3-menu-bg:rgba(30,30,32,.86);
+  --t3-menu-border:rgba(255,255,255,.1);
+  --t3-menu-shadow:0 18px 44px -18px rgba(0,0,0,.8),0 2px 6px rgba(0,0,0,.3);
+  --t3-menu-hover:rgba(255,255,255,.07);
+  --t3-menu-selected:rgba(255,255,255,.1);
+  --t3-chip-bg:rgba(255,255,255,.05);
+  --t3-chip-border:rgba(255,255,255,.09);
+  --nav-row-hover:rgba(255,255,255,.06);
+  --nav-row-selected:rgba(255,255,255,.1);
+  --nav-row-selected-rim:inset 0 1px 0 rgba(255,255,255,.07),inset 0 0 0 .5px rgba(255,255,255,.07),0 1px 3px rgba(0,0,0,.3);
+  --halo-core:rgba(255,255,255,.14);
+  --halo-mid:rgba(255,255,255,.05);
+  --lens-fill:linear-gradient(180deg,rgba(255,255,255,.15),rgba(255,255,255,.055));
+  --lens-rim:inset 0 1px 0 rgba(255,255,255,.22),inset 0 -.5px 0 rgba(0,0,0,.3),0 0 0 .5px rgba(255,255,255,.09),0 6px 16px rgba(0,0,0,.35);
+  --lens-specular:rgba(255,255,255,.24);
+}
