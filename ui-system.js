@@ -323,15 +323,10 @@ let currentRoute="layers";
 function openDefaultPanes(route){
   if(visited.has(currentRoute)) return;
   for(const name of route.open||[]){
-    const pane=$(`.pane[data-pane="${name}"]`,panes),toggle=$(".pane-x",pane);
-    if(!pane?.classList.contains("min")||!toggle) continue;
-    /* Opened for the person, not by them: the pane's own toggle refocuses its
-       chevron when the fold animation ends, which would leave a focus ring on
-       a control nobody touched. Drop that one programmatic focus. */
-    const dropFocus=()=>toggle.blur();
-    toggle.addEventListener("focus",dropFocus,{once:true});
-    setTimeout(()=>toggle.removeEventListener("focus",dropFocus),1000);
-    toggle.click();
+    const pane=$(`.pane[data-pane="${name}"]`,panes);
+    if(!pane?.classList.contains("min")) continue;
+    /* Opening a default pane must leave keyboard focus where the person is. */
+    bridge.openPane(name);
   }
   visited.add(currentRoute);
 }
@@ -475,24 +470,10 @@ function renderLayersView(){
 
 /* Satellite: a scene search built for imagery. A place, address or pasted
    coordinate (with the main field's geocoder suggestions), a button that
-   searches the map centre, quick filters for the common imagery questions,
-   and the full filters beneath them in the same card. Built once and kept,
-   so a background refresh of this page never takes the field from under a
-   person typing in it. */
-const SAT_QUICK=[
-  {id:"clear",label:"Under 10% cloud",select:"cloud",value:"10",off:"101",title:"Only scenes with less than 10% cloud"},
-  {id:"recent",label:"Last 30 days",select:"days",value:"30",off:"365",title:"Only scenes from the last 30 days"},
-  {id:"radar",label:"Radar",select:"vis",value:"sar",off:"all",title:"Radar (SAR) sees through cloud and at night"},
-  {id:"sharp",label:"Sharpest first",select:"sort",value:"res",off:"date",title:"Highest resolution scenes first"}
-];
+   searches the map centre, and scene filters below the search field. Built
+   once and kept, so a background refresh of this page never takes the field
+   from under a person typing in it. */
 let satelliteSearch=null;
-function syncSatelliteChips(){
-  if(!satelliteSearch) return;
-  for(const chip of $$(".csp-sat-chip",satelliteSearch)){
-    const quick=SAT_QUICK.find(item=>item.id===chip.dataset.quick),select=$("#"+quick.select);
-    chip.setAttribute("aria-pressed",String(!!select&&select.value===quick.value));
-  }
-}
 function buildSatelliteSearch(){
   const wrap=document.createElement("section");wrap.className="csp-sat-search";wrap.setAttribute("aria-label","Scene search");
   wrap.innerHTML=`
@@ -506,9 +487,6 @@ function buildSatelliteSearch(){
         <button type="submit" class="csp-sat-go" title="Search" aria-label="Search scenes">${svg('<path d="M5 12h14M13 6l6 6-6 6"/>')}</button>
         <div class="csp-sat-suggest" id="cspSatSuggest" role="listbox" aria-label="Places" hidden></div>
       </form>
-      <div class="csp-sat-chips" role="group" aria-label="Quick filters">
-        ${SAT_QUICK.map(quick=>`<button type="button" class="csp-sat-chip" data-quick="${quick.id}" aria-pressed="false" title="${quick.title}">${quick.label}</button>`).join("")}
-      </div>
       <div class="csp-sat-filters"></div>
     </div>`;
   const form=$(".csp-sat-field",wrap),input=$("#cspSatQuery",wrap),list=$("#cspSatSuggest",wrap);
@@ -568,14 +546,6 @@ function buildSatelliteSearch(){
     const text=input.value.trim();if(text) bridge.searchText?.(text);
   });
   $(".csp-sat-center",wrap).addEventListener("click",()=>{hide();bridge.searchMapCenter?.();input.value=bridge.searchLabel?.()||""});
-  $(".csp-sat-chips",wrap).addEventListener("click",event=>{
-    const chip=event.target.closest(".csp-sat-chip");if(!chip) return;
-    const quick=SAT_QUICK.find(item=>item.id===chip.dataset.quick),select=$("#"+quick.select);if(!select) return;
-    select.value=select.value===quick.value?quick.off:quick.value;
-    select.dispatchEvent(new Event("change",{bubbles:true}));
-    syncSatelliteChips();
-  });
-  document.addEventListener("change",event=>{if(SAT_QUICK.some(quick=>event.target.id===quick.select)) syncSatelliteChips()});
   return wrap;
 }
 function renderSatelliteView(){
@@ -587,7 +557,6 @@ function renderSatelliteView(){
     $(".csp-sat-filters",satelliteSearch).append(...filterParts);
     const input=$("#cspSatQuery",satelliteSearch);
     if(input&&!input.value) input.value=bridge.searchLabel?.()||"";
-    syncSatelliteChips();
   }
   let shown=$("#cspSatelliteShown",customView);
   if(!shown){shown=document.createElement("div");shown.id="cspSatelliteShown";customView.append(shown)}

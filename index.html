@@ -993,8 +993,8 @@ body.pane-reordering,body.pane-reordering *{cursor:grabbing!important;user-selec
 }
 
 </style>
-<link rel="stylesheet" href="ui-theme.css?build=2026-10-16i">
-<link rel="stylesheet" href="ui-system.css?build=2026-10-16i">
+<link rel="stylesheet" href="ui-theme.css?build=2026-10-16j">
+<link rel="stylesheet" href="ui-system.css?build=2026-10-16j">
 <style>
 /* The redesign restructures the legacy DOM rather than replacing it, and the
    script that does so is the last thing on the page - so the browser paints the
@@ -1107,8 +1107,8 @@ html.csp-boot body{visibility:hidden}
             <div class="dpre hide-row" id="dpre">
               <button type="button" data-pre="thismonth">This month</button>
               <button type="button" data-pre="lastmonth">Last month</button>
-              <button type="button" data-pre="ytd">Year to date</button>
-              <button type="button" data-pre="lastyear">Last calendar year</button>
+              <button type="button" data-pre="ytd" aria-label="Year to date" title="Year to date">YTD</button>
+              <button type="button" data-pre="lastyear" aria-label="Last calendar year" title="Last calendar year">Last year</button>
             </div>
             <div class="dnote hide-row" id="dnote"></div>
 
@@ -1767,7 +1767,7 @@ html.csp-boot body{visibility:hidden}
   L.Renderer.prototype.onAdd=function(map){return onAdd.call(this,map||this._map)};
 })();
 </script>
-<script src="version.js?build=2026-10-16i"></script>
+<script src="version.js?build=2026-10-16j"></script>
 <script src="mosaic-core.js"></script>
 <script src="png-stream.js"></script>
 <script src="terrain-core.js"></script>
@@ -10289,6 +10289,11 @@ window.ClearSkiesPortalBridge={
   resetLayer:cspResetLayer,
   setLayerOrder:cspSetLayerOrder,
   refreshOverlayStatus:paintOverlayNote,
+  /* Automatic route opens keep focus in the search or navigation control. */
+  openPane:name=>{
+    const pane=document.querySelector(`.pane[data-pane="${name}"]`);
+    if(pane?.classList.contains("min")) togglePaneAnimated(pane);
+  },
   /* Annotation tools stay on whichever map is visible. */
   ensureMap:()=>{if(document.body.classList.contains("point-cloud-open"))pointCloudPanel?.close?.()},
   ensure2d:()=>{ if(document.body.classList.contains("point-cloud-open")) pointCloudPanel?.close?.(); if(document.body.classList.contains("terrain-3d")) exitTerrain3d() },
@@ -10657,8 +10662,8 @@ $("#q").addEventListener("blur",()=>setTimeout(acHide,120));
 document.addEventListener("click",e=>{ if(!e.target.closest("#iw")) acHide() });
 })();
 </script>
-<script src="markup-3d.js?build=2026-10-16i"></script>
-<script src="markup.js?build=2026-10-16i"></script>
-<script src="ui-system.js?build=2026-10-16i"></script>
+<script src="markup-3d.js?build=2026-10-16j"></script>
+<script src="markup.js?build=2026-10-16j"></script>
+<script src="ui-system.js?build=2026-10-16j"></script>
 </body>
 </html>

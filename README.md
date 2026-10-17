@@ -99,7 +99,7 @@ all saved preferences on the device. Map sources and live attribution are at
 the bottom of Settings and in the dock's Layers popover.
 
 Satellite imagery has its own place/coordinate search, map-centre search and
-quick filters beside the full scene filters. Filter values survive navigation
+scene filters below the search field. Filter values survive navigation
 between panels. The sidebar and panels use grouped rows, with a pointer halo
 and glass hover effect on desktop; Reduce Motion calms these effects.
 
@@ -110,7 +110,8 @@ Appearance colours and presets (including after a reload). `test-markup-controls
 metadata drafts, slider math, exact units and one-step width undo in `npm test`.
 `node scripts/ui-snapshot.js` checks whole-view Capture, area selection and exported pixels.
 `node scripts/ui-satellite-search.js` covers scene filters, custom dates, search
-keys, dismissed lookups, mobile focus, source credits and the classic fallback.
+keys, dismissed lookups, mobile focus, source credits, header alignment, pinned
+navigation controls and both dropdown styles, plus the classic fallback.
 All accept a local server URL and the optional `PLAYWRIGHT_MODULE` environment
 variable; browser tooling is not an application dependency.
 

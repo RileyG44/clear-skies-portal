@@ -772,8 +772,8 @@ body.csp-redesign .csp-locate-label{display:none}
 }
 /* A landscape phone or an open keyboard must not squeeze navigation to zero. */
 @media(max-width:1050px) and (max-height:600px){
-  body.csp-redesign #cspNav{overflow-y:auto;overscroll-behavior:contain}
-  body.csp-redesign #cspNavScroll{flex:0 0 auto;overflow:visible}
+  :root:not(.csp-glass) body.csp-redesign #cspNav{overflow-y:auto;overscroll-behavior:contain}
+  :root:not(.csp-glass) body.csp-redesign #cspNavScroll{flex:0 0 auto;overflow:visible}
   body.csp-redesign #cspNav > .searchbox,
   body.csp-redesign #cspNav > .foot{flex-shrink:0}
   body.csp-redesign #cspWorkspaceHeader{padding:8px 16px}
@@ -1572,13 +1572,13 @@ body.csp-redesign #cspGrabber{display:none}
   .csp-glass body.csp-redesign #cspGrabber:focus-visible{outline:none}
   .csp-glass body.csp-redesign #cspGrabber:focus-visible::before{opacity:1;box-shadow:0 0 0 3px var(--ui-ring)}
 
-  /* At the medium detent the pinned footer would leave room for three rows,
-     so the whole navigation scrolls as one and the footer follows the list. */
-  .csp-glass body.csp-redesign #cspNav{overflow-y:auto;overscroll-behavior:contain}
-  .csp-glass body.csp-redesign #cspNavScroll{flex:0 0 auto;overflow:visible}
+  /* Only the tool list scrolls; Appearance and Settings stay at the bottom
+     of the sheet at both open detents. */
+  .csp-glass body.csp-redesign #cspNav{overflow:hidden}
+  .csp-glass body.csp-redesign #cspNavScroll{flex:1 1 0;min-height:0;overflow-y:auto;overscroll-behavior:contain}
   .csp-glass body.csp-redesign #cspNav > .searchbox,
   .csp-glass body.csp-redesign #cspNav > .foot{flex-shrink:0}
-  .csp-glass body.csp-redesign #cspNav > .foot{margin-top:8px}
+  .csp-glass body.csp-redesign #cspNav > .foot{margin-top:auto}
   .csp-glass body.csp-redesign #cspNav .searchbox{padding:4px 14px 8px}
   /* Popovers open beside the map-button capsule; on a phone there is only
      room beside it if they are narrower than the screen less the capsule. */
@@ -1818,16 +1818,14 @@ body.csp-redesign:not([data-csp-route="satellite"]) #status[data-kind="scenes"]{
 
 /* ---- phone menu typography -------------------------------------------------
    The icons lead and the words follow: symbols at full ink and a size up,
-   labels a step smaller in regular weight and a softened ink, so the row reads
-   as a list rather than a column of headlines. Each label sits on the bottom
-   line of its icon (baseline on the icon's lower edge) instead of floating at
-   its centre. Section headings drop to small caps-spaced grey so they read as
+   labels a step smaller in regular weight and a softened ink. Labels and
+   symbols are centred together inside the selection. Section headings read as
    structure, not as items. */
 @media (max-width:760px){
   .csp-glass body.csp-redesign .csp-nav-button{
     --nav-icon:22px;
     grid-template-columns:var(--nav-icon) minmax(0,1fr) auto;
-    align-items:end;
+    align-items:center;
     gap:14px;
     min-height:48px;
     padding:12px 12px 13px;
@@ -1838,13 +1836,13 @@ body.csp-redesign:not([data-csp-route="satellite"]) #status[data-kind="scenes"]{
   }
   .csp-glass body.csp-redesign .csp-nav-button img{
     width:var(--nav-icon);height:var(--nav-icon);
-    align-self:end;
+    align-self:center;
     opacity:1;
   }
   .csp-glass body.csp-redesign .csp-nav-button > span:not(.csp-nav-count):not(.csp-nav-dot){
-    line-height:1;
-    margin-bottom:-.2em;      /* baseline onto the icon's bottom edge */
-    padding-bottom:.2em;      /* keep descenders inside the row */
+    line-height:1.35;
+    margin-bottom:0;
+    padding-bottom:0;
   }
   .csp-glass body.csp-redesign .csp-nav-button .csp-nav-count,
   .csp-glass body.csp-redesign .csp-nav-button .csp-nav-dot{align-self:center}
@@ -2443,7 +2441,7 @@ body.csp-redesign .csp-setting-foot[hidden]{display:none}
 @supports (corner-shape:superellipse(1.6)){
   .csp-glass body.csp-redesign.csp-redesign{--r-shell:20px;--r-popover:15px;--r-card:13px;--r-control:9px;--r-row:9px;--r-chip:6px}
   .csp-glass body.csp-redesign.csp-redesign :is(#side,.tool-popover,#mkBar,#mkPop,#ac,.csp-card,#panes .pane-b,.menu-card,#surfaceResearchBox,.csp-nav-button,
-    .csp-layer-tool,.csp-sat-field,.csp-sat-chip,.csp-sat-suggest,.snapshot-action,.ghost,.csp-setting-preview,.csp-theme-preset,
+    .csp-layer-tool,.csp-sat-field,.csp-sat-suggest,.snapshot-action,.ghost,.csp-setting-preview,.csp-theme-preset,
     .ov-opacity-control,.ov-line-control,.terrain-mode,.terrain-mode button,.csp-segmented,select,
     input:is([type=text],[type=search],[type=number],[type=date],[type=url]),textarea),
   .csp-glass body.csp-redesign.csp-redesign select::picker(select){corner-shape:superellipse(1.6)}
@@ -2460,14 +2458,14 @@ body.csp-redesign .csp-setting-foot[hidden]{display:none}
 }
 .csp-glass body.csp-redesign.csp-redesign #cspNav .csp-nav-button{
   position:relative;isolation:isolate;
-  grid-template-columns:18px minmax(0,1fr) auto;gap:9px;
+  grid-template-columns:18px minmax(0,1fr) auto;gap:9px;align-items:center;
   min-height:32px;margin:1px 0;padding:0 10px;
   border-radius:var(--r-row);
   color:color-mix(in srgb,var(--ui-text) 84%,transparent);
   font-size:14px;font-weight:500;letter-spacing:-.006em;
   transition:background-color .2s ease,box-shadow .2s ease,color .2s ease;
 }
-.csp-glass body.csp-redesign.csp-redesign #cspNav .csp-nav-button img{width:16px;height:16px;opacity:.6;transition:opacity .2s ease}
+.csp-glass body.csp-redesign.csp-redesign #cspNav .csp-nav-button img{width:16px;height:16px;align-self:center;opacity:.6;transition:opacity .2s ease}
 .csp-glass body.csp-redesign.csp-redesign #cspNav .csp-nav-button:hover{background:var(--nav-row-hover);color:var(--ui-text)}
 .csp-glass body.csp-redesign.csp-redesign #cspNav .csp-nav-button:hover img{opacity:.92}
 .csp-glass body.csp-redesign.csp-redesign #cspNav .csp-nav-button[aria-current="page"]{
@@ -2483,6 +2481,14 @@ body.csp-redesign .csp-setting-foot[hidden]{display:none}
 .csp-glass body.csp-redesign.csp-redesign #cspNav .csp-nav-button .csp-nav-count:empty{display:none}
 .csp-glass body.csp-redesign.csp-redesign #cspNav :is(#cspAppearanceNav,#cspSettingsNav) .csp-nav-button{font-size:14px}
 .csp-glass body.csp-redesign.csp-redesign #cspNav #cspSettingsNav{margin-bottom:8px}
+@media (max-width:760px),(pointer:coarse){
+  .csp-glass body.csp-redesign.csp-redesign #cspNav .csp-nav-button{
+    min-height:48px;padding:10px 12px;margin:2px 0;
+    grid-template-columns:22px minmax(0,1fr) auto;gap:12px;font-size:15px;
+  }
+  .csp-glass body.csp-redesign.csp-redesign #cspNav .csp-nav-button img{width:22px;height:22px}
+  .csp-glass body.csp-redesign.csp-redesign #cspNav :is(#cspAppearanceNav,#cspSettingsNav) .csp-nav-button{font-size:15px}
+}
 
 /* ---- navigation pane: cursor halo and glass lens -------------------------
    The halo is one blurred disc behind the pane's content (z-index -1 inside
@@ -2521,6 +2527,7 @@ body.csp-redesign .csp-setting-foot[hidden]{display:none}
 }
 
 /* ---- workspace: sections, cards and rows -------------------------------- */
+.csp-glass body.csp-redesign.csp-redesign #cspWorkspaceHeader{padding-inline:var(--t3-gutter)}
 .csp-glass body.csp-redesign.csp-redesign #cspWorkspace .csp-section-label{
   margin:0 calc(var(--t3-gutter) + var(--t3-row-x)) 10px;
   color:var(--t3-head);font-size:14px;font-weight:400;letter-spacing:-.006em;text-transform:none;
@@ -2547,12 +2554,13 @@ body.csp-redesign .csp-setting-foot[hidden]{display:none}
 .csp-glass body.csp-redesign.csp-redesign #cspWorkspace #panes .pane.min .pane-h{margin-bottom:0}
 .csp-glass body.csp-redesign.csp-redesign #cspWorkspace #panes .pane-h:hover{background:transparent}
 .csp-glass body.csp-redesign.csp-redesign #cspWorkspace #panes .pane-t{
+  flex:1;min-width:0;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;
   color:var(--t3-head);font-size:14px;font-weight:400;letter-spacing:-.006em;transition:color .2s ease;
 }
 .csp-glass body.csp-redesign.csp-redesign #cspWorkspace #panes .pane-h:hover .pane-t{color:var(--ui-text)}
-.csp-glass body.csp-redesign.csp-redesign #cspWorkspace #panes .pane-n{color:var(--t3-desc);font-size:12px;font-weight:400}
+.csp-glass body.csp-redesign.csp-redesign #cspWorkspace #panes .pane-n{flex:none;max-width:35%;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;color:var(--t3-desc);font-size:12px;font-weight:400}
 .csp-glass body.csp-redesign.csp-redesign #cspWorkspace #panes .pane-x{
-  width:24px;height:24px;border-radius:var(--r-chip);transition:transform .32s var(--ease-mac),background-color .2s ease;
+  flex:0 0 24px;width:24px;height:24px;border-radius:var(--r-chip);transition:transform .32s var(--ease-mac),background-color .2s ease;
 }
 .csp-glass body.csp-redesign.csp-redesign #cspWorkspace #panes .pane-h:hover .pane-x{background:var(--t3-row-hover)}
 .csp-glass body.csp-redesign.csp-redesign #cspWorkspace #panes :is(.pane-h,.pane-x):focus:not(:focus-visible){outline:none}
@@ -2698,7 +2706,7 @@ body.csp-redesign .csp-setting-foot[hidden]{display:none}
 
 /* ---- fields, buttons and menus ------------------------------------------ */
 .csp-glass body.csp-redesign.csp-redesign #side select{
-  min-height:32px;padding:0 30px 0 10px;
+  position:relative;box-sizing:border-box;min-width:0;max-width:100%;min-height:32px;padding:0 32px 0 10px;
   border:1px solid var(--t3-input-border);border-radius:var(--r-control);
   background-color:var(--t3-input-bg);color:var(--ui-text);
   box-shadow:0 1px 1px var(--t3-input-shade);
@@ -2725,8 +2733,12 @@ body.csp-redesign .csp-setting-foot[hidden]{display:none}
   .csp-glass body.csp-redesign.csp-redesign #cspWorkspace .ghost{min-height:44px;font-size:16px}
 }
 @supports (appearance:base-select){
-  .csp-glass body.csp-redesign.csp-redesign #side select{padding-right:10px}
-  .csp-glass body.csp-redesign.csp-redesign #side select::picker-icon{width:6px;height:6px;border-color:var(--ui-text-muted);opacity:.7;transition:transform .25s var(--ease-mac)}
+  .csp-glass body.csp-redesign.csp-redesign #side select{padding-right:32px}
+  .csp-glass body.csp-redesign.csp-redesign #side select::picker-icon{
+    position:absolute;right:12px;top:50%;margin:0;width:6px;height:6px;
+    border-color:var(--ui-text-muted);opacity:.7;transform:translateY(-65%) rotate(45deg);transition:transform .25s var(--ease-mac);
+  }
+  .csp-glass body.csp-redesign.csp-redesign #side select:open::picker-icon{transform:translateY(-35%) rotate(225deg)}
   .csp-glass body.csp-redesign.csp-redesign #side select:open{border-color:var(--ui-accent);box-shadow:0 0 0 3px var(--ui-ring)}
   .csp-glass body.csp-redesign.csp-redesign :is(#side,#pointCloudPanel,#snapshotPanel) select::picker(select){
     padding:4px;border:1px solid var(--t3-menu-border);border-radius:var(--r-popover);
@@ -2790,25 +2802,25 @@ body.csp-redesign .csp-setting-foot[hidden]{display:none}
 .csp-glass body.csp-redesign.csp-redesign .csp-sat-suggest .s{grid-column:1;color:var(--t3-desc);font-size:12px}
 .csp-glass body.csp-redesign.csp-redesign .csp-sat-suggest .t{grid-column:2;grid-row:1/3;align-self:center;color:var(--t3-desc);font-size:11px;text-transform:capitalize}
 .csp-glass body.csp-redesign.csp-redesign .csp-sat-suggest .note{padding:8px;color:var(--t3-desc);font-size:12.5px}
-.csp-glass body.csp-redesign.csp-redesign .csp-sat-chips{display:flex;flex-wrap:wrap;gap:6px;margin:10px 0 4px}
-.csp-glass body.csp-redesign.csp-redesign .csp-sat-chip{
-  min-height:28px;padding:0 10px;border:1px solid var(--t3-chip-border);border-radius:999px;
-  background:var(--t3-chip-bg);color:var(--ui-text);font-size:12.5px;font-weight:500;cursor:pointer;
-  transition:background-color .15s ease,border-color .15s ease,color .15s ease,transform .16s var(--ease-menu);
-}
-.csp-glass body.csp-redesign.csp-redesign .csp-sat-chip:hover{border-color:var(--t3-input-border-hover)}
-.csp-glass body.csp-redesign.csp-redesign .csp-sat-chip:active{transform:scale(.96)}
-.csp-glass body.csp-redesign.csp-redesign .csp-sat-chip[aria-pressed="true"]{border-color:transparent;background:var(--ui-accent);color:var(--ui-on-accent)}
-.csp-glass body.csp-redesign.csp-redesign .csp-sat-chip:focus-visible{outline:2px solid var(--ui-ring);outline-offset:1px}
-.csp-glass body.csp-redesign.csp-redesign #cspWorkspace .csp-sat-filters{margin-top:6px}
+.csp-glass body.csp-redesign.csp-redesign #cspWorkspace .csp-sat-filters{margin-top:10px}
 .csp-glass body.csp-redesign.csp-redesign #cspWorkspace .csp-sat-filters > .fgrid{display:block}
 .csp-glass body.csp-redesign.csp-redesign #cspWorkspace .csp-sat-filters > .fgrid > .csp-field-row:first-child{border-top:1px solid var(--t3-divider)}
 .csp-glass body.csp-redesign.csp-redesign #cspWorkspace .csp-sat-filters :is(.dpre,.dnote){margin:0 0 8px}
+.csp-glass body.csp-redesign.csp-redesign #cspWorkspace .csp-sat-filters .dpre{
+  display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr) minmax(0,.6fr) minmax(0,1fr);gap:4px;
+}
+.csp-glass body.csp-redesign.csp-redesign #cspWorkspace .csp-sat-filters .dpre button{
+  min-width:0;padding:8px 3px;white-space:nowrap;line-height:1.2;font-size:11px;
+  border:1px solid var(--t3-input-border);border-radius:var(--r-control);background:var(--t3-input-bg);
+}
+@media (max-width:760px){
+  .csp-glass body.csp-redesign.csp-redesign #side select{min-height:44px;font-size:16px}
+  .csp-glass body.csp-redesign.csp-redesign #cspWorkspace .csp-sat-filters .dpre button{min-height:36px;font-size:clamp(10px,2.8vw,11px)}
+}
 @media (pointer:coarse){
   .csp-glass body.csp-redesign.csp-redesign .csp-sat-field{min-height:46px}
   .csp-glass body.csp-redesign.csp-redesign #side #cspWorkspace #cspSatQuery{min-height:44px;font-size:16px}
   .csp-glass body.csp-redesign.csp-redesign .csp-sat-field button{width:40px;height:40px}
-  .csp-glass body.csp-redesign.csp-redesign .csp-sat-chip{min-height:36px}
 }
 
 /* ---- motion -------------------------------------------------------------- */
