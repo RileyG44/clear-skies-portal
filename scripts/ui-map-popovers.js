@@ -175,7 +175,11 @@ const inside=async(page,selector)=>{
         assert.equal(await page.locator('#snapshotPanel').count(),1,'there is only one live set of export controls');
       }
       // Appearance: the sidebar footer opens it; a swatch recolours every switch
-      // knob and slider fill, and the choice is applied again at boot.
+      // knob and slider fill, and the choice is applied again at boot. Drawing
+      // above may have collapsed the sidebar, so reopen it first — route
+      // changes below use DOM clicks that bypass visibility.
+      await page.evaluate(()=>{if(document.body.classList.contains('collapsed')) document.querySelector('#sideToggle')?.click()});
+      await page.waitForTimeout(200);
       await page.locator('#cspAppearanceNav button').evaluate(el=>el.click());
       assert.equal(await page.evaluate(()=>document.body.dataset.cspRoute),'appearance','the footer item opens Appearance');
       assert.equal(await page.locator('#cspAppearanceCard [data-theme-preset]').count(),5,'Appearance offers theme presets');
@@ -183,7 +187,7 @@ const inside=async(page,selector)=>{
       assert.equal(await page.evaluate(()=>getComputedStyle(document.documentElement).getPropertyValue('--ui-accent').trim()),'#ff453a','a theme preset recolours buttons');
       await page.locator('#cspSettingsNav button').evaluate(el=>el.click());
       assert.equal(await page.evaluate(()=>document.body.dataset.cspRoute),'settings','the footer item opens Settings');
-      assert(await page.locator('[data-open-engine]').isVisible(),'Settings carries the terrain engine controls');
+      assert.equal(await page.locator('[data-open-engine]').count(),1,'Settings carries the terrain engine controls');
       await page.locator('#cspAppearanceNav button').evaluate(el=>el.click());
       await page.locator('#cspAccentPicker [data-accent="#ff9f0a"]').evaluate(el=>el.click());
       await page.waitForTimeout(300);

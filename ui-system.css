@@ -1091,7 +1091,7 @@ body.csp-redesign .csp-preview-badge{
 
 .csp-glass body.csp-redesign #cspWorkspaceHeader{
   padding:20px 24px 8px;
-  border-bottom:0;
+  border-bottom:.5px solid var(--ui-line);
   background:transparent;
 }
 .csp-glass body.csp-redesign #cspWorkspaceTitle{
@@ -2382,12 +2382,17 @@ body.csp-redesign .csp-setting-preview{display:grid;gap:6px;padding:10px 12px;bo
 body.csp-redesign .csp-setting-preview .csp-setting-row>span:first-child{color:var(--ui-text-muted);font-size:12px}
 body.csp-redesign .csp-setting-preview input[type=range]{width:100%;margin:0}
 body.csp-redesign .csp-setting-foot{display:flex;justify-content:flex-end;min-height:20px}
-body.csp-redesign .csp-theme-presets{display:flex;flex-wrap:wrap;gap:8px}
-body.csp-redesign .csp-theme-preset{display:inline-flex;align-items:center;gap:7px;min-height:34px;padding:0 12px;border:1px solid var(--ui-line);border-radius:999px;background:transparent;color:var(--ui-text);font-size:12.5px;font-weight:550;cursor:pointer}
+body.csp-redesign .csp-theme-presets{display:flex;flex-wrap:wrap;gap:10px}
+body.csp-redesign .csp-theme-preset{display:grid;justify-items:center;gap:6px;padding:8px 8px 7px;border:1px solid var(--ui-line);border-radius:12px;background:transparent;color:var(--ui-text);font-size:12px;font-weight:550;cursor:pointer}
 body.csp-redesign .csp-theme-preset[aria-checked="true"]{border-color:var(--ui-accent);box-shadow:0 0 0 2px var(--ui-ring)}
-body.csp-redesign .csp-theme-dots{display:inline-flex}
-body.csp-redesign .csp-theme-dots i{width:14px;height:14px;border-radius:50%;background:var(--swatch);box-shadow:inset 0 0 0 .5px var(--ui-line)}
-body.csp-redesign .csp-theme-dots i+i{margin-left:-5px}
+body.csp-redesign .csp-theme-thumb{position:relative;display:block;width:66px;height:46px;border-radius:8px;background:var(--ui-surface);box-shadow:inset 0 0 0 .5px var(--ui-line);overflow:hidden}
+body.csp-redesign .csp-theme-thumb i{position:absolute;display:block}
+body.csp-redesign .csp-theme-thumb .tt-line{left:8px;top:8px;width:26px;height:5px;border-radius:99px;background:var(--ui-line-strong)}
+body.csp-redesign .csp-theme-thumb .tt-toggle{right:8px;top:7px;width:20px;height:11px;border-radius:99px;background:var(--p-toggle)}
+body.csp-redesign .csp-theme-thumb .tt-toggle::after{content:"";position:absolute;right:1.5px;top:1.5px;width:8px;height:8px;border-radius:50%;background:var(--ui-surface)}
+body.csp-redesign .csp-theme-thumb .tt-slider{left:8px;right:8px;top:24px;height:4px;border-radius:99px;background:var(--p-track,var(--ui-line))}
+body.csp-redesign .csp-theme-thumb .tt-slider b{position:absolute;left:0;top:0;width:58%;height:100%;border-radius:99px;background:var(--p-toggle)}
+body.csp-redesign .csp-theme-thumb .tt-button{left:8px;bottom:7px;width:24px;height:9px;border-radius:99px;background:var(--p-button)}
 body.csp-redesign .csp-segmented{display:inline-flex;gap:2px;padding:2px;border-radius:9px;background:var(--ui-fill)}
 body.csp-redesign .csp-segmented button{min-height:28px;padding:0 10px;border:0;border-radius:7px;background:transparent;color:var(--ui-text-muted);font-size:12px;font-weight:550;cursor:pointer}
 body.csp-redesign .csp-segmented button[aria-pressed="true"]{background:var(--ui-surface);color:var(--ui-text);box-shadow:0 1px 3px var(--ui-shadow-4)}
@@ -2399,7 +2404,8 @@ body.csp-redesign .csp-settings-card .snapshot-action{min-height:32px;padding:0 
    Inline properties on <html> carry the saved values; defaults keep the
    shipped look. Reduce Motion is the same opt-in, classed on <html>. */
 html.csp-glass body.csp-redesign,body.csp-redesign{font-family:var(--csp-font-family,-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI",sans-serif)}
-body.csp-redesign #side,body.csp-redesign .tool-popover{zoom:var(--csp-text-zoom,1)}
+body.csp-redesign #side{zoom:var(--csp-text-zoom,1)}
+body.csp-redesign .tool-popover{font-family:var(--csp-font-family,-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI",sans-serif)}
 html.csp-reduce-motion :is(*,*::before,*::after){animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important}
 body.csp-redesign .csp-setting-foot[hidden]{display:none}
 @media (pointer:coarse){body.csp-redesign .csp-accent-swatch{width:36px;height:36px}body.csp-redesign .csp-accent-custom::after{inset:10px}}

@@ -366,10 +366,13 @@ function buildLayerCard(layer,index,entries,compact=false){
   });
   /* Only the handle arms dragging; pressing anywhere else on the card selects,
      toggles or slides without starting a reorder. */
-  handle?.addEventListener("pointerdown",()=>{card.draggable=true;window.addEventListener("pointerup",()=>{card.draggable=false},{once:true})});
+  let dragStarted=false;
+  const disarm=()=>{if(!dragStarted){card.draggable=false}};
+  handle?.addEventListener("pointerdown",()=>{card.draggable=true;window.addEventListener("pointerup",disarm,{once:true});window.addEventListener("blur",disarm,{once:true})});
+  handle?.addEventListener("pointercancel",disarm);
   card.querySelectorAll("img").forEach(img=>{img.draggable=false});
-  card.addEventListener("dragstart",event=>{if(!card.draggable){event.preventDefault();return}event.dataTransfer.effectAllowed="move";event.dataTransfer.setData("text/plain",layer.id);card.classList.add("csp-dragging")});
-  card.addEventListener("dragend",()=>{card.draggable=false;card.classList.remove("csp-dragging")});
+  card.addEventListener("dragstart",event=>{if(!card.draggable){event.preventDefault();return}dragStarted=true;event.dataTransfer.effectAllowed="move";event.dataTransfer.setData("text/plain",layer.id);card.classList.add("csp-dragging")});
+  card.addEventListener("dragend",()=>{dragStarted=false;card.draggable=false;card.classList.remove("csp-dragging")});
   card.addEventListener("dragover",event=>{if(!layer.locked){event.preventDefault();event.dataTransfer.dropEffect="move"}});
   card.addEventListener("drop",event=>{
     event.preventDefault();const source=event.dataTransfer.getData("text/plain");if(!source||source===layer.id) return;
@@ -469,7 +472,17 @@ function loadAppearance(){
     }
     if(!base.toggle) base.toggle=validColor(localStorage.getItem(CONTROL_ACCENT_KEY));
   }catch(error){}
+  base.preset=derivePresetFor(base);
   return base;
+}
+/* The preset is a fact about the colours, not a stored label: untouched
+   colours are Meadow, an exact preset palette is that preset, anything else
+   (including a colour migrated from the old single-colour setting) is Custom.
+   Font, text colour and text size never change it. */
+function derivePresetFor(a){
+  if(!a.toggle&&!a.track&&!a.button) return "meadow";
+  const match=THEME_PRESETS.find(p=>p.toggle===a.toggle&&p.track===a.track&&p.button===a.button);
+  return match?match.id:"custom";
 }
 let appearance=loadAppearance();
 function controlAccent(){ return appearance.toggle||CONTROL_ACCENT_DEFAULT }
@@ -488,18 +501,15 @@ function applyAppearance(persist=true){
   }catch(error){}
   syncAppearancePicker();
 }
-function setAppearance(patch,fromPreset=false){
+function setAppearance(patch){
   appearance={...appearance,...patch};
-  if(!fromPreset){
-    const match=THEME_PRESETS.find(p=>p.toggle===appearance.toggle&&p.track===appearance.track&&p.button===appearance.button);
-    appearance.preset=match?match.id:"custom";
-  }
+  appearance.preset=derivePresetFor(appearance);
   applyAppearance();
 }
 function setControlAccent(value){ setAppearance({toggle:validColor(value)}) }
 function applyThemePreset(id){
   const preset=THEME_PRESETS.find(p=>p.id===id);if(!preset) return;
-  setAppearance({toggle:preset.toggle,track:preset.track,button:preset.button,preset:preset.id},true);
+  setAppearance({toggle:preset.toggle,track:preset.track,button:preset.button});
 }
 function syncAppearancePicker(){
   const view=customView;if(!view||!$("#cspAppearanceCard",view)) return;
@@ -561,7 +571,7 @@ function renderAppearanceView(){
       <span class="csp-accent-name" id="cspPresetName" aria-live="polite"></span>
     </div>
     <div class="csp-theme-presets" role="radiogroup" aria-label="Theme preset">
-      ${THEME_PRESETS.map(p=>`<button type="button" class="csp-theme-preset" role="radio" aria-checked="false" data-theme-preset="${p.id}"><span class="csp-theme-dots"><i style="--swatch:${p.toggle}"></i><i style="--swatch:${p.button}"></i></span>${p.name}</button>`).join("")}
+      ${THEME_PRESETS.map(p=>`<button type="button" class="csp-theme-preset" role="radio" aria-checked="false" data-theme-preset="${p.id}" style="--p-toggle:${p.toggle};--p-button:${p.button};--p-track:${p.track||"var(--ui-line)"}"><span class="csp-theme-thumb" aria-hidden="true"><i class="tt-line"></i><i class="tt-toggle"></i><i class="tt-slider"><b></b></i><i class="tt-button"></i></span>${p.name}</button>`).join("")}
     </div>
     ${colorRow("toggle","Toggle & slider colour","Fills every switch knob and the filled part of a slider when it is on.",CONTROL_ACCENTS,true)}
     ${colorRow("track","Slider track colour","The part of the slider bar after the thumb. Auto follows light and dark mode.",TRACK_SWATCHES)}
@@ -622,17 +632,30 @@ function renderSettingsView(){
   clearCustom();
   const engineLabel=document.createElement("div");engineLabel.className="csp-section-label";engineLabel.textContent="Terrain engine";
   const engine=document.createElement("div");engine.className="csp-card csp-settings-card";
-  const srvState=$("#srvState")?.textContent.trim(),srvUrl=$("#srvUrl")?.value.trim(),srvOn=$("#srvDot")?.classList.contains("on");
   engine.innerHTML=`
     <div class="csp-setting-row">
-      <div class="csp-setting-text"><strong>Secure terrain engine</strong><span>${srvState||(srvOn?"Connected.":"Not connected. Your Mac self-heals locally; this saves and checks its Tailscale HTTPS address.")}</span></div>
-      <span class="csp-nav-dot ${srvOn?"on":"off"}" aria-hidden="true"></span>
+      <div class="csp-setting-text"><strong>Secure terrain engine</strong><span data-engine-state></span></div>
+      <span class="csp-nav-dot off" data-engine-dot aria-hidden="true"></span>
     </div>
-    ${srvUrl?`<div class="csp-setting-row"><span class="csp-setting-text"><span>Address</span></span><span class="csp-accent-name">${srvUrl.replace(/</g,"&lt;")}</span></div>`:""}
+    <div class="csp-setting-row" data-engine-address-row hidden><span class="csp-setting-text"><span>Address</span></span><span class="csp-accent-name" data-engine-address></span></div>
     <div class="csp-setting-row">
       <span class="csp-setting-text"><span>Connect, copy a private setup link, or forget this device.</span></span>
       <button type="button" class="snapshot-action" data-open-engine>Open controls</button>
     </div>`;
+  /* The engine state lives in the dock pop-up; mirror it while this page is
+     mounted so connecting there updates here without a revisit. */
+  const syncEngine=()=>{
+    if(!engine.isConnected) return;
+    const state=$("#srvState")?.textContent.trim(),on=$("#srvDot")?.classList.contains("on"),url=$("#srvUrl")?.value.trim();
+    $("[data-engine-state]",engine).textContent=state||(on?"Connected.":"Not connected. Your Mac self-heals locally; this saves and checks its Tailscale HTTPS address.");
+    $("[data-engine-dot]",engine).className="csp-nav-dot "+(on?"on":"off");
+    $("[data-engine-address-row]",engine).hidden=!url;
+    $("[data-engine-address]",engine).textContent=url||"";
+  };
+  syncEngine();
+  const engineObserver=new MutationObserver(syncEngine);
+  for(const el of [$("#srvState"),$("#srvDot")].filter(Boolean)) engineObserver.observe(el,{attributes:true,childList:true,characterData:true,subtree:true});
+  $("#srvUrl")?.addEventListener("input",syncEngine);
   const exportLabel=document.createElement("div");exportLabel.className="csp-section-label";exportLabel.textContent="Export";
   const exportCard=document.createElement("div");exportCard.className="csp-card csp-settings-card";
   exportCard.innerHTML=`
@@ -643,7 +666,7 @@ function renderSettingsView(){
       </select>
     </div>
     <label class="csp-setting-row">
-      <span class="csp-setting-text"><strong>Map info in exports</strong><span>Coordinates, elevation and colour keys, on by default.</span></span>
+      <span class="csp-setting-text"><strong>Map info in exports</strong><span>Coordinates, elevation and colour keys in saved images.</span></span>
       <span class="csp-switch"><input type="checkbox" data-export-readout role="switch"><span></span></span>
     </label>`;
   const accessLabel=document.createElement("div");accessLabel.className="csp-section-label";accessLabel.textContent="Accessibility & data";
@@ -671,6 +694,10 @@ function renderSettingsView(){
   readout.addEventListener("change",()=>{
     if(liveReadout&&liveReadout.checked!==readout.checked){liveReadout.checked=readout.checked;liveReadout.dispatchEvent(new Event("change",{bubbles:true}))}
   });
+  /* Keep these defaults in step when the camera pop-up changes them first. */
+  const liveScale=$("#snapshotScale");
+  liveScale?.addEventListener("change",()=>{if(exportCard.isConnected) scaleSelect.value=liveScale.value});
+  liveReadout?.addEventListener("change",()=>{if(exportCard.isConnected) readout.checked=liveReadout.checked});
   const motion=$("[data-reduce-motion]",access);
   motion.checked=document.documentElement.classList.contains("csp-reduce-motion");
   motion.addEventListener("change",()=>{
@@ -678,7 +705,10 @@ function renderSettingsView(){
     try{if(motion.checked)localStorage.setItem("clearskies.reduceMotion.v1","1");else localStorage.removeItem("clearskies.reduceMotion.v1")}catch(error){}
   });
   $("[data-reset-all]",access).addEventListener("click",()=>{
-    try{for(const key of ["clearskies.appearance.v1","clearskies.controlAccent.v1","clearskies.snapshot-scale.v1","clearskies.snapshot.readout.v1","clearskies.reduceMotion.v1","clearskies.workspace.v1"]) localStorage.removeItem(key)}catch(error){}
+    /* Preferences and panel layout only; map content choices (overlays,
+       terrain and markup state) are data, not preferences, and stay. */
+    const keys=["clearskies.appearance.v1","clearskies.controlAccent.v1","clearskies.snapshot-scale.v1","clearskies.snapshot.readout.v1","clearskies.reduceMotion.v1","clearskies.workspace.v1","clearskies.terrain-sections.v1","clearskies.active-layer-order.v1","clearskies.panes.v1","clearskies.scenePanel.v1","clearskies.mapToolOrder.v2","clearskies.mapTheme.v1"];
+    try{for(const key of keys) localStorage.removeItem(key);sessionStorage.removeItem("clearskies.panes.session.v1")}catch(error){}
     location.reload();
   });
 }

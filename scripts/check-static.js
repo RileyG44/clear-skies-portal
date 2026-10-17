@@ -79,6 +79,10 @@ assert(uiSystem.includes('custom:"appearance"')&&uiSystem.includes("renderAppear
        "Appearance must be its own route with theme presets");
 assert(uiSystem.includes("renderSettingsView")&&uiSystem.includes("data-open-engine")&&!uiSystem.includes("cspEngineNav"),
        "Settings must carry the terrain engine instead of a footer engine item");
+assert(uiSystem.includes("derivePresetFor")&&uiSystem.includes("pointercancel"),
+       "appearance presets must derive from colours and cancelled drags must disarm");
+assert(!uiStyles.includes(".tool-popover{zoom:var(--csp-text-zoom"),
+       "popovers must not zoom; their positioner uses unscaled dimensions");
 const versionSandbox={};
 vm.runInNewContext(read("version.js"),versionSandbox,{filename:"version.js"});
 assert.match(versionSandbox.CSP_BUILD,/^\d{4}-\d{2}-\d{2}[a-z]$/,"build version must be date plus revision letter");
