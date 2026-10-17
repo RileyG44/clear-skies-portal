@@ -102,7 +102,7 @@ Reset layout are in Settings under This device, including on phones.
 Satellite imagery has its own place/coordinate search, map-centre search and
 scene filters below the search field. Filter values survive navigation
 between panels. The sidebar and panels use grouped rows, with a pointer halo
-and glass hover effect on desktop; Reduce Motion calms these effects.
+and glass hover effect on desktop; Reduce Motion disables those pointer effects.
 
 Browser regressions: `node scripts/ui-map-popovers.js` covers light/dark desktop,
 mobile, narrow phones, landscape, editing, layer switching, drawing, keyboard
@@ -115,6 +115,10 @@ keys, dismissed lookups, mobile focus, source credits, header alignment, pinned
 navigation controls and both dropdown styles, plus the classic fallback.
 `node scripts/ui-sheet-chrome.js` checks the compact phone footer, toolbar
 fade/slide and direct swipe tracking, Reduced Motion, and Settings utilities.
+`node scripts/ui-review-regressions.js` covers touch scrolling and completed
+taps, committed locations and retained drafts, result-selection animations,
+reduced-motion and scaled-pointer geometry, short-screen navigation, readable
+date shortcuts, phone picker targets and unsupported-picker motion safeguards.
 All accept a local server URL and the optional `PLAYWRIGHT_MODULE` environment
 variable; browser tooling is not an application dependency.
 

@@ -53,7 +53,7 @@ const base=process.argv[2]||'http://127.0.0.1:8765/';
       if(reduced){assert.equal(mid.opacity,1);assert(['none','matrix(1, 0, 0, 1, 0, 0)'].includes(mid.transform))}
       else assert(mid.opacity>0&&mid.opacity<1,`toolbar eases back in: ${JSON.stringify(mid)}`);
       await page.waitForTimeout(350);settled=await state();
-      assert.equal(settled.opacity,1);assert(!settled.inert&&settled.hidden==='false');
+      assert.equal(settled.opacity,1);assert(!settled.inert&&settled.hidden===null);
       if(!reduced){
         const session=await context.newCDPSession(page),grab=await page.locator('#cspGrabber').boundingBox();
         const x=grab.x+grab.width/2,y=grab.y+10;

@@ -471,8 +471,8 @@
   --nav-row-selected-rim:inset 0 0 0 .5px rgba(0,0,0,.07),0 1px 2px rgba(0,0,0,.07),0 2px 8px rgba(0,0,0,.04);
   --halo-core:rgba(255,255,255,.8);
   --halo-mid:rgba(255,255,255,.3);
-  --lens-fill:linear-gradient(180deg,rgba(255,255,255,.82),rgba(255,255,255,.52));
-  --lens-rim:inset 0 1px 0 rgba(255,255,255,1),inset 0 -.5px 0 rgba(0,0,0,.07),0 0 0 .5px rgba(0,0,0,.08),0 3px 10px rgba(0,0,0,.08);
+  --lens-fill:linear-gradient(180deg,rgba(255,255,255,.5),rgba(255,255,255,.22));
+  --lens-rim:inset 0 1px 0 rgba(255,255,255,.85),inset 0 0 0 .5px rgba(0,0,0,.05);
   --lens-specular:rgba(255,255,255,.95);
 }
 :root.csp-glass[data-ui-theme="dark"]{
@@ -497,7 +497,7 @@
   --nav-row-selected-rim:inset 0 1px 0 rgba(255,255,255,.07),inset 0 0 0 .5px rgba(255,255,255,.07),0 1px 3px rgba(0,0,0,.3);
   --halo-core:rgba(255,255,255,.14);
   --halo-mid:rgba(255,255,255,.05);
-  --lens-fill:linear-gradient(180deg,rgba(255,255,255,.15),rgba(255,255,255,.055));
-  --lens-rim:inset 0 1px 0 rgba(255,255,255,.22),inset 0 -.5px 0 rgba(0,0,0,.3),0 0 0 .5px rgba(255,255,255,.09),0 6px 16px rgba(0,0,0,.35);
+  --lens-fill:linear-gradient(180deg,rgba(255,255,255,.075),rgba(255,255,255,.03));
+  --lens-rim:inset 0 1px 0 rgba(255,255,255,.12);
   --lens-specular:rgba(255,255,255,.24);
 }

@@ -339,6 +339,7 @@ const filtersBody=$(".pane[data-pane='filters'] .pane-b",panes);
 const filterParts=[$(".fgrid",filtersBody),$(".toggles",filtersBody)].filter(Boolean);
 function restoreFilters(){
   if(filtersBody&&filterParts.some(part=>part.parentElement!==filtersBody)) filtersBody.append(...filterParts);
+  if(status.parentElement!==workspaceScroll) workspaceScroll.insertBefore(status,panes);
 }
 function clearCustom(){
   satelliteSearch?.dispatchEvent(new Event("csp:search-dismiss"));
@@ -482,21 +483,39 @@ function buildSatelliteSearch(){
       <form class="csp-sat-field" role="search">
         <img src="${icon("search")}" alt="">
         <input type="search" id="cspSatQuery" placeholder="Place or coordinates" autocomplete="off" autocorrect="off" spellcheck="false" enterkeyhint="search"
-               aria-label="Find scenes by place or coordinates" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="cspSatSuggest">
+               aria-label="Find scenes by place or coordinates" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="cspSatSuggest" aria-describedby="cspSatNote">
         <button type="button" class="csp-sat-center" title="Search at the map centre" aria-label="Search scenes at the map centre">${svg('<circle cx="12" cy="12" r="7"/><circle cx="12" cy="12" r="2"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/>')}</button>
         <button type="submit" class="csp-sat-go" title="Search" aria-label="Search scenes">${svg('<path d="M5 12h14M13 6l6 6-6 6"/>')}</button>
         <div class="csp-sat-suggest" id="cspSatSuggest" role="listbox" aria-label="Places" hidden></div>
       </form>
+      <p class="csp-sat-note" id="cspSatNote" role="status" hidden></p>
       <div class="csp-sat-filters"></div>
     </div>`;
   const form=$(".csp-sat-field",wrap),input=$("#cspSatQuery",wrap),list=$("#cspSatSuggest",wrap);
-  let places=[],active=-1,timer=0,request=null,generation=0;
+  const message=$("#cspSatNote",wrap),note=text=>{message.textContent=text;message.hidden=!text};
+  let places=[],active=-1,timer=0,request=null,generation=0,draft=false,draftLocationChanged=false,committedVersion=-1,committedLabel="";
   const hide=()=>{
     clearTimeout(timer);timer=0;request?.abort();request=null;generation++;
     list.hidden=true;list.replaceChildren();places=[];active=-1;input.setAttribute("aria-expanded","false");input.removeAttribute("aria-activedescendant");
+    note("");
   };
   wrap.addEventListener("csp:search-dismiss",hide);
-  const note=text=>{list.innerHTML=`<div class="note">${text}</div>`;list.hidden=false;input.setAttribute("aria-expanded","true")};
+  const syncCommitted=()=>{
+    const state=bridge.searchState?.()||{version:0,label:bridge.searchLabel?.()||""};
+    if(state.version!==committedVersion){
+      committedVersion=state.version;committedLabel=state.label;
+      draft=draft&&input.value!==committedLabel;draftLocationChanged=draft;
+      if(!draft){hide();input.value=committedLabel}
+    }
+    if(draftLocationChanged&&wrap.isConnected&&message.hidden) note(`Map location: ${committedLabel}. Search to use your draft.`);
+  };
+  document.addEventListener("csp:location",syncCommitted);
+  wrap.addEventListener("csp:search-sync",syncCommitted);
+  const highlight=()=>{
+    [...list.children].forEach((option,index)=>option.setAttribute("aria-selected",String(index===active)));
+    if(active>=0){input.setAttribute("aria-activedescendant",`cspSatOption${active}`);list.children[active]?.scrollIntoView({block:"nearest"})}
+    else input.removeAttribute("aria-activedescendant");
+  };
   const paint=()=>{
     if(!places.length){hide();return}
     list.replaceChildren(...places.map((place,index)=>{
@@ -504,18 +523,21 @@ function buildSatelliteSearch(){
       option.setAttribute("aria-selected",String(index===active));
       option.innerHTML=`<span class="p"></span><span class="s"></span><span class="t"></span>`;
       option.children[0].textContent=place.primary;option.children[1].textContent=place.secondary||"";option.children[2].textContent=place.kind||"";
-      option.addEventListener("pointerdown",event=>{event.preventDefault();pick(index)});
+      option.addEventListener("mousedown",event=>event.preventDefault());
+      option.addEventListener("click",()=>pick(index));
       return option;
     }));
     list.hidden=false;input.setAttribute("aria-expanded","true");
-    if(active>=0) input.setAttribute("aria-activedescendant",`cspSatOption${active}`);else input.removeAttribute("aria-activedescendant");
+    highlight();
   };
   const pick=index=>{
     const place=places[index];if(!place) return;
     input.value=place.secondary?`${place.primary}, ${place.secondary.split(",").map(part=>part.trim()).slice(0,2).join(", ")}`:place.primary;
-    hide();bridge.searchPlace?.(place);
+    draft=false;draftLocationChanged=false;hide();bridge.searchPlace?.(place);
   };
   input.addEventListener("input",()=>{
+    draft=input.value!==committedLabel;
+    if(!draft) draftLocationChanged=false;
     hide();
     const text=input.value.trim();
     if(text.length<3) return;
@@ -523,11 +545,13 @@ function buildSatelliteSearch(){
     timer=setTimeout(async()=>{
       timer=0;
       request=new AbortController();
+      note("Searching places…");
       try{
         const found=await bridge.placeSuggestions?.(text,request.signal);
         if(current!==generation||input.value.trim()!==text||document.activeElement!==input||!wrap.isConnected) return;
         places=found||[];active=-1;
-        if(places.length) paint();else if(found) hide();
+        if(places.length){note("");paint()}
+        else if(found){hide();note("No matching suggestions. Press Enter to search.")}
       }catch(error){
         if(error?.name!=="AbortError"&&current===generation&&document.activeElement===input&&wrap.isConnected)
           note("Place search is unavailable. You can still paste coordinates.");
@@ -535,17 +559,17 @@ function buildSatelliteSearch(){
     },260);
   });
   input.addEventListener("keydown",event=>{
-    if(event.key==="ArrowDown"&&places.length){event.preventDefault();active=(active+1)%places.length;paint()}
-    else if(event.key==="ArrowUp"&&places.length){event.preventDefault();active=(active-1+places.length)%places.length;paint()}
+    if(event.key==="ArrowDown"&&places.length){event.preventDefault();active=(active+1)%places.length;highlight()}
+    else if(event.key==="ArrowUp"&&places.length){event.preventDefault();active=active<0?places.length-1:(active-1+places.length)%places.length;highlight()}
     else if(event.key==="Enter"&&active>=0){event.preventDefault();pick(active)}
     else if(event.key==="Escape"&&(!list.hidden||timer||request)){event.preventDefault();event.stopPropagation();hide()}
   });
   input.addEventListener("blur",()=>setTimeout(()=>{if(document.activeElement!==input) hide()},120));
   form.addEventListener("submit",event=>{
     event.preventDefault();hide();
-    const text=input.value.trim();if(text) bridge.searchText?.(text);
+    const text=input.value.trim();if(text){draft=false;draftLocationChanged=false;bridge.searchText?.(text)}
   });
-  $(".csp-sat-center",wrap).addEventListener("click",()=>{hide();bridge.searchMapCenter?.();input.value=bridge.searchLabel?.()||""});
+  $(".csp-sat-center",wrap).addEventListener("click",()=>{draft=false;draftLocationChanged=false;hide();bridge.searchMapCenter?.();input.value=bridge.searchLabel?.()||""});
   return wrap;
 }
 function renderSatelliteView(){
@@ -555,9 +579,9 @@ function renderSatelliteView(){
     clearCustom();
     customView.append(satelliteSearch);
     $(".csp-sat-filters",satelliteSearch).append(...filterParts);
-    const input=$("#cspSatQuery",satelliteSearch);
-    if(input&&!input.value) input.value=bridge.searchLabel?.()||"";
+    $(".csp-sat-card",satelliteSearch).insertBefore(status,$(".csp-sat-filters",satelliteSearch));
   }
+  satelliteSearch?.dispatchEvent(new Event("csp:search-sync"));
   let shown=$("#cspSatelliteShown",customView);
   if(!shown){shown=document.createElement("div");shown.id="cspSatelliteShown";customView.append(shown)}
   const entries=bridge.activeLayers().filter(layer=>layer.id==="scene");
@@ -849,7 +873,7 @@ function renderSettingsView(){
     buildDetails.setAttribute("aria-expanded",String(!!diagnostics));
   });
   $("[data-reset-layout]",device).addEventListener("click",()=>$("#resetPanes")?.click());
-  customView.append(engineLabel,engine,exportLabel,exportCard,accessLabel,access,sourcesLabel,mapSources,deviceLabel,device);
+  customView.append(engineLabel,engine,exportLabel,exportCard,accessLabel,access,deviceLabel,device,sourcesLabel,mapSources);
   syncMapSources();
   $("[data-open-engine]",engine).addEventListener("click",()=>$("#serverToggle")?.click());
   const scaleSelect=$("[data-export-scale]",exportCard);
@@ -926,25 +950,26 @@ navScroll.addEventListener("click",event=>{const route=event.target.closest("[da
    underdamped spring - it lags, overshoots a touch, and stretches along its
    own velocity when it has to catch up - and the row under the pointer turns
    into a small glass lens: a lifted capsule with a specular spot at the
-   pointer, its content magnified about that point. Mouse and pen only; with
-   Reduce Motion the light follows without lag or stretch and nothing scales. */
-const calmMotion=()=>matchMedia("(prefers-reduced-motion: reduce)").matches||document.documentElement.classList.contains("csp-reduce-motion");
-{
+   pointer, its content magnified about a fixed origin. Mouse and pen only;
+   Reduce Motion disables the halo and lens entirely. */
+const reducedMotion=matchMedia("(prefers-reduced-motion: reduce)");
+const calmMotion=()=>reducedMotion.matches||document.documentElement.classList.contains("csp-reduce-motion");
+if(!classicUi){
   const finePointer=matchMedia("(hover:hover) and (pointer:fine)");
+  const enabled=()=>finePointer.matches&&!calmMotion()&&document.documentElement.classList.contains("csp-glass");
   const layer=document.createElement("div");layer.className="csp-halo-layer";layer.setAttribute("aria-hidden","true");
   const halo=document.createElement("div");halo.className="csp-cursor-halo";layer.append(halo);nav.prepend(layer);
   const STIFFNESS=170,DAMPING=19;   // critical damping would be 2*sqrt(170) = 26
   let target=null,position=null,velocity={x:0,y:0},frame=0,lastTime=0,lensRow=null;
   const paint=()=>{
     if(!position) return;
-    const speed=Math.hypot(velocity.x,velocity.y),stretch=calmMotion()?0:Math.min(speed/1500,.65);
+    const speed=Math.hypot(velocity.x,velocity.y),stretch=Math.min(speed/1500,.65);
     const angle=Math.atan2(velocity.y,velocity.x);
     halo.style.transform=`translate3d(${position.x.toFixed(1)}px,${position.y.toFixed(1)}px,0) rotate(${angle.toFixed(3)}rad) scale(${(1+stretch).toFixed(3)},${(1/(1+stretch*.55)).toFixed(3)})`;
   };
   const step=now=>{
-    frame=0;if(!target||!position) return;
+    frame=0;if(!enabled()){reset();return}if(!target||!position) return;
     const dt=Math.min(.034,lastTime?(now-lastTime)/1000:1/60);lastTime=now;
-    if(calmMotion()){position={...target};velocity={x:0,y:0};paint();return}
     velocity.x+=(STIFFNESS*(target.x-position.x)-DAMPING*velocity.x)*dt;
     velocity.y+=(STIFFNESS*(target.y-position.y)-DAMPING*velocity.y)*dt;
     position.x+=velocity.x*dt;position.y+=velocity.y*dt;
@@ -952,26 +977,38 @@ const calmMotion=()=>matchMedia("(prefers-reduced-motion: reduce)").matches||doc
     if(settled){velocity={x:0,y:0};lastTime=0}else frame=requestAnimationFrame(step);
     paint();
   };
-  const setLens=row=>{
+  const setLens=(row,x)=>{
     if(row===lensRow) return;
     lensRow?.classList.remove("csp-lens");
     lensRow=row;row?.classList.add("csp-lens");
+    if(row){
+      const originX=Math.max(row.offsetWidth*.3,Math.min(row.offsetWidth*.7,x)),originY=row.offsetHeight/2;
+      for(const child of row.children) child.style.transformOrigin=`${(originX-child.offsetLeft).toFixed(1)}px ${(originY-child.offsetTop).toFixed(1)}px`;
+    }
+  };
+  const reset=()=>{
+    cancelAnimationFrame(frame);frame=0;lastTime=0;target=null;position=null;velocity={x:0,y:0};
+    halo.classList.remove("on");setLens(null);
   };
   nav.addEventListener("pointermove",event=>{
-    if((event.pointerType!=="mouse"&&event.pointerType!=="pen")||!finePointer.matches) return;
+    if((event.pointerType!=="mouse"&&event.pointerType!=="pen")||!enabled()) return;
     const box=nav.getBoundingClientRect();
-    target={x:event.clientX-box.left,y:event.clientY-box.top};
+    target={x:(event.clientX-box.left)*nav.offsetWidth/box.width,y:(event.clientY-box.top)*nav.offsetHeight/box.height};
     if(!position) position={...target};
     halo.classList.add("on");
     if(!frame){lastTime=0;frame=requestAnimationFrame(step)}
     const row=event.target.closest?.(".csp-nav-button");
-    setLens(row&&nav.contains(row)?row:null);
-    if(!row) return;
-    const rect=row.getBoundingClientRect(),x=event.clientX-rect.left,y=event.clientY-rect.top;
+    if(!row||!nav.contains(row)){setLens(null);return}
+    const rect=row.getBoundingClientRect(),x=(event.clientX-rect.left)*row.offsetWidth/rect.width,y=(event.clientY-rect.top)*row.offsetHeight/rect.height;
+    setLens(row,x);
     row.style.setProperty("--lx",`${x.toFixed(1)}px`);row.style.setProperty("--ly",`${y.toFixed(1)}px`);
-    if(!calmMotion()) for(const child of row.children) child.style.transformOrigin=`${(x-child.offsetLeft).toFixed(1)}px ${(y-child.offsetTop).toFixed(1)}px`;
   });
-  nav.addEventListener("pointerleave",()=>{halo.classList.remove("on");setLens(null);target=null;position=null});
+  nav.addEventListener("pointerleave",reset);
+  navScroll.addEventListener("scroll",()=>setLens(null),{passive:true});
+  nav.addEventListener("scroll",()=>setLens(null),{passive:true});
+  finePointer.addEventListener("change",reset);reducedMotion.addEventListener("change",reset);
+  window.addEventListener("resize",reset);
+  new MutationObserver(()=>{if(!enabled()) reset()}).observe(document.documentElement,{attributes:true,attributeFilter:["class"]});
 }
 $("#cspBack").addEventListener("click",()=>{document.body.dataset.cspView="nav"});
 compactShell.addEventListener("change",event=>{if(!event.matches) delete document.body.dataset.cspView;else document.body.dataset.cspView="nav"});
@@ -1174,8 +1211,7 @@ const syncSheetTools=(progress=null)=>{
   if(progress===null&&dragProgress!=="") progress=Number(dragProgress);
   const hidden=sheetMode()&&(progress===null?currentDetent()==="large":progress>=.99);
   if(sheetTools.inert!==hidden) sheetTools.inert=hidden;
-  const state=String(hidden);
-  if(sheetTools.getAttribute("aria-hidden")!==state) sheetTools.setAttribute("aria-hidden",state);
+  if(hidden) sheetTools.setAttribute("aria-hidden","true");else sheetTools.removeAttribute("aria-hidden");
 };
 const syncGrabber=()=>{
   grabber.setAttribute("aria-label",peeking()?"Show panel":"Resize panel");
