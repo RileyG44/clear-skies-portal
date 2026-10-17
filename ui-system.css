@@ -1595,8 +1595,15 @@ body.csp-redesign #cspGrabber{display:none}
   .csp-glass body.csp-redesign #sideToggleDock,
   .csp-glass body.csp-redesign:not(.collapsed) #sideToggleDock{left:calc(12px + var(--safe-left));top:calc(12px + var(--safe-top))}
   .csp-glass body.csp-redesign #mapDock,
-  .csp-glass body.csp-redesign:not(.collapsed) #mapDock{top:calc(12px + var(--safe-top));opacity:1;pointer-events:auto;transform:none}
-  .csp-glass body.csp-redesign[data-csp-detent="large"]:not(.collapsed) #mapDock{opacity:0;pointer-events:none}
+  .csp-glass body.csp-redesign:not(.collapsed) #mapDock{
+    top:calc(12px + var(--safe-top));pointer-events:auto;
+    opacity:calc(1 - var(--csp-dock-hide,0));
+    transform:translate3d(calc(12px * var(--csp-dock-hide,0)),0,0) scale(calc(1 - .04 * var(--csp-dock-hide,0)));
+    transform-origin:top right;
+    transition:opacity .24s ease,transform .3s cubic-bezier(.2,.8,.2,1);
+  }
+  .csp-glass body.csp-redesign[data-csp-detent="large"]:not(.collapsed) #mapDock{--csp-dock-hide:1;pointer-events:none}
+  .csp-glass body.csp-redesign.csp-sheet-dragging #mapDock{transition:none}
 }
 
 /* ---- the phone sheet's glass -------------------------------------------
@@ -1650,7 +1657,7 @@ body.csp-redesign #cspGrabber{display:none}
   .csp-glass body.csp-redesign.collapsed #side{transform:translateX(calc(-100% - 24px))}
   .csp-glass body.csp-redesign #cspGrabber{display:none}
   .csp-glass body.csp-redesign:not(.collapsed) #sideToggleDock{left:calc(var(--card-w) + 16px + var(--safe-left))}
-  .csp-glass body.csp-redesign[data-csp-detent="large"]:not(.collapsed) #mapDock{opacity:1;pointer-events:auto}
+  .csp-glass body.csp-redesign[data-csp-detent="large"]:not(.collapsed) #mapDock{--csp-dock-hide:0;opacity:1;pointer-events:auto;transform:none;transition:none}
   .csp-glass body.csp-redesign #cspNav .searchbox{padding-top:12px}
 }
 
@@ -1711,6 +1718,7 @@ body.csp-redesign #cspGrabber{display:none}
   .csp-glass body.csp-redesign input[type=range]::-moz-range-thumb,
   .csp-glass body.csp-redesign .csp-mode-menu{transition:none!important;animation:none!important}
   .csp-glass body.csp-redesign .csp-switch span{transition:none}
+  .csp-glass body.csp-redesign #mapDock{transition:none!important;transform:none!important}
   .csp-glass body.csp-redesign .csp-switch:active span::after{width:22px}
   .csp-glass body.csp-redesign .csp-switch:active input:checked + span::after{transform:translateX(16px)}
   .csp-glass body.csp-redesign input[type=range]:active::-webkit-slider-thumb,
@@ -2481,6 +2489,13 @@ body.csp-redesign .csp-setting-foot[hidden]{display:none}
 .csp-glass body.csp-redesign.csp-redesign #cspNav .csp-nav-button .csp-nav-count:empty{display:none}
 .csp-glass body.csp-redesign.csp-redesign #cspNav :is(#cspAppearanceNav,#cspSettingsNav) .csp-nav-button{font-size:14px}
 .csp-glass body.csp-redesign.csp-redesign #cspNav #cspSettingsNav{margin-bottom:8px}
+@media (max-width:760px){
+  /* The sheet already reserves the home-indicator inset. Keep only a small
+     bottom gutter here; build information and layout reset live in Settings. */
+  .csp-glass body.csp-redesign.csp-redesign #cspNav > .foot{padding:8px 14px}
+  .csp-glass body.csp-redesign.csp-redesign #cspNav .foot-meta{display:none}
+  .csp-glass body.csp-redesign.csp-redesign #cspNav #cspSettingsNav{margin-bottom:0}
+}
 @media (max-width:760px),(pointer:coarse){
   .csp-glass body.csp-redesign.csp-redesign #cspNav .csp-nav-button{
     min-height:48px;padding:10px 12px;margin:2px 0;
@@ -2606,6 +2621,7 @@ body.csp-redesign .csp-setting-foot[hidden]{display:none}
 .csp-glass body.csp-redesign.csp-redesign #cspWorkspace .csp-empty-layers{color:var(--t3-desc);font-size:12.5px}
 .csp-glass body.csp-redesign.csp-redesign #cspWorkspace .csp-map-sources{padding:12px var(--t3-row-x);color:var(--t3-desc);font-size:12px;line-height:1.55;overflow-wrap:anywhere}
 .csp-glass body.csp-redesign.csp-redesign #cspWorkspace .csp-map-sources a{color:var(--ui-text);text-decoration:underline;text-decoration-color:var(--t3-divider);text-underline-offset:2px}
+.csp-glass body.csp-redesign.csp-redesign #cspWorkspace .csp-device-card #buildDiag{max-width:100%;overflow:auto;white-space:pre-wrap;overflow-wrap:anywhere}
 
 /* Field rows built from the legacy grids (ui-system.js wraps each label and
    its control), boolean checkboxes shown as switch rows, and the T3 divider
@@ -2866,5 +2882,6 @@ body.csp-redesign .csp-setting-foot[hidden]{display:none}
 }
 .csp-glass.csp-reduce-motion body.csp-redesign.csp-redesign :is(#cspWorkspace.csp-route-enter > *,#cspNavScroll,#ac,.coord-menu,.csp-sat-suggest,#results > *){animation:none!important}
 .csp-glass.csp-reduce-motion body.csp-redesign.csp-redesign #cspWorkspace details::details-content{transition:none!important}
+.csp-glass.csp-reduce-motion body.csp-redesign.csp-redesign #mapDock{transition:none!important;transform:none!important}
 .csp-glass.csp-reduce-motion body.csp-redesign.csp-redesign select::picker(select){transition:none!important}
 .csp-glass.csp-reduce-motion body.csp-redesign.csp-redesign #cspNav .csp-nav-button > *{transform:none!important;transition:none!important}

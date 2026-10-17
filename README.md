@@ -95,8 +95,9 @@ The separate **Settings** item below Appearance is the foundation for
 app-level preferences: the secure terrain engine (status and a shortcut to
 its dock controls, which hold the Tailscale address), the default export
 resolution and map-info choice, a Reduce Motion override, and a reset for
-all saved preferences on the device. Map sources and live attribution are at
-the bottom of Settings and in the dock's Layers popover.
+all saved preferences on the device. Map sources and live attribution are in
+Settings and the dock's Layers popover. The build number, build diagnostics and
+Reset layout are in Settings under This device, including on phones.
 
 Satellite imagery has its own place/coordinate search, map-centre search and
 scene filters below the search field. Filter values survive navigation
@@ -112,6 +113,8 @@ metadata drafts, slider math, exact units and one-step width undo in `npm test`.
 `node scripts/ui-satellite-search.js` covers scene filters, custom dates, search
 keys, dismissed lookups, mobile focus, source credits, header alignment, pinned
 navigation controls and both dropdown styles, plus the classic fallback.
+`node scripts/ui-sheet-chrome.js` checks the compact phone footer, toolbar
+fade/slide and direct swipe tracking, Reduced Motion, and Settings utilities.
 All accept a local server URL and the optional `PLAYWRIGHT_MODULE` environment
 variable; browser tooling is not an application dependency.
 

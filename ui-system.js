@@ -827,7 +827,29 @@ function renderSettingsView(){
       <button type="button" class="linkbtn" data-reset-all>Reset all preferences</button>
     </div>`;
   const sourcesLabel=document.createElement("div");sourcesLabel.className="csp-section-label";sourcesLabel.textContent="Map sources";
-  customView.append(engineLabel,engine,exportLabel,exportCard,accessLabel,access,sourcesLabel,mapSources);
+  const deviceLabel=document.createElement("div");deviceLabel.className="csp-section-label";deviceLabel.textContent="This device";
+  const device=document.createElement("div");device.className="csp-card csp-settings-card csp-device-card";
+  device.innerHTML=`
+    <div class="csp-setting-row">
+      <div class="csp-setting-text"><strong>Build</strong><span data-device-build></span></div>
+      <button type="button" class="linkbtn" data-build-details aria-controls="buildDiag" aria-expanded="false">Build details</button>
+    </div>
+    <div class="csp-setting-row">
+      <div class="csp-setting-text"><strong>Panel layout</strong><span>Restore the default order, sizes and collapsed panels.</span></div>
+      <button type="button" class="linkbtn" data-reset-layout>Reset layout</button>
+    </div>`;
+  $("[data-device-build]",device).textContent=window.CSP_BUILD||"development";
+  const buildDetails=$("[data-build-details]",device);
+  const existingDiagnostics=$("#buildDiag");
+  if(existingDiagnostics){device.append(existingDiagnostics);buildDetails.setAttribute("aria-expanded","true")}
+  buildDetails.addEventListener("click",()=>{
+    $("#buildStamp")?.click();
+    const diagnostics=$("#buildDiag");
+    if(diagnostics) device.append(diagnostics);
+    buildDetails.setAttribute("aria-expanded",String(!!diagnostics));
+  });
+  $("[data-reset-layout]",device).addEventListener("click",()=>$("#resetPanes")?.click());
+  customView.append(engineLabel,engine,exportLabel,exportCard,accessLabel,access,sourcesLabel,mapSources,deviceLabel,device);
   syncMapSources();
   $("[data-open-engine]",engine).addEventListener("click",()=>$("#serverToggle")?.click());
   const scaleSelect=$("[data-export-scale]",exportCard);
@@ -1145,6 +1167,16 @@ const grabber=document.createElement("button");
 grabber.id="cspGrabber";grabber.type="button";
 side.prepend(grabber);
 const currentDetent=()=>isCollapsed()?"peek":document.body.dataset.cspDetent||"medium";
+const sheetTools=$("#mapDock");
+const syncSheetTools=(progress=null)=>{
+  if(!sheetTools) return;
+  const dragProgress=sheetTools.style.getPropertyValue("--csp-dock-hide");
+  if(progress===null&&dragProgress!=="") progress=Number(dragProgress);
+  const hidden=sheetMode()&&(progress===null?currentDetent()==="large":progress>=.99);
+  if(sheetTools.inert!==hidden) sheetTools.inert=hidden;
+  const state=String(hidden);
+  if(sheetTools.getAttribute("aria-hidden")!==state) sheetTools.setAttribute("aria-hidden",state);
+};
 const syncGrabber=()=>{
   grabber.setAttribute("aria-label",peeking()?"Show panel":"Resize panel");
   grabber.setAttribute("aria-expanded",String(currentDetent()==="large"));
@@ -1153,6 +1185,7 @@ const setDetent=detent=>{
   document.body.dataset.cspDetent=detent;
   side.style.height="";
   syncGrabber();
+  syncSheetTools();
 };
 const openSheet=(detent="medium")=>{setDetent(detent);if(isCollapsed()) toggleSheet()};
 const goToDetent=detent=>{
@@ -1171,9 +1204,10 @@ const syncPeek=()=>{
   if(sheetMode()) side.inert=false;
   else side.inert=isCollapsed();
   syncGrabber();
+  syncSheetTools();
 };
 new MutationObserver(syncPeek).observe(document.body,{attributes:true,attributeFilter:["class"]});
-peekLayout.addEventListener("change",syncPeek);
+peekLayout.addEventListener("change",()=>{sheetTools?.style.removeProperty("--csp-dock-hide");syncPeek()});
 syncPeek();
 /* A portrait phone opens on the map: the sheet starts at peek, search field
    ready, as Maps does. Placed without animation so it does not slide down on
@@ -1228,6 +1262,14 @@ if(sheetMode()&&!isCollapsed()){
     if(height>large) height=large+(height-large)*.22;
     if(height<peek) height=Math.max(peek*.6,peek-(peek-height)*.22);
     side.style.height=`${height}px`;
+    if(sheetMode()&&sheetTools){
+      /* Clear the tools before the rising sheet reaches them. While a finger
+         owns the sheet, opacity and position follow its height directly. */
+      const fadeSpan=Math.max(1,Math.min(120,(large-g.limits.medium)*.5));
+      const progress=Math.max(0,Math.min(1,(height-g.limits.medium)/fadeSpan));
+      sheetTools.style.setProperty("--csp-dock-hide",progress.toFixed(3));
+      syncSheetTools(progress);
+    }
     const now=performance.now();
     g.samples.push({y,t:now});
     while(g.samples.length>2&&now-g.samples[0].t>100) g.samples.shift();
@@ -1236,6 +1278,7 @@ if(sheetMode()&&!isCollapsed()){
   const end=()=>{
     const g=gesture;gesture=null;if(!g) return;
     document.body.classList.remove("csp-sheet-dragging");
+    const settleTools=()=>{sheetTools?.style.removeProperty("--csp-dock-hide");syncSheetTools()};
     if(g.mode===null){
       // a tap: the grabber steps through the detents; a tap elsewhere on a
       // peeking strip is handled by the click listener below
@@ -1243,9 +1286,10 @@ if(sheetMode()&&!isCollapsed()){
         suppressNextClick();
         goToDetent(g.from==="peek"?"medium":g.from==="medium"?"large":"medium");
       }
+      settleTools();
       return;
     }
-    if(g.mode!=="sheet") return;
+    if(g.mode!=="sheet"){settleTools();return}
     suppressNextClick();
     const first=g.samples[0],last=g.samples[g.samples.length-1];
     const velocity=last.t>first.t?(last.y-first.y)/(last.t-first.t):0; // px per ms, positive = down
@@ -1262,6 +1306,7 @@ if(sheetMode()&&!isCollapsed()){
     }
     if(target===g.from) side.style.height="";
     else goToDetent(target);
+    settleTools();
   };
   const active=()=>phoneSheet.matches&&glassOn();
   /* Touch: non-passive, so the first move can claim the gesture before the
