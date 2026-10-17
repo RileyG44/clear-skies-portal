@@ -144,7 +144,9 @@ const scenes=Array.from({length:3},(_,i)=>({type:'Feature',id:'review-scene-'+i,
     assert.equal(await m.locator('#cspSatSuggest .note').count(),0,'status is outside the listbox');
     fixture.mode='error';await query.fill('Failed lookup');
     await m.locator('#cspSatNote').filter({hasText:'unavailable'}).waitFor();
-    await query.evaluate(el=>el.blur());await m.locator('#days').click();await m.waitForTimeout(230);
+    await query.evaluate(el=>el.blur());await m.locator('#days').click();
+    // Measure touch targets after the picker's scale-in animation settles.
+    await m.locator('#days').evaluate(el=>Promise.all(el.getAnimations({subtree:true}).map(animation=>animation.finished.catch(()=>{}))));
     assert(await m.locator('#days option').evaluateAll(els=>els.every(el=>el.getBoundingClientRect().height>=44&&parseFloat(getComputedStyle(el).fontSize)>=16)),'phone options retain touch sizing');
     await m.keyboard.press('Escape');await m.waitForTimeout(250);await m.screenshot({path:path.join(output,'review-fixed-mobile.png')});
     await mobile.finish();console.log('PASS phone: touch scroll, tap, click-only activation, ArrowUp, lookup feedback and 44px picker options');

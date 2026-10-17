@@ -993,8 +993,8 @@ body.pane-reordering,body.pane-reordering *{cursor:grabbing!important;user-selec
 }
 
 </style>
-<link rel="stylesheet" href="ui-theme.css?build=2026-10-17a">
-<link rel="stylesheet" href="ui-system.css?build=2026-10-17a">
+<link rel="stylesheet" href="ui-theme.css?build=2026-10-17b">
+<link rel="stylesheet" href="ui-system.css?build=2026-10-17b">
 <style>
 /* The redesign restructures the legacy DOM rather than replacing it, and the
    script that does so is the last thing on the page - so the browser paints the
@@ -1767,7 +1767,7 @@ html.csp-boot body{visibility:hidden}
   L.Renderer.prototype.onAdd=function(map){return onAdd.call(this,map||this._map)};
 })();
 </script>
-<script src="version.js?build=2026-10-17a"></script>
+<script src="version.js?build=2026-10-17b"></script>
 <script src="mosaic-core.js"></script>
 <script src="png-stream.js"></script>
 <script src="terrain-core.js"></script>
@@ -2769,6 +2769,12 @@ function acRender(){
   });
 }
 function esc(s){ return String(s==null?"":s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c])) }
+/* Phones are tapped, not clicked: the hints that name the gesture say so. */
+const MAP_TAP=matchMedia("(pointer:coarse)").matches?"tap":"click";
+if(MAP_TAP==="tap"){
+  const idle=document.getElementById("status");if(idle?.dataset.kind==="idle") idle.textContent="Enter a location, or tap anywhere on the map.";
+  const empty=document.querySelector("#results .empty");if(empty) empty.innerHTML="No search yet.<br>Try <b>Moses Lake</b>, <b>Zermatt</b>, or double-tap the map.";
+}
 function safeHttpUrl(value){
   try{ const u=new URL(String(value||"")); return /^https?:$/.test(u.protocol)?u.href:"" }
   catch(e){ return "" }
@@ -2790,7 +2796,7 @@ async function acQuery(t){
     else acRender();
   }catch(e){
     if(e?.name==="AbortError"||generation!==acGeneration||document.activeElement!==$("#q")||$("#q").value.trim()!==t) return;
-    acList=[]; acShow('<div class="note">Place search unavailable \u2014 you can still paste coordinates or double-click the map</div>');
+    acList=[]; acShow(`<div class="note">Place search unavailable \u2014 you can still paste coordinates or double-${MAP_TAP} the map</div>`);
   }
 }
 
@@ -3161,7 +3167,7 @@ function render(enter=false){
   resEl.classList.toggle("csp-results-enter",enter===true&&ITEMS.length>0);
   if(!ITEMS.length){
     resEl.innerHTML = LOC ? '<div class="empty">No imagery found.<br>Widen the date range or cloud filter.</div>'
-                          : '<div class="empty">No search yet.<br>Try <b>Moses Lake</b>, <b>Zermatt</b>, or double-click the map.</div>';
+                          : `<div class="empty">No search yet.<br>Try <b>Moses Lake</b>, <b>Zermatt</b>, or double-${MAP_TAP} the map.</div>`;
     setCount("results","");
     return;
   }
@@ -4310,7 +4316,7 @@ const endSnapDrag=()=>{
   snapDrag=null;layoutSnapSel();
 };
 snapSel.addEventListener("pointerup",endSnapDrag);snapSel.addEventListener("pointercancel",endSnapDrag);
-snapBox.addEventListener("dblclick",event=>{ event.preventDefault();saveSnapshotSelection() });
+snapBox.addEventListener("dblclick",event=>{ event.preventDefault();event.stopPropagation();saveSnapshotSelection() });
 /* Zooming stays live while choosing: the wheel and Safari's trackpad pinch are
    handed to the map underneath, and the rectangle stays where it was drawn. */
 snapSel.addEventListener("wheel",event=>{
@@ -4328,6 +4334,9 @@ snapSel.addEventListener("keydown",event=>{
   if(move&&event.target===snapBox){ event.preventDefault();snapRect={...snapRect,x:snapRect.x+move[0],y:snapRect.y+move[1]};layoutSnapSel() }
 });
 $("#snapSelCancel").onclick=()=>{ if(!snapshotExporting) endSnapshotSelect() };
+/* The selection lives inside the map: its buttons must not also count as a
+   tap on the ground (that put the spot's coordinates in the search field). */
+L.DomEvent.disableClickPropagation(snapBar);
 snapSaveBtn.onclick=()=>saveSnapshotSelection();
 addEventListener("resize",()=>layoutSnapSel());
 map.on("zoomend moveend",()=>layoutSnapSel());
@@ -5026,6 +5035,9 @@ $("#geologyIdentify").onclick=()=>identifyGeologyAt(map.getCenter(),false);
 
 /* ------------------------------------------------- right-click map menu */
 const menuEl=$("#menu");
+/* The menu sits inside the map; choosing an item must not also count as a
+   tap on the ground under the item. */
+L.DomEvent.disableClickPropagation(menuEl);L.DomEvent.disableScrollPropagation(menuEl);
 function hideMenu(){ menuEl.style.display="none" }
 document.addEventListener("click", e=>{ if(!e.target.closest("#menu")) hideMenu() });
 map.on("movestart zoomstart", hideMenu);
@@ -6902,6 +6914,8 @@ function renderTerrainSourcePanel(summaryArg,is3dArg,layerArg){
   body.querySelector("#mapSourceReferences").innerHTML=credits.join("<br>");
   const status=body.querySelector(".terrain-source-panel-status");
   status.textContent=is3d?public3dSourceText():summary.sources.length?`${summary.sources.map(source=>source.label).join(" + ")} · ${summary.coverage}% of tile positions rendered`:`${summary.coverage}% of tile positions rendered · waiting for elevation`;
+  /* With terrain off there is no elevation to wait for; say nothing. */
+  status.hidden=!is3d&&!summary.sources.length&&$("#terStyle")?.value==="off";
   const rows=body.querySelector(".tsp-rows");
   const active=window.ClearSkiesPortalBridge?.activeLayers?.()||[];
   const visible=active.filter(item=>item.visible!==false);
@@ -10655,8 +10669,8 @@ $("#q").addEventListener("blur",()=>setTimeout(acHide,120));
 document.addEventListener("click",e=>{ if(!e.target.closest("#iw")) acHide() });
 })();
 </script>
-<script src="markup-3d.js?build=2026-10-17a"></script>
-<script src="markup.js?build=2026-10-17a"></script>
-<script src="ui-system.js?build=2026-10-17a"></script>
+<script src="markup-3d.js?build=2026-10-17b"></script>
+<script src="markup.js?build=2026-10-17b"></script>
+<script src="ui-system.js?build=2026-10-17b"></script>
 </body>
 </html>

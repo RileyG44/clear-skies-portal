@@ -2,7 +2,7 @@
 const assert=require('node:assert/strict'),fs=require('node:fs'),vm=require('node:vm');
 const source=fs.readFileSync('markup.js','utf8');
 const code=(name,next)=>source.slice(source.indexOf(`function ${name}(`),source.indexOf(`function ${next}(`,source.indexOf(`function ${name}(`)));
-const range={};vm.runInNewContext(code('widthRangePosition','syncWidthRange'),range);
+const range={};vm.runInNewContext(code('widthRangePosition','syncGroundRange'),range);
 for(const min of [0,.1])for(const max of [10000,50000.125]){
   assert.equal(range.widthRangePosition(min,min,max),0);
   assert.equal(range.widthRangePosition(max,min,max),1000);
@@ -13,6 +13,11 @@ for(const min of [0,.1])for(const max of [10000,50000.125]){
   }
   assert.equal(range.widthRangeFeet(1000,min,max),+max.toFixed(4));
 }
+const units={};vm.runInNewContext(code('fmtFeet','finishGroundEdit'),units);
+assert.equal(units.parseFeet('2,730 ft'),2730);assert.equal(units.parseFeet(' 12.5 '),12.5);assert.equal(units.parseFeet('-40'),-40);
+for(const bad of ['','  ','wide','12 m'])assert(Number.isNaN(units.parseFeet(bad)),`${bad} is not a number of feet`);
+assert.equal(units.fmtFeet(2729.8164),(2730).toLocaleString()+' ft','large values read in whole feet');
+assert.equal(units.fmtFeet(12.345),'12.3 ft');assert.equal(units.fmtFeet(.125),'0.13 ft');assert.equal(units.fmtFeet(20),'20 ft');
 const one={doc:{markup:{id:'one',name:'One',description:'Old'}}},two={doc:{markup:{id:'two',name:'Two'}}};
 const changes=[];
 const meta={layerDetailsDraft:{layer:one,name:'  North rim <A>  ',description:'  First line\nSecond line  '},touch:layer=>changes.push(layer),paintLayerContext(){},editing:two};
@@ -38,4 +43,4 @@ env.applyGroundValue('width',20,true);assert.equal(saves,1);assert.equal(selecte
 selected=null;env.applyGroundValue('width',1.25,true);
 assert.equal(env.styles.ink.groundWidth,1.25*.3048,'new marks retain exact feet as metres');
 assert.equal(env.styles.ink.width,1.25*.3048/2);
-console.log('markup controls passed (metadata drafts, layer isolation, logarithmic feet slider, exact units and one-step undo)');
+console.log('markup controls passed (metadata drafts, layer isolation, logarithmic feet slider, typed feet, exact units and one-step undo)');

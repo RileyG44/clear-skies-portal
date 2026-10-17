@@ -107,8 +107,9 @@ and glass hover effect on desktop; Reduce Motion disables those pointer effects.
 Browser regressions: `node scripts/ui-map-popovers.js` covers light/dark desktop,
 mobile, narrow phones, landscape, editing, layer switching, drawing, keyboard
 focus, panel transitions, Reduced Motion, the camera's two actions and the
-Appearance colours and presets (including after a reload). `test-markup-controls.js` exercises
-metadata drafts, slider math, exact units and one-step width undo in `npm test`.
+Appearance colours and presets (including after a reload), the typed width field
+and the selected mark's Delete/Undo bar. `test-markup-controls.js` exercises
+metadata drafts, slider math, typed feet, exact units and one-step width undo in `npm test`.
 `node scripts/ui-snapshot.js` checks whole-view Capture, area selection and exported pixels.
 `node scripts/ui-satellite-search.js` covers scene filters, custom dates, search
 keys, dismissed lookups, mobile focus, source credits, header alignment, pinned
@@ -384,11 +385,18 @@ The drawing bar works like a paint program:
 - **Text** and **Pin**, with colour, size and transparency.
 - **Eraser**: cuts pen and highlighter strokes where it passes; anything else it touches
   is removed whole.
-- **Select**: click a mark to select it, drag to move it, drag the frame's handles to
-  resize (Shift keeps proportions) or the round handle to rotate. The bar restyles the
-  selection; **Edit points** reshapes polygons; duplicate (Ctrl/⌘+D) and delete
-  (Delete key) sit beside it. **Undo**/**Redo** (Ctrl/⌘+Z, Shift for redo) step through
-  changes. Keys: V select, H pan, P pen, I highlighter, E eraser, S shapes, T text.
+- **Select**: click (or tap) a mark to select it, drag to move it, drag the frame's
+  handles to resize (Shift keeps proportions) or the round handle to rotate. A small
+  bar beside the selection offers **Style** (reopens the tools for that mark), **Edit
+  text** for notes and pins, **Duplicate** and **Delete**; after a delete it offers
+  **Undo** in the same place, so on a phone nothing needs the tools panel. The tools
+  panel restyles the selection too; **Edit points** reshapes polygons; Ctrl/⌘+D
+  duplicates and the Delete key deletes. **Undo**/**Redo** (Ctrl/⌘+Z, Shift for redo)
+  step through changes. Keys: V select, H pan, P pen, I highlighter, E eraser, S shapes,
+  T text.
+- **Width**, outline and pin size read like the other sliders (label, slider, value).
+  The slider is logarithmic, from a tenth of a foot to miles; tap the value to type an
+  exact number of feet.
 
 Marks are anchored to the ground: positions are latitude/longitude and every size is in
 metres, so they grow and shrink with the map like writing on a paper map and stay put
