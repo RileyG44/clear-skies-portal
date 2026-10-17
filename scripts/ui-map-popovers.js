@@ -180,6 +180,8 @@ const inside=async(page,selector)=>{
       // changes below use DOM clicks that bypass visibility.
       await page.evaluate(()=>{if(document.body.classList.contains('collapsed')) document.querySelector('#sideToggle')?.click()});
       await page.waitForTimeout(200);
+      const subtitle=await page.evaluate(()=>{const el=document.querySelector('#cspWorkspaceDescription');const header=document.querySelector('#cspWorkspaceHeader');return {text:el.textContent.trim(),visible:!!el.offsetParent,line:getComputedStyle(header).borderBottomWidth}});
+      assert(subtitle.text.length>0&&subtitle.line!=='0px','the workspace subtitle and its hairline are present');
       await page.locator('#cspAppearanceNav button').evaluate(el=>el.click());
       assert.equal(await page.evaluate(()=>document.body.dataset.cspRoute),'appearance','the footer item opens Appearance');
       assert.equal(await page.locator('#cspAppearanceCard [data-theme-preset]').count(),5,'Appearance offers theme presets');

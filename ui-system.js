@@ -32,16 +32,16 @@ side.style.width="580px";
 }
 
 const ROUTES={
-  layers:{title:"Layers",description:"",icon:"layers",panes:[],custom:"layers"},
-  satellite:{title:"Satellite imagery",description:"",icon:"satellite",panes:["filters","summary","passes","results","overlays"],open:["filters","results"],overlayGroup:"Imagery",overlayTitle:"Satellite base layers",custom:"satellite"},
-  terrain:{title:"Terrain & LiDAR",description:"",icon:"mountain-snow",panes:["terrain"],open:["terrain"],researchMode:"terrain"},
-  analyze:{title:"Analyze",description:"",icon:"scan-search",panes:["research"],open:["research"],researchMode:"analyze"},
-  export:{title:"Export",description:"",icon:"download",panes:[],custom:"export"},
-  conditions:{title:"Conditions",description:"",icon:"cloud-sun",panes:["alerts","overlays"],open:["alerts","overlays"],overlayGroup:"Conditions",overlayTitle:"Conditions layers"},
-  geology:{title:"Geology & hazards",description:"",icon:"triangle-alert",panes:["overlays","research"],open:["overlays","research"],overlayGroup:"Geology & hazards",overlayTitle:"Geology layers",researchMode:"geology"},
-  past:{title:"Past landscapes",description:"",icon:"history",panes:["overlays"],open:["overlays"],overlayGroup:"Past landscapes",overlayTitle:"Past landscape layers"},
-  markup:{title:"Markup",description:"",icon:"pen-line",panes:[],custom:"markup"},
-  labels:{title:"Labels & reference",description:"",icon:"tags",panes:["overlays"],open:["overlays"],overlayGroup:"Labels & reference",overlayTitle:"Reference layers"},
+  layers:{title:"Layers",description:"Everything currently drawn on the map, in render order.",icon:"layers",panes:[],custom:"layers"},
+  satellite:{title:"Satellite imagery",description:"Find dated scenes, tune the search, and control the image already on the map.",icon:"satellite",panes:["filters","summary","passes","results","overlays"],open:["filters","results"],overlayGroup:"Imagery",overlayTitle:"Satellite base layers",custom:"satellite"},
+  terrain:{title:"Terrain & LiDAR",description:"Choose how elevation is drawn, then fine-tune it.",icon:"mountain-snow",panes:["terrain"],open:["terrain"],researchMode:"terrain"},
+  analyze:{title:"Analyze",description:"Measure landform patterns or reveal features in the current view.",icon:"scan-search",panes:["research"],open:["research"],researchMode:"analyze"},
+  export:{title:"Export",description:"Capture the whole view or a selected area as a PNG at your chosen resolution.",icon:"download",panes:[],custom:"export"},
+  conditions:{title:"Conditions",description:"Weather, earthquakes, volcanoes, fire, snow, and other time-sensitive layers.",icon:"cloud-sun",panes:["alerts","overlays"],open:["alerts","overlays"],overlayGroup:"Conditions",overlayTitle:"Conditions layers"},
+  geology:{title:"Geology & hazards",description:"Surface geology, faults, seismic context, landslides, and point identification.",icon:"triangle-alert",panes:["overlays","research"],open:["overlays","research"],overlayGroup:"Geology & hazards",overlayTitle:"Geology layers",researchMode:"geology"},
+  past:{title:"Past landscapes",description:"Ice-age lakes, glaciers, archaeology, and reconstructed environments.",icon:"history",panes:["overlays"],open:["overlays"],overlayGroup:"Past landscapes",overlayTitle:"Past landscape layers"},
+  markup:{title:"Markup",description:"Draw, write and pin notes on the map, in layers you can switch on and off together or apart.",icon:"pen-line",panes:[],custom:"markup"},
+  labels:{title:"Labels & reference",description:"Roads, trails, places, water, boundaries, and reference labels.",icon:"tags",panes:["overlays"],open:["overlays"],overlayGroup:"Labels & reference",overlayTitle:"Reference layers"},
   appearance:{title:"Appearance",description:"Personal preferences for this browser. They are saved on this device only.",icon:"sliders-horizontal",panes:[],custom:"appearance"},
   settings:{title:"Settings",description:"Terrain engine, export defaults and accessibility for this browser.",icon:"settings",panes:[],custom:"settings"}
 };

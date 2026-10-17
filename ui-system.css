@@ -276,7 +276,7 @@ body.csp-redesign #cspWorkspaceHeader{
   position:relative;
   z-index:4;
   flex:none;
-  padding:18px 24px 12px;
+  padding:22px 24px 18px;
   border-bottom:1px solid var(--line);
   background:var(--ui-frost);
 }
@@ -317,7 +317,7 @@ body.csp-redesign #cspWorkspaceScroll{
   min-height:0;
   overflow:auto;
   overscroll-behavior:contain;
-  padding:10px 0 36px;
+  padding:20px 0 36px;
   scrollbar-width:thin;
   scrollbar-color:var(--line-strong) transparent;
 }
@@ -775,6 +775,9 @@ body.csp-redesign .csp-locate-label{display:none}
   body.csp-redesign .csp-layer-tool{width:28px;height:28px}
   body.csp-redesign .csp-layer-handle{width:28px;height:28px}
 }
+@media(max-width:1050px) and (max-height:480px){
+  body.csp-redesign #cspWorkspaceDescription{display:none}
+}
 /* A landscape phone or an open keyboard must not squeeze navigation to zero. */
 @media(max-width:1050px) and (max-height:600px){
   body.csp-redesign #cspNav{overflow-y:auto;overscroll-behavior:contain}
@@ -782,7 +785,6 @@ body.csp-redesign .csp-locate-label{display:none}
   body.csp-redesign #cspNav > .searchbox,
   body.csp-redesign #cspNav > .foot{flex-shrink:0}
   body.csp-redesign #cspWorkspaceHeader{padding:8px 16px}
-  body.csp-redesign #cspWorkspaceDescription{display:none}
 }
 
 /* A tile is hidden until its image has decoded - Leaflet appends the <img>
@@ -1090,7 +1092,7 @@ body.csp-redesign .csp-preview-badge{
 /* ---- workspace: large title over inset-grouped cards ------------------- */
 
 .csp-glass body.csp-redesign #cspWorkspaceHeader{
-  padding:20px 24px 8px;
+  padding:26px 24px 14px;
   border-bottom:.5px solid var(--ui-line);
   background:transparent;
 }
@@ -1113,10 +1115,11 @@ body.csp-redesign .csp-preview-badge{
   margin:0 0 10px -6px;
 }
 .csp-glass body.csp-redesign #cspBack img{filter:var(--ui-icon-filter-accent)}
-.csp-glass body.csp-redesign #cspWorkspaceScroll{padding:2px 0 36px}
+.csp-glass body.csp-redesign #cspWorkspaceScroll{padding:14px 0 36px}
+.csp-glass body.csp-redesign #cspCustomView > .csp-section-label:first-child{margin-top:0}
 
 .csp-glass body.csp-redesign .csp-section-label{
-  margin:10px 36px 7px;
+  margin:14px 36px 7px;
   color:var(--ui-text-muted);
   font-size:12px;
   font-weight:500;
@@ -1593,6 +1596,7 @@ body.csp-redesign #cspGrabber{display:none}
      room beside it if they are narrower than the screen less the capsule. */
   .csp-glass body.csp-redesign :is(.tool-popover,#terrainSourcePanel){width:min(340px,calc(100vw - 96px - var(--safe-left) - var(--safe-right)))}
   .csp-glass body.csp-redesign #cspWorkspaceHeader{padding:4px 18px 10px}
+  .csp-glass body.csp-redesign #cspWorkspaceScroll{padding-top:10px}
   .csp-glass body.csp-redesign #cspWorkspaceTitle{font-size:26px}
   .csp-glass body.csp-redesign .csp-nav-button{min-height:46px;font-size:16px;gap:12px;grid-template-columns:24px minmax(0,1fr) auto}
   .csp-glass body.csp-redesign .csp-nav-button img{width:20px;height:20px}

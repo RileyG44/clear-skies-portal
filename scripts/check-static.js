@@ -75,6 +75,8 @@ assert(uiSystem.includes("csp-layer-rail")&&uiSystem.includes('data-action="edit
        "layer card actions must be icon tools in the left rail");
 assert(uiSystem.includes("descriptionEl.hidden=!route.description"),
        "workspace subtitles must hide when a route has none");
+assert([...uiSystem.matchAll(/description:"[^"]+"/g)].length>=12,
+       "every workspace route must carry a subtitle");
 assert(uiSystem.includes('custom:"appearance"')&&uiSystem.includes("renderAppearanceView")&&uiSystem.includes("THEME_PRESETS"),
        "Appearance must be its own route with theme presets");
 assert(uiSystem.includes("renderSettingsView")&&uiSystem.includes("data-open-engine")&&!uiSystem.includes("cspEngineNav"),
