@@ -50,6 +50,7 @@ const DEFAULT_COLOR="#ff3b30";
 const VIEW_KEY="clearskies.markup.view.v1",STYLE_KEY="clearskies.markup.style.v1",LAST_KEY="clearskies.markup.last.v1";
 const icon=name=>`vendor/icons/${name}.svg`;
 const esc=s=>String(s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const coarse=()=>matchMedia("(pointer:coarse)").matches;
 
 /* ---------------------------------------------------------------- geometry */
 const MERC=40075016.686;
@@ -464,6 +465,7 @@ function touch(layer){
 }
 const stackFor=(stacks,layer)=>{ const id=layer.doc.markup.id;if(!stacks.has(id)) stacks.set(id,[]);return stacks.get(id) };
 function pushUndo(layer){
+  hideUndoNote();
   const stack=stackFor(undoStacks,layer);
   stack.push(JSON.stringify(layer.doc.features));if(stack.length>100) stack.shift();
   stackFor(redoStacks,layer).length=0;
@@ -472,6 +474,7 @@ function pushUndo(layer){
 function dropUndo(layer){ stackFor(undoStacks,layer).pop();if(editing===layer)syncHistoryButtons() }
 function undoRedo(redo){
   if(!editing) return;
+  hideUndoNote();
   const from=stackFor(redo?redoStacks:undoStacks,editing),to=stackFor(redo?undoStacks:redoStacks,editing);
   if(!from.length) return;
   to.push(JSON.stringify(editing.doc.features));
@@ -602,6 +605,12 @@ L.DomEvent.disableClickPropagation(bar);L.DomEvent.disableScrollPropagation(bar)
 const pop=document.createElement("div");pop.id="mkPop";pop.className="tool-popover";pop.hidden=true;pop.setAttribute("role","dialog");
 document.getElementById("app").append(pop);
 L.DomEvent.disableClickPropagation(pop);L.DomEvent.disableScrollPropagation(pop);
+/* The selected mark's actions, beside it on the map. Tapping the map closes
+   the tools panel, so on a phone Delete must not live only in there. */
+const selBar=document.createElement("div");selBar.className="mk-selbar";selBar.hidden=true;
+selBar.setAttribute("role","toolbar");selBar.setAttribute("aria-label","Selected mark");
+mapEl.append(selBar);
+L.DomEvent.disableClickPropagation(selBar);L.DomEvent.disableScrollPropagation(selBar);
 
 const TOOLS=[
   ["select","mouse-pointer-2","Select, move and resize (V)"],
@@ -618,7 +627,7 @@ let draft=null;          // a mark being drawn
 let gesture=null;        // a selection being moved, resized or rotated
 let pointsMode=false;    // editing the points of a selected shape
 let toolsOpen=false;     // dismissing the popover must not turn off the pen
-let layerDetailsDraft=null,groundEdit=null;
+let layerDetailsDraft=null,groundEdit=null,valueEdit=null;
 let lastLayerId=store.get(LAST_KEY,null);
 const notifyEditing=()=>document.dispatchEvent(new CustomEvent("csp:markup-editing",{detail:{editing:!!editing,expanded:!!editing&&toolsOpen,layer:editing?.doc.markup.id||null}}));
 function setToolsOpen(open,restoreFocus=false){
@@ -637,18 +646,20 @@ function startEditing(layer){
   /* The layer's colour is the default ink for that layer. */
   if(newLayer||!styles.ink.color) styles.ink.color=layer.doc.markup.color;
   tool=tool==="pan"||tool==="select"?"pen":tool;
-  /* Lower the phone sheet once the tap that chose Draw has finished; doing it
-     inside that tap let the same click land on the lowered sheet and raise it. */
-  if(innerWidth<=760) setTimeout(()=>{ if(editing&&!document.body.classList.contains("collapsed")) $("#sideToggle")?.click() },60);
+  /* Lower the phone sheet (or, on a phone on its side, put the panel away)
+     once the tap that chose Draw has finished; doing it inside that tap let
+     the same click land on the lowered sheet and raise it. */
+  if(innerWidth<=760||matchMedia("(pointer:coarse) and (max-height:500px)").matches) setTimeout(()=>{ if(editing&&!document.body.classList.contains("collapsed")) $("#sideToggle")?.click() },60);
   document.body.classList.add("csp-markup-editing");
+  for(const name of ["sliders-horizontal","type","copy","trash-2"]) new Image().src=icon(name);
   toolsOpen=true;
   B.announceToolPopover?.(bar);
   setTool(tool);changed();notifyEditing();
 }
 function stopEditing(restoreFocus=false){
   finishLayerDetails(true,false);finishGroundEdit();
-  cancelDraft();deselect();closePop();editing=null;tool="pan";toolsOpen=false;
-  capture.hidden=true;bar.hidden=true;eraserRing.hidden=true;document.body.classList.remove("csp-markup-editing");
+  cancelDraft();deselect();closePop();hideUndoNote();editing=null;tool="pan";toolsOpen=false;
+  capture.hidden=true;bar.hidden=true;selBar.hidden=true;eraserRing.hidden=true;document.body.classList.remove("csp-markup-editing");
   map.dragging.enable();view3d()?.dragPan.enable();mapEl.classList.remove("mk-hover");changed();notifyEditing();
   if(restoreFocus) document.getElementById("quickDraw")?.focus({preventScroll:true});
 }
@@ -669,7 +680,7 @@ function setTool(next){
   if(isLine&&(ink.groundWidth??ink.width*here())<=0){ink.groundWidth=.03048;ink.width=ink.groundWidth/here();saveStyles()}
   const drawing=!["pan","select"].includes(tool);
   capture.hidden=!drawing;capture.dataset.tool=tool;
-  eraserRing.hidden=tool!=="eraser";
+  eraserRing.hidden=true;           // shown where the pointer is, once it is over the map
   paintBar();
   if(switched&&!matchMedia("(prefers-reduced-motion: reduce)").matches)
     bar.querySelector(`[data-tool="${next}"]`)?.animate([{scale:.94},{scale:1.015,offset:.65},{scale:1}],{duration:200,easing:"cubic-bezier(.2,.8,.2,1)"});
@@ -706,20 +717,27 @@ function finishLayerDetails(commit,repaint=true){
   if(repaint)paintLayerContext();
 }
 /* A logarithmic slider covers sub-foot marks and large landscape annotations;
-   the feet field remains exact and can extend the slider beyond its range. */
+   the value beside it opens an exact field that can extend the slider's range. */
 function widthRangePosition(value,min,max){
   return Math.round(1000*Math.log((Math.max(min,Math.min(max,value))+.1)/(min+.1))/Math.log((max+.1)/(min+.1)));
 }
 function widthRangeFeet(position,min,max){
   return +(Math.exp(Math.max(0,Math.min(1000,position))/1000*Math.log((max+.1)/(min+.1)))*(min+.1)-.1).toFixed(4);
 }
-function syncWidthRange(value,fromRange=false){
-  const range=bar.querySelector("[data-ground-range]"),number=bar.querySelector('[data-ground="width"]');if(!range||!number)return;
-  const min=Number(number.min),max=Math.max(10000,Number(range.dataset.feetMax)||0,value);
-  range.dataset.feetMax=max;
-  if(fromRange)number.value=value;else range.value=widthRangePosition(value,min,max);
-  range.setAttribute("aria-valuetext",`${value.toLocaleString()} feet`);
+function syncGroundRange(key,value,fromRange=false){
+  const control=bar.querySelector(`.mk-ground[data-ground="${key}"]`),range=control?.querySelector("[data-ground-range]");if(!range)return;
+  const min=Number(control.dataset.feetMin),max=Math.max(10000,Number(range.dataset.feetMax)||0,value);
+  control.dataset.feet=value;range.dataset.feetMax=max;
+  if(!fromRange)range.value=widthRangePosition(value,min,max);
+  range.setAttribute("aria-valuetext",spokenFeet(value));
+  const button=control.querySelector(".mk-value");
+  if(button){button.textContent=fmtFeet(value);button.setAttribute("aria-label",`${control.dataset.label}: ${spokenFeet(value)}. Type a value`)}
 }
+/* Feet as the panel shows them: whole feet once a number is large, finer
+   steps for small marks. The edit field keeps the exact value. */
+function fmtFeet(value){const a=Math.abs(value);return `${(+value).toLocaleString(undefined,{maximumFractionDigits:a>=100?0:a>=10?1:2})} ft`}
+function spokenFeet(value){return `${(+value).toLocaleString(undefined,{maximumFractionDigits:2})} feet`}
+function parseFeet(text){const value=Number(String(text).replace(/[\s,]|ft$|feet$/gi,""));return String(text).trim()&&Number.isFinite(value)?value:NaN}
 function finishGroundEdit(){if(groundEdit){touch(groundEdit.layer);groundEdit=null;drawFrame()}}
 function applyGroundValue(key,value,final){
   if(!editing||!Number.isFinite(value))return;
@@ -753,17 +771,20 @@ function currentStyle(){
   return {family,color:ink.color,width:ink.width,opacity:ink.opacity,fillColor:styles.fill.color,fillOpacity:styles.fill.opacity,size:styles.text.size,eraser:styles.eraser.size};
 }
 function paintBar(){
+  placeSelBar();
   if(!editing||!toolsOpen){ bar.hidden=true;return }
   // Background source/view refreshes must not replace the field being typed in.
   if(layerDetailsDraft?.layer===editing&&bar.contains(document.activeElement)&&document.activeElement.matches("[data-layer-detail]"))return;
   bar.hidden=false;
   const f=selectedFeature(),s=currentStyle(),m=editing.doc.markup;
   const shape=shapeById(styles.shape);
+  /* Ground sizes read like the other sliders: label, slider, value. The value
+     is a button that opens an exact field for a typed number. */
   const ground=(key,label,px)=>{
     const metres=f?(f.properties[key]||0):(key==="size"?(tool==="pin"?styles.text.pinGroundSize??(styles.text.groundSize!=null?styles.text.groundSize*1.4:undefined):styles.text.groundSize):(s.family==="highlight"?styles.highlight:styles.ink).groundWidth)??px*here(),value=+feet(metres).toFixed(4),min=s.family==="shape"?0:.1,max=Math.max(10000,value);
-    const number=`<label class="mk-ground"><span>${label}</span><input type="number" data-ground="${key}" min="${min}" step="any" value="${value}" aria-label="${label} in feet"><span>ft</span></label>`;
-    return key!=="width"?number:`<div class="mk-width-control">${number}<input class="mk-width-range" type="range" data-ground-range="width" min="0" max="1000" step="1" value="${widthRangePosition(value,min,max)}" data-feet-max="${max}" aria-label="${label}" aria-valuetext="${value} feet"></div>`;
+    return `<div class="mk-slider mk-ground" data-ground="${key}" data-label="${label}" data-feet="${value}" data-feet-min="${min}"><span>${label}</span><input type="range" data-ground-range="${key}" min="0" max="1000" step="1" value="${widthRangePosition(value,min,max)}" data-feet-max="${max}" aria-label="${label}" aria-valuetext="${spokenFeet(value)}"><button type="button" class="mk-value" data-edit-ground="${key}" aria-haspopup="dialog" aria-label="${label}: ${spokenFeet(value)}. Type a value" title="Type a value">${fmtFeet(value)}</button></div>`;
   };
+  const valueRow=(key,label,value)=>`<div class="mk-slider mk-value-row" data-feet="${value}"><span>${label}</span><button type="button" class="mk-value" data-edit-placement="${key}" aria-haspopup="dialog" aria-label="${label}: ${spokenFeet(value)}. Type a value" title="Type a value">${fmtFeet(value)}</button></div>`;
   const tools=TOOLS.map(t=>t?`<button type="button" class="mk-tool" data-tool="${t[0]}" aria-pressed="${tool===t[0]}" title="${t[2]}" aria-label="${t[2].replace(/ \(.\)$/,"")}">${
     t[0]==="shape"?`<span class="mk-shape-icons"><span class="mk-shape-glyph">${shapePreview(shape)}</span><img class="mk-caret" src="${icon("chevron-down")}" alt=""></span>`:`<img src="${icon(t[1])}" alt="">`}<span class="mk-tool-label">${{select:"Select",pan:"Pan",pen:"Pen",highlight:"Highlight",eraser:"Eraser",shape:"Shapes",text:"Text",pin:"Pin"}[t[0]]}</span></button>`:sep).join("");
   const undoCount=stackFor(undoStacks,editing).length,redoCount=stackFor(redoStacks,editing).length;
@@ -774,13 +795,13 @@ function paintBar(){
   else if(fam==="shape") opts=chip("color",s.color,s.width?"Outline colour":"Outline colour (no outline)")+ground("width","Outline",s.width)+slider("opacity","Opacity",s.opacity,5,100,1,"%")+sep+
     chip("fill",s.fillColor==="auto"?s.color:s.fillColor,s.fillColor===null?"Fill: none":"Fill colour",s.fillColor===null)+(s.fillColor===null?"":slider("fillOpacity","Fill",s.fillOpacity,0,100,1,"%"));
   else if(fam==="text") opts=chip("color",s.color,"Colour")+((f?.properties.kind||tool)==="pin"?ground("size","Size",s.size):slider("size","Font size",s.size,8,160,1,"px"))+slider("opacity","Opacity",s.opacity,5,100,1,"%");
-  else opts=`<span class="mk-hint">${tool==="select"?"Click a mark to select it · drag to move · handles resize and rotate":"Drag to move around the map"}</span>`;
+  else opts=`<span class="mk-hint">${tool==="select"?`${coarse()?"Tap":"Click"} a mark to select it · drag to move · handles resize and rotate`:"Drag to move around the map"}</span>`;
   if(view3d()&&fam&&fam!=="eraser"){
     const snapped=f?!f.properties.space3d:placementSnaps();
     opts+=sep+`<label class="mk-snap"><input type="checkbox" data-placement="snap" ${snapped?"checked":""}>Snap to surface</label>`;
     if(!snapped){
       const elevation=f?.properties.space3d?.anchor[2];
-      opts+=`<label class="mk-ground"><span>${f?"Elevation":"Distance"}</span><input type="number" data-placement="${f?"elevation":"distance"}" value="${+(f?feet(elevation):styles.placement.distance).toFixed(2)}" ${f?"":"min=1"} step="any" aria-label="${f?"Elevation above sea level":"Placement distance"} in feet"><span>ft</span></label>`;
+      opts+=valueRow(f?"elevation":"distance",f?"Elevation":"Distance",f?feet(elevation):styles.placement.distance);
     }
   }
   let actions="";
@@ -818,7 +839,13 @@ function syncHistoryButtons(){
 }
 new ResizeObserver(placeBar).observe(document.getElementById("mapDock"));
 new MutationObserver(placeBar).observe(document.getElementById("mapDock"),{childList:true});
-addEventListener("resize",()=>{ placeBar();closePop() });
+/* A phone keyboard opening for the value field can resize the window; that
+   field stays open and follows its row. */
+addEventListener("resize",()=>{
+  placeBar();
+  const anchor=pop.dataset.kind==="value"&&bar.querySelector(".mk-value[aria-expanded]");
+  if(anchor) placePop(anchor,true);else closePop();
+});
 let last3dMode=!!view3d();
 new MutationObserver(()=>{const mode=!!view3d();if(mode!==last3dMode){last3dMode=mode;cancelDraft();deselect();if(editing)paintBar()}requestAnimationFrame(placeBar)}).observe(document.body,{attributes:true,attributeFilter:["class"]});
 
@@ -881,31 +908,29 @@ function changePlacement(snap){
   pushUndo(editing);f.geometry=converted.geometry;f.properties=p;
   styles.placement[field]=snap;saveStyles();renderFeature(editing,f);touch(editing);drawFrame();paintBar();
 }
+/* 3D placement distance (a default for new marks) and a selected mark's
+   elevation. Returns false when the value cannot be used. */
+function applyPlacementValue(key,value){
+  if(!editing||!view3d()||!Number.isFinite(value)||(key==="distance"&&value<1))return false;
+  if(key==="distance"){styles.placement.distance=value;saveStyles();return true;}
+  const f=selectedFeature();if(key!=="elevation"||!f?.properties.space3d)return false;
+  pushUndo(editing);f.properties.space3d.anchor[2]=value*.3048;renderFeature(editing,f);touch(editing);drawFrame();return true;
+}
 bar.addEventListener("change",event=>{
-  const input=event.target.closest("[data-placement]");if(!input||!editing||!view3d())return;
-  const key=input.dataset.placement;
-  if(key==="snap"){changePlacement(input.checked);return;}
-  const value=Number(input.value);if(!Number.isFinite(value)||(key==="distance"&&value<1)){paintBar();return;}
-  if(key==="distance"){styles.placement.distance=value;saveStyles();return;}
-  const f=selectedFeature();if(key==="elevation"&&f?.properties.space3d){pushUndo(editing);f.properties.space3d.anchor[2]=value*.3048;renderFeature(editing,f);touch(editing);drawFrame();}
-});
-bar.addEventListener("change",event=>{
-  const input=event.target.closest("[data-ground]");if(!input||!editing)return;
-  const value=Number(input.value);if(!Number.isFinite(value)||value<Number(input.min)){paintBar();return;}
-  applyGroundValue(input.dataset.ground,value,true);if(input.dataset.ground==="width")syncWidthRange(value);
+  const input=event.target.closest('[data-placement="snap"]');if(!input||!editing||!view3d())return;
+  changePlacement(input.checked);
 });
 bar.addEventListener("input",event=>{
   const input=event.target;
   if(input.dataset.layerDetail&&layerDetailsDraft)layerDetailsDraft[input.dataset.layerDetail]=input.value;
-  if(input.matches('[data-ground="width"]')&&input.value!==""&&Number.isFinite(input.valueAsNumber))syncWidthRange(input.valueAsNumber);
   if(input.matches("[data-ground-range]")){
-    const number=bar.querySelector('[data-ground="width"]'),value=widthRangeFeet(+input.value,+number.min,+input.dataset.feetMax);
-    syncWidthRange(value,true);applyGroundValue("width",value,false);
+    const control=input.closest(".mk-ground"),key=input.dataset.groundRange,value=widthRangeFeet(+input.value,+control.dataset.feetMin,+input.dataset.feetMax);
+    syncGroundRange(key,value,true);applyGroundValue(key,value,false);
   }
 });
 bar.addEventListener("change",event=>{
   const input=event.target;
-  if(input.matches("[data-ground-range]"))applyGroundValue("width",Number(bar.querySelector('[data-ground="width"]').value),true);
+  if(input.matches("[data-ground-range]"))applyGroundValue(input.dataset.groundRange,Number(input.closest(".mk-ground").dataset.feet),true);
   if(input.matches("[data-layer-select]")){
     const layer=layers.get(input.value);if(layer&&layer!==editing){finishLayerDetails(true,false);startEditing(layer)}
   }
@@ -945,6 +970,11 @@ bar.addEventListener("click",event=>{
     setTool(button.dataset.tool);return;
   }
   if(button.dataset.pop){ pop.hidden||pop.dataset.kind!==button.dataset.pop?openPop(button.dataset.pop,button):closePop();return }
+  if(button.dataset.editGround||button.dataset.editPlacement){
+    if(!pop.hidden&&pop.dataset.kind==="value"&&button.getAttribute("aria-expanded")==="true"){if(commitValueEdit())closePop()}
+    else openValueEdit(button);
+    return;
+  }
   const act=button.dataset.act;
   if(act==="undo") undoRedo(false);
   else if(act==="redo") undoRedo(true);
@@ -958,8 +988,76 @@ bar.addEventListener("click",event=>{
 });
 
 /* Popovers from the toolbar: the colour grid and the shape gallery. */
-function closePop(){ pop.hidden=true;pop.dataset.kind="";bar.querySelectorAll("[data-pop][aria-expanded]").forEach(b=>b.removeAttribute("aria-expanded")) }
+function closePop(){ pop.hidden=true;pop.dataset.kind="";valueEdit=null;pop.classList.remove("mk-pop-value");bar.querySelectorAll("[aria-expanded]").forEach(b=>b.removeAttribute("aria-expanded")) }
+function placePop(anchor,above=false){
+  const a=anchor.getBoundingClientRect(),app=document.getElementById("app").getBoundingClientRect();
+  const w=pop.offsetWidth,h=pop.offsetHeight;
+  const left=clamp(a.left-app.left+a.width/2-w/2,8,app.width-w-8),below=a.bottom-app.top+8,over=a.top-app.top-h-8;
+  let top=above&&over>=8?over:below;
+  if(top+h>app.height-8) top=Math.max(8,over);
+  pop.style.left=left+"px";pop.style.top=top+"px";
+}
+/* A typed width, size, distance or elevation. The field belongs to the mark
+   (or tool default) that was current when it opened; it is applied on Set,
+   Return, the keyboard's Done, or a tap elsewhere, and Escape discards it. */
+function openValueEdit(button){
+  closePop();
+  const ground=button.dataset.editGround,key=ground||button.dataset.editPlacement,control=button.closest(".mk-slider");
+  const label=control.querySelector("span").textContent,min=ground?Number(control.dataset.feetMin):key==="distance"?1:-Infinity;
+  const current=Number(control.dataset.feet);
+  valueEdit={kind:ground?"ground":"placement",key,min,current,layer:editing,fid:selected?.fid??null};
+  pop.dataset.kind="value";pop.classList.add("mk-pop-value");pop.setAttribute("aria-label",label);
+  pop.innerHTML=`<form class="mk-value-form" novalidate>
+      <label class="mk-pop-label" for="mkValueInput">${esc(label)}</label>
+      <div class="mk-value-entry"><span class="mk-value-field"><input id="mkValueInput" class="mk-value-input" type="text" inputmode="${min<0?"text":"decimal"}" enterkeyhint="done" autocomplete="off" spellcheck="false" value="${Number.isFinite(current)?current:""}" aria-label="${esc(label)} in feet"><span aria-hidden="true">ft</span></span>
+      <button type="submit" class="mk-text-btn mk-value-set">Set</button></div>
+      <div class="mk-value-error" role="alert" hidden></div>
+    </form>`;
+  pop.hidden=false;button.setAttribute("aria-expanded","true");
+  placePop(button,true);
+  const input=pop.querySelector(".mk-value-input");input.focus({preventScroll:true});input.select();
+}
+/* Returns true when the typed value was used (or left unchanged). */
+function commitValueEdit(){
+  const edit=valueEdit,input=pop.querySelector(".mk-value-input");if(!edit||!input)return true;
+  if(!editing||editing!==edit.layer||(selected?.fid??null)!==edit.fid){valueEdit=null;return true}
+  const value=parseFeet(input.value);
+  const error=!Number.isFinite(value)?"Enter a number of feet.":value<edit.min?`Use ${edit.min} ft or more.`:"";
+  if(error){const note=pop.querySelector(".mk-value-error");note.textContent=error;note.hidden=false;input.setAttribute("aria-invalid","true");return false}
+  valueEdit=null;
+  if(value===edit.current)return true;
+  if(edit.kind==="ground"){
+    applyGroundValue(edit.key,value,true);syncGroundRange(edit.key,value);
+  }else{
+    applyPlacementValue(edit.key,value);
+    const button=bar.querySelector(`[data-edit-placement="${edit.key}"]`),control=button?.closest(".mk-slider");
+    if(control){control.dataset.feet=value;button.textContent=fmtFeet(value);button.setAttribute("aria-label",`${control.querySelector("span").textContent}: ${spokenFeet(value)}. Type a value`)}
+  }
+  // Keep the pressed toolbar target connected when an outside tap commits.
+  return true;
+}
+pop.addEventListener("submit",event=>{
+  event.preventDefault();
+  const anchor=bar.querySelector(".mk-value[aria-expanded]");
+  if(commitValueEdit()){closePop();anchor?.focus({preventScroll:true})}else pop.querySelector(".mk-value-input")?.focus();
+});
+pop.addEventListener("input",event=>{
+  if(!event.target.matches(".mk-value-input"))return;
+  event.target.removeAttribute("aria-invalid");const note=pop.querySelector(".mk-value-error");if(note)note.hidden=true;
+});
+pop.addEventListener("keydown",event=>{
+  if(event.key!=="Escape"||pop.dataset.kind!=="value")return;
+  event.preventDefault();event.stopPropagation();
+  const anchor=bar.querySelector(".mk-value[aria-expanded]");closePop();anchor?.focus({preventScroll:true});
+});
+/* The iOS number pad has no Return key; its Done button only blurs. */
+pop.addEventListener("focusout",event=>{
+  if(pop.dataset.kind!=="value"||!event.target.matches(".mk-value-input")||pop.contains(event.relatedTarget))return;
+  setTimeout(()=>{if(pop.dataset.kind==="value"&&!pop.contains(document.activeElement)&&commitValueEdit())closePop()},0);
+});
 function openPop(kind,anchor){
+  if(pop.dataset.kind==="value")commitValueEdit();
+  closePop();
   pop.dataset.kind=kind;
   pop.setAttribute("aria-label",kind==="shape"?"Shapes":kind==="fill"?"Fill colour":"Colour");
   const s=currentStyle();
@@ -976,11 +1074,7 @@ function openPop(kind,anchor){
     fadeGrid($(".mk-color-grid",pop));
   }
   pop.hidden=false;anchor.setAttribute("aria-expanded","true");
-  const a=anchor.getBoundingClientRect(),app=document.getElementById("app").getBoundingClientRect();
-  const w=pop.offsetWidth,h=pop.offsetHeight;
-  let left=clamp(a.left-app.left+a.width/2-w/2,8,app.width-w-8),top=a.bottom-app.top+8;
-  if(top+h>app.height-8) top=Math.max(8,a.top-app.top-h-8);
-  pop.style.left=left+"px";pop.style.top=top+"px";
+  placePop(anchor);
 }
 pop.addEventListener("click",event=>{
   const b=event.target.closest("button");if(!b) return;
@@ -998,7 +1092,11 @@ pop.addEventListener("change",event=>{
   if(event.target.type!=="color") return;
   applyStyle(pop.dataset.kind==="fill"?"fill":"color",event.target.value,true);closePop();paintBar();
 });
-document.addEventListener("pointerdown",event=>{ if(!pop.hidden&&!pop.contains(event.target)&&!event.target.closest("[data-pop],[data-tool='shape']")) closePop() },true);
+document.addEventListener("pointerdown",event=>{
+  if(pop.hidden||pop.contains(event.target)||event.target.closest("[data-pop],[data-tool='shape'],.mk-value[aria-expanded]")) return;
+  if(pop.dataset.kind==="value") commitValueEdit();
+  closePop();
+},true);
 function fadeGrid(grid){
   if(!grid) return;
   const edges=()=>{ grid.classList.toggle("mk-at-top",grid.scrollTop<2);grid.classList.toggle("mk-at-end",grid.scrollTop+grid.clientHeight>=grid.scrollHeight-2) };
@@ -1365,8 +1463,14 @@ function frameOf(f){
     c:[at(x0,y0),at(x1,y0),at(x1,y1),at(x0,y1)].map(q=>featurePx(f,unproj(q)))};
 }
 const HANDLES=[["nw",0,0],["n",.5,0],["ne",1,0],["e",1,.5],["se",1,1],["s",.5,1],["sw",0,1],["w",0,.5]];
+let frameBox=null;   // the drawn selection's screen extent, for the action bar
+const boxOf=pts=>({x0:Math.min(...pts.map(q=>q.x)),x1:Math.max(...pts.map(q=>q.x)),y0:Math.min(...pts.map(q=>q.y)),y1:Math.max(...pts.map(q=>q.y))});
 function drawFrame(){
-  overlay.replaceChildren();
+  overlay.replaceChildren();frameBox=null;
+  drawSelectionFrame();
+  placeSelBar();
+}
+function drawSelectionFrame(){
   const f=selectedFeature();if(!f||!editing) return;
   const k=f.properties.kind;
   if(f.properties.space3d&&window.CSPMarkup3D.isVisible?.(view3d(),f.properties.space3d)===false)return;
@@ -1376,6 +1480,7 @@ function drawFrame(){
     const svg=document.createElementNS(SVGNS,"svg");svg.setAttribute("class","mk-frame");
     const line=document.createElementNS(SVGNS,"polyline");line.setAttribute("points",pts.map(q=>`${q.x},${q.y}`).join(" "));svg.append(line);overlay.append(svg);
     dot("mk-h-end",pts[0],{h:"v0"});dot("mk-h-end",pts[pts.length-1],{h:`v${pts.length-1}`});
+    frameBox=boxOf(pts);
     return;
   }
   const fr=frameOf(f);if(!fr||fr.c.some(q=>!Number.isFinite(q.x)||!Number.isFinite(q.y))) return;
@@ -1383,6 +1488,7 @@ function drawFrame(){
   const poly=document.createElementNS(SVGNS,"polygon");poly.setAttribute("points",c.map(q=>`${q.x},${q.y}`).join(" "));svg.append(poly);
   const top=c[0].add(c[1]).divideBy(2),mid=c[0].add(c[2]).divideBy(2),dir=top.subtract(mid),len=Math.hypot(dir.x,dir.y)||1;
   const knob=top.add(dir.multiplyBy(26/len));
+  frameBox=boxOf(k==="pin"?c:[...c,knob]);
   if(k!=="pin"){ const stem=document.createElementNS(SVGNS,"line");stem.setAttribute("x1",top.x);stem.setAttribute("y1",top.y);stem.setAttribute("x2",knob.x);stem.setAttribute("y2",knob.y);svg.append(stem) }
   overlay.append(svg);
   if(pointsMode&&f.geometry.type==="Polygon"){
@@ -1401,7 +1507,85 @@ map.on("move zoom viewreset rotate resize",()=>{ if(selected&&!gesture) requestA
 map.on("zoomend",()=>{ if(selected) drawFrame();if(editing) paintBarValues() });
 /* After zooming, the width and size sliders show the selected mark at the
    new scale. */
-function paintBarValues(){ if(selectedFeature()&&!bar.contains(document.activeElement)) paintBar() }
+function paintBarValues(){ if(selectedFeature()&&!bar.contains(document.activeElement)&&pop.dataset.kind!=="value") paintBar() }
+
+/* The action bar sits above the selection (below it when there is no room),
+   follows it as the map moves, and steps aside for the map buttons and the
+   phone sheet. It hides while a mark is dragged and while the tools panel,
+   which carries the same actions, is open. After Delete it briefly offers
+   Undo in the same place. */
+let undoNoteTimer=0;
+const selButton=(act,iconName,label,extra="")=>`<button type="button" class="mk-sel-btn${extra}" data-sel="${act}"><span class="mk-sel-icon" style="--icon:url(${icon(iconName)})" aria-hidden="true"></span><span>${label}</span></button>`;
+function selBarLimits(){
+  const m=mapEl.getBoundingClientRect(),limits={left:8,right:m.width-8,top:8,bottom:m.height-8,dock:null};
+  const dock=document.getElementById("mapDock")?.getBoundingClientRect();
+  if(dock&&dock.width&&getComputedStyle(document.getElementById("mapDock")).opacity!=="0"){
+    limits.dock={left:dock.left-m.left-8,top:dock.top-m.top-8,bottom:dock.bottom-m.top+8};
+    limits.top=Math.max(limits.top,dock.top-m.top);   // the buttons already clear the notch and status bar
+  }
+  const side=document.getElementById("side"),r=side?.getBoundingClientRect();
+  if(r&&r.width>0&&r.height>0){
+    /* The phone sheet rises from the bottom; elsewhere an open sidebar
+       floats over the map's leading edge. */
+    if(document.body.classList.contains("csp-redesign")&&matchMedia("(max-width:760px) and (orientation:portrait)").matches) limits.bottom=Math.min(limits.bottom,r.top-m.top-8);
+    else if(!document.body.classList.contains("collapsed")&&r.left-m.left<m.width/2&&r.right>m.left) limits.left=Math.max(limits.left,r.right-m.left+8);
+  }
+  return limits;
+}
+function positionSelBar(box){
+  const lim=selBarLimits(),w=selBar.offsetWidth,h=selBar.offsetHeight,gap=12;
+  if(box.x1<lim.left-8||box.x0>lim.right+8||box.y1<0||box.y0>lim.bottom+8){selBar.hidden=true;return}   // covered or off screen
+  let top=box.y0-h-gap;
+  if(top<lim.top) top=box.y1+gap;
+  top=clamp(top,lim.top,Math.max(lim.top,lim.bottom-h));
+  let left=clamp((box.x0+box.x1)/2-w/2,lim.left,Math.max(lim.left,lim.right-w));
+  if(lim.dock&&left+w>lim.dock.left&&top<lim.dock.bottom&&top+h>lim.dock.top) left=Math.max(lim.left,lim.dock.left-w);
+  selBar.style.transform=`translate(${Math.round(left)}px,${Math.round(top)}px)`;
+  selBar.dataset.anchorX=(box.x0+box.x1)/2;
+}
+function placeSelBar(){
+  if(selBar.dataset.key==="undo"){ if(editing&&!selectedFeature()) return;hideUndoNote() }
+  const f=selectedFeature();
+  if(!f||!frameBox||!editing||tool!=="select"||toolsOpen||gesture?.moved){selBar.hidden=true;return}
+  const kind=f.properties.kind,key=kind==="text"||kind==="pin"?"text":"mark";
+  if(selBar.dataset.key!==key){
+    selBar.dataset.key=key;
+    selBar.innerHTML=selButton("style","sliders-horizontal","Style")+(key==="text"?selButton("edit-text","type","Edit text"):"")+
+      selButton("duplicate","copy","Duplicate")+selButton("delete","trash-2","Delete"," mk-sel-danger");
+  }
+  selBar.hidden=false;
+  positionSelBar(frameBox);
+}
+function showUndoNote(){
+  const centre=Number(selBar.dataset.anchorX);
+  selBar.dataset.key="undo";selBar.classList.add("mk-selbar-note");
+  selBar.innerHTML=`<span class="mk-sel-note" role="status">Mark deleted</span><button type="button" class="mk-sel-undo" data-sel="undo">Undo</button>`;
+  selBar.hidden=false;
+  if(Number.isFinite(centre)){
+    const m=/translate\(([-\d.]+)px,\s*([-\d.]+)px\)/.exec(selBar.style.transform),top=m?+m[2]:8,lim=selBarLimits(),w=selBar.offsetWidth;
+    selBar.style.transform=`translate(${Math.round(clamp(centre-w/2,lim.left,Math.max(lim.left,lim.right-w)))}px,${top}px)`;
+  }
+  clearTimeout(undoNoteTimer);undoNoteTimer=setTimeout(hideUndoNote,5000);
+}
+function hideUndoNote(){
+  clearTimeout(undoNoteTimer);
+  if(selBar.dataset.key!=="undo") return;
+  selBar.dataset.key="";selBar.classList.remove("mk-selbar-note");selBar.hidden=true;
+}
+selBar.addEventListener("click",event=>{
+  /* Leaflet finds a control's click by walking up from the target; Delete and
+     Undo replace the button first, so stop the click here or the map would
+     take it as a tap on the ground. */
+  event.stopPropagation();
+  const button=event.target.closest("[data-sel]");if(!button||!editing) return;
+  const act=button.dataset.sel;
+  if(act==="style") setToolsOpen(true);
+  else if(act==="edit-text") editSelectedText();
+  else if(act==="duplicate") duplicateSelected();
+  else if(act==="delete"){ deleteSelected();showUndoNote() }
+  else if(act==="undo"){ hideUndoNote();undoRedo(false) }
+});
+
 
 /* Pointer gestures in Select: grab a mark to move it, a handle to resize or
    rotate it. They take the pointer before the map can start a pan. */
@@ -1479,7 +1663,7 @@ let suppressClickUntil=0;
 /* Capture phase on the map: decide before Leaflet sees the press. */
 mapEl.addEventListener("pointerdown",event=>{
   if(!editing||tool!=="select"||event.button>0||gesture) return;
-  if(event.target.closest("#mkBar,#mkPop,.mk-text-input,.leaflet-control,#mapDock")) return;
+  if(event.target.closest("#mkBar,#mkPop,.mk-selbar,.mk-text-input,.leaflet-control,#mapDock")) return;
   closePop();
   const p=pointPx(event),handleEl=event.target.closest(".mk-handle");
   const f=selectedFeature();
@@ -1503,7 +1687,7 @@ addEventListener("pointermove",event=>{ if(gesture&&event.pointerId===gesture.id
 addEventListener("pointerup",event=>{ if(gesture&&event.pointerId===gesture.id) endGesture() });
 addEventListener("pointercancel",event=>{ if(gesture&&event.pointerId===gesture.id){ const G=gesture;G.f.geometry=G.snap;G.f.properties=G.props;renderFeature(editing,G.f);G.moved=false;endGesture() } });
 mapEl.addEventListener("dblclick",event=>{
-  if(!editing||tool!=="select") return;
+  if(!editing||tool!=="select"||event.target.closest(".mk-selbar")) return;
   const f=selectedFeature();
   if(f&&(f.properties.kind==="text"||f.properties.kind==="pin")&&hitFeature(f,pointPx(event))){ event.stopPropagation();event.preventDefault();editSelectedText() }
 },true);
@@ -1515,7 +1699,7 @@ mapEl.addEventListener("pointermove",event=>{
 /* The click that ends a press on a mark is the mark's, not the map's: it must
    not also open a popup from a layer underneath. */
 mapEl.addEventListener("click",event=>{
-  if(!editing||tool!=="select") return;
+  if(!editing||tool!=="select"||event.target.closest(".mk-selbar")) return;
   if(performance.now()<suppressClickUntil||hitTest(pointPx(event))){ event.stopPropagation();event.preventDefault() }
 },true);
 map.on("click",()=>{ if(performance.now()<suppressClickUntil) return;if(editing&&tool==="select"&&selected){ deselect();paintBar() } });

@@ -142,6 +142,12 @@ coordinateActions.addEventListener("click",event=>{
   }
 });
 
+/* Coordinates put in the field by a map tap are replaced, not appended to,
+   when you tap the field and start typing a place. */
+{
+  const q=$("#q"),coordinates=/^\s*-?\d{1,3}(\.\d+)?\s*,\s*-?\d{1,3}(\.\d+)?\s*$/;
+  q?.addEventListener("focus",()=>{if(coordinates.test(q.value)) setTimeout(()=>{if(document.activeElement===q) q.select()},0)});
+}
 const locateButton=$("#loc");
 if(locateButton) locateButton.innerHTML=`<img src="${icon(classicUi?"map-pinned":"navigation")}" alt=""><span class="csp-locate-label">Locate me</span>`;
 
@@ -380,7 +386,7 @@ function buildLayerCard(layer,index,entries,compact=false){
   if(layer.locked) card.classList.add("csp-layer-locked");
   if(compact) card.classList.add("csp-layer-compact");
   card.draggable=false;
-  const rail=layer.locked||compact?"":`<div class="csp-layer-rail"><button class="csp-layer-handle" type="button" aria-label="Reorder ${layer.name}" title="Drag to reorder"></button><button class="csp-layer-tool" type="button" data-action="up" aria-label="Move ${layer.name} up" title="Move up" ${index===0?"disabled":""}><img src="${icon("chevron-up")}" alt=""></button><button class="csp-layer-tool" type="button" data-action="down" aria-label="Move ${layer.name} down" title="Move down" ${index===entries.length-2?"disabled":""}><img src="${icon("chevron-down")}" alt=""></button><button class="csp-layer-tool" type="button" data-action="edit" aria-label="Edit ${layer.name}" title="Edit"><img src="${icon("pencil")}" alt=""></button><button class="csp-layer-tool" type="button" data-action="reset" aria-label="Reset ${layer.name}" title="Reset"><img src="${icon("rotate-ccw")}" alt=""></button></div>`;
+  const rail=layer.locked||compact?"":`<div class="csp-layer-rail"><button class="csp-layer-handle" type="button" aria-label="Reorder ${layer.name}" title="Drag to reorder"></button><div class="csp-layer-tools"><button class="csp-layer-tool" type="button" data-action="up" aria-label="Move ${layer.name} up" title="Move up" ${index===0?"disabled":""}><img src="${icon("chevron-up")}" alt=""></button><button class="csp-layer-tool" type="button" data-action="down" aria-label="Move ${layer.name} down" title="Move down" ${index===entries.length-2?"disabled":""}><img src="${icon("chevron-down")}" alt=""></button><button class="csp-layer-tool" type="button" data-action="edit" aria-label="Edit ${layer.name}" title="Edit"><img src="${icon("pencil")}" alt=""></button><button class="csp-layer-tool" type="button" data-action="reset" aria-label="Reset ${layer.name}" title="Reset"><img src="${icon("rotate-ccw")}" alt=""></button></div></div>`;
   card.innerHTML=`
     ${rail}
     <div class="csp-layer-main"><div class="csp-layer-name"></div><div class="csp-layer-meta"></div>${layer.noOpacity?"":`<div class="csp-layer-opacity"><input class="csp-layer-range" type="range" min="0" max="100" step="1" value="${Math.round(layer.opacity)}"><output>${Math.round(layer.opacity)}%</output></div>`}</div>
@@ -805,7 +811,7 @@ function renderSettingsView(){
   engine.innerHTML=`
     <div class="csp-setting-row">
       <div class="csp-setting-text"><strong>Secure terrain engine</strong><span data-engine-state></span></div>
-      <span class="csp-nav-dot off" data-engine-dot aria-hidden="true"></span>
+      <span class="csp-nav-dot csp-status-dot off" data-engine-dot aria-hidden="true"></span>
     </div>
     <div class="csp-setting-row" data-engine-address-row hidden><span class="csp-setting-text"><span>Address</span></span><span class="csp-accent-name" data-engine-address></span></div>
     <div class="csp-setting-row">
@@ -818,7 +824,7 @@ function renderSettingsView(){
     if(!engine.isConnected) return;
     const state=$("#srvState")?.textContent.trim(),on=$("#srvDot")?.classList.contains("on"),url=$("#srvUrl")?.value.trim();
     $("[data-engine-state]",engine).textContent=state||(on?"Connected.":"Not connected. Your Mac self-heals locally; this saves and checks its Tailscale HTTPS address.");
-    $("[data-engine-dot]",engine).className="csp-nav-dot "+(on?"on":"off");
+    $("[data-engine-dot]",engine).className="csp-nav-dot csp-status-dot "+(on?"on":"off");
     $("[data-engine-address-row]",engine).hidden=!url;
     $("[data-engine-address]",engine).textContent=url||"";
   };
@@ -874,7 +880,7 @@ function renderSettingsView(){
   });
   $("[data-reset-layout]",device).addEventListener("click",()=>$("#resetPanes")?.click());
   customView.append(engineLabel,engine,exportLabel,exportCard,accessLabel,access,deviceLabel,device,sourcesLabel,mapSources);
-  syncMapSources();
+  syncMapSources();syncEngine();
   $("[data-open-engine]",engine).addEventListener("click",()=>$("#serverToggle")?.click());
   const scaleSelect=$("[data-export-scale]",exportCard);
   try{scaleSelect.value=localStorage.getItem("clearskies.snapshot-scale.v1")||"2"}catch(error){}

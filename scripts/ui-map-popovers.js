@@ -60,13 +60,44 @@ const inside=async(page,selector)=>{
       await page.locator('#mkBar [data-layer-select]').selectOption(firstId);
       assert.equal(await page.locator('#mkBar [data-edit-detail="name"]').textContent(),'North rim <A>');
       assert.equal(await page.evaluate(()=>[...window.CSPMarkup._layers.values()].find(layer=>layer.doc.markup.name==='Second layer').doc.markup.description),'Other layer notes','switching saves details to their original layer');
-      await page.locator('#mkBar [data-ground="width"]').fill('50000.125');await page.locator('#mkBar [data-ground="width"]').press('Tab');
-      assert.equal(await page.locator('#mkBar [data-ground-range]').inputValue(),'1000');
-      await page.locator('#mkBar [data-ground-range]').focus();await page.keyboard.press('ArrowLeft');await page.keyboard.press('ArrowLeft');
-      assert.equal(await page.locator('#mkBar [data-ground-range]').inputValue(),'998','keyboard range steps keep focus');
-      await page.locator('#mkBar [data-ground-range]').fill('500');
-      assert(Number(await page.locator('#mkBar [data-ground="width"]').inputValue())<50000.125);
-      await page.locator('#mkBar [data-ground="width"]').fill('20');await page.locator('#mkBar [data-ground="width"]').press('Tab');
+      // Width reads label, slider, value; the value opens a field for a typed number.
+      const typeWidth=async value=>{await page.locator('#mkBar [data-edit-ground="width"]').click();await page.locator('#mkPop .mk-value-input').fill(value);await page.locator('#mkPop .mk-value-input').press('Enter')};
+      const rows=await page.locator('#mkBar .mk-slider:has(input[type=range])').evaluateAll(els=>els.map(el=>{const r=el.querySelector('input[type=range]').getBoundingClientRect();return [Math.round(r.left),Math.round(r.right)]}));
+      assert(rows.length>=2&&rows.every(r=>Math.abs(r[0]-rows[0][0])<=1&&Math.abs(r[1]-rows[0][1])<=1),`width and opacity tracks line up: ${JSON.stringify(rows)}`);
+      await typeWidth('50000.125');
+      assert(await page.locator('#mkPop').evaluate(el=>el.hidden),'Return applies the typed width and closes the field');
+      assert.equal(await page.evaluate(()=>document.activeElement.dataset.editGround),'width','Return restores focus to the width value');
+      await page.locator('#mkBar [data-edit-ground="width"]').click();
+      assert.equal(await page.locator('#mkPop .mk-value-input').inputValue(),'50000.125','reopening retains an exact large fractional width');
+      await page.locator('#mkPop .mk-value-input').press('Enter');
+      assert.equal(await page.locator('#mkBar [data-ground-range="width"]').inputValue(),'1000');
+      assert.equal(await page.locator('#mkBar [data-edit-ground="width"]').textContent(),`${(50000).toLocaleString('en-US')} ft`);
+      await page.locator('#mkBar [data-ground-range="width"]').focus();await page.keyboard.press('ArrowLeft');await page.keyboard.press('ArrowLeft');
+      assert.equal(await page.locator('#mkBar [data-ground-range="width"]').inputValue(),'998','keyboard range steps keep focus');
+      await page.locator('#mkBar [data-ground-range="width"]').fill('500');
+      assert(Number(await page.locator('#mkBar .mk-ground[data-ground="width"]').getAttribute('data-feet'))<50000.125);
+      await page.locator('#mkBar [data-edit-ground="width"]').click();
+      await inside(page,'#mkPop');
+      await page.locator('#mkPop .mk-value-input').fill('wide');await page.locator('#mkPop .mk-value-input').press('Enter');
+      assert(!await page.locator('#mkPop').evaluate(el=>el.hidden),'an invalid width keeps the field open');
+      assert.equal(await page.locator('#mkPop .mk-value-input').getAttribute('aria-invalid'),'true');
+      await page.keyboard.press('Escape');
+      assert(await page.locator('#mkPop').evaluate(el=>el.hidden),'Escape discards the typed width');
+      await typeWidth('0.125');
+      await page.locator('#mkBar [data-edit-ground="width"]').click();
+      assert.equal(await page.locator('#mkPop .mk-value-input').inputValue(),'0.125','reopening retains an exact small fractional width');
+      await page.locator('#mkPop .mk-value-input').fill('21.125');
+      await page.locator('#mkBar [data-tool="pan"]').click();
+      assert.equal(await page.locator('#mkBar [data-tool="pan"]').getAttribute('aria-pressed'),'true','the first tap commits the width and activates the next tool');
+      await page.locator('#mkBar [data-tool="pen"]').click();
+      await page.locator('#mkBar [data-edit-ground="width"]').click();
+      await page.locator('#mkPop .mk-value-input').fill('22.125');
+      // Dispatch the trigger directly: the compact value bubble can cover Colour.
+      await page.locator('#mkBar [data-pop="color"]').dispatchEvent('click');
+      assert.equal(await page.locator('#mkPop').getAttribute('data-kind'),'color','the first tap commits width and opens Colour');
+      await inside(page,'#mkPop');
+      await page.locator('#mkPop [data-pick="#ff3b30"]').first().click();
+      await typeWidth('20');
       const feedback=await page.evaluate(()=>{document.querySelector('#mkBar [data-tool="pan"]').click();return document.querySelector('#mkBar [data-tool="pan"]').getAnimations().length});
       assert.equal(feedback>0,label!=='reduced-motion','tool feedback honors Reduce Motion');
       for(const tool of ['pen','highlight','eraser','shape','text','pin','select','pan']){
@@ -143,7 +174,7 @@ const inside=async(page,selector)=>{
       assert.equal(await page.locator('#quickDraw').getAttribute('aria-pressed'),'true','closing the window keeps the drawing mode');
       await page.locator('#quickDraw').click();
       assert(await visible(page,'#mkBar'),'the drawing button reopens the controls');
-      await page.locator('#mkBar [data-ground="width"]').focus();
+      await page.locator('#mkBar [data-ground-range="width"]').focus();
       await page.keyboard.press('Escape');
       assert(!await visible(page,'#mkBar'),'Escape works while a markup input is focused');
       await page.locator('#quickDraw').click();
@@ -216,6 +247,30 @@ const inside=async(page,selector)=>{
       assert.equal(await page.evaluate(([id,fid])=>window.CSPMarkup._layers.get(id).doc.features.find(f=>f.properties.fid===fid).properties.width,[firstId,mark.id]),mark.width,'one Undo restores a whole slider drag');
       await page.locator('#mkBar [data-act="redo"]').click();
       assert.equal(await page.evaluate(([id,fid])=>window.CSPMarkup._layers.get(id).doc.features.find(f=>f.properties.fid===fid).properties.width,[firstId,mark.id]),widthAfter);
+      // With the tools closed, the selected mark carries its own actions on the
+      // map. Bring the mark into the open part of the map first; off screen or
+      // under the phone sheet the bar correctly stays hidden.
+      await page.evaluate(([id,fid])=>{
+        const f=window.CSPMarkup._layers.get(id).doc.features.find(x=>x.properties.fid===fid),c=f.geometry.coordinates.flat(2);
+        window.ClearSkiesPortalBridge.map.setView([c[1],c[0]],window.ClearSkiesPortalBridge.map.getZoom(),{animate:false});
+        window.CSPMarkup._select(fid);
+      },[firstId,mark.id]);
+      await page.locator('#mkBar .tool-close').click();
+      assert(await visible(page,'.mk-selbar'),'a selected mark shows its actions once the tools close');
+      await inside(page,'.mk-selbar');
+      assert.deepEqual(await page.locator('.mk-selbar [data-sel]').evaluateAll(els=>els.map(el=>el.dataset.sel)),['style','duplicate','delete']);
+      const features=()=>page.evaluate(id=>window.CSPMarkup._layers.get(id).doc.features.length,firstId);
+      const kept=await features(),query=await page.locator('#q').inputValue();
+      await page.locator('.mk-selbar [data-sel="delete"]').click();
+      assert.equal(await features(),kept-1,'Delete removes the mark in place');
+      assert.equal(await page.locator('#q').inputValue(),query,'the Delete tap does not reach the map underneath');
+      assert.equal(await page.locator('.mk-selbar .mk-sel-note').textContent(),'Mark deleted');
+      await page.locator('.mk-selbar [data-sel="undo"]').click();
+      assert.equal(await features(),kept,'Undo beside it restores the mark');
+      await page.evaluate(fid=>window.CSPMarkup._select(fid),mark.id);
+      await page.locator('.mk-selbar [data-sel="style"]').click();
+      assert(await visible(page,'#mkBar'),'Style opens the tools for the selected mark');
+      assert(!await visible(page,'.mk-selbar'),'the panel and the map bar are not shown together');
       assert.deepEqual(errors,[],`${label} has no JavaScript errors`);
       console.log(`PASS ${label}: all tools, visible controls, shared surface, panel switching, capture, focus and resizing`);
       await context.close();
