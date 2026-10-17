@@ -2296,14 +2296,20 @@ body.csp-redesign:not([data-csp-route="satellite"]) #cspWorkspace #status[data-k
   --ui-frost:var(--map3d-motion-fill);--ui-frost-weak:var(--map3d-motion-fill);
 }
 .csp-glass body.csp-redesign.terrain-3d.map3d-moving{--map3d-motion-fill:var(--ui-surface);--map3d-motion-panel:var(--ui-rail)}
-body.terrain-3d.map3d-moving :is(#side,#ac,.coord-menu,.map-tool,.tool-popover,#snapshotStatus,.snap-sel-size,.snap-sel-bar,#ctl,#menu,#blk,#pointCloudPanel,.pc-head,.pane-drag-ghost,.ovgrp,#newBuild,.leaflet-control-zoom,.leaflet-control-zoom a,.leaflet-control-attribution,.leaflet-popup-content-wrapper,.leaflet-tooltip,#mapDock,#panes .grp,#side #q,#side #loc,#map3d .maplibregl-ctrl-attrib,#mkBar,#mkPop,.csp-sat-suggest),
-body.terrain-3d.map3d-moving #side select::picker(select),body.terrain-3d.map3d-moving #pointCloudPanel select::picker(select),body.terrain-3d.map3d-moving #snapshotPanel select::picker(select){
+body.terrain-3d.map3d-moving :is(#side,#ac,.coord-menu,.map-tool,.tool-popover,#snapshotStatus,.snap-sel-size,.snap-sel-bar,#ctl,#menu,#blk,#pointCloudPanel,.pc-head,.pane-drag-ghost,.ovgrp,#newBuild,.leaflet-control-zoom,.leaflet-control-zoom a,.leaflet-control-attribution,.leaflet-popup-content-wrapper,.leaflet-tooltip,#mapDock,#panes .grp,#side #q,#side #loc,#map3d .maplibregl-ctrl-attrib,#mkBar,#mkPop,.csp-sat-suggest){
   -webkit-backdrop-filter:none!important;backdrop-filter:none!important;
 }
 /* Classic is already opaque. Glass controls keep their hover/selected fill
    instead of replacing that feedback with the neutral motion material. */
-.csp-glass body.terrain-3d.map3d-moving :is(#ac,.coord-menu,.map-tool:not(:hover):not(.active):not([aria-pressed="true"]),.tool-popover,#snapshotStatus,.snap-sel-bar,#ctl,#menu,#blk,#pointCloudPanel,.pc-head,.pane-drag-ghost,#newBuild,.leaflet-control-zoom,.leaflet-control-zoom a:not(:hover),.leaflet-control-attribution,.leaflet-popup-content-wrapper,.leaflet-tooltip,#mapDock,#map3d .maplibregl-ctrl-attrib,#mkBar,#mkPop,.csp-sat-suggest),
-.csp-glass body.terrain-3d.map3d-moving #side select::picker(select),.csp-glass body.terrain-3d.map3d-moving #pointCloudPanel select::picker(select),.csp-glass body.terrain-3d.map3d-moving #snapshotPanel select::picker(select){background-color:var(--map3d-motion-fill)!important}
+.csp-glass body.terrain-3d.map3d-moving :is(#ac,.coord-menu,.map-tool:not(:hover):not(.active):not([aria-pressed="true"]),.tool-popover,#snapshotStatus,.snap-sel-bar,#ctl,#menu,#blk,#pointCloudPanel,.pc-head,.pane-drag-ghost,#newBuild,.leaflet-control-zoom,.leaflet-control-zoom a:not(:hover),.leaflet-control-attribution,.leaflet-popup-content-wrapper,.leaflet-tooltip,#mapDock,#map3d .maplibregl-ctrl-attrib,#mkBar,#mkPop,.csp-sat-suggest){background-color:var(--map3d-motion-fill)!important}
+/* Unknown pseudo-elements invalidate ordinary selector lists. Keep native
+   picker enhancements separate from the motion safeguards every engine needs. */
+@supports selector(select::picker(select)){
+  body.terrain-3d.map3d-moving :is(#side,#pointCloudPanel,#snapshotPanel) select::picker(select){
+    -webkit-backdrop-filter:none!important;backdrop-filter:none!important;
+  }
+  .csp-glass body.terrain-3d.map3d-moving :is(#side,#pointCloudPanel,#snapshotPanel) select::picker(select){background-color:var(--map3d-motion-fill)!important}
+}
 .csp-glass body.terrain-3d.map3d-moving :is(#side,.ovgrp,#panes .grp){background-color:var(--map3d-motion-panel)!important}
 /* The selection-size label has white ink in every theme. */
 .csp-glass body.terrain-3d.map3d-moving .snap-sel-size{background-color:var(--ui-selection-size-solid)!important}
@@ -2434,7 +2440,7 @@ body.csp-redesign .csp-setting-foot[hidden]{display:none}
    ========================================================================== */
 
 /* ---- geometry ----------------------------------------------------------- */
-:root.csp-glass{interpolate-size:allow-keywords}
+.csp-glass #cspWorkspace details{interpolate-size:allow-keywords}
 .csp-glass body.csp-redesign.csp-redesign{
   --r-shell:16px;--r-popover:12px;--r-card:11px;--r-control:7px;--r-row:7px;--r-chip:5px;
   --radius-card:var(--r-card);--radius-control:var(--r-control);--radius-chip:var(--r-chip);
@@ -2442,7 +2448,7 @@ body.csp-redesign .csp-setting-foot[hidden]{display:none}
   --t3-row-x:16px;
   --t3-section-gap:24px;
   --t3-head:color-mix(in srgb,var(--ui-text) 70%,transparent);
-  --t3-desc:color-mix(in srgb,var(--ui-text-muted) 88%,transparent);
+  --t3-desc:var(--ui-text-muted);
   --ease-mac:cubic-bezier(.32,.72,0,1);
   --ease-menu:cubic-bezier(.2,.8,.2,1);
 }
@@ -2451,8 +2457,10 @@ body.csp-redesign .csp-setting-foot[hidden]{display:none}
   .csp-glass body.csp-redesign.csp-redesign :is(#side,.tool-popover,#mkBar,#mkPop,#ac,.csp-card,#panes .pane-b,.menu-card,#surfaceResearchBox,.csp-nav-button,
     .csp-layer-tool,.csp-sat-field,.csp-sat-suggest,.snapshot-action,.ghost,.csp-setting-preview,.csp-theme-preset,
     .ov-opacity-control,.ov-line-control,.terrain-mode,.terrain-mode button,.csp-segmented,select,
-    input:is([type=text],[type=search],[type=number],[type=date],[type=url]),textarea),
-  .csp-glass body.csp-redesign.csp-redesign select::picker(select){corner-shape:superellipse(1.6)}
+    input:is([type=text],[type=search],[type=number],[type=date],[type=url]),textarea){corner-shape:superellipse(1.6)}
+  @supports selector(select::picker(select)){
+    .csp-glass body.csp-redesign.csp-redesign select::picker(select){corner-shape:superellipse(1.6)}
+  }
 }
 @media (min-width:1051px){
   .csp-glass body.csp-redesign.csp-redesign #side{border-radius:var(--r-shell)}
@@ -2495,6 +2503,7 @@ body.csp-redesign .csp-setting-foot[hidden]{display:none}
   .csp-glass body.csp-redesign.csp-redesign #cspNav > .foot{padding:8px 14px}
   .csp-glass body.csp-redesign.csp-redesign #cspNav .foot-meta{display:none}
   .csp-glass body.csp-redesign.csp-redesign #cspNav #cspSettingsNav{margin-bottom:0}
+  .csp-glass body.csp-redesign.csp-redesign{--t3-gutter:12px}
 }
 @media (max-width:760px),(pointer:coarse){
   .csp-glass body.csp-redesign.csp-redesign #cspNav .csp-nav-button{
@@ -2504,6 +2513,19 @@ body.csp-redesign .csp-setting-foot[hidden]{display:none}
   .csp-glass body.csp-redesign.csp-redesign #cspNav .csp-nav-button img{width:22px;height:22px}
   .csp-glass body.csp-redesign.csp-redesign #cspNav :is(#cspAppearanceNav,#cspSettingsNav) .csp-nav-button{font-size:15px}
 }
+/* Short phones and landscape layouts keep the footer pinned without letting
+   two stacked utility rows and desktop metadata consume the tool list. */
+@media (max-width:1050px) and (max-height:600px){
+  .csp-glass body.csp-redesign.csp-redesign #cspNav{overflow:hidden}
+  .csp-glass body.csp-redesign.csp-redesign #cspNavScroll{flex:1 1 0;min-height:0;overflow-y:auto;overscroll-behavior:contain}
+  .csp-glass body.csp-redesign.csp-redesign #cspNav > .foot{
+    display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:4px;
+    margin-top:auto;padding:6px 12px;flex-shrink:0;
+  }
+  .csp-glass body.csp-redesign.csp-redesign #cspNav .foot-meta{display:none}
+  .csp-glass body.csp-redesign.csp-redesign #cspNav #cspSettingsNav{margin-bottom:0}
+  .csp-glass body.csp-redesign.csp-redesign #cspNav :is(#cspAppearanceNav,#cspSettingsNav) .csp-nav-button{min-height:44px;padding:6px 10px;gap:8px;font-size:14px}
+}
 
 /* ---- navigation pane: cursor halo and glass lens -------------------------
    The halo is one blurred disc behind the pane's content (z-index -1 inside
@@ -2511,8 +2533,8 @@ body.csp-redesign .csp-setting-foot[hidden]{display:none}
    pointer, overshoots a touch, and stretches along its own velocity. The lens
    is each row's ::before - a glass capsule with a specular spot at the
    pointer - and the row's content scales about the pointer, so the area under
-   it reads as magnified. Fine pointers only; Reduce Motion keeps a still
-   highlight with no chase, stretch or magnification. */
+   it reads as magnified. Fine pointers only; Reduce Motion disables both
+   effects and keeps the ordinary hover feedback. */
 .csp-glass body.csp-redesign.csp-redesign #cspNav > .csp-halo-layer{
   position:absolute;inset:0;z-index:-1;overflow:hidden;pointer-events:none;border-radius:inherit;
 }
@@ -2537,7 +2559,7 @@ body.csp-redesign .csp-setting-foot[hidden]{display:none}
   }
   .csp-glass body.csp-redesign.csp-redesign #cspNav .csp-nav-button.csp-lens::before{opacity:1;transform:none}
   .csp-glass body.csp-redesign.csp-redesign #cspNav .csp-nav-button > *{transition:transform .36s var(--ease-mac)}
-  .csp-glass body.csp-redesign.csp-redesign #cspNav .csp-nav-button.csp-lens > *{transform:scale(1.07)}
+  .csp-glass body.csp-redesign.csp-redesign #cspNav .csp-nav-button.csp-lens > *{transform:scale(1.03)}
   .csp-glass body.csp-redesign.csp-redesign #cspNav .csp-nav-button.csp-lens:active > *{transform:scale(1.015);transition-duration:.12s}
 }
 
@@ -2699,6 +2721,8 @@ body.csp-redesign .csp-setting-foot[hidden]{display:none}
 .csp-glass body.csp-redesign.csp-redesign #cspWorkspace :is(.ov-opacity-control,.ov-line-control){
   margin:2px 8px 10px;padding:10px 12px 8px;border:0;border-radius:var(--r-control);background:var(--ui-fill);
 }
+.csp-glass body.csp-redesign.csp-redesign #cspWorkspace .ov-opacity-control{padding-inline:0;background:transparent}
+.csp-glass body.csp-redesign.csp-redesign #cspWorkspace .ov-opacity-control .ov-line-label{padding-inline:12px}
 .csp-glass body.csp-redesign.csp-redesign #cspWorkspace .ov-line-label{color:var(--t3-desc);font-size:12px;font-weight:500}
 .csp-glass body.csp-redesign.csp-redesign #cspWorkspace .ovnote{padding:8px;color:var(--t3-desc);font-size:12px;line-height:1.5}
 
@@ -2772,6 +2796,9 @@ body.csp-redesign .csp-setting-foot[hidden]{display:none}
   }
   .csp-glass body.csp-redesign.csp-redesign :is(#side,#pointCloudPanel,#snapshotPanel) select option:is(:hover,:focus-visible){background:var(--t3-menu-hover)}
   .csp-glass body.csp-redesign.csp-redesign :is(#side,#pointCloudPanel,#snapshotPanel) select option:checked{background:var(--t3-menu-selected);font-weight:500}
+  @media (max-width:760px),(pointer:coarse){
+    .csp-glass body.csp-redesign.csp-redesign :is(#side,#pointCloudPanel,#snapshotPanel) select option{min-height:44px;padding:10px 12px;font-size:16px}
+  }
 }
 
 /* ---- satellite: scene search with its filters --------------------------- */
@@ -2802,7 +2829,7 @@ body.csp-redesign .csp-setting-foot[hidden]{display:none}
 .csp-glass body.csp-redesign.csp-redesign .csp-sat-field:has(input:placeholder-shown) .csp-sat-go{opacity:0;visibility:hidden;transform:scale(.7)}
 .csp-glass body.csp-redesign.csp-redesign .csp-sat-field .csp-sat-go{transition:opacity .15s ease,transform .22s var(--ease-mac),visibility 0s,filter .15s ease}
 .csp-glass body.csp-redesign.csp-redesign .csp-sat-suggest{
-  position:absolute;left:0;right:0;top:calc(100% + 6px);z-index:40;max-height:280px;overflow:auto;padding:4px;
+  position:absolute;left:0;right:0;top:calc(100% + 6px);z-index:40;max-height:min(280px,40dvh);overflow:auto;padding:4px;overscroll-behavior:contain;
   border:1px solid var(--t3-menu-border);border-radius:var(--r-popover);
   background:var(--t3-menu-bg);box-shadow:var(--t3-menu-shadow);
   -webkit-backdrop-filter:blur(16px) saturate(1.1);backdrop-filter:blur(16px) saturate(1.1);
@@ -2815,9 +2842,11 @@ body.csp-redesign .csp-setting-foot[hidden]{display:none}
 .csp-glass body.csp-redesign.csp-redesign .csp-sat-suggest [role=option][aria-selected="true"],
 .csp-glass body.csp-redesign.csp-redesign .csp-sat-suggest [role=option]:hover{background:var(--t3-menu-hover)}
 .csp-glass body.csp-redesign.csp-redesign .csp-sat-suggest .p{color:var(--ui-text);font-size:13.5px;font-weight:500}
-.csp-glass body.csp-redesign.csp-redesign .csp-sat-suggest .s{grid-column:1;color:var(--t3-desc);font-size:12px}
+.csp-glass body.csp-redesign.csp-redesign .csp-sat-suggest .s{grid-column:1;color:var(--t3-desc);font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .csp-glass body.csp-redesign.csp-redesign .csp-sat-suggest .t{grid-column:2;grid-row:1/3;align-self:center;color:var(--t3-desc);font-size:11px;text-transform:capitalize}
-.csp-glass body.csp-redesign.csp-redesign .csp-sat-suggest .note{padding:8px;color:var(--t3-desc);font-size:12.5px}
+.csp-glass body.csp-redesign.csp-redesign .csp-sat-note{margin:8px 0;color:var(--t3-desc);font-size:12.5px}
+.csp-glass body.csp-redesign.csp-redesign .csp-sat-card > #status{margin:8px 0;padding:0}
+.csp-glass body.csp-redesign.csp-redesign .csp-sat-card > #status .chip{padding:0;border:0;background:transparent;box-shadow:none}
 .csp-glass body.csp-redesign.csp-redesign #cspWorkspace .csp-sat-filters{margin-top:10px}
 .csp-glass body.csp-redesign.csp-redesign #cspWorkspace .csp-sat-filters > .fgrid{display:block}
 .csp-glass body.csp-redesign.csp-redesign #cspWorkspace .csp-sat-filters > .fgrid > .csp-field-row:first-child{border-top:1px solid var(--t3-divider)}
@@ -2831,7 +2860,12 @@ body.csp-redesign .csp-setting-foot[hidden]{display:none}
 }
 @media (max-width:760px){
   .csp-glass body.csp-redesign.csp-redesign #side select{min-height:44px;font-size:16px}
-  .csp-glass body.csp-redesign.csp-redesign #cspWorkspace .csp-sat-filters .dpre button{min-height:36px;font-size:clamp(10px,2.8vw,11px)}
+  .csp-glass body.csp-redesign.csp-redesign #cspWorkspace .csp-sat-filters .dpre button{min-height:44px;font-size:12px}
+}
+@media (max-width:380px){
+  .csp-glass body.csp-redesign.csp-redesign .csp-sat-filters .csp-field-row{flex-wrap:wrap;gap:8px}
+  .csp-glass body.csp-redesign.csp-redesign #cspWorkspace .csp-sat-filters .csp-field-row > label{flex:1 0 auto;white-space:nowrap}
+  .csp-glass body.csp-redesign.csp-redesign #cspWorkspace .csp-sat-filters .csp-field-row > select{min-width:140px}
 }
 @media (pointer:coarse){
   .csp-glass body.csp-redesign.csp-redesign .csp-sat-field{min-height:46px}
@@ -2866,20 +2900,26 @@ body.csp-redesign .csp-setting-foot[hidden]{display:none}
 .csp-glass body.csp-redesign.csp-redesign :is(#ac,.coord-menu){animation:csp-menu-in .2s var(--ease-menu) both;transform-origin:top center}
 
 /* New search results arrive in a short cascade. */
-.csp-glass body.csp-redesign.csp-redesign #results > :is(.item,.grp){animation:csp-row-in .32s var(--ease-mac) both}
-.csp-glass body.csp-redesign.csp-redesign #results > :is(.item,.grp):nth-child(2){animation-delay:.025s}
-.csp-glass body.csp-redesign.csp-redesign #results > :is(.item,.grp):nth-child(3){animation-delay:.05s}
-.csp-glass body.csp-redesign.csp-redesign #results > :is(.item,.grp):nth-child(4){animation-delay:.075s}
-.csp-glass body.csp-redesign.csp-redesign #results > :is(.item,.grp):nth-child(5){animation-delay:.1s}
-.csp-glass body.csp-redesign.csp-redesign #results > :is(.item,.grp):nth-child(n+6){animation-delay:.12s}
+.csp-glass body.csp-redesign.csp-redesign #results.csp-results-enter > :is(.item,.grp){animation:csp-row-in .32s var(--ease-mac) backwards}
+.csp-glass body.csp-redesign.csp-redesign #results.csp-results-enter > :is(.item,.grp):nth-child(2){animation-delay:.025s}
+.csp-glass body.csp-redesign.csp-redesign #results.csp-results-enter > :is(.item,.grp):nth-child(3){animation-delay:.05s}
+.csp-glass body.csp-redesign.csp-redesign #results.csp-results-enter > :is(.item,.grp):nth-child(4){animation-delay:.075s}
+.csp-glass body.csp-redesign.csp-redesign #results.csp-results-enter > :is(.item,.grp):nth-child(5){animation-delay:.1s}
+.csp-glass body.csp-redesign.csp-redesign #results.csp-results-enter > :is(.item,.grp):nth-child(n+6){animation-delay:.12s}
 
 @media (prefers-reduced-motion:reduce){
+  .csp-glass body.csp-redesign.csp-redesign #cspNav > .csp-halo-layer{display:none!important}
+  .csp-glass body.csp-redesign.csp-redesign #cspNav .csp-nav-button::before{display:none!important;transform:none!important;transition:none!important}
+  .csp-glass body.csp-redesign.csp-redesign #cspNav .csp-nav-button:hover:not([aria-current="page"]){background:var(--nav-row-hover)}
   .csp-glass body.csp-redesign.csp-redesign :is(#cspWorkspace.csp-route-enter > *,#cspNavScroll,#ac,.coord-menu,.csp-sat-suggest,#results > *){animation:none!important}
   .csp-glass body.csp-redesign.csp-redesign #cspWorkspace details::details-content{transition:none!important}
   .csp-glass body.csp-redesign.csp-redesign #cspNav .csp-nav-button > *,
   .csp-glass body.csp-redesign.csp-redesign #cspNav .csp-nav-button.csp-lens > *{transform:none!important;transition:none!important}
   .csp-glass body.csp-redesign.csp-redesign select::picker(select){transition:none!important}
 }
+.csp-glass.csp-reduce-motion body.csp-redesign.csp-redesign #cspNav > .csp-halo-layer{display:none!important}
+.csp-glass.csp-reduce-motion body.csp-redesign.csp-redesign #cspNav .csp-nav-button::before{display:none!important;transform:none!important;transition:none!important}
+.csp-glass.csp-reduce-motion body.csp-redesign.csp-redesign #cspNav .csp-nav-button:hover:not([aria-current="page"]){background:var(--nav-row-hover)}
 .csp-glass.csp-reduce-motion body.csp-redesign.csp-redesign :is(#cspWorkspace.csp-route-enter > *,#cspNavScroll,#ac,.coord-menu,.csp-sat-suggest,#results > *){animation:none!important}
 .csp-glass.csp-reduce-motion body.csp-redesign.csp-redesign #cspWorkspace details::details-content{transition:none!important}
 .csp-glass.csp-reduce-motion body.csp-redesign.csp-redesign #mapDock{transition:none!important;transform:none!important}

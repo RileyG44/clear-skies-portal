@@ -993,8 +993,8 @@ body.pane-reordering,body.pane-reordering *{cursor:grabbing!important;user-selec
 }
 
 </style>
-<link rel="stylesheet" href="ui-theme.css?build=2026-10-16k">
-<link rel="stylesheet" href="ui-system.css?build=2026-10-16k">
+<link rel="stylesheet" href="ui-theme.css?build=2026-10-17a">
+<link rel="stylesheet" href="ui-system.css?build=2026-10-17a">
 <style>
 /* The redesign restructures the legacy DOM rather than replacing it, and the
    script that does so is the last thing on the page - so the browser paints the
@@ -1092,7 +1092,7 @@ html.csp-boot body{visibility:hidden}
               <option value="14">Last 14 days</option>
               <option value="30">Last 30 days</option>
               <option value="90">Last 90 days</option>
-              <option value="365" selected>Last year</option>
+              <option value="365" selected>Last 365 days</option>
               <option value="1825">Last 5 years</option>
               <option value="0">All time</option>
               <option value="custom">Custom range…</option>
@@ -1107,8 +1107,8 @@ html.csp-boot body{visibility:hidden}
             <div class="dpre hide-row" id="dpre">
               <button type="button" data-pre="thismonth">This month</button>
               <button type="button" data-pre="lastmonth">Last month</button>
-              <button type="button" data-pre="ytd" aria-label="Year to date" title="Year to date">YTD</button>
-              <button type="button" data-pre="lastyear" aria-label="Last calendar year" title="Last calendar year">Last year</button>
+              <button type="button" data-pre="ytd" title="Year to date">YTD</button>
+              <button type="button" data-pre="lastyear" title="Last calendar year">Last year</button>
             </div>
             <div class="dnote hide-row" id="dnote"></div>
 
@@ -1767,7 +1767,7 @@ html.csp-boot body{visibility:hidden}
   L.Renderer.prototype.onAdd=function(map){return onAdd.call(this,map||this._map)};
 })();
 </script>
-<script src="version.js?build=2026-10-16k"></script>
+<script src="version.js?build=2026-10-17a"></script>
 <script src="mosaic-core.js"></script>
 <script src="png-stream.js"></script>
 <script src="terrain-core.js"></script>
@@ -2630,16 +2630,19 @@ map.on("dblclick",e=>{ if(document.body.classList.contains("dnr-selecting"))retu
 
 /* ---------------------------------------------------------------- state */
 let LOC=null, ITEMS=[], SEL=null, searchToken=0, searchAbort=null;
+let committedLocation=null, locationVersion=0, resultEntryTimer=0;
 const $=s=>document.querySelector(s);
 const statusEl=$("#status"), resEl=$("#results");
 
-function setLoc(lat,lng,keepLabel){
+function setLoc(lat,lng,keepLabel,label){
   LOC={lat,lng};
   if(marker) map.removeLayer(marker);
   marker=L.circleMarker([lat,lng],{radius:7,color:"#4a9eff",weight:2,fillColor:"#4a9eff",fillOpacity:.55})
           .addTo(map).bindTooltip(lat.toFixed(5)+", "+lng.toFixed(5),{direction:"top",offset:[0,-8]});
   if(!keepLabel) $("#q").value = lat.toFixed(5)+", "+lng.toFixed(5);
   updateCoordinateActions();
+  committedLocation={version:++locationVersion,coordinates:{lat,lng},label:label||lat.toFixed(5)+", "+lng.toFixed(5)};
+  document.dispatchEvent(new CustomEvent("csp:location",{detail:committedLocation}));
 }
 
 function ago(iso){
@@ -2735,7 +2738,7 @@ function placeKind(p){
 }
 
 /* ------------------------------------------------- autocomplete */
-let acAbort=null, acTimer=null, acList=[], acIdx=-1;
+let acAbort=null, acTimer=null, acList=[], acIdx=-1, acGeneration=0;
 const acEl=(()=>{ const d=document.createElement("div"); d.id="ac"; d.style.display="none";
                   document.getElementById("iw").appendChild(d); return d })();
 
@@ -2749,20 +2752,20 @@ function acHide(){ acEl.style.display="none"; acIdx=-1 }
 /* A search that has already run must not be followed by the suggestion list
    it overtook: the debounce timer or an in-flight lookup would otherwise land
    after Enter and reopen the dropdown over the panel. */
-function acCancel(){ clearTimeout(acTimer); if(acAbort) acAbort.abort(); acList=[] }
+function acCancel(){ clearTimeout(acTimer); if(acAbort) acAbort.abort(); acGeneration++; acList=[] }
 function acShow(html){ acEl.innerHTML=html; acEl.style.display="block" }
 
 function acRender(){
   if(!acList.length){ acHide(); return }
   acShow(acList.map((i,n)=>{
-    const s=splitName(i);
     return `<div class="r ${n===acIdx?"k":""}" data-n="${n}">
-      <div class="p">${esc(s.primary)}</div>
-      <div class="s">${esc(s.secondary)}</div>
-      <div class="t">${esc(kindOf(i))}</div></div>`;
+      <div class="p">${esc(i.primary)}</div>
+      <div class="s">${esc(i.secondary)}</div>
+      <div class="t">${esc(i.kind)}</div></div>`;
   }).join(""));
   acEl.querySelectorAll(".r").forEach(el=>{
-    el.onmousedown=e=>{ e.preventDefault(); acPick(+el.dataset.n) };
+    el.onmousedown=e=>e.preventDefault();
+    el.onclick=()=>acPick(+el.dataset.n);
   });
 }
 function esc(s){ return String(s==null?"":s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c])) }
@@ -2772,35 +2775,21 @@ function safeHttpUrl(value){
 }
 
 function acPick(n){
-  const f=acList[n]; if(!f) return;
-  acCancel(); acHide();
-  const s=splitName(f), c=f.geometry.coordinates;
-  $("#q").value = s.secondary ? `${s.primary}, ${s.secondary.split(",").map(x=>x.trim()).slice(0,2).join(", ")}` : s.primary;
-  setLoc(c[1], c[0], /*keepLabel*/true);
-  const e=f.properties.extent;          // [minLon, maxLat, maxLon, minLat]
-  if(e) map.fitBounds([[e[3],e[0]],[e[1],e[2]]], {maxZoom:13});
-  else  map.setView([c[1],c[0]], 12);
-  run();
+  const place=acList[n];if(place) cspSearchPlace(place);
 }
 
 async function acQuery(t){
   if(acAbort) acAbort.abort();
   acAbort=new AbortController();
+  const generation=++acGeneration;
   try{
-    const r=await fetch(PHOTON+"/api/?limit=6&q="+encodeURIComponent(t), {signal:acAbort.signal});
-    if(!r.ok) throw new Error("geocoder "+r.status);
-    const seen=new Set();
-    acList=((await r.json()).features||[]).filter(f=>{
-      if(!(f.geometry&&f.geometry.coordinates)) return false;
-      const s=splitName(f),key=[s.primary,s.secondary,kindOf(f)].join("|").toLowerCase();
-      if(seen.has(key)) return false;
-      seen.add(key); return true;
-    }); acIdx=-1;
-    if(document.activeElement!==$("#q")||$("#q").value.trim()!==t) return;
+    const found=await cspPlaceSuggestions(t,acAbort.signal);
+    if(generation!==acGeneration||document.activeElement!==$("#q")||$("#q").value.trim()!==t) return;
+    acList=found;acIdx=-1;
     if(!acList.length) acShow('<div class="note">No matches</div>');
     else acRender();
   }catch(e){
-    if(e && e.name==="AbortError") return;
+    if(e?.name==="AbortError"||generation!==acGeneration||document.activeElement!==$("#q")||$("#q").value.trim()!==t) return;
     acList=[]; acShow('<div class="note">Place search unavailable \u2014 you can still paste coordinates or double-click the map</div>');
   }
 }
@@ -2819,9 +2808,9 @@ function acInput(){
 function acKey(e){
   const open=acEl.style.display!=="none" && acList.length;
   if(e.key==="ArrowDown"&&open){ e.preventDefault(); acIdx=(acIdx+1)%acList.length; acRender() }
-  else if(e.key==="ArrowUp"&&open){ e.preventDefault(); acIdx=(acIdx-1+acList.length)%acList.length; acRender() }
+  else if(e.key==="ArrowUp"&&open){ e.preventDefault(); acIdx=acIdx<0?acList.length-1:(acIdx-1+acList.length)%acList.length; acRender() }
   else if(e.key==="Enter"){ if(open&&acIdx>=0){ e.preventDefault(); acPick(acIdx) } else { acCancel(); acHide(); doSearch() } }
-  else if(e.key==="Escape"){ acHide() }
+  else if(e.key==="Escape"){ acCancel(); acHide() }
 }
 
 /* ------------------------------------------------- current location */
@@ -3047,7 +3036,7 @@ async function run(){
   ITEMS=[].concat(...got, gibsItems(win));
   const n=ITEMS.length;
   statusEl.dataset.kind="scenes",statusEl.innerHTML=Object.values(chips).join(" ")+` <span class="chip">${n} results</span>`;
-  render();
+  render(true);
   renderPasses();
   refreshTerrainCoverage();
 }
@@ -3167,7 +3156,9 @@ function bestPhoto(pool){
   return tiers(photo.filter(x=>NATIVE_RGB.has(x.coll))) || tiers(photo);
 }
 
-function render(){
+function render(enter=false){
+  clearTimeout(resultEntryTimer);
+  resEl.classList.toggle("csp-results-enter",enter===true&&ITEMS.length>0);
   if(!ITEMS.length){
     resEl.innerHTML = LOC ? '<div class="empty">No imagery found.<br>Widen the date range or cloud filter.</div>'
                           : '<div class="empty">No search yet.<br>Try <b>Moses Lake</b>, <b>Zermatt</b>, or double-click the map.</div>';
@@ -3220,6 +3211,7 @@ function render(){
       h+=`<button type="button" class="more-items" data-more="${encodeURIComponent(g)}">Show ${Math.min(RESULT_PAGE,list.length-shown)} more · ${list.length-shown} remaining</button>`;
   }
   resEl.innerHTML=h;
+  if(enter===true) resultEntryTimer=setTimeout(()=>{resEl.classList.remove("csp-results-enter");resultEntryTimer=0},500);
   setCount("results", pool.length ? pool.length+" of "+ITEMS.length : "");
   resEl.querySelectorAll(".item").forEach(el=>el.onclick=()=>select(+el.dataset.i));
   resEl.querySelectorAll(".grp").forEach(el=>el.onclick=()=>{
@@ -8748,11 +8740,11 @@ async function doSearch(){
   acCancel(); acHide();
   try{
     const ll=parseCoordinates(t);
-    if(ll){ setLoc(ll.lat,ll.lng,/*keepLabel*/true); map.setView([ll.lat,ll.lng], Math.max(map.getZoom(),10)); }
+    if(ll){ setLoc(ll.lat,ll.lng,/*keepLabel*/true,t); map.setView([ll.lat,ll.lng], Math.max(map.getZoom(),10)); }
     else{
       statusEl.dataset.kind="general",statusEl.innerHTML='<span class="spin"></span> Geocoding…';
       const g=await geocode(t);
-      setLoc(g.lat,g.lng,/*keepLabel*/true); map.setView([g.lat,g.lng],11);
+      setLoc(g.lat,g.lng,/*keepLabel*/true,t); map.setView([g.lat,g.lng],11);
     }
     run();
   }catch(e){ statusEl.dataset.kind="general",statusEl.innerHTML=`<span class="chip err">${e.message}</span>` }
@@ -8779,7 +8771,7 @@ function cspSearchPlace(place){
   if(!place||!Number.isFinite(place.lat)||!Number.isFinite(place.lng)) return;
   acCancel();acHide();
   $("#q").value=place.secondary?`${place.primary}, ${place.secondary.split(",").map(x=>x.trim()).slice(0,2).join(", ")}`:place.primary;
-  setLoc(place.lat,place.lng,/*keepLabel*/true);
+  setLoc(place.lat,place.lng,/*keepLabel*/true,$("#q").value.trim());
   const e=place.extent;          // [minLon, maxLat, maxLon, minLat]
   if(e) map.fitBounds([[e[3],e[0]],[e[1],e[2]]],{maxZoom:13});
   else map.setView([place.lat,place.lng],12);
@@ -10303,7 +10295,8 @@ window.ClearSkiesPortalBridge={
   searchPlace:cspSearchPlace,
   searchText:cspSearchText,
   searchMapCenter:cspSearchMapCenter,
-  searchLabel:()=>LOC?$("#q").value.trim():""
+  searchLabel:()=>committedLocation?.label||"",
+  searchState:()=>committedLocation?{...committedLocation,coordinates:{...committedLocation.coordinates}}:{version:0,label:"",coordinates:null}
 };
 
 if("serviceWorker" in navigator && (location.protocol==="https:" || location.hostname==="localhost"))
@@ -10662,8 +10655,8 @@ $("#q").addEventListener("blur",()=>setTimeout(acHide,120));
 document.addEventListener("click",e=>{ if(!e.target.closest("#iw")) acHide() });
 })();
 </script>
-<script src="markup-3d.js?build=2026-10-16k"></script>
-<script src="markup.js?build=2026-10-16k"></script>
-<script src="ui-system.js?build=2026-10-16k"></script>
+<script src="markup-3d.js?build=2026-10-17a"></script>
+<script src="markup.js?build=2026-10-17a"></script>
+<script src="ui-system.js?build=2026-10-17a"></script>
 </body>
 </html>

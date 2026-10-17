@@ -61,9 +61,9 @@ function selectors(text){
   });
 }
 const filterValues=rule=>Array.from(rule.declarations.matchAll(/(?:^|;)\s*(?:-webkit-)?backdrop-filter\s*:\s*([^;]+)/g),m=>m[1].trim());
-const motionRules=rules(motionCss),filterRule=motionRules.find(rule=>filterValues(rule).length===2);
-assert(filterRule,'motion must directly disable both backdrop properties');
-const targets=selectors(filterRule.selector).map(selector=>selector.replace(/^body\.terrain-3d\.map3d-moving\s+/,''));
+const motionRules=rules(motionCss),filterRules=motionRules.filter(rule=>filterValues(rule).length===2&&filterValues(rule).every(value=>/^none(?:\s*!important)?$/.test(value)));
+assert(filterRules.length,'motion must directly disable both backdrop properties');
+const targets=filterRules.flatMap(rule=>selectors(rule.selector)).map(selector=>selector.replace(/^body\.terrain-3d\.map3d-moving\s+/,''));
 function covers(selector,target){
   // The override's last compound must match the blurred element itself, not
   // just one of its ancestors. A broader class covers additional classes on
