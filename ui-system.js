@@ -34,7 +34,8 @@ side.style.width="580px";
 const ROUTES={
   layers:{title:"Layers",description:"Everything currently drawn on the map, in render order.",icon:"layers",panes:[],custom:"layers"},
   satellite:{title:"Satellite imagery",description:"Find dated scenes, tune the search, and control the image already on the map.",icon:"satellite",panes:[...(classicUi?["filters"]:[]),"summary","passes","results","overlays"],open:[...(classicUi?["filters"]:[]),"results"],overlayGroup:"Imagery",overlayTitle:"Satellite base layers",custom:"satellite"},
-  terrain:{title:"Terrain & LiDAR",description:"Choose how elevation is drawn, then fine-tune it.",icon:"mountain-snow",panes:["terrain"],open:["terrain"],researchMode:"terrain"},
+  terrain:{title:"LiDAR",description:"Draw LiDAR terrain layers, fetch WA DNR surveys, and save areas for offline use.",icon:"radar",panes:["terrain"],open:["terrain"]},
+  elevation:{title:"Elevation",description:"Colour the ground by height or highlight it above and below a threshold.",icon:"mountain-snow",panes:["elevation"],open:["elevation"]},
   analyze:{title:"Analyze",description:"Measure landform patterns or reveal features in the current view.",icon:"scan-search",panes:["research"],open:["research"],researchMode:"analyze"},
   export:{title:"Export",description:"Capture the whole view or a selected area as a PNG at your chosen resolution.",icon:"download",panes:[],custom:"export"},
   conditions:{title:"Conditions",description:"Weather, earthquakes, volcanoes, fire, snow, and other time-sensitive layers.",icon:"cloud-sun",panes:["alerts","overlays"],open:["alerts","overlays"],overlayGroup:"Conditions",overlayTitle:"Conditions layers"},
@@ -89,7 +90,7 @@ function navGroup(label,items){
   }
   navScroll.append(group);
 }
-navGroup("Map",["layers","satellite","terrain","analyze","export"]);
+navGroup("Map",["layers","satellite","terrain","elevation","analyze","export"]);
 navGroup("Layer groups",["conditions","geology","past","labels","markup"]);
 
 const appearanceNav=document.createElement("div");appearanceNav.id="cspAppearanceNav";
@@ -154,7 +155,8 @@ if(locateButton) locateButton.innerHTML=`<img src="${icon(classicUi?"map-pinned"
 const SEARCH_ROUTES=new Map([
   ["layers","layers"],["active layers","layers"],
   ["satellite","satellite"],["satellite imagery","satellite"],["imagery","satellite"],["scenes","satellite"],["filters","satellite"],
-  ["terrain","terrain"],["lidar","terrain"],["terrain lidar","terrain"],["elevation","terrain"],["hillshade","terrain"],
+  ["terrain","terrain"],["lidar","terrain"],["terrain lidar","terrain"],["hillshade","terrain"],["wa dnr","terrain"],["dnr","terrain"],["point cloud","terrain"],
+  ["elevation","elevation"],["elevation spectrum","elevation"],["spectrum","elevation"],["elevation highlights","elevation"],["elevation bands","elevation"],
   ["analyze","analyze"],["analysis","analyze"],["research","analyze"],
   ["export","export"],["snapshot","export"],["download","export"],
   ["conditions","conditions"],["weather","conditions"],["earthquakes","conditions"],["fire","conditions"],["snow","conditions"],
@@ -180,7 +182,7 @@ $("#q")?.addEventListener("keydown",event=>{
   event.preventDefault();event.stopImmediatePropagation();
 },true);
 
-const PANE_TITLES={filters:"Search filters",alerts:"Live conditions",summary:"Best available",passes:"Acquisition timing",terrain:"Terrain rendering",research:"Analysis tools",overlays:"Layer catalog",results:"Satellite scenes"};
+const PANE_TITLES={filters:"Search filters",alerts:"Live conditions",summary:"Best available",passes:"Acquisition timing",terrain:"LiDAR",elevation:"Elevation",research:"Analysis tools",overlays:"Layer catalog",results:"Satellite scenes"};
 for(const [name,title] of Object.entries(PANE_TITLES)){
   const pane=$(`.pane[data-pane="${name}"]`,panes),label=$(".pane-t",pane),head=$(".pane-h",pane);
   if(label) label.textContent=title;
@@ -220,7 +222,6 @@ const researchPane=$(".pane[data-pane='research']",panes),researchBody=$(".pane-
 const fabricBox=$("#fabricResearchBox");
 
 for(const [group,elements] of Object.entries({
-  terrain:[spectrumBox,bandsBox],
   analyze:[fabricBox,surfaceBox],
   geology:[geologyBox]
 })) for(const element of elements) if(element) element.dataset.cspResearchGroup=group;
@@ -230,23 +231,18 @@ function filterResearch(mode){
     element.classList.toggle("csp-route-hidden",element.dataset.cspResearchGroup!==mode);
   }
   const title=$(".pane-t",researchPane);
-  if(title) title.textContent=mode==="terrain"?"Elevation Spectrum":mode==="geology"?"Identify geology":"Analysis tools";
+  if(title) title.textContent=mode==="geology"?"Identify geology":"Analysis tools";
 }
 
-/* Rendering belongs with the terrain layer; measurements keep their own cards. */
-const elevationColour=document.createElement("details");
-elevationColour.id="terElevationColour";elevationColour.className="terrain-appearance elevation-colour";
-elevationColour.innerHTML='<summary>Elevation Spectrum <span class="pane-n" id="terElevationState">off</span></summary><p class="control-hint">Colour by height or highlight ground above and below a threshold.</p>';
-if(spectrumBox) elevationColour.append(spectrumBox);
-if(bandsBox) elevationColour.append(bandsBox);
-const terrainDownload=$("#terrainDownloadBox");
-if(terrainDownload)terrainDownload.before(elevationColour);else $(".pane[data-pane=terrain] .pane-b")?.append(elevationColour);
+/* Elevation colouring has its own page; its cards share one sectioned body. */
+const elevationColour=$(".pane[data-pane='elevation'] .pane-b",panes);
+elevationColour?.classList.add("elevation-colour");
 $("#terrainDownloadBox")?.after(...[$("#terrainSourceDetails"),$("#terReset")].filter(Boolean));
 
 /* Terrain tools fold away when unused. Each closed row names what is active,
    and the panel remembers which rows were left open. */
 const TERRAIN_SECTIONS_KEY="clearskies.terrain-sections.v1";
-const terrainSections=["terLidar","terElevationColour","terrainDownloadBox","terrainSourceDetails"];
+const terrainSections=["terLidar","terrainDownloadBox","terrainSourceDetails"];
 let openTerrainSections=null;
 try{openTerrainSections=JSON.parse(localStorage.getItem(TERRAIN_SECTIONS_KEY))}catch(error){}
 for(const id of terrainSections){
@@ -263,16 +259,8 @@ function syncTerrainSections(){
     const text=style.value==="off"?"off":style.selectedOptions[0]?.textContent||style.value;
     if(lidar.textContent!==text) lidar.textContent=text;
   }
-  const colour=$("#terElevationState");
-  if(colour){
-    const on=[$("#elevSh")?.checked&&"Spectrum",($("#elevBelowOn")?.checked||$("#elevAboveOn")?.checked)&&"Highlights"].filter(Boolean);
-    const text=on.length?`${on.join(" + ")} on`:"off";
-    if(colour.textContent!==text) colour.textContent=text;
-  }
 }
-elevationColour.addEventListener("change",syncTerrainSections);
 $("#terStyle")?.addEventListener("change",syncTerrainSections);
-elevationColour.addEventListener("click",()=>setTimeout(syncTerrainSections));
 syncTerrainSections();
 for(const grid of $$(".terrain-look-grid")){
   while(grid.firstElementChild){
@@ -372,7 +360,8 @@ function saveLayerOrder(ids){
 function routeForLayer(layer){
   if(layer.id.startsWith("markup:")) return "markup";
   if(layer.id==="scene"||layer.id==="active-fires") return layer.id==="scene"?"satellite":"conditions";
-  if(layer.id==="terrain"||layer.id.startsWith("elevation-")) return "terrain";
+  if(layer.id==="terrain") return "terrain";
+  if(layer.id.startsWith("elevation-")) return "elevation";
   if(layer.id==="surface-analysis") return "analyze";
   if(layer.id.startsWith("overlay:")){
     const group=(bridge.overlayCatalog().find(o=>`overlay:${o.id}`===layer.id)||{}).group;
@@ -455,7 +444,7 @@ function renderLayerStack(container,onlyScene=false,before=null){
 
 function availableLayersCard(){
   const card=document.createElement("div");card.className="csp-card";
-  const options=[["satellite","Satellite imagery","Dated optical, radar, IR, and global mosaics"],["terrain","Terrain & LiDAR","Hillshade, elevation, contours, and 3D"],["conditions","Conditions","Weather, seismicity, fire, and snow"],["geology","Geology & hazards","Surface geology, faults, and landslides"],["past","Past landscapes","Glaciers, ice-age lakes, and archaeology"],["labels","Labels & reference","Roads, trails, water, places, and boundaries"],["markup","Markup","Your own drawings, notes and pins"]];
+  const options=[["satellite","Satellite imagery","Dated optical, radar, IR, and global mosaics"],["terrain","LiDAR","Hillshade, contours, WA DNR, and 3D"],["elevation","Elevation","Height spectrum and above/below highlights"],["conditions","Conditions","Weather, seismicity, fire, and snow"],["geology","Geology & hazards","Surface geology, faults, and landslides"],["past","Past landscapes","Glaciers, ice-age lakes, and archaeology"],["labels","Labels & reference","Roads, trails, water, places, and boundaries"],["markup","Markup","Your own drawings, notes and pins"]];
   for(const [route,name,meta] of options){
     const button=document.createElement("button");button.className="csp-available-row";button.type="button";
     button.innerHTML=`<strong>${name}</strong><img src="${icon("chevron-right")}" alt="" width="15" height="15"><span>${meta}</span>`;
@@ -1123,8 +1112,9 @@ function updateCounts(){
   const set=(key,value)=>{const el=$(`[data-count="${key}"]`);if(el) el.textContent=value||""};
   set("layers",String(active.filter(layer=>!layer.locked).length));
   set("satellite",($("#n_results")?.textContent||"").match(/\d[\d,]*/)?.[0]||"");
-  const terrainCount=active.filter(layer=>layer.id==="terrain"||layer.id.startsWith("elevation-")).length;
-  set("terrain",terrainCount?String(terrainCount):"");
+  set("terrain",active.some(layer=>layer.id==="terrain")?"1":"");
+  const elevationCount=active.filter(layer=>layer.id.startsWith("elevation-")).length;
+  set("elevation",elevationCount?String(elevationCount):"");
   set("analyze",active.some(layer=>layer.id==="surface-analysis")?"1":"");
   const markupCount=active.filter(layer=>layer.id.startsWith("markup:")).length;set("markup",markupCount?String(markupCount):"");
   for(const [key,group] of [["conditions","Conditions"],["geology","Geology & hazards"],["past","Past landscapes"],["labels","Labels & reference"]]){

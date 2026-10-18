@@ -3,7 +3,7 @@ const assert=require("node:assert/strict"),fs=require("node:fs"),os=require("nod
 const {EventEmitter}=require("node:events");
 const {spawn}=require("node:child_process");
 const net=require("node:net");
-const {DnrStore,tileBounds}=require("./wadnr");
+const {DnrStore,tileBounds,uncovered}=require("./wadnr");
 const runtime=require("./vendor/dnr-runtime.cjs");
 const publicTerrain=require("./public-terrain");
 const terrainRaster=require("./terrain-raster");
@@ -199,8 +199,30 @@ async function httpChecks(fixture){
     child.kill("SIGTERM");await new Promise(r=>child.once("exit",r));
   }
 }
+function uncoveredChecks(){
+  const area=(parts)=>parts.reduce((sum,[w,s,e,n])=>sum+(e-w)*(n-s),0);
+  assert.deepEqual(uncovered([0,0,4,4],[]),[[0,0,4,4]]);
+  assert.deepEqual(uncovered([0,0,4,4],[[-1,-1,5,5]]),[],"a cached file covering the cell needs no download");
+  assert.deepEqual(uncovered([0,0,4,4],[[-1,2,5,5]]),[[0,0,4,2]],"a seam cell only requests the uncached strip");
+  const parts=uncovered([0,0,4,4],[[1,1,2,2],[3,-1,5,5]]);
+  assert.equal(area(parts),16-1-4);
+  for(const p of parts)assert.ok(!(p[0]<2&&p[2]>1&&p[1]<2&&p[3]>1)&&p[2]<=3,"no requested part overlaps a cached extent");
+}
+async function seamDownloadChecks(){
+  const dir=fs.mkdtempSync(path.join(root,"seam-")),bodies=[],acquired=[];
+  const store=new DnrStore(dir,{request:async(p,body)=>{if(body)bodies.push(JSON.parse(decodeURIComponent(body.slice(8))));
+    return body?[{dataset_id:10,dataset_name:"DTM",bytes:1024,files:1}]:p==="/project"?projects:layers;}});
+  store.minFreeBytes=0;
+  store.index.files=[{key:"k",datasetId:10,bounds:[-119,47.5,-117,48],file:"k.tif",levels:[]}];
+  store.acquire=async args=>{acquired.push(args.geometry);return {files:[]};};
+  store.queue.set("j",{id:"j",bbox:[-118.5,47.4,-118.4,47.6],datasetId:10,project:name,touched:Date.now(),state:"queued"});
+  store.drain();for(let i=0;i<20&&store.active;i++)await tick();
+  assert.deepEqual(bodies[0],{type:"Polygon",coordinates:[[[-118.5,47.4],[-118.4,47.4],[-118.4,47.5],[-118.5,47.5],[-118.5,47.4]]]},
+    "coverage query excludes the cached file so DNR does not re-zip it");
+  assert.deepEqual(acquired[0],bodies[0],"the ZIP download uses the same clipped geometry");
+}
 async function main(){
-  try{await catalogueChecks();await acquisitionChecks();await warmAreaChecks();const fixture=await rasterChecks();sourceChoiceChecks();await httpChecks(fixture);
+  try{uncoveredChecks();await seamDownloadChecks();await catalogueChecks();await acquisitionChecks();await warmAreaChecks();const fixture=await rasterChecks();sourceChoiceChecks();await httpChecks(fixture);
     console.log("DNR checks passed (catalogue, bounded acquisition, GeoTIFF, units, no-data, overviews, styles, HTTP provenance, strict fabric and DNR view downloads)");
   }finally{await runtime.close();fs.rmSync(root,{recursive:true,force:true});}
 }

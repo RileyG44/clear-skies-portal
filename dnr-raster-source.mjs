@@ -159,7 +159,7 @@ function response(pathname,cookie){
 /* Use the documented website session and download link. The ZIP is streamed
    directly to bounded temporary files, not buffered on the HTTP event loop.
    Archive paths are identifiers only; no archive path is written to disk. */
-export async function acquire({cacheDir,datasetId,project,bbox,maxBytes,minFreeBytes,known=[]},onProgress=()=>{}){
+export async function acquire({cacheDir,datasetId,project,bbox,geometry:shape,maxBytes,minFreeBytes,known=[]},onProgress=()=>{}){
   const base=path.join(cacheDir,"wadnr"),tmp=await fsp.mkdtemp(path.join(base,"download-"));
   onProgress({tempDir:tmp});
   let received=0,written=0,lastCheck=0;
@@ -169,7 +169,7 @@ export async function acquire({cacheDir,datasetId,project,bbox,maxBytes,minFreeB
     const page=await response("/");
     if(page.statusCode!==200){page.resume();throw new Error(`DNR session HTTP ${page.statusCode}`);}
     const cookie=(page.headers["set-cookie"]||[]).map(v=>v.split(";")[0]).join(";");page.resume();
-    const [w,s,e,n]=bbox,geometry={type:"Polygon",coordinates:[[[w,s],[e,s],[e,n],[w,n],[w,s]]]};
+    const [w,s,e,n]=bbox,geometry=shape||{type:"Polygon",coordinates:[[[w,s],[e,s],[e,n],[w,n],[w,s]]]};
     remote=await response("/download?"+new URLSearchParams({ids:String(datasetId),geojson:JSON.stringify(geometry)}),cookie);
     if(remote.statusCode!==200||!/zip|octet-stream/i.test(remote.headers["content-type"]||"")){
       remote.resume();throw new Error(`DNR elevation download HTTP ${remote.statusCode}`);

@@ -29,7 +29,7 @@ for(const name of ['LercDecode.js','LercDecode.es.js','lerc-wasm.wasm','README.m
    audited symbols used by the portal shell. */
 const iconNames=[
   "arrow-left","arrow-right","chevron-down","chevron-right","chevron-up","cloud-sun","download","history","image",
-  "layers","map-pinned","mountain-snow","navigation","radio","rotate-ccw","satellite","scan-search",
+  "layers","map-pinned","mountain-snow","navigation","radar","radio","rotate-ccw","satellite","scan-search",
   "search","settings","settings-2","sliders-horizontal","tags","triangle-alert",
   /* markup tools */
   "pen-line","hand","mouse-pointer-2","pencil","minus","move-up-right","pentagon","square","circle","type","map-pin",

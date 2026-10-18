@@ -361,6 +361,7 @@ body.csp-redesign #panes .pane-rz{display:none}
 body.csp-redesign #panes .pane[data-pane="filters"] .pane-b,
 body.csp-redesign #panes .pane[data-pane="summary"] .pane-b,
 body.csp-redesign #panes .pane[data-pane="terrain"] .pane-b,
+body.csp-redesign #panes .pane[data-pane="elevation"] .pane-b,
 body.csp-redesign #panes .pane[data-pane="research"] .pane-b,
 body.csp-redesign #panes .pane[data-pane="passes"] .pane-b,
 body.csp-redesign #panes .pane[data-pane="alerts"] .pane-b,
@@ -2280,6 +2281,7 @@ body.csp-redesign #panes .terrain-subsection > .note{padding:8px 0 0}
 body.csp-redesign #panes .elevation-colour > .control-hint{margin-top:4px}
 body.csp-redesign #panes .elevation-colour > .fabbox{margin:16px 0 0;padding-top:16px}
 body.csp-redesign #panes .elevation-colour > .fabbox:last-child{padding-bottom:8px}
+body.csp-redesign #panes .elevation-colour > .fabbox:first-child{margin-top:0;padding-top:0;border-top:0}
 body.csp-redesign #panes :is(#fabRun,#researchRun,#terWarm){width:100%;min-height:44px;margin-top:16px;border:1px solid var(--ui-line-strong);border-radius:10px}
 body.csp-redesign #panes #fabRun{color:var(--ui-text-2);background:var(--ui-surface)}
 body.csp-redesign #panes :is(#researchRun,#terWarm){color:var(--ui-control-ink);background:var(--ui-control);border-color:var(--ui-control)}
@@ -2363,6 +2365,7 @@ body.csp-redesign #dnrClear[hidden]{display:none}
 /* The tool page already names these sections. Keep one heading per level
    instead of putting the analysis cards inside another headed card. */
 body.csp-redesign[data-csp-route="terrain"] .pane[data-pane="terrain"] > .pane-h,
+body.csp-redesign[data-csp-route="elevation"] .pane[data-pane="elevation"] > .pane-h,
 body.csp-redesign[data-csp-route="analyze"] .pane[data-pane="research"] > .pane-h{display:none}
 body.csp-redesign[data-csp-route="analyze"] #panes .pane[data-pane="research"]{border:0;background:transparent;box-shadow:none}
 body.csp-redesign[data-csp-route="analyze"] #panes .pane[data-pane="research"] > .pane-b{padding:0!important}

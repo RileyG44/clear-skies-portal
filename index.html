@@ -777,6 +777,7 @@ a:hover{text-decoration:underline}
 .pane[data-pane="filters"] .pane-b,
 .pane[data-pane="summary"] .pane-b,
 .pane[data-pane="terrain"] .pane-b,
+.pane[data-pane="elevation"] .pane-b,
 .pane[data-pane="research"] .pane-b{padding:12px 18px 13px 16px}
 .pane[data-pane="passes"] .pane-b{padding:10px 18px 12px 16px}
 .pane[data-pane="alerts"] .pane-b,
@@ -993,8 +994,8 @@ body.pane-reordering,body.pane-reordering *{cursor:grabbing!important;user-selec
 }
 
 </style>
-<link rel="stylesheet" href="ui-theme.css?build=2026-10-17b">
-<link rel="stylesheet" href="ui-system.css?build=2026-10-17b">
+<link rel="stylesheet" href="ui-theme.css?build=2026-10-17d">
+<link rel="stylesheet" href="ui-system.css?build=2026-10-17d">
 <style>
 /* The redesign restructures the legacy DOM rather than replacing it, and the
    script that does so is the last thing on the page - so the browser paints the
@@ -1237,7 +1238,7 @@ html.csp-boot body{visibility:hidden}
       <section class="pane" data-pane="terrain">
         <div class="pane-h">
           <span class="grip" aria-hidden="true"></span>
-          <span class="pane-t">Terrain &amp; LiDAR</span>
+          <span class="pane-t">LiDAR</span>
           <span class="pane-n" id="n_terrain"></span>
           <span class="pane-x">&#9662;</span>
         </div>
@@ -1353,28 +1354,14 @@ html.csp-boot body{visibility:hidden}
         <div class="pane-rz" title="Drag to resize"></div>
       </section>
 
-      <section class="pane" data-pane="research">
+      <section class="pane" data-pane="elevation">
         <div class="pane-h">
           <span class="grip" aria-hidden="true"></span>
-          <span class="pane-t">Research tools</span>
-          <span class="pane-n" id="n_research"></span>
+          <span class="pane-t">Elevation</span>
+          <span class="pane-n" id="n_elevation"></span>
           <span class="pane-x">&#9662;</span>
         </div>
         <div class="pane-b">
-          <div class="fabbox menu-card" id="fabricResearchBox">
-            <h3 class="menu-section-title">Landform fabric</h3>
-            <p class="control-hint">Find the direction and spacing of ridges and valleys, including possible glacial lineations.</p>
-            <div class="elev-field"><label for="fabBand">Landform spacing</label>
-            <select id="fabBand" title="Which wavelength band to isolate. Narrower bands separate fine lineation from ordinary ridge-and-valley grain.">
-              <option value="20,120">65&ndash;400 ft</option>
-              <option value="50,300" selected>165&ndash;1,000 ft</option>
-              <option value="150,800">500&ndash;2,600 ft</option>
-            </select>
-          </div>
-            <p class="control-hint">Choose the size of landforms to measure. Smaller spacing isolates finer texture.</p>
-            <button class="ghost" id="fabRun">Measure landform fabric</button>
-            <div id="fabOut" class="fabout" role="status" aria-live="polite"></div>
-          </div>
           <div class="fabbox">
             <label class="check elev-toggle" id="lb_elevSh">
               <input type="checkbox" id="elevSh"> Elevation spectrum
@@ -1465,6 +1452,32 @@ html.csp-boot body{visibility:hidden}
             </div>
             <div class="elev-band-note" id="elevBandOut">Enable a below or above band to highlight ground at those heights.</div>
             <button class="linkbtn" id="elevBandsReset" type="button" style="margin-top:8px">Reset highlights</button>
+          </div>
+        </div>
+        <div class="pane-rz" title="Drag to resize"></div>
+      </section>
+
+      <section class="pane" data-pane="research">
+        <div class="pane-h">
+          <span class="grip" aria-hidden="true"></span>
+          <span class="pane-t">Research tools</span>
+          <span class="pane-n" id="n_research"></span>
+          <span class="pane-x">&#9662;</span>
+        </div>
+        <div class="pane-b">
+          <div class="fabbox menu-card" id="fabricResearchBox">
+            <h3 class="menu-section-title">Landform fabric</h3>
+            <p class="control-hint">Find the direction and spacing of ridges and valleys, including possible glacial lineations.</p>
+            <div class="elev-field"><label for="fabBand">Landform spacing</label>
+            <select id="fabBand" title="Which wavelength band to isolate. Narrower bands separate fine lineation from ordinary ridge-and-valley grain.">
+              <option value="20,120">65&ndash;400 ft</option>
+              <option value="50,300" selected>165&ndash;1,000 ft</option>
+              <option value="150,800">500&ndash;2,600 ft</option>
+            </select>
+          </div>
+            <p class="control-hint">Choose the size of landforms to measure. Smaller spacing isolates finer texture.</p>
+            <button class="ghost" id="fabRun">Measure landform fabric</button>
+            <div id="fabOut" class="fabout" role="status" aria-live="polite"></div>
           </div>
           <div class="fabbox" id="surfaceResearchBox">
             <div class="elev-section-head">
@@ -1767,7 +1780,7 @@ html.csp-boot body{visibility:hidden}
   L.Renderer.prototype.onAdd=function(map){return onAdd.call(this,map||this._map)};
 })();
 </script>
-<script src="version.js?build=2026-10-17b"></script>
+<script src="version.js?build=2026-10-17d"></script>
 <script src="mosaic-core.js"></script>
 <script src="png-stream.js"></script>
 <script src="terrain-core.js"></script>
@@ -2166,7 +2179,7 @@ compactMapViewport.addEventListener?.("change",syncLeafZoomControl);
        backwards - a second small zoom in committed a level out, which is the map
        "bouncing right back" this fixes. With small gestures committing on their
        own there is nothing left for a remainder to accumulate toward. */
-    intent=target;
+    intent=viewClamp(target);
     /* The settle is the one time the zoom is committed even if the tile level
        happens to match: it also brings the camera itself onto the level, so
        everything that reads the map's zoom sees the resting value. */
@@ -2183,7 +2196,9 @@ compactMapViewport.addEventListener?.("change",syncLeafZoomControl);
        the view back through map.setView - and rebases `visual` on what is actually
        on screen. Reading the gesture base before that read left it stale, which
        made the gesture's travel read as more than a level and swallowed the zoom. */
-    intent=intentBase()+step;
+    /* Clamped: scrolling on past the deepest level used to bank the excess, so
+       the next zoom out had to unwind it all before the map moved at all. */
+    intent=viewClamp(intentBase()+step);
     noteGesture();
     aimAt(intent);
     clearTimeout(settleTimer); settleTimer=setTimeout(settleToNativeLevel,160);
@@ -2219,7 +2234,7 @@ compactMapViewport.addEventListener?.("change",syncLeafZoomControl);
          the upscaled-and-soft case the settle exists to avoid. The gesture's travel
          is added to the intent seeded at gesturestart, so small pinches accumulate
          into a committed level without a large one overshooting. */
-      intent=intentBase()+((visual===null?pinch.zoom:visual)-pinch.zoom);
+      intent=viewClamp(intentBase()+((visual===null?pinch.zoom:visual)-pinch.zoom));
       settleToNativeLevel();
     },{passive:false});
   }
@@ -5206,8 +5221,8 @@ syncChecks();
    the arrangement survives a reload. ------------------------------------- */
 const PANE_KEY="clearskies.panes.v1";
 const panesEl=document.getElementById("panes");
-const DEFAULT_ORDER=["filters","alerts","summary","passes","terrain","research","overlays","results"];
-const DEFAULT_STATE=()=>({order:[...DEFAULT_ORDER], min:{filters:true, alerts:false, terrain:true, research:true, overlays:true}, h:{}, grow:"results"});
+const DEFAULT_ORDER=["filters","alerts","summary","passes","terrain","elevation","research","overlays","results"];
+const DEFAULT_STATE=()=>({order:[...DEFAULT_ORDER], min:{filters:true, alerts:false, terrain:true, elevation:true, research:true, overlays:true}, h:{}, grow:"results"});
 let paneState=DEFAULT_STATE();
 
 function paneEl(name){ return panesEl.querySelector(`.pane[data-pane="${name}"]`) }
@@ -5245,6 +5260,11 @@ function loadPanes(){
   if(!paneState.order.includes("alerts")){
     const filters=paneState.order.indexOf("filters");
     paneState.order.splice(filters<0?0:filters+1,0,"alerts");
+  }
+  // Elevation was split out of the terrain pane; it starts beside it.
+  if(!paneState.order.includes("elevation")){
+    const terrain=paneState.order.indexOf("terrain");
+    paneState.order.splice(terrain<0?paneState.order.length:terrain+1,0,"elevation");
   }
   // Any other pane introduced by a future update goes to the end.
   DEFAULT_ORDER.forEach(n=>{ if(!paneState.order.includes(n)) paneState.order.push(n) });
@@ -6550,6 +6570,27 @@ async function enterTerrain3d(){
       pixelRatio:MAP3D_COMPACT?Math.min(2,Number(devicePixelRatio)||1):undefined,
       maxZoom:22,maxPitch:85,renderWorldCopies:false,scrollZoom:false,canvasContextAttributes:{antialias:!MAP3D_COMPACT,powerPreference:"high-performance"},
       attributionControl:true,fadeDuration:0});
+    /* MapLibre 6's jumpTo looks up the ground under the centre at the requested
+       zoom itself, and a fractional zoom names no tile, so the lookup returns 0.
+       Every eased wheel/pinch frame (setZoom -> jumpTo) therefore dropped the
+       camera to sea level - underground once zoomed past ~z16 - and the whole
+       view went to the blank background until the zoom settled on a level.
+       Supply the elevation from the whole tile level instead. The lookup also
+       reads 0 when that level's tile under the centre is not resident (zooming
+       out past it), so then keep the current elevation: zooming about the
+       centre does not change the ground beneath it. MapLibre 6 routes the map's
+       setZoom/jumpTo through its internal camera, so that is what is wrapped. */
+    {
+      const camera=map3d._camera||map3d,jumpTo=camera.jumpTo;
+      camera.jumpTo=function(options,eventData){
+        if(options&&"zoom" in options&&!("elevation" in options)&&this.terrain){
+          const center=options.center!=null?module.LngLat.convert(options.center):this.transform.center;
+          const ground=this.terrain.getElevationForLngLatZoom(center,Math.floor(options.zoom));
+          options={...options,elevation:ground||this.transform.elevation};
+        }
+        return jumpTo.call(this,options,eventData);
+      };
+    }
     window.CSPMarkup?.attach3d(module,map3d);
     map3d.on("movestart",mark3dGlassMotion);map3d.on("move",mark3dGlassMotion);
     map3d.on("move",cursorCameraMoved);map3d.on("idle",cursorCameraIdle);
@@ -9013,7 +9054,11 @@ function elevRampRgb(value,level,span){
    Float32 elevation texture at a time, draws it on the GPU, then copies the
    finished pixels into the tile's ordinary 2D canvas. */
 class ElevationGpuRenderer{
-  constructor(){
+  constructor(){ this.init() }
+  /* Re-run when the browser restores a lost context (GPU memory pressure, a
+     driver reset); without it shading stayed on the slow CPU path for the rest
+     of the session. */
+  init(){
     this.ready=false;
     try{
       this.canvas=document.createElement("canvas");
@@ -9099,6 +9144,7 @@ class ElevationGpuRenderer{
         this.uniforms[name]=gl.getUniformLocation(program,name);
       this.ready=true;
       this.canvas.addEventListener("webglcontextlost",event=>{ event.preventDefault(); this.ready=false });
+      this.canvas.addEventListener("webglcontextrestored",()=>this.init(),{once:true});
     }catch(error){ this.ready=false; console.warn("Elevation GPU disabled:",error) }
   }
   paint(target,elev,settings){
@@ -9136,7 +9182,8 @@ const elevGpu=new ElevationGpuRenderer();
    Leaflet's ordinary canvas. This avoids both a context-per-tile limit and the
    pre-coloured ArcGIS tiles that became transparent at deep zoom. */
 class TerrainGpuRenderer{
-  constructor(){
+  constructor(){ this.init() }
+  init(){   // see ElevationGpuRenderer.init
     this.ready=false;
     try{
       this.canvas=document.createElement("canvas");this.canvas.width=this.canvas.height=256;
@@ -9261,7 +9308,11 @@ class TerrainGpuRenderer{
             float sum=0.0,total=0.0;
             for(int index=0;index<4;index++){
               float az=sunAzimuth-90.0+45.0*float(index);
-              float weight=length(vec2(dx,dy))<1.0e-12?1.0:pow(sin(radians(aspect-mod(az,360.0))),2.0);
+              /* s*s, not pow(s,2.0): GLSL pow is undefined for a negative base and
+                 Apple GPUs return NaN, which turned this style black and failed the
+                 self-test - disabling GPU shading for every style. */
+              float s=sin(radians(aspect-mod(az,360.0)));
+              float weight=length(vec2(dx,dy))<1.0e-12?1.0:s*s;
               sum+=weight*directShade(dx,dy,az);total+=weight;
             }
             direct=sum/max(total,0.00001);
@@ -9280,6 +9331,7 @@ class TerrainGpuRenderer{
       this.ready=true;
       if(!this.selfTest()) throw new Error("terrain GPU orientation self-test failed");
       this.canvas.addEventListener("webglcontextlost",event=>{event.preventDefault();this.ready=false});
+      this.canvas.addEventListener("webglcontextrestored",()=>this.init(),{once:true});
     }catch(error){this.ready=false;console.warn("Terrain GPU disabled:",error)}
   }
   paint(target,elevation,groundResolution,style,lighting=terrainLighting()){
@@ -10194,7 +10246,7 @@ function cspActiveLayers(){
   }
   if($("#terStyle").value!=="off"){
     layers.push({id:"terrain",name:$("#terStyle").selectedOptions[0]?.textContent||"Terrain",
-      meta:`${$("#terSrc").selectedOptions[0]?.textContent||"Best available"} · Terrain & LiDAR`,
+      meta:`${$("#terSrc").selectedOptions[0]?.textContent||"Best available"} · LiDAR`,
       opacity:+$("#terOp").value,visible:true,kind:"terrain"});
   }
   if($("#elevSh").checked){
@@ -10204,7 +10256,7 @@ function cspActiveLayers(){
   }
   if($("#elevBelowOn").checked||$("#elevAboveOn").checked){
     layers.push({id:"elevation-bands",name:"Elevation highlights",
-      meta:"Below / above range shading · Terrain & LiDAR",
+      meta:"Below / above range shading · Elevation",
       opacity:+$("#elevBandAlpha").value,visible:true,kind:"analysis"});
   }
   if(researchLayer){
@@ -10669,8 +10721,8 @@ $("#q").addEventListener("blur",()=>setTimeout(acHide,120));
 document.addEventListener("click",e=>{ if(!e.target.closest("#iw")) acHide() });
 })();
 </script>
-<script src="markup-3d.js?build=2026-10-17b"></script>
-<script src="markup.js?build=2026-10-17b"></script>
-<script src="ui-system.js?build=2026-10-17b"></script>
+<script src="markup-3d.js?build=2026-10-17d"></script>
+<script src="markup.js?build=2026-10-17d"></script>
+<script src="ui-system.js?build=2026-10-17d"></script>
 </body>
 </html>
