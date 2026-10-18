@@ -15,6 +15,10 @@
  */
 
 :root {
+  /* A pale backing keeps the desktop map key legible over imagery. */
+  --map-readout-surface:rgb(255 255 255/.94);
+  --map-readout-line:rgb(0 0 0/.1);
+  --map-readout-shadow:rgb(0 0 0/.1);
   /* surfaces, lightest to deepest */
   --ui-surface: #ffffff;
   --ui-rail: #faf9f8;

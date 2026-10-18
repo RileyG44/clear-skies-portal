@@ -2185,7 +2185,9 @@ body.terrain-3d .mk-selbar{z-index:970}
 /* Desktop map readout stays in the corner underneath the sidebar. */
 #mapReadout{
   position:absolute;z-index:1100;left:12px;bottom:14px;width:260px;
-  display:grid;gap:7px;pointer-events:none;color:var(--map-readout-ink);background:transparent;
+  display:grid;gap:7px;pointer-events:none;color:var(--map-readout-ink);
+  padding:10px 12px;border:1px solid var(--map-readout-line);border-radius:10px;
+  background:var(--map-readout-surface);box-shadow:0 2px 10px var(--map-readout-shadow);
   font:11px/1.35 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
   font-variant-numeric:tabular-nums;
 }
@@ -2581,13 +2583,13 @@ body.csp-redesign .csp-setting-foot[hidden]{display:none}
   border-radius:var(--r-row);
   color:color-mix(in srgb,var(--ui-text) 84%,transparent);
   font-size:14px;font-weight:500;letter-spacing:-.006em;
-  transition:background-color .2s ease,box-shadow .2s ease,color .2s ease;
+  transition:background-color .2s ease,color .2s ease;
 }
 .csp-glass body.csp-redesign.csp-redesign #cspNav .csp-nav-button img{width:16px;height:16px;align-self:center;opacity:.6;transition:opacity .2s ease}
 .csp-glass body.csp-redesign.csp-redesign #cspNav .csp-nav-button:hover{background:var(--nav-row-hover);color:var(--ui-text)}
 .csp-glass body.csp-redesign.csp-redesign #cspNav .csp-nav-button:hover img{opacity:.92}
 .csp-glass body.csp-redesign.csp-redesign #cspNav .csp-nav-button[aria-current="page"]{
-  background:var(--nav-row-selected);box-shadow:var(--nav-row-selected-rim);color:var(--ui-text);font-weight:600;
+  background:var(--nav-row-selected);box-shadow:none;color:var(--ui-text);font-weight:600;
 }
 .csp-glass body.csp-redesign.csp-redesign #cspNav .csp-nav-button[aria-current="page"] img{opacity:1}
 .csp-glass body.csp-redesign.csp-redesign #cspNav .csp-nav-button:focus-visible{outline:2px solid var(--ui-ring);outline-offset:1px}
@@ -2649,21 +2651,8 @@ body.csp-redesign .csp-setting-foot[hidden]{display:none}
 @media (hover:none),(pointer:coarse){
   .csp-glass body.csp-redesign.csp-redesign #cspNav > .csp-halo-layer{display:none}
 }
-@media (hover:hover) and (pointer:fine){
-  .csp-glass body.csp-redesign.csp-redesign #cspNav .csp-nav-button:hover{background:transparent}
-  .csp-glass body.csp-redesign.csp-redesign #cspNav .csp-nav-button[aria-current="page"]:hover{background:var(--nav-row-selected)}
-  .csp-glass body.csp-redesign.csp-redesign #cspNav .csp-nav-button::before{
-    content:"";position:absolute;inset:0;z-index:-1;border-radius:inherit;corner-shape:inherit;pointer-events:none;
-    background:radial-gradient(70px 40px at var(--lx,50%) var(--ly,50%),var(--lens-specular),transparent 72%),var(--lens-fill);
-    box-shadow:var(--lens-rim);
-    opacity:0;transform:scale(.94);
-    transition:opacity .2s ease,transform .4s var(--ease-mac);
-  }
-  .csp-glass body.csp-redesign.csp-redesign #cspNav .csp-nav-button.csp-lens::before{opacity:1;transform:none}
-  .csp-glass body.csp-redesign.csp-redesign #cspNav .csp-nav-button > *{transition:transform .36s var(--ease-mac)}
-  .csp-glass body.csp-redesign.csp-redesign #cspNav .csp-nav-button.csp-lens > *{transform:scale(1.03)}
-  .csp-glass body.csp-redesign.csp-redesign #cspNav .csp-nav-button.csp-lens:active > *{transform:scale(1.015);transition-duration:.12s}
-}
+/* Sidebar rows use a flat fill for hover and selection, without a raised
+   lens, rim, or scaling the label/icon. Keyboard focus stays explicit. */
 
 /* ---- workspace: sections, cards and rows -------------------------------- */
 .csp-glass body.csp-redesign.csp-redesign #cspWorkspaceHeader{padding-inline:var(--t3-gutter)}
@@ -3033,3 +3022,18 @@ body.csp-redesign .csp-setting-foot[hidden]{display:none}
 .csp-glass.csp-reduce-motion body.csp-redesign.csp-redesign #mapDock{transition:none!important;transform:none!important}
 .csp-glass.csp-reduce-motion body.csp-redesign.csp-redesign select::picker(select){transition:none!important}
 .csp-glass.csp-reduce-motion body.csp-redesign.csp-redesign #cspNav .csp-nav-button > *{transform:none!important;transition:none!important}
+
+/* Layer names open their settings; source details live below the quick controls. */
+body.csp-redesign.csp-redesign button.csp-layer-title{
+  display:block;width:100%;min-height:0;margin:0;padding:0;
+  border:0;border-radius:3px;background:none;box-shadow:none;
+  color:var(--ink);font:inherit;font-size:13px;font-weight:590;line-height:1.4;
+  text-align:left;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;cursor:pointer;
+}
+body.csp-redesign.csp-redesign button.csp-layer-title:hover{background:none;box-shadow:none;text-decoration:underline;text-underline-offset:3px}
+body.csp-redesign.csp-redesign button.csp-layer-title:focus-visible{outline:2px solid var(--ui-ring);outline-offset:3px}
+body.csp-redesign .csp-layer-sources{display:grid;gap:10px;padding:12px 14px;border-top:1px solid var(--line)}
+body.csp-redesign .csp-layer-sources h3{margin:0;color:var(--ink-2);font-size:11px;font-weight:600}
+body.csp-redesign .csp-layer-source{display:grid;gap:2px;min-width:0}
+body.csp-redesign .csp-layer-source-name{color:var(--ink-2);font-size:11px;font-weight:600}
+body.csp-redesign .csp-layer-source-meta{color:var(--ink-3);font-size:11px;line-height:1.45;overflow-wrap:anywhere}
