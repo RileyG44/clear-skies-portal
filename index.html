@@ -994,8 +994,8 @@ body.pane-reordering,body.pane-reordering *{cursor:grabbing!important;user-selec
 }
 
 </style>
-<link rel="stylesheet" href="ui-theme.css?build=2026-10-17g">
-<link rel="stylesheet" href="ui-system.css?build=2026-10-17g">
+<link rel="stylesheet" href="ui-theme.css?build=2026-10-17h">
+<link rel="stylesheet" href="ui-system.css?build=2026-10-17h">
 <style>
 /* The redesign restructures the legacy DOM rather than replacing it, and the
    script that does so is the last thing on the page - so the browser paints the
@@ -1286,6 +1286,7 @@ html.csp-boot body{visibility:hidden}
               <h3 class="menu-section-title">WA DNR LiDAR</h3>
               <p class="control-hint">Download Washington state LiDAR for an area you choose. USGS stays active elsewhere.</p>
               <button class="ghost" id="dnrSelect" type="button" aria-describedby="dnrEngineHint">Select area on map</button>
+              <button class="ghost" id="dnrViewport" type="button" aria-describedby="dnrEngineHint">Download current view</button>
               <p class="control-hint" id="dnrEngineHint"></p>
               <div class="dnr-status-row"><div id="dnrAreaMsg" class="warmmsg" role="status" aria-live="polite">No downloaded areas</div>
                 <button class="linkbtn" id="dnrClear" type="button">Clear areas</button></div>
@@ -1733,8 +1734,12 @@ html.csp-boot body{visibility:hidden}
       </div>
     </div>
     <div id="dnrSelectionBar" class="dnr-selection-bar" role="region" aria-label="Download selected WA DNR area" hidden>
-      <div><strong>WA DNR area</strong><p id="dnrSelectionMsg">Drag to move; drag a corner to resize.</p><span id="dnrAnnouncement" class="dnr-announcement" role="status" aria-live="polite"></span></div>
-      <div class="dnr-selection-actions"><button class="ghost" id="dnrCancel" type="button">Cancel</button><button class="ghost" id="dnrFetch" type="button" disabled>Download WA DNR</button></div>
+      <button id="dnrDownloadToggle" class="dnr-download-toggle" type="button" aria-expanded="false" aria-controls="dnrSelectionDetails" hidden><span class="dnr-download-dot" aria-hidden="true"></span><span id="dnrDownloadSummary">WA DNR download</span><span aria-hidden="true">⌄</span></button>
+      <div id="dnrSelectionDetails">
+        <div><strong id="dnrPanelTitle">WA DNR area</strong><p id="dnrSelectionMsg">Drag to move; drag a corner to resize.</p><progress id="dnrDownloadProgress" aria-label="WA DNR download progress" hidden></progress></div>
+        <div class="dnr-selection-actions"><button class="ghost" id="dnrCancel" type="button">Cancel</button><button class="ghost" id="dnrFetch" type="button" disabled>Download WA DNR</button></div>
+      </div>
+      <span id="dnrAnnouncement" class="dnr-announcement" role="status" aria-live="polite"></span>
     </div>
     <section id="ctl" hidden aria-label="Displayed imagery controls">
       <div id="ctlHead" title="Drag displayed imagery controls">
@@ -1781,7 +1786,7 @@ html.csp-boot body{visibility:hidden}
   L.Renderer.prototype.onAdd=function(map){return onAdd.call(this,map||this._map)};
 })();
 </script>
-<script src="version.js?build=2026-10-17g"></script>
+<script src="version.js?build=2026-10-17h"></script>
 <script src="mosaic-core.js"></script>
 <script src="png-stream.js"></script>
 <script src="terrain-core.js"></script>
@@ -8436,20 +8441,35 @@ function warmPreview(){
 /* ---- WA DNR fetched areas: explicit, map-anchored selection ------------- */
 let dnrSelRect=null,dnrSelHandles=[],dnrSelBbox=null,dnrAreaLayer=null,dnrFetchPoll=null,dnrFetchToken=0;
 let dnrBusy=false,dnrLargeApproved=false,dnrSuccessTimer=null,dnrJobId=null,dnrPositionFrame=0;
+let dnrDownloadBbox=null,dnrBackground=false,dnrPollNow=null,dnrStartUncertain=false;
 const dnrBar=$("#dnrSelectionBar"),dnrMoveBox=document.createElement("div");
 dnrMoveBox.className="dnr-move-box";dnrMoveBox.hidden=true;dnrMoveBox.tabIndex=0;
 dnrMoveBox.setAttribute("role","group");
 dnrMoveBox.setAttribute("aria-label","WA DNR selected area. Drag to move, drag corners to resize. Arrow keys move; Escape cancels.");
 map.getContainer().append(dnrMoveBox);
-function dnrMsg(text,state="selecting",announce=true){
+function dnrMsg(text,state="selecting",announce=true,shortText){
   const summary=state==="ready"?`WA DNR ready in ${dnrAreas.length} area${dnrAreas.length===1?"":"s"}`:
-    !dnrBar.hidden&&state==="selecting"?"Area selected on map":
-    !dnrBar.hidden&&state==="error"?"Download failed · retry on map":text;
+    !dnrBackground&&state==="selecting"?"Area selected on map":text;
   if($("#dnrAreaMsg").textContent!==summary)$("#dnrAreaMsg").textContent=summary;
   $("#dnrSelectionMsg").textContent=text;dnrBar.dataset.state=state;
+  const labels={loading:"WA DNR · downloading…",warning:"WA DNR · confirm area",error:"WA DNR · needs attention",ready:"WA DNR · ready",cancelled:"WA DNR · cancelled"};
+  $("#dnrDownloadSummary").textContent=shortText||labels[state]||"WA DNR download";
+  $("#dnrDownloadToggle").title=text;
   if(announce&&$("#dnrAnnouncement").textContent!==text)$("#dnrAnnouncement").textContent=text;
   scheduleDnrPosition();
 }
+function expandDnrDownload(expanded){
+  $("#dnrSelectionDetails").hidden=dnrBackground&&!expanded;
+  $("#dnrDownloadToggle").setAttribute("aria-expanded",String(expanded));
+  dnrBar.dataset.expanded=String(expanded);scheduleDnrPosition();
+}
+function showDnrDownload(expanded=false){
+  dnrBackground=true;dnrBar.dataset.background="true";dnrBar.hidden=false;
+  dnrBar.setAttribute("aria-label","WA DNR download");
+  $("#dnrDownloadToggle").hidden=false;$("#dnrPanelTitle").textContent="WA DNR download";
+  expandDnrDownload(expanded);
+}
+$("#dnrDownloadToggle").onclick=()=>expandDnrDownload($("#dnrSelectionDetails").hidden);
 function scheduleDnrPosition(){
   if(dnrPositionFrame)return;
   dnrPositionFrame=requestAnimationFrame(()=>{dnrPositionFrame=0;positionDnrSelection()});
@@ -8457,6 +8477,7 @@ function scheduleDnrPosition(){
 function paintDnrAvailability(){
   const select=$("#dnrSelect");if(!select)return;
   select.disabled=!PROXY||dnrBusy;
+  $("#dnrViewport").disabled=!PROXY||dnrBusy;
   $("#dnrEngineHint").textContent=!PROXY?"Connect the local terrain engine to download WA DNR LiDAR.":"";
 }
 function paintDnrAreas(){
@@ -8469,6 +8490,14 @@ function paintDnrAreas(){
 function positionDnrSelection(){
   if(dnrBar.hidden)return;
   const mr=map.getContainer().getBoundingClientRect();
+  if(dnrBackground){
+    // A collapsed status chip sits beside the toolbar, away from selection and
+    // camera gestures. Its details expand only when requested or confirming.
+    const br=dnrBar.getBoundingClientRect(),dock=$("#mapDock").getBoundingClientRect();
+    const left=Math.max(mr.left+10,Math.min(mr.right-br.width-10,dock.left-br.width-10));
+    Object.assign(dnrBar.style,{left:left+"px",top:Math.max(mr.top+10,dock.top)+"px"});
+    return;
+  }
   let anchor={x:mr.width/2,y:mr.height/2};
   if(dnrSelBbox){
     const points=dnrCorners(dnrSelBbox).map(ll=>map.latLngToContainerPoint(ll));
@@ -8497,7 +8526,7 @@ function clearDnrSelection({keepBar=false}={}){
 }
 function dnrCorners(b){return [[b[1],b[0]],[b[1],b[2]],[b[3],b[2]],[b[3],b[0]]]}
 function updateDnrBounds(bbox,{announce=true}={}){
-  dnrSelBbox=bbox;dnrLargeApproved=false;
+  dnrSelBbox=bbox;dnrDownloadBbox=null;dnrLargeApproved=false;
   dnrSelRect.setBounds([[bbox[1],bbox[0]],[bbox[3],bbox[2]]]);
   dnrCorners(bbox).forEach((ll,i)=>dnrSelHandles[i]?.setLatLng(ll));
   $("#dnrFetch").textContent="Download WA DNR";
@@ -8509,7 +8538,11 @@ function setDnrBusy(busy){
   dnrMoveBox.setAttribute("aria-disabled",String(busy));paintDnrAvailability();
 }
 function setDnrSelection(bbox){
-  clearTimeout(dnrSuccessTimer);dnrBar.hidden=false;$("#dnrFetch").hidden=false;$("#dnrCancel").textContent="Cancel";
+  clearTimeout(dnrSuccessTimer);dnrBackground=false;dnrDownloadBbox=null;
+  dnrBar.dataset.background="false";dnrBar.setAttribute("aria-label","Download selected WA DNR area");
+  $("#dnrDownloadToggle").hidden=true;$("#dnrSelectionDetails").hidden=false;
+  $("#dnrPanelTitle").textContent="WA DNR area";$("#dnrDownloadProgress").hidden=true;
+  dnrBar.hidden=false;$("#dnrFetch").hidden=false;$("#dnrCancel").textContent="Cancel";
   if(!dnrSelRect)dnrSelRect=L.rectangle([[bbox[1],bbox[0]],[bbox[3],bbox[2]]],
     {color:"#ff9f0a",weight:2,fillOpacity:.05,interactive:false}).addTo(map);
   for(const h of dnrSelHandles)map.removeLayer(h);dnrSelHandles=[];
@@ -8557,17 +8590,27 @@ async function stopDnrJob(jobId){
   if(!response.ok)throw new Error(`HTTP ${response.status}`);
 }
 function cancelDnrSelection(){
-  const jobId=dnrJobId,wasBusy=dnrBusy;
-  clearTimeout(dnrSuccessTimer);const cancelToken=++dnrFetchToken;clearTimeout(dnrFetchPoll);dnrFetchPoll=null;dnrJobId=null;
+  const jobId=dnrJobId,wasBusy=dnrBusy,wasUncertain=dnrStartUncertain;
+  clearTimeout(dnrSuccessTimer);const cancelToken=++dnrFetchToken;clearTimeout(dnrFetchPoll);dnrFetchPoll=null;dnrJobId=null;dnrPollNow=null;dnrDownloadBbox=null;
   setDnrBusy(false);clearDnrSelection();paintDnrAreas();$("#dnrSelect").focus({preventScroll:true});
   if(wasBusy){
-    const message=serverHealth?.features?.includes("wadnr-job-cancel")?"Download cancelled. No area was applied.":"Selection cancelled. The engine may finish its download; no area will be applied.";
+    const message=wasUncertain?"Tracking dismissed. The unconfirmed engine job may continue; no area was applied.":
+      serverHealth?.features?.includes("wadnr-job-cancel")?"Download request cancelled. No area was applied; an already-started file may finish caching.":"Request dismissed. The engine may finish its download; no area will be applied.";
     dnrMsg(message);
-    stopDnrJob(jobId).catch(()=>{if(cancelToken===dnrFetchToken)dnrMsg("Selection cancelled. The engine could not be reached to stop the download; no area was applied.")});
+    stopDnrJob(jobId).catch(()=>{
+      if(cancelToken!==dnrFetchToken)return;
+      showDnrDownload();$("#dnrFetch").hidden=true;$("#dnrCancel").textContent="Dismiss";$("#dnrDownloadProgress").hidden=true;
+      dnrMsg("The engine could not be reached to stop the download. It may finish in the background; no area will be applied.","error",true,"WA DNR · stop unconfirmed");
+    });
   }
 }
 $("#dnrCancel").onclick=cancelDnrSelection;
-document.addEventListener("keydown",event=>{if(event.key==="Escape"&&!dnrBar.hidden){event.preventDefault();cancelDnrSelection()}});
+document.addEventListener("keydown",event=>{
+  if(event.key!=="Escape"||dnrBar.hidden)return;
+  if(dnrBackground){
+    if(!$("#dnrSelectionDetails").hidden){event.preventDefault();expandDnrDownload(false);$("#dnrDownloadToggle").focus({preventScroll:true})}
+  }else{event.preventDefault();cancelDnrSelection()}
+});
 $("#dnrSelect").onclick=event=>{
   event.stopPropagation();
   if(!PROXY||dnrBusy){paintDnrAvailability();return}
@@ -8598,48 +8641,105 @@ $("#dnrSelect").onclick=event=>{
   setDnrSelection(toBbox(Math.min(1,(x1-x0)/width,(y1-y0)/height)));
   requestAnimationFrame(()=>dnrMoveBox.focus({preventScroll:true}));
 };
-$("#dnrFetch").onclick=async()=>{
-  if(!dnrSelBbox||dnrBusy)return;
+function dnrViewportBbox(){
+  const view=map3d&&document.body.classList.contains("terrain-3d")?map3d:map,b=view.getBounds();
+  return [b.getWest(),b.getSouth(),b.getEast(),b.getNorth()];
+}
+async function startDnrDownload(bbox){
+  if(dnrBusy||!bbox)return;
   if(!PROXY){dnrMsg("Connect the terrain engine, then retry this download.","error");return}
-  const bbox=[...dnrSelBbox];
+  bbox=[...bbox];
+  if(bbox.length!==4||!bbox.every(Number.isFinite)||bbox[0]>=bbox[2]||bbox[1]>=bbox[3]||bbox[0]<-180||bbox[2]>180||bbox[1]<-85||bbox[3]>85){
+    dnrMsg("This view cannot be downloaded. Move the map to Washington and try again.","error");return;
+  }
+  const sameArea=dnrDownloadBbox?.every((v,i)=>v===bbox[i]);
+  if(!sameArea)dnrLargeApproved=false;
+  dnrDownloadBbox=bbox;
   const zn=65536,tx=lon=>Math.floor((lon+180)/360*zn),ty=lat=>Math.floor((1-Math.asinh(Math.tan(lat*Math.PI/180))/Math.PI)/2*zn);
   const cells=Math.max(1,(tx(bbox[2])-tx(bbox[0])+1)*(ty(bbox[1])-ty(bbox[3])+1));
   if(cells>512&&!dnrLargeApproved){
-    dnrLargeApproved=true;$("#dnrFetch").textContent="Download anyway";
-    dnrMsg(`Large area: about ${cells.toLocaleString()} acquisition cells. Several large surveys may be downloaded. Resize to reduce it, or download anyway.`,"warning");return;
+    dnrLargeApproved=true;$("#dnrFetch").textContent="Download anyway";$("#dnrFetch").hidden=false;$("#dnrFetch").disabled=false;
+    if(!dnrSelBbox)showDnrDownload(true);
+    dnrMsg(`Large area: about ${cells.toLocaleString()} acquisition cells. Several large surveys may be downloaded. Zoom in or choose a smaller area, or download anyway.`,"warning");return;
   }
-  const token=++dnrFetchToken;dnrJobId=null;setDnrBusy(true);dnrMsg("Starting WA DNR download…","loading");
-  const failed=text=>{if(token!==dnrFetchToken)return;setDnrBusy(false);$("#dnrFetch").textContent="Retry download";dnrMsg(text,"error")};
-  let jobId=null;
+  const token=++dnrFetchToken;dnrJobId=null;dnrPollNow=null;dnrStartUncertain=false;clearTimeout(dnrSuccessTimer);
+  clearDnrSelection();showDnrDownload();setDnrBusy(true);
+  document.dispatchEvent(new CustomEvent("csp:dnr-download"));
+  $("#dnrDownloadToggle").focus({preventScroll:true});
+  $("#dnrFetch").hidden=true;$("#dnrCancel").textContent="Cancel download";
+  $("#dnrDownloadProgress").hidden=false;$("#dnrDownloadProgress").removeAttribute("value");
+  dnrMsg("Starting WA DNR download. You can keep using the map.","loading",true,"WA DNR · starting…");
+  const failed=text=>{
+    if(token!==dnrFetchToken)return;
+    setDnrBusy(false);dnrJobId=null;dnrPollNow=null;clearTimeout(dnrFetchPoll);dnrFetchPoll=null;
+    $("#dnrDownloadProgress").hidden=true;$("#dnrFetch").hidden=false;$("#dnrFetch").textContent="Retry download";
+    $("#dnrCancel").textContent="Dismiss";dnrMsg(text,"error");
+  };
+  let jobId=null,startRejected=false;
   try{
     const r=await fetch(api("/api/wadnr/warm"),{method:"POST",body:JSON.stringify({bbox}),signal:AbortSignal.timeout(20000)});
+    startRejected=!r.ok;
     const value=await r.json();if(!r.ok)throw new Error(value.error||`HTTP ${r.status}`);
-    jobId=value.id||null;
-  }catch(error){failed(`Could not start download: ${error.message}`);return}
+    if(typeof value.id!=="string"||!value.id)throw new Error("The engine did not return a download ID");
+    jobId=value.id;
+  }catch(error){
+    if(token!==dnrFetchToken)return;
+    if(startRejected){failed(`Could not start download: ${error.message}`);return}
+    // A lost POST response may already have started work. Check for idle
+    // before allowing a new request, without claiming an unowned global job.
+    dnrStartUncertain=true;$("#dnrCancel").textContent="Dismiss";
+    dnrMsg(`The start response was lost: ${error.message}. Checking the engine before allowing another download.`,"error",true,"WA DNR · checking start…");
+  }
   // A cancel can arrive before the engine returns its job id.
   if(token!==dnrFetchToken){stopDnrJob(jobId).catch(()=>{});return}
-  dnrJobId=jobId;
-  clearTimeout(dnrFetchPoll);
+  dnrJobId=jobId;clearTimeout(dnrFetchPoll);
+  let polling=false;
   const poll=async()=>{
-    if(token!==dnrFetchToken)return;
+    if(token!==dnrFetchToken||polling)return;
+    polling=true;clearTimeout(dnrFetchPoll);dnrFetchPoll=null;
     try{
       const r=await fetch(api("/api/wadnr/warm/status"),{signal:AbortSignal.timeout(20000)});if(!r.ok)throw new Error(`HTTP ${r.status}`);
       const s=await r.json();if(token!==dnrFetchToken)return;
+      if(dnrStartUncertain){
+        if(!s.running){failed("The engine is idle. The start response was lost, so this area was not applied. Retry to verify and complete the same area.");return}
+        dnrMsg("The engine is downloading, but the start response was lost. Waiting for it to finish; this unconfirmed area will not be applied.","loading",true,"WA DNR · unconfirmed job");
+        dnrFetchPoll=setTimeout(poll,5000);return;
+      }
       if(jobId&&s.id&&s.id!==jobId){failed("Another download replaced this one. Your area was not applied; retry to download it.");return}
       dnrStatus=s.acquisition;
       const complete=!s.running&&!s.error&&!s.stop&&s.total>0&&s.done>=s.total&&(!jobId||s.id===jobId);
-      if(s.running){dnrMsg(`Downloading WA DNR: ${s.done}/${s.total} areas. ${dnrAcquisitionText()}`,"loading");dnrFetchPoll=setTimeout(poll,2000);return}
-      dnrFetchPoll=null;setDnrBusy(false);
+      if(s.running){
+        $("#dnrFetch").hidden=true;$("#dnrDownloadProgress").hidden=false;
+        if(s.total>0){$("#dnrDownloadProgress").max=s.total;$("#dnrDownloadProgress").value=s.done}
+        dnrMsg(`Downloading WA DNR: ${s.done}/${s.total} areas. ${dnrAcquisitionText()}`,"loading",true,`WA DNR · ${s.done}/${s.total}`);
+        dnrFetchPoll=setTimeout(poll,2000);return;
+      }
       if(!complete){failed(s.error?`Download could not complete: ${s.error}`:"Download stopped before the area finished. Retry to complete it.");return}
+      setDnrBusy(false);dnrJobId=null;dnrPollNow=null;
       if(!dnrAreas.some(a=>a.bbox.every((v,i)=>v===bbox[i])))dnrAreas.push({bbox,at:Date.now()});
-      saveDnrAreas();clearDnrSelection({keepBar:true});paintDnrAreas();
-      $("#dnrFetch").hidden=true;$("#dnrCancel").textContent="Done";
+      saveDnrAreas();paintDnrAreas();
+      $("#dnrDownloadProgress").hidden=true;$("#dnrFetch").hidden=true;$("#dnrCancel").textContent="Done";
       dnrMsg(`WA DNR ready in this area · ${fmtMB(s.bytes)} added.`,"ready");
       resetMeshSources();applyTerrain(true);if(elevationActive())applyElev();schedule3dStyle();scheduleDnrStatus();
       dnrSuccessTimer=setTimeout(()=>{dnrBar.hidden=true},5000);
-    }catch(error){failed(`Download status unavailable: ${error.message}`)}
+    }catch(error){
+      if(token!==dnrFetchToken)return;
+      // A missing status response is not a failed acquisition. Keep ownership
+      // and both start controls locked while reconnecting to the same job.
+      $("#dnrFetch").hidden=false;$("#dnrFetch").disabled=false;$("#dnrFetch").textContent="Check status";
+      dnrMsg(`Download continues in the background. Status unavailable: ${error.message}. Retrying automatically.`,"error",true,"WA DNR · reconnecting…");
+      dnrFetchPoll=setTimeout(poll,5000);
+    }finally{polling=false}
   };
-  dnrFetchPoll=setTimeout(poll,2000);
+  dnrPollNow=poll;dnrFetchPoll=setTimeout(poll,2000);
+}
+$("#dnrFetch").onclick=()=>dnrBusy?dnrPollNow?.():startDnrDownload(dnrDownloadBbox||dnrSelBbox);
+$("#dnrViewport").onclick=()=>{
+  if(!PROXY||dnrBusy){paintDnrAvailability();return}
+  // Freeze the active camera before clearing any selection or moving the map.
+  const bbox=dnrViewportBbox();dnrFetchToken++;clearTimeout(dnrSuccessTimer);clearDnrSelection();
+  dnrDownloadBbox=null;dnrLargeApproved=false;$("#dnrCancel").textContent="Cancel";
+  return startDnrDownload(bbox);
 };
 $("#dnrClear").onclick=()=>{
   if(dnrBusy)return;
@@ -8650,10 +8750,9 @@ $("#dnrClear").onclick=()=>{
 map.on("move zoom resize rotate",scheduleDnrPosition);
 new ResizeObserver(scheduleDnrPosition).observe($("#side"));
 new MutationObserver(()=>{
-  if(!dnrSelBbox)return;
+  if(dnrBackground||!dnrSelBbox)return;
   const mode3d=document.body.classList.contains("terrain-3d")||$("#terModePoints").getAttribute("aria-pressed")==="true";
   if(mode3d&&!dnrBusy){cancelDnrSelection();dnrMsg("Area selection closed. Select an area to return to the 2D map.");return}
-  if(dnrBusy){dnrMoveBox.hidden=mode3d;dnrBar.hidden=mode3d;document.body.classList.toggle("dnr-selecting",!mode3d);scheduleDnrPosition()}
 }).observe(document.body,{attributes:true,attributeFilter:["class"]});
 paintDnrAreas();
 
@@ -10848,8 +10947,8 @@ $("#q").addEventListener("blur",()=>setTimeout(acHide,120));
 document.addEventListener("click",e=>{ if(!e.target.closest("#iw")) acHide() });
 })();
 </script>
-<script src="markup-3d.js?build=2026-10-17g"></script>
-<script src="markup.js?build=2026-10-17g"></script>
-<script src="ui-system.js?build=2026-10-17g"></script>
+<script src="markup-3d.js?build=2026-10-17h"></script>
+<script src="markup.js?build=2026-10-17h"></script>
+<script src="ui-system.js?build=2026-10-17h"></script>
 </body>
 </html>

@@ -148,3 +148,18 @@ Root owns final title/footer CSS; screenshot shows browser-default button border
 - Live installed browser verified build 2026-10-17g, hidden sidebar selector, corrected 2D action, and LiDAR page layout.
 - CI and Pages run 39101350169 passed check, Windows and deployment jobs for implementation db6adc0. Public version.js and HTML verify build 2026-10-17g, hidden selector and corrected action.
 - #9 and #10 remain pending the requested missing behavior, not permission. No guessed changes were made to either control.
+
+## Items 9 and 10 - release 2026-10-17h
+
+- #9: Replace the LiDAR style dropdown with labelled graphic buttons matching the markup tool palette. Preserve the existing style values, handlers and saved preferences.
+- #10: Add Download current view beneath Select area. Snapshot the current map viewport and start its WA DNR job without entering the selection tool.
+- Run both selected-area and viewport downloads in the background. Remove selection handles and blocking selection state when a download begins; keep compact progress, cancel and retry controls outside the map's working area.
+- Preserve owned-job cancellation, superseded-response fencing, success-only area persistence, no-engine messaging and large-area confirmation.
+- #9 implemented in `ui-system.js`/`ui-system.css`: 11 native-value radio buttons with local icons, markup-palette styling, full labels, roving Tab and arrows/Home/End. Hidden native select remains the engine and preferences source; existing section synchronization covers programmatic changes.
+- #10 implemented in `index.html`/`ui-system.css`: frozen viewport from the active 2D/3D camera; no selection tool for current-view path. Both start paths remove handles/move box/selection class and use a compact top-right chip, with expandable details/progress/cancel/retry. Phone sheet returns to peek.
+- Lost status responses retain the owned ID and busy guard; Check status sends GET only. Lost start acknowledgements poll without adopting or cancelling an arbitrary global job. Only confirmed matching completion persists the frozen area.
+- Independent design review: `/tmp/csp-dnr-background-review.md`; implementation review: `/tmp/csp-lidar-controls-verification.md`. No blockers.
+- Node 24 full npm test and npm run check passed. Expanded menu tests cover viewport/3D bounds, map cleanup, warning/confirmation, status recovery, unknown start, cancellation fences, supersession and success timers.
+- T3 browser: desktop graphic-button selection + ArrowLeft changed the native style and retained one Tab stop; all icons loaded. Controlled current-view and selected-area jobs showed progress, removed handles, accepted map clicks/pan, survived 3D, recovered status without a duplicate POST, completed only the original bbox and cancelled by owned ID.
+- At 390px portrait width all style targets are >=54px tall. Stable background chip measured about 132x46px, wholly left of the toolbar; details open on demand. No new upstream acquisition was used for UI checks. Backend DNR tests passed in the full suite.
+- Final build 2026-10-17h; release/live verification pending.

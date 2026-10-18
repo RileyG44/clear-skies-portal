@@ -12,7 +12,7 @@ const elements=()=>{
     if(!nodes.has(id))nodes.set(id,{value:'',disabled:false,hidden:false,textContent:'',attributes:{},listeners:{},
       addEventListener(type,handler){this.listeners[type]=handler},
       dispatchEvent(event){this.listeners[event.type]?.(event)},
-      setAttribute(name,value){this.attributes[name]=String(value)},focus(){}});
+      setAttribute(name,value){this.attributes[name]=String(value)},removeAttribute(name){delete this.attributes[name]},dataset:{},focus(){}});
     return nodes.get(id);
   }};
 };
@@ -40,35 +40,49 @@ function spanChecks(){
     const feet=context.elevSpanFromPosition(position);assert(feet>=previous,'span never reverses direction');previous=feet;
   }
   const panel=between('<div class="terdl dnr-module" id="dnrAreaPanel">','<div class="terrain-subsection" id="terAppearance">');
-  assert.equal((panel.match(/<button/g)||[]).length,2,'the module contains only Select and housekeeping Clear');
+  assert.equal((panel.match(/<button/g)||[]).length,3,'the module contains Select, current-view download and housekeeping Clear');
+  assert(panel.includes('id="dnrViewport"'),'viewport download is separate from selection');
   assert(!panel.includes('id="dnrFetch"'),'download confirmation belongs on the map');
   assert(between('<div id="dnrSelectionBar"','<section id="ctl"').includes('id="dnrFetch"'),'map toolbar owns confirmation');
 }
 const reply=value=>({ok:true,json:async()=>value});
 function dnrFixture(){
-  const nodes=elements(),timers=new Map(),requests=[],messages=[],stops=[];let nextTimer=1;
-  const context={$:nodes.get,document:{body:{classList:{remove(){}}}},
+  const nodes=elements(),timers=new Map(),requests=[],messages=[],stops=[],removed=[],events=[],keys={};let nextTimer=1;
+  const classes=new Set(['dnr-selecting']);
+  const bounds=values=>({getWest:()=>values[0],getSouth:()=>values[1],getEast:()=>values[2],getNorth:()=>values[3]});
+  const context={$:nodes.get,document:{body:{classList:{add:name=>classes.add(name),remove:name=>classes.delete(name),contains:name=>classes.has(name)}},
+      dispatchEvent:event=>events.push(event.type),addEventListener:(name,handler)=>{keys[name]=handler}},
+    CustomEvent:class{constructor(type){this.type=type}},
     serverHealth:{features:['wadnr-job-cancel']},PROXY:true,dnrBar:nodes.get('#dnrSelectionBar'),
-    dnrMoveBox:nodes.get('.dnr-move-box'),dnrSelHandles:[],dnrAreas:[],dnrBusy:false,dnrSelBbox:[-120,47,-119.999,47.001],
+    dnrMoveBox:nodes.get('.dnr-move-box'),dnrSelRect:{setBounds(){}},dnrSelHandles:[{dragging:{enable(){},disable(){}},setLatLng(){}}],
+    dnrAreas:[],dnrBusy:false,dnrSelBbox:[-120,47,-119.999,47.001],
+    dnrDownloadBbox:null,dnrBackground:false,dnrPollNow:null,dnrStartUncertain:false,
     dnrJobId:null,dnrFetchToken:0,dnrFetchPoll:null,dnrSuccessTimer:null,dnrLargeApproved:false,
-    AbortSignal,api:x=>x,fmtMB:x=>String(x),dnrAcquisitionText:()=>'',
-    clearDnrSelection(){context.dnrSelBbox=null;context.dnrBar.hidden=true;context.clears++},
-    paintDnrAreas(){},paintDnrAvailability(){},saveDnrAreas(){context.saves++},resetMeshSources(){},applyTerrain(){},
-    elevationActive:()=>false,applyElev(){},schedule3dStyle(){},scheduleDnrStatus(){},
-    dnrMsg:(text,state)=>messages.push({text,state}),clears:0,saves:0,
+    viewport:[-120,47,-119.999,47.001],map3d:null,
+    map:{getBounds:()=>bounds(context.viewport),removeLayer:layer=>removed.push(layer)},
+    AbortSignal,api:x=>x,fmtMB:x=>String(x),dnrAcquisitionText:()=>'',scheduleDnrPosition(){},
+    paintDnrAreas(){},saveDnrAreas(){context.saves++},resetMeshSources(){},applyTerrain(){},
+    elevationActive:()=>false,applyElev(){},schedule3dStyle(){},scheduleDnrStatus(){},clears:0,saves:0,
     setTimeout(callback){const id=nextTimer++;timers.set(id,callback);return id},clearTimeout:id=>timers.delete(id),
     fetch:async(url,init)=>{
-      requests.push(url);
+      requests.push({url,body:init?.body?JSON.parse(init.body):null});
       if(url==='/api/wadnr/warm/stop'){stops.push(JSON.parse(init.body).id);return reply({cancelled:true})}
       return context.respond(url,init);
     },respond:async url=>reply(url.endsWith('/status')?{id:'job-1',running:true,total:2,done:1}:{id:'job-1'})
   };
   vm.createContext(context);
-  vm.runInContext(between('function setDnrBusy(', 'function setDnrSelection(')+
-    between('async function stopDnrJob(', '$("#dnrCancel").onclick')+
-    between('$("#dnrFetch").onclick=async', '$("#dnrClear").onclick'),context);
-  const poll=async()=>{const [id,callback]=timers.entries().next().value;timers.delete(id);await callback()};
-  return {context,nodes,timers,messages,requests,stops,poll,start:()=>nodes.get('#dnrFetch').onclick()};
+  vm.runInContext(between('function dnrMsg(', 'function scheduleDnrPosition(')+
+    between('function paintDnrAvailability(', 'function paintDnrAreas(')+
+    between('function clearDnrSelection(', 'function setDnrSelection(')+
+    between('async function stopDnrJob(', '$("#dnrSelect").onclick')+
+    between('function dnrViewportBbox(', '$("#dnrClear").onclick'),context);
+  const originalClear=context.clearDnrSelection,originalMsg=context.dnrMsg;
+  context.clearDnrSelection=(...args)=>{context.clears++;return originalClear(...args)};
+  context.dnrMsg=(text,state,...args)=>{messages.push({text,state});return originalMsg(text,state,...args)};
+  const poll=async()=>{const entry=timers.entries().next().value;assert(entry,'a poll must be scheduled');const [id,callback]=entry;timers.delete(id);await callback()};
+  const postCount=()=>requests.filter(r=>r.url==='/api/wadnr/warm').length;
+  return {context,nodes,timers,messages,requests,stops,poll,removed,classes,events,keys,postCount,
+    bounds,start:()=>nodes.get('#dnrFetch').onclick(),currentView:()=>nodes.get('#dnrViewport').onclick()};
 }
 async function dnrChecks(){
   let f=dnrFixture();await f.start();
@@ -77,7 +91,7 @@ async function dnrChecks(){
   let resolveStatus;
   f.context.respond=()=>new Promise(resolve=>{resolveStatus=resolve});
   const late=f.poll();f.context.cancelDnrSelection();
-  assert.equal(f.context.dnrBusy,false);assert.equal(f.context.clears,1);assert.equal(f.timers.size,0);
+  assert.equal(f.context.dnrBusy,false);assert.equal(f.context.dnrSelBbox,null);assert.equal(f.timers.size,0);
   assert.deepEqual(f.stops,['job-1'],'Cancel stops only the owned engine job');
   resolveStatus(reply({id:'job-1',running:false,total:2,done:2}));await late;
   assert.equal(f.context.dnrAreas.length,0,'a late completion after Cancel cannot apply an area');
@@ -98,7 +112,7 @@ async function dnrChecks(){
 
   f=dnrFixture();f.context.serverHealth.features=[];await f.start();f.context.cancelDnrSelection();
   assert.deepEqual(f.stops,[],'legacy engines receive no unguarded global stop request');
-  assert.equal(f.context.dnrBusy,false,'legacy engines still allow closing selection');
+  assert.equal(f.context.dnrBusy,false,'legacy engines still allow dismissing the request');
 
   f=dnrFixture();await f.start();
   f.context.respond=async()=>reply({id:'somebody-elses-job',running:false,total:2,done:2});await f.poll();
@@ -109,4 +123,54 @@ async function dnrChecks(){
   f.context.respond=async()=>reply({id:'job-1',running:false,total:2,done:2,bytes:100});await f.poll();
   assert.equal(f.context.dnrAreas.length,1);assert.equal(f.context.saves,1,'complete jobs persist their selected area');
 }
-spanChecks();dnrChecks().then(()=>console.log('menu control checks passed (span, keyboard escape from snaps, persistence, map confirmation, stuck-job cancellation, late responses, ownership and completion)')).catch(error=>{console.error(error);process.exitCode=1});
+async function backgroundChecks(){
+  let f=dnrFixture();await f.currentView();
+  assert.equal(f.postCount(),1);assert.deepEqual(f.requests[0].body.bbox,f.context.viewport);
+  assert.equal(f.context.dnrSelRect,null);assert.equal(f.context.dnrSelHandles.length,0);assert(f.removed.length>=2);
+  assert.equal(f.context.dnrMoveBox.hidden,true);assert.equal(f.classes.has('dnr-selecting'),false,'download frees normal map interaction');
+  assert.equal(f.context.dnrBackground,true);assert.equal(f.nodes.get('#dnrSelectionDetails').hidden,true,'background details start collapsed');
+  assert(f.events.includes('csp:dnr-download'),'phone sheet can leave the map available');
+  const frozen=[...f.requests[0].body.bbox];f.context.viewport=[-121,46,-120.99,46.01];
+  f.context.respond=async()=>reply({id:'job-1',running:false,total:2,done:2,bytes:100});await f.poll();
+  assert.deepEqual(Array.from(f.context.dnrAreas[0].bbox),frozen,'completion applies the original camera, not the moved map');
+  assert.equal(f.context.saves,1);
+
+  f=dnrFixture();f.classes.add('terrain-3d');f.context.map3d={getBounds:()=>f.bounds([-121,46,-120.999,46.001])};
+  await f.currentView();assert.deepEqual(f.requests[0].body.bbox,[-121,46,-120.999,46.001],'3D uses the live camera without exiting it');
+  assert(f.classes.has('terrain-3d'));
+
+  f=dnrFixture();f.context.viewport=[-120,47,-119.85,47.1];await f.currentView();
+  assert.equal(f.postCount(),0,'large current views require an explicit second action');
+  assert.equal(f.context.dnrBackground,true);assert.equal(f.nodes.get('#dnrSelectionDetails').hidden,false);
+  const large=[...f.context.viewport];f.context.viewport=[-121,46,-120.999,46.001];await f.start();
+  assert.equal(f.postCount(),1);assert.deepEqual(f.requests[0].body.bbox,large,'confirmation uses the warned viewport');
+
+  f=dnrFixture();f.context.PROXY=false;f.context.paintDnrAvailability();await f.currentView();
+  assert.equal(f.postCount(),0);assert(f.nodes.get('#dnrSelect').disabled&&f.nodes.get('#dnrViewport').disabled);
+  f=dnrFixture();f.context.viewport=[-120,84,-119,89];await f.currentView();assert.equal(f.postCount(),0,'invalid polar bounds never start');
+
+  f=dnrFixture();await f.currentView();f.context.respond=async()=>{throw new Error('temporary offline')};await f.poll();
+  assert.equal(f.context.dnrBusy,true,'status failure retains the active guard');assert.equal(f.context.dnrJobId,'job-1');
+  assert.equal(f.nodes.get('#dnrFetch').textContent,'Check status');assert.equal(f.context.dnrAreas.length,0);
+  await f.currentView();assert.equal(f.postCount(),1,'a second acquisition is disabled while reconnecting');
+  f.context.respond=async()=>reply({id:'job-1',running:false,total:2,done:2,bytes:100});await f.start();
+  assert.equal(f.postCount(),1,'Check status is GET-only');assert.equal(f.context.dnrAreas.length,1);
+
+  f=dnrFixture();f.context.respond=async url=>{if(url.endsWith('/warm'))throw new Error('start response lost');return reply({id:'unowned',running:true,total:2,done:1})};
+  await f.currentView();assert.equal(f.context.dnrBusy,true);assert.equal(f.context.dnrJobId,null);
+  await f.poll();assert.equal(f.postCount(),1);assert.equal(f.context.dnrAreas.length,0,'an unowned global job cannot apply this area');
+  f.context.respond=async()=>reply({id:'unowned',running:false,total:2,done:2});await f.poll();
+  assert.equal(f.context.dnrBusy,false);assert.equal(f.context.dnrAreas.length,0);assert.deepEqual(f.stops,[]);
+
+  f=dnrFixture();await f.currentView();
+  f.keys.keydown({key:'Escape',preventDefault(){throw new Error('collapsed background status must not consume Escape')}});
+  assert.equal(f.context.dnrBusy,true);assert.deepEqual(f.stops,[],'Escape does not cancel a background job');
+  f.context.expandDnrDownload(true);let escaped=false;
+  f.keys.keydown({key:'Escape',preventDefault(){escaped=true}});
+  assert(escaped);assert.equal(f.nodes.get('#dnrSelectionDetails').hidden,true);assert.equal(f.context.dnrBusy,true);
+
+  f=dnrFixture();await f.start();f.context.respond=async()=>reply({id:'job-1',running:false,total:2,done:2,bytes:100});await f.poll();
+  assert.equal(f.timers.size,1);await f.currentView();
+  assert.equal(f.context.dnrBar.hidden,false);assert.equal(f.timers.size,1,'new work clears the old success-dismiss timer');
+}
+spanChecks();dnrChecks().then(backgroundChecks).then(()=>console.log('menu control checks passed (elevation span, owned jobs, viewport/3D snapshot, background interaction, large-area confirmation, status recovery, uncertain starts and cancellation)')).catch(error=>{console.error(error);process.exitCode=1});
