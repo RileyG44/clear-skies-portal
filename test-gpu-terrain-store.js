@@ -129,10 +129,58 @@ const data=values=>({width:2,height:2,grid:new Float32Array(values)});
   const phaseA2=phasesStore.want([{z:3,x:4,y:4}]);await tick();
   phaseRequests[4].resolve(data([1,1,1,1]));await tick();
   phaseRequests.slice(0,4).forEach(p=>p.resolve(data([1,1,1,1])));await Promise.all([phaseA,phaseB]);await tick();
-  assert.equal(phaseRequests.length,6,'obsolete A/B completion cannot start sharp A before the current primary phase settles');
+  assert.equal(phaseRequests.length,7,'current detail can sharpen while its lower-ranked primary is still pending');
+  assert.equal(phaseRequests[6].url,'detail/3/4/4','obsolete A/B completion does not launch unrelated refinement');
   phaseRequests[5].resolve(data([1,1,1,1]));await phaseA2;await tick();
   assert.equal(phaseRequests.length,7);assert.equal(phaseRequests[6].o.group,'sharp');
   phaseRequests[6].resolve(data([1,1,1,1]));await tick();phasesStore.destroy();
+
+  const independentJobs=new Map(),independentCalls=[];
+  const independent=new ElevationTileStore({sources:[source('s',2,8,{dz:1,sharper:true})],request:url=>{
+    independentCalls.push(url);return new Promise(resolve=>independentJobs.set(url,resolve));}});
+  const independentDone=independent.want([{z:3,x:0,y:0},{z:3,x:4,y:0}]);await tick();
+  independentJobs.get('s/2/0/0')(data([2,2,2,2]));await tick();
+  assert.ok(independentCalls.includes('s/3/0/0'),'ready region sharpens before unrelated slow primary completes');
+  independentJobs.get('s/3/0/0')(data([3,3,3,3]));await tick();
+  assert.equal(independent.finestFor('s',{z:3,x:0,y:0}).z,3);
+  independentJobs.get('s/2/2/0')(data([2,2,2,2]));await independentDone;await tick();
+  independentJobs.get('s/3/4/0')(data([3,3,3,3]));await tick();independent.destroy();
+
+  const partialCalls=[];
+  const partialSharp=new ElevationTileStore({sources:[source('survey',5,8,{dz:1,sharper:true}),source('fallback',2,8,{dz:1,sharper:true})],request:async url=>{
+    partialCalls.push(url);return data(url.startsWith('survey')?[NaN,NaN,10,NaN]:[3,3,3,3]);}});
+  await partialSharp.want([{z:3,x:0,y:0}]);await tick();
+  assert.ok(partialCalls.includes('survey/3/0/0'));assert.ok(partialCalls.includes('fallback/3/0/0'),'partial survey cannot strand exposed fallback at coarse resolution');
+  assert.equal(partialSharp.finestFor('fallback',{z:3,x:0,y:0}).z,3);partialSharp.destroy();
+
+  for(const failure of ['reject','empty']){
+    let attempts=0;
+    const recovered=new ElevationTileStore({retryDelayMs:10,sources:[source('s',2,8,{dz:1,sharper:true})],request:async url=>{
+      if(url==='s/3/0/0'&&++attempts===1){if(failure==='empty')return null;throw Error('temporary outage');}
+      return data([3,3,3,3]);}});
+    await recovered.want([{z:3,x:0,y:0}]);await tick();
+    assert.equal(recovered.finestFor('s',{z:3,x:0,y:0}).z,2);
+    assert.equal(recovered.settled().refining,true,'cooldown retains visible refinement demand');
+    await new Promise(resolve=>setTimeout(resolve,35));await tick();
+    assert.equal(attempts,2,'stationary view retries detail without another pan');
+    assert.equal(recovered.finestFor('s',{z:3,x:0,y:0}).z,3);
+    assert.equal(recovered._retryTimer,0);recovered.destroy();
+  }
+  let obsoleteRetries=0;
+  const cancelledRetry=new ElevationTileStore({retryDelayMs:10,sources:[source('s',1,8)],request:async()=>{obsoleteRetries++;throw Error('outage');}});
+  await cancelledRetry.want([{z:3,x:0,y:0}]);cancelledRetry.want([]);
+  await new Promise(resolve=>setTimeout(resolve,25));assert.equal(obsoleteRetries,1,'leaving a tile cancels its retry');
+  cancelledRetry.destroy();assert.equal(cancelledRetry._retryTimer,0);
+
+  const fs=require('node:fs'),vm=require('node:vm'),html=fs.readFileSync(require.resolve('./index.html'),'utf8');
+  const adapter=html.slice(html.indexOf('function gpuElevationRequest('),html.indexOf('function gpuElevationSources('));
+  let noCoverageRequests=0;
+  const context={elevationRequests:{request:async()=>{noCoverageRequests++;return null;}}};
+  vm.createContext(context);vm.runInContext(adapter,context);
+  const noCoverage=new ElevationTileStore({retryDelayMs:10,sources:[source('s',5,8)],request:context.gpuElevationRequest});
+  await noCoverage.want([{z:3,x:0,y:0}]);await new Promise(resolve=>setTimeout(resolve,25));
+  assert.equal(noCoverageRequests,1,'explicit provider no-coverage is cached, not retried');
+  assert.equal(noCoverage._retryTimer,0);assert.equal(noCoverage.finestFor('s',{z:3,x:0,y:0}).validCount,0);noCoverage.destroy();
 
   const sources=buildSources({dnrEndpoint:'/dnr',rawEndpoint:'/raw',nationalEndpoint:'/national',fallback:'/base/{z}/{x}/{y}',fallbackNativeZoom:15,refineOverview:true},
     {proxy:true,api:x=>x,dz:1,dnrRevision:7,dnrTileAllowed:()=>true,rawCoverageQuery:'r=1'});

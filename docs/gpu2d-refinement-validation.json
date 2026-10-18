@@ -1,0 +1,590 @@
+{
+  "release": "2026-10-17j",
+  "baselineCommit": "79722f9",
+  "physicalIPhoneTested": false,
+  "fixture": "Fixed viewport CSSz14/DPR2, native detailz15. Hold one native parent; half of detailed URLs fail once. Production sharedpool and GPU renderer. Accelerated350ms store retry delay; production10seconds.",
+  "results": {
+    "chrome-baseline": {
+      "browser": "chrome",
+      "url": "http://127.0.0.1:8826/",
+      "baseline": true,
+      "startedAt": "2026-10-18T06:52:50.812Z",
+      "errors": [],
+      "whilePrimaryHeld": {
+        "fine": 0,
+        "held": "native/14/2803/5702",
+        "heldCompleted": false,
+        "frames": 12
+      },
+      "coarseImage": "/tmp/csp-refinement-fix/chrome-baseline-recovering.png",
+      "allNative": false,
+      "after": {
+        "native": 70,
+        "total": 140,
+        "recovered": 0,
+        "stats": {
+          "textures": 118,
+          "textureBytes": 30932992,
+          "frames": 28,
+          "drawCalls": 97,
+          "lastFrameMs": 1.8999998569488525,
+          "ready": true,
+          "queuedUploads": 0,
+          "uploads": 118,
+          "evictions": 0,
+          "generation": 2,
+          "error": null,
+          "heightFieldBytes": 41472000,
+          "trackedTiles": 118,
+          "coverageKind": "resident tile overlap estimate; readProvenance returns sampled pixel coverage",
+          "fallback": "CPU when float targets or self-test unavailable"
+        },
+        "settled": {
+          "complete": 140,
+          "total": 140,
+          "ratio": 1,
+          "coveredPixels": 9175040,
+          "totalPixels": 9175040,
+          "refining": false,
+          "failed": true
+        },
+        "center": {
+          "lat": 47.858,
+          "lng": -118.33
+        },
+        "zoom": 14,
+        "renderer": "see-context-probe"
+      },
+      "nativeImage": "/tmp/csp-refinement-fix/chrome-baseline-native.png",
+      "diff": {
+        "width": 2880,
+        "height": 1800,
+        "pixels": 5184000,
+        "maxChannel": [
+          139,
+          200,
+          149,
+          0
+        ],
+        "max": 200,
+        "mean": 64.06504108796297,
+        "over3": 2616768,
+        "pctOver3": 50.477777777777774,
+        "pctWithin3": 49.522222222222226
+      },
+      "hardware": "ANGLE (Apple, ANGLE Metal Renderer: Apple M2, Unspecified Version)",
+      "pass": true,
+      "finishedAt": "2026-10-18T06:52:58.890Z"
+    },
+    "chrome-fixed": {
+      "browser": "chrome",
+      "url": "http://127.0.0.1:8826/",
+      "baseline": false,
+      "startedAt": "2026-10-18T06:52:38.692Z",
+      "errors": [],
+      "whilePrimaryHeld": {
+        "fine": 51,
+        "held": "native/14/2803/5702",
+        "heldCompleted": false,
+        "frames": 17
+      },
+      "coarseImage": "/tmp/csp-refinement-fix/chrome-fixed-recovering.png",
+      "allNative": true,
+      "after": {
+        "native": 140,
+        "total": 140,
+        "recovered": 70,
+        "stats": {
+          "textures": 188,
+          "textureBytes": 49283072,
+          "frames": 41,
+          "drawCalls": 97,
+          "lastFrameMs": 1.2000000476837158,
+          "ready": true,
+          "queuedUploads": 0,
+          "uploads": 188,
+          "evictions": 0,
+          "generation": 2,
+          "error": null,
+          "heightFieldBytes": 41472000,
+          "trackedTiles": 188,
+          "coverageKind": "resident tile overlap estimate; readProvenance returns sampled pixel coverage",
+          "fallback": "CPU when float targets or self-test unavailable"
+        },
+        "settled": {
+          "complete": 140,
+          "total": 140,
+          "ratio": 1,
+          "coveredPixels": 9175040,
+          "totalPixels": 9175040,
+          "refining": false,
+          "failed": false
+        },
+        "center": {
+          "lat": 47.858,
+          "lng": -118.33
+        },
+        "zoom": 14,
+        "renderer": "see-context-probe"
+      },
+      "nativeImage": "/tmp/csp-refinement-fix/chrome-fixed-native.png",
+      "diff": {
+        "width": 2880,
+        "height": 1800,
+        "pixels": 5184000,
+        "maxChannel": [
+          171,
+          204,
+          148,
+          0
+        ],
+        "max": 204,
+        "mean": 63.814889660493826,
+        "over3": 2621259,
+        "pctOver3": 50.56440972222222,
+        "pctWithin3": 49.43559027777778
+      },
+      "hardware": "ANGLE (Apple, ANGLE Metal Renderer: Apple M2, Unspecified Version)",
+      "pass": true,
+      "finishedAt": "2026-10-18T06:52:50.746Z"
+    },
+    "webkit-fixed": {
+      "browser": "webkit",
+      "url": "http://127.0.0.1:8826/",
+      "baseline": false,
+      "startedAt": "2026-10-18T06:52:58.945Z",
+      "errors": [],
+      "whilePrimaryHeld": {
+        "fine": 16,
+        "held": "native/14/2803/5702",
+        "heldCompleted": false,
+        "frames": 6
+      },
+      "coarseImage": "/tmp/csp-refinement-fix/webkit-fixed-recovering.png",
+      "allNative": true,
+      "after": {
+        "native": 140,
+        "total": 140,
+        "recovered": 70,
+        "stats": {
+          "textures": 188,
+          "textureBytes": 49283072,
+          "frames": 32,
+          "drawCalls": 97,
+          "lastFrameMs": 1,
+          "ready": true,
+          "queuedUploads": 0,
+          "uploads": 188,
+          "evictions": 0,
+          "generation": 2,
+          "error": null,
+          "heightFieldBytes": 41472000,
+          "trackedTiles": 188,
+          "coverageKind": "resident tile overlap estimate; readProvenance returns sampled pixel coverage",
+          "fallback": "CPU when float targets or self-test unavailable"
+        },
+        "settled": {
+          "complete": 140,
+          "total": 140,
+          "ratio": 1,
+          "coveredPixels": 9175040,
+          "totalPixels": 9175040,
+          "refining": false,
+          "failed": false
+        },
+        "center": {
+          "lat": 47.858,
+          "lng": -118.33
+        },
+        "zoom": 14,
+        "renderer": "see-context-probe"
+      },
+      "nativeImage": "/tmp/csp-refinement-fix/webkit-fixed-native.png",
+      "diff": {
+        "width": 2880,
+        "height": 1800,
+        "pixels": 5184000,
+        "maxChannel": [
+          171,
+          206,
+          149,
+          0
+        ],
+        "max": 206,
+        "mean": 112.7050518904321,
+        "over3": 4580244,
+        "pctOver3": 88.35347222222222,
+        "pctWithin3": 11.646527777777777
+      },
+      "hardware": "Apple GPU",
+      "pass": true,
+      "finishedAt": "2026-10-18T06:53:04.892Z"
+    },
+    "webkit-phone-fixed": {
+      "browser": "webkit",
+      "url": "http://127.0.0.1:8826/",
+      "baseline": false,
+      "phoneEmulation": true,
+      "startedAt": "2026-10-18T06:54:39.355Z",
+      "errors": [],
+      "whilePrimaryHeld": {
+        "fine": 23,
+        "held": "native/14/2805/5702",
+        "heldCompleted": false,
+        "frames": 9
+      },
+      "coarseImage": "/tmp/csp-refinement-fix/webkit-phone-fixed-recovering.png",
+      "allNative": true,
+      "after": {
+        "native": 60,
+        "total": 60,
+        "recovered": 30,
+        "stats": {
+          "textures": 80,
+          "textureBytes": 20971520,
+          "frames": 18,
+          "drawCalls": 33,
+          "lastFrameMs": 0,
+          "ready": true,
+          "queuedUploads": 0,
+          "uploads": 80,
+          "evictions": 0,
+          "generation": 2,
+          "error": null,
+          "heightFieldBytes": 23699520,
+          "trackedTiles": 80,
+          "coverageKind": "resident tile overlap estimate; readProvenance returns sampled pixel coverage",
+          "fallback": "CPU when float targets or self-test unavailable"
+        },
+        "settled": {
+          "complete": 60,
+          "total": 60,
+          "ratio": 1,
+          "coveredPixels": 3932160,
+          "totalPixels": 3932160,
+          "refining": false,
+          "failed": false
+        },
+        "center": {
+          "lat": 47.857978796550626,
+          "lng": -118.32996368408205
+        },
+        "zoom": 14,
+        "renderer": "see-context-probe"
+      },
+      "nativeImage": "/tmp/csp-refinement-fix/webkit-phone-fixed-native.png",
+      "diff": {
+        "width": 1170,
+        "height": 2532,
+        "pixels": 2962440,
+        "maxChannel": [
+          176,
+          206,
+          156,
+          0
+        ],
+        "max": 206,
+        "mean": 64.26688000432077,
+        "over3": 1495671,
+        "pctOver3": 50.48780734799692,
+        "pctWithin3": 49.51219265200308
+      },
+      "hardware": "Apple GPU",
+      "pass": true,
+      "finishedAt": "2026-10-18T06:54:46.202Z"
+    }
+  },
+  "independentBaselineProof": {
+    "stationaryFailure": {
+      "failedNative": 16,
+      "requestsBeforeRetryExpiry": 17,
+      "requestsAfterSameBoundsLookup": 17,
+      "requestsAfterForcedInvalidation": 33,
+      "statusAfterFailure": {
+        "complete": 16,
+        "total": 16,
+        "ratio": 1,
+        "coveredPixels": 1048576,
+        "totalPixels": 1048576,
+        "refining": false,
+        "failed": true
+      },
+      "statusAfterExpiry": {
+        "complete": 16,
+        "total": 16,
+        "ratio": 1,
+        "coveredPixels": 1048576,
+        "totalPixels": 1048576,
+        "refining": false,
+        "failed": false
+      },
+      "qualification": "production neededTiles/want closure; GL initialization skipped only in memory; no render/GPU"
+    },
+    "globalBarrier": {
+      "afterFirstTileReady": [
+        "raw/2/2/2",
+        "raw/2/3/2"
+      ],
+      "afterUnrelatedPrimaryRelease": [
+        "raw/2/2/2",
+        "raw/2/3/2",
+        "raw/3/4/4",
+        "raw/3/6/4"
+      ]
+    },
+    "partialSource": {
+      "requests": [
+        "dnr/2/2/2",
+        "raw/2/2/2",
+        "dnr/3/4/4"
+      ],
+      "status": {
+        "complete": 1,
+        "total": 1,
+        "ratio": 1,
+        "coveredPixels": 65536,
+        "totalPixels": 65536,
+        "refining": false,
+        "failed": false
+      },
+      "provenance": {
+        "ranks": {
+          "3": 56320,
+          "5": 9216
+        },
+        "labels": [
+          "dnr",
+          "raw"
+        ],
+        "surveys": [],
+        "sampleMeters": {
+          "3": 1890888.8389577859,
+          "5": 1161619.1568261487
+        }
+      }
+    },
+    "idleGate": {
+      "active": 1,
+      "queued": 1,
+      "sharpStartedBeforeRelease": false
+    }
+  },
+  "independentFinalReview": {
+    "verdict": "PASS",
+    "productionChainProbes": {
+      "none": {
+        "callsBeforeRevision": 1,
+        "record": {
+          "width": 1,
+          "height": 1,
+          "validCount": 0,
+          "bytes": 4
+        },
+        "status": {
+          "complete": 1,
+          "total": 1,
+          "ratio": 1,
+          "coveredPixels": 65536,
+          "totalPixels": 65536,
+          "refining": false,
+          "failed": false
+        },
+        "errors": 0,
+        "revisionInvalidation": "re-requested and accepted valid data"
+      },
+      "empty": {
+        "callsBeforeRevision": 1,
+        "record": {
+          "width": 1,
+          "height": 1,
+          "validCount": 0,
+          "bytes": 4
+        },
+        "status": {
+          "complete": 1,
+          "total": 1,
+          "ratio": 1,
+          "coveredPixels": 65536,
+          "totalPixels": 65536,
+          "refining": false,
+          "failed": false
+        },
+        "errors": 0,
+        "revisionInvalidation": "re-requested and accepted valid data"
+      },
+      "opaque-empty": {
+        "callsBeforeRevision": 1,
+        "record": {
+          "width": 1,
+          "height": 1,
+          "validCount": 0,
+          "bytes": 4
+        },
+        "status": {
+          "complete": 1,
+          "total": 1,
+          "ratio": 1,
+          "coveredPixels": 65536,
+          "totalPixels": 65536,
+          "refining": false,
+          "failed": false
+        },
+        "errors": 0,
+        "revisionInvalidation": "re-requested and accepted valid data"
+      },
+      "transient202": {
+        "callsAtExhaustion": 63,
+        "pendingPollWaits": 60,
+        "statusBeforeRecovery": {
+          "complete": 1,
+          "total": 1,
+          "ratio": 1,
+          "coveredPixels": 65536,
+          "totalPixels": 65536,
+          "refining": true,
+          "failed": true
+        },
+        "error": "Elevation processing is still pending",
+        "callsAfterStationaryRecovery": 64,
+        "statusAfterRecovery": {
+          "complete": 1,
+          "total": 1,
+          "ratio": 1,
+          "coveredPixels": 65536,
+          "totalPixels": 65536,
+          "refining": false,
+          "failed": false
+        }
+      },
+      "rejectedTransport": {
+        "calls": 4,
+        "errors": [
+          "temporary network failure"
+        ],
+        "status": {
+          "complete": 1,
+          "total": 1,
+          "ratio": 1,
+          "coveredPixels": 65536,
+          "totalPixels": 65536,
+          "refining": false,
+          "failed": false
+        }
+      },
+      "shapedAllNaN": {
+        "calls": 1,
+        "status": {
+          "complete": 0,
+          "total": 1,
+          "ratio": 0,
+          "coveredPixels": 0,
+          "totalPixels": 65536,
+          "refining": false,
+          "failed": false
+        }
+      },
+      "priorRegressionProbes": {
+        "failedSharpHiddenByComplete": {
+          "calls": [
+            "survey/2/0/0",
+            "fallback/2/0/0",
+            "fallback/3/0/0",
+            "survey/3/0/0"
+          ],
+          "status": {
+            "complete": 1,
+            "total": 1,
+            "ratio": 1,
+            "coveredPixels": 65536,
+            "totalPixels": 65536,
+            "refining": false,
+            "failed": false
+          }
+        },
+        "failedSharpWithPartialBest": {
+          "calls": [
+            "survey/2/0/0",
+            "fallback/2/0/0",
+            "fallback/3/0/0",
+            "survey/3/0/0",
+            "fallback/3/0/0"
+          ],
+          "status": {
+            "complete": 1,
+            "total": 1,
+            "ratio": 1,
+            "coveredPixels": 65536,
+            "totalPixels": 65536,
+            "refining": false,
+            "failed": false
+          },
+          "ranks": {
+            "2": 20480,
+            "5": 45056
+          },
+          "samples": {
+            "survey": {
+              "rank": 5,
+              "value": 9
+            },
+            "fallback": {
+              "rank": 2,
+              "value": 4
+            }
+          }
+        },
+        "primaryRecovery": {
+          "calls": 3,
+          "status": {
+            "complete": 1,
+            "total": 1,
+            "ratio": 1,
+            "coveredPixels": 65536,
+            "totalPixels": 65536,
+            "refining": false,
+            "failed": false
+          }
+        },
+        "lifecycle": {
+          "clearDestroy": "no retries",
+          "lateSourceRevision": "aborted old result ignored",
+          "newFineValue": 3,
+          "residentInvalidation": "primary and sharp replaced"
+        },
+        "realPool": {
+          "configuration": {
+            "concurrency": 14,
+            "groupLimits": {
+              "detail": 6,
+              "national": 6,
+              "overview": 6,
+              "sharp": 6,
+              "dnr": 2
+            },
+            "idleGroups": []
+          },
+          "sharpStartsWhilePrimaryBlocked": true,
+          "peakActive": 14,
+          "peakSharp": 6,
+          "nonSharpActive": 8
+        },
+        "budget": {
+          "stats": {
+            "tiles": 2,
+            "bytes": 32,
+            "pending": 0,
+            "maxBytes": 32
+          },
+          "calls": 5
+        }
+      },
+      "hashes": {
+        "index.html": "481ebdad647677114d9bc181bb90e3af5d3661c1337cb1a6f2cd0ad45a62237d",
+        "gpu-terrain-store.js": "5de3f3558e36b3943ce7f84c19bf4cd9fb3c0ce0d11d45c7182d557dc7ad7279",
+        "test-gpu-terrain-store.js": "115f61ff6c341c4228d4950380592206e3beca588c6e6bb8949ed6972f5a6af5",
+        "sw.js": "55cb3cc3dd8802f485b72a29b096b80b965deb90fd0f4f82e305ac5fe2239b75",
+        "version.js": "4a2114dafde077af3801c9c813375a9bc5082d1efa6e0cb7c05700b8ea1964b5"
+      }
+    }
+  }
+}

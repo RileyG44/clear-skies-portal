@@ -32,7 +32,8 @@
     this.options=options||{};this._listeners={};this._tiles=new Map();this._pending=new Map();
     this._failed=new Map();this._wanted=new Map();this._displays=[];this._sources=[];
     this._bytes=0;this._revision=0;this._epoch=0;this._demand=0;this._destroyed=false;
-    this._levels=new Map();this._summaries=new Map();
+    this._levels=new Map();this._summaries=new Map();this._retryTimer=0;
+    this.retryDelayMs=Math.max(1,this.options.retryDelayMs??10000);
     this.maxBytes=Math.max(0,this.options.maxBytes??192*1024*1024);
   }
   ElevationTileStore.prototype.on=function(event,fn){(this._listeners[event]||(this._listeners[event]=new Set())).add(fn);return this;};
@@ -67,6 +68,18 @@
     const levels=[...(this._levels.get(id)?.keys()||[])].filter(z=>z<=c.z).sort((a,b)=>b-a);
     for(const z of levels){const t=coords(c,z),r=this.get(tileKey(id,z,t.x,t.y));if(r)return r;}
   };
+  ElevationTileStore.prototype._scheduleRetry=function(){
+    clearTimeout(this._retryTimer);this._retryTimer=0;
+    if(this._destroyed)return;
+    let next=Infinity;
+    for(const [key,until] of this._failed)if(this._wanted.has(key)&&!this._tiles.has(key))next=Math.min(next,until);
+    if(!Number.isFinite(next))return;
+    this._retryTimer=setTimeout(()=>{
+      this._retryTimer=0;
+      if(!this._destroyed)this.want(this._displays,{generation:this._generation});
+    },Math.max(0,next-Date.now()));
+    this._retryTimer?.unref?.();
+  };
   ElevationTileStore.prototype._load=function(job){
     const {key,source,c,sharp}=job;
     if(this._tiles.has(key))return Promise.resolve(this._tiles.get(key));
@@ -78,7 +91,8 @@
       signal:controller.signal,priority:sharp?0:source.rank===5?2:source.rank,
       group:sharp?'sharp':source.group||'overview',kind:source.kind
     });}).then(data=>{
-      if(!data||controller.signal.aborted||epoch!==this._epoch||this._destroyed)return null;
+      if(controller.signal.aborted||epoch!==this._epoch||this._destroyed)return null;
+      if(!data)throw new Error('Elevation tile unavailable');
       const width=data.width,height=data.height;
       if(!Number.isInteger(width)||width<1||!Number.isInteger(height)||height<1||!data.grid||data.grid.length!==width*height)throw new Error('Invalid native elevation grid');
       // Decoder caches may share the returned array. Masking and sentinel
@@ -99,10 +113,11 @@
       levels.set(r.z,(levels.get(r.z)||0)+1);this._invalidateSummaries(r);this._evict();
       this._emit('tile',r);return r;
     }).catch(error=>{
-      if(!controller.signal.aborted&&epoch===this._epoch){this._failed.set(key,Date.now()+10000);this._emit('error',{key,error});}
+      if(!controller.signal.aborted&&epoch===this._epoch){this._failed.set(key,Date.now()+this.retryDelayMs);this._emit('error',{key,error});}
       return null;
     }).finally(()=>{
       if(this._pending.get(key)===pending)this._pending.delete(key);
+      if(epoch===this._epoch)this._scheduleRetry();
       if(epoch===this._epoch&&!this._destroyed)this._emit('settled',key);
     });
     return pending.promise;
@@ -147,21 +162,33 @@
     for(const [key,until] of this._failed)if(!wanted.has(key)||until<=Date.now())this._failed.delete(key);
     for(const [key,p] of this._pending)if(!wanted.has(key)){p.controller.abort();this._pending.delete(key);}
     // Every primary source is dispatched together; refinement cannot starve it.
-    const primary=new Map();for(const jobs of groups)for(const j of jobs)if(!j.sharp)primary.set(j.key,j);
+    const primary=new Map(),dependents=new Map();
+    for(const jobs of groups)for(const j of jobs)if(!j.sharp){
+      primary.set(j.key,j);
+      if(!dependents.has(j.key))dependents.set(j.key,[]);
+      dependents.get(j.key).push(jobs);
+    }
     const epoch=this._epoch;
-    const first=Promise.all([...primary.values()].map(j=>this._load(j)));
-    first.then(()=>{
+    // Refine each available region independently. One slow/missing primary
+    // must not hold every ready region behind a viewport-wide barrier.
+    const refine=key=>{
       if(epoch!==this._epoch||demand!==this._demand||this._destroyed)return;
-      for(const jobs of groups){
+      for(const jobs of dependents.get(key)||[]){
         if(!jobs.length)continue;
         const available=jobs.filter(j=>!j.sharp&&this._tiles.has(j.key)&&this._tiles.get(j.key).validCount>0);
         available.sort((a,b)=>b.source.rank-a.source.rank);
-        const best=available[0];if(!best)continue;
-        const sharp=jobs.find(j=>j.sharp&&j.source.id===best.source.id&&j.c.z>best.c.z);
-        if(sharp&&this._wanted.has(sharp.key))this._load(sharp);
+        for(const best of available){
+          const sharp=jobs.find(j=>j.sharp&&j.source.id===best.source.id&&j.c.z>best.c.z);
+          if(sharp&&this._wanted.has(sharp.key))this._load(sharp);
+          // Partial surveys still expose lower-rank fallback pixels. Those
+          // pixels need their native detail too; full coverage can hide them.
+          if(this._tiles.get(best.key).validCount===this._tiles.get(best.key).grid.length)break;
+        }
       }
       this._evict();
-    });
+    };
+    const first=Promise.all([...primary.values()].map(j=>this._load(j).then(record=>{refine(j.key);return record;})));
+    this._scheduleRetry();
     return first;
   };
   ElevationTileStore.prototype._sampler=function(sources,displayZ){
@@ -239,9 +266,8 @@
   ElevationTileStore.prototype.settled=function(displayTiles){
     const tiles=displayTiles||this._displays;let complete=0,coveredPixels=0,totalPixels=0;
     for(const d of tiles){const s=this._summary(d);if(s.covered===s.total)complete++;coveredPixels+=s.covered;totalPixels+=s.total;}
-    const now=Date.now();for(const [key,until] of this._failed)if(until<=now)this._failed.delete(key);
     return {complete,total:tiles.length,ratio:totalPixels?coveredPixels/totalPixels:0,coveredPixels,totalPixels,
-      refining:this._pending.size>0,failed:[...this._failed.keys()].some(key=>this._wanted.has(key))};
+      refining:this._pending.size>0||!!this._retryTimer,failed:[...this._failed.keys()].some(key=>this._wanted.has(key))};
   };
   ElevationTileStore.prototype.provenance=function(displayTiles){
     const ranks={},labels=new Set(),surveys=new Map(),sampleMeters={};
@@ -299,6 +325,7 @@
       provenance:[...labels],provisional:this._pending.size>0};
   };
   ElevationTileStore.prototype.clear=function(){
+    clearTimeout(this._retryTimer);this._retryTimer=0;
     this._epoch++;this._demand++;for(const p of this._pending.values())p.controller.abort();this._pending.clear();
     this._tiles.clear();this._failed.clear();this._wanted.clear();this._displays=[];this._bytes=0;this._levels.clear();this._summaries.clear();this._emit('clear');
   };

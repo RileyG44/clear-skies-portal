@@ -994,8 +994,8 @@ body.pane-reordering,body.pane-reordering *{cursor:grabbing!important;user-selec
 }
 
 </style>
-<link rel="stylesheet" href="ui-theme.css?build=2026-10-17i">
-<link rel="stylesheet" href="ui-system.css?build=2026-10-17i">
+<link rel="stylesheet" href="ui-theme.css?build=2026-10-17j">
+<link rel="stylesheet" href="ui-system.css?build=2026-10-17j">
 <style>
 /* The redesign restructures the legacy DOM rather than replacing it, and the
    script that does so is the last thing on the page - so the browser paints the
@@ -1786,7 +1786,7 @@ html.csp-boot body{visibility:hidden}
   L.Renderer.prototype.onAdd=function(map){return onAdd.call(this,map||this._map)};
 })();
 </script>
-<script src="version.js?build=2026-10-17i"></script>
+<script src="version.js?build=2026-10-17j"></script>
 <script src="mosaic-core.js"></script>
 <script src="png-stream.js"></script>
 <script src="terrain-core.js"></script>
@@ -5845,7 +5845,10 @@ function initGpuTerrain(){
 function gpuElevationRequest(url,options={}){
   const {kind,...requestOptions}=options;
   return elevationRequests.request(url,signal=>(kind==="lerc"||url.includes("/exportImage?"))
-    ?fetchPublicElevation(url,signal):fetchElevation(url,signal),requestOptions);
+    ?fetchPublicElevation(url,signal):fetchElevation(url,signal),requestOptions).then(tile=>tile||{
+      // fetchElevation uses null for explicit X-Coverage:none / empty DEM.
+      // Cache that confirmed absence; transport errors still reject/retry.
+      grid:new Float32Array([NaN]),width:1,height:1,noCoverage:true});
 }
 function gpuElevationSources(){
   const options={...elevationSourceOptions(),fallbackNativeZoom:15,nationalNativeZoom:17,rawNativeZoom:18,refineOverview:true};
@@ -9696,7 +9699,9 @@ function loadTerrainPrefs(){
    tiles. A bounded queue prevents three layers from saturating the engine. */
 /* The engine runs a render per core (two per worker while they wait on S3),
    so the page keeps it fed: six raw 1 m renders in flight instead of two. */
-const elevationRequests=new CSPTilePipeline.RequestPool({concurrency:14,groupLimits:{detail:6,national:6,overview:6,sharp:6,dnr:2},idleGroups:["sharp"]});
+// Sharp work uses at most six slots, leaving eight for newly exposed terrain.
+// A slow primary request must not keep every free slot idle indefinitely.
+const elevationRequests=new CSPTilePipeline.RequestPool({concurrency:14,groupLimits:{detail:6,national:6,overview:6,sharp:6,dnr:2}});
 function sourceSampleMeters(coords){
   const count=2**coords.z,latitude=Math.atan(Math.sinh(Math.PI*(1-2*(coords.y+.5)/count)));
   return 156543.03392804097*Math.cos(latitude)/count;
@@ -9778,7 +9783,7 @@ async function fetchElevation(url,signal){
         const value=await response.json();dnrStatus=value.acquisition||dnrStatus;
         if(typeof scheduleTerrainStatus==="function")scheduleTerrainStatus();
         clearTimeout(timeout);
-        if(++pendingChecks>60)return null;
+        if(++pendingChecks>60)throw new Error("Elevation processing is still pending");
         await waitElevationRetry(5000,signal);attempt--;continue;
       }
       if(!response.ok||response.headers.get("X-CSP-Error")){
@@ -11029,8 +11034,8 @@ $("#q").addEventListener("blur",()=>setTimeout(acHide,120));
 document.addEventListener("click",e=>{ if(!e.target.closest("#iw")) acHide() });
 })();
 </script>
-<script src="markup-3d.js?build=2026-10-17i"></script>
-<script src="markup.js?build=2026-10-17i"></script>
-<script src="ui-system.js?build=2026-10-17i"></script>
+<script src="markup-3d.js?build=2026-10-17j"></script>
+<script src="markup.js?build=2026-10-17j"></script>
+<script src="ui-system.js?build=2026-10-17j"></script>
 </body>
 </html>
