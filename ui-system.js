@@ -375,10 +375,11 @@ function buildLayerCard(layer,index,entries,compact=false){
   if(layer.locked) card.classList.add("csp-layer-locked");
   if(compact) card.classList.add("csp-layer-compact");
   card.draggable=false;
+  const title=layer.id!=="basemap"&&routeForLayer(layer)!=="layers"?'<button type="button" class="csp-layer-name csp-layer-title" data-action="edit"></button>':'<div class="csp-layer-name"></div>';
   const rail=layer.locked||compact?"":`<div class="csp-layer-rail"><button class="csp-layer-handle" type="button" aria-label="Reorder ${layer.name}" title="Drag to reorder"></button><div class="csp-layer-tools"><button class="csp-layer-tool" type="button" data-action="up" aria-label="Move ${layer.name} up" title="Move up" ${index===0?"disabled":""}><img src="${icon("chevron-up")}" alt=""></button><button class="csp-layer-tool" type="button" data-action="down" aria-label="Move ${layer.name} down" title="Move down" ${index===entries.length-2?"disabled":""}><img src="${icon("chevron-down")}" alt=""></button><button class="csp-layer-tool" type="button" data-action="edit" aria-label="Edit ${layer.name}" title="Edit"><img src="${icon("pencil")}" alt=""></button><button class="csp-layer-tool" type="button" data-action="reset" aria-label="Reset ${layer.name}" title="Reset"><img src="${icon("rotate-ccw")}" alt=""></button></div></div>`;
   card.innerHTML=`
     ${rail}
-    <div class="csp-layer-main"><div class="csp-layer-name"></div><div class="csp-layer-meta"></div>${layer.noOpacity?"":`<div class="csp-layer-opacity"><input class="csp-layer-range" type="range" min="0" max="100" step="1" value="${Math.round(layer.opacity)}"><output>${Math.round(layer.opacity)}%</output></div>`}</div>
+    <div class="csp-layer-main">${title}<div class="csp-layer-meta"></div>${layer.noOpacity?"":`<div class="csp-layer-opacity"><input class="csp-layer-range" type="range" min="0" max="100" step="1" value="${Math.round(layer.opacity)}"><output>${Math.round(layer.opacity)}%</output></div>`}</div>
     <label class="csp-switch" aria-label="Show ${layer.name}"><input type="checkbox" ${layer.visible?"checked":""} ${layer.locked?"disabled":""}><span></span></label>`;
   $(".csp-layer-name",card).textContent=layer.name;
   $(".csp-layer-meta",card).textContent=layer.meta||"";
@@ -421,6 +422,61 @@ function buildLayerCard(layer,index,entries,compact=false){
   });
   return card;
 }
+
+/* The toolbar renderer owns its live source descriptions and sliders. Enhance
+   those rows in place so refreshes preserve the controls and their full source
+   text, while the sidebar keeps its inline metadata. */
+const toolbarLayerBody=$("#terrainSourcePanelBody");
+function syncToolbarLayerSources(){
+  if(!toolbarLayerBody) return;
+  toolbarLayerObserver.disconnect();
+  try{
+    const layers=new Map(bridge.activeLayers().map(layer=>[layer.id,layer]));
+    let footer=$(".csp-layer-sources",toolbarLayerBody);
+    if(!footer){
+      footer=document.createElement("footer");footer.className="csp-layer-sources";
+      footer.setAttribute("aria-label","Layer sources");toolbarLayerBody.append(footer);
+    }
+    const sources=[];
+    for(const row of $$(".terrain-source-panel-row",toolbarLayerBody)){
+      const layer=layers.get(row.dataset.id),meta=$(".terrain-source-panel-meta",row);
+      let title=$(".terrain-source-panel-name",row);
+      if(layer&&layer.id!=="basemap"&&routeForLayer(layer)!=="layers"&&title?.tagName!=="BUTTON"){
+        const button=document.createElement("button");button.type="button";
+        button.className="terrain-source-panel-name csp-layer-title";
+        button.textContent=title.textContent;title.replaceWith(button);title=button;
+        button.addEventListener("click",()=>{
+          $("#terrainSourceClose")?.click();
+          if(document.body.classList.contains("collapsed")) $("#sideToggle")?.click();
+          activateRoute(routeForLayer(layer));
+          $("#cspWorkspaceTitle").setAttribute("tabindex","-1");
+          $("#cspWorkspaceTitle").focus({preventScroll:true});
+        });
+      }
+      if(meta){
+        meta.hidden=true;
+        sources.push([title?.textContent||layer?.name||"Unnamed layer",meta.textContent]);
+      }
+    }
+    const signature=JSON.stringify(sources);
+    if(footer.dataset.signature!==signature){
+      footer.dataset.signature=signature;footer.replaceChildren();
+      for(const [name,meta] of sources){
+        const row=document.createElement("div");row.className="csp-layer-source";
+        const label=document.createElement("div");label.className="csp-layer-source-name";label.textContent=name;
+        const detail=document.createElement("div");detail.className="csp-layer-source-meta";detail.textContent=meta;
+        row.append(label,detail);footer.append(row);
+      }
+    }
+    footer.hidden=!sources.length;
+    // Keep credits and any existing explanations before this final source list.
+    if(toolbarLayerBody.lastElementChild!==footer) toolbarLayerBody.append(footer);
+  }finally{
+    toolbarLayerObserver.observe(toolbarLayerBody,{childList:true,subtree:true,characterData:true});
+  }
+}
+const toolbarLayerObserver=new MutationObserver(syncToolbarLayerSources);
+syncToolbarLayerSources();
 
 /* Where each card sat before a rebuild, so the new list can slide from there. */
 const layerCardTops=root=>new Map($$(".csp-layer-card",root).map(card=>[card.dataset.layerId,card.getBoundingClientRect().top]));

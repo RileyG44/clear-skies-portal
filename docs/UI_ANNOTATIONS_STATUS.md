@@ -1,6 +1,6 @@
 # UI annotation implementation status
 
-Implementation is blocked on missing annotation context. No application code was changed. Parent confirmed the same missing tools and requested a read-only inventory, with implementation to resume when Riley resends details.
+Current delivery: clarified annotations #2 and #3 implemented in `ui-system.js`. Earlier recovery evidence and inventory below are retained as historical context. Remaining annotations are outside this narrowed task.
 
 ## Checklist
 
@@ -89,10 +89,33 @@ UI work only when resumed. Do not edit GPU terrain files, GPU integration functi
 Riley clarified #2 and #3; implement only these in `ui-system.js` and this document.
 
 - [x] Record narrowed scope before exploration.
-- [ ] Merge `origin/main` (expected `56e18e0`) into isolated branch, preserving inventory.
-- [ ] #2: Move full source metadata from compact toolbar layer cards into a footer listing active layer names and metadata at the bottom of the toolbar Layers pop-out. Keep ordinary sidebar metadata.
-- [ ] #3: Use native `.csp-layer-title` buttons to open matching existing settings/edit route and close pop-out; preserve independent slider, toggle and drag behavior. Keep pinned basemap informational where no meaningful route exists.
-- [ ] Verify JavaScript syntax and browser behavior on port 8820 with temporary cache.
-- [ ] Commit changes; report behavior, SHA and limitations.
+- [x] Merge `origin/main` (expected `56e18e0`) into isolated branch, preserving inventory.
+- [x] #2: Move full source metadata from compact toolbar layer cards into a footer listing active layer names and metadata at the bottom of the toolbar Layers pop-out. Keep ordinary sidebar metadata.
+- [x] #3: Use native `.csp-layer-title` buttons to open matching existing settings/edit route and close pop-out; preserve independent slider, toggle and drag behavior. Keep pinned basemap informational where no meaningful route exists.
+- [x] Verify JavaScript syntax and browser behavior on port 8820 with temporary cache.
+- [x] Prepare implementation commit and report behavior, SHA and limitations.
 
 Root owns CSS (including new classes), #1 and #7. Do not edit CSS, tests, build stamps, index.html, GPU files, parent checkout or deployed service. Other annotations remain unresolved and out of scope. Footer classes: `.csp-layer-sources`, `.csp-layer-source`, `.csp-layer-source-name`, `.csp-layer-source-meta`.
+
+
+## Narrowed implementation result
+
+- Merged `origin/main` at `56e18e0` via merge commit `d8e653c`; inventory document preserved. Upstream GPU/index/build changes came from that requested merge, not this implementation.
+- #2: Toolbar source descriptions now appear in a final `.csp-layer-sources` footer, with each active displayed row's name and full existing metadata. The existing inline metadata nodes remain hidden so the native terrain renderer can keep updating them; a scoped observer copies changed text without replacing sliders. Sidebar metadata remains inline.
+- #3: Toolbar titles are native buttons using `.csp-layer-title` and `routeForLayer`. They close the pop-out using its existing close control, reveal a collapsed sidebar, open the matching existing edit route, and focus the destination heading. Sidebar card titles also use native edit buttons. The basemap stays informational because it has no settings route.
+- Actual toolbar rows originate in `index.html`'s `renderTerrainSourcePanel`, separately from `buildLayerCard`; enhancement lives entirely in `ui-system.js` to respect file ownership. No original renderer code was edited.
+- Root notified of both title selector variants: `button.terrain-source-panel-name.csp-layer-title` for toolbar and `button.csp-layer-name.csp-layer-title` for sidebar.
+
+### Verification
+
+- `node --check ui-system.js`, `node scripts/check-static.js`, `node test-menu-controls.js`, `node test-coordinate-search.js`, and `git diff --check` passed.
+- Fresh server on `127.0.0.1:8820`, cache `/tmp/csp-ui-annotations-cache.MzvdGd`; stopped after verification. Ports 8765/8816 untouched.
+- T3 preview at 1280 × 800: verified hidden inline toolbar metadata, footer as last child with all four displayed names/full source strings, and retained sidebar metadata.
+- Real keyboard Enter and Space activated title navigation to Conditions and closed the pop-out. Space also reopened a collapsed sidebar; focus landed on `#cspWorkspaceTitle`.
+- Real keyboard ArrowLeft on toolbar opacity changed 90% to 89%, kept the pop-out open and left the current route unchanged.
+- Browser-only temporary metadata mutation propagated its full text into the footer while preserving the exact slider DOM node. No fixture or test files were changed.
+- Visual screenshot inspected: `/Users/riley/.t3/userdata/browser-artifacts/browser-screenshot-127-0-0-1-mvddyfhs-6e53b40c.png`.
+
+### Limitations and integration
+
+Root owns final title/footer CSS; screenshot shows browser-default button borders and unstyled footer text until that CSS is integrated. Existing pop-out scrolling still applies to the longer content. No CSS, tests, index.html, build stamps, GPU files, deployed service or parent checkout were edited by this implementation. No deployment or merge into parent was performed. Other annotations remain unimplemented here by explicit scope. Changed implementation files: `ui-system.js` and this document only.
