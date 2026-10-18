@@ -37,7 +37,7 @@ UI worktree: `t3/implement-preview-ui-annotations`, initial inventory commit
 7. Sidebar menu hover/selected rows: use flat fills, without raised rims or scaling.
 
 8. Remove the duplicate 2D/3D/Point Cloud selector from the LiDAR sidebar; keep the toolbar selector as the only visible mode control. Implemented in build 2026-10-17g, including closing the point-cloud viewer when selecting 2D.
-9. Target is the LiDAR style dropdown (hillshade/aspect/etc.). Replacement behavior awaits clarification because the original instruction was truncated.
-10. Target is the WA DNR download module. New second-button behavior awaits clarification because the original instruction was truncated.
+9. LiDAR style dropdown replaced by a labelled icon-button palette matching the markup tools. All 11 styles, including Off and contour intervals, retain existing saved settings and rendering handlers. Implemented in build 2026-10-17h.
+10. WA DNR has Download current view below Select area. Both viewport and selected-area jobs run in the background with a compact progress chip beside the toolbar; click for details, cancellation or retry. Large areas retain explicit confirmation. Implemented in build 2026-10-17h.
 
 #4–6 are deferred because Riley is unsure of the original targets. #11–18 await further descriptions.

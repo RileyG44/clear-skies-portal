@@ -2297,6 +2297,7 @@ body.csp-redesign #panes .elev-section-title{font-size:15px;font-weight:650}
 body.csp-redesign #panes .elev-section-head{margin-bottom:8px}
 body.csp-redesign #panes #dnrAreaPanel{margin-top:16px;padding:12px 0 16px;border-top:0;border-bottom:1px solid var(--ui-line)}
 body.csp-redesign #panes #dnrSelect{width:100%;min-height:44px;margin:12px 0 8px;border:1px solid var(--ui-line-strong);border-radius:10px;color:var(--ui-text-2);background:var(--ui-surface)}
+body.csp-redesign #panes #dnrViewport{width:100%;min-height:44px;margin:0 0 8px;border:1px solid var(--ui-line-strong);border-radius:10px;color:var(--ui-text-2);background:var(--ui-surface)}
 body.csp-redesign .dnr-status-row{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-top:4px}
 body.csp-redesign #dnrAreaMsg{margin:0;font-size:12.5px;line-height:1.45}
 body.csp-redesign #dnrClear{flex:none;padding:0}
@@ -2360,6 +2361,19 @@ body.csp-redesign #dnrClear[hidden]{display:none}
 .dnr-selection-actions #dnrFetch[hidden]{display:none}
 .dnr-selection-bar[data-state="error"] p,.dnr-selection-bar[data-state="warning"] p{color:var(--ui-warn)}
 .dnr-selection-bar[data-state="ready"] p{color:var(--ui-text)}
+.dnr-selection-bar [hidden]{display:none!important}
+.dnr-selection-bar[data-background="true"]{width:auto;max-width:min(320px,calc(100vw - 78px));padding:0;box-shadow:0 3px 14px var(--ui-shadow-2)}
+.dnr-download-toggle{display:flex;align-items:center;gap:8px;width:100%;min-height:40px;padding:8px 12px;border:0;border-radius:14px;background:transparent;color:var(--ui-text);font:inherit;font-size:12px;cursor:pointer;text-align:left}
+.dnr-download-toggle:focus-visible{outline:2px solid var(--ui-accent);outline-offset:2px}
+.dnr-download-toggle > :last-child{margin-left:auto}
+.dnr-download-dot{flex:none;width:8px;height:8px;border-radius:50%;background:var(--ui-accent)}
+.dnr-selection-bar[data-state="loading"] .dnr-download-dot{animation:dnr-download-pulse 1.4s ease-in-out infinite}
+.dnr-selection-bar[data-state="error"] .dnr-download-dot,.dnr-selection-bar[data-state="warning"] .dnr-download-dot{background:var(--ui-warn)}
+.dnr-selection-bar[data-background="true"] #dnrSelectionDetails{width:300px;max-width:100%;padding:4px 12px 12px;box-sizing:border-box}
+#dnrDownloadProgress{display:block;width:100%;height:6px;margin:0 0 12px;accent-color:var(--ui-accent)}
+@keyframes dnr-download-pulse{50%{opacity:.35}}
+@media(prefers-reduced-motion:reduce){.dnr-selection-bar[data-state="loading"] .dnr-download-dot{animation:none}}
+@media(max-width:760px){.dnr-download-toggle{min-height:44px}}
 .dnr-move-box{position:absolute;z-index:450;cursor:move;touch-action:none;background:transparent}
 .dnr-move-box:focus-visible{outline:2px solid var(--ui-accent);outline-offset:4px}
 #map .dnr-handle{width:44px;height:44px;border:0;border-radius:0;background:transparent;box-shadow:none;touch-action:none}
@@ -3037,3 +3051,34 @@ body.csp-redesign .csp-layer-sources h3{margin:0;color:var(--ink-2);font-size:11
 body.csp-redesign .csp-layer-source{display:grid;gap:2px;min-width:0}
 body.csp-redesign .csp-layer-source-name{color:var(--ink-2);font-size:11px;font-weight:600}
 body.csp-redesign .csp-layer-source-meta{color:var(--ink-3);font-size:11px;line-height:1.45;overflow-wrap:anywhere}
+
+/* LiDAR's native select remains the terrain engine's source of truth. The
+   enhanced palette uses the same dimensions and material as #mkBar .mk-tool. */
+body.csp-redesign #panes .csp-terrain-native[hidden]{display:none!important}
+body.csp-redesign #panes .csp-terrain-styles{
+  display:grid;grid-template-columns:repeat(3,minmax(44px,1fr));gap:4px;
+  grid-column:1/-1;min-width:0;
+}
+body.csp-redesign #panes .csp-terrain-style{
+  position:relative;display:grid;place-items:center;align-content:center;gap:5px;
+  box-sizing:border-box;width:100%;min-width:44px;min-height:54px;height:auto;padding:6px 4px;
+  border:0;border-radius:12px;background:transparent;color:var(--ui-text);box-shadow:none;
+  font:inherit;text-align:center;white-space:normal;cursor:pointer;
+  transition:background-color .14s ease,color .14s ease,scale .16s cubic-bezier(.2,.8,.2,1);
+}
+body.csp-redesign #panes .csp-terrain-style-label{
+  min-width:0;font-size:10.5px;line-height:1.15;font-weight:500;white-space:normal;overflow-wrap:anywhere;
+}
+body.csp-redesign #panes .csp-terrain-style img{
+  width:19px;height:19px;filter:var(--ui-icon-filter);pointer-events:none;
+}
+body.csp-redesign #panes .csp-terrain-style:hover:not(:disabled){background:var(--ui-fill)}
+body.csp-redesign #panes .csp-terrain-style[aria-checked="true"]{background:var(--ui-accent);color:var(--ui-on-accent)}
+body.csp-redesign #panes .csp-terrain-style[aria-checked="true"] img{filter:brightness(0) invert(1)}
+body.csp-redesign #panes .csp-terrain-style:focus-visible{outline:2px solid var(--ui-accent);outline-offset:2px}
+body.csp-redesign #panes .csp-terrain-style:active:not(:disabled){scale:.96}
+body.csp-redesign #panes .csp-terrain-style:disabled{opacity:.35;cursor:default}
+@media(prefers-reduced-motion:reduce){
+  body.csp-redesign #panes .csp-terrain-style{transition:none;scale:1}
+}
+.csp-reduce-motion body.csp-redesign #panes .csp-terrain-style{transition:none;scale:1}
