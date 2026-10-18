@@ -994,8 +994,8 @@ body.pane-reordering,body.pane-reordering *{cursor:grabbing!important;user-selec
 }
 
 </style>
-<link rel="stylesheet" href="ui-theme.css?build=2026-10-17f">
-<link rel="stylesheet" href="ui-system.css?build=2026-10-17f">
+<link rel="stylesheet" href="ui-theme.css?build=2026-10-17g">
+<link rel="stylesheet" href="ui-system.css?build=2026-10-17g">
 <style>
 /* The redesign restructures the legacy DOM rather than replacing it, and the
    script that does so is the last thing on the page - so the browser paints the
@@ -1243,7 +1243,8 @@ html.csp-boot body{visibility:hidden}
           <span class="pane-x">&#9662;</span>
         </div>
         <div class="pane-b">
-          <div class="terrain-view" id="terView">
+          <!-- Internal mode actions stay wired to the single toolbar selector. -->
+          <div class="terrain-view" id="terView" hidden>
             <div class="terrain-mode" role="group" aria-label="Map view">
               <button id="terMode2d" type="button" aria-pressed="true">2D map</button>
               <button id="terMode3d" type="button" aria-pressed="false">3D terrain</button>
@@ -1780,7 +1781,7 @@ html.csp-boot body{visibility:hidden}
   L.Renderer.prototype.onAdd=function(map){return onAdd.call(this,map||this._map)};
 })();
 </script>
-<script src="version.js?build=2026-10-17f"></script>
+<script src="version.js?build=2026-10-17g"></script>
 <script src="mosaic-core.js"></script>
 <script src="png-stream.js"></script>
 <script src="terrain-core.js"></script>
@@ -6759,7 +6760,7 @@ function schedule3dStyle(){
     map3dStyleTimer=setTimeout(refresh3dStyle,90);
   },60);
 }
-$("#terMode2d").onclick=exitTerrain3d;
+$("#terMode2d").onclick=()=>{ pointCloudPanel?.close();exitTerrain3d() };
 $("#terMode3d").onclick=()=>{ pointCloudPanel?.close();enterTerrain3d().catch(()=>{}) };
 pointCloudPanel=CSPPointCloud.install({map,onBearingChange:syncBearingButton,
   beforeOpen:()=>{
@@ -10847,8 +10848,8 @@ $("#q").addEventListener("blur",()=>setTimeout(acHide,120));
 document.addEventListener("click",e=>{ if(!e.target.closest("#iw")) acHide() });
 })();
 </script>
-<script src="markup-3d.js?build=2026-10-17f"></script>
-<script src="markup.js?build=2026-10-17f"></script>
-<script src="ui-system.js?build=2026-10-17f"></script>
+<script src="markup-3d.js?build=2026-10-17g"></script>
+<script src="markup.js?build=2026-10-17g"></script>
+<script src="ui-system.js?build=2026-10-17g"></script>
 </body>
 </html>

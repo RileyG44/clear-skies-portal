@@ -1,7 +1,7 @@
 # UI annotation numbers
 
 The original context was unavailable; the table preserves received labels,
-including truncation. Riley clarified #1–3 and #7 on 2026-10-17; see below.
+including truncation. Riley clarified #1–3 and #7–10 on 2026-10-17; see below.
 Do not infer the remaining targets or missing instructions from labels alone.
 
 | Number | Original reference suffix | Received label |
@@ -36,4 +36,8 @@ UI worktree: `t3/implement-preview-ui-annotations`, initial inventory commit
 3. Toolbar Layers pop-out: make titles open matching layer settings; sidebar titles do the same.
 7. Sidebar menu hover/selected rows: use flat fills, without raised rims or scaling.
 
-#4–6 are deferred because Riley is unsure of the original targets. #8–18 await further descriptions.
+8. Remove the duplicate 2D/3D/Point Cloud selector from the LiDAR sidebar; keep the toolbar selector as the only visible mode control. Implemented in build 2026-10-17g, including closing the point-cloud viewer when selecting 2D.
+9. Target is the LiDAR style dropdown (hillshade/aspect/etc.). Replacement behavior awaits clarification because the original instruction was truncated.
+10. Target is the WA DNR download module. New second-button behavior awaits clarification because the original instruction was truncated.
+
+#4–6 are deferred because Riley is unsure of the original targets. #11–18 await further descriptions.

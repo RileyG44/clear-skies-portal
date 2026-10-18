@@ -129,3 +129,20 @@ Root owns final title/footer CSS; screenshot shows browser-default button border
 - Parent checked computed styles in light/dark themes, inspected desktop screenshots, confirmed title navigation closes the pop-out, and checked mobile width/readout visibility.
 - Relevant map readout, glass motion, menu controls, coordinate search, syntax and static checks pass. No new tests were added for these reversible UI changes.
 - Remaining annotations: #4–6 have uncertain targets; #8–18 await further user descriptions.
+
+## Second clarification pass
+
+- Recovered current checkout at main 6dabc48, build 2026-10-17f; working tree was clean.
+- #8: Remove duplicate 2D/3D/Point Cloud selector from the LiDAR sidebar. Preserve the toolbar selector and its existing behavior.
+- #9 target: LiDAR hillshade/aspect/style dropdown. Replacement instruction was truncated; clarification requested.
+- #10 target: WA DNR download area in the LiDAR menu. Second-button behavior was truncated; clarification requested.
+- Preserve completed GPU integration and UI items #1-3/#7. Remaining notes stay deferred.
+- #8 implemented: whole `#terView` is hidden in the original HTML, preserving internal mode handlers/state without rendering sidebar controls or their note/spacing.
+- Fixed existing point-cloud-to-2D action: selecting 2D now closes the point-cloud viewer before exiting 3D terrain. This supports the sole toolbar selector.
+- Independent read-only review artifact: `/tmp/csp-mode-selector-review.md`.
+- Browser verified desktop 3D entry, point-cloud entry, keyboard point-cloud-to-2D exit, and hidden sidebar block at desktop and 390px portrait widths. No point-cloud data/rendering claim is made.
+- Point-cloud panel overlaps the toolbar at desktop, so direct pointer reopening timed out; keyboard selection succeeded. Alternate IAB/Chrome surfaces were unavailable.
+- Passed syntax/static, menu controls, point-cloud core, glass-motion and whitespace checks.
+- Release build 2026-10-17g installed using backups and atomic static-asset replacements; no service restart or download/cache changes. Installed assets match checkout by SHA-256.
+- Final static/menu/point-cloud checks pass on Node 24.19.0. The build-stamp check caught an omitted HTML cache-bust update; corrected before pushing.
+- Live browser verification and public deployment pending.
