@@ -97,8 +97,8 @@ async function poolTests(){
 }
 async function integrationTests(){
   const index=fs.readFileSync("index.html","utf8"),start=index.indexOf("const ELEV_CACHE_BYTES="),end=index.indexOf("\nasync function encodeTileRgba",start);
-  let loads=0,rendered=0,mode="auto";const statuses=new Map();
-  const sandbox={CSPTilePipeline:{RequestPool},CSPTerrainDrapePool:{Pool},navigator:{hardwareConcurrency:8},AbortController,DOMException,
+  let loads=0,rendered=0,gpuClears=0,mode="auto";const statuses=new Map();
+  const sandbox={CSPTilePipeline:{RequestPool},CSPTerrainDrapePool:{Pool},navigator:{hardwareConcurrency:8},AbortController,DOMException,gpu3d:{clear(){gpuClears++;}},
     meshKey:(z,x,y)=>`${mode}:${z}/${x}/${y}`,PROXY:false,public3dDrapeSources:statuses,scheduleTerrainStatus(){},
     publicElevationWithFallback:async(coords,signal)=>{loads++;await tick();if(signal.aborted)throw new DOMException("aborted","AbortError");return {grid:new Float32Array(256*256).fill(coords.x+.00031),rank:2}},
     reliefResolution:r=>r,tileGroundResolution:()=>1,terrainLighting:()=>({}),CSPTerrainDrape:{render:job=>{rendered++;return job.tiles[0]}},encodeTileRgba:async rgba=>rgba,
@@ -113,6 +113,7 @@ async function integrationTests(){
   assert.equal(loads,8,"palette and lighting revisions reuse source floats");assert.equal(statuses.get("4/3/4").rank,2);
   await sandbox.source(4,19,4,c2.signal);assert.equal(loads,8,"world wrapping shares cache key");
   sandbox.clear();await sandbox.source(4,3,4,c2.signal);assert.equal(loads,9,"reset clears source cache");
+  assert.equal(gpuClears,1,"source reset also invalidates resident 3D GPU data");
   mode="wadnr";await sandbox.source(4,3,4,c2.signal);assert.equal(loads,10,"source mode changes cache key");
   const noData=await sandbox.source(4,3,-1,c2.signal);assert.equal(noData,null);
   const cancelledHit=new AbortController();cancelledHit.abort();await assert.rejects(sandbox.source(4,3,4,cancelledHit.signal),{name:"AbortError"});

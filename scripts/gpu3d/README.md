@@ -31,8 +31,8 @@ Design, mirroring `scripts/gpu2d/harness-lib.js` and `scripts/ui-terrain-drape.j
   and provider variation cannot move request counts. Elevation, basemap, and
   total requests are counted; in-page counters record `renderDrapeTile`
   calls by style, worker constructions, and worker `postMessage` jobs.
-- Visible-terrain readiness: MapLibre style loaded plus every
-  `style.tileManagers` tile `loaded` (exposed as `window.__map3d` by the same
+- Visible-terrain readiness: MapLibre style loaded plus the visible layers'
+  source tiles `loaded`, completed CPU shade jobs and GPU inputs ready (exposed as `window.__map3d` by the same
   `CSPMarkup?.attach3d` injection the drape regression uses); timeouts report
   the real tile states instead of passing.
 - Fixed camera at pitch 58 / bearing 37 ( zoom 14), styles
@@ -41,10 +41,12 @@ Design, mirroring `scripts/gpu2d/harness-lib.js` and `scripts/ui-terrain-drape.j
   drape-render, worker-post, and elevation-request deltas), a four-leg
   camera route with RAF frame p50/p95, and a desktop DPR2 pass plus a
   390x844 DPR3 phone-emulation pass (emulation, not a physical iPhone).
-- Screenshots of `#map3d` are written per style with visible-raster coverage
+- Framebuffer screenshots captured in MapLibre's render event exclude HTML controls
+  and use the actual drawing-buffer dimensions (the existing phone policy caps rendering at 2x).
+  Images are written per style with visible-raster coverage
   against the MapLibre background. Old/new parity is same-camera screenshots
   compared with `diff3d.js`; no pass threshold is invented here.
-- GPU detection (integrator contract): `window.CSPApp.gpu3d()` returns a
+- GPU detection: `window.ClearSkiesPortalBridge.gpu3d()` returns a
   controller with `stats() -> {enabled,error,renderer:{inputTextures,
   inputBytes,uploads,draws,...},cache:{...}}`, and
   `document.documentElement.dataset.gpu3d` is `'on'|'off'`. `?gpu3d=0` forces
@@ -54,3 +56,15 @@ Design, mirroring `scripts/gpu2d/harness-lib.js` and `scripts/ui-terrain-drape.j
   expected signal (reported, not gated here) is zero added CPU drape-worker
   jobs for analytic + spectrum changes, with renderer uploads/draws as the
   GPU-side evidence.
+
+Control timing waits for actual shade submissions or CPU jobs to begin, then
+visible source readiness and a presented frame. It includes legacy debounce
+and avoids measuring the preceding loaded image. Source coordinates and focal
+camera elevation stay fixed for parity. Run benchmark processes sequentially
+without other GPU workloads; these are application response measurements, not
+GPU completion timestamps or a universal frame-rate claim.
+
+`lifecycle3d.js` checks clean frames, relighting without uploads, native texture
+reloads, structural style changes, elevation visibility, exit/re-entry, context
+loss/recovery and a forced automatic CPU fallback. Run it with the same
+`--url`, `--browser` and `--out` options. No benchmark uses the live port 8765.

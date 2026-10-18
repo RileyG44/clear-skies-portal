@@ -128,6 +128,7 @@
       const waiters=job.waiters;
       job.waiters=new Set();
       if(error){
+        if(!job.controller.signal.aborted)job.controller.abort();
         rejectWaiters(waiters,error);
         return;
       }

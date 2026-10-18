@@ -38,22 +38,24 @@
       "RASTERIZER_DISCARD", "DITHER", "SAMPLE_ALPHA_TO_COVERAGE", "SAMPLE_COVERAGE"]
       .map(name => [gl[name], gl.isEnabled(gl[name])]);
     gl.activeTexture(gl.TEXTURE0);
-    s.texture = gl.getParameter(gl.TEXTURE_BINDING_2D);
-    s.sampler = gl.getParameter(gl.SAMPLER_BINDING);
-    gl.activeTexture(s.ACTIVE_TEXTURE);
+    try {
+      s.texture = gl.getParameter(gl.TEXTURE_BINDING_2D);
+      s.sampler = gl.getParameter(gl.SAMPLER_BINDING);
+    } finally { gl.activeTexture(s.ACTIVE_TEXTURE); }
     return s;
   }
   function restore(gl, s) {
+    if (!s || gl.isContextLost()) return;
     gl.bindFramebuffer(gl.DRAW_FRAMEBUFFER, s.DRAW_FRAMEBUFFER_BINDING);
     gl.bindFramebuffer(gl.READ_FRAMEBUFFER, s.READ_FRAMEBUFFER_BINDING);
-    gl.viewport(...s.VIEWPORT);
+    if(s.VIEWPORT?.length===4)gl.viewport(...s.VIEWPORT);
     gl.useProgram(s.CURRENT_PROGRAM);
     gl.bindVertexArray(s.VERTEX_ARRAY_BINDING);
     gl.activeTexture(gl.TEXTURE0);
     gl.bindTexture(gl.TEXTURE_2D, s.texture);
     gl.bindSampler(0, s.sampler);
     gl.activeTexture(s.ACTIVE_TEXTURE);
-    gl.colorMask(...s.COLOR_WRITEMASK);
+    if(s.COLOR_WRITEMASK?.length===4)gl.colorMask(...s.COLOR_WRITEMASK);
     s.enables.forEach(([cap, on]) => on ? gl.enable(cap) : gl.disable(cap));
     gl.bindBuffer(gl.PIXEL_UNPACK_BUFFER, s.PIXEL_UNPACK_BUFFER_BINDING);
     gl.bindBuffer(gl.PIXEL_PACK_BUFFER, s.PIXEL_PACK_BUFFER_BINDING);
@@ -279,6 +281,7 @@
       for (const name of shaders.SHADE_UNIFORMS) locations[name] = gl.getUniformLocation(program, name);
       sizeLocation = gl.getUniformLocation(program, "u_size"); heightLocation = gl.getUniformLocation(program, "u_height");
       selfTestError = selfTest();
+      if(gl.isContextLost())throw new Error("3D terrain context lost during initialization");
       for (const key of Object.keys(counters)) counters[key] = 0;
       uniforms.clear();
     } catch (_) { destroy(); return null; }

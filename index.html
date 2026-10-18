@@ -1796,6 +1796,9 @@ html.csp-boot body{visibility:hidden}
 <script src="gpu-terrain-store.js"></script>
 <script src="gpu-terrain-engine.js"></script>
 <script src="gpu-terrain-layer.js"></script>
+<script src="gpu-terrain-3d-cache.js"></script>
+<script src="gpu-terrain-3d-renderer.js"></script>
+<script src="gpu-terrain-3d-layer.js"></script>
 <script src="wa-archaeology.js"></script>
 <script src="glacial-research-core.js"></script>
 <script src="glacial-segment-core.js"></script>
@@ -1893,6 +1896,8 @@ const HIDPI=(Number(window.devicePixelRatio)||1)>=1.5;
    a z18 picture stretched until it goes soft. */
 const TERRAIN_OVERZOOM=22;
 let map3d=null,maplibreModule=null,maplibreProtocolReady=false,map3dStyleRevision=0;
+let gpu3d=null,gpu3dFailed=false,gpu3dBlank=null;
+let map3dStylePending=null;
 /* Set while 3D is wanted. Leaving 3D before the lazy import finishes used to
    leave an orphaned MapLibre instance holding WebGL and workers: exit saw
    map3d still null, returned, and the loader then created a map nothing
@@ -6367,7 +6372,35 @@ function terrainSky(theme,light){
 }
 /* What the 3D style is made of. A slider can repaint in place; a change in
    this key (terrain style, terrain on/off, spectrum on/off) needs a new style. */
-function map3dStructureKey(){ return [$("#terStyle").value,$("#terSrc").value,elevationActive()?"elev":"-",PROXY?API:"public"].join("|") }
+function gpu3dPreferred(){
+  if(gpu3dFailed||typeof createImageBitmap!=="function"||typeof ImageData!=="function"||!window.CSPGpuTerrain3DLayer||!window.CSPGpuTerrain3DRenderer||!window.CSPGpuTerrain3DCache)return false;
+  let storage;try{storage=localStorage}catch{}
+  return CSPGpuTerrain3DLayer.resolveFlag(location.search,storage);
+}
+function map3dStructureKey(){
+  if(gpu3dPreferred()){
+    const pick=chooseTerrain($("#terStyle").value);
+    return ["gpu",$("#terSrc").value,PROXY?API:"public",terrainTheme(),pick.src==="wadnr"?pick.ids?.join(","):"analytic"].join("|");
+  }
+  return [$("#terStyle").value,$("#terSrc").value,elevationActive()?"elev":"-",PROXY?API:"public"].join("|");
+}
+function gpu3dStates(){
+  const style=$("#terStyle").value;
+  return {analysis:{terrain:{style:style==="off"?"hs":style,opacity:1,look:terrainLook(style),
+    ...(["hs","hsmulti","tint","off"].includes(style)?{lighting:terrainLighting()}:{})},spectrumOpacity:0},
+    elevspec:{terrain:{style:"off"},spectrum:elevationRenderSettings(),spectrumOpacity:1}};
+}
+function initGpu3d(module){
+  if(!gpu3dPreferred()){document.documentElement.dataset.gpu3d="off";return;}
+  gpu3d=CSPGpuTerrain3DLayer.create({map:map3d,version:module.getVersion?.()||module.version,
+    maxBytes:(matchMedia("(pointer:coarse)").matches?64:192)*1024*1024,
+    loadGrid:(z,x,y,signal)=>drapeElevation(z,x,y,signal),groundResolution:tileGroundResolution,getStates:gpu3dStates,
+    onStatus:(enabled)=>{document.documentElement.dataset.gpu3d=enabled?"on":"off";},
+    onFallback:reason=>{
+      gpu3dFailed=true;console.warn("3D GPU analytical textures: using worker fallback:",reason);
+      setTimeout(()=>{if(!map3d)return;if(map3d.isStyleLoaded())refresh3dStyle();else map3d.once("load",()=>{if(map3d)refresh3dStyle();});},0);
+    }});
+}
 let map3dBuiltKey="",elevSpectrumRevision=0;
 function terrainRasterStyle(){
   map3dBuiltKey=map3dStructureKey();
@@ -6375,7 +6408,7 @@ function terrainRasterStyle(){
      no analytical drape, just a light hillshade so the ground still reads as
      ground. With neither on, 3D shows the default hillshade as before. */
   const spectrumAlone=$("#terStyle").value==="off"&&elevationActive();
-  const theme=terrainTheme(),style=$("#terStyle").value==="off"?"hs":$("#terStyle").value;
+  const theme=terrainTheme(),style=$("#terStyle").value==="off"?"hs":$("#terStyle").value,gpu=gpu3dPreferred();
   const light=terrainLighting(),opacity=terrainOpacity()/100,pick=chooseTerrain(style);
   const directions=style==="hsmulti"?[light.azimuth,(light.azimuth+90)%360,(light.azimuth+180)%360,(light.azimuth+270)%360]:light.azimuth;
   const altitudes=style==="hsmulti"?[light.altitude,light.altitude,light.altitude,light.altitude]:light.altitude;
@@ -6399,9 +6432,10 @@ function terrainRasterStyle(){
   ];
   /* Elevation tint under the shading, for every case where the ground would
      otherwise be bare hillshade or a published drape. */
-  if(!spectrumAlone&&(style==="hs"||style==="hsmulti"||pick.src==="wadnr")) layers.push({id:"terrain-relief",type:"color-relief",source:"demShade",
+  if(gpu||!spectrumAlone&&(style==="hs"||style==="hsmulti"||pick.src==="wadnr")) layers.push({id:"terrain-relief",type:"color-relief",source:"demShade",
+    layout:{visibility:!spectrumAlone&&(style==="hs"||style==="hsmulti"||pick.src==="wadnr")?"visible":"none"},
     paint:{"color-relief-color":hypsometricRamp(),"color-relief-opacity":theme==="dark"?.32:.4}});
-  if(style==="hs"||style==="hsmulti") layers.push({id:"terrain-hillshade",type:"hillshade",source:"demShade",paint:{
+  if(gpu||style==="hs"||style==="hsmulti") layers.push({id:"terrain-hillshade",type:"hillshade",source:"demShade",layout:{visibility:style==="hs"||style==="hsmulti"?"visible":"none"},paint:{
     "hillshade-method":style==="hsmulti"?"multidirectional":"standard",
     "hillshade-illumination-direction":directions,"hillshade-illumination-altitude":altitudes,
     "hillshade-illumination-anchor":"map","hillshade-exaggeration":Math.max(.05,Math.min(1,opacity*1.15)),
@@ -6411,9 +6445,9 @@ function terrainRasterStyle(){
     "hillshade-highlight-color":`rgba(255,247,235,${Math.max(.3,Math.min(1,opacity*1.1)).toFixed(2)})`,
     "hillshade-accent-color":"#5f6d79"
   }});
-  else{
-    sources.analysis={type:"raster",tiles:[`cspterrain://${style}/{z}/{x}/{y}.png?r=${++map3dStyleRevision}`],tileSize:256,maxzoom:18};
-    layers.push({id:"terrain-analysis",type:"raster",source:"analysis",paint:{"raster-opacity":opacity,"raster-fade-duration":0}});
+  if(gpu||!(style==="hs"||style==="hsmulti")){
+    sources.analysis={type:"raster",tiles:[gpu?"cspgpu3d://analysis/{z}/{x}/{y}.png":`cspterrain://${style}/{z}/{x}/{y}.png?r=${++map3dStyleRevision}`],tileSize:256,maxzoom:18};
+    layers.push({id:"terrain-analysis",type:"raster",source:"analysis",layout:{visibility:style!=="hs"&&style!=="hsmulti"?"visible":"none"},paint:{"raster-opacity":opacity,"raster-fade-duration":0}});
   }
   if(spectrumAlone){
     /* The hillshade above was built at full terrain strength; standing alone
@@ -6429,9 +6463,9 @@ function terrainRasterStyle(){
   /* The elevation spectrum and highlights, draped over whatever terrain or
      lidar layer is on (or on their own). Colour is baked into the tile, so a
      setting change swaps the tile URL rather than rebuilding the style. */
-  if(elevationActive()){
-    sources.elevspec={type:"raster",tiles:[`cspelev://s/{z}/{x}/{y}.png?r=${elevSpectrumRevision}`],tileSize:256,maxzoom:18};
-    layers.push({id:"elev-spectrum",type:"raster",source:"elevspec",paint:{"raster-opacity":1,"raster-fade-duration":0}});
+  if(gpu||elevationActive()){
+    sources.elevspec={type:"raster",tiles:[gpu?"cspgpu3d://elevspec/{z}/{x}/{y}.png":`cspelev://s/{z}/{x}/{y}.png?r=${elevSpectrumRevision}`],tileSize:256,maxzoom:18};
+    layers.push({id:"elev-spectrum",type:"raster",source:"elevspec",layout:{visibility:elevationActive()?"visible":"none"},paint:{"raster-opacity":1,"raster-fade-duration":0}});
   }
   /* `sky` is a style-level object in MapLibre, not a layer - a "sky" layer type is
      rejected by the style validator and takes the whole style down with it. */
@@ -6497,6 +6531,7 @@ const drapeWorkers=new CSPTerrainDrapePool.Pool({
   }
 });
 function elevCacheClear(){
+  gpu3d?.clear();
   const old=elevCache;elevCache=newElevCache();
   for(const job of old.jobs.values()){job.controller.abort();old._settle(job,new DOMException("aborted","AbortError"))}
   old.queue=[];old.cache.clear();old.bytes=0;drapeWorkers.clear();
@@ -6548,6 +6583,18 @@ async function encodeTileRgba(rgba){
 
 async function installMaplibreProtocols(module){
   if(maplibreProtocolReady) return;
+  module.addProtocol("cspgpu3d",async(params,controller)=>{
+    const match=params.url.match(/^cspgpu3d:\/\/(analysis|elevspec)\/(\d+)\/(\d+)\/(\d+)\.png/);
+    if(!match)throw new Error("invalid 3D GPU texture request");
+    const [,kind,z,x,y]=match;
+    if(!gpu3d?.enabled)return {data:await renderDrapeTile(kind==="elevspec"?"spectrum":$("#terStyle").value,+z,+x,+y,controller.signal)};
+    await gpu3d.prepare(+z,+x,+y,controller.signal);
+    if(controller.signal.aborted)throw new DOMException("aborted","AbortError");
+    // One blank upload creates MapLibre's native mipmapped texture. Before
+    // presentation the custom offscreen pass shades it directly on the GPU.
+    gpu3dBlank??=new ImageData(256,256);
+    return {data:await createImageBitmap(gpu3dBlank,CSPTerrainDrape.BITMAP_OPTIONS)};
+  });
   module.addProtocol("cspmesh",async(params,controller)=>{
     const match=params.url.match(/^cspmesh:\/\/(dem|shade)\/(\d+)\/(\d+)\/(\d+)\.png/);
     if(!match) throw new Error("invalid mesh tile");
@@ -6681,6 +6728,7 @@ async function enterTerrain3d(){
         return jumpTo.call(this,options,eventData);
       };
     }
+    initGpu3d(module);
     window.CSPMarkup?.attach3d(module,map3d);
     map3d.on("movestart",mark3dGlassMotion);map3d.on("move",mark3dGlassMotion);
     map3d.on("move",cursorCameraMoved);map3d.on("idle",cursorCameraIdle);
@@ -6703,16 +6751,31 @@ async function enterTerrain3d(){
 }
 function exitTerrain3d(){
   reset3dGlassMotion();map3dWanted=false;
+  map3dStylePending=null;
   clearTimeout(map3dLightTimer);
   elevCacheClear();
   if(!map3d){setTerrainModeUi(false);return}
   const center=map3d.getCenter(),zoom=map3d.getZoom(),bearing=map3d.getBearing();
-  map3d.remove();map3d=null;clearTimeout(map3dStyleTimer);map.setView([center.lat,center.lng],zoom,{animate:false});map.setBearing?.(bearing);
+  map3d.remove();map3d=null;gpu3d=null;clearTimeout(map3dStyleTimer);map.setView([center.lat,center.lng],zoom,{animate:false});map.setBearing?.(bearing);
   map.keyboard?.enable();setTerrainModeUi(false);map.invalidateSize({pan:false});
 }
 function refresh3dStyle(){
-  if(!map3d) return;const center=map3d.getCenter(),camera={center:[center.lng,center.lat],zoom:map3d.getZoom(),bearing:map3d.getBearing(),pitch:map3d.getPitch()};
-  map3d.setStyle(terrainRasterStyle(),{diff:false});map3d.jumpTo(camera);
+  if(!map3d)return;
+  const current=map3d;
+  if(map3dStylePending?.map===current){map3dStylePending.again=true;return;}
+  const center=current.getCenter(),camera={center:[center.lng,center.lat],zoom:current.getZoom(),bearing:current.getBearing(),pitch:current.getPitch(),elevation:current.getCenterElevation()};
+  const pending={map:current,again:false};map3dStylePending=pending;
+  const style=terrainRasterStyle();
+  // The outgoing terrain's depth pass must not run against the new style
+  // before its projection exists. New terrain initialization resets focal
+  // elevation, so restore the complete camera after style.load.
+  current.setTerrain(null);
+  current.once("style.load",()=>{
+    if(map3d!==current||map3dStylePending!==pending)return;
+    current.jumpTo(camera);map3dStylePending=null;
+    if(pending.again||map3dBuiltKey!==map3dStructureKey())refresh3dStyle();
+  });
+  current.setStyle(style,{diff:false});
 }
 /* A lighting change does not need a new style. Rebuilding with {diff:false}
    tears down every source and layer and refetches all of them, which is why
@@ -6742,17 +6805,30 @@ function apply3dLighting(){
   if(map3dBuiltKey!==map3dStructureKey()) return false;
   const light=terrainLighting(),opacity=terrainOpacity()/100,style=$("#terStyle").value;
   try{
-    map3d.setTerrain({source:"dem",exaggeration:light.exaggeration});
+    if(map3d.getTerrain()?.exaggeration!==light.exaggeration)map3d.setTerrain({source:"dem",exaggeration:light.exaggeration});
+    if(gpu3d?.enabled){
+      const actual=style==="off"?"hs":style,pick=chooseTerrain(actual),spectrumAlone=style==="off"&&elevationActive();
+      const visible={"terrain-analysis":actual!=="hs"&&actual!=="hsmulti","terrain-hillshade":actual==="hs"||actual==="hsmulti",
+        "terrain-relief":!spectrumAlone&&(actual==="hs"||actual==="hsmulti"||pick.src==="wadnr"),"elev-spectrum":elevationActive()};
+      for(const [id,on] of Object.entries(visible))if(map3d.getLayer(id)&&map3d.getLayoutProperty(id,"visibility")!==(on?"visible":"none"))map3d.setLayoutProperty(id,"visibility",on?"visible":"none");
+      map3d.setPaintProperty("terrain-hillshade","hillshade-method",actual==="hsmulti"?"multidirectional":"standard");
+      gpu3d.update();
+    }
     paint3dHillshade(light,opacity,style);
+    if(gpu3d?.enabled&&style==="off"&&elevationActive()&&map3d.getLayer("terrain-hillshade")){
+      map3d.setPaintProperty("terrain-hillshade","hillshade-exaggeration",.45);
+      map3d.setPaintProperty("terrain-hillshade","hillshade-highlight-color","rgba(255,255,255,0)");
+    }
     paint3dSky(light);
     if(map3d.getLayer("terrain-analysis")) map3d.setPaintProperty("terrain-analysis","raster-opacity",opacity);
     if(map3d.getLayer("wadnr-drape")) map3d.setPaintProperty("wadnr-drape","raster-opacity",opacity);
-    return !analyticalStyle();          // analytical colour is baked into the tile
+    return gpu3d?.enabled||!analyticalStyle();
   }catch(e){ return false }
 }
 
 function schedule3dStyle(){
   if(!map3d) return;
+  if(gpu3d?.enabled&&apply3dLighting())return;
   clearTimeout(map3dLightTimer);
   map3dLightTimer=setTimeout(()=>{
     if(apply3dLighting()) return;       // handled in place
@@ -10218,6 +10294,7 @@ function applyElev(){
 let elev3dTimer=0;
 function sync3dSpectrum(){
   if(!map3d) return;
+  if(gpu3d?.enabled&&apply3dLighting())return;
   clearTimeout(elev3dTimer);
   elev3dTimer=setTimeout(()=>{
     if(!map3d) return;
@@ -10338,7 +10415,8 @@ function paintTerrainLightingFrame(){
   paintTerrainLegend($("#terStyle").value);
   for(const layer of [terBase,terLayer]) if(layer?._store)
     layer._store.forEach(tile=>layer._paint(tile.cv,tile.elev,tile.coords));
-  if(map3d?.getLayer("terrain-hillshade")){
+  if(gpu3d?.enabled){apply3dLighting();}
+  else if(map3d?.getLayer("terrain-hillshade")){
     paint3dHillshade(light,terrainOpacity()/100,$("#terStyle").value);
     paint3dSky(light);
     map3d.setTerrain({source:"dem",exaggeration:light.exaggeration});
@@ -10465,6 +10543,7 @@ window.ClearSkiesPortalBridge={
   announceToolPopover,
   map3d:()=>map3d,
   gpuTerrain:()=>gpuTerrainLayer,
+  gpu3d:()=>gpu3d,
   api,
   server:()=>({online:PROXY,base:API}),
   activeLayers:cspActiveLayers,

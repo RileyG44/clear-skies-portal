@@ -10,12 +10,18 @@ const { lib2d } = H;
 
 async function profile(page, browserName, args, shotsDir, label) {
   const out = { profile: label };
-  const renderer = await lib2d.gpuRenderer(page);
+  const entered = await H.enter3d(page, args);
+  const renderer = await page.evaluate(()=>{
+    const gl=window.__map3d?.painter?.context?.gl;
+    if(!gl)return {renderer:'none',vendor:'none',software:true};
+    const ext=gl.getExtension('WEBGL_debug_renderer_info');
+    const renderer=String(gl.getParameter(ext?ext.UNMASKED_RENDERER_WEBGL:gl.RENDERER));
+    return {renderer,vendor:String(gl.getParameter(ext?ext.UNMASKED_VENDOR_WEBGL:gl.VENDOR)),software:/swiftshader|llvmpipe|softpipe|software/i.test(renderer)};
+  });
   out.renderer = renderer;
   out.performanceValid = !renderer.software;
   if (renderer.software) out.performanceNote = 'SOFTWARE RENDERER (' + renderer.renderer + '): timings in this run are NOT performance evidence.';
   out.gpu3d = await H.gpu3dStatus(page, args.gpu3d);
-  const entered = await H.enter3d(page, args);
   out.enter = entered;
   out.camera = await H.tileState(page);
   /* Warm-up: one full style cycle before any delta is measured. */
@@ -33,6 +39,7 @@ async function profile(page, browserName, args, shotsDir, label) {
   await H.setControl(page, 'elevSh', true, true);
   await H.setControl(page, 'elevBelowOn', true, true);
   await H.setControl(page, 'elevAboveOn', true, true);
+  await page.waitForFunction(()=>window.__map3d.getLayer('elev-spectrum')&&window.__map3d.getLayoutProperty('elev-spectrum','visibility')!=='none');
   out.spectrumReady = await H.waitTerrain(page);
   out.shots.push({ style: 'spectrum+bands', ...(await H.shot(page, path.join(shotsDir, `${label}-spectrum-bands-gpu3d${args.gpu3d}-${browserName}.png`))) });
   /* Control response after warm-up: light (uniform/paint on GPU, worker re-render
@@ -40,11 +47,13 @@ async function profile(page, browserName, args, shotsDir, label) {
   const net = page.__counts;
   const getC = () => H.counters(page, net);
   out.controlResponse = { light: [], spectrum: [] };
+  await H.setStyle(page,'tint');
+  await H.waitTerrain(page);
   for (let i = 0; i < args.repeats; i++) {
     out.controlResponse.light.push(await H.measureControlResponse(page,
       () => H.setControl(page, 'terSunAz', i % 2 ? 315 : 120), getC));
     out.controlResponse.spectrum.push(await H.measureControlResponse(page,
-      () => H.setControl(page, 'elevSlide', i % 2 ? 335 : 500), getC));
+      () => H.setControl(page, 'elevSlide', i % 2 ? 335 : 1250), getC));
   }
   const summ = (rows) => ({
     wallP50: lib2d.percentile(rows.map((r) => r.wallMs), 50),
@@ -52,7 +61,9 @@ async function profile(page, browserName, args, shotsDir, label) {
     paintP50: lib2d.percentile(rows.map((r) => r.paintMs), 50),
     drapeRendersDelta: rows.map((r) => r.delta.drapeRenders),
     workerPostsDelta: rows.map((r) => r.delta.workerPosts),
-    elevationRequestsDelta: rows.map((r) => r.delta.elevationRequests)
+    elevationRequestsDelta: rows.map((r) => r.delta.elevationRequests),
+    gpuDrawsDelta:rows.map(r=>r.delta.gpuDraws),gpuUploadsDelta:rows.map(r=>r.delta.gpuUploads),
+    shadeCompletedDelta:rows.map(r=>r.delta.shadeDone)
   });
   out.controlSummary = { light: summ(out.controlResponse.light), spectrum: summ(out.controlResponse.spectrum) };
   out.cameraRoute = await H.rafRoute(page);
@@ -120,5 +131,10 @@ async function profile(page, browserName, args, shotsDir, label) {
     console.log(JSON.stringify(result.verdict));
   }
   if (result.error) process.exitCode = 1;
+  if(result.pageErrors.length)process.exitCode=1;
+  for(const profile of Object.values(result.profiles)){
+    if(!profile.enter?.ready?.ok||!profile.enter?.settled?.ok||Object.values(profile.styles||{}).some(s=>!s.readyOk)||profile.shots?.some(s=>s.blank))process.exitCode=1;
+    if(args.requireGpu&&(!profile.gpuStatsEnd?.enabled||profile.gpuStatsEnd?.error))process.exitCode=1;
+  }
   if (args.requireGpu && args.gpu3d && result.verdict.gpuBenchmark.startsWith('UNAVAILABLE')) process.exitCode = 3;
 })().catch((e) => { console.error(e); process.exitCode = 1; });

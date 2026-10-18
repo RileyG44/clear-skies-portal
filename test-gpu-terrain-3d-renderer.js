@@ -131,6 +131,13 @@ function focusedChecks() {
   assert.equal(rendererModule.create({gl: bad}), null); assert.deepEqual(bad.state(), badState);
   const mismatch = new GL(); mismatch.readPixels = (x,y,w,h,f,t,p) => p.fill(255);
   assert.equal(rendererModule.create({gl: mismatch}), null, "startup CPU mismatch rejects renderer");
+  const snapshotFailure=new GL(),active=snapshotFailure.p.get(snapshotFailure.ACTIVE_TEXTURE),get=snapshotFailure.getParameter.bind(snapshotFailure);
+  snapshotFailure.getParameter=p=>{if(p===snapshotFailure.TEXTURE_BINDING_2D)throw Error("snapshot binding failure");return get(p);};
+  assert.equal(rendererModule.create({gl:snapshotFailure}),null);
+  assert.equal(snapshotFailure.p.get(snapshotFailure.ACTIVE_TEXTURE),active,"snapshot failure restores active texture locally");
+  const midLoss=new GL(),getLoss=midLoss.getParameter.bind(midLoss);
+  midLoss.getParameter=p=>{if(p===midLoss.VIEWPORT){midLoss.lost=true;return null;}return getLoss(p);};
+  assert.doesNotThrow(()=>assert.equal(rendererModule.create({gl:midLoss}),null),"loss during startup returns unsupported instead of throwing from restore");
   assert.equal(rendererModule.create({gl: {}}), null);
   console.log("gpu terrain 3D focused checks passed");
 }

@@ -4,9 +4,14 @@
    set explicitly with --max-mean / --max-pct-over3 after visual inspection. */
 const fs = require('fs');
 const { lib2d } = require('./harness3d-lib.js');
-const a = process.argv.slice(2);
-const files = a.filter((x) => !x.startsWith('--'));
-const opt = (name) => { const i = a.indexOf(name); return i >= 0 ? Number(a[i + 1]) : null; };
+const a = process.argv.slice(2),files=[],limits={};
+for(let i=0;i<a.length;i++){
+  if(a[i]==='--max-mean'||a[i]==='--max-pct-over3'){
+    const value=Number(a[++i]);if(!Number.isFinite(value)||value<0)throw Error('invalid difference limit');limits[a[i-1]]=value;
+  }else if(a[i].startsWith('--'))throw Error('unknown argument '+a[i]);
+  else files.push(a[i]);
+}
+const opt = name => limits[name]??null;
 if (files.length !== 2) { console.error('node scripts/gpu3d/diff3d.js OLD.png NEW.png [--max-mean N] [--max-pct-over3 N]'); process.exit(2); }
 const imgA = lib2d.decodePng(fs.readFileSync(files[0]));
 const imgB = lib2d.decodePng(fs.readFileSync(files[1]));

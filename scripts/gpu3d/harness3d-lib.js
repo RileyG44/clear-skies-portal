@@ -122,13 +122,18 @@ async function installFixture(context, args, png) {
   const counts = { elevation: 0, national: 0, basemap: 0, total: 0 };
   await context.addInitScript(() => {
     try { localStorage.setItem('clearskies.reduceMotion.v1', '1'); } catch (e) {}
-    window.__workers = []; window.__workerPosts = 0;
+    window.__workers = []; window.__workerPosts = 0;window.__shadePending=0;window.__shadeDone=0;window.__renderFrames=0;
     const W = window.Worker;
     if (W) {
       window.Worker = function (url, opts) {
         const w = new W(url, opts); window.__workers.push(String(url));
-        const pm = w.postMessage.bind(w);
-        w.postMessage = (...a) => { window.__workerPosts++; return pm(...a); };
+        const pm = w.postMessage.bind(w),shades=new Set();
+        if(String(url).includes('terrain-drape-worker'))w.addEventListener('message',e=>{
+          if(shades.delete(e.data?.id)){window.__shadePending--;window.__shadeDone++;}
+        });
+        w.postMessage = (...a) => { window.__workerPosts++;
+          if(String(url).includes('terrain-drape-worker')&&a[0]?.op!=='decode'){shades.add(a[0].id);window.__shadePending++;}
+          return pm(...a); };
         return w;
       };
       window.Worker.prototype = W.prototype;
@@ -142,18 +147,18 @@ async function installFixture(context, args, png) {
     } catch (e) { await route.continue().catch(() => {}); }
   });
   const pngRoute = (counter) => (route) => { counts[counter]++; route.fulfill({ status: 200, contentType: 'image/png', body: png, headers: { 'access-control-allow-origin': '*' } }); };
-  await context.route(/\/api\/elev\/national\//, (r) => { counts.national++; pngRoute('elevation')(r); });
+  await context.route(/\/api\/elev\/national\//, pngRoute('national'));
   await context.route(/\/api\/elev\/\d+\//, pngRoute('elevation'));
   await context.route('https://s3.amazonaws.com/elevation-tiles-prod/**', pngRoute('elevation'));
   await context.route(/https:\/\/(?:[^/]*arcgisonline\.com|[^/]*cartocdn\.com|[^/]*tile\.openstreetmap\.org)\//, pngRoute('basemap'));
   await context.route(args.origin + '**', async (route) => {
     const url = new URL(route.request().url());
     counts.total++;
-    if (url.pathname !== '/' && url.pathname !== '/index.html') return route.continue();
+    if (url.pathname !== '/' && url.pathname !== '/index.html') return route.fallback();
     const res = await route.fetch();
     let html = await res.text();
     const hook = 'window.CSPMarkup?.attach3d(module,map3d);';
-    if (html.includes(hook)) html = html.replace(hook, hook + 'window.__map3d=map3d;');
+    if (html.includes(hook)) html = html.replace(hook, hook + 'window.__map3d=map3d;map3d.on("render",()=>{window.__renderFrames=(window.__renderFrames||0)+1;});');
     const renderHook = 'async function renderDrapeTile(style,z,x,y,signal){';
     if (html.includes(renderHook)) html = html.replace(renderHook, renderHook + 'window.__drapeRenders=(window.__drapeRenders||0)+1;window.__drapeByStyle=window.__drapeByStyle||{};window.__drapeByStyle[style]=(window.__drapeByStyle[style]||0)+1;');
     await route.fulfill({ response: res, body: html });
@@ -181,9 +186,13 @@ async function waitTerrain(page, { timeout = 35000, minTiles = 8 } = {}) {
     await page.waitForFunction((min) => {
       const m = window.__map3d; if (!m || !m.isStyleLoaded()) return false;
       const tm = m.style && m.style.tileManagers; if (!tm) return false;
-      let total = 0, loaded = 0;
-      for (const id in tm) { const t = tm[id]; if (!t || !t.getIds) continue; for (const k of t.getIds()) { total++; if (t.getTileByID(k).state === 'loaded') loaded++; } }
-      return total >= min && loaded === total;
+      const style=m.getStyle(),needed=new Set([m.getTerrain()?.source].filter(Boolean));
+      for(const layer of style.layers||[])if(layer.source&&layer.layout?.visibility!=='none'&&layer.paint?.['raster-opacity']!==0)needed.add(layer.source);
+      let total=0;
+      for(const id of needed){const t=tm[id],ids=t?.getIds?.()||[];if(!ids.length)return false;
+        for(const key of ids){if(t.getTileByID(key)?.state!=='loaded')return false;total++;}}
+      const gpu=window.ClearSkiesPortalBridge?.gpu3d?.()?.stats();
+      return total>=min&&!window.__shadePending&&(!gpu?.enabled||gpu.pending===0&&gpu.cache.pending===0&&gpu.renderer?.draws>0);
     }, minTiles, { timeout });
     return { ok: true, ms: Date.now() - t0, state: await tileState(page) };
   } catch (e) {
@@ -208,6 +217,9 @@ async function tileState(page) {
 async function enter3d(page, args) {
   await page.goto(args.url, { waitUntil: 'domcontentloaded', timeout: 60000 });
   await page.evaluate(() => {
+    const bridge=window.ClearSkiesPortalBridge;
+    bridge?.map?.setView([47.858,-118.33],14,{animate:false});
+    const source=document.getElementById('terSrc');source.value='3dep';source.dispatchEvent(new Event('change',{bubbles:true}));
     const s = document.getElementById('terStyle');
     if (s) { s.value = 'slope'; s.dispatchEvent(new Event('change', { bubbles: true })); }
   });
@@ -220,26 +232,28 @@ async function enter3d(page, args) {
 }
 
 async function setStyle(page, style) {
-  const before = await page.evaluate(() => window.__drapeRenders || 0);
+  const before=await paintState(page);
+  const changed=await page.evaluate(v=>document.getElementById('terStyle').value!==v,style);
   await page.evaluate((v) => {
     const s = document.getElementById('terStyle');
     s.value = v; s.dispatchEvent(new Event('input', { bubbles: true })); s.dispatchEvent(new Event('change', { bubbles: true }));
   }, style);
-  /* App debounces style rebuilds (~150 ms); without this, all-tiles-loaded can
-     still describe the previous style and the screenshot is stale. On the CPU
-     path require a new drape render; on GPU (dataset on) renders stay flat. */
-  const t0 = Date.now();
-  while (Date.now() - t0 < 10000) {
-    const probe = await page.evaluate((b) => ({
-      gpu: document.documentElement.dataset.gpu3d === 'on',
-      renders: window.__drapeRenders || 0, b
-    }), before);
-    if (probe.gpu || probe.renders > before) break;
-    await page.waitForTimeout(150);
-  }
-  await page.waitForTimeout(200);
-  return waitTerrain(page);
+  if(changed)await waitChangedPaint(page,before);
+  const ready=await waitTerrain(page);await presented(page);return ready;
 }
+
+async function paintState(page){return page.evaluate(()=>({
+  gpu:window.ClearSkiesPortalBridge?.gpu3d?.()?.stats()?.renderer?.draws||0,
+  cpu:window.__drapeRenders||0,done:window.__shadeDone||0,frames:window.__renderFrames||0}));}
+async function waitChangedPaint(page,before){
+  await page.waitForFunction(b=>{
+    const stats=window.ClearSkiesPortalBridge?.gpu3d?.()?.stats();
+    return stats?.enabled?stats.renderer.draws>b.gpu:(window.__drapeRenders||0)>b.cpu;
+  },before,{timeout:20000});
+}
+async function presented(page){await page.evaluate(()=>new Promise(resolve=>{
+  const m=window.__map3d;m.once('render',()=>requestAnimationFrame(()=>resolve()));m.triggerRepaint();
+}));}
 
 async function setControl(page, id, value, isCheckbox) {
   await page.evaluate(({ id, value, isCheckbox }) => {
@@ -252,13 +266,13 @@ async function setControl(page, id, value, isCheckbox) {
 /* Time from control dispatch to 2 presented frames + CPU/GPU deltas. */
 async function measureControlResponse(page, apply, getCounters) {
   const before = await getCounters();
+  const pixelsBefore=await paintState(page);
   const t0 = Date.now();
   await apply();
-  const paintMs = await page.evaluate(() => new Promise((resolve) => {
-    const start = performance.now();
-    requestAnimationFrame(() => requestAnimationFrame(() => resolve(performance.now() - start)));
-  }));
+  await waitChangedPaint(page,pixelsBefore);
   const ready = await waitTerrain(page, { timeout: 20000 });
+  await presented(page);
+  const paintMs=Date.now()-t0;
   const after = await getCounters();
   return { wallMs: Date.now() - t0, paintMs: Math.round(paintMs), ready, delta: deltaCounters(before, after) };
 }
@@ -276,7 +290,9 @@ async function counters(page, netCounts) {
     drapeRenders: window.__drapeRenders || 0,
     drapeByStyle: window.__drapeByStyle || {},
     workerPosts: window.__workerPosts || 0,
-    workers: (window.__workers || []).slice()
+    workers: (window.__workers || []).slice(),shadePending:window.__shadePending||0,shadeDone:window.__shadeDone||0,
+    gpuDraws:window.ClearSkiesPortalBridge?.gpu3d?.()?.stats()?.renderer?.draws||0,
+    gpuUploads:window.ClearSkiesPortalBridge?.gpu3d?.()?.stats()?.renderer?.uploads||0
   })).catch(() => ({ drapeRenders: null, workerPosts: null, workers: [] }));
   return { ...inPage, elevationRequests: netCounts.elevation + netCounts.national, basemapRequests: netCounts.basemap, totalRequests: netCounts.total };
 }
@@ -301,7 +317,11 @@ async function rafRoute(page) {
 
 async function shot(page, file) {
   fs.mkdirSync(path.dirname(file), { recursive: true });
-  const png = await page.locator('#map3d').screenshot({ type: 'png', animations: 'disabled' });
+  // Capture the actual framebuffer during its render event. This diagnostic
+  // readback excludes HTML overlays and preserves the real phone render size.
+  const data=await page.evaluate(()=>new Promise(resolve=>{const m=window.__map3d;
+    m.once('render',()=>resolve(m.getCanvas().toDataURL('image/png')));m.triggerRepaint();}));
+  const png=Buffer.from(data.split(',')[1],'base64');
   fs.writeFileSync(file, png);
   const img = lib2d.decodePng(png);
   /* Visible raster coverage vs MapLibre light background (#dbe6eb). */
@@ -311,10 +331,10 @@ async function shot(page, file) {
 
 async function gpu3dStatus(page, requested) {
   return page.evaluate((requested) => {
-    /* Integrator contract: window.CSPApp.gpu3d() -> controller with stats();
+    /* Integrator contract: window.ClearSkiesPortalBridge.gpu3d() -> controller with stats();
        document.documentElement.dataset.gpu3d = 'on'|'off'. ?gpu3d=0|1 selects. */
     let c = null, callError = null;
-    try { c = typeof window.CSPApp?.gpu3d === 'function' ? window.CSPApp.gpu3d() : (window.CSPGpu3D || window.__gpu3d || null); }
+    try { c = typeof window.ClearSkiesPortalBridge?.gpu3d === 'function' ? window.ClearSkiesPortalBridge.gpu3d() : (window.CSPGpu3D || window.__gpu3d || null); }
     catch (e) { callError = String(e.message || e); }
     let stats = null;
     try { stats = c && typeof c.stats === 'function' ? c.stats() : null; } catch (e) { callError = String(e.message || e); }
@@ -324,7 +344,7 @@ async function gpu3dStatus(page, requested) {
       requested: !!requested, available: !!c, callError, dataset, enabled, stats,
       keys: c ? Object.keys(c).slice(0, 30) : [],
       note: c ? 'controller via CSPApp.gpu3d(); stats() recorded verbatim'
-        : 'GPU3D UNAVAILABLE: no window.CSPApp.gpu3d() controller in this build. GPU benchmark NOT run; do not treat CPU numbers as GPU results.'
+        : 'GPU3D UNAVAILABLE: no window.ClearSkiesPortalBridge.gpu3d() controller in this build. GPU benchmark NOT run; do not treat CPU numbers as GPU results.'
     };
   }, requested);
 }
@@ -332,7 +352,7 @@ async function gpu3dStatus(page, requested) {
 async function gpu3dStats(page) {
   return page.evaluate(() => {
     try {
-      const c = typeof window.CSPApp?.gpu3d === 'function' ? window.CSPApp.gpu3d() : null;
+      const c = typeof window.ClearSkiesPortalBridge?.gpu3d === 'function' ? window.ClearSkiesPortalBridge.gpu3d() : null;
       return c && typeof c.stats === 'function' ? c.stats() : null;
     } catch (e) { return { error: String(e.message || e) }; }
   });
@@ -361,7 +381,7 @@ async function contextLossProbe(page) {
 
 module.exports = {
   REPO, CENTER, CAMERA, ROUTE, STYLES, parseArgs, usage, fixturePng, spawnServer, stopServer,
-  launch, installFixture, newPage, waitTerrain, tileState, enter3d, setStyle, setControl,
+  launch, installFixture, newPage, waitTerrain, tileState, enter3d, setStyle, setControl,paintState,waitChangedPaint,presented,
   measureControlResponse, deltaCounters, counters, rafRoute, shot, gpu3dStatus, gpu3dStats, contextLossProbe,
   lib2d
 };
