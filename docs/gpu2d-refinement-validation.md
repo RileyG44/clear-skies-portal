@@ -71,3 +71,18 @@ Run the regression against an isolated server with:
 node scripts/gpu2d/refinement.js --url http://127.0.0.1:8826/ --browser chrome
 node scripts/gpu2d/refinement.js --url http://127.0.0.1:8826/ --browser webkit --phone
 ```
+
+## Deployed verification
+
+[CI39105840030](https://github.com/RileyG44/clear-skies-portal/actions/runs/39105840030)
+passes Linux verification/audit, Windows tests and Pages deployment. Build j
+is installed in the backed-up Mac runtime. Page, version, service worker and
+GPU store assets match the expected source locally and minified artifact on
+Pages. The hosted page loads build j and the retry scheduler.
+
+On actual local-service terrain in Chrome/Metal, a fine national tile request
+was forced to fail all three transport attempts. With the camera unchanged,
+it retried after **10,107 ms** and loaded all **65,536** valid native samples;
+its failure flag cleared, renderer frames advanced and no page errors occurred.
+The production 10-second retry interval was retained for this live check.
+[Deployment evidence](gpu2d-refinement-deployment.json).

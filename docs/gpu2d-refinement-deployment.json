@@ -1,0 +1,120 @@
+{
+  "release": "2026-10-17j",
+  "ci": {
+    "conclusion": "success",
+    "headSha": "4c506c226d43e41af3db7e3a8d9b1bac3efc72fa",
+    "jobs": [
+      {
+        "name": "check",
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "name": "windows",
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "name": "deploy",
+        "status": "completed",
+        "conclusion": "success"
+      }
+    ],
+    "status": "completed",
+    "url": "https://github.com/RileyG44/clear-skies-portal/actions/runs/39105840030"
+  },
+  "hashes": {
+    "index.html": {
+      "installedMatches": true,
+      "hostedMatches": true,
+      "sourceSha256": "481ebdad647677114d9bc181bb90e3af5d3661c1337cb1a6f2cd0ad45a62237d",
+      "pagesSha256": "939a3f334e99486f27d62b49449d9cc447f7b01b7339368e13e723f9d1468414"
+    },
+    "version.js": {
+      "installedMatches": true,
+      "hostedMatches": true,
+      "sourceSha256": "4a2114dafde077af3801c9c813375a9bc5082d1efa6e0cb7c05700b8ea1964b5",
+      "pagesSha256": "d8689654d44bf4fe2d0509879c8e2151c18d6abc599dbe155827017f599e0f26"
+    },
+    "sw.js": {
+      "installedMatches": true,
+      "hostedMatches": true,
+      "sourceSha256": "55cb3cc3dd8802f485b72a29b096b80b965deb90fd0f4f82e305ac5fe2239b75",
+      "pagesSha256": "55cb3cc3dd8802f485b72a29b096b80b965deb90fd0f4f82e305ac5fe2239b75"
+    },
+    "gpu-terrain-store.js": {
+      "installedMatches": true,
+      "hostedMatches": true,
+      "sourceSha256": "5de3f3558e36b3943ce7f84c19bf4cd9fb3c0ce0d11d45c7182d557dc7ad7279",
+      "pagesSha256": "1c2742c5611757a32122e3c46ee6de92d1fa9c1f717de0170c33c1955896fe7e"
+    }
+  },
+  "liveRealTerrainRecovery": {
+    "startedAt": "2026-10-18T06:58:07.657Z",
+    "errors": [],
+    "forcedFailures": 3,
+    "target": "http://127.0.0.1:8765/api/elev/national/15/5608/11405.png",
+    "build": "2026-10-17j",
+    "failedAt": 1792306692993,
+    "before": {
+      "center": {
+        "lat": 47.858,
+        "lng": -118.33
+      },
+      "zoom": 14,
+      "stats": {
+        "textures": 172,
+        "textureBytes": 45088768,
+        "frames": 49,
+        "drawCalls": 97,
+        "lastFrameMs": 1.1999998092651367,
+        "ready": true,
+        "queuedUploads": 0,
+        "uploads": 172,
+        "evictions": 0,
+        "generation": 1,
+        "error": null,
+        "heightFieldBytes": 41472000,
+        "trackedTiles": 172,
+        "coverageKind": "resident tile overlap estimate; readProvenance returns sampled pixel coverage",
+        "fallback": "CPU when float targets or self-test unavailable"
+      }
+    },
+    "recoveryMs": 10107,
+    "after": {
+      "center": {
+        "lat": 47.858,
+        "lng": -118.33
+      },
+      "zoom": 14,
+      "stats": {
+        "textures": 224,
+        "textureBytes": 58720256,
+        "frames": 90,
+        "drawCalls": 97,
+        "lastFrameMs": 7.300000190734863,
+        "ready": true,
+        "queuedUploads": 0,
+        "uploads": 224,
+        "evictions": 0,
+        "generation": 1,
+        "error": null,
+        "heightFieldBytes": 41472000,
+        "trackedTiles": 224,
+        "coverageKind": "resident tile overlap estimate; readProvenance returns sampled pixel coverage",
+        "fallback": "CPU when float targets or self-test unavailable"
+      },
+      "tile": {
+        "key": "national/15/5608/11405",
+        "z": 15,
+        "validCount": 65536
+      },
+      "failed": false,
+      "renderer": "ANGLE (Apple, ANGLE Metal Renderer: Apple M2, Unspecified Version)"
+    },
+    "pass": true,
+    "finishedAt": "2026-10-18T06:58:24.650Z"
+  },
+  "runtimeHealthOk": true,
+  "backupCreated": true
+}
