@@ -4007,7 +4007,7 @@ function snapshotDomItems(sel){
   const mapEl=$("#map"),box=mapEl.getBoundingClientRect();
   const left=box.left+sel.x,top=box.top+sel.y,right=left+sel.w,bottom=top+sel.h;
   return [...mapEl.querySelectorAll("canvas.leaflet-tile,canvas.leaflet-zoom-animated,img.leaflet-image-layer,img.leaflet-marker-icon,.leaflet-overlay-pane svg,.leaflet-marker-pane svg")]
-    .filter(el=>!el.closest(".csp-tile-hold,.csp-markup-pane")&&!(el.parentElement&&el.parentElement.closest("svg")))
+    .filter(el=>!el.closest(".csp-tile-hold,.csp-markup-pane,.csp-gpu-terrain-container")&&!(el.parentElement&&el.parentElement.closest("svg")))
     .filter(el=>{ const r=el.getBoundingClientRect();return r.width>0&&r.height>0&&r.right>left&&r.left<right&&r.bottom>top&&r.top<bottom })
     .filter(el=>snapshotElementOpacity(el,mapEl)>0.001&&getComputedStyle(el).visibility!=="hidden");
 }
@@ -4068,10 +4068,12 @@ async function composeSnapshot(spec){
       const items=snapshotPaintOrder([
         ...spec.plans.map(plan=>({kind:"tiles",plan,el:plan.layer.getContainer?.()||mapEl})),
         ...snapshotDomItems(spec.sel).map(el=>({kind:"dom",el})),
-        ...(window.CSPMarkup?.snapshotEntries()||[])
+        ...(window.CSPMarkup?.snapshotEntries()||[]),
+        ...(gpuTerrainEnabled?[gpuTerrainLayer.snapshotEntry(spec)].filter(Boolean):[])
       ]);
       for(const item of items){
         if(item.kind==="tiles"){ const r=await drawSnapshotRasterPlan(ctx,item.plan,spec,cache,progress);drawn+=r.drawn;failed+=r.failed }
+        else if(item.kind==="gpu-terrain"){ctx.drawImage(await item.canvas(),0,0);drawn++;}
         else if(item.kind==="markup"){if(window.CSPMarkup.drawSnapshotLayer(ctx,item.id,spec))drawn++}
         else if(await drawSnapshotDomItem(ctx,item.el,spec,cache)) drawn++;
       }
@@ -4120,7 +4122,8 @@ async function composeSnapshotStream(spec,write){
   const items=snapshotPaintOrder([
     ...spec.plans.map(plan=>({kind:"tiles",plan,el:plan.layer.getContainer?.()||mapEl})),
     ...snapshotDomItems(sel).map(el=>({kind:"dom",el})),
-    ...(window.CSPMarkup?.snapshotEntries()||[])
+    ...(window.CSPMarkup?.snapshotEntries()||[]),
+    ...(gpuTerrainEnabled?[gpuTerrainLayer.snapshotEntry(spec)].filter(Boolean):[])
   ]).map(item=>{
     if(item.kind!=="dom") return item;
     const info=snapshotDomInfo(item.el);if(!info) return null;
@@ -4165,6 +4168,9 @@ async function composeSnapshotStream(spec,write){
             const subset=planTiles.get(item.plan).filter(hits);if(!subset.length) continue;
             const r=await drawSnapshotRasterPlan(ctx,item.plan,blockSpec,cache,null,subset);
             drawn+=r.drawn;for(const t of r.failedTiles) failedUrls.add(t.url);
+          }else if(item.kind==="gpu-terrain"){
+            const entry=gpuTerrainLayer.snapshotEntry({...blockSpec,width:w,height:h});
+            if(entry){ctx.drawImage(await entry.canvas(),0,0);drawn++;}
           }else if(item.kind==="markup"){if(window.CSPMarkup.drawSnapshotLayer(ctx,item.id,blockSpec))drawn++}
           else if(hits(item)&&await drawSnapshotDomItem(ctx,item.el,blockSpec,cache,item.info)) drawn++;
         }
@@ -5802,6 +5808,79 @@ const api = p => API + p;
 const RAW_COVERAGE_QUERY="ix=2";
 
 let terLayer=null, terBase=null, PROXY=false, WA_LAYERS=null, waCover=null, terTimer=null;
+// One engine/store for both analytical terrain and elevation. The published
+// DNR image layer retains its own path. No tile-pane layer uses z441..449:
+// imagery is 410, terrain 440, spectrum 450 and research 455.
+let gpuTerrainLayer=null,gpuTerrainStore=null,gpuTerrainEnabled=false,gpuTerrainDecided=false,gpuSourceKey=null,gpuTerrainOrderZ=null;
+function initGpuTerrain(){
+  if(gpuTerrainDecided)return gpuTerrainEnabled;
+  gpuTerrainDecided=true;
+  let storage;try{storage=localStorage}catch{}
+  if(window.CSPGpuTerrainLayer?.resolveFlag(location.search,storage)&&window.CSPGpuTerrainStore&&L.cspGpuTerrainLayer){
+    gpuTerrainStore=new CSPGpuTerrainStore.ElevationTileStore({
+      sources:gpuElevationSources,request:gpuElevationRequest,
+      mask:(grid,w,h,coords,source)=>source.rank===5?maskDnrGrid(grid,w,h,coords):grid,
+      maxBytes:(matchMedia("(pointer:coarse)").matches?64:192)*1024*1024});
+    gpuTerrainLayer=L.cspGpuTerrainLayer({store:gpuTerrainStore,state:gpuTerrainState(),zIndex:440});
+    gpuTerrainEnabled=!!gpuTerrainLayer.getEngine();
+    if(!gpuTerrainEnabled){gpuTerrainLayer.destroy();gpuTerrainLayer=null;
+      // The base skeleton's destroy is deliberately unimplemented.
+      try{gpuTerrainStore.destroy()}catch{}gpuTerrainStore=null;}
+  }
+  document.documentElement.dataset.gpu2d=gpuTerrainEnabled?"on":"off";
+  return gpuTerrainEnabled;
+}
+function gpuElevationRequest(url,options={}){
+  const {kind,...requestOptions}=options;
+  return elevationRequests.request(url,signal=>(kind==="lerc"||url.includes("/exportImage?"))
+    ?fetchPublicElevation(url,signal):fetchElevation(url,signal),requestOptions);
+}
+function gpuElevationSources(){
+  const options={...elevationSourceOptions(),fallbackNativeZoom:15,nationalNativeZoom:17,rawNativeZoom:18,refineOverview:true};
+  // buildSources' environment is the only adapter seam with Workstream D.
+  const env={proxy:PROXY,api,dz:HIDPI?1:0,dnrTileAllowed,dnrRevision:dnrStatus?.revision||0,
+    rawCoverageQuery:RAW_COVERAGE_QUERY,nationalUrl:CSPPublicTerrain.nationalUrl,sourceSampleMeters};
+  if(CSPGpuTerrainStore.buildSources)return CSPGpuTerrainStore.buildSources(options,env);
+  // Contract-only fallback for stores without the optional builder. Native
+  // grids stay native; no resampling or masking occurs on the display path.
+  const sources=[],add=(id,rank,label,max,url,allowed,kind)=>sources.push({id,rank,label,
+    nativeZoom:z=>Math.min(z,max),url,allowed,kind,group:rank===5?"dnr":rank===3?"detail":rank===2?"national":"overview",sharper:true});
+  if(PROXY&&options.dnrEndpoint)add("dnr",5,"WA DNR elevation",18,(z,x,y)=>api(`${options.dnrEndpoint}/${z}/${x}/${y}.png?acquire=0&revision=${env.dnrRevision}`),dnrTileAllowed);
+  if(PROXY&&options.rawEndpoint)add("raw",3,"USGS 3.3 ft",18,(z,x,y)=>api(`${options.rawEndpoint}/${z}/${x}/${y}.png?${RAW_COVERAGE_QUERY}`),c=>c.z-env.dz>=13);
+  if(PROXY&&options.nationalEndpoint)add("national",2,"National elevation",17,(z,x,y)=>api(`${options.nationalEndpoint}/${z}/${x}/${y}.png`),()=>true);
+  if(!PROXY)add("national",2,"USGS 3DEP elevation",18,(z,x,y)=>CSPPublicTerrain.nationalUrl({z,x,y}),()=>true,"lerc");
+  add("overview",1,"Overview elevation",15,(z,x,y)=>options.fallback.replace("{z}",z).replace("{x}",x).replace("{y}",y),()=>true);
+  return sources;
+}
+function gpuTerrainState(){
+  const style=$("#terStyle").value;
+  return CSPGpuTerrainLayer.buildState({style:style!=="off"&&chooseTerrain(style).src!=="wadnr"?style:"off",
+    opacity:terrainOpacity()/100,look:terrainLook(style),lighting:terrainLighting(),
+    spectrum:elevationRenderSettings(),spectrumOpacity:1});
+}
+function syncGpuTerrain(){
+  if(!gpuTerrainEnabled)return;
+  const sourceKey=elevationSourceOptions().sourceKey;
+  if(gpuSourceKey!==null&&gpuSourceKey!==sourceKey){gpuTerrainStore.clear();gpuTerrainLayer.redraw();}
+  gpuSourceKey=sourceKey;
+  const state=gpuTerrainState();gpuTerrainLayer.setState(state);
+  const active=state.terrain.style!=="off"||elevationActive();
+  // Published DNR images keep the existing spectrum-over-image order.
+  gpuTerrainLayer.setZIndex(gpuTerrainOrderZ??(state.terrain.style==="off"&&$("#terStyle").value!=="off"?450:440));
+  if(active&&!map.hasLayer(gpuTerrainLayer))gpuTerrainLayer.addTo(map);
+  else if(!active&&map.hasLayer(gpuTerrainLayer))map.removeLayer(gpuTerrainLayer);
+  scheduleTerrainStatus();
+}
+function terrainLayerSummary(layer){
+  if(!gpuTerrainEnabled||layer&&layer!==gpuTerrainLayer)return CSPPublicTerrain.summarize(Object.values(layer?._tiles||{}));
+  if(!map.hasLayer(gpuTerrainLayer))return {sources:[],coverage:0,total:0,ready:0,refining:false,failed:false};
+  const status=gpuTerrainLayer.settled(),provenance=gpuTerrainLayer.provenance()||{},ranks=provenance.ranks||{};
+  const total=Object.values(ranks).reduce((sum,n)=>sum+n,0);
+  const sources=Object.entries(ranks).filter(([rank,n])=>n>0&&CSPPublicTerrain.SOURCES[rank]).sort((a,b)=>b[0]-a[0])
+    .map(([rank,n])=>({...CSPPublicTerrain.SOURCES[rank],rank:+rank,pixels:n,percent:total?100*n/total:0,
+      surveys:provenance.surveys||[],sampleMeters:provenance.sampleMeters?.[rank]}));
+  return {sources,coverage:Math.round(status.ratio*100),total:status.total,ready:status.complete,refining:status.refining,failed:false};
+}
 let probeToken=0, waLayersPromise=null, terrainQueryToken=0, serverHealth=null, serverProbeTimer=null;
 let waCoverageState="unknown",waCoverageError="",dnrStatus=null,dnrStatusTimer=null,dnrLastError="",dnrRenderedRevision=-1;
 const dnrElevationAvailable=()=>PROXY&&serverHealth?.features?.includes("wadnr-elevation");
@@ -6865,7 +6944,8 @@ function terrainLook(style=$("#terStyle").value){
   };
 }
 function applyTerrainAppearanceTo(layer){
-  if(!layer) return;
+  if(gpuTerrainEnabled)syncGpuTerrain();
+  if(!layer||layer===gpuTerrainLayer) return;
   const style=layer._cspStyle||$("#terStyle").value,look=terrainLook(style),container=layer.getContainer?.();
   if(container) container.style.filter=`saturate(${look.saturation/100}) contrast(${look.contrast/100}) brightness(${look.brightness/100})`;
 }
@@ -6932,7 +7012,7 @@ function renderTerrainSourcePanel(summaryArg,is3dArg,layerArg){
   const body=$("#terrainSourcePanelBody");if(!body)return;
   const is3d=is3dArg??document.body.classList.contains("terrain-3d");
   const layer=layerArg||(terrainSwap?terrainSwap.displayedLayer:(!terLayer?elevLayer:terLayer));
-  const summary=summaryArg||CSPPublicTerrain.summarize(Object.values(layer?._tiles||{}));
+  const summary=summaryArg||terrainLayerSummary(layer);
   /* Built once and updated in place: this runs on every tile load, and a
      rebuild would drop a slider out from under a drag. */
   if(!body.dataset.built){
@@ -6983,7 +7063,7 @@ function renderTerrainSourcePanel(summaryArg,is3dArg,layerArg){
     const row=rows.querySelector(`[data-id="${CSS.escape(item.id)}"]`);if(!row)continue;
     let basis=item.meta||"Source not reported";
     if(item.id==="terrain"||item.id==="elevation-spectrum"||item.id==="elevation-bands"){
-      const own=item.id==="terrain"?summary:CSPPublicTerrain.summarize(Object.values(elevLayer?._tiles||{}));
+      const own=item.id==="terrain"?summary:terrainLayerSummary(elevLayer);
       basis=own.sources.length?own.sources.map(entry=>`${entry.label} (${Math.round(entry.percent)}% · ${sourceResolutionText(entry)})`).join(" · "):"Elevation source is still loading";
       if(item.id==="terrain"&&dnrAreas.length)basis=`WA DNR fetched areas: ${dnrAreas.length} · Rendered: ${basis}`;
     }
@@ -7013,7 +7093,7 @@ function paintTerrainStatus(){
   if($("#terStyle").value==="off"&&!elevationActive()&&!is3d){terrainLoadStatus.hidden=true;return;}
   terrainLoadStatus.hidden=false;
   const layer=terrainSwap?terrainSwap.displayedLayer:(!terLayer?elevLayer:terLayer),tiles=Object.values(layer?._tiles||{});
-  const summary=CSPPublicTerrain.summarize(tiles),{refining,failed,coverage,sources}=summary;
+  const summary=terrainLayerSummary(layer),{refining,failed,coverage,sources}=summary;
   const loading=!!terrainSwap||coverage<100||refining;
   terrainLoadStatus.dataset.state=loading?"loading":failed?"partial":"ready";
   const label=terrainSwap?"Preparing terrain":coverage<100?"Loading terrain":refining?"Refining terrain":failed?"Terrain available · some detail unavailable":"Terrain ready";
@@ -7036,6 +7116,7 @@ function clearTerrain(){
   if(terrainSwap) terrainSwap(false);
   if(terLayer){ map.removeLayer(terLayer); terLayer=null }
   if(terBase){ map.removeLayer(terBase); terBase=null }
+  if(gpuTerrainEnabled)syncGpuTerrain();
 }
 
 function installTerrain(nextBase,nextLayer){
@@ -7075,6 +7156,7 @@ function installTerrain(nextBase,nextLayer){
     if(oldLayer) oldLayer.setOpacity(value); if(oldBase) oldBase.setOpacity(value);
   };
   const readiness=()=>{
+    if(ready.getEngine&&ready.settled)return ready.settled();
     const tiles=Object.values(ready._tiles||{}).filter(tile=>tile.current!==false);
     const complete=tiles.filter(tile=>!!tile.loaded&&
       (!(tile.el instanceof HTMLCanvasElement)||tile.el._cspHasContent===true)).length;
@@ -7106,6 +7188,14 @@ function applyTerrain(force){
   if(style==="off"){ clearTerrain(); terSig=null; setCount("terrain",""); paintTerrainInfo(); return }
   const op=+$("#terOp").value/100;
   const pick=chooseTerrain(style);
+  if(gpuTerrainEnabled&&pick.src!=="wadnr"){
+    if(terrainSwap)terrainSwap(false);
+    if(terLayer){map.removeLayer(terLayer);terLayer=null;}
+    if(terBase){map.removeLayer(terBase);terBase=null;}
+    terrainSwapMessage="";syncGpuTerrain();terSig=null;
+    setCount("terrain",STYLE_NAME[style]||"");paintTerrainInfo(pick);return;
+  }
+  if(gpuTerrainEnabled)syncGpuTerrain();
   // Rebuilding a tile layer throws away every tile it has already loaded, which
   // is why panning used to blank the map. Only rebuild when the actual choice
   // changes; otherwise leave Leaflet alone and let it reuse its tiles.
@@ -7313,6 +7403,7 @@ function syncTerrainOpacity(){
 $("#terOp").oninput=()=>{ const v=syncTerrainOpacity();
   if(terrainSwap&&terrainSwap.setOpacity) terrainSwap.setOpacity(v);
   else{ if(terLayer) terLayer.setOpacity(v); if(terBase) terBase.setOpacity(v) }
+  if(gpuTerrainEnabled)syncGpuTerrain();
   saveTerrainPrefs();schedule3dStyle() };
 for(const id of ["#terContrast","#terSaturation","#terBrightness"]) $(id).addEventListener("input",updateTerrainLook);
 $("#terLookReset").onclick=()=>{
@@ -9785,6 +9876,12 @@ function waitForElevationLayer(layer,timeout=15000){
   return new Promise(resolve=>{
     const started=performance.now();
     const poll=()=>{
+      if(layer===gpuTerrainLayer){
+        const status=layer.settled();
+        if(status.complete&&(!status.refining&&status.ratio>=.9||performance.now()-started>timeout))return resolve(true);
+        if(performance.now()-started>timeout)return resolve(status.complete>0);
+        setTimeout(poll,120);return;
+      }
       if(layer._store.size&&(!layer._pending.size||performance.now()-started>timeout)) return resolve(layer._store.size>0);
       if(performance.now()-started>timeout) return resolve(layer._store.size>0);
       setTimeout(poll,120);
@@ -9792,6 +9889,11 @@ function waitForElevationLayer(layer,timeout=15000){
   });
 }
 async function researchElevationSource(){
+  if(gpuTerrainEnabled){
+    const temporary=!map.hasLayer(gpuTerrainLayer);
+    if(temporary)gpuTerrainLayer.addTo(map);
+    await waitForElevationLayer(gpuTerrainLayer);return {layer:gpuTerrainLayer,temporary};
+  }
   if(elevLayer&&elevLayer._store.size){ await waitForElevationLayer(elevLayer,4500);return {layer:elevLayer,temporary:false} }
   const layer=new ElevLayer({...elevationSourceOptions(),fallbackNativeZoom:15,nationalNativeZoom:17,
     render:elevationRenderSettings(),maxZoom:VIEW_MAX,maxNativeZoom:17,zIndex:1,opacity:0,keepBuffer:0,
@@ -9799,6 +9901,7 @@ async function researchElevationSource(){
   layer.addTo(map);await waitForElevationLayer(layer);return {layer,temporary:true};
 }
 function researchElevationGrid(layer){
+  if(layer===gpuTerrainLayer)return layer.gridForView();
   const rows=[];
   for(const [key,tile] of layer._store){
     const [z,x,y]=key.split("/").map(Number);if(tile.elev&&tile.elev.length===65536) rows.push({z,x,y,elev:tile.elev});
@@ -10049,7 +10152,7 @@ function paintElevOut(){
   const o=$("#elevOut"); if(!o) return;
   const m=elevMetres();
   if(!$("#elevSh").checked){ o.textContent=""; return }
-  const loaded=CSPPublicTerrain.summarize(Object.values(elevLayer?._tiles||{}));
+  const loaded=terrainLayerSummary(elevLayer);
   const source=loaded.sources.length?`Displayed: ${loaded.sources.map(s=>s.label).join(" + ")}.`:'Elevation is loading; source details appear after tiles render.';
   o.textContent=`White at ${Math.round(m/0.3048).toLocaleString()} ft; red lower and blue higher, strongest by \u00b1${Math.round(elevSpanMetres()/0.3048).toLocaleString()} ft at ${$("#elevAlpha").value}% opacity. ${source}`;
 }
@@ -10081,6 +10184,7 @@ function applyElev(){
   paintElevOut();
   paintElevationBandOut(); syncElevationChecks();
   const on=elevationActive();
+  if(gpuTerrainEnabled){syncGpuTerrain();scheduleTerrainStatus();sync3dSpectrum();return;}
   if(!on){
     if(elevLayer){ map.removeLayer(elevLayer); elevLayer=null }
     sync3dSpectrum();
@@ -10161,6 +10265,8 @@ async function runFabric(){
 }
 document.getElementById("fabRun").onclick=runFabric;
 loadTerrainPrefs();
+initGpuTerrain();
+if(gpuTerrainLayer)gpuTerrainLayer.on("tilerefine",()=>{scheduleTerrainStatus();paintElevOut();});
 syncElevSpanSlider();
 syncTerrainOpacity();
 syncTerrainLookControls();
@@ -10219,6 +10325,7 @@ function repaintTerrainLighting(){
 }
 function paintTerrainLightingFrame(){
   const light=syncTerrainLighting();
+  if(gpuTerrainEnabled)syncGpuTerrain();
   paintTerrainLegend($("#terStyle").value);
   for(const layer of [terBase,terLayer]) if(layer?._store)
     layer._store.forEach(tile=>layer._paint(tile.cv,tile.elev,tile.coords));
@@ -10325,6 +10432,11 @@ function cspResetLayer(id){
 }
 function cspSetLayerOrder(order){
   const top=620;
+  // Terrain and spectrum share a compositing surface: keep them adjacent,
+  // using the uppermost requested stack position for that surface.
+  const gpuIds=["terrain","elevation-spectrum","elevation-bands"];
+  const gpuIndex=(order||[]).findIndex(id=>gpuIds.includes(id));
+  if(gpuTerrainEnabled&&gpuIndex>=0){gpuTerrainOrderZ=top-gpuIndex*8+1;gpuTerrainLayer.setZIndex(gpuTerrainOrderZ);}
   (order||[]).forEach((id,index)=>{
     const z=top-index*8;
     if(id==="scene"){
@@ -10343,6 +10455,7 @@ window.ClearSkiesPortalBridge={
   positionToolPopover,
   announceToolPopover,
   map3d:()=>map3d,
+  gpuTerrain:()=>gpuTerrainLayer,
   api,
   server:()=>({online:PROXY,base:API}),
   activeLayers:cspActiveLayers,
@@ -10486,6 +10599,7 @@ function cursorTileSample(tile,ll){
   return ElevationTileCore.isElevation(value)?value:null;
 }
 function cursorLoadedElevation(ll){
+  if(gpuTerrainEnabled){const sample=gpuTerrainLayer.sampleAt(ll);return sample?{...sample,source:sample.label}:null;}
   let best=null;
   for(const layer of [elevLayer,terLayer,terBase])for(const tile of layer?._store?.values()||[]){
     const value=cursorTileSample(tile,ll);
