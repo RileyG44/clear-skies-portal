@@ -52,7 +52,7 @@
         if(this._engine&&this._state)this._engine.setState(this._state);
       },
       onAdd:function(map){
-        this._map=map;
+        this._map=map;this._geometryCache=new WeakMap();
         if(!this._engine)return;
         /* Keeping the container IN tilePane preserves stacking against every
            raster and overlay. Its inverse ancestor matrix makes it a genuinely
@@ -62,7 +62,7 @@
         this._container.style.cssText="position:absolute;left:0;top:0;transform-origin:0 0;pointer-events:none;transition:none";
         this._container.style.zIndex=this.options.zIndex;this._container.appendChild(this._canvas);
         this._tile=()=>{this.redraw();this.fire("tilerefine");};this.options.store?.on("tile",this._tile);
-        this._resizeObserver=new root.ResizeObserver(()=>this.redraw());this._resizeObserver.observe(map.getContainer());
+        this._resizeObserver=new root.ResizeObserver(()=>{this._geometryCache=new WeakMap();this.redraw();});this._resizeObserver.observe(map.getContainer());
         this._hidden=root.document.body.classList.contains("terrain-3d");
         this._visibilityObserver=new root.MutationObserver(()=>{
           const hidden=root.document.body.classList.contains("terrain-3d");
@@ -75,12 +75,13 @@
         if(this._frame)root.cancelAnimationFrame(this._frame);this._frame=0;
         this._resizeObserver?.disconnect();this._visibilityObserver?.disconnect();
         if(this._tile)this.options.store?.off("tile",this._tile);
-        this._container?.remove();this._container=null;this._painted=null;this._view=null;
+        this._container?.remove();this._container=null;this._painted=null;this._view=null;this._nativeZoom=false;
         /* remove/add retains resident engine textures; destroy() is final. */
       },
       getEvents:function(){return {move:this._moved,zoom:this._moved,moveend:this._moved,
         zoomend:this._moved,viewreset:this._moved,resize:this._moved,rotate:this._moved,zoomanim:this._zoomAnim};},
       _moved:function(event){
+        if(event?.type==="resize")this._geometryCache=new WeakMap();
         this._painted=null;this.redraw();
         // Drag/rotate handlers already run in Leaflet's painted frame. Keep
         // the screen-sized canvas fixed to the viewport before presentation.
@@ -90,6 +91,7 @@
       },
       _zoomAnim:function(event){
         this._painted={center:event.center,zoom:event.zoom};this._dirty=true;
+        this._nativeZoom=!event.noUpdate&&!this._map._cspPaneZoom;
         if(event.noUpdate){
           /* The app fires this inside its painted animation frame. Flush here,
              before presentation; a second rAF would lag the basemap by a frame. */
@@ -100,12 +102,23 @@
       _matrix:function(el,interpolated){
         let matrix=new root.DOMMatrix();
         while(el&&el!==this._map.getContainer()){
-          const cs=root.getComputedStyle(el),origin=(el.style.transformOrigin||cs.transformOrigin).split(" ").map(parseFloat);
-          let local=new root.DOMMatrix().translate(el.offsetLeft||0,el.offsetTop||0);
+          // Pane layout is static between resizes; reading offsets/computed
+          // styles after every transform write forces WebKit to flush layout.
+          // Cache only layout geometry. Current inline transforms are always
+          // read, and native CSS interpolation still samples computed style.
+          let geometry=this._geometryCache.get(el),cs;
+          if(!geometry||geometry.left!==el.style.left||geometry.top!==el.style.top||geometry.className!==el.className){
+            cs=root.getComputedStyle(el);
+            geometry={left:el.style.left,top:el.style.top,className:el.className,
+              x:el.offsetLeft||0,y:el.offsetTop||0,origin:cs.transformOrigin,transform:cs.transform};
+            this._geometryCache.set(el,geometry);
+          }
+          const origin=(el.style.transformOrigin||geometry.origin).split(" ").map(parseFloat);
+          let local=new root.DOMMatrix().translate(geometry.x,geometry.y);
           // Inline transforms are the pane painter's current frame. Browsers can
           // return the previous composited transform from getComputedStyle in
           // the same rAF; only native CSS tile transitions need interpolation.
-          const transform=!interpolated&&el.style.transform||cs.transform;
+          const transform=interpolated?(cs||root.getComputedStyle(el)).transform:(el.style.transform||geometry.transform);
           if(transform&&transform!=="none")local=local.translate(origin[0]||0,origin[1]||0)
             .multiply(new root.DOMMatrix(transform)).translate(-origin[0]||0,-origin[1]||0);
           matrix=local.multiply(matrix);el=el.parentElement;
@@ -118,17 +131,23 @@
         this._container.style.transform=inverse.toString();
         let point=inverse.transformPoint({x:view.cssSize[0]/2,y:view.cssSize[1]/2});
         let origin=map.getPixelOrigin(),zoom=map.getZoom();
-        if(map._animatingZoom&&!map._cspPaneZoom){
+        if((map._animatingZoom||this._nativeZoom)&&!map._cspPaneZoom){
           /* Native Leaflet zooms interpolate a tile-level CSS transition. Read
-             its painted matrix, rather than jumping to zoomanim's target. */
+             its painted matrix, rather than jumping to zoomanim's target.
+             Leaflet's zoom-end timer can precede the CSS transition's final
+             frame. Keep sampling that transition until it really finishes. */
+          let transitioning=false;
           map.eachLayer(layer=>{
             if(!origin||!(layer instanceof L.GridLayer))return;
             const level=layer._levels?.[layer._tileZoom];if(!level?.el)return;
             const matrix=this._matrix(level.el,true),scale=Math.hypot(matrix.a,matrix.b);
             if(!(scale>0))return;
+            transitioning=transitioning||!!level.el.getAnimations?.().some(animation=>
+              animation.playState==="running"&&/transform$/.test(animation.transitionProperty||""));
             point=matrix.inverse().transformPoint({x:view.cssSize[0]/2,y:view.cssSize[1]/2});
             origin=level.origin;zoom=+layer._tileZoom;view.zoom=zoom+Math.log2(scale);
           });
+          this._nativeZoom=!!map._animatingZoom||transitioning;
         }
         const world=256*2**zoom;
         view.centerMerc=[(origin.x+point.x)/world,(origin.y+point.y)/world];
@@ -143,7 +162,7 @@
         const w=Math.max(1,Math.round(view.cssSize[0]*view.dpr)),h=Math.max(1,Math.round(view.cssSize[1]*view.dpr));
         if(this._canvas.width!==w)this._canvas.width=w;if(this._canvas.height!==h)this._canvas.height=h;
         this._coverage=this._engine.render(view);this.fire("render",{view,coverage:this._coverage});
-        if(this._map._animatingZoom)this.redraw();
+        if(this._map._animatingZoom||this._nativeZoom)this.redraw();
       },
       redraw:function(){
         this._dirty=true;
@@ -158,7 +177,10 @@
       getContainer:function(){return this._container;},
       getEngine:function(){return this._engine;},getStore:function(){return this.options.store;},
       sampleAt:function(ll){return this.options.store.sampleAt(ll.lng,ll.lat);},
-      gridForView:function(){return this.options.store.gridForView({bounds:this._map.getBounds(),zoom:this._map.getZoom(),maxSide:640});},
+      gridForView:function(){
+        const grid=this.options.store.gridForView({bounds:this._map.getBounds(),zoom:this._map.getZoom(),maxSide:640});
+        return grid&&Array.isArray(grid.bounds)?{...grid,bounds:L.latLngBounds(grid.bounds)}:grid;
+      },
       _tilesNeeded:function(){return this._map?this._engine.neededTiles(this._view||this._deriveView()):[];},
       settled:function(){return this.options.store.settled(this._tilesNeeded());},
       provenance:function(){return this.options.store.provenance(this._tilesNeeded());},

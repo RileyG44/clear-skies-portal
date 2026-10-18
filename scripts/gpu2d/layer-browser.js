@@ -13,6 +13,7 @@ function png(){
  for(let y=0;y<256;y++)for(let x=0;x<256;x++){const i=y*1025+1+x*4;rows.set([129,96,0,255],i);}
  return Buffer.concat([Buffer.from('89504e470d0a1a0a','hex'),chunk('IHDR',header),chunk('IDAT',zlib.deflateSync(rows)),chunk('IEND',Buffer.alloc(0))]);
 }
+const BASE=process.env.CSP_GPU2D_URL||'http://127.0.0.1:8812';
 const image=png(),mock=fs.readFileSync(path.join(__dirname,'layer-mock-engine.js'),'utf8');
 const expose='\nwindow.__layerApp={snapshotDomMatrix,snapshotSpec,composeSnapshot,composeSnapshotStream,snapshotDomItems,enterTerrain3d,exitTerrain3d,researchElevationSource,researchElevationGrid,cursorLoadedElevation,gpuTerrainState,syncGpuTerrain};\n';
 const baselineExpose='\nwindow.__layerApp={snapshotDomMatrix};\n';
@@ -22,18 +23,18 @@ async function prepare(browser,{mocked=true,flag='1',baseline=false,ui='',dpr=2}
  const html=baseline?cp.execFileSync('timeout',['60','git','show','58ba07d:index.html'],{cwd:ROOT,encoding:'utf8'}):fs.readFileSync(path.join(ROOT,'index.html'),'utf8');
  await page.route('**/*',async route=>{
   const u=new URL(route.request().url());
-  if(u.origin!=='http://127.0.0.1:8812'){
+  if(u.origin!==BASE){
    if(/\.(png|jpg)|tile|exportImage|MapServer/.test(u.href))return route.fulfill({contentType:'image/png',body:image});
    return route.abort();
   }
   if(u.pathname==='/')return route.fulfill({contentType:'text/html',body:html.replace('})();\n</script>\n<script src="markup-3d',(baseline?baselineExpose:expose)+'})();\n</script>\n<script src="markup-3d')});
-  if(u.pathname==='/gpu-terrain-engine.js'&&mocked)return route.fulfill({contentType:'text/javascript',body:mock});
+  if(u.pathname==='/gpu-terrain-engine.js'&&!baseline&&mocked!=='real')return route.fulfill({contentType:'text/javascript',body:mocked?mock:'window.CSPGpuTerrainEngine={create:()=>null};'});
   if(u.pathname==='/api/health')return route.fulfill({json:{ok:true,features:[]}});
   if(/\/api\/(elev|usgs\/elev|wadnr\/elev|terrain)/.test(u.pathname))return route.fulfill({contentType:'image/png',body:image});
   if(u.pathname.startsWith('/api/'))return route.fulfill({json:{ok:true,layers:[],areas:[],features:[]}});
   return route.continue();
  });
- await page.goto(`http://127.0.0.1:8812/?gpu2d=${flag}${ui?`&ui=${ui}`:''}`);
+ await page.goto(`${BASE}/?gpu2d=${flag}${ui?`&ui=${ui}`:''}`);
  await page.waitForFunction(()=>!!window.ClearSkiesPortalBridge);
  await page.evaluate(()=>{
   const m=ClearSkiesPortalBridge.map;m.setView([47.858,-118.33],15,{animate:false});
@@ -43,14 +44,24 @@ async function prepare(browser,{mocked=true,flag='1',baseline=false,ui='',dpr=2}
  await page.waitForTimeout(900);
  return {context,page,errors};
 }
-async function alignment(page){return page.evaluate(()=>{
- const m=window.__alignmentMap||ClearSkiesPortalBridge.map,g=window.__alignmentLayer||ClearSkiesPortalBridge.gpuTerrain(),v=g.getEngine().stats().lastView;
- const canvasMatrix=__layerApp.snapshotDomMatrix(g._canvas,m.getContainer());
+function measureAlignment(view){
+ const m=window.__alignmentMap||ClearSkiesPortalBridge.map,g=window.__alignmentLayer||ClearSkiesPortalBridge.gpuTerrain(),v=view||g.getEngine().stats().lastView;
+ // Capture each ancestor once. Re-reading a CSS transition separately for
+ // hundreds of tiles compares different compositor times in WebKit.
+ const cache=new Map([[m.getContainer(),new DOMMatrix()]]);
+ const domMatrix=node=>{
+  if(cache.has(node))return cache.get(node);
+  const cs=getComputedStyle(node),[ox,oy]=cs.transformOrigin.split(' ').map(v=>parseFloat(v)||0);
+  let local=new DOMMatrix().translate(node.offsetLeft||0,node.offsetTop||0);
+  if(cs.transform&&cs.transform!=='none')local=local.translate(ox,oy).multiply(new DOMMatrix(cs.transform)).translate(-ox,-oy);
+  const matrix=domMatrix(node.parentElement).multiply(local);cache.set(node,matrix);return matrix;
+ };
+ const canvasMatrix=domMatrix(g._canvas);
  let max=0,count=0;
  for(const tile of Object.values(window.__debugGrid._tiles||{})){
   if(tile.current===false)continue;
   const coords=tile.coords,z=coords.z+v.dz,n=2**z,size=window.__debugGrid.getTileSize().x;
-  const matrix=__layerApp.snapshotDomMatrix(tile.el,m.getContainer());
+  const matrix=domMatrix(tile.el);
   for(const [dx,dy] of [[0,0],[size,0],[0,size],[size,size]]){
    const actual=matrix.transformPoint(new DOMPoint(dx,dy));
    if(actual.x<30||actual.y<30||actual.x>v.cssSize[0]-30||actual.y>v.cssSize[1]-30)continue;
@@ -59,9 +70,10 @@ async function alignment(page){return page.evaluate(()=>{
    max=Math.max(max,Math.hypot(drawn.x-actual.x,drawn.y-actual.y));count++;
   }
  }
- const matrix=__layerApp.snapshotDomMatrix(g._canvas,m.getContainer());
- return {max,count,zoom:v.zoom,bearing:v.bearing,dz:v.dz,canvasMatrix:[matrix.a,matrix.b,matrix.c,matrix.d,matrix.e,matrix.f],frame:g.getEngine().stats().frames};
- });}
+ const matrix=canvasMatrix;
+ return {max,count,zoom:v.zoom,bearing:v.bearing,dz:v.dz,canvasMatrix:[matrix.a,matrix.b,matrix.c,matrix.d,matrix.e,matrix.f],frame:g.getEngine().stats().frames+(view?1:0)};
+}
+async function alignment(page){return page.evaluate(measureAlignment);}
 async function run(){
  const browser=which==='webkit'?await pw.webkit.launch():await pw.chromium.launch({channel:'chrome',headless:true,args:['--use-angle=metal','--enable-gpu','--ignore-gpu-blocklist']});
  const report={browser:which,alignment:[],errors:[]};
@@ -112,17 +124,51 @@ async function run(){
   await page.waitForTimeout(300);
   // A separate map tests native Leaflet CSS zoom without the app's gesture
   // accumulator or pending wheel settle influencing the native animation.
-  await page.evaluate(async()=>{
+  await page.evaluate(async code=>{
    const css=document.createElement('style');css.id='nativeZoomCss';css.textContent='#nativeZoomTest .leaflet-zoom-anim .leaflet-zoom-animated{transition:transform .25s cubic-bezier(0,0,.25,1)!important}';document.head.append(css);
    const div=document.createElement('div');div.id='nativeZoomTest';div.style.cssText='position:absolute;inset:0;z-index:9999';document.body.append(div);
    const m=window.__alignmentMap=L.map(div,{rotate:true,bearing:37,zoomAnimation:true,zoomSnap:0}).setView([47.858,-118.33],15);
    window.__mainDebugGrid=__debugGrid;
    window.__debugGrid=new (L.GridLayer.extend({createTile(){const c=document.createElement('canvas');c.width=c.height=256;return c;}}))({tileSize:128,maxZoom:28,updateWhenZooming:false}).addTo(m);
    window.__alignmentLayer=L.cspGpuTerrainLayer({store:new CSPGpuTerrainStore.ElevationTileStore({}),state:__layerApp.gpuTerrainState()}).addTo(m);
-   await new Promise(r=>setTimeout(r,100));m.setZoom(16,{animate:true});
+   await new Promise(r=>setTimeout(r,100));
+   // WebKit advances compositor time between successive getComputedStyle
+   // calls, even within one JS callback. Hold the isolated native map's CSS
+   // transitions during each geometry comparison so the layer and independent
+   // oracle observe the same instant. The app's actual wheel/drag tests above
+   // run without this instrumentation; this check isolates native view math.
+    const measure=(0,eval)('('+code+')');window.__nativeSamples=[];
+    const derive=__alignmentLayer._deriveView;
+    __alignmentLayer._deriveView=function(){
+      this.__heldAnimations=div.getAnimations({subtree:true}).filter(a=>a.playState==='running');
+      for(const animation of this.__heldAnimations){const time=animation.currentTime;animation.pause();animation.currentTime=time;}
+      if(this.__heldAnimations.length)this._nativeZoom=true;
+      return derive.call(this);
+    };
+    const engine=__alignmentLayer.getEngine(),render=engine.render;
+    engine.render=function(view){
+      try{
+        const start=performance.now(),sample=measure(view),result=render.call(this,view);
+        const grid=__debugGrid,level=grid._levels[grid._tileZoom];
+        __nativeSamples.push({phase:'native-zoom',sampling:'held compositor time',...sample,paintMs:performance.now()-start,postPaintMax:measure(view).max,
+         nativeAnimating:m._animatingZoom,tileZoom:grid._tileZoom,animations:level.el.getAnimations().map(a=>({time:a.currentTime,state:a.playState}))});return result;
+      }finally{
+        if(__alignmentLayer.__heldAnimations?.length)__alignmentLayer._nativeZoom=true;
+        for(const animation of __alignmentLayer.__heldAnimations||[])animation.play();
+      }
+    };
+   m.setZoom(16,{animate:true});
+  },measureAlignment.toString());
+  await page.waitForFunction(()=>__nativeSamples.length>=3&&!__alignmentMap._animatingZoom&&!__alignmentLayer._nativeZoom,null,{timeout:2000});
+  const nativeSamples=await page.evaluate(()=>__nativeSamples);report.alignment.push(...nativeSamples);
+  assert(nativeSamples.filter(s=>s.zoom>15.001&&s.zoom<15.999).length>=3,'native transition must produce interpolated frames');
+  report.nativeZoom=await page.evaluate(async()=>{
+   const before=__alignmentLayer.getEngine().stats().frames;await new Promise(r=>setTimeout(r,120));
+   return {enabled:__alignmentMap._zoomAnimated,animating:__alignmentMap._animatingZoom,tracking:__alignmentLayer._nativeZoom,
+    before,after:__alignmentLayer.getEngine().stats().frames};
   });
-  for(let i=0;i<6;i++){await page.waitForTimeout(35);report.alignment.push({phase:'native-zoom',...await alignment(page)});}
-  report.nativeZoom=await page.evaluate(()=>({enabled:__alignmentMap._zoomAnimated,animating:__alignmentMap._animatingZoom}));
+  assert(report.nativeZoom.enabled);assert.equal(report.nativeZoom.animating,false);assert.equal(report.nativeZoom.tracking,false);
+  assert.equal(report.nativeZoom.before,report.nativeZoom.after,'completed native transition must return to idle');
   await page.evaluate(()=>{__alignmentLayer.destroy();__alignmentMap.remove();document.getElementById('nativeZoomTest').remove();document.getElementById('nativeZoomCss').remove();window.__alignmentLayer=null;window.__alignmentMap=null;window.__debugGrid=__mainDebugGrid;});
   await page.waitForTimeout(250);
   // Real drag pan: move callbacks must leave the canvas covering the whole
@@ -151,10 +197,15 @@ async function run(){
    const layer=ClearSkiesPortalBridge.gpuTerrain(),engine=layer.getEngine(),map=ClearSkiesPortalBridge.map;
    map.removeLayer(layer);layer.addTo(map);await new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)));
    await new Promise(r=>setTimeout(r,400));const before=engine.stats().frames;await new Promise(r=>setTimeout(r,120));
+   const store=layer.getStore(),getGrid=store.gridForView,arrayBounds=[[47,-119],[48,-118]],leafletBounds=L.latLngBounds(arrayBounds);
+   store.gridForView=()=>({bounds:arrayBounds});const converted=layer.gridForView().bounds;
+   store.gridForView=()=>({bounds:leafletBounds});const preservesBounds=layer.gridForView().bounds===leafletBounds;store.gridForView=getGrid;
    return {same:engine===layer.getEngine(),before,after:engine.stats().frames,canvases:document.querySelectorAll('.csp-gpu-terrain').length,
-    sample:__layerApp.cursorLoadedElevation(map.getCenter()),grid:__layerApp.researchElevationGrid(layer).width};
+    sample:__layerApp.cursorLoadedElevation(map.getCenter()),grid:__layerApp.researchElevationGrid(layer).width,
+    bounds:{preservesBounds,south:converted.getSouthWest().lat,west:converted.getSouthWest().lng,north:converted.getNorthEast().lat,east:converted.getNorthEast().lng}};
   });
   assert(report.lifecycle.same);assert.equal(report.lifecycle.canvases,1);assert.equal(report.lifecycle.before,report.lifecycle.after);assert(report.lifecycle.sample);assert(report.lifecycle.grid);
+  assert.deepEqual(report.lifecycle.bounds,{preservesBounds:true,south:47,west:-119,north:48,east:-118});
   report.exports=[];
   await page.evaluate(()=>ClearSkiesPortalBridge.map.removeLayer(__debugGrid));
   for(const bearing of [0,37,90])for(const scale of [1,2,4]){
@@ -174,9 +225,18 @@ async function run(){
    const normal=await __layerApp.composeSnapshot(spec);await __layerApp.composeSnapshotStream(spec,chunk=>{chunks.push(chunk);});
    const pixels=async blob=>{const img=new Image(),url=URL.createObjectURL(blob);img.src=url;await img.decode();const c=document.createElement('canvas');c.width=img.width;c.height=img.height;
     const g=c.getContext('2d');g.drawImage(img,0,0);URL.revokeObjectURL(url);return g.getImageData(0,0,c.width,c.height).data;};
-   const a=await pixels(normal.blob),b=await pixels(new Blob(chunks,{type:'image/png'}));let different=0;for(let i=0;i<a.length;i++)if(a[i]!==b[i])different++;
-   return {different,bytes:chunks.reduce((sum,c)=>sum+c.length,0)};
-  });assert.equal(report.stream.different,0,'stream and regular GPU exports must match');
+   const a=await pixels(normal.blob),b=await pixels(new Blob(chunks,{type:'image/png'}));let different=0,max=0,alphaDifferent=0;
+   for(let i=0;i<a.length;i++){const d=Math.abs(a[i]-b[i]);if(d){different++;if(i%4===3)alphaDifferent++;}max=Math.max(max,d);}
+   // Verify the fixture's GPU-entry pixels exactly before composition. WebKit
+   // can round its translucent Canvas2D fixture one color code differently
+   // when drawing into the stream path's alpha:false destination canvas.
+   const layer=ClearSkiesPortalBridge.gpuTerrain(),first=await layer.snapshotEntry(spec).canvas(),second=await layer.snapshotEntry({...spec,width:spec.width,height:spec.height}).canvas();
+   const x=first.getContext('2d').getImageData(0,0,first.width,first.height).data,y=second.getContext('2d').getImageData(0,0,second.width,second.height).data;
+   let entryDifferent=0;for(let i=0;i<x.length;i++)if(x[i]!==y[i])entryDifferent++;
+   return {different,max,alphaDifferent,entryDifferent,bytes:chunks.reduce((sum,c)=>sum+c.length,0)};
+  });assert.equal(report.stream.entryDifferent,0,'full and block terrain-entry pixels must match exactly');
+  assert.equal(report.stream.alphaDifferent,0,'stream and regular export alpha must match exactly');
+  assert(report.stream.max<=1,'mock Canvas2D stream color quantization exceeded one code value: '+JSON.stringify(report.stream));
   // The real MapLibre module runs with fixture raster responses.
   await page.evaluate(()=>__layerApp.enterTerrain3d().catch(e=>window.__3dError=String(e)));await page.waitForTimeout(600);
   report.mode3d=await page.evaluate(()=>({error:window.__3dError||null,map:!!ClearSkiesPortalBridge.map3d(),hidden:getComputedStyle(ClearSkiesPortalBridge.gpuTerrain()._canvas).visibility}));
@@ -218,4 +278,5 @@ async function run(){
   console.log(JSON.stringify({browser:which,maxAlignmentPx:Math.max(...report.alignment.map(x=>x.max)),gestureFrames:report.gesture.length,exports:report.exports.length,lifecycle:report.lifecycle,fallback:report.fallback,errors:report.errors},null,2));
  }finally{fs.writeFileSync(path.join(OUT,`${which}-results.json`),JSON.stringify(report,null,2));await browser.close();}
 }
-run().catch(e=>{console.error(e);process.exitCode=1;});
+if(require.main===module)run().catch(e=>{console.error(e);process.exitCode=1;});
+module.exports={prepare};

@@ -5885,7 +5885,7 @@ function terrainLayerSummary(layer){
   const sources=Object.entries(ranks).filter(([rank,n])=>n>0&&CSPPublicTerrain.SOURCES[rank]).sort((a,b)=>b[0]-a[0])
     .map(([rank,n])=>({...CSPPublicTerrain.SOURCES[rank],rank:+rank,pixels:n,percent:total?100*n/total:0,
       surveys:provenance.surveys||[],sampleMeters:provenance.sampleMeters?.[rank]}));
-  return {sources,coverage:Math.round(status.ratio*100),total:status.total,ready:status.complete,refining:status.refining,failed:false};
+  return {sources,coverage:Math.round(status.ratio*100),total:status.total,ready:status.complete,refining:status.refining,failed:!!status.failed};
 }
 let probeToken=0, waLayersPromise=null, terrainQueryToken=0, serverHealth=null, serverProbeTimer=null;
 let waCoverageState="unknown",waCoverageError="",dnrStatus=null,dnrStatusTimer=null,dnrLastError="",dnrRenderedRevision=-1;
@@ -10172,6 +10172,7 @@ function paintElevationBandOut(){
 }
 let elevPaintFrame=0;
 function scheduleElevPaint(){
+  if(gpuTerrainEnabled)syncGpuTerrain();
   if(elevPaintFrame) return;
   elevPaintFrame=requestAnimationFrame(()=>{ elevPaintFrame=0; applyElev() });
 }
@@ -10326,6 +10327,7 @@ for(const id of ["#terDepth","#terExtent","#fabBand"]){ const el=$(id); if(el) e
 let terrainLightFrame=0;
 function repaintTerrainLighting(){
   syncTerrainLighting();
+  if(gpuTerrainEnabled)syncGpuTerrain();
   if(terrainLightFrame)return;
   terrainLightFrame=requestAnimationFrame(()=>{terrainLightFrame=0;paintTerrainLightingFrame();});
 }
