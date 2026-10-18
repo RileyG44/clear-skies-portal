@@ -341,7 +341,18 @@ for(const grid of $$(".terrain-look-grid")){
   grid.remove();
 }
 const terrainHints={off:"Choose a layer to show the shape of the ground.",hs:"Shaded relief makes landforms easier to read.",hsmulti:"Light from several directions reveals landforms with fewer deep shadows.",tint:"Colour the ground by height, with shaded relief.",slope:"Show how steep the ground is.",aspect:"Colour each slope by the direction it faces.",northness:"Show how strongly slopes face north or south."};
-const researchHints={lrm:"Remove broad hills so smaller landforms stand out.",tpi:"Show ridges and hollows relative to surrounding ground.",tri:"Show how rough or broken the surface is.",residual:"Find bumps and dips that differ from the broader surface.",northness:"Show which way slopes face, along north–south and east–west axes.",curvature:"Show how slopes bend and where flow converges or spreads.",glacial:"Flag possible ice-margin landforms. Check candidates against geology and field evidence.",moraine:"Beta: find leads on moraine-like ridges and hummocky belts. Compare with Glacial margin; landslides and other terrain can look similar.",flood:"Flag possible flood channels. Check candidates against geology and field evidence."};
+const researchHints={lrm:"Remove broad hills so smaller landforms stand out.",tpi:"Show ridges and hollows relative to surrounding ground.",tri:"Show how rough or broken the surface is.",residual:"Find bumps and dips that differ from the broader surface.",northness:"Show which way slopes face, along north–south and east–west axes.",curvature:"Show how slopes bend and where flow converges or spreads.",glacial:"Flag possible ice-margin landforms. Check candidates against geology and field evidence.",moraine:"Beta: find leads on moraine-like ridges and hummocky belts. Compare with Glacial margin; landslides and other terrain can look similar.",flood:"Flag possible flood channels. Check candidates against geology and field evidence.",
+  svf:"How much open sky each spot can see. Subtle banks, pits and trails stand out with no sun angle to tune.",
+  openpos:"Bright where ground stands proud: ridges, berms and crests read crisply.",
+  openneg:"Bright where ground sinks in: channels, ditches and hollows read crisply.",
+  rrim:"Red for steep ground, light for ridges, dark for hollows. A classic Japanese LiDAR map style.",
+  geomorphons:"Name every spot as a peak, ridge, shoulder, spur, slope, hollow, footslope, valley, pit or flat.",
+  drainage:"Trace where water would run, from rills to the main stream.",
+  wetness:"Show where water tends to collect: flat ground that drains a large area.",
+  depressions:"Find closed hollows such as kettles, sinkholes and ponds, shaded by depth.",
+  avalanche:"Highlight slopes from 27° up, where avalanches start most often. One input to avalanche terrain, not a forecast.",
+  solar:"Daily sunshine with terrain shadows. Dark ground keeps its snow longest.",
+  wind:"Blue slopes are sheltered and collect drifting snow; orange slopes are scoured by the wind."};
 function syncMenuHints(){
   const style=$("#terStyle")?.value,source=$("#terSrc")?.value;
   const setHint=(id,text)=>{const hint=$(id);if(hint)hint.textContent=text};
@@ -352,8 +363,12 @@ function syncMenuHints(){
   // The beta uses automatic landform scales; the shared Fine/Broad setting
   // affects the other products only, so do not offer an ineffective control.
   const scaleField=$("#researchScaleField"),scale=$("#researchScale");
-  if(scaleField)scaleField.hidden=product==="moraine";
-  if(scale)scale.disabled=product==="moraine";
+  const fixedScale=["moraine","drainage","wetness","depressions","avalanche","solar"].includes(product);
+  if(scaleField)scaleField.hidden=fixedScale;
+  if(scale)scale.disabled=fixedScale;
+  const sunField=$("#researchSunField"),windField=$("#researchWindField");
+  if(sunField)sunField.hidden=product!=="solar";
+  if(windField)windField.hidden=product!=="wind";
 }
 for(const id of ["terStyle","terSrc","researchProduct"]) $("#"+id)?.addEventListener("change",syncMenuHints);
 for(const id of ["terReset","researchReset"]) $("#"+id)?.addEventListener("click",()=>requestAnimationFrame(syncMenuHints));
