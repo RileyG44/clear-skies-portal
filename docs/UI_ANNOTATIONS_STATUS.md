@@ -147,7 +147,7 @@ Root owns final title/footer CSS; screenshot shows browser-default button border
 - Final static/menu/point-cloud checks pass on Node 24.19.0. The build-stamp check caught an omitted HTML cache-bust update; corrected before pushing.
 - Live installed browser verified build 2026-10-17g, hidden sidebar selector, corrected 2D action, and LiDAR page layout.
 - CI and Pages run 39101350169 passed check, Windows and deployment jobs for implementation db6adc0. Public version.js and HTML verify build 2026-10-17g, hidden selector and corrected action.
-- #9 and #10 remain pending the requested missing behavior, not permission. No guessed changes were made to either control.
+- At the #8 release, #9 and #10 awaited missing behavior. The subsequent clarification and implementation are recorded below.
 
 ## Items 9 and 10 - release 2026-10-17h
 
@@ -162,4 +162,6 @@ Root owns final title/footer CSS; screenshot shows browser-default button border
 - Node 24 full npm test and npm run check passed. Expanded menu tests cover viewport/3D bounds, map cleanup, warning/confirmation, status recovery, unknown start, cancellation fences, supersession and success timers.
 - T3 browser: desktop graphic-button selection + ArrowLeft changed the native style and retained one Tab stop; all icons loaded. Controlled current-view and selected-area jobs showed progress, removed handles, accepted map clicks/pan, survived 3D, recovered status without a duplicate POST, completed only the original bbox and cancelled by owned ID.
 - At 390px portrait width all style targets are >=54px tall. Stable background chip measured about 132x46px, wholly left of the toolbar; details open on demand. No new upstream acquisition was used for UI checks. Backend DNR tests passed in the full suite.
-- Final build 2026-10-17h; release/live verification pending.
+- Release 2026-10-17h installed from implementation f3c82ba using backups and atomic replacement of five static assets. Installed SHA-256 hashes match checkout; server/cache/download state was preserved.
+- Live installed browser verified build h, 11 style controls, hidden native select, current-view button and status UI without console errors.
+- CI and Pages run 39102325679 passed check, Windows and deploy. Public build, HTML, style-palette JavaScript/CSS and service worker were independently fetched and verified.
