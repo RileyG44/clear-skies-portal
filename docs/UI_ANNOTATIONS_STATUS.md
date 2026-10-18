@@ -83,3 +83,16 @@ These are verified current code locations, not mappings inferred from the missin
 Implemented annotations: none. Unresolved annotations: all 18 listed above. Changed files: only this status artifact.
 
 UI work only when resumed. Do not edit GPU terrain files, GPU integration functions/tests, or DNR acquisition/server implementation. Do not deploy, merge into parent, or overwrite its checkout. Ports 8765 and 8816 were left untouched. No agents were spawned or delegated.
+
+## Resumed narrowed deliverable
+
+Riley clarified #2 and #3; implement only these in `ui-system.js` and this document.
+
+- [x] Record narrowed scope before exploration.
+- [ ] Merge `origin/main` (expected `56e18e0`) into isolated branch, preserving inventory.
+- [ ] #2: Move full source metadata from compact toolbar layer cards into a footer listing active layer names and metadata at the bottom of the toolbar Layers pop-out. Keep ordinary sidebar metadata.
+- [ ] #3: Use native `.csp-layer-title` buttons to open matching existing settings/edit route and close pop-out; preserve independent slider, toggle and drag behavior. Keep pinned basemap informational where no meaningful route exists.
+- [ ] Verify JavaScript syntax and browser behavior on port 8820 with temporary cache.
+- [ ] Commit changes; report behavior, SHA and limitations.
+
+Root owns CSS (including new classes), #1 and #7. Do not edit CSS, tests, build stamps, index.html, GPU files, parent checkout or deployed service. Other annotations remain unresolved and out of scope. Footer classes: `.csp-layer-sources`, `.csp-layer-source`, `.csp-layer-source-name`, `.csp-layer-source-meta`.
