@@ -88,4 +88,21 @@ script globals. The release checks include the merged LiDAR/menu UI changes.
 Physical iPhone/Safari performance is **untested**. Phone viewport and WebKit
 results here run on the Mac. The device inventory has no available simulator
 devices, so no simulator result is claimed either. Deployment verification is
-recorded separately after publishing.
+recorded in [gpu3d-deployment.json](gpu3d-deployment.json).
+
+## Published verification
+
+Release commit `f59966b` is on main. [CI and Pages run 39103465184](https://github.com/RileyG44/clear-skies-portal/actions/runs/39103465184)
+passes Linux checks/audit, Windows tests and deployment. The backed-up Mac
+LaunchAgent serves build `2026-10-17i`, with seven installed asset hashes
+matching source. Six hosted assets, including all three GPU modules, match
+the assembled minified artifact byte for byte.
+
+Real Chrome/Metal browser checks of both the installed service and the hosted
+site pass on actual terrain: GPU enabled, zero page errors, nonblank native
+3D geometry plus spectrum, and zero height uploads for relighting. The hosted
+check uses public elevation without an engine connection; its cold data
+readiness takes about 35 seconds for the initial view and 37 seconds for the
+expanded pitched view. The cached local service takes about 2 and 6 seconds.
+These are source-loading observations, not control-response benchmarks.
+Physical iPhone performance remains unmeasured.

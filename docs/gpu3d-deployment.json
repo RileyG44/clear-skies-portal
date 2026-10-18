@@ -1,0 +1,573 @@
+{
+  "release": "2026-10-17i",
+  "releaseCommit": "f59966b3dbacf9a223b4616227c10b91fdfcc02b",
+  "ci": {
+    "conclusion": "success",
+    "headSha": "f59966b3dbacf9a223b4616227c10b91fdfcc02b",
+    "jobs": [
+      {
+        "name": "check",
+        "status": "completed",
+        "conclusion": "success",
+        "url": "https://github.com/RileyG44/clear-skies-portal/actions/runs/39103465184/job/117604298922"
+      },
+      {
+        "name": "windows",
+        "status": "completed",
+        "conclusion": "success",
+        "url": "https://github.com/RileyG44/clear-skies-portal/actions/runs/39103465184/job/117604299056"
+      },
+      {
+        "name": "deploy",
+        "status": "completed",
+        "conclusion": "success",
+        "url": "https://github.com/RileyG44/clear-skies-portal/actions/runs/39103465184/job/117604391391"
+      }
+    ],
+    "status": "completed",
+    "url": "https://github.com/RileyG44/clear-skies-portal/actions/runs/39103465184"
+  },
+  "localRuntimeHashes": {
+    "index.html": {
+      "source": "a778f5e335b86b17ff1b3c23873fb98842de40a108a22043143212cfd852fd4a",
+      "installed": "a778f5e335b86b17ff1b3c23873fb98842de40a108a22043143212cfd852fd4a"
+    },
+    "version.js": {
+      "source": "701f2d8aafa06182c245863d8493746bebcfac9a071cde25c0f5a9d29e398503",
+      "installed": "701f2d8aafa06182c245863d8493746bebcfac9a071cde25c0f5a9d29e398503"
+    },
+    "sw.js": {
+      "source": "a36203fd2a4265637077b11abd7e225f1841c17d6eda4b71c8a410980468e814",
+      "installed": "a36203fd2a4265637077b11abd7e225f1841c17d6eda4b71c8a410980468e814"
+    },
+    "gpu-terrain-3d-cache.js": {
+      "source": "47fc4dfee3fd715686e48f735f7accde86820413eb5f2c15f42a64acbd379823",
+      "installed": "47fc4dfee3fd715686e48f735f7accde86820413eb5f2c15f42a64acbd379823"
+    },
+    "gpu-terrain-3d-renderer.js": {
+      "source": "2ce7055fb77371b5aa3988cd7803e4777464e55427dc2c2e3136639db58ad456",
+      "installed": "2ce7055fb77371b5aa3988cd7803e4777464e55427dc2c2e3136639db58ad456"
+    },
+    "gpu-terrain-3d-layer.js": {
+      "source": "16b4dcdad28ce5ff85bf51f8fd77596207fe6a30a2fa3d15d72d61cb1dd3f237",
+      "installed": "16b4dcdad28ce5ff85bf51f8fd77596207fe6a30a2fa3d15d72d61cb1dd3f237"
+    },
+    "server.js": {
+      "source": "969bd7ae22f34c747d2b1a46e0ad386a3f7a86b333265cf3175a55371807db77",
+      "installed": "969bd7ae22f34c747d2b1a46e0ad386a3f7a86b333265cf3175a55371807db77"
+    }
+  },
+  "pagesHashes": {
+    "index.html": {
+      "status": 200,
+      "sha256": "a51e1ac838917cb0ab54bfefb440e08a906449da44bc1cd201e307d65de0274e",
+      "assembledSha256": "a51e1ac838917cb0ab54bfefb440e08a906449da44bc1cd201e307d65de0274e",
+      "matches": true,
+      "bytes": 671261
+    },
+    "version.js": {
+      "status": 200,
+      "sha256": "8205badd028f3b4676304c0a167b24f1e9564bcd610a5793044159f9341549c7",
+      "assembledSha256": "8205badd028f3b4676304c0a167b24f1e9564bcd610a5793044159f9341549c7",
+      "matches": true,
+      "bytes": 36
+    },
+    "sw.js": {
+      "status": 200,
+      "sha256": "a36203fd2a4265637077b11abd7e225f1841c17d6eda4b71c8a410980468e814",
+      "assembledSha256": "a36203fd2a4265637077b11abd7e225f1841c17d6eda4b71c8a410980468e814",
+      "matches": true,
+      "bytes": 5323
+    },
+    "gpu-terrain-3d-cache.js": {
+      "status": 200,
+      "sha256": "29f5653f3ddab0519a593a9d9ea4775de787827e93cdc243a61a59b8b25d65f3",
+      "assembledSha256": "29f5653f3ddab0519a593a9d9ea4775de787827e93cdc243a61a59b8b25d65f3",
+      "matches": true,
+      "bytes": 5746
+    },
+    "gpu-terrain-3d-renderer.js": {
+      "status": 200,
+      "sha256": "f26360c2709702f2203e4f0f38006e0ffae1a68704f073dab43f043e2754912b",
+      "assembledSha256": "f26360c2709702f2203e4f0f38006e0ffae1a68704f073dab43f043e2754912b",
+      "matches": true,
+      "bytes": 12490
+    },
+    "gpu-terrain-3d-layer.js": {
+      "status": 200,
+      "sha256": "37a69a615e5e67cf86723780447aaa8288a342c9463e09584c38de2c5f51dcdc",
+      "assembledSha256": "37a69a615e5e67cf86723780447aaa8288a342c9463e09584c38de2c5f51dcdc",
+      "matches": true,
+      "bytes": 6959
+    }
+  },
+  "realTerrainLocal": {
+    "startedAt": "2026-10-18T06:17:38.421Z",
+    "expectedBuild": "2026-10-17i",
+    "fixture": false,
+    "targets": [
+      {
+        "url": "http://127.0.0.1:8765/",
+        "pageErrors": [],
+        "build": "2026-10-17i",
+        "initialReady": {
+          "ok": true,
+          "ms": 1695,
+          "state": {
+            "managers": {
+              "basemap": {
+                "loaded": 28
+              },
+              "dem": {
+                "loaded": 11
+              },
+              "demShade": {},
+              "analysis": {
+                "loaded": 28
+              },
+              "elevspec": {},
+              "mk-markup-1-cm5aue": {
+                "loaded": 28
+              }
+            },
+            "pitch": 0.5789758234346798,
+            "bearing": 0,
+            "zoom": 14,
+            "center": [
+              -118.3300000000002,
+              47.85800000000111
+            ]
+          }
+        },
+        "cameraReady": {
+          "ok": true,
+          "ms": 5845,
+          "state": {
+            "managers": {
+              "basemap": {
+                "loaded": 50
+              },
+              "dem": {
+                "loaded": 25
+              },
+              "demShade": {},
+              "analysis": {
+                "loaded": 50
+              },
+              "elevspec": {},
+              "mk-markup-1-cm5aue": {
+                "loaded": 50
+              }
+            },
+            "pitch": 58.00000000000001,
+            "bearing": 37,
+            "zoom": 14,
+            "center": [
+              -118.33,
+              47.858
+            ]
+          }
+        },
+        "renderer": "ANGLE (Apple, ANGLE Metal Renderer: Apple M2, Unspecified Version)",
+        "before": {
+          "enabled": true,
+          "error": null,
+          "lost": false,
+          "installed": true,
+          "frames": 52,
+          "invalidations": 61,
+          "pending": 0,
+          "renderer": {
+            "inputTextures": 61,
+            "inputBytes": 16241616,
+            "uploads": 61,
+            "draws": 61,
+            "evictions": 0,
+            "batches": 52,
+            "cacheHits": 0,
+            "uniformUpdates": 73,
+            "maxBytes": 201326592,
+            "selfTestMaxError": 0
+          },
+          "cache": {
+            "entries": 62,
+            "bytes": 16507872,
+            "pending": 0,
+            "hits": 0,
+            "misses": 67,
+            "evictions": 0,
+            "generation": 0,
+            "destroyed": false
+          }
+        },
+        "relightReady": {
+          "ok": true,
+          "ms": 42,
+          "state": {
+            "managers": {
+              "basemap": {
+                "loaded": 50
+              },
+              "dem": {
+                "loaded": 25
+              },
+              "demShade": {},
+              "analysis": {
+                "loaded": 50
+              },
+              "elevspec": {},
+              "mk-markup-1-cm5aue": {
+                "loaded": 50
+              }
+            },
+            "pitch": 58.00000000000001,
+            "bearing": 37,
+            "zoom": 14,
+            "center": [
+              -118.33,
+              47.858
+            ]
+          }
+        },
+        "afterLight": {
+          "enabled": true,
+          "error": null,
+          "lost": false,
+          "installed": true,
+          "frames": 53,
+          "invalidations": 62,
+          "pending": 0,
+          "renderer": {
+            "inputTextures": 61,
+            "inputBytes": 16241616,
+            "uploads": 61,
+            "draws": 111,
+            "evictions": 0,
+            "batches": 53,
+            "cacheHits": 50,
+            "uniformUpdates": 91,
+            "maxBytes": 201326592,
+            "selfTestMaxError": 0
+          },
+          "cache": {
+            "entries": 62,
+            "bytes": 16507872,
+            "pending": 0,
+            "hits": 0,
+            "misses": 67,
+            "evictions": 0,
+            "generation": 0,
+            "destroyed": false
+          }
+        },
+        "lightUploadDelta": 0,
+        "spectrumReady": {
+          "ok": true,
+          "ms": 31,
+          "state": {
+            "managers": {
+              "basemap": {
+                "loaded": 50
+              },
+              "dem": {
+                "loaded": 25
+              },
+              "demShade": {},
+              "analysis": {
+                "loaded": 50
+              },
+              "elevspec": {
+                "loaded": 50
+              },
+              "mk-markup-1-cm5aue": {
+                "loaded": 50
+              }
+            },
+            "pitch": 58.00000000000001,
+            "bearing": 37,
+            "zoom": 14,
+            "center": [
+              -118.33,
+              47.858
+            ]
+          }
+        },
+        "afterSpectrum": {
+          "enabled": true,
+          "error": null,
+          "lost": false,
+          "installed": true,
+          "frames": 54,
+          "invalidations": 112,
+          "pending": 0,
+          "renderer": {
+            "inputTextures": 61,
+            "inputBytes": 16241616,
+            "uploads": 61,
+            "draws": 161,
+            "evictions": 0,
+            "batches": 54,
+            "cacheHits": 100,
+            "uniformUpdates": 121,
+            "maxBytes": 201326592,
+            "selfTestMaxError": 0
+          },
+          "cache": {
+            "entries": 62,
+            "bytes": 16507872,
+            "pending": 0,
+            "hits": 50,
+            "misses": 67,
+            "evictions": 0,
+            "generation": 0,
+            "destroyed": false
+          }
+        },
+        "screenshot": {
+          "file": "/tmp/csp-gpu3d-upgrade/live-127-0-0-1.png",
+          "sha256": "fd531feb0e357f835851cfffc127a306d2631feb933d2d8a39d48a6dd0996a92",
+          "width": 2880,
+          "height": 1800,
+          "coverage": 1,
+          "blank": false,
+          "mean": 146
+        },
+        "pass": true
+      }
+    ],
+    "finishedAt": "2026-10-18T06:17:51.364Z",
+    "pass": true
+  },
+  "realTerrainPages": {
+    "startedAt": "2026-10-18T06:18:03.049Z",
+    "expectedBuild": "2026-10-17i",
+    "fixture": false,
+    "targets": [
+      {
+        "url": "https://rileyg44.github.io/clear-skies-portal/",
+        "pageErrors": [],
+        "build": "2026-10-17i",
+        "initialReady": {
+          "ok": true,
+          "ms": 35091,
+          "state": {
+            "managers": {
+              "basemap": {
+                "loaded": 28
+              },
+              "dem": {
+                "loaded": 11
+              },
+              "demShade": {},
+              "analysis": {
+                "loaded": 28
+              },
+              "elevspec": {}
+            },
+            "pitch": 1.1561782614279048,
+            "bearing": 0,
+            "zoom": 14,
+            "center": [
+              -118.3299999999993,
+              47.85799999999975
+            ]
+          }
+        },
+        "cameraReady": {
+          "ok": true,
+          "ms": 36703,
+          "state": {
+            "managers": {
+              "basemap": {
+                "loaded": 50
+              },
+              "dem": {
+                "loaded": 25
+              },
+              "demShade": {},
+              "analysis": {
+                "loaded": 50
+              },
+              "elevspec": {}
+            },
+            "pitch": 58.00000000000001,
+            "bearing": 37,
+            "zoom": 14,
+            "center": [
+              -118.33,
+              47.858
+            ]
+          }
+        },
+        "renderer": "ANGLE (Apple, ANGLE Metal Renderer: Apple M2, Unspecified Version)",
+        "before": {
+          "enabled": true,
+          "error": null,
+          "lost": false,
+          "installed": true,
+          "frames": 52,
+          "invalidations": 61,
+          "pending": 0,
+          "renderer": {
+            "inputTextures": 61,
+            "inputBytes": 16241616,
+            "uploads": 61,
+            "draws": 61,
+            "evictions": 0,
+            "batches": 52,
+            "cacheHits": 0,
+            "uniformUpdates": 77,
+            "maxBytes": 201326592,
+            "selfTestMaxError": 0
+          },
+          "cache": {
+            "entries": 61,
+            "bytes": 16241616,
+            "pending": 0,
+            "hits": 0,
+            "misses": 64,
+            "evictions": 0,
+            "generation": 0,
+            "destroyed": false
+          }
+        },
+        "relightReady": {
+          "ok": true,
+          "ms": 2,
+          "state": {
+            "managers": {
+              "basemap": {
+                "loaded": 50
+              },
+              "dem": {
+                "loaded": 25
+              },
+              "demShade": {},
+              "analysis": {
+                "loaded": 50
+              },
+              "elevspec": {}
+            },
+            "pitch": 58.00000000000001,
+            "bearing": 37,
+            "zoom": 14,
+            "center": [
+              -118.33,
+              47.858
+            ]
+          }
+        },
+        "afterLight": {
+          "enabled": true,
+          "error": null,
+          "lost": false,
+          "installed": true,
+          "frames": 53,
+          "invalidations": 62,
+          "pending": 0,
+          "renderer": {
+            "inputTextures": 61,
+            "inputBytes": 16241616,
+            "uploads": 61,
+            "draws": 111,
+            "evictions": 0,
+            "batches": 53,
+            "cacheHits": 50,
+            "uniformUpdates": 96,
+            "maxBytes": 201326592,
+            "selfTestMaxError": 0
+          },
+          "cache": {
+            "entries": 61,
+            "bytes": 16241616,
+            "pending": 0,
+            "hits": 0,
+            "misses": 64,
+            "evictions": 0,
+            "generation": 0,
+            "destroyed": false
+          }
+        },
+        "lightUploadDelta": 0,
+        "spectrumReady": {
+          "ok": true,
+          "ms": 26,
+          "state": {
+            "managers": {
+              "basemap": {
+                "loaded": 50
+              },
+              "dem": {
+                "loaded": 25
+              },
+              "demShade": {},
+              "analysis": {
+                "loaded": 50
+              },
+              "elevspec": {
+                "loaded": 50
+              }
+            },
+            "pitch": 58.00000000000001,
+            "bearing": 37,
+            "zoom": 14,
+            "center": [
+              -118.33,
+              47.858
+            ]
+          }
+        },
+        "afterSpectrum": {
+          "enabled": true,
+          "error": null,
+          "lost": false,
+          "installed": true,
+          "frames": 54,
+          "invalidations": 112,
+          "pending": 0,
+          "renderer": {
+            "inputTextures": 61,
+            "inputBytes": 16241616,
+            "uploads": 61,
+            "draws": 161,
+            "evictions": 0,
+            "batches": 54,
+            "cacheHits": 100,
+            "uniformUpdates": 126,
+            "maxBytes": 201326592,
+            "selfTestMaxError": 0
+          },
+          "cache": {
+            "entries": 61,
+            "bytes": 16241616,
+            "pending": 0,
+            "hits": 50,
+            "misses": 64,
+            "evictions": 0,
+            "generation": 0,
+            "destroyed": false
+          }
+        },
+        "screenshot": {
+          "file": "/tmp/csp-gpu3d-upgrade/live-rileyg44-github-io.png",
+          "sha256": "d4ed9defbd78e3cccced04356826cfba78a1a22ea1b255bbd0f047bc52c83f32",
+          "width": 2880,
+          "height": 1800,
+          "coverage": 1,
+          "blank": false,
+          "mean": 145.8
+        },
+        "pass": true
+      }
+    ],
+    "finishedAt": "2026-10-18T06:19:19.319Z",
+    "pass": true
+  },
+  "physicalIPhoneTested": false,
+  "backupCreated": true,
+  "runtimeHealth": {
+    "ok": true,
+    "channel": "live"
+  },
+  "tailscaleServeApiRoutesPresent": true
+}
