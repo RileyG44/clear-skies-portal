@@ -1,9 +1,14 @@
 /* Clear Skies Portal — Electron shell.
-   Boots server.js on a free loopback port, waits for /api/health, then shows it.
-   The web app is untouched: every request it makes is relative, so it simply
-   follows whatever port we picked.                                           */
+   Prefers the terrain engine this Mac already runs (the LaunchAgent on
+   127.0.0.1:8765): the page and every /api call then come straight from that
+   one local server, sharing its warm tile cache. Only when no engine answers
+   does it boot its own server.js on a free loopback port. The web app is
+   untouched: every request it makes is relative, so it simply follows
+   whichever origin we load.                                                  */
 const {app, BrowserWindow, shell, dialog, session} = require("electron");
-const {fork} = require("child_process");
+const {fork, execFile} = require("child_process");
+const fs   = require("fs");
+const os   = require("os");
 const path = require("path");
 const http = require("http");
 const net  = require("net");
@@ -15,6 +20,10 @@ const SERVER = app.isPackaged
   ? path.join(process.resourcesPath,"app","server.js")
   : path.join(__dirname,"..","server.js");
 const HOST   = "127.0.0.1";
+// Where scripts/install-mac-service.sh puts the always-on engine.
+const ENGINE_PORT  = Number(process.env.CSP_ENGINE_PORT) || 8765;
+const ENGINE_AGENT = "com.rileyg44.clear-skies-portal";
+const ENGINE_PLIST = path.join(os.homedir(), "Library", "LaunchAgents", `${ENGINE_AGENT}.plist`);
 
 let child = null;
 let win   = null;
@@ -52,6 +61,48 @@ function startServer(p){
         `The local server stopped unexpectedly (code ${code}${sig ? `, ${sig}` : ""}).\n\nQuit and reopen the app to try again.`);
     }
   });
+}
+
+/* One /api/health probe: does a healthy engine already answer on this port? */
+function engineUp(p, timeoutMs = 800){
+  return new Promise(resolve => {
+    const req = http.get({host: HOST, port: p, path: "/api/health", timeout: timeoutMs}, res => {
+      let body = "";
+      res.setEncoding("utf8");
+      res.on("data", d => { body += d; });
+      res.on("end", () => {
+        try{ resolve(res.statusCode === 200 && JSON.parse(body).ok === true) }
+        catch(e){ resolve(false) }
+      });
+    });
+    req.on("error",   () => resolve(false));
+    req.on("timeout", () => { req.destroy(); resolve(false); });
+  });
+}
+
+/* The installed engine is down (crashed, or unloaded): ask launchd to start it
+   rather than running a second engine with a cold cache next to it. */
+function kickstartAgent(){
+  if (process.platform !== "darwin" || !fs.existsSync(ENGINE_PLIST)) return Promise.resolve(false);
+  const target = `gui/${process.getuid()}`;
+  const run = args => new Promise(resolve => execFile("/bin/launchctl", args, err => resolve(!err)));
+  return run(["kickstart", `${target}/${ENGINE_AGENT}`])
+    .then(ok => ok || run(["bootstrap", target, ENGINE_PLIST]));
+}
+
+/* Use the Mac's engine if it is up or can be woken; otherwise our own copy. */
+async function pickServer(){
+  if (process.env.CSP_ELECTRON_OWN_SERVER !== "1"){
+    if (await engineUp(ENGINE_PORT)) return ENGINE_PORT;
+    if (await kickstartAgent()){
+      try{ await waitForServer(ENGINE_PORT, 15000); return ENGINE_PORT }
+      catch(e){ /* fall through to a bundled server */ }
+    }
+  }
+  const p = await freePort();
+  startServer(p);
+  await waitForServer(p);
+  return p;
 }
 
 /* Poll /api/health rather than guessing at a sleep. */
@@ -116,9 +167,8 @@ if (!app.requestSingleInstanceLock()){
     });
 
     try {
-      port = await freePort();
-      startServer(port);
-      await waitForServer(port);
+      port = await pickServer();
+      console.log(child ? `[app] started a bundled server on ${port}` : `[app] using the Mac's terrain engine on ${port}`);
       createWindow();
     } catch (err) {
       dialog.showErrorBox("Clear Skies Portal", `Could not start the local server.\n\n${err.message}`);
