@@ -145,4 +145,6 @@ Root owns final title/footer CSS; screenshot shows browser-default button border
 - Passed syntax/static, menu controls, point-cloud core, glass-motion and whitespace checks.
 - Release build 2026-10-17g installed using backups and atomic static-asset replacements; no service restart or download/cache changes. Installed assets match checkout by SHA-256.
 - Final static/menu/point-cloud checks pass on Node 24.19.0. The build-stamp check caught an omitted HTML cache-bust update; corrected before pushing.
-- Live browser verification and public deployment pending.
+- Live installed browser verified build 2026-10-17g, hidden sidebar selector, corrected 2D action, and LiDAR page layout.
+- CI and Pages run 39101350169 passed check, Windows and deployment jobs for implementation db6adc0. Public version.js and HTML verify build 2026-10-17g, hidden selector and corrected action.
+- #9 and #10 remain pending the requested missing behavior, not permission. No guessed changes were made to either control.
