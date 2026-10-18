@@ -777,6 +777,7 @@ a:hover{text-decoration:underline}
 .pane[data-pane="filters"] .pane-b,
 .pane[data-pane="summary"] .pane-b,
 .pane[data-pane="terrain"] .pane-b,
+.pane[data-pane="elevation"] .pane-b,
 .pane[data-pane="research"] .pane-b{padding:12px 18px 13px 16px}
 .pane[data-pane="passes"] .pane-b{padding:10px 18px 12px 16px}
 .pane[data-pane="alerts"] .pane-b,
@@ -993,8 +994,8 @@ body.pane-reordering,body.pane-reordering *{cursor:grabbing!important;user-selec
 }
 
 </style>
-<link rel="stylesheet" href="ui-theme.css?build=2026-10-17b">
-<link rel="stylesheet" href="ui-system.css?build=2026-10-17b">
+<link rel="stylesheet" href="ui-theme.css?build=2026-10-17c">
+<link rel="stylesheet" href="ui-system.css?build=2026-10-17c">
 <style>
 /* The redesign restructures the legacy DOM rather than replacing it, and the
    script that does so is the last thing on the page - so the browser paints the
@@ -1237,7 +1238,7 @@ html.csp-boot body{visibility:hidden}
       <section class="pane" data-pane="terrain">
         <div class="pane-h">
           <span class="grip" aria-hidden="true"></span>
-          <span class="pane-t">Terrain &amp; LiDAR</span>
+          <span class="pane-t">LiDAR</span>
           <span class="pane-n" id="n_terrain"></span>
           <span class="pane-x">&#9662;</span>
         </div>
@@ -1353,28 +1354,14 @@ html.csp-boot body{visibility:hidden}
         <div class="pane-rz" title="Drag to resize"></div>
       </section>
 
-      <section class="pane" data-pane="research">
+      <section class="pane" data-pane="elevation">
         <div class="pane-h">
           <span class="grip" aria-hidden="true"></span>
-          <span class="pane-t">Research tools</span>
-          <span class="pane-n" id="n_research"></span>
+          <span class="pane-t">Elevation</span>
+          <span class="pane-n" id="n_elevation"></span>
           <span class="pane-x">&#9662;</span>
         </div>
         <div class="pane-b">
-          <div class="fabbox menu-card" id="fabricResearchBox">
-            <h3 class="menu-section-title">Landform fabric</h3>
-            <p class="control-hint">Find the direction and spacing of ridges and valleys, including possible glacial lineations.</p>
-            <div class="elev-field"><label for="fabBand">Landform spacing</label>
-            <select id="fabBand" title="Which wavelength band to isolate. Narrower bands separate fine lineation from ordinary ridge-and-valley grain.">
-              <option value="20,120">65&ndash;400 ft</option>
-              <option value="50,300" selected>165&ndash;1,000 ft</option>
-              <option value="150,800">500&ndash;2,600 ft</option>
-            </select>
-          </div>
-            <p class="control-hint">Choose the size of landforms to measure. Smaller spacing isolates finer texture.</p>
-            <button class="ghost" id="fabRun">Measure landform fabric</button>
-            <div id="fabOut" class="fabout" role="status" aria-live="polite"></div>
-          </div>
           <div class="fabbox">
             <label class="check elev-toggle" id="lb_elevSh">
               <input type="checkbox" id="elevSh"> Elevation spectrum
@@ -1465,6 +1452,32 @@ html.csp-boot body{visibility:hidden}
             </div>
             <div class="elev-band-note" id="elevBandOut">Enable a below or above band to highlight ground at those heights.</div>
             <button class="linkbtn" id="elevBandsReset" type="button" style="margin-top:8px">Reset highlights</button>
+          </div>
+        </div>
+        <div class="pane-rz" title="Drag to resize"></div>
+      </section>
+
+      <section class="pane" data-pane="research">
+        <div class="pane-h">
+          <span class="grip" aria-hidden="true"></span>
+          <span class="pane-t">Research tools</span>
+          <span class="pane-n" id="n_research"></span>
+          <span class="pane-x">&#9662;</span>
+        </div>
+        <div class="pane-b">
+          <div class="fabbox menu-card" id="fabricResearchBox">
+            <h3 class="menu-section-title">Landform fabric</h3>
+            <p class="control-hint">Find the direction and spacing of ridges and valleys, including possible glacial lineations.</p>
+            <div class="elev-field"><label for="fabBand">Landform spacing</label>
+            <select id="fabBand" title="Which wavelength band to isolate. Narrower bands separate fine lineation from ordinary ridge-and-valley grain.">
+              <option value="20,120">65&ndash;400 ft</option>
+              <option value="50,300" selected>165&ndash;1,000 ft</option>
+              <option value="150,800">500&ndash;2,600 ft</option>
+            </select>
+          </div>
+            <p class="control-hint">Choose the size of landforms to measure. Smaller spacing isolates finer texture.</p>
+            <button class="ghost" id="fabRun">Measure landform fabric</button>
+            <div id="fabOut" class="fabout" role="status" aria-live="polite"></div>
           </div>
           <div class="fabbox" id="surfaceResearchBox">
             <div class="elev-section-head">
@@ -1767,7 +1780,7 @@ html.csp-boot body{visibility:hidden}
   L.Renderer.prototype.onAdd=function(map){return onAdd.call(this,map||this._map)};
 })();
 </script>
-<script src="version.js?build=2026-10-17b"></script>
+<script src="version.js?build=2026-10-17c"></script>
 <script src="mosaic-core.js"></script>
 <script src="png-stream.js"></script>
 <script src="terrain-core.js"></script>
@@ -5206,8 +5219,8 @@ syncChecks();
    the arrangement survives a reload. ------------------------------------- */
 const PANE_KEY="clearskies.panes.v1";
 const panesEl=document.getElementById("panes");
-const DEFAULT_ORDER=["filters","alerts","summary","passes","terrain","research","overlays","results"];
-const DEFAULT_STATE=()=>({order:[...DEFAULT_ORDER], min:{filters:true, alerts:false, terrain:true, research:true, overlays:true}, h:{}, grow:"results"});
+const DEFAULT_ORDER=["filters","alerts","summary","passes","terrain","elevation","research","overlays","results"];
+const DEFAULT_STATE=()=>({order:[...DEFAULT_ORDER], min:{filters:true, alerts:false, terrain:true, elevation:true, research:true, overlays:true}, h:{}, grow:"results"});
 let paneState=DEFAULT_STATE();
 
 function paneEl(name){ return panesEl.querySelector(`.pane[data-pane="${name}"]`) }
@@ -5245,6 +5258,11 @@ function loadPanes(){
   if(!paneState.order.includes("alerts")){
     const filters=paneState.order.indexOf("filters");
     paneState.order.splice(filters<0?0:filters+1,0,"alerts");
+  }
+  // Elevation was split out of the terrain pane; it starts beside it.
+  if(!paneState.order.includes("elevation")){
+    const terrain=paneState.order.indexOf("terrain");
+    paneState.order.splice(terrain<0?paneState.order.length:terrain+1,0,"elevation");
   }
   // Any other pane introduced by a future update goes to the end.
   DEFAULT_ORDER.forEach(n=>{ if(!paneState.order.includes(n)) paneState.order.push(n) });
@@ -10194,7 +10212,7 @@ function cspActiveLayers(){
   }
   if($("#terStyle").value!=="off"){
     layers.push({id:"terrain",name:$("#terStyle").selectedOptions[0]?.textContent||"Terrain",
-      meta:`${$("#terSrc").selectedOptions[0]?.textContent||"Best available"} · Terrain & LiDAR`,
+      meta:`${$("#terSrc").selectedOptions[0]?.textContent||"Best available"} · LiDAR`,
       opacity:+$("#terOp").value,visible:true,kind:"terrain"});
   }
   if($("#elevSh").checked){
@@ -10204,7 +10222,7 @@ function cspActiveLayers(){
   }
   if($("#elevBelowOn").checked||$("#elevAboveOn").checked){
     layers.push({id:"elevation-bands",name:"Elevation highlights",
-      meta:"Below / above range shading · Terrain & LiDAR",
+      meta:"Below / above range shading · Elevation",
       opacity:+$("#elevBandAlpha").value,visible:true,kind:"analysis"});
   }
   if(researchLayer){
@@ -10669,8 +10687,8 @@ $("#q").addEventListener("blur",()=>setTimeout(acHide,120));
 document.addEventListener("click",e=>{ if(!e.target.closest("#iw")) acHide() });
 })();
 </script>
-<script src="markup-3d.js?build=2026-10-17b"></script>
-<script src="markup.js?build=2026-10-17b"></script>
-<script src="ui-system.js?build=2026-10-17b"></script>
+<script src="markup-3d.js?build=2026-10-17c"></script>
+<script src="markup.js?build=2026-10-17c"></script>
+<script src="ui-system.js?build=2026-10-17c"></script>
 </body>
 </html>

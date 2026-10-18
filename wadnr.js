@@ -12,6 +12,27 @@ function tileBounds(z,x,y){
   return [x/n*360-180,lat(y+1),(x+1)/n*360-180,lat(y)];
 }
 function polygon(b){const [w,s,e,n]=b;return {type:"Polygon",coordinates:[[[w,s],[e,s],[e,n],[w,n],[w,s]]]};}
+/* The parts of bbox outside every cover rectangle. DNR packages every file a
+   query touches into one ZIP, so cached extents are cut out of the request. */
+function uncovered(bbox,covers){
+  let parts=[bbox];
+  for(const c of covers){
+    const next=[];
+    for(const p of parts){
+      if(!intersects(p,c)){next.push(p);continue;}
+      const [w,s,e,n]=p,iw=Math.max(w,c[0]),is=Math.max(s,c[1]),ie=Math.min(e,c[2]),in_=Math.min(n,c[3]);
+      if(s<is)next.push([w,s,e,is]);
+      if(in_<n)next.push([w,in_,e,n]);
+      if(w<iw)next.push([w,is,iw,in_]);
+      if(ie<e)next.push([ie,is,e,in_]);
+    }
+    parts=next;
+  }
+  return parts;
+}
+function geometry(parts){
+  return parts.length===1?polygon(parts[0]):{type:"MultiPolygon",coordinates:parts.map(p=>polygon(p).coordinates)};
+}
 function atomic(file,value){
   const tmp=file+"."+process.pid+".tmp";
   try{fs.writeFileSync(tmp,JSON.stringify(value));fs.renameSync(tmp,file);}
@@ -161,7 +182,11 @@ class DnrStore {
     }
     this.active=job;job.state="checking";
     (async()=>{
-      const body="geojson="+encodeURIComponent(JSON.stringify(polygon(job.bbox)));
+      const known=this.index.files.filter(f=>f.datasetId===job.datasetId);
+      const parts=uncovered(job.bbox,known.map(f=>f.bounds));
+      if(!parts.length){this.index.regions.push({datasetId:job.datasetId,bbox:job.bbox});this.save();return;}
+      const shape=geometry(parts);
+      const body="geojson="+encodeURIComponent(JSON.stringify(shape));
       const rows=await this.request("/query",body);
       if(this.closed)return;
       if(!Array.isArray(rows))throw new Error("Invalid DNR download coverage response");
@@ -171,8 +196,7 @@ class DnrStore {
       const limit=Math.min(this.maxArchiveBytes,remaining,(free-this.minFreeBytes-64*1024*1024)/2.1);
       if(dataset.bytes>limit||dataset.files>32)throw new Error("DNR area exceeds the download budget; zoom in to a smaller area");
       job.state="downloading";
-      const result=await this.acquire({...job,cacheDir:this.cacheDir,maxBytes:limit,minFreeBytes:this.minFreeBytes,
-        known:this.index.files.filter(f=>f.datasetId===job.datasetId)});
+      const result=await this.acquire({...job,geometry:shape,cacheDir:this.cacheDir,maxBytes:limit,minFreeBytes:this.minFreeBytes,known});
       const files=new Map(this.index.files.map(f=>[f.key,f]));
       for(const f of result.files)files.set(f.key,{...f,year:job.year});
       this.index.files=[...files.values()];this.index.regions.push({datasetId:job.datasetId,bbox:job.bbox});
@@ -214,4 +238,4 @@ class DnrStore {
       await fs.promises.rm(temp,{recursive:true,force:true});
   }
 }
-module.exports={DnrStore,tileBounds,polygon,intersects,contains};
+module.exports={DnrStore,tileBounds,polygon,uncovered,intersects,contains};
