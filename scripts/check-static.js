@@ -274,7 +274,7 @@ assert(index.includes('id="buildDiag"'),"the geometry readout must be reachable 
   for(const selector of ["#mapDock",".leaflet-control-zoom","#sideToggleDock .map-tool"])
     assert(new RegExp(`:is\\([^)]*${selector.replace(/[.#]/g,m=>"\\"+m)}[^)]*\\)\\{[^}]*background-color:var\\(--lg-control\\)`).test(ui),
       `${selector} must use the clear Liquid Glass material`);
-  for(const selector of [".tool-popover","#menu",".leaflet-popup-content-wrapper","#snapshotStatus","#pointCloudPanel"])
+  for(const selector of [".tool-popover","#menu",".leaflet-popup-content-wrapper","#snapshotStatus","#pointCloudPanel","#mapReadout"])
     assert(new RegExp(`:is\\([^)]*${selector.replace(/[.#]/g,m=>"\\"+m)}[^)]*\\)\\{[^}]*background-color:var\\(--lg-popover\\)`).test(ui),
       `${selector} must use the frosted Liquid Glass material`);
   assert(read("ui-system.js").includes('"Search":long'),"the placeholder must shorten in a narrow field instead of clipping");
@@ -714,6 +714,13 @@ assert(index.includes('p.precision==="estimated"')&&read("wa-archaeology.js").in
 assert(index.includes('id="coordCopy"')&&index.includes('id="coordOpen"')&&
        index.includes("https://www.google.com/maps/search/?api=1")&&index.includes("https://earth.google.com/web/search/"),
        "the search row must copy a selected coordinate and offer cross-platform Google Maps and Earth links");
+{
+  const menu=index.slice(index.indexOf("menuEl.innerHTML="),index.indexOf("menuEl.style.display=\"block\""));
+  const at=action=>menu.indexOf(`data-action="${action}"`);
+  const scenesAt=menu.indexOf("\n    scenes+");
+  assert(at("copy")>=0&&at("copy")<at("maps")&&at("maps")<at("earth")&&at("earth")<scenesAt&&scenesAt<at("search"),
+    "the map menu must lead with copy, then Google Maps, then Google Earth, before the scene list");
+}
 assert(index.includes("child.bindTooltip(tooltip")&&index.includes('className:"csp-point-tip"'),
        "interactive point overlays must reveal concise labels on hover while retaining full click popups");
 assert(index.includes('cache:o.geoTtl?"no-cache":"force-cache"')&&index.includes("retaining the last successful data"),

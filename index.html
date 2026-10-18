@@ -210,7 +210,6 @@ body.terrain-3d #map>.leaflet-pane,body.terrain-3d #map>.leaflet-control-contain
 .about-disclosure[open] summary::before{transform:rotate(45deg) translate(-1px,-1px)}
 
 /* ---- elevation spectrum ------------------------------------------------ */
-#mapReadout{--map-readout-ink:#000;--map-readout-edge:rgb(0 0 0/.35)}
 .elev-spectrum-scale{display:grid;gap:4px;margin-top:1px}
 .elevRamp{height:9px;border-radius:999px;border:1px solid oklch(100% 0 0/.16);
   background:linear-gradient(90deg,#d8525a 0%,#f6a6a8 28%,#f7f7f2 50%,#9ec3f8 72%,#3278df 100%);
@@ -994,8 +993,8 @@ body.pane-reordering,body.pane-reordering *{cursor:grabbing!important;user-selec
 }
 
 </style>
-<link rel="stylesheet" href="ui-theme.css?build=2026-10-17j">
-<link rel="stylesheet" href="ui-system.css?build=2026-10-17j">
+<link rel="stylesheet" href="ui-theme.css?build=2026-10-18a">
+<link rel="stylesheet" href="ui-system.css?build=2026-10-18a">
 <style>
 /* The redesign restructures the legacy DOM rather than replacing it, and the
    script that does so is the last thing on the page - so the browser paints the
@@ -1786,7 +1785,7 @@ html.csp-boot body{visibility:hidden}
   L.Renderer.prototype.onAdd=function(map){return onAdd.call(this,map||this._map)};
 })();
 </script>
-<script src="version.js?build=2026-10-17j"></script>
+<script src="version.js?build=2026-10-18a"></script>
 <script src="mosaic-core.js"></script>
 <script src="png-stream.js"></script>
 <script src="terrain-core.js"></script>
@@ -5166,10 +5165,14 @@ map.on("contextmenu",e=>{
       <div class="a">${esc(it.label)} &middot; ${esc(it.date.slice(0,10))}</div>
       <div class="b">${ago(it.date)} &middot; ${res(it.gsd)}${it.cloud!=null?" &middot; "+it.cloud.toFixed(0)+"% cloud":""} &middot; ${esc(it.src.split(" ")[0])}</div>
     </div>`).join("");
-  menuEl.innerHTML=`<div class="h">${esc(title)}</div>${scenes}`+
+  const place=coordinateLinks(ll);
+  menuEl.innerHTML=`<div class="h">${esc(title)}</div>`+
+    `<div class="m" role="menuitem" tabindex="-1" data-action="copy"><div class="a">Copy coordinates</div></div>`+
+    `<div class="m" role="menuitem" tabindex="-1" data-action="maps"><div class="a">Open in Google Maps</div></div>`+
+    `<div class="m" role="menuitem" tabindex="-1" data-action="earth"><div class="a">Open in Google Earth</div></div>`+
+    scenes+
     (neighbour?`<div class="m" role="menuitem" tabindex="-1" data-action="remove"><div class="a">Remove this surrounding scene</div></div>`:"")+
     `<div class="m" role="menuitem" tabindex="-1" data-action="search"><div class="a">Search imagery here</div><div class="b">${ll.lat.toFixed(6)}, ${ll.lng.toFixed(6)}</div></div>`+
-    `<div class="m" role="menuitem" tabindex="-1" data-action="copy"><div class="a">Copy coordinates</div></div>`+
     `<div class="m" role="menuitem" tabindex="-1" data-action="geology"><div class="a">Identify surface geology here</div><div class="b">Shows every overlapping map compilation</div></div>`+
     `<div class="m" role="menuitem" tabindex="-1" data-action="research"><div class="a">Open terrain research tools here</div></div>`+
     `<div class="m ${SEL==null?"disabled":""}" role="menuitem" tabindex="${SEL==null?"-1":"0"}" aria-disabled="${SEL==null}" data-action="fill"><div class="a">Fill surroundings for this viewport</div><div class="b">${SEL==null?"Select a scene first":"Uses the best available matching images"}</div></div>`;
@@ -5184,6 +5187,10 @@ map.on("contextmenu",e=>{
     }else if(action==="remove"&&neighbour){ map.removeLayer(neighbour.layer);NEIGH=NEIGH.filter(x=>x!==neighbour) }
     else if(action==="search"){ setLoc(ll.lat,ll.lng);run() }
     else if(action==="copy") await copyMapCoordinates(ll);
+    else if(action==="maps"||action==="earth"){
+      const opened=window.open(action==="maps"?place.maps:place.earth,"_blank","noopener,noreferrer");
+      if(opened) opened.opener=null;
+    }
     else if(action==="geology") await identifyGeologyAt(ll,true);
     else if(action==="research") openResearchAt(ll);
     else if(action==="fill"&&SEL!=null) fillMosaic(ITEMS[SEL],true);
@@ -11034,8 +11041,8 @@ $("#q").addEventListener("blur",()=>setTimeout(acHide,120));
 document.addEventListener("click",e=>{ if(!e.target.closest("#iw")) acHide() });
 })();
 </script>
-<script src="markup-3d.js?build=2026-10-17j"></script>
-<script src="markup.js?build=2026-10-17j"></script>
-<script src="ui-system.js?build=2026-10-17j"></script>
+<script src="markup-3d.js?build=2026-10-18a"></script>
+<script src="markup.js?build=2026-10-18a"></script>
+<script src="ui-system.js?build=2026-10-18a"></script>
 </body>
 </html>

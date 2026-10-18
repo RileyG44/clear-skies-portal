@@ -15,10 +15,14 @@
  */
 
 :root {
-  /* A pale backing keeps the desktop map key legible over imagery. */
+  /* The cursor card. Ink follows the theme text; the pale fill is the classic
+     shell. Liquid Glass replaces the fill with the same frosted material as
+     the other map panels. */
   --map-readout-surface:rgb(255 255 255/.94);
   --map-readout-line:rgb(0 0 0/.1);
   --map-readout-shadow:rgb(0 0 0/.1);
+  --map-readout-ink:var(--ui-text);
+  --map-readout-edge:rgb(0 0 0/.35);
   /* surfaces, lightest to deepest */
   --ui-surface: #ffffff;
   --ui-rail: #faf9f8;
@@ -102,6 +106,10 @@
 }
 
 :root[data-ui-theme="dark"] {
+  --map-readout-surface:rgb(28 28 26/.92);
+  --map-readout-line:rgb(255 255 255/.14);
+  --map-readout-shadow:rgb(0 0 0/.45);
+  --map-readout-edge:rgb(255 255 255/.28);
   /* Not an inversion of the light values. Inverting a warm paper palette gives
      a blue-black that fights the map; these are neutral-warm at low luminance,
      and the steps between surfaces are compressed because contrast reads

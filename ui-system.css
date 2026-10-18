@@ -1405,8 +1405,8 @@ body.csp-redesign .csp-preview-badge{
 /* The classic shell has no glass menu styling; keep it a plain list there. */
 body.csp-redesign .csp-mode-menu [data-mode]{display:flex;gap:8px;align-items:center;width:100%;text-align:left}
 
-/* Frosted surfaces: popovers, menus, callouts, toasts. */
-.csp-glass body.csp-redesign :is(.tool-popover,#menu,.leaflet-popup-content-wrapper,#snapshotStatus,#pointCloudPanel,#blk,#cspNav #ac){
+/* Frosted surfaces: popovers, menus, callouts, toasts, the cursor readout. */
+.csp-glass body.csp-redesign :is(.tool-popover,#menu,.leaflet-popup-content-wrapper,#snapshotStatus,#pointCloudPanel,#blk,#cspNav #ac,#mapReadout){
   border:0!important;
   background-color:var(--lg-popover)!important;
   background-image:var(--lg-sheen-tall)!important;
@@ -1414,6 +1414,11 @@ body.csp-redesign .csp-mode-menu [data-mode]{display:flex;gap:8px;align-items:ce
   backdrop-filter:var(--lg-filter);
   box-shadow:var(--lg-rim-lifted)!important;
   color:var(--ui-text);
+}
+.csp-glass body.csp-redesign #mapReadout{
+  border-radius:16px;
+  --map-readout-edge:color-mix(in srgb,var(--ui-text) 35%,transparent);
+  font-family:var(--csp-font-family,-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI",sans-serif);
 }
 .csp-glass body.csp-redesign .tool-popover{border-radius:22px}
 .csp-glass body.csp-redesign .tool-popover-head{border-bottom:.5px solid var(--glass-edge);padding:12px 12px 10px 16px}
@@ -2405,12 +2410,12 @@ body.csp-redesign:not([data-csp-route="satellite"]) #cspWorkspace #status[data-k
   --ui-frost:var(--map3d-motion-fill);--ui-frost-weak:var(--map3d-motion-fill);
 }
 .csp-glass body.csp-redesign.terrain-3d.map3d-moving{--map3d-motion-fill:var(--ui-surface);--map3d-motion-panel:var(--ui-rail)}
-body.terrain-3d.map3d-moving :is(#side,#ac,.coord-menu,.map-tool,.tool-popover,#snapshotStatus,.snap-sel-size,.snap-sel-bar,#ctl,#menu,#blk,#pointCloudPanel,.pc-head,.pane-drag-ghost,.ovgrp,#newBuild,.leaflet-control-zoom,.leaflet-control-zoom a,.leaflet-control-attribution,.leaflet-popup-content-wrapper,.leaflet-tooltip,#mapDock,#panes .grp,#side #q,#side #loc,#map3d .maplibregl-ctrl-attrib,#mkBar,#mkPop,.mk-selbar,.csp-sat-suggest){
+body.terrain-3d.map3d-moving :is(#side,#ac,.coord-menu,.map-tool,.tool-popover,#snapshotStatus,.snap-sel-size,.snap-sel-bar,#ctl,#menu,#blk,#pointCloudPanel,.pc-head,.pane-drag-ghost,.ovgrp,#newBuild,.leaflet-control-zoom,.leaflet-control-zoom a,.leaflet-control-attribution,.leaflet-popup-content-wrapper,.leaflet-tooltip,#mapDock,#mapReadout,#panes .grp,#side #q,#side #loc,#map3d .maplibregl-ctrl-attrib,#mkBar,#mkPop,.mk-selbar,.csp-sat-suggest){
   -webkit-backdrop-filter:none!important;backdrop-filter:none!important;
 }
 /* Classic is already opaque. Glass controls keep their hover/selected fill
    instead of replacing that feedback with the neutral motion material. */
-.csp-glass body.terrain-3d.map3d-moving :is(#ac,.coord-menu,.map-tool:not(:hover):not(.active):not([aria-pressed="true"]),.tool-popover,#snapshotStatus,.snap-sel-bar,#ctl,#menu,#blk,#pointCloudPanel,.pc-head,.pane-drag-ghost,#newBuild,.leaflet-control-zoom,.leaflet-control-zoom a:not(:hover),.leaflet-control-attribution,.leaflet-popup-content-wrapper,.leaflet-tooltip,#mapDock,#map3d .maplibregl-ctrl-attrib,#mkBar,#mkPop,.mk-selbar,.csp-sat-suggest){background-color:var(--map3d-motion-fill)!important}
+.csp-glass body.terrain-3d.map3d-moving :is(#ac,.coord-menu,.map-tool:not(:hover):not(.active):not([aria-pressed="true"]),.tool-popover,#snapshotStatus,.snap-sel-bar,#ctl,#menu,#blk,#pointCloudPanel,.pc-head,.pane-drag-ghost,#newBuild,.leaflet-control-zoom,.leaflet-control-zoom a:not(:hover),.leaflet-control-attribution,.leaflet-popup-content-wrapper,.leaflet-tooltip,#mapDock,#mapReadout,#map3d .maplibregl-ctrl-attrib,#mkBar,#mkPop,.mk-selbar,.csp-sat-suggest){background-color:var(--map3d-motion-fill)!important}
 /* Unknown pseudo-elements invalidate ordinary selector lists. Keep native
    picker enhancements separate from the motion safeguards every engine needs. */
 @supports selector(select::picker(select)){
