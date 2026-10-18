@@ -432,7 +432,7 @@ assert(index.includes('zoomSnap:0,scrollWheelZoom:false')&&index.includes('pinch
        index.includes('scrollWheelZoom is off because Leaflet'),
        "trackpad pinch must zoom the map continuously instead of stepping whole levels or page-zooming");
 assert(index.includes('const intentBase=')&&index.includes('const viewZoom=')&&
-       index.includes('intent=intentBase()+((visual===null?pinch.zoom:visual)-pinch.zoom)'),
+       index.includes('intent=viewClamp(intentBase()+((visual===null?pinch.zoom:visual)-pinch.zoom))'),
        "a pinch must settle onto a native level, counting its travel once, and must drive the 3D camera when 3D is on screen");
 assert(index.includes('scrollZoom:false')&&index.includes('const ZOOM_EASE=')&&index.includes('aimAt(target)'),
        "one handler must own the wheel in both views, and zoom must ease towards its aim rather than step in one event");
@@ -895,5 +895,19 @@ const pointCatalog=JSON.parse(read("point-cloud-catalog.json"));
 assert.equal(pointCatalog.projects.length,30,"Washington point-cloud catalog must contain 30 projects");
 for(const icon of manifest.icons||[])
   assert(fs.existsSync(path.join(root,icon.src)),`missing manifest icon: ${icon.src}`);
+
+/* MapLibre 6's jumpTo samples terrain at the fractional zoom it is given, which
+   names no tile and reads 0 - the camera sank underground mid-zoom and the 3D
+   view went blank. Every zoom frame must carry a whole-level elevation. */
+assert(index.includes('camera.jumpTo=function(options,eventData)')&&
+       index.includes('getElevationForLngLatZoom(center,Math.floor(options.zoom))')&&
+       index.includes('elevation:ground||this.transform.elevation'),
+       "3D zoom frames must supply the ground elevation from a whole tile level");
+assert(index.includes('intent=viewClamp(intentBase()+step)')&&index.includes('intent=viewClamp(target)'),
+       "wheel zoom past the deepest level must not bank zoom that has to be unwound before zooming out");
+/* GLSL pow() is undefined for a negative base (NaN on Apple GPUs). */
+assert(!/pow\(sin\(/.test(index),"shaders must square signed values with s*s, not pow(s,2.0)");
+assert((index.match(/webglcontextrestored",\(\)=>this\.init\(\)/g)||[]).length===2,
+       "both shared GPU renderers must rebuild when a lost context is restored");
 
 console.log(`static checks passed (${inline.length} inline scripts, ${sources.sources.length} sources, build ${versionSandbox.CSP_BUILD})`);

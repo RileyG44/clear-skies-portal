@@ -994,8 +994,8 @@ body.pane-reordering,body.pane-reordering *{cursor:grabbing!important;user-selec
 }
 
 </style>
-<link rel="stylesheet" href="ui-theme.css?build=2026-10-17c">
-<link rel="stylesheet" href="ui-system.css?build=2026-10-17c">
+<link rel="stylesheet" href="ui-theme.css?build=2026-10-17d">
+<link rel="stylesheet" href="ui-system.css?build=2026-10-17d">
 <style>
 /* The redesign restructures the legacy DOM rather than replacing it, and the
    script that does so is the last thing on the page - so the browser paints the
@@ -1780,7 +1780,7 @@ html.csp-boot body{visibility:hidden}
   L.Renderer.prototype.onAdd=function(map){return onAdd.call(this,map||this._map)};
 })();
 </script>
-<script src="version.js?build=2026-10-17c"></script>
+<script src="version.js?build=2026-10-17d"></script>
 <script src="mosaic-core.js"></script>
 <script src="png-stream.js"></script>
 <script src="terrain-core.js"></script>
@@ -2179,7 +2179,7 @@ compactMapViewport.addEventListener?.("change",syncLeafZoomControl);
        backwards - a second small zoom in committed a level out, which is the map
        "bouncing right back" this fixes. With small gestures committing on their
        own there is nothing left for a remainder to accumulate toward. */
-    intent=target;
+    intent=viewClamp(target);
     /* The settle is the one time the zoom is committed even if the tile level
        happens to match: it also brings the camera itself onto the level, so
        everything that reads the map's zoom sees the resting value. */
@@ -2196,7 +2196,9 @@ compactMapViewport.addEventListener?.("change",syncLeafZoomControl);
        the view back through map.setView - and rebases `visual` on what is actually
        on screen. Reading the gesture base before that read left it stale, which
        made the gesture's travel read as more than a level and swallowed the zoom. */
-    intent=intentBase()+step;
+    /* Clamped: scrolling on past the deepest level used to bank the excess, so
+       the next zoom out had to unwind it all before the map moved at all. */
+    intent=viewClamp(intentBase()+step);
     noteGesture();
     aimAt(intent);
     clearTimeout(settleTimer); settleTimer=setTimeout(settleToNativeLevel,160);
@@ -2232,7 +2234,7 @@ compactMapViewport.addEventListener?.("change",syncLeafZoomControl);
          the upscaled-and-soft case the settle exists to avoid. The gesture's travel
          is added to the intent seeded at gesturestart, so small pinches accumulate
          into a committed level without a large one overshooting. */
-      intent=intentBase()+((visual===null?pinch.zoom:visual)-pinch.zoom);
+      intent=viewClamp(intentBase()+((visual===null?pinch.zoom:visual)-pinch.zoom));
       settleToNativeLevel();
     },{passive:false});
   }
@@ -6568,6 +6570,27 @@ async function enterTerrain3d(){
       pixelRatio:MAP3D_COMPACT?Math.min(2,Number(devicePixelRatio)||1):undefined,
       maxZoom:22,maxPitch:85,renderWorldCopies:false,scrollZoom:false,canvasContextAttributes:{antialias:!MAP3D_COMPACT,powerPreference:"high-performance"},
       attributionControl:true,fadeDuration:0});
+    /* MapLibre 6's jumpTo looks up the ground under the centre at the requested
+       zoom itself, and a fractional zoom names no tile, so the lookup returns 0.
+       Every eased wheel/pinch frame (setZoom -> jumpTo) therefore dropped the
+       camera to sea level - underground once zoomed past ~z16 - and the whole
+       view went to the blank background until the zoom settled on a level.
+       Supply the elevation from the whole tile level instead. The lookup also
+       reads 0 when that level's tile under the centre is not resident (zooming
+       out past it), so then keep the current elevation: zooming about the
+       centre does not change the ground beneath it. MapLibre 6 routes the map's
+       setZoom/jumpTo through its internal camera, so that is what is wrapped. */
+    {
+      const camera=map3d._camera||map3d,jumpTo=camera.jumpTo;
+      camera.jumpTo=function(options,eventData){
+        if(options&&"zoom" in options&&!("elevation" in options)&&this.terrain){
+          const center=options.center!=null?module.LngLat.convert(options.center):this.transform.center;
+          const ground=this.terrain.getElevationForLngLatZoom(center,Math.floor(options.zoom));
+          options={...options,elevation:ground||this.transform.elevation};
+        }
+        return jumpTo.call(this,options,eventData);
+      };
+    }
     window.CSPMarkup?.attach3d(module,map3d);
     map3d.on("movestart",mark3dGlassMotion);map3d.on("move",mark3dGlassMotion);
     map3d.on("move",cursorCameraMoved);map3d.on("idle",cursorCameraIdle);
@@ -9031,7 +9054,11 @@ function elevRampRgb(value,level,span){
    Float32 elevation texture at a time, draws it on the GPU, then copies the
    finished pixels into the tile's ordinary 2D canvas. */
 class ElevationGpuRenderer{
-  constructor(){
+  constructor(){ this.init() }
+  /* Re-run when the browser restores a lost context (GPU memory pressure, a
+     driver reset); without it shading stayed on the slow CPU path for the rest
+     of the session. */
+  init(){
     this.ready=false;
     try{
       this.canvas=document.createElement("canvas");
@@ -9117,6 +9144,7 @@ class ElevationGpuRenderer{
         this.uniforms[name]=gl.getUniformLocation(program,name);
       this.ready=true;
       this.canvas.addEventListener("webglcontextlost",event=>{ event.preventDefault(); this.ready=false });
+      this.canvas.addEventListener("webglcontextrestored",()=>this.init(),{once:true});
     }catch(error){ this.ready=false; console.warn("Elevation GPU disabled:",error) }
   }
   paint(target,elev,settings){
@@ -9154,7 +9182,8 @@ const elevGpu=new ElevationGpuRenderer();
    Leaflet's ordinary canvas. This avoids both a context-per-tile limit and the
    pre-coloured ArcGIS tiles that became transparent at deep zoom. */
 class TerrainGpuRenderer{
-  constructor(){
+  constructor(){ this.init() }
+  init(){   // see ElevationGpuRenderer.init
     this.ready=false;
     try{
       this.canvas=document.createElement("canvas");this.canvas.width=this.canvas.height=256;
@@ -9279,7 +9308,11 @@ class TerrainGpuRenderer{
             float sum=0.0,total=0.0;
             for(int index=0;index<4;index++){
               float az=sunAzimuth-90.0+45.0*float(index);
-              float weight=length(vec2(dx,dy))<1.0e-12?1.0:pow(sin(radians(aspect-mod(az,360.0))),2.0);
+              /* s*s, not pow(s,2.0): GLSL pow is undefined for a negative base and
+                 Apple GPUs return NaN, which turned this style black and failed the
+                 self-test - disabling GPU shading for every style. */
+              float s=sin(radians(aspect-mod(az,360.0)));
+              float weight=length(vec2(dx,dy))<1.0e-12?1.0:s*s;
               sum+=weight*directShade(dx,dy,az);total+=weight;
             }
             direct=sum/max(total,0.00001);
@@ -9298,6 +9331,7 @@ class TerrainGpuRenderer{
       this.ready=true;
       if(!this.selfTest()) throw new Error("terrain GPU orientation self-test failed");
       this.canvas.addEventListener("webglcontextlost",event=>{event.preventDefault();this.ready=false});
+      this.canvas.addEventListener("webglcontextrestored",()=>this.init(),{once:true});
     }catch(error){this.ready=false;console.warn("Terrain GPU disabled:",error)}
   }
   paint(target,elevation,groundResolution,style,lighting=terrainLighting()){
@@ -10687,8 +10721,8 @@ $("#q").addEventListener("blur",()=>setTimeout(acHide,120));
 document.addEventListener("click",e=>{ if(!e.target.closest("#iw")) acHide() });
 })();
 </script>
-<script src="markup-3d.js?build=2026-10-17c"></script>
-<script src="markup.js?build=2026-10-17c"></script>
-<script src="ui-system.js?build=2026-10-17c"></script>
+<script src="markup-3d.js?build=2026-10-17d"></script>
+<script src="markup.js?build=2026-10-17d"></script>
+<script src="ui-system.js?build=2026-10-17d"></script>
 </body>
 </html>
