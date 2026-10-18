@@ -5812,6 +5812,7 @@ let terLayer=null, terBase=null, PROXY=false, WA_LAYERS=null, waCover=null, terT
 // DNR image layer retains its own path. No tile-pane layer uses z441..449:
 // imagery is 410, terrain 440, spectrum 450 and research 455.
 let gpuTerrainLayer=null,gpuTerrainStore=null,gpuTerrainEnabled=false,gpuTerrainDecided=false,gpuSourceKey=null,gpuTerrainOrderZ=null;
+let gpuSourceSpecs=null,gpuSourceSpecsKey=null;
 function initGpuTerrain(){
   if(gpuTerrainDecided)return gpuTerrainEnabled;
   gpuTerrainDecided=true;
@@ -5821,10 +5822,10 @@ function initGpuTerrain(){
       sources:gpuElevationSources,request:gpuElevationRequest,
       mask:(grid,w,h,coords,source)=>source.rank===5?maskDnrGrid(grid,w,h,coords):grid,
       maxBytes:(matchMedia("(pointer:coarse)").matches?64:192)*1024*1024});
-    gpuTerrainLayer=L.cspGpuTerrainLayer({store:gpuTerrainStore,state:gpuTerrainState(),zIndex:440});
+    gpuTerrainLayer=L.cspGpuTerrainLayer({store:gpuTerrainStore,state:gpuTerrainState(),zIndex:440,
+      maxTextureBytes:(matchMedia("(pointer:coarse)").matches?64:192)*1024*1024});
     gpuTerrainEnabled=!!gpuTerrainLayer.getEngine();
     if(!gpuTerrainEnabled){gpuTerrainLayer.destroy();gpuTerrainLayer=null;
-      // The base skeleton's destroy is deliberately unimplemented.
       try{gpuTerrainStore.destroy()}catch{}gpuTerrainStore=null;}
   }
   document.documentElement.dataset.gpu2d=gpuTerrainEnabled?"on":"off";
@@ -5837,10 +5838,13 @@ function gpuElevationRequest(url,options={}){
 }
 function gpuElevationSources(){
   const options={...elevationSourceOptions(),fallbackNativeZoom:15,nationalNativeZoom:17,rawNativeZoom:18,refineOverview:true};
+  const key=options.sourceKey+":"+(HIDPI?1:0);
+  if(gpuSourceSpecs&&gpuSourceSpecsKey===key)return gpuSourceSpecs;
+  gpuSourceSpecsKey=key;
   // buildSources' environment is the only adapter seam with Workstream D.
   const env={proxy:PROXY,api,dz:HIDPI?1:0,dnrTileAllowed,dnrRevision:dnrStatus?.revision||0,
     rawCoverageQuery:RAW_COVERAGE_QUERY,nationalUrl:CSPPublicTerrain.nationalUrl,sourceSampleMeters};
-  if(CSPGpuTerrainStore.buildSources)return CSPGpuTerrainStore.buildSources(options,env);
+  if(CSPGpuTerrainStore.buildSources)return gpuSourceSpecs=CSPGpuTerrainStore.buildSources(options,env);
   // Contract-only fallback for stores without the optional builder. Native
   // grids stay native; no resampling or masking occurs on the display path.
   const sources=[],add=(id,rank,label,max,url,allowed,kind)=>sources.push({id,rank,label,
@@ -5850,7 +5854,7 @@ function gpuElevationSources(){
   if(PROXY&&options.nationalEndpoint)add("national",2,"National elevation",17,(z,x,y)=>api(`${options.nationalEndpoint}/${z}/${x}/${y}.png`),()=>true);
   if(!PROXY)add("national",2,"USGS 3DEP elevation",18,(z,x,y)=>CSPPublicTerrain.nationalUrl({z,x,y}),()=>true,"lerc");
   add("overview",1,"Overview elevation",15,(z,x,y)=>options.fallback.replace("{z}",z).replace("{x}",x).replace("{y}",y),()=>true);
-  return sources;
+  return gpuSourceSpecs=sources;
 }
 function gpuTerrainState(){
   const style=$("#terStyle").value;
@@ -5861,7 +5865,9 @@ function gpuTerrainState(){
 function syncGpuTerrain(){
   if(!gpuTerrainEnabled)return;
   const sourceKey=elevationSourceOptions().sourceKey;
-  if(gpuSourceKey!==null&&gpuSourceKey!==sourceKey){gpuTerrainStore.clear();gpuTerrainLayer.redraw();}
+  if(gpuSourceKey!==null&&gpuSourceKey!==sourceKey){
+    gpuTerrainStore.clear();gpuTerrainLayer.getEngine().invalidate();gpuTerrainLayer.redraw();
+  }
   gpuSourceKey=sourceKey;
   const state=gpuTerrainState();gpuTerrainLayer.setState(state);
   const active=state.terrain.style!=="off"||elevationActive();

@@ -97,7 +97,8 @@
     const altitude=Math.max(5,Math.min(90,Number.isFinite(+lighting.altitude)?+lighting.altitude:45));
     const ambient=Math.max(0,Math.min(.6,Number.isFinite(+lighting.ambient)?+lighting.ambient:.12));
     const shadeDirect=terrain.createHillshade({azimuth,altitude,ambient});
-    const shadeMulti=terrain.createMultidirectionalHillshade({altitude,ambient});
+    const shadeMulti=terrain.createMultidirectionalHillshade({altitude,ambient,
+      azimuths:[azimuth-90,azimuth-45,azimuth,azimuth+45]});
     const gradient={dzdx:0,dzdy:0},colour=new Uint8ClampedArray(4);
     for(let y=0;y<info.height;y++) for(let x=0;x<info.width;x++){
       const value=valueAt(info,x,y),offset=(y*info.width+x)*4;

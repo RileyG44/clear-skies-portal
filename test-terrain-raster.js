@@ -56,6 +56,19 @@ const westLight=raster.renderRgba("hillshade",{
 });
 assert.notDeepEqual(Array.from(eastLight),Array.from(westLight),
   "opposed sun azimuths must produce different hillshade pixels");
+assert.notDeepEqual(
+  raster.renderRgba("hsmulti",{...litSurface,lighting:{azimuth:90,altitude:35,ambient:.08}}),
+  raster.renderRgba("hsmulti",{...litSurface,lighting:{azimuth:270,altitude:35,ambient:.08}}),
+  "multidirectional CPU fallback must follow the same sun slider as GPU shading");
+for(const azimuth of [0,90,167,270,315,359]){
+  const expected=Math.round(255*require("./terrain-core.js").createMultidirectionalHillshade({
+    azimuths:[azimuth-90,azimuth-45,azimuth,azimuth+45],altitude:35,ambient:.08
+  })(.8,-.3));
+  const actual=pixel(raster.renderRgba("hsmulti",{...litSurface,
+    lighting:{azimuth,altitude:35,ambient:.08}}),16,8,8);
+  assert(Math.abs(actual[0]-expected)<=1,`multi-light direction ${azimuth}: ${actual[0]} vs ${expected}`);
+  assert.equal(actual[0],actual[1]);assert.equal(actual[1],actual[2]);assert.equal(actual[3],255);
+}
 const defaultLight=raster.renderRgba("hillshade",litSurface);
 const explicitDefault=raster.renderRgba("hillshade",{
   ...litSurface,lighting:{azimuth:315,altitude:45,ambient:.12}
