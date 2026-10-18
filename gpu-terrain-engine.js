@@ -119,7 +119,7 @@
     var requestFrame = typeof options.onNeedsFrame === 'function' ? options.onNeedsFrame : function () {};
     var destroyed = false, ready = false, lost = false, error = null, dirty = true, heightDirty = true;
     var boundsScratch = {}, activeSources = null, sourceRefs = [], sourcesDirty = true, planBounds = {}, requestBounds = {}, shadeField, provenanceField;
-    var generation = 0, drawCalls = 0, lastFrameMs = 0, uploads = 0, evictions = 0;
+    var generation = 0, frames = 0, drawCalls = 0, lastFrameMs = 0, uploads = 0, evictions = 0;
     var queue = new Map(), known = new Map(), sources = new Map(), sourceList = [], plan = [], planDirty = true;
     var wanted = [], coverageKey = '', viewScalars = new Float64Array(8), lastResult = {coverage: 0, missing: 0};
     viewScalars.fill(NaN);
@@ -297,13 +297,17 @@
       residents.sort(function (a, b) { return a.record.rank - b.record.rank || a.record.z - b.record.z || a.key.localeCompare(b.key); });
       var total = 0, covered = 0;
       for (var y = b.y0; y <= b.y1; y++) for (var wx = b.x0; wx <= b.x1; wx++) {
-        var x = mod(wx, n), tile = {z: b.z, x: x, y: y}, has = false;
+        var x = mod(wx, n), tile = {z: b.z, x: x, y: y}, has = false, tileStart = plan.length;
         for (var j = 0; j < residents.length; j++) {
           var e = residents[j], r = e.record, spec = sources.get(r.sourceId);
           if (spec && spec.allowed && !spec.allowed(tile)) continue;
           var factor = Math.pow(2, b.z - r.z), rx0 = mod(r.x, Math.pow(2, r.z)) * factor, ry0 = r.y * factor;
           var x0 = Math.max(x, rx0), y0 = Math.max(y, ry0), x1 = Math.min(x + 1, rx0 + factor), y1 = Math.min(y + 1, ry0 + factor);
           if (x1 <= x0 || y1 <= y0) continue;
+          // A complete higher-priority record hides every earlier draw in
+          // this display tile. Retain fallback draws when any native sample
+          // is missing, so finer no-data still reveals the lower rank.
+          if (e.allValid && x0 === x && y0 === y && x1 === x + 1 && y1 === y + 1) plan.length = tileStart;
           var crop = {x: (x0 - rx0) / factor, y: (y0 - ry0) / factor, width: (x1 - x0) / factor, height: (y1 - y0) / factor, nativeWidth: r.width, nativeHeight: r.height};
           plan.push({entry: e, x: wx + x0 - x, y: y0, width: x1 - x0, height: y1 - y0, crop: crop, z: b.z}); has = true;
           lru.get(e.key);
@@ -452,7 +456,7 @@
         }
         if (planDirty) buildPlan(view);
         if (heightDirty) { drawHeight(field, view); heightDirty = false; dirty = true; }
-        if (dirty) { drawShade(field, null, view); dirty = false; }
+        if (dirty) { drawShade(field, null, view); dirty = false; frames++; }
       } catch (e) { error = String(e && e.message || e); ready = false; }
       lastFrameMs = now() - start; return lastResult;
     }
@@ -580,7 +584,7 @@
         coverageKey = ''; heightDirty = dirty = planDirty = true; needsFrame();
       }, render: render,
       neededTiles: function (view) { if (refreshSources()) heightDirty = dirty = planDirty = true; return want(view); }, renderToCanvas: renderToCanvas, readProvenance: readProvenance,
-      stats: function () { return {textures: lru.size, textureBytes: lru.bytes, drawCalls: drawCalls, lastFrameMs: lastFrameMs,
+      stats: function () { return {textures: lru.size, textureBytes: lru.bytes, frames: frames, drawCalls: drawCalls, lastFrameMs: lastFrameMs,
         ready: ready, queuedUploads: queue.size, uploads: uploads, evictions: evictions, generation: generation, error: error,
         heightFieldBytes: field ? field.width * field.height * 8 : 0, trackedTiles: known.size,
         coverageKind: 'resident tile overlap estimate; readProvenance returns sampled pixel coverage', fallback: 'CPU when float targets or self-test unavailable'}; },

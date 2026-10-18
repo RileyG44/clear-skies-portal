@@ -55,6 +55,85 @@ const data=values=>({width:2,height:2,grid:new Float32Array(values)});
   assert.equal(phases.length,3);assert.equal(phases[0].url,'s/2/2/2');
   assert.ok(phases.slice(1).every(p=>p.priority===0&&p.group==='sharp'));retina.destroy();
 
+  // Invalid opaque Terrarium sentinels must never reach the GPU or mutate
+  // a shared decoder cache. The native mask also receives an owned grid.
+  const decoderGrid=new Float32Array([-32768,-20000,Infinity,25]);
+  const normalized=new ElevationTileStore({sources:[source('s',1,0)],request:async()=>({width:2,height:2,grid:decoderGrid})});
+  await normalized.want([{z:0,x:0,y:0}]);
+  assert.deepEqual([...normalized.get('s/0/0/0').grid].map(Number.isNaN),[true,true,true,false]);
+  assert.equal(decoderGrid[0],-32768);assert.equal(decoderGrid[2],Infinity);normalized.destroy();
+  const sharedMaskGrid=new Float32Array([1,2,3,4]);
+  const copyMask=new ElevationTileStore({sources:[source('s',1,0)],request:async()=>({width:2,height:2,grid:sharedMaskGrid}),mask:g=>{g[0]=NaN;return g;}});
+  await copyMask.want([{z:0,x:0,y:0}]);assert.equal(sharedMaskGrid[0],1);copyMask.destroy();
+
+  // Research downsampling averages every native cell, including an impulse
+  // away from the output center, and merges rank/no-data before averaging.
+  const impulse=new Float32Array(16);impulse.fill(NaN);impulse[0]=100;
+  const averaging=new ElevationTileStore({sources:[source('base',1,0),source('detail',5,0)],
+    request:async url=>({width:4,height:4,grid:url.startsWith('detail')?impulse:new Float32Array(16)})});
+  await averaging.want([{z:0,x:0,y:0}]);
+  const averaged=averaging.gridForView({bounds:[-180,-85.0511287798,180,85.0511287798],zoom:20,maxSide:1});
+  assert.equal(averaged.width,1);assert.equal(averaged.height,1);assert.equal(averaged.grid[0],6.25);
+  assert.equal(averaged.factor,4);assert.equal(averaged.z,Math.log2(4/256),'research resolution uses resident native density, not invented z20 detail');
+  assert.ok(Math.abs(averaged.resolution-40075016.68557849)<1e-6);
+  const mixed=averaging.provenance();assert.ok(mixed.ranks[1]>0&&mixed.ranks[5]>0);
+  assert.equal(Object.values(mixed.ranks).reduce((a,b)=>a+b,0),65536,'contributions count one visible rank per sample');
+  const summary=averaging._summary({z:0,x:0,y:0});averaging.settled();averaging.provenance();
+  assert.equal(averaging._summary({z:0,x:0,y:0}),summary,'status calls reuse cached contributions');averaging.destroy();
+
+  const partial=new ElevationTileStore({sources:[source('detail',5,0)],request:async()=>({width:4,height:4,grid:impulse})});
+  await partial.want([{z:0,x:0,y:0}]);
+  assert.equal(partial.settled().complete,0,'one valid pixel cannot mark an entire display tile complete');
+  assert.ok(partial.settled().ratio>0&&partial.settled().ratio<1);partial.destroy();
+  const hidden=new ElevationTileStore({sources:[source('base',1,0),source('detail',5,0)],request:async url=>({...data([10,10,10,10]),surveys:[{id:url.startsWith('base')?'hidden':'visible'}]})});
+  await hidden.want([{z:0,x:0,y:0}]);
+  assert.deepEqual(hidden.provenance().ranks,{'5':65536});assert.deepEqual(hidden.provenance().surveys,[{id:'visible'}]);hidden.destroy();
+
+  // Cursor/research gates use the current display zoom even while a finer
+  // source remains cached after zooming out.
+  const gatedSources=[source('base',1,0),source('raw',3,4,{allowed:c=>c.z>=3})];
+  const gated=new ElevationTileStore({sources:gatedSources,request:async url=>data(url.startsWith('raw')?[30,30,30,30]:[10,10,10,10])});
+  await gated.want([{z:3,x:4,y:4}]);assert.equal(gated.sampleAt(22.5,-20).rank,3);
+  await gated.want([{z:2,x:2,y:2}]);assert.equal(gated.sampleAt(22.5,-20).rank,1);
+  assert.equal(gated.sampleAt(0,90),null,'unprojectable polar latitudes have no native sample');gated.destroy();
+
+  const retinaResearch=new ElevationTileStore({sources:[source('s',1,1,{dz:1,sharper:true})],
+    request:async()=>({width:256,height:256,grid:new Float32Array(65536).fill(42)})});
+  await retinaResearch.want([{z:1,x:1,y:1}]);await tick();await tick();
+  const retinaGrid=retinaResearch.gridForView({bounds:[0,-85.0511287798,180,0],zoom:0,maxSide:256});
+  assert.equal(retinaGrid.width,256);assert.equal(retinaGrid.height,256);
+  assert.equal(retinaGrid.z,1,'research retains resident HiDPI native level above CSS map zoom');retinaResearch.destroy();
+
+  // A mask may select one overzoomed corner of a native tile; its center
+  // need not satisfy the current display-coordinate source gate.
+  const corner=new ElevationTileStore({sources:[source('dnr',5,0,{allowed:c=>c.z===2&&c.x===0&&c.y===0})],request:async()=>({width:256,height:256,grid:new Float32Array(65536).fill(4)})});
+  await corner.want([{z:2,x:0,y:0}]);
+  const cornerGrid=corner.gridForView({bounds:[-180,66.51326044311186,-90,85.0511287798],zoom:2,maxSide:4});
+  assert.ok(cornerGrid.grid.some(Number.isFinite),'selected native corner remains available to research');corner.destroy();
+
+  let revision=1,revisionSpecs=[source('s',1,0,{url:()=>`revision-${revision}`})],revisionCalls=0;
+  const revised=new ElevationTileStore({sources:()=>revisionSpecs,request:async()=>{revisionCalls++;return data([revision,revision,revision,revision]);}});
+  await revised.want([{z:0,x:0,y:0}]);revision=2;revisionSpecs=[source('s',1,0,{url:()=>`revision-${revision}`})];
+  await revised.want([{z:0,x:0,y:0}]);assert.equal(revisionCalls,2);assert.equal(revised.sampleAt(0,0).value,2,'source revision replaces stale native record');revised.destroy();
+
+  let cancelCalls=[];
+  const preflight=new ElevationTileStore({sources:[source('s',1,4)],request:async url=>{cancelCalls.push(url);return data([1,1,1,1]);}});
+  const cancelledBeforeStart=preflight.want([{z:2,x:0,y:0}]);const currentBeforeStart=preflight.want([{z:2,x:1,y:0}]);
+  await Promise.all([cancelledBeforeStart,currentBeforeStart]);assert.deepEqual(cancelCalls,['s/2/1/0'],'cancel before dispatch avoids an obsolete network request');preflight.destroy();
+
+  const phaseRequests=[];
+  const phasesStore=new ElevationTileStore({sources:[source('detail',5,8,{dz:1,sharper:true}),source('base',1,8,{dz:1,sharper:true})],
+    request:(url,o)=>new Promise(resolve=>phaseRequests.push({url,o,resolve}))});
+  const phaseA=phasesStore.want([{z:3,x:4,y:4}]);await tick();
+  const phaseB=phasesStore.want([{z:3,x:6,y:4}]);await tick();
+  const phaseA2=phasesStore.want([{z:3,x:4,y:4}]);await tick();
+  phaseRequests[4].resolve(data([1,1,1,1]));await tick();
+  phaseRequests.slice(0,4).forEach(p=>p.resolve(data([1,1,1,1])));await Promise.all([phaseA,phaseB]);await tick();
+  assert.equal(phaseRequests.length,6,'obsolete A/B completion cannot start sharp A before the current primary phase settles');
+  phaseRequests[5].resolve(data([1,1,1,1]));await phaseA2;await tick();
+  assert.equal(phaseRequests.length,7);assert.equal(phaseRequests[6].o.group,'sharp');
+  phaseRequests[6].resolve(data([1,1,1,1]));await tick();phasesStore.destroy();
+
   const sources=buildSources({dnrEndpoint:'/dnr',rawEndpoint:'/raw',nationalEndpoint:'/national',fallback:'/base/{z}/{x}/{y}',fallbackNativeZoom:15,refineOverview:true},
     {proxy:true,api:x=>x,dz:1,dnrRevision:7,dnrTileAllowed:()=>true,rawCoverageQuery:'r=1'});
   assert.equal(sources.find(s=>s.id==='raw').allowed({z:13}),false);

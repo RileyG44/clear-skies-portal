@@ -15,6 +15,7 @@
   const mercY=lat=>(1-Math.asinh(Math.tan(Math.max(-LIMIT,Math.min(LIMIT,lat))*Math.PI/180))/Math.PI)/2;
   function coords(c,z){const scale=2**(c.z-z),n=2**z;return {z,x:mod(Math.floor(c.x/scale),n),y:Math.floor(c.y/scale)};}
   function native(source,z){return Math.max(0,Math.min(z,Math.floor(typeof source.nativeZoom==='function'?source.nativeZoom(z):source.nativeZoom??z)));}
+  function sourceUrl(source,c){return typeof source.url==='function'?source.url(c.z,c.x,c.y):source.url.replace('{z}',c.z).replace('{x}',c.x).replace('{y}',c.y);}
   function resolution(c,w=256){return EARTH*Math.cos(latitude((c.y+.5)/2**c.z)*Math.PI/180)/(2**c.z*w);}
   function sample(record,mx,my){
     const n=2**record.z,px=Math.max(0,Math.min(record.width-1,(mod(mx,1)*n-record.x)*record.width-.5));
@@ -30,26 +31,41 @@
   function ElevationTileStore(options){
     this.options=options||{};this._listeners={};this._tiles=new Map();this._pending=new Map();
     this._failed=new Map();this._wanted=new Map();this._displays=[];this._sources=[];
-    this._bytes=0;this._revision=0;this._epoch=0;this._destroyed=false;
+    this._bytes=0;this._revision=0;this._epoch=0;this._demand=0;this._destroyed=false;
+    this._levels=new Map();this._summaries=new Map();
     this.maxBytes=Math.max(0,this.options.maxBytes??192*1024*1024);
   }
   ElevationTileStore.prototype.on=function(event,fn){(this._listeners[event]||(this._listeners[event]=new Set())).add(fn);return this;};
   ElevationTileStore.prototype.off=function(event,fn){this._listeners[event]?.delete(fn);return this;};
   ElevationTileStore.prototype._emit=function(event,value){for(const fn of this._listeners[event]||[])fn(value);};
+  ElevationTileStore.prototype._invalidateSummaries=function(record){
+    for(const [key,entry] of this._summaries){
+      const d=entry.coords,z=Math.min(d.z,record.z),a=coords(d,z),b=coords(record,z);
+      if(a.x===b.x&&a.y===b.y)this._summaries.delete(key);
+    }
+  };
+  ElevationTileStore.prototype._remove=function(key){
+    const r=this._tiles.get(key);if(!r)return;
+    this._tiles.delete(key);this._bytes-=r.grid.byteLength;this._invalidateSummaries(r);
+    const levels=this._levels.get(r.sourceId),count=levels.get(r.z)-1;
+    if(count)levels.set(r.z,count);else levels.delete(r.z);
+    if(!levels.size)this._levels.delete(r.sourceId);
+  };
   ElevationTileStore.prototype._evict=function(){
     if(this._bytes<=this.maxBytes)return;
     // Prefer old, offscreen records; a hard cap still applies to huge views.
     for(const protectedPass of [false,true])for(const [key,r] of this._tiles){
       if(this._bytes<=this.maxBytes)return;
       if(!protectedPass&&this._wanted.has(key))continue;
-      this._tiles.delete(key);this._bytes-=r.grid.byteLength;
+      this._remove(key);
     }
   };
   ElevationTileStore.prototype.get=function(key){
     const r=this._tiles.get(key);if(r){this._tiles.delete(key);this._tiles.set(key,r);}return r;
   };
   ElevationTileStore.prototype.finestFor=function(id,c){
-    for(let z=c.z;z>=0;z--){const t=coords(c,z),r=this.get(tileKey(id,z,t.x,t.y));if(r)return r;}
+    const levels=[...(this._levels.get(id)?.keys()||[])].filter(z=>z<=c.z).sort((a,b)=>b-a);
+    for(const z of levels){const t=coords(c,z),r=this.get(tileKey(id,z,t.x,t.y));if(r)return r;}
   };
   ElevationTileStore.prototype._load=function(job){
     const {key,source,c,sharp}=job;
@@ -57,23 +73,30 @@
     if(this._pending.has(key))return this._pending.get(key).promise;
     if((this._failed.get(key)||0)>Date.now())return Promise.resolve(null);
     const controller=new AbortController(),epoch=this._epoch;
-    const pending={controller,promise:null};this._pending.set(key,pending);
-    pending.promise=Promise.resolve().then(()=>this.options.request(job.url,{
+    const pending={controller,promise:null,job};this._pending.set(key,pending);
+    pending.promise=Promise.resolve().then(()=>{if(controller.signal.aborted)return null;return this.options.request(job.url,{
       signal:controller.signal,priority:sharp?0:source.rank===5?2:source.rank,
       group:sharp?'sharp':source.group||'overview',kind:source.kind
-    })).then(data=>{
+    });}).then(data=>{
       if(!data||controller.signal.aborted||epoch!==this._epoch||this._destroyed)return null;
       const width=data.width,height=data.height;
       if(!Number.isInteger(width)||width<1||!Number.isInteger(height)||height<1||!data.grid||data.grid.length!==width*height)throw new Error('Invalid native elevation grid');
+      // Decoder caches may share the returned array. Masking and sentinel
+      // normalization must never alter a different consumer's native data.
       let grid=data.grid instanceof Float32Array?data.grid:new Float32Array(data.grid);
-      if(this.options.mask)grid=this.options.mask(grid,width,height,c,source);
+      if(this.options.mask)grid=this.options.mask(grid.slice(),width,height,c,source);
+      let normalized=false;
+      for(const value of grid)if(!valid(value)&&!Number.isNaN(value)){normalized=true;break;}
+      if(normalized){grid=grid.slice();for(let i=0;i<grid.length;i++)if(!valid(grid[i]))grid[i]=NaN;}
       if(!(grid instanceof Float32Array)||grid.length!==width*height)throw new Error('Invalid masked elevation grid');
-      const r={key,sourceId:source.id,rank:source.rank,label:source.label,z:c.z,x:c.x,y:c.y,width,height,grid,
+      const r={key,url:job.url,sourceId:source.id,rank:source.rank,label:source.label,z:c.z,x:c.x,y:c.y,width,height,grid,
         sampleMeters:typeof source.sampleMeters==='function'?source.sampleMeters(c):source.sampleMeters??resolution(c,width),
         surveys:data.surveys||[],revision:++this._revision,validCount:0};
       for(const value of grid)if(valid(value))r.validCount++;
       if(grid.byteLength>this.maxBytes){this._failed.set(key,Date.now()+30000);return null;}
-      this._tiles.set(key,r);this._bytes+=grid.byteLength;this._evict();
+      this._tiles.set(key,r);this._bytes+=grid.byteLength;
+      let levels=this._levels.get(r.sourceId);if(!levels)this._levels.set(r.sourceId,levels=new Map());
+      levels.set(r.z,(levels.get(r.z)||0)+1);this._invalidateSummaries(r);this._evict();
       this._emit('tile',r);return r;
     }).catch(error=>{
       if(!controller.signal.aborted&&epoch===this._epoch){this._failed.set(key,Date.now()+10000);this._emit('error',{key,error});}
@@ -86,8 +109,22 @@
   };
   ElevationTileStore.prototype.want=function(displayTiles,options){
     if(this._destroyed)return;
-    this._sources=(typeof this.options.sources==='function'?this.options.sources():this.options.sources||[]).slice();
-    this._displays=displayTiles.slice();this._generation=options?.generation;
+    const sources=(typeof this.options.sources==='function'?this.options.sources():this.options.sources||[]).slice();
+    const changed=sources.length!==this._sources.length||sources.some((s,i)=>s!==this._sources[i]);
+    this._sources=sources;this._displays=displayTiles.slice();this._generation=options?.generation;
+    const demand=++this._demand;
+    // Source identities are stable in the app, but URL revisions must also
+    // invalidate cached/offscreen native tiles for other store consumers.
+    if(changed){
+      this._summaries.clear();const byId=new Map(sources.map(s=>[s.id,s]));
+      for(const [key,r] of this._tiles){const s=byId.get(r.sourceId);
+        if(!s||r.url!==sourceUrl(s,r)||r.rank!==s.rank||r.label!==s.label||native(s,r.z)<r.z)this._remove(key);}
+      for(const [key,p] of this._pending){const s=byId.get(p.job.source.id);
+        if(!s||p.job.url!==sourceUrl(s,p.job.c)||p.job.source.rank!==s.rank||p.job.source.label!==s.label||native(s,p.job.c.z)<p.job.c.z){p.controller.abort();this._pending.delete(key);}}
+      this._failed.clear();
+    }
+    const displayKeys=new Set(displayTiles.map(d=>tileKey('',d.z,mod(d.x,2**d.z),d.y)));
+    for(const key of this._summaries.keys())if(!displayKeys.has(key))this._summaries.delete(key);
     const wanted=new Map(),groups=[];
     for(const d of displayTiles){
       const jobs=[];
@@ -97,7 +134,7 @@
         for(const sharp of [false,true]){
           if(sharp&&source.sharper===false)continue;
           const z=native(source,sharp?d.z:shown),c=coords(d,z),key=tileKey(source.id,z,c.x,c.y);
-          const url=typeof source.url==='function'?source.url(z,c.x,c.y):source.url.replace('{z}',z).replace('{x}',c.x).replace('{y}',c.y);
+          const url=sourceUrl(source,c);
           const job={key,source,c,url,sharp};
           if(!wanted.has(key)||!sharp)wanted.set(key,job);
           jobs.push(job);
@@ -107,13 +144,14 @@
       groups.push(jobs);
     }
     this._wanted=wanted;
+    for(const [key,until] of this._failed)if(!wanted.has(key)||until<=Date.now())this._failed.delete(key);
     for(const [key,p] of this._pending)if(!wanted.has(key)){p.controller.abort();this._pending.delete(key);}
     // Every primary source is dispatched together; refinement cannot starve it.
     const primary=new Map();for(const jobs of groups)for(const j of jobs)if(!j.sharp)primary.set(j.key,j);
     const epoch=this._epoch;
     const first=Promise.all([...primary.values()].map(j=>this._load(j)));
     first.then(()=>{
-      if(epoch!==this._epoch||this._destroyed)return;
+      if(epoch!==this._epoch||demand!==this._demand||this._destroyed)return;
       for(const jobs of groups){
         if(!jobs.length)continue;
         const available=jobs.filter(j=>!j.sharp&&this._tiles.has(j.key)&&this._tiles.get(j.key).validCount>0);
@@ -126,45 +164,93 @@
     });
     return first;
   };
-  ElevationTileStore.prototype._at=function(mx,my,sources){
-    let best=null;
-    for(const s of sources){
-      if(best&&best.rank>s.rank)continue;
-      // Walk finest to coarse within each source, retaining coarse data in holes.
-      const max=native(s,28),n=2**max,c={z:max,x:Math.floor(mod(mx,1)*n),y:Math.min(n-1,Math.floor(my*n))};
-      if(s.allowed&&!s.allowed(c))continue;
-      for(let z=max;z>=0;z--){
-        const t=coords(c,z),r=this._tiles.get(tileKey(s.id,z,t.x,t.y));if(!r)continue;
-        const value=sample(r,mx,my);if(!valid(value))continue;
-        if(!best||r.rank>best.rank||(r.rank===best.rank&&r.z>best.z))best={value,rank:r.rank,label:r.label,z:r.z,sourceId:r.sourceId};
-        break;
+  ElevationTileStore.prototype._sampler=function(sources,displayZ){
+    const specs=sources.map(s=>({source:s,levels:[...(this._levels.get(s.id)?.keys()||[])].sort((a,b)=>b-a)}));
+    return (mx,my)=>{
+      if(my<0||my>1)return null;
+      mx=mod(mx,1);let best=null;
+      for(const {source:s,levels} of specs){
+        if(best&&best.rank>s.rank)continue;
+        const n=2**displayZ,c={z:displayZ,x:Math.floor(mx*n),y:Math.min(n-1,Math.floor(my*n))};
+        if(s.allowed&&!s.allowed(c))continue;
+        for(const z of levels){
+          const nz=2**z,r=this._tiles.get(tileKey(s.id,z,Math.floor(mx*nz),Math.min(nz-1,Math.floor(my*nz))));
+          if(!r||!r.validCount)continue;
+          const value=sample(r,mx,my);if(!valid(value))continue;
+          if(!best||r.rank>best.rank||(r.rank===best.rank&&r.z>best.z))best={value,rank:r.rank,label:r.label,z:r.z,sourceId:r.sourceId,record:r};
+          break;
+        }
       }
-    }
-    return best;
+      return best;
+    };
+  };
+  ElevationTileStore.prototype._at=function(mx,my,sources){
+    const z=this._displays.length?Math.max(...this._displays.map(d=>d.z)):0;
+    return this._sampler(sources,z)(mx,my);
   };
   ElevationTileStore.prototype.sampleAt=function(lng,lat){
-    if(!Number.isFinite(lng)||!Number.isFinite(lat))return null;
-    return this._at((lng+180)/360,mercY(lat),this._sources);
+    if(!Number.isFinite(lng)||!Number.isFinite(lat)||Math.abs(lat)>LIMIT)return null;
+    const hit=this._at((lng+180)/360,mercY(lat),this._sources);
+    if(!hit)return null;const {record,...result}=hit;return result;
+  };
+  ElevationTileStore.prototype._summary=function(d){
+    const key=tileKey('',d.z,mod(d.x,2**d.z),d.y),cached=this._summaries.get(key);if(cached)return cached;
+    const sources=this._sources.filter(s=>!s.allowed||s.allowed(d)),ids=new Set(sources.map(s=>s.id)),records=[];
+    for(const r of this._tiles.values()){
+      if(!ids.has(r.sourceId)||!r.validCount)continue;
+      const z=Math.min(d.z,r.z),a=coords(d,z),b=coords(r,z);if(a.x===b.x&&a.y===b.y)records.push(r);
+    }
+    records.sort((a,b)=>b.rank-a.rank||b.z-a.z||b.key.localeCompare(a.key));
+    const entry={coords:{...d},ranks:{},records:new Set(),covered:0,total:256*256};
+    const first=records[0];
+    if(first&&first.z<=d.z&&first.validCount===first.grid.length){
+      entry.covered=entry.total;entry.ranks[first.rank]=entry.total;entry.records.add(first);
+    }else if(records.length){
+      // Rank/validity metadata only: no elevation raster or interpolation is
+      // produced in the draw/status path. Each display sample has one winner.
+      const winners=new Uint8Array(entry.total),mx=mod(d.x,2**d.z);
+      for(const r of records){
+        const scale=2**(d.z-r.z),rx=r.x*scale,ry=r.y*scale;
+        const x0=Math.max(0,Math.ceil((rx-mx)*256-.5)),x1=Math.min(256,Math.ceil((rx+scale-mx)*256-.5));
+        const y0=Math.max(0,Math.ceil((ry-d.y)*256-.5)),y1=Math.min(256,Math.ceil((ry+scale-d.y)*256-.5));
+        const allValid=r.validCount===r.grid.length;let contributed=0;
+        const lower=new Int32Array(256),upper=new Int32Array(256),fraction=new Float64Array(256);
+        if(!allValid)for(let x=x0;x<x1;x++){
+          const px=Math.max(0,Math.min(r.width-1,((mx+(x+.5)/256-rx)/scale)*r.width-.5));
+          lower[x]=Math.floor(px);upper[x]=Math.min(r.width-1,lower[x]+1);fraction[x]=px-lower[x];
+        }
+        for(let y=y0;y<y1;y++){
+          const py=Math.max(0,Math.min(r.height-1,((d.y+(y+.5)/256-ry)/scale)*r.height-.5));
+          const by=Math.floor(py),row=by*r.width,next=Math.min(r.height-1,by+1)*r.width,fy=py-by;
+          for(let x=x0;x<x1;x++){
+            const i=y*256+x;if(winners[i])continue;
+            const lo=lower[x],hi=upper[x],fx=fraction[x],g=r.grid;
+            if(allValid||valid(g[row+lo])||(fx>0&&valid(g[row+hi]))||(fy>0&&valid(g[next+lo]))||(fx>0&&fy>0&&valid(g[next+hi]))){
+              winners[i]=1;contributed++;
+            }
+          }
+        }
+        if(contributed){entry.covered+=contributed;entry.ranks[r.rank]=(entry.ranks[r.rank]||0)+contributed;entry.records.add(r);}
+        if(entry.covered===entry.total)break;
+      }
+    }
+    this._summaries.set(key,entry);return entry;
   };
   ElevationTileStore.prototype.settled=function(displayTiles){
-    const tiles=displayTiles||this._displays;let complete=0;
-    for(const d of tiles)if(this._sources.some(s=>(!s.allowed||s.allowed(d))&&this.finestFor(s.id,d)?.validCount>0))complete++;
-    return {complete,total:tiles.length,ratio:tiles.length?complete/tiles.length:0,refining:this._pending.size>0,failed:this._failed.size>0};
+    const tiles=displayTiles||this._displays;let complete=0,coveredPixels=0,totalPixels=0;
+    for(const d of tiles){const s=this._summary(d);if(s.covered===s.total)complete++;coveredPixels+=s.covered;totalPixels+=s.total;}
+    const now=Date.now();for(const [key,until] of this._failed)if(until<=now)this._failed.delete(key);
+    return {complete,total:tiles.length,ratio:totalPixels?coveredPixels/totalPixels:0,coveredPixels,totalPixels,
+      refining:this._pending.size>0,failed:[...this._failed.keys()].some(key=>this._wanted.has(key))};
   };
   ElevationTileStore.prototype.provenance=function(displayTiles){
-    const ranks={},labels=new Set(),surveys=new Map(),sampleMeters={},seen=new Set();
-    for(const d of displayTiles||this._displays)for(const s of this._sources){
-      if(s.allowed&&!s.allowed(d))continue;
-      // Include ancestors because finer no-data does not replace their ground.
-      let r=this.finestFor(s.id,d);
-      while(r){
-        if(!seen.has(r.key)){
-          seen.add(r.key);const count=r.validCount;
-          if(count){ranks[r.rank]=(ranks[r.rank]||0)+count;labels.add(r.label);
-            sampleMeters[r.rank]=Math.min(sampleMeters[r.rank]??Infinity,r.sampleMeters);
-            for(const survey of r.surveys)surveys.set(JSON.stringify(survey),survey);}
-        }
-        r=r.z?this.finestFor(s.id,{z:r.z-1,x:Math.floor(r.x/2),y:Math.floor(r.y/2)}):null;
+    const ranks={},labels=new Set(),surveys=new Map(),sampleMeters={};
+    for(const d of displayTiles||this._displays){
+      const summary=this._summary(d);
+      for(const [rank,count] of Object.entries(summary.ranks))ranks[rank]=(ranks[rank]||0)+count;
+      for(const r of summary.records){
+        labels.add(r.label);if(Number.isFinite(r.sampleMeters))sampleMeters[r.rank]=Math.min(sampleMeters[r.rank]??Infinity,r.sampleMeters);
+        for(const survey of r.surveys)surveys.set(JSON.stringify(survey),survey);
       }
     }
     return {ranks,labels:[...labels],surveys:[...surveys.values()],sampleMeters};
@@ -174,23 +260,47 @@
     const west=b.getWest?b.getWest():b.west??b[0],south=b.getSouth?b.getSouth():b.south??b[1];
     let east=b.getEast?b.getEast():b.east??b[2];const north=b.getNorth?b.getNorth():b.north??b[3];
     if(east<west)east+=360;
-    if(![west,south,east,north].every(Number.isFinite)||east<=west||north<=south)throw new Error('Invalid research bounds');
-    const x0=(west+180)/360,x1=(east+180)/360,y0=mercY(north),y1=mercY(south),z=Math.max(0,Math.min(22,Math.round(request.zoom)));
-    const max=Math.max(1,Math.floor(request.maxSide||640)),nativeW=Math.max(1,(x1-x0)*256*2**z),nativeH=Math.max(1,(y1-y0)*256*2**z);
-    const factor=Math.max(1,nativeW/max,nativeH/max),width=Math.max(1,Math.ceil(nativeW/factor)),height=Math.max(1,Math.ceil(nativeH/factor));
-    const grid=new Float32Array(width*height);grid.fill(NaN);const labels=new Set();
-    // CPU query only: bounded output avoids allocating a huge overzoom mosaic.
-    for(let y=0;y<height;y++)for(let x=0;x<width;x++){
-      const hit=this._at(x0+(x+.5)/width*(x1-x0),y0+(y+.5)/height*(y1-y0),this._sources);
-      if(hit){grid[y*width+x]=hit.value;labels.add(hit.label);}
+    if(![west,south,east,north,request.zoom].every(Number.isFinite)||east<=west||east-west>360||north<=south)throw new Error('Invalid research bounds');
+    const requestedZ=Math.max(0,Math.min(28,Math.round(request.zoom))),displayZ=this._displays.length?Math.max(...this._displays.map(d=>d.z)):requestedZ;
+    let density=0;const xWest=(west+180)/360,xEast=(east+180)/360,yNorth=mercY(north),ySouth=mercY(south);
+    const specs=new Map(this._sources.map(s=>[s.id,s]));
+    for(const r of this._tiles.values()){
+      const s=specs.get(r.sourceId);if(!s||!r.validCount)continue;
+      const n=2**r.z,rx=r.x/n,ry=r.y/n;
+      // A native tile may cover many display tiles, including a selected DNR
+      // corner whose native-tile center is outside the selected area.
+      if(s.allowed&&!this._displays.some(d=>{
+        if(!s.allowed(d))return false;
+        const z=Math.min(d.z,r.z),a=coords(d,z),b=coords(r,z);return a.x===b.x&&a.y===b.y;
+      }))continue;
+      const shift=Math.floor(xWest-rx),overlapsX=[shift,shift+1].some(w=>rx+w<xEast&&rx+1/n+w>xWest);
+      if(overlapsX&&ry<ySouth&&ry+1/n>yNorth)density=Math.max(density,Math.max(r.width,r.height)*n);
     }
+    if(!density)throw new Error('No elevation pixels are ready for this view.');
+    // Display coordinates already include the HiDPI next-zoom level.
+    density=Math.min(density,256*2**Math.max(requestedZ,displayZ));
+    // Reproduce the research mosaic's box average, streamed into bounded
+    // output bins. Never substitute one bilinear center for a downsampled area.
+    const ix0=Math.floor(xWest*density+1e-8),ix1=Math.ceil(xEast*density-1e-8),iy0=Math.floor(yNorth*density+1e-8),iy1=Math.ceil(ySouth*density-1e-8);
+    const nativeW=Math.max(1,ix1-ix0),nativeH=Math.max(1,iy1-iy0),max=Math.max(1,Math.floor(request.maxSide||640));
+    if(nativeW*nativeH>(this.options.maxResearchSamples??16777216))throw new Error('Research view has too many native samples; zoom in before analysis.');
+    const factor=Math.max(1,Math.ceil(Math.max(nativeW,nativeH)/max)),width=Math.ceil(nativeW/factor),height=Math.ceil(nativeH/factor);
+    const grid=new Float32Array(width*height),sums=new Float64Array(grid.length),counts=new Uint32Array(grid.length),labels=new Set();grid.fill(NaN);
+    const hitAt=this._sampler(this._sources,displayZ);
+    for(let y=0;y<nativeH;y++)for(let x=0;x<nativeW;x++){
+      const hit=hitAt((ix0+x+.5)/density,(iy0+y+.5)/density);
+      if(hit){const i=Math.floor(y/factor)*width+Math.floor(x/factor);sums[i]+=hit.value;counts[i]++;labels.add(hit.label);}
+    }
+    for(let i=0;i<grid.length;i++)if(counts[i])grid[i]=sums[i]/counts[i];
     if(!labels.size)throw new Error('No elevation pixels are ready for this view.');
-    return {grid,width,height,bounds:b,z,factor,resolution:EARTH*Math.cos((north+south)/2*Math.PI/180)*(x1-x0)/width,
+    const outputBounds=[[latitude((iy0+height*factor)/density),ix0/density*360-180],[latitude(iy0/density),(ix0+width*factor)/density*360-180]];
+    return {grid,width,height,bounds:outputBounds,z:Math.log2(density/256),factor,
+      resolution:EARTH*Math.cos((north+south)/2*Math.PI/180)/density*factor,
       provenance:[...labels],provisional:this._pending.size>0};
   };
   ElevationTileStore.prototype.clear=function(){
-    this._epoch++;for(const p of this._pending.values())p.controller.abort();this._pending.clear();
-    this._tiles.clear();this._failed.clear();this._wanted.clear();this._displays=[];this._bytes=0;this._emit('clear');
+    this._epoch++;this._demand++;for(const p of this._pending.values())p.controller.abort();this._pending.clear();
+    this._tiles.clear();this._failed.clear();this._wanted.clear();this._displays=[];this._bytes=0;this._levels.clear();this._summaries.clear();this._emit('clear');
   };
   ElevationTileStore.prototype.destroy=function(){this._destroyed=true;this.clear();this._listeners={};};
   ElevationTileStore.prototype.stats=function(){return {tiles:this._tiles.size,bytes:this._bytes,pending:this._pending.size,maxBytes:this.maxBytes};};
