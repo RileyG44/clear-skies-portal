@@ -5942,6 +5942,8 @@ function elevationSourceOptions(){
 function dnrAcquisitionText(){
   const active=dnrStatus?.active;
   if(!active)return dnrLastError?`DNR elevation unavailable · ${dnrLastError}`:"";
+  if(active.state==="restoring")return `Loading DNR elevation from iCloud · ${active.project}`;
+  if(active.state==="archiving")return "Moving older DNR elevation to iCloud to make room";
   return active.state==="preparing"?`Preparing DNR elevation overviews · ${active.project}`:
     `Downloading DNR elevation · ${active.project}${active.bytes?` · ${(active.bytes/1048576).toFixed(0)} MiB`:""}`;
 }
