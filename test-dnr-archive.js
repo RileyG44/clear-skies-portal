@@ -126,7 +126,8 @@ async function noArchiveChecks(){
 
 function rootChecks(){
   assert.equal(defaultArchiveRoot({CSP_DNR_ARCHIVE_DIR:"off"}),null);
-  assert.equal(defaultArchiveRoot({CSP_DNR_ARCHIVE_DIR:"/tmp/x"}),"/tmp/x");
+  const custom=path.join(root,"custom-icloud");
+  assert.equal(defaultArchiveRoot({CSP_DNR_ARCHIVE_DIR:custom}),path.resolve(custom));
   if(process.platform!=="darwin")assert.equal(defaultArchiveRoot({}),null,"no iCloud Drive outside macOS");
   const store=new DnrStore(path.join(root,"budget"),{archive:null});
   assert.equal(store.maxBytes,32*1073741824,"default DNR budget is 32 GiB");
