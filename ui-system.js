@@ -461,6 +461,7 @@ function syncToolbarLayerSources(){
     const signature=JSON.stringify(sources);
     if(footer.dataset.signature!==signature){
       footer.dataset.signature=signature;footer.replaceChildren();
+      const heading=document.createElement("h3");heading.textContent="Sources";footer.append(heading);
       for(const [name,meta] of sources){
         const row=document.createElement("div");row.className="csp-layer-source";
         const label=document.createElement("div");label.className="csp-layer-source-name";label.textContent=name;

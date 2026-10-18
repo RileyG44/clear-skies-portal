@@ -1,8 +1,8 @@
 # UI annotation numbers
 
-Riley will mark the site with these numbers after GPU work. The original context
-was unavailable; these are the received labels, including their truncation.
-Do not infer a target or missing instruction from a label alone.
+The original context was unavailable; the table preserves received labels,
+including truncation. Riley clarified #1–3 and #7 on 2026-10-17; see below.
+Do not infer the remaining targets or missing instructions from labels alone.
 
 | Number | Original reference suffix | Received label |
 |---|---|---|
@@ -27,4 +27,13 @@ Do not infer a target or missing instruction from a label alone.
 
 Original references have the prefix `preview-annotation_`.
 UI worktree: `t3/implement-preview-ui-annotations`, initial inventory commit
-`95c23c7`. No UI changes have been implemented from these unavailable contexts.
+`95c23c7`. The first pass implements #1–3 and #7.
+
+## Clarified first pass
+
+1. Desktop bottom-left map info and layer key: add a pale background for readability.
+2. Toolbar Layers pop-out: move metadata beneath layer names into a Sources footer.
+3. Toolbar Layers pop-out: make titles open matching layer settings; sidebar titles do the same.
+7. Sidebar menu hover/selected rows: use flat fills, without raised rims or scaling.
+
+#4–6 are deferred because Riley is unsure of the original targets. #8–18 await further descriptions.

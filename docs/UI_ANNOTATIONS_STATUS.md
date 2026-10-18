@@ -119,3 +119,13 @@ Root owns CSS (including new classes), #1 and #7. Do not edit CSS, tests, build 
 ### Limitations and integration
 
 Root owns final title/footer CSS; screenshot shows browser-default button borders and unstyled footer text until that CSS is integrated. Existing pop-out scrolling still applies to the longer content. No CSS, tests, index.html, build stamps, GPU files, deployed service or parent checkout were edited by this implementation. No deployment or merge into parent was performed. Other annotations remain unimplemented here by explicit scope. Changed implementation files: `ui-system.js` and this document only.
+
+## Root integration result
+
+- #1: Desktop map info and layer keys now share a pale, padded background with dark text; it stays readable over light/dark imagery and remains hidden on mobile.
+- #2: Toolbar per-layer source text appears in the final Sources footer. Existing summary/provenance and attribution remain available.
+- #3: Both toolbar and sidebar layer names open their existing settings destinations. Titles have plain text styling, hover underline and visible keyboard focus. Slider/toggle handling remains separate.
+- #7: Sidebar selected/hover rows use flat fills; raised rims and hover label/icon scaling were removed.
+- Parent checked computed styles in light/dark themes, inspected desktop screenshots, confirmed title navigation closes the pop-out, and checked mobile width/readout visibility.
+- Relevant map readout, glass motion, menu controls, coordinate search, syntax and static checks pass. No new tests were added for these reversible UI changes.
+- Remaining annotations: #4–6 have uncertain targets; #8–18 await further user descriptions.
