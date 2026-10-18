@@ -20,7 +20,7 @@ function close(actual, expected, epsilon, message) {
 /* Contract surface. */
 assert.equal(shaders.VERSION, "1");
 assert.deepEqual({ ...shaders.STYLE_IDS },
-  { hs: 0, hsmulti: 1, slope: 2, aspect: 3, northness: 4, tint: 5, c2: 6, c5: 7, c10: 8, c25: 9 });
+  { hs: 0, hsmulti: 1, slope: 2, aspect: 3, northness: 4, tint: 5, c2: 6, c5: 7, c10: 8, c25: 9, rem: 10, contour: 11 });
 assert.match(shaders.fullscreenVertexSource, /#version 300 es/);
 assert.match(shaders.fullscreenVertexSource, /out vec2 v_screenUv/);
 assert.match(shaders.fullscreenVertexSource, /gl_VertexID/);
@@ -39,7 +39,7 @@ assert.match(SRC, /out vec4 fragColor;/);
 
 /* Every declared uniform is listed in SHADE_UNIFORMS and vice versa. */
 {
-  const declared = [...SRC.matchAll(/uniform\s+(?:int|float|vec2|vec3)\s+(u_\w+)\s*;/g)].map((m) => m[1]);
+  const declared = [...SRC.matchAll(/uniform\s+(?:int|float|vec2|vec3|vec4)\s+(u_\w+)\s*(?:\[\d+\])?\s*;/g)].map((m) => m[1]);
   assert.deepEqual([...declared].sort(), [...shaders.SHADE_UNIFORMS].sort(),
     "SHADE_UNIFORMS must list every uniform the shader declares");
   assert.equal(new Set(shaders.SHADE_UNIFORMS).size, shaders.SHADE_UNIFORMS.length,

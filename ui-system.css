@@ -3087,3 +3087,116 @@ body.csp-redesign #panes .csp-terrain-style:disabled{opacity:.35;cursor:default}
   body.csp-redesign #panes .csp-terrain-style{transition:none;scale:1}
 }
 .csp-reduce-motion body.csp-redesign #panes .csp-terrain-style{transition:none;scale:1}
+
+/* LiDAR Studio: looks, layer stack, palette editor and effects
+   (lidar-studio.js). Sized to the terrain pane's 44 px touch targets and the
+   same quiet material as the style grid above it. */
+.ls{--ls-radius:12px;display:grid;gap:18px;min-width:0;color:var(--ui-text)}
+.ls[data-disabled] .ls-note{margin:0}
+.ls-section{display:grid;gap:8px;min-width:0}
+.ls-head{display:flex;align-items:baseline;gap:8px;min-width:0}
+.ls-head .menu-section-title{margin:0}
+.ls-head .pane-n,.ls-head .linkbtn{margin-left:auto;font-size:12px}
+.ls .control-hint{margin:0}
+.ls-looks{display:grid;grid-auto-flow:column;grid-auto-columns:92px;gap:8px;overflow-x:auto;overscroll-behavior-x:contain;
+  scroll-snap-type:x proximity;padding:2px 2px 8px;margin:0 -2px;scrollbar-width:thin}
+.ls-look{position:relative;display:grid;gap:6px;justify-items:stretch;padding:0;border:0;background:transparent;color:inherit;
+  font:inherit;font-size:11.5px;font-weight:500;text-align:center;cursor:pointer;scroll-snap-align:start;min-height:44px}
+.ls-look-preview{display:block;width:92px;height:61px;border-radius:var(--ls-radius);background:var(--ui-sunken);
+  box-shadow:inset 0 0 0 1px var(--ui-shadow-3);transition:box-shadow .16s ease,transform .16s cubic-bezier(.2,.8,.2,1)}
+.ls-look:hover .ls-look-preview{transform:translateY(-1px)}
+.ls-look[aria-checked="true"] .ls-look-preview{box-shadow:0 0 0 2px var(--ui-surface),0 0 0 4px var(--ui-accent)}
+.ls-look[aria-checked="true"] .ls-look-name{color:var(--ui-accent);font-weight:650}
+.ls-look:focus-visible{outline:none}
+.ls-look:focus-visible .ls-look-preview{box-shadow:0 0 0 2px var(--ui-surface),0 0 0 4px var(--ui-accent)}
+.ls-look-name{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ls-look-remove{position:absolute;top:4px;right:4px;display:grid;place-items:center;width:22px;height:22px;border-radius:50%;
+  background:var(--ui-tooltip);opacity:0;transition:opacity .14s ease}
+.ls-look-remove img{width:13px;height:13px;filter:brightness(0) invert(1)}
+.ls-look:hover .ls-look-remove,.ls-look:focus-visible .ls-look-remove{opacity:1}
+@media (hover:none){.ls-look-remove{opacity:.85}}
+.ls-look-blurb{min-height:1.4em}
+.ls-save-row{display:flex;gap:6px;align-items:center}
+.ls-save-row[hidden]{display:none}
+.ls-save-row input{flex:1;min-width:0;min-height:36px}
+.ls-layers{list-style:none;margin:0;padding:0;display:grid;gap:6px}
+.ls-layer{border-radius:var(--ls-radius);background:var(--ui-sunken);transition:background-color .14s ease}
+.ls-layer.is-open{background:var(--ui-selected)}
+.ls-layer.is-hidden .ls-layer-main{opacity:.5}
+.ls-layer-row{display:flex;align-items:center;gap:2px;min-width:0;padding:2px}
+.ls-icon-button{display:grid;place-items:center;flex:none;width:40px;height:44px;border:0;border-radius:10px;background:transparent;cursor:pointer}
+.ls-icon-button img{width:17px;height:17px;filter:var(--ui-icon-filter)}
+.ls-icon-button:disabled{cursor:default;opacity:.4}
+.ls-icon-button:hover:not(:disabled){background:var(--ui-hover)}
+.ls-layer-main{display:flex;align-items:center;gap:10px;flex:1;min-width:0;min-height:44px;padding:6px 8px 6px 2px;border:0;border-radius:10px;
+  background:transparent;color:inherit;font:inherit;text-align:left;cursor:pointer}
+.ls-layer-main:hover{background:var(--ui-hover)}
+.ls-layer-main:focus-visible,.ls-icon-button:focus-visible,.ls-palette:focus-visible,.ls-pill:focus-visible,.ls-add-button:focus-visible,.ls-menu-item:focus-visible{outline:2px solid var(--ui-accent);outline-offset:1px}
+.ls-swatch{flex:none;width:34px;height:22px;border-radius:6px;box-shadow:inset 0 0 0 1px var(--ui-shadow-3)}
+.ls-layer-text{display:grid;min-width:0;flex:1}
+.ls-layer-name{font-size:13px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ls-layer-meta{font-size:11.5px;color:var(--ui-text-muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ls-chevron{width:16px;height:16px;filter:var(--ui-icon-filter);opacity:.6;transition:transform .18s ease}
+.ls-layer.is-open .ls-chevron{transform:rotate(180deg)}
+.ls-editor{display:grid;gap:14px;padding:6px 12px 14px}
+.ls-field{display:grid;gap:6px;min-width:0}
+.ls-field-label{font-size:12px;font-weight:600;color:var(--ui-text-2)}
+.ls-palettes{display:grid;grid-template-columns:repeat(auto-fill,minmax(74px,1fr));gap:6px}
+.ls-palette{display:grid;gap:4px;padding:5px;border:0;border-radius:10px;background:transparent;color:inherit;font:inherit;font-size:11px;cursor:pointer;min-height:44px}
+.ls-palette:hover{background:var(--ui-hover)}
+.ls-palette-bar{display:block;height:16px;border-radius:5px;box-shadow:inset 0 0 0 1px var(--ui-shadow-3)}
+.ls-palette-name{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--ui-text-2)}
+.ls-palette[aria-checked="true"]{background:var(--ui-surface);box-shadow:0 0 0 2px var(--ui-accent)}
+.ls-palette[aria-checked="true"] .ls-palette-name{color:var(--ui-text);font-weight:600}
+.ls-ramp-wrap{display:grid;gap:8px}
+.ls-ramp{position:relative;height:30px;margin:0 9px;border-radius:8px;box-shadow:inset 0 0 0 1px var(--ui-shadow-3);cursor:copy;touch-action:none}
+.ls-stop{position:absolute;top:50%;width:18px;height:36px;margin:0;padding:0;border:3px solid var(--ui-thumb);border-radius:9px;
+  background:var(--stop);box-shadow:0 1px 4px var(--ui-shadow-4),0 0 0 1px var(--ui-shadow-3);transform:translate(-50%,-50%);cursor:grab;touch-action:none}
+.ls-stop::after{content:"";position:absolute;inset:-6px -10px}
+.ls-stop.is-selected{border-color:var(--ui-accent);z-index:1}
+.ls-stop:active{cursor:grabbing}
+.ls-stop:focus-visible{outline:2px solid var(--ui-accent);outline-offset:3px}
+.ls-stop-controls{display:flex;align-items:center;gap:10px}
+.ls-colour{display:flex;align-items:center;gap:8px;font-size:12px;cursor:pointer}
+.ls-colour input{width:36px;height:30px;padding:0;border:0;border-radius:8px;background:transparent;cursor:pointer}
+.ls-stop-position{font-size:12px;color:var(--ui-text-muted);font-variant-numeric:tabular-nums}
+.ls-stop-controls .ls-pill{margin-left:auto}
+.ls-range{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:8px}
+.ls-range-inputs{display:flex;align-items:center;gap:6px}
+.ls-range-inputs input{width:82px;min-height:34px;font-variant-numeric:tabular-nums}
+.ls-range-inputs input:disabled{opacity:.6}
+.ls-range-dash,.ls-unit{font-size:12px;color:var(--ui-text-muted)}
+.ls-check{display:inline-flex;align-items:center;gap:6px;font-size:12px;min-height:34px;cursor:pointer}
+.ls-sliders{display:grid;gap:12px}
+.ls-slider{display:grid;gap:2px}
+.ls-slider[hidden]{display:none}
+.ls-slider label{font-size:12px;font-weight:600;color:var(--ui-text-2)}
+.ls-slider output{font-size:12px;color:var(--ui-text-muted);font-variant-numeric:tabular-nums}
+.ls-slider input[type=range]{width:100%;min-height:32px}
+.ls-slider .control-hint{font-size:11.5px}
+.ls-select{min-height:36px}
+.ls-actions{display:flex;flex-wrap:wrap;gap:6px}
+.ls-pill{display:inline-flex;align-items:center;justify-content:center;gap:6px;min-height:34px;min-width:34px;padding:0 12px;border:1px solid var(--ui-line-strong);
+  border-radius:999px;background:var(--ui-surface);color:var(--ui-text);font:inherit;font-size:12px;cursor:pointer}
+.ls-pill img{width:14px;height:14px;filter:var(--ui-icon-filter)}
+.ls-pill:has(img):not(:has(span)){padding:0 9px}
+.ls-pill:hover:not(:disabled){background:var(--ui-hover)}
+.ls-pill:disabled{opacity:.4;cursor:default}
+.ls-pill[aria-pressed="true"]{background:var(--ui-accent);border-color:transparent;color:var(--ui-on-accent)}
+.ls-pill-primary{background:var(--ui-accent);border-color:transparent;color:var(--ui-on-accent)}
+.ls-add{position:relative}
+.ls-add-button{display:flex;align-items:center;justify-content:center;gap:8px;width:100%;min-height:44px;border:1px dashed var(--ui-line-strong);border-radius:var(--ls-radius);
+  background:transparent;color:var(--ui-text-2);font:inherit;font-size:13px;cursor:pointer}
+.ls-add-button img{width:16px;height:16px;filter:var(--ui-icon-filter)}
+.ls-add-button:hover:not(:disabled){background:var(--ui-hover)}
+.ls-add-button:disabled{opacity:.45;cursor:default}
+.ls-menu{position:absolute;left:0;right:0;top:calc(100% + 6px);z-index:30;display:grid;padding:6px;border-radius:14px;background:var(--ui-surface);
+  box-shadow:0 10px 30px var(--ui-shadow-3),0 0 0 1px var(--ui-line)}
+.ls-menu[hidden]{display:none}
+.ls-menu-item{display:flex;align-items:center;gap:10px;min-height:40px;padding:0 10px;border:0;border-radius:9px;background:transparent;color:inherit;font:inherit;font-size:13px;text-align:left;cursor:pointer}
+.ls-menu-item:hover{background:var(--ui-hover)}
+.ls-menu-item .ls-swatch{width:28px;height:16px}
+.ls-reset{justify-self:start;padding:0;font-size:12.5px}
+@media(prefers-reduced-motion:reduce){.ls-look-preview,.ls-chevron,.ls-layer{transition:none}}
+.csp-reduce-motion .ls-look-preview,.csp-reduce-motion .ls-chevron{transition:none}
+body.csp-redesign #panes #terLidar > .lidar-studio{padding-top:16px}
