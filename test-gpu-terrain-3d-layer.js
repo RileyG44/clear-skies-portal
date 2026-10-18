@@ -1,6 +1,21 @@
 "use strict";
 const assert=require("node:assert/strict");
 const Layer=require("./gpu-terrain-3d-layer.js"),Cache=require("./gpu-terrain-3d-cache.js");
+// A spectrum debounce queued before GPU activation must not restore CPU URLs.
+{
+  const fs=require("node:fs"),vm=require("node:vm"),html=fs.readFileSync(require.resolve("./index.html"),"utf8");
+  const fn=html.slice(html.indexOf("function sync3dSpectrum(){"),html.indexOf("/* Numbers for what an aspect map"));
+  let callback,writes=0,cleared=0,deferred=0,paint=false;
+  const env={elev3dTimer:0,gpu3d:null,map3dBuiltKey:"same",map3dStructureKey:()=>"same",
+    map3d:{getSource:()=>({setTiles(){writes++;}})},elevSpectrumRevision:0,
+    apply3dLighting:()=>paint,schedule3dStyle(){deferred++;},refresh3dStyle(){throw Error("unexpected rebuild");},
+    setTimeout(fn){callback=fn;return 1;},clearTimeout(){cleared++;}};
+  vm.createContext(env);vm.runInContext(fn,env);env.sync3dSpectrum();
+  env.gpu3d={enabled:true};callback();assert.equal(writes,0);assert.equal(deferred,1);
+  paint=true;env.sync3dSpectrum();assert.equal(cleared,2,"GPU fast path cancels old timer");
+  assert.equal(writes,0);
+  env.gpu3d=null;env.sync3dSpectrum();callback();assert.equal(writes,1,"legacy path still refreshes");
+}
 function fixture(){
   const callbacks=new Map(),layers=new Map([["terrain-analysis",{}],["elev-spectrum",{}]]);
   const grid=new Float32Array(256*256).fill(123),handles=[{},{}],tiles=handles.map(handle=>({state:"loaded",

@@ -343,7 +343,7 @@ async function gpu3dStatus(page, requested) {
     return {
       requested: !!requested, available: !!c, callError, dataset, enabled, stats,
       keys: c ? Object.keys(c).slice(0, 30) : [],
-      note: c ? 'controller via CSPApp.gpu3d(); stats() recorded verbatim'
+      note: c ? 'controller via ClearSkiesPortalBridge.gpu3d(); stats() recorded verbatim'
         : 'GPU3D UNAVAILABLE: no window.ClearSkiesPortalBridge.gpu3d() controller in this build. GPU benchmark NOT run; do not treat CPU numbers as GPU results.'
     };
   }, requested);

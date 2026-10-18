@@ -1,6 +1,6 @@
 'use strict';
 /* Deterministic 3D drape bench: CPU worker path today, GPU path when the
-   integrator exposes window.CSPApp?.gpu3d / window.CSPGpu3D (?gpu3d=1).
+   integrator exposes window.ClearSkiesPortalBridge.gpu3d (?gpu3d=1).
    Real Chrome/Metal + Playwright WebKit; software renderers void performance.
    Usage: see harness3d-lib usage(). Never port 8765. */
 const fs = require('fs');
