@@ -3278,3 +3278,8 @@ body.csp-redesign #panes .elev-settings{border-top:1px solid var(--ui-line);marg
 #cspElectronTitlebar{position:fixed;inset:0 0 auto;height:32px;z-index:20000;pointer-events:auto;
   background:color-mix(in srgb,var(--ui-surface) 90%,transparent);border-bottom:1px solid var(--ui-line);
   backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);-webkit-app-region:drag;app-region:drag}
+
+/* The selected-location dot takes its color from Settings > Appearance (white
+   by default); a soft dark halo keeps a light dot readable on snow, light
+   basemaps and bright imagery without changing its size or shape. */
+.leaflet-interactive.csp-location-dot{filter:var(--csp-location-dot-halo)}

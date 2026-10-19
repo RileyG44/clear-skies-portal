@@ -706,6 +706,12 @@ const APPEARANCE_KEY="clearskies.appearance.v1";
 const CONTROL_ACCENT_KEY="clearskies.controlAccent.v1",CONTROL_ACCENT_DEFAULT="#4cd964";
 const CONTROL_ACCENTS=[["Green","#4cd964"],["Mint","#00c7be"],["Teal","#30b0c7"],["Blue","#0a84ff"],["Indigo","#5e5ce6"],
   ["Purple","#bf5af2"],["Pink","#ff375f"],["Red","#ff453a"],["Orange","#ff9f0a"],["Yellow","#ffd60a"]];
+/* The selected-location dot. White reads on dark imagery and the dark halo
+   (ui-system.css) keeps it visible on snow and light basemaps; the blue is
+   the dot's original color. */
+const LOCATION_DOT_DEFAULT="#ffffff";
+const LOCATION_DOT_SWATCHES=[["White","#ffffff"],["Blue","#4a9eff"],["Red","#ff453a"],["Orange","#ff9f0a"],["Yellow","#ffd60a"],
+  ["Green","#4cd964"],["Pink","#ff375f"],["Purple","#bf5af2"],["Black","#000000"]];
 const TRACK_SWATCHES=[["Auto",null],["Light grey","#d1d1d6"],["Grey","#8e8e93"],["Charcoal","#3a3a3c"],["Black","#000000"],["White","#ffffff"]];
 const FONTS={
   system:{name:"System",stack:"-apple-system,BlinkMacSystemFont,\"SF Pro Text\",\"Segoe UI\",sans-serif"},
@@ -723,12 +729,13 @@ const THEME_PRESETS=[
 const validColor=value=>/^#[0-9a-f]{6}$/i.test(String(value||""))?String(value).toLowerCase():null;
 const validAccent=validColor;
 function loadAppearance(){
-  const base={toggle:null,track:null,button:null,font:"system",fontColor:null,textSize:1,preset:"meadow"};
+  const base={toggle:null,track:null,button:null,font:"system",fontColor:null,locationDot:null,textSize:1,preset:"meadow"};
   try{
     const saved=JSON.parse(localStorage.getItem(APPEARANCE_KEY)||"{}");
     if(saved&&typeof saved==="object"){
       base.toggle=validColor(saved.toggle);base.track=validColor(saved.track);base.button=validColor(saved.button);
       base.fontColor=validColor(saved.fontColor);
+      base.locationDot=validColor(saved.locationDot);if(base.locationDot===LOCATION_DOT_DEFAULT) base.locationDot=null;
       if(FONTS[saved.font]) base.font=saved.font;
       if([0.92,1,1.12].includes(Number(saved.textSize))) base.textSize=Number(saved.textSize);
       if(typeof saved.preset==="string") base.preset=saved.preset;
@@ -741,7 +748,7 @@ function loadAppearance(){
 /* The preset is a fact about the colors, not a stored label: untouched
    colors are Meadow, an exact preset palette is that preset, anything else
    (including a color migrated from the old single-color setting) is Custom.
-   Font, text color and text size never change it. */
+   Font, text color, the location dot and text size never change it. */
 function derivePresetFor(a){
   if(!a.toggle&&!a.track&&!a.button) return "meadow";
   const match=THEME_PRESETS.find(p=>p.toggle===a.toggle&&p.track===a.track&&p.button===a.button);
@@ -755,17 +762,20 @@ function applyAppearance(persist=true){
   if(appearance.track) root.style.setProperty("--csp-slider-track",appearance.track);else root.style.removeProperty("--csp-slider-track");
   if(appearance.button) root.style.setProperty("--ui-accent",appearance.button);else root.style.removeProperty("--ui-accent");
   if(appearance.fontColor) root.style.setProperty("--ui-text",appearance.fontColor);else root.style.removeProperty("--ui-text");
+  if(appearance.locationDot) root.style.setProperty("--csp-location-dot",appearance.locationDot);else root.style.removeProperty("--csp-location-dot");
   if(appearance.font&&appearance.font!=="system") root.style.setProperty("--csp-font-family",FONTS[appearance.font].stack);else root.style.removeProperty("--csp-font-family");
   if(appearance.textSize&&appearance.textSize!==1) root.style.setProperty("--csp-text-zoom",String(appearance.textSize));else root.style.removeProperty("--csp-text-zoom");
   if(persist)try{
-    const isDefault=!toggle&&!appearance.track&&!appearance.button&&!appearance.fontColor&&appearance.font==="system"&&appearance.textSize===1;
+    const isDefault=!toggle&&!appearance.track&&!appearance.button&&!appearance.fontColor&&!appearance.locationDot&&appearance.font==="system"&&appearance.textSize===1;
     if(isDefault) localStorage.removeItem(APPEARANCE_KEY);else localStorage.setItem(APPEARANCE_KEY,JSON.stringify(appearance));
     if(toggle&&toggle!==CONTROL_ACCENT_DEFAULT) localStorage.setItem(CONTROL_ACCENT_KEY,toggle);else localStorage.removeItem(CONTROL_ACCENT_KEY);
   }catch(error){}
   syncAppearancePicker();
+  document.dispatchEvent(new CustomEvent("csp:appearance",{detail:{locationDot:appearance.locationDot||LOCATION_DOT_DEFAULT}}));
 }
 function setAppearance(patch){
   appearance={...appearance,...patch};
+  if(appearance.locationDot===LOCATION_DOT_DEFAULT) appearance.locationDot=null;
   appearance.preset=derivePresetFor(appearance);
   applyAppearance();
 }
@@ -779,7 +789,7 @@ function syncAppearancePicker(){
   const presetName=appearance.preset==="custom"?"Custom":(THEME_PRESETS.find(p=>p.id===appearance.preset)?.name||"Custom");
   const presetEl=$("#cspPresetName",view);if(presetEl) presetEl.textContent=presetName;
   $$("[data-theme-preset]",view).forEach(button=>button.setAttribute("aria-checked",String(button.dataset.themePreset===appearance.preset)));
-  const values={toggle:appearance.toggle||CONTROL_ACCENT_DEFAULT,track:appearance.track,button:appearance.button||"#007aff"};
+  const values={toggle:appearance.toggle||CONTROL_ACCENT_DEFAULT,track:appearance.track,button:appearance.button||"#007aff",locationDot:appearance.locationDot||LOCATION_DOT_DEFAULT};
   for(const [key,value] of Object.entries(values)){
     $$(`[data-color-for="${key}"] [data-color]`,view).forEach(button=>{
       const swatchValue=button.dataset.color||null;
@@ -788,7 +798,7 @@ function syncAppearancePicker(){
     const custom=$(`[data-color-custom="${key}"]`,view);
     if(custom&&value) custom.value=value;
     const nameEl=$(`#cspColorName-${key}`,view);
-    if(nameEl) nameEl.textContent=key==="track"&&!value?"Auto":(CONTROL_ACCENTS.find(([,hex])=>hex===value)?.[0]||value.toUpperCase());
+    if(nameEl) nameEl.textContent=key==="track"&&!value?"Auto":((key==="locationDot"?LOCATION_DOT_SWATCHES:CONTROL_ACCENTS).find(([,hex])=>hex===value)?.[0]||value.toUpperCase());
   }
   /* the original accent picker's hooks, kept for the toggle color */
   const picker=$("#cspAccentPicker",view);
@@ -806,7 +816,7 @@ function syncAppearancePicker(){
   const fontColor=$("[data-font-color]",view);if(fontColor&&appearance.fontColor) fontColor.value=appearance.fontColor;
   $$("[data-text-size]",view).forEach(button=>button.setAttribute("aria-pressed",String(Number(button.dataset.textSize)===appearance.textSize)));
   const foot=$(".csp-setting-foot",view);
-  if(foot) foot.hidden=appearance.preset==="meadow"&&!appearance.fontColor&&appearance.font==="system"&&appearance.textSize===1;
+  if(foot) foot.hidden=appearance.preset==="meadow"&&!appearance.fontColor&&!appearance.locationDot&&appearance.font==="system"&&appearance.textSize===1;
 }
 function colorRow(key,label,desc,swatches,legacy=false){
   return `<div class="csp-setting-row">
@@ -853,6 +863,7 @@ function renderAppearanceView(){
         <button type="button" data-text-size="0.92" aria-pressed="false">Small</button><button type="button" data-text-size="1" aria-pressed="false">Default</button><button type="button" data-text-size="1.12" aria-pressed="false">Large</button>
       </span>
     </div>
+    ${colorRow("locationDot","Location dot color","The dot that marks the place you select on the map.",LOCATION_DOT_SWATCHES)}
     <div class="csp-setting-preview">
       <label class="csp-setting-row"><span>Preview</span><span class="csp-switch"><input type="checkbox" checked aria-label="Preview switch"><span></span></span></label>
       <input type="range" min="0" max="100" step="1" value="62" aria-label="Preview slider">
@@ -864,7 +875,7 @@ function renderAppearanceView(){
     const preset=event.target.closest("[data-theme-preset]");if(preset){applyThemePreset(preset.dataset.themePreset);return}
     if(event.target.closest("[data-font-color-auto]")){setAppearance({fontColor:null});return}
     if(event.target.closest("[data-appearance-reset]")){
-      appearance={toggle:null,track:null,button:null,font:"system",fontColor:null,textSize:1,preset:"meadow"};applyAppearance();return;
+      appearance={toggle:null,track:null,button:null,font:"system",fontColor:null,locationDot:null,textSize:1,preset:"meadow"};applyAppearance();return;
     }
     const size=event.target.closest("[data-text-size]");if(size){setAppearance({textSize:Number(size.dataset.textSize)});return}
     const swatch=event.target.closest("[data-accent]");if(swatch){setControlAccent(swatch.dataset.accent);return}

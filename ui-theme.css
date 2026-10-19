@@ -430,6 +430,8 @@
    groove, a grey resting knob, a faint light halo around a held thumb. */
 :root{
   --csp-control-on:#4cd964;
+  --csp-location-dot:#ffffff;
+  --csp-location-dot-halo:drop-shadow(0 0 1px rgba(0,0,0,.7)) drop-shadow(0 0 3px rgba(0,0,0,.3));
   --csp-switch-track:rgba(120,120,128,.16);
   --csp-switch-rim-off:rgba(60,60,67,.2);
   --csp-switch-rim-on:color-mix(in srgb,var(--csp-control-on) 62%,transparent);
