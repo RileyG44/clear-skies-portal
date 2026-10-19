@@ -366,6 +366,14 @@ function openDefaultPanes(route){
   }
   visited.add(currentRoute);
 }
+/* Reset layout collapses every pane. The LiDAR, Elevation and Analyze pages
+   hide their pane's header, so a collapsed pane there is a blank page with
+   nothing to reopen it. Treat a reset like a fresh launch: each page opens its
+   default panes again, starting with the one on screen. */
+$("#resetPanes")?.addEventListener("click",()=>{
+  visited.clear();
+  const route=ROUTES[currentRoute];if(route) openDefaultPanes(route);
+});
 
 /* The scene filters live in the Search filters pane, and visit the Satellite
    page's search card while it is shown. They go home before anything clears
