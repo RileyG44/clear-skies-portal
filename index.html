@@ -725,7 +725,7 @@ a:hover{text-decoration:underline}
 .terrain-lighting{margin-top:10px;padding-top:10px;border-top:1px solid var(--line)}
 .terrain-lighting .terrain-look-grid{grid-template-columns:82px minmax(0,1fr) 44px}
 .terrain-lighting .note{padding:5px;color:var(--ink-3);font-size:10px;line-height:1.45}
-/* When the sun cannot move the picture, the note says so in the warning colour
+/* When the sun cannot move the picture, the note says so in the warning color
    rather than sitting there as evergreen prose that the reader has to match
    against the source they happen to be on. */
 .terrain-lighting .note[data-live="false"]{color:#ffd18a}
@@ -993,8 +993,8 @@ body.pane-reordering,body.pane-reordering *{cursor:grabbing!important;user-selec
 }
 
 </style>
-<link rel="stylesheet" href="ui-theme.css?build=2026-10-19e">
-<link rel="stylesheet" href="ui-system.css?build=2026-10-19e">
+<link rel="stylesheet" href="ui-theme.css?build=2026-10-19f">
+<link rel="stylesheet" href="ui-system.css?build=2026-10-19f">
 <style>
 /* The redesign restructures the legacy DOM rather than replacing it, and the
    script that does so is the last thing on the page - so the browser paints the
@@ -1123,9 +1123,9 @@ html.csp-boot body{visibility:hidden}
             <label for="vis">Image type</label>
             <select id="vis">
               <option value="all" selected>All types</option>
-              <option value="rgb">Natural colour (RGB)</option>
+              <option value="rgb">Natural color (RGB)</option>
               <option value="sar">Radar (SAR)</option>
-              <option value="false">False colour / IR</option>
+              <option value="false">False color / IR</option>
               <option value="night">Night lights</option>
               <option value="terrain">Terrain</option>
             </select>
@@ -1271,7 +1271,7 @@ html.csp-boot body{visibility:hidden}
               </select>
               <p class="control-hint" id="terStyleHint"></p>
             </div>
-            <div class="terrain-subsection lidar-studio" id="terStudio" aria-label="LiDAR colours, layers and effects"></div>
+            <div class="terrain-subsection lidar-studio" id="terStudio" aria-label="LiDAR colors, layers and effects"></div>
             <details class="terrain-appearance terrain-data-settings">
               <summary>Data source & overall opacity</summary>
               <div class="fgrid terrain-fields">
@@ -1308,7 +1308,7 @@ html.csp-boot body{visibility:hidden}
                 <label for="terContrast">Contrast</label>
                 <input type="range" id="terContrast" min="60" max="180" step="1" value="110">
                 <output id="terContrastOut" for="terContrast">110%</output>
-                <label for="terSaturation">Colour</label>
+                <label for="terSaturation">Color</label>
                 <input type="range" id="terSaturation" min="0" max="180" step="1" value="100">
                 <output id="terSaturationOut" for="terSaturation">100%</output>
                 <label for="terBrightness">Light</label>
@@ -1386,8 +1386,34 @@ html.csp-boot body{visibility:hidden}
               <button class="linkbtn" id="elevSpectrumReset" type="button">Reset</button>
             </div>
             <div id="elevOut" class="fabout"></div>
+            <details class="terrain-appearance elev-settings" id="elevPaletteBox">
+              <summary>Palette & colors</summary>
+              <div class="elev-settings-body">
+                <div class="elevRamp" id="elevPalettePreview" aria-hidden="true"></div>
+                <label for="elevPalette">Preset</label>
+                <select id="elevPalette" aria-label="Spectrum color preset">
+                  <option value="classic">Red / white / blue</option>
+                  <option value="orange-blue">Orange / cream / blue</option>
+                  <option value="terrain">Forest / sand / snow</option>
+                  <option value="ember">Ember</option>
+                  <option value="glacier">Glacier</option>
+                  <option value="viridis">Viridis</option>
+                  <option value="custom">Custom</option>
+                </select>
+                <div class="elev-spectrum-colors">
+                  <label>Lower<input type="color" id="elevLowColor" value="#f85c6c" aria-label="Lower elevation color"></label>
+                  <label>Reference<input type="color" id="elevMidColor" value="#fffffa" aria-label="Reference elevation color"></label>
+                  <label>Higher<input type="color" id="elevHighColor" value="#46a0ff" aria-label="Higher elevation color"></label>
+                </div>
+                <div class="ls-actions">
+                  <button class="ls-pill" id="elevPaletteReverse" type="button">Reverse</button>
+                  <button class="ls-pill" id="elevPaletteReset" type="button">Reset colors</button>
+                </div>
+                <p class="control-hint">Edit any color to customize the spectrum. Your colors are saved on this device.</p>
+              </div>
+            </details>
             <details class="terrain-appearance elev-settings">
-              <summary>Reference & colour range</summary>
+              <summary>Reference & color range</summary>
               <div class="elev-form elev-settings-body">
               <div class="elev-field">
                 <div class="elev-control-row">
@@ -1400,23 +1426,23 @@ html.csp-boot body{visibility:hidden}
                 <input type="range" id="elevSlide" min="-500" max="4500" step="1" value="335" aria-label="Reference elevation">
               </div>
               <div class="elev-field">
-                <label class="elev-label" for="elevSpan">Colour span</label>
+                <label class="elev-label" for="elevSpan">Color span</label>
                 <div class="unit-field">
                   <input type="number" id="elevSpan" list="elevSpanPresets" min="10" max="20000" step="1" value="300"
-                         title="Enter any distance in feet from the reference where red and blue reach full strength"
-                         aria-label="Custom elevation colour span in feet">
+                         title="Enter any distance in feet from the reference where colors reach full strength"
+                         aria-label="Custom elevation color span in feet">
                   <span class="unit-suffix">ft</span>
                 </div>
-                <input type="range" id="elevSpanSlide" min="0" max="1000" step="1" value="447" aria-label="Colour span in feet" aria-describedby="elevSpanHint">
-                <p class="control-hint" id="elevSpanHint">Red and blue reach full strength this far from the reference. A smaller span makes subtle height changes stand out.</p>
+                <input type="range" id="elevSpanSlide" min="0" max="1000" step="1" value="447" aria-label="Color span in feet" aria-describedby="elevSpanHint">
+                <p class="control-hint" id="elevSpanHint">Colors reach full strength this far from the reference. A smaller span makes subtle height changes stand out.</p>
               </div>
               <datalist id="elevSpanPresets">
                 <option value="50"><option value="150"><option value="300">
                 <option value="600"><option value="1200"><option value="2500">
               </datalist>
               <div class="elev-spectrum-scale">
-                <div class="elevRamp" aria-hidden="true"></div>
-                <div class="elevKey"><span><b>red</b> lower</span><span><b>white</b> reference</span><span><b>blue</b> higher</span></div>
+                <div class="elevRamp" id="elevRangePreview" aria-hidden="true"></div>
+                <div class="elevKey"><span>Lower</span><span>Reference</span><span>Higher</span></div>
               </div>
               </div>
             </details>
@@ -1433,11 +1459,12 @@ html.csp-boot body{visibility:hidden}
               </div>
             </details>
           </div>
-          <div class="fabbox" id="elevBandsBox">
-            <div class="elev-module-head">
+          <details class="fabbox elev-module" id="elevBandsBox">
+            <summary class="elev-module-head">
               <h3 class="menu-section-title">Elevation highlights</h3>
               <button class="linkbtn" id="elevBandsReset" type="button">Reset</button>
-            </div>
+            </summary>
+            <div class="elev-module-body">
             <p class="control-hint">Highlight ground below or above a height.</p>
             <div class="elev-highlight-toggles">
               <label class="check" id="lb_elevBelow"><input type="checkbox" id="elevBelowOn"> Below</label>
@@ -1445,19 +1472,19 @@ html.csp-boot body{visibility:hidden}
             </div>
             <div class="elev-band-note" id="elevBandOut">Enable a below or above band to highlight ground at those heights.</div>
             <details class="terrain-appearance elev-settings">
-              <summary>Thresholds & colours</summary>
+              <summary>Thresholds & colors</summary>
               <div class="elev-settings-body elev-thresholds">
                 <div class="elev-field">
                   <label for="elevBelowVal">Below elevation</label>
                   <div class="elev-threshold-row">
-                    <input type="color" id="elevBelowColor" value="#f85c6c" aria-label="Below-elevation colour">
+                    <input type="color" id="elevBelowColor" value="#f85c6c" aria-label="Below-elevation color">
                     <div class="unit-field"><input type="number" id="elevBelowVal" value="1000" step="10" aria-label="Shade below elevation in feet"><span class="unit-suffix">ft</span></div>
                   </div>
                 </div>
                 <div class="elev-field">
                   <label for="elevAboveVal">Above elevation</label>
                   <div class="elev-threshold-row">
-                    <input type="color" id="elevAboveColor" value="#46a0ff" aria-label="Above-elevation colour">
+                    <input type="color" id="elevAboveColor" value="#46a0ff" aria-label="Above-elevation color">
                     <div class="unit-field"><input type="number" id="elevAboveVal" value="1500" step="10" aria-label="Shade above elevation in feet"><span class="unit-suffix">ft</span></div>
                   </div>
                 </div>
@@ -1487,7 +1514,8 @@ html.csp-boot body{visibility:hidden}
             </div>
               </div>
             </details>
-          </div>
+            </div>
+          </details>
         </div>
         <div class="pane-rz" title="Drag to resize"></div>
       </section>
@@ -1601,8 +1629,8 @@ html.csp-boot body{visibility:hidden}
                 <input type="range" id="researchOpacity" min="0" max="100" step="1" value="82">
               </div>
               <div class="elev-field" id="researchPaletteField">
-                <label for="researchPalette">Colours</label>
-                <select id="researchPalette" aria-label="Analysis colours"></select>
+                <label for="researchPalette">Colors</label>
+                <select id="researchPalette" aria-label="Analysis colors"></select>
                 <div class="research-swatch" id="researchSwatch" aria-hidden="true"></div>
               </div>
               <div class="elev-field" id="researchReliefField">
@@ -1610,7 +1638,7 @@ html.csp-boot body{visibility:hidden}
                   <label class="elev-label" for="researchRelief">Relief shading</label>
                   <span class="elev-value" id="researchReliefOut">0%</span>
                 </div>
-                <input type="range" id="researchRelief" min="0" max="100" step="1" value="0" aria-label="Hillshade mixed into the analysis colours">
+                <input type="range" id="researchRelief" min="0" max="100" step="1" value="0" aria-label="Hillshade mixed into the analysis colors">
               </div>
               <div class="elev-field">
                 <label for="researchBlend">Blend with the map</label>
@@ -1624,7 +1652,7 @@ html.csp-boot body{visibility:hidden}
                   <option value="screen">Screen</option>
                   <option value="darken">Darken</option>
                   <option value="lighten">Lighten</option>
-                  <option value="color">Colour only</option>
+                  <option value="color">Color only</option>
                   <option value="luminosity">Brightness only</option>
                 </select>
               </div>
@@ -1707,7 +1735,7 @@ html.csp-boot body{visibility:hidden}
           <label for="pcBudget">Point budget</label><input id="pcBudget" type="range" min="1" max="10" step="1" value="3"><output id="pcBudgetOut" for="pcBudget">3 M</output>
           <label for="pcSize">Point size</label><input id="pcSize" type="range" min="0.5" max="5" step="0.1" value="1"><output id="pcSizeOut" for="pcSize">1.0</output>
           <label for="pcSizeMode">Size mode</label><select id="pcSizeMode"><option value="adaptive" selected>Adaptive</option><option value="fixed">Fixed</option></select><span></span>
-          <label for="pcColour">Colour by</label><select id="pcColour"><option value="elevation" selected>Elevation</option><option value="intensity">Intensity</option><option value="classification">Classification</option><option value="rgba">RGB</option><option value="return number">Return number</option></select><span></span>
+          <label for="pcColour">Color by</label><select id="pcColour"><option value="elevation" selected>Elevation</option><option value="intensity">Intensity</option><option value="classification">Classification</option><option value="rgba">RGB</option><option value="return number">Return number</option></select><span></span>
           <label for="pcEdl">Eye-Dome Lighting</label><input id="pcEdl" type="checkbox" checked><span></span>
           <label for="pcEdlStrength">EDL strength</label><input id="pcEdlStrength" type="range" min="0" max="3" step="0.1" value="1"><output id="pcEdlStrengthOut" for="pcEdlStrength">1.0</output>
           <label for="pcEdlRadius">EDL radius</label><input id="pcEdlRadius" type="range" min="0.5" max="4" step="0.1" value="1.4"><output id="pcEdlRadiusOut" for="pcEdlRadius">1.4</output>
@@ -1896,7 +1924,7 @@ html.csp-boot body{visibility:hidden}
   L.Renderer.prototype.onAdd=function(map){return onAdd.call(this,map||this._map)};
 })();
 </script>
-<script src="version.js?build=2026-10-19e"></script>
+<script src="version.js?build=2026-10-19f"></script>
 <script src="mosaic-core.js"></script>
 <script src="png-stream.js"></script>
 <script src="terrain-core.js"></script>
@@ -1939,9 +1967,9 @@ const TITILER = "https://titiler.xyz/cog/tiles/WebMercatorQuad/{z}/{x}/{y}.png?u
 
 /* per-collection display metadata: label, ground sample distance (m), sensor kind */
 /* vis = how the default rendering looks:
-   rgb     natural colour, as the human eye would see it
+   rgb     natural color, as the human eye would see it
    sar     radar backscatter (greyscale / false composite)
-   false   false colour or infrared composite
+   false   false color or infrared composite
    terrain elevation                                        */
 const COLL = {
   "sentinel-2-l2a": {label:"Sentinel-2 L2A",  gsd:10,  kind:"Optical", vis:"rgb"},
@@ -1959,7 +1987,7 @@ const COLL = {
   "NISAR_L2_GCOV_PROVISIONAL_V1_1":{label:"NISAR GCOV (provisional)", gsd:20, kind:"L-band SAR", vis:"sar"},
   "NISAR_L2_GCOV_BETA_V1_1":       {label:"NISAR GCOV (beta)",        gsd:20, kind:"L-band SAR", vis:"sar"}
 };
-const VIS_LABEL={rgb:"Natural colour", sar:"Radar", false:"False colour", terrain:"Terrain", night:"Night lights"};
+const VIS_LABEL={rgb:"Natural color", sar:"Radar", false:"False color", terrain:"Terrain", night:"Night lights"};
 
 /* GIBS raster layer that renders NISAR L2 GCOV; CMR tells us where/when a granule exists */
 const NISAR_GIBS="https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/NISAR_L2_Geocoded_Polarimetric_Covariance"
@@ -1967,13 +1995,13 @@ const NISAR_GIBS="https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/NISAR_L2_Ge
 
 /* GIBS daily global layers - always available, date-addressed */
 const GIBS = [
-  {id:"VIIRS_NOAA21_CorrectedReflectance_TrueColor", label:"VIIRS NOAA-21 true colour", gsd:375, vis:"rgb"},
-  {id:"VIIRS_NOAA20_CorrectedReflectance_TrueColor", label:"VIIRS NOAA-20 true colour", gsd:375, vis:"rgb"},
-  {id:"VIIRS_SNPP_CorrectedReflectance_TrueColor",   label:"VIIRS Suomi-NPP true colour", gsd:375, vis:"rgb"},
-  {id:"MODIS_Terra_CorrectedReflectance_TrueColor",  label:"MODIS Terra true colour", gsd:250, vis:"rgb"},
-  {id:"MODIS_Aqua_CorrectedReflectance_TrueColor",   label:"MODIS Aqua true colour", gsd:250, vis:"rgb"},
-  {id:"VIIRS_NOAA20_CorrectedReflectance_BandsM11-I2-I1", label:"VIIRS NOAA-20 false colour (snow/fire)", gsd:375, vis:"false"},
-  {id:"MODIS_Terra_CorrectedReflectance_Bands721", label:"MODIS Terra false colour (burn/snow)", gsd:250, vis:"false"},
+  {id:"VIIRS_NOAA21_CorrectedReflectance_TrueColor", label:"VIIRS NOAA-21 true color", gsd:375, vis:"rgb"},
+  {id:"VIIRS_NOAA20_CorrectedReflectance_TrueColor", label:"VIIRS NOAA-20 true color", gsd:375, vis:"rgb"},
+  {id:"VIIRS_SNPP_CorrectedReflectance_TrueColor",   label:"VIIRS Suomi-NPP true color", gsd:375, vis:"rgb"},
+  {id:"MODIS_Terra_CorrectedReflectance_TrueColor",  label:"MODIS Terra true color", gsd:250, vis:"rgb"},
+  {id:"MODIS_Aqua_CorrectedReflectance_TrueColor",   label:"MODIS Aqua true color", gsd:250, vis:"rgb"},
+  {id:"VIIRS_NOAA20_CorrectedReflectance_BandsM11-I2-I1", label:"VIIRS NOAA-20 false color (snow/fire)", gsd:375, vis:"false"},
+  {id:"MODIS_Terra_CorrectedReflectance_Bands721", label:"MODIS Terra false color (burn/snow)", gsd:250, vis:"false"},
   {id:"VIIRS_NOAA20_DayNightBand_At_Sensor_Radiance", label:"VIIRS NOAA-20 night lights", gsd:750, vis:"night", tms:"GoogleMapsCompatible_Level8"},
   {id:"VIIRS_NOAA21_DayNightBand", label:"VIIRS NOAA-21 night lights", gsd:750, vis:"night", tms:"GoogleMapsCompatible_Level8"},
   {id:"VIIRS_Black_Marble", label:"Black Marble night composite", gsd:500, vis:"night", tms:"GoogleMapsCompatible_Level8", fixed:"2016-01-01"}
@@ -3273,22 +3301,22 @@ function summarise(pool){
   setCount("summary", pool.length+" scenes");
 }
 
-/* A "photo" here means a daylight true-colour scene - the ordinary satellite
+/* A "photo" here means a daylight true-color scene - the ordinary satellite
    view you get on a maps app. Explicitly not radar, not night lights, not
-   false-colour or infrared, none of which read as a picture of the ground. */
+   false-color or infrared, none of which read as a picture of the ground. */
 const isPhoto = it => !!it.tiles && it.vis==="rgb" && it.kind!=="Night";
 /* Ties on date go to the finer product. Sentinel-2 and HLS often carry the
    same acquisition to the minute, and 10 m beats 30 m. */
 const newestOf = arr => arr.slice().sort((a,b)=>
   (new Date(b.date)-new Date(a.date)) || ((a.gsd??1e9)-(b.gsd??1e9)))[0];
 
-/* Collections that ship a ready-made true-colour composite. HLS is nominally
-   true colour too, but it is 30 m band maths that the provider renders with a
+/* Collections that ship a ready-made true-color composite. HLS is nominally
+   true color too, but it is 30 m band maths that the provider renders with a
    gamma curve and no rescale, so it lands dark and muddy beside Sentinel-2's
    `visual` asset. Open on something that looks like the ground. */
 const NATIVE_RGB = new Set(["sentinel-2-l2a","landsat-c2-l2","naip"]);
 
-/* newest daylight true-colour scene, preferring sharp and clear */
+/* newest daylight true-color scene, preferring sharp and clear */
 function bestPhoto(pool){
   const photo = pool.filter(isPhoto);
   if(!photo.length) return null;
@@ -3297,7 +3325,7 @@ function bestPhoto(pool){
     return newestOf(sharp.filter(x=>x.cloud!=null && x.cloud<20))
         || newestOf(sharp.filter(x=>x.cloud==null || x.cloud<50))
         || newestOf(sharp)
-        || newestOf(set.filter(x=>x.cloud==null || x.cloud<50))   // coarse but still true colour
+        || newestOf(set.filter(x=>x.cloud==null || x.cloud<50))   // coarse but still true color
         || newestOf(set);
   };
   // Sentinel-2 / Landsat / NAIP first, and only fall back to the rest — HLS,
@@ -4599,13 +4627,13 @@ function providerPenalty(key){
    10000 and land sits around 500-3000, so with no stretch the scene comes back
    dark and muddy. Supply the stretch the provider omits. */
 /* Sentinel-2 reaches us two ways for the same collection id. AWS Earth Search
-   offers a "visual" asset — TCI, already 8-bit natural colour, which is what
+   offers a "visual" asset — TCI, already 8-bit natural color, which is what
    the primary scene usually is. The Planetary Computer's tiler instead serves
-   the raw bands, and asked for B04/B03/B02 with no colour formula it stretches
+   the raw bands, and asked for B04/B03/B02 with no color formula it stretches
    each scene by itself: one comes back near-black, the next violet, the next
-   olive. That is the mosaic going strange colours and staying black, and it
+   olive. That is the mosaic going strange colors and staying black, and it
    only showed on neighbours because the primary came from the other provider.
-   Give the raw-band request the natural-colour formula the Planetary Computer
+   Give the raw-band request the natural-color formula the Planetary Computer
    documents for this collection. Not a rescale as well — with both, the tile
    blows out to white. */
 const MPC_NATURAL = "gamma RGB 3.2 saturation 0.8 sigmoidal RGB 25 0.35";
@@ -6097,7 +6125,7 @@ function scheduleDnrStatus(){
 }
 let map3dLoading=null,map3dStyleTimer=null;
 
-/* Geometry and colour come from different tiles on purpose.
+/* Geometry and color come from different tiles on purpose.
 
    The mesh only needs relief, so it uses the national 3DEP tile, which skips
    the raw 1 m COG read entirely. Measured cold: the raw path runs 2-16 s per
@@ -6107,7 +6135,7 @@ let map3dLoading=null,map3dStyleTimer=null;
    relief but very visible in load time.
 
    The analytical drape keeps the full-detail path, so 1 m lidar still shows up
-   where it matters: in the colour. This also answers MapLibre's warning about
+   where it matters: in the color. This also answers MapLibre's warning about
    sharing one source between terrain and a hillshade layer. */
 const DEM_MAX_ZOOM=14;
 /* The engine path renders the same USGS 3DEP service the public path reads and
@@ -6118,7 +6146,7 @@ const DEM_ENGINE_MAX_ZOOM=17;
 /* How fine the 3D *mesh* is sampled, as opposed to the drape. The public pipeline
    can serve finer USGS 3DEP elevation than the engine's national mosaic - 1 m
    where a survey covers the point - and that is what gives close-up terrain its
-   shape rather than its colour. Each level finer is four times the elevation
+   shape rather than its color. Each level finer is four times the elevation
    tiles per view and every tile is a five-tile skirt (centre plus four
    neighbours), so this is the one number that trades 3D detail for requests;
    17 is where a close-up still resolves the mesh without the request count
@@ -6486,17 +6514,17 @@ function terrainTheme(){ return $("#map").dataset.basemapTheme==="dark"?"dark":"
 function hypsometricRamp(){
   /* Muted toward grey: this is a depth cue over the ground texture, not a paint
      job. At full saturation it swallowed the basemap's streets and labels at close
-     zoom, where flat ground has no relief to explain the colour. */
+     zoom, where flat ground has no relief to explain the color. */
   return ["interpolate",["linear"],["elevation"],
     0,"#5f7a6c",250,"#7d8f74",500,"#9aa67f",900,"#b3ab8c",
     1400,"#bda98a",1900,"#b2957c",2500,"#9d8b7c",3000,"#ada49e",3600,"#e6e4e1"];
 }
 /* Sky and atmosphere for the 3D view.
 
-   The 3D view had no sky at all - terrain ended in a flat background colour,
+   The 3D view had no sky at all - terrain ended in a flat background color,
    which is most of why it read as a sheet rather than a landscape. A sky layer
    gives it a horizon, and fog-ground-blend gives it aerial perspective: distant
-   ground fades toward the horizon colour the way it does in a photograph, which
+   ground fades toward the horizon color the way it does in a photograph, which
    is the strongest depth cue a 3D map can carry. The palette follows the sun that
    is already driving the shading, so moving the sun moves the whole scene rather
    than just the shadows. */
@@ -6557,7 +6585,7 @@ function terrainRasterStyle(){
      ground. With neither on, 3D shows the default hillshade as before. */
   const spectrumAlone=$("#terStyle").value==="off"&&elevationActive();
   const theme=terrainTheme(),style=$("#terStyle").value==="off"?"hs":$("#terStyle").value,gpu=gpu3dPreferred();
-  /* A styled scene (LiDAR Studio colours or layers) draws through the GPU
+  /* A styled scene (LiDAR Studio colors or layers) draws through the GPU
      analysis drape, never MapLibre's own hillshade and tint. */
   const styled=gpu&&!!studioStack($("#terStyle").value),plain=(style==="hs"||style==="hsmulti")&&!styled;
   const light=terrainLighting(),opacity=terrainOpacity()/100,pick=chooseTerrain(style);
@@ -6612,7 +6640,7 @@ function terrainRasterStyle(){
     layers.push({id:"wadnr-drape",type:"raster",source:"wadnr",paint:{"raster-opacity":opacity,"raster-fade-duration":0}});
   }
   /* The elevation spectrum and highlights, draped over whatever terrain or
-     lidar layer is on (or on their own). Colour is baked into the tile, so a
+     lidar layer is on (or on their own). Color is baked into the tile, so a
      setting change swaps the tile URL rather than rebuilding the style. */
   if(gpu||elevationActive()){
     sources.elevspec={type:"raster",tiles:[gpu?"cspgpu3d://elevspec/{z}/{x}/{y}.png":`cspelev://s/{z}/{x}/{y}.png?r=${elevSpectrumRevision}`],tileSize:256,maxzoom:18};
@@ -6932,11 +6960,11 @@ function refresh3dStyle(){
    tears down every source and layer and refetches all of them, which is why
    dragging a slider used to stutter. Hillshade lighting is paint state, and
    relief is a terrain property; both can be set in place. Only the analytical
-   styles need new tiles, because their colour is baked into the raster. */
+   styles need new tiles, because their color is baked into the raster. */
 function analyticalStyle(){ const v=$("#terStyle").value; return v!=="off"&&v!=="hs"&&v!=="hsmulti" }
 
 /* Sun, relief and sky are all paint state, so a slider drag repaints them in
-   place; only the analytical styles need new tiles, because their colour is baked
+   place; only the analytical styles need new tiles, because their color is baked
    into the raster. Both callers below share these so the live path and the
    freshly-built style can never drift apart. */
 function paint3dSky(light){ map3d?.setSky?.(terrainSky(terrainTheme(),light)) }
@@ -7291,7 +7319,7 @@ function renderTerrainSourcePanel(summaryArg,is3dArg,layerArg){
       row.innerHTML='<div class="terrain-source-panel-name"></div><div class="terrain-source-panel-meta"></div>'+
         (item.noOpacity?"":'<label class="tsp-control"><span>Opacity</span><input type="range" min="0" max="100" step="1" data-tsp="opacity"><output></output></label>')+
         (item.id==="elevation-spectrum"?'<label class="tsp-control"><span>Elevation</span><input type="range" min="-500" max="4500" step="1" data-tsp="elevation"><output></output></label>'+
-          '<label class="tsp-control"><span>Color span</span><input type="range" min="0" max="1000" step="1" data-tsp="span" title="Distance in feet from the reference where red and blue reach full strength"><output></output></label>':"");
+          '<label class="tsp-control"><span>Color span</span><input type="range" min="0" max="1000" step="1" data-tsp="span" title="Distance in feet from the reference where colors reach full strength"><output></output></label>':"");
       row.querySelectorAll("input").forEach(input=>input.setAttribute("aria-label",`${item.name} ${input.dataset.tsp==="span"?"color span in feet":input.dataset.tsp}`));
       rows.append(row);
     }
@@ -7828,7 +7856,7 @@ const OVERLAYS = [
   { id:"earthquakes", group:"Conditions", name:"Earthquakes", via:"USGS · 5 min", sw:"#ff8d5b", z:504,
     geoLoader:loadEarthquakeAlerts,
     pointKind:"quake", geoTtl:5*60*1000, attr:"USGS Earthquake Hazards Program", defaultOpacity:94,
-    note:"Preliminary real-time locations; marker size follows magnitude and colour follows reported depth. Event values can be revised." },
+    note:"Preliminary real-time locations; marker size follows magnitude and color follows reported depth. Event values can be revised." },
 
   { id:"volcanostatus", group:"Conditions", name:"Volcano status", via:"USGS VSC · 15 min", sw:"#f26b54", z:503,
     geoLoader:loadVolcanoAlerts,
@@ -8122,9 +8150,9 @@ function setOverlayOrder(order){
 
 function ovGeoStyle(o,feature,opacity){
   if(o.popupKind==="weather"){
-    const rank=nwsAlertRank(feature),colour=rank>=2?"#ff4f5e":rank===1?"#f5a33b":"#54a7e8";
-    return {color:colour,weight:rank>=2?2.4:1.8,opacity:.96*opacity,
-      fillColor:colour,fillOpacity:(rank>=2?.18:rank===1?.13:.09)*opacity,
+    const rank=nwsAlertRank(feature),color=rank>=2?"#ff4f5e":rank===1?"#f5a33b":"#54a7e8";
+    return {color:color,weight:rank>=2?2.4:1.8,opacity:.96*opacity,
+      fillColor:color,fillOpacity:(rank>=2?.18:rank===1?.13:.09)*opacity,
       dashArray:rank===0?"5 4":null};
   }
   if(o.styleKind==="nadi1"){
@@ -9481,15 +9509,15 @@ async function copyServerSetupLink(){
 })();
 
 /* The tiles carry elevation rather than a picture of it, so changing the
-   reference or colour span repaints local pixels instead of refetching every
+   reference or color span repaints local pixels instead of refetching every
    tile. White is the chosen height; values below move red and values above
    move blue, preserving continuous relief information in either direction. */
-function elevRampRgb(value,level,span){
+function elevRampRgb(value,level,span,colors=[[248,92,108],[255,255,250],[70,160,255]]){
   const d=(value-level)/Math.max(1,span);
   const t=Math.max(0,Math.min(1,Math.abs(d)));
   const smooth=t*t*(3-2*t);                    // retain a readable white centre
-  const target=d>=0 ? [70,160,255] : [248,92,108];
-  const white=[255,255,250];
+  const target=colors[d>=0?2:0];
+  const white=colors[1];
   return white.map((c,i)=>Math.round(c+(target[i]-c)*smooth));
 }
 
@@ -9528,6 +9556,9 @@ class ElevationGpuRenderer{
         uniform float spectrumLevel;
         uniform float spectrumSpan;
         uniform float spectrumAlpha;
+        uniform vec3 spectrumLow;
+        uniform vec3 spectrumMid;
+        uniform vec3 spectrumHigh;
         uniform float belowOn;
         uniform float belowLevel;
         uniform vec3 belowColor;
@@ -9539,7 +9570,7 @@ class ElevationGpuRenderer{
         uniform float outlineOn;
         uniform float outlineWidth;
         in vec2 uv;
-        out vec4 colour;
+        out vec4 color;
         void over(inout vec4 base,vec3 rgb,float a){
           a=clamp(a,0.0,1.0);
           base=vec4(rgb*a+base.rgb*(1.0-a),a+base.a*(1.0-a));
@@ -9552,8 +9583,8 @@ class ElevationGpuRenderer{
             float d=(value-spectrumLevel)/max(1.0,spectrumSpan);
             float t=clamp(abs(d),0.0,1.0);
             float blend=t*t*(3.0-2.0*t);
-            vec3 white=vec3(255.0,255.0,250.0)/255.0;
-            vec3 target=(d>=0.0?vec3(70.0,160.0,255.0):vec3(248.0,92.0,108.0))/255.0;
+            vec3 white=spectrumMid;
+            vec3 target=d>=0.0?spectrumHigh:spectrumLow;
             over(result,mix(white,target,blend),spectrumAlpha*(0.15+0.85*t));
           }
           float belowCoverage=bandFeather>0.0
@@ -9570,7 +9601,7 @@ class ElevationGpuRenderer{
             if(aboveOn>0.5) line=max(line,1.0-smoothstep(0.0,max(0.001,outlineWidth*0.5),abs(value-aboveLevel)));
             over(result,vec3(1.0),0.88*line);
           }
-          colour=result;                 // premultiplied, matching the context
+          color=result;                 // premultiplied, matching the context
         }`);
       const program=this.program=gl.createProgram();
       gl.attachShader(program,vertex); gl.attachShader(program,fragment); gl.linkProgram(program);
@@ -9582,7 +9613,7 @@ class ElevationGpuRenderer{
       gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_S,gl.CLAMP_TO_EDGE);
       gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_T,gl.CLAMP_TO_EDGE);
       this.uniforms={};
-      for(const name of ["heights","spectrumOn","spectrumLevel","spectrumSpan","spectrumAlpha",
+      for(const name of ["heights","spectrumOn","spectrumLevel","spectrumSpan","spectrumAlpha","spectrumLow","spectrumMid","spectrumHigh",
         "belowOn","belowLevel","belowColor","aboveOn","aboveLevel","aboveColor","bandAlpha",
         "bandFeather","outlineOn","outlineWidth"])
         this.uniforms[name]=gl.getUniformLocation(program,name);
@@ -9602,6 +9633,9 @@ class ElevationGpuRenderer{
       gl.uniform1f(this.uniforms.spectrumLevel,settings.level);
       gl.uniform1f(this.uniforms.spectrumSpan,settings.span);
       gl.uniform1f(this.uniforms.spectrumAlpha,settings.spectrumAlpha);
+      gl.uniform3f(this.uniforms.spectrumLow,...settings.spectrumLow.map(v=>v/255));
+      gl.uniform3f(this.uniforms.spectrumMid,...settings.spectrumMid.map(v=>v/255));
+      gl.uniform3f(this.uniforms.spectrumHigh,...settings.spectrumHigh.map(v=>v/255));
       gl.uniform1f(this.uniforms.belowOn,settings.below.enabled?1:0);
       gl.uniform1f(this.uniforms.belowLevel,settings.below.level);
       gl.uniform3f(this.uniforms.belowColor,...settings.below.color);
@@ -9654,7 +9688,7 @@ class TerrainGpuRenderer{
         uniform float ambientLight;
         uniform int style;
         in vec2 uv;
-        out vec4 colour;
+        out vec4 color;
         const float PI=3.141592653589793;
         bool bad(float v){ return isnan(v)||isinf(v)||v < -1.0e20; }
         float h(vec2 p){ return texture(heights,p).r; }
@@ -9719,15 +9753,15 @@ class TerrainGpuRenderer{
           if(bad(v)||bad(a)||bad(b)||bad(c)||bad(d)||bad(f)||bad(g)||bad(q)||bad(k)) discard;
           float dx=((c+2.0*f+k)-(a+2.0*d+g))/(8.0*groundRes);
           float dy=((g+2.0*q+k)-(a+2.0*b+c))/(8.0*groundRes);
-          if(style==2){ colour=vec4(slopeColour(degrees(atan(length(vec2(dx,dy))))),1.0);return; }
+          if(style==2){ color=vec4(slopeColour(degrees(atan(length(vec2(dx,dy))))),1.0);return; }
           float aspect=aspectOf(dx,dy);
-          if(style==3){ if(length(vec2(dx,dy))<=tan(radians(0.5))) discard;colour=vec4(aspectColour(aspect),1.0);return; }
+          if(style==3){ if(length(vec2(dx,dy))<=tan(radians(0.5))) discard;color=vec4(aspectColour(aspect),1.0);return; }
           if(style==4){
             if(length(vec2(dx,dy))<=tan(radians(0.5))) discard;
             float northness=cos(radians(aspect)),amount=abs(northness);
             vec3 neutral=vec3(247,243,224)/255.0;
             vec3 target=(northness>=0.0?vec3(55,137,92):vec3(214,82,78))/255.0;
-            colour=vec4(mix(neutral,target,amount),1.0);return;
+            color=vec4(mix(neutral,target,amount),1.0);return;
           }
           if(style>=6){
             float interval=style==6?2.0:style==7?5.0:style==8?10.0:25.0;
@@ -9741,11 +9775,11 @@ class TerrainGpuRenderer{
             float lineWidth=max(0.35,min(interval*0.5,perPixel*0.7));
             if(distanceToLine>=lineWidth) discard;
             bool indexLine=abs(mod(round(multiple),5.0))<0.5;
-            colour=indexLine?vec4(vec3(120,70,40)/255.0,1.0):vec4(vec3(150,110,80)/255.0,200.0/255.0);return;
+            color=indexLine?vec4(vec3(120,70,40)/255.0,1.0):vec4(vec3(150,110,80)/255.0,200.0/255.0);return;
           }
           if(style==5){
             float shade315=ambientLight+(1.0-ambientLight)*directShade(dx,dy,sunAzimuth);
-            colour=vec4(min(tintColour(v)*(0.33+0.82*shade315),vec3(1.0)),1.0);return;
+            color=vec4(min(tintColour(v)*(0.33+0.82*shade315),vec3(1.0)),1.0);return;
           }
           float direct;
           if(style==1){
@@ -9761,7 +9795,7 @@ class TerrainGpuRenderer{
             }
             direct=sum/max(total,0.00001);
           }else direct=directShade(dx,dy,sunAzimuth);
-          float shade=ambientLight+(1.0-ambientLight)*direct;colour=vec4(vec3(shade),1.0);
+          float shade=ambientLight+(1.0-ambientLight)*direct;color=vec4(vec3(shade),1.0);
         }`);
       const program=this.program=gl.createProgram();gl.attachShader(program,vertex);gl.attachShader(program,fragment);gl.linkProgram(program);
       if(!gl.getProgramParameter(program,gl.LINK_STATUS)) throw new Error(gl.getProgramInfoLog(program)||"program link failed");
@@ -9828,7 +9862,7 @@ function saveTerrainPrefs(){
     depth:$("#terDepth").value,extent:$("#terExtent").value,fabric:$("#fabBand").value,
     elevationOn:$("#elevSh").checked,elevationM:+$("#elevSlide").value,
     elevationUnit:$("#elevUnit").value,elevationSpanFt:+$("#elevSpan").value,
-    elevationAlpha:+$("#elevAlpha").value,elevationBands:elevationBandState(),lighting:terrainLighting()
+    elevationAlpha:+$("#elevAlpha").value,elevationSpectrumColors:spectrumHexColors(),elevationBands:elevationBandState(),lighting:terrainLighting()
   })) }catch(e){}
 }
 function loadTerrainPrefs(){
@@ -9850,6 +9884,10 @@ function loadTerrainPrefs(){
       if(Number.isFinite(+p.lighting.ambient)) $("#terAmbient").value=Math.round(Math.max(0,Math.min(.6,+p.lighting.ambient))*100);
       if(Number.isFinite(+p.lighting.exaggeration)) $("#terExaggeration").value=Math.round(Math.max(.25,Math.min(4,+p.lighting.exaggeration))*100);
     }
+    if(p.elevationSpectrumColors) for(const [i,id] of SPECTRUM_COLOR_IDS.entries()){
+      const value=p.elevationSpectrumColors[i];if(/^#[0-9a-f]{6}$/i.test(value||"")) $(id).value=value;
+    }
+    syncSpectrumPalette();
     restoreElevationBands(p.elevationBands);
     const m=+$("#elevSlide").value;
     $("#elevVal").value=Math.round(m/ELEV_UNIT[$("#elevUnit").value]);
@@ -10207,7 +10245,7 @@ const AnalyticTerrainLayer=ElevLayer.extend({
 
 /* ------------------------------- viewport-scale geomorphology research */
 let researchLayer=null,researchWorker=null,researchServerController=null,researchToken=0;
-/* The last analysis stays in memory so colours, relief shading and blend
+/* The last analysis stays in memory so colors, relief shading and blend
    change instantly without recomputing, and the cursor readout can sample it. */
 let researchLast=null,researchPalettes={},researchLiveTimer=0;
 const RESEARCH_PREF_KEY="clearskies.research.v1";
@@ -10300,7 +10338,7 @@ function researchQuantile(data,q){
   for(let i=0;i<data.length;i+=step) if(Number.isFinite(data[i])) values.push(data[i]);
   if(!values.length) return NaN;values.sort((a,b)=>a-b);return values[Math.max(0,Math.min(values.length-1,Math.round((values.length-1)*q)))];
 }
-/* Colour looks for the lidar analysis products. Stops are [0..1, "#hex"],
+/* Color looks for the lidar analysis products. Stops are [0..1, "#hex"],
    the shape terrain-core's normalizeColorRamp takes, so a shared palette
    editor can drive them later. Fixed-value classes (avalanche) use
    [degrees, "#hex"] and paint each band flat. */
@@ -10375,7 +10413,7 @@ function researchRamp(stops){
   };
 }
 function researchCss(rgb){ return `rgb(${rgb.map(Math.round).join(",")})` }
-/* Hillshade of the analysed DEM, 0..1, for mixing into the colours. */
+/* Hillshade of the analysed DEM, 0..1, for mixing into the colors. */
 function researchHillshade(elevation,width,height,resolution){
   const out=new Float32Array(width*height),res=resolution/reliefZFactor(resolution);
   const az=315*Math.PI/180,alt=45*Math.PI/180,sa=Math.sin(alt),ca=Math.cos(alt),sz=Math.sin(az),cz=Math.cos(az);
@@ -10388,7 +10426,7 @@ function researchHillshade(elevation,width,height,resolution){
   }
   return out;
 }
-/* Legacy research products keep their original colours and keys. */
+/* Legacy research products keep their original colors and keys. */
 function researchLegacyColours(result,product){
   const data=result.data,secondary=result.secondary;
   const signed=["lrm","tpi","residual","curvature"].includes(product);
@@ -10422,14 +10460,14 @@ function researchLegacyColours(result,product){
     labels:directional?["N","E","S","W","N"]:product==="moraine"?["Low support","Possible lead","Strong lead"]:screen?["0","Candidate score","1"]:[tick(start),signed?"0":"",tick(end)]};
   return {colourAt:(value,i)=>colourAt(value,secondary?.[i]),legend};
 }
-/* One colour function per look: (value, index) -> {rgb, alpha}. */
+/* One color function per look: (value, index) -> {rgb, alpha}. */
 function researchLookColours(result,product,paletteId){
   const look=RESEARCH_LOOKS[product],palette=RESEARCH_PALETTES[paletteId],data=result.data,secondary=result.secondary;
   const alpha=look.alpha??1,name=result.label;
   if(look.range==="categories"){
-    const colours=palette.categories.map(researchHex),classes=CSPTerrainAnalysis.GEOMORPHON_CLASSES;
+    const colors=palette.categories.map(researchHex),classes=CSPTerrainAnalysis.GEOMORPHON_CLASSES;
     const order=[2,3,4,5,6,7,8,9,10,1],width=100/order.length;
-    return {colourAt:value=>value>=1&&value<=10?{rgb:colours[value-1],alpha}:null,
+    return {colourAt:value=>value>=1&&value<=10?{rgb:colors[value-1],alpha}:null,
       legend:{name,bar:`linear-gradient(90deg,${order.map((c,i)=>`${palette.categories[c-1]} ${i*width}% ${(i+1)*width}%`).join(",")})`,labels:[classes[2],classes[6],classes[10]+" · flat"]}};
   }
   if(look.range==="classes"){
@@ -10445,12 +10483,12 @@ function researchLookColours(result,product,paletteId){
   }
   if(look.range==="rrim"){
     const tint=researchHex(palette.tint),lo=researchQuantile(data,.02),hi=researchQuantile(data,.98),span=Math.max(1e-6,hi-lo);
-    const colour=(t,s)=>{const shade=.12+.88*t;return [0,1,2].map(c=>(255+(tint[c]-255)*s)*shade)};
+    const color=(t,s)=>{const shade=.12+.88*t;return [0,1,2].map(c=>(255+(tint[c]-255)*s)*shade)};
     return {colourAt:(value,i)=>{
         const t=Math.max(0,Math.min(1,(value-lo)/span)),s=Math.max(0,Math.min(1,(secondary?.[i]||0)/45));
-        return {rgb:colour(t,s),alpha};
+        return {rgb:color(t,s),alpha};
       },
-      legend:{name,bar:`linear-gradient(90deg,${researchCss(colour(0,.2))},${researchCss(colour(.55,1))},${researchCss(colour(1,.15))})`,labels:look.labels}};
+      legend:{name,bar:`linear-gradient(90deg,${researchCss(color(0,.2))},${researchCss(color(.55,1))},${researchCss(color(1,.15))})`,labels:look.labels}};
   }
   const ramp=researchRamp(palette.stops);
   let lo,hi;
@@ -10487,11 +10525,11 @@ function researchColourRaster(result,product,options={}){
   const relief=Math.max(0,Math.min(1,(options.relief||0)/100)),shade=relief>0&&options.hillshade;
   for(let i=0;i<data.length;i++){
     const value=data[i],o=i*4;if(!Number.isFinite(value)) continue;
-    const colour=look.colourAt(value,i);if(!colour||!(colour.alpha>0)) continue;
-    /* Multiply-style relief: full shadow keeps a quarter of the colour. */
+    const color=look.colourAt(value,i);if(!color||!(color.alpha>0)) continue;
+    /* Multiply-style relief: full shadow keeps a quarter of the color. */
     const k=shade?1-relief+relief*(.25+.95*shade[i]):1;
-    image.data[o]=Math.min(255,Math.round(colour.rgb[0]*k));image.data[o+1]=Math.min(255,Math.round(colour.rgb[1]*k));
-    image.data[o+2]=Math.min(255,Math.round(colour.rgb[2]*k));image.data[o+3]=Math.round(255*colour.alpha);
+    image.data[o]=Math.min(255,Math.round(color.rgb[0]*k));image.data[o+1]=Math.min(255,Math.round(color.rgb[1]*k));
+    image.data[o+2]=Math.min(255,Math.round(color.rgb[2]*k));image.data[o+3]=Math.round(255*color.alpha);
   }
   canvas.getContext("2d").putImageData(image,0,0);return {url:canvas.toDataURL("image/png"),legend:look.legend};
 }
@@ -10694,7 +10732,7 @@ const ELEV_UNIT={m:1, ft:0.3048, yd:0.9144};
 let elevLayer=null;
 /* The spectrum and the below/above highlights for one tile of heights, as
    straight (not premultiplied) RGBA. The 2D layer's CPU path and the 3D
-   drape both colour through here, so the two views cannot disagree. `stride`
+   drape both color through here, so the two views cannot disagree. `stride`
    and `offset` let the 3D path read the 256x256 interior of a skirted 258
    grid in place. */
 function elevationColours(elev,count,settings,out,width=count,stride=width,offset=0){
@@ -10760,6 +10798,9 @@ function elevationRenderSettings(){
   const rgb=band=>(band.rgba||ElevationBands.parseColor(band.color)).slice(0,3).map(v=>v/255);
   return {spectrumOn:$("#elevSh").checked,level:elevMetres(),span:elevSpanMetres(),
     spectrumAlpha:elevAlpha()/255,
+    spectrumLow:ElevationBands.parseColor($("#elevLowColor").value).slice(0,3),
+    spectrumMid:ElevationBands.parseColor($("#elevMidColor").value).slice(0,3),
+    spectrumHigh:ElevationBands.parseColor($("#elevHighColor").value).slice(0,3),
     below:{enabled:!!(below&&below.enabled),level:below?below.maxM:0,color:below?rgb(below):[1,0,0]},
     above:{enabled:!!(above&&above.enabled),level:above?above.minM:0,color:above?rgb(above):[0,0,1]},
     bandAlpha:inputPercent("#elevBandAlpha",52)/100,
@@ -10781,14 +10822,14 @@ function paintElevOut(){
   if(!$("#elevSh").checked){ o.textContent=""; return }
   const loaded=terrainLayerSummary(elevLayer);
   const source=loaded.sources.length?`Displayed: ${loaded.sources.map(s=>s.label).join(" + ")}.`:'Elevation is loading; source details appear after tiles render.';
-  o.textContent=`White at ${Math.round(m/0.3048).toLocaleString()} ft; red lower and blue higher, strongest by \u00b1${Math.round(elevSpanMetres()/0.3048).toLocaleString()} ft at ${$("#elevAlpha").value}% opacity. ${source}`;
+  o.textContent=`Reference at ${Math.round(m/0.3048).toLocaleString()} ft; selected colors below and above, strongest by \u00b1${Math.round(elevSpanMetres()/0.3048).toLocaleString()} ft at ${$("#elevAlpha").value}% opacity. ${source}`;
 }
 function paintElevationBandOut(){
   const out=$("#elevBandOut"),parts=[];
   if($("#elevBelowOn").checked) parts.push(`below ${(+$("#elevBelowVal").value||0).toLocaleString()} ft`);
   if($("#elevAboveOn").checked) parts.push(`above ${(+$("#elevAboveVal").value||0).toLocaleString()} ft`);
   out.textContent=parts.length
-    ? `Highlighting ${parts.join(" and ")} with ${(+$("#elevBandFeather").value||0).toLocaleString()} ft soft transitions. Colours update as you adjust the controls.`
+    ? `Highlighting ${parts.join(" and ")} with ${(+$("#elevBandFeather").value||0).toLocaleString()} ft soft transitions. Colors update as you adjust the controls.`
     : "Enable a below or above band to highlight ground at those heights.";
 }
 let elevPaintFrame=0;
@@ -10896,6 +10937,35 @@ async function runFabric(){
   + `<div class="note">${note}<br>Source: ${j.sources.join(", ")}</div>`;
 }
 document.getElementById("fabRun").onclick=runFabric;
+const SPECTRUM_COLOR_IDS=["#elevLowColor","#elevMidColor","#elevHighColor"];
+const SPECTRUM_PALETTES={
+  classic:["#f85c6c","#fffffa","#46a0ff"],
+  "orange-blue":["#b35806","#f7f7f7","#2166ac"],
+  terrain:["#24553b","#d9bd87","#f4f7ff"],
+  ember:["#230d26","#ec592c","#fff3b0"],
+  glacier:["#102632","#348e9b","#d5ffff"],
+  viridis:["#440154","#21918c","#fde725"]
+};
+function spectrumHexColors(){return SPECTRUM_COLOR_IDS.map(id=>$(id).value.toLowerCase())}
+function syncSpectrumPalette(){
+  const colors=spectrumHexColors();
+  $("#elevPalette").value=Object.keys(SPECTRUM_PALETTES).find(id=>SPECTRUM_PALETTES[id].every((v,i)=>v===colors[i]))||"custom";
+  const level=elevMetres(),span=elevSpanMetres();
+  const gradient="linear-gradient(90deg,"+Array.from({length:17},(_,i)=>`rgb(${elevRampRgb(level-span+i*span/8,level,span,spectrumHexColors().map(hex=>ElevationBands.parseColor(hex).slice(0,3))).join(",")}) ${i/16*100}%`).join(",")+")";
+  for(const id of ["#elevPalettePreview","#elevRangePreview"])$(id).style.background=gradient;
+}
+function applySpectrumColors(colors){
+  SPECTRUM_COLOR_IDS.forEach((id,i)=>$(id).value=colors[i]);
+  syncSpectrumPalette();saveTerrainPrefs();scheduleElevPaint();
+}
+$("#elevPalette").addEventListener("change",()=>{const colors=SPECTRUM_PALETTES[$("#elevPalette").value];if(colors){$("#elevSh").checked=true;applySpectrumColors(colors)}});
+for(const id of SPECTRUM_COLOR_IDS){
+  $(id).addEventListener("input",()=>{syncSpectrumPalette();scheduleElevPaint()});
+  $(id).addEventListener("change",()=>{syncSpectrumPalette();saveTerrainPrefs();scheduleElevPaint()});
+}
+$("#elevPaletteReverse").onclick=()=>applySpectrumColors(spectrumHexColors().reverse());
+$("#elevPaletteReset").onclick=()=>applySpectrumColors(SPECTRUM_PALETTES.classic);
+syncSpectrumPalette();
 loadTerrainPrefs();
 initGpuTerrain();
 // The studio mounts before preferences hydrate the native style field.
@@ -10939,6 +11009,7 @@ $("#elevBandAlpha").addEventListener("input",()=>{
 });
 $("#elevBandAlpha").addEventListener("change",saveTerrainPrefs);
 $("#elevSpectrumReset").onclick=()=>{
+  SPECTRUM_COLOR_IDS.forEach((id,i)=>$(id).value=SPECTRUM_PALETTES.classic[i]);syncSpectrumPalette();
   $("#elevSh").checked=false;
   $("#elevUnit").value="ft";$("#elevVal").value=1100;$("#elevSlide").value=335;
   $("#elevSpan").value=300;syncElevSpanSlider();$("#elevAlpha").value=48;$("#elevAlphaOut").textContent="48%";
@@ -11166,7 +11237,7 @@ function offerNewBuild(){
   document.getElementById("newBuildLater").onclick=()=>bar.remove();
 }
 
-/* Desktop cursor readout and keys use the same geographic grids and colour
+/* Desktop cursor readout and keys use the same geographic grids and color
    definitions as the map. Camera exports freeze this model once per save. */
 async function createSnapshotReadout(spec){
   /* Chosen once: a camera move while this awaits the elevation or the keys
@@ -11401,7 +11472,7 @@ function readoutColourKeys(){
   }
   if($("#elevSh").checked&&elevAlpha()>0){
     const level=elevMetres(),span=elevSpanMetres();
-    const stops=Array.from({length:17},(_,i)=>`rgb(${elevRampRgb(level-span+i*span/8,level,span).join(",")}) ${i/16*100}%`);
+    const stops=Array.from({length:17},(_,i)=>`rgb(${elevRampRgb(level-span+i*span/8,level,span,spectrumHexColors().map(hex=>ElevationBands.parseColor(hex).slice(0,3))).join(",")}) ${i/16*100}%`);
     keys.push({name:"Elevation spectrum",bar:`linear-gradient(90deg,${stops.join(",")})`,labels:[level-span,level,level+span].map(v=>`${Math.round(v/.3048).toLocaleString()} ft`)});
   }
   if(elevationActive()&&+$("#elevBandAlpha").value>0){
@@ -11477,8 +11548,8 @@ $("#q").addEventListener("blur",()=>setTimeout(acHide,120));
 document.addEventListener("click",e=>{ if(!e.target.closest("#iw")) acHide() });
 })();
 </script>
-<script src="markup-3d.js?build=2026-10-19e"></script>
-<script src="markup.js?build=2026-10-19e"></script>
-<script src="ui-system.js?build=2026-10-19e"></script>
+<script src="markup-3d.js?build=2026-10-19f"></script>
+<script src="markup.js?build=2026-10-19f"></script>
+<script src="ui-system.js?build=2026-10-19f"></script>
 </body>
 </html>

@@ -75,6 +75,20 @@ for(const spectrumOn of [false,true])for(const outline of [false,true])for(const
   assert.deepEqual(drape.render({style:"spectrum",size:20,tiles,settings:{...settings,bandState:state}}),
     coloursBefore(skirted,400,settings,new Uint8ClampedArray(1600),20,22,23));comparisons++;
 }
+// Custom spectrum colors must agree at each endpoint, the reference, and in worker drapes.
+{
+  const settings={spectrumOn:true,level:0,span:25,spectrumAlpha:1,
+    spectrumLow:[0,255,0],spectrumMid:[255,0,255],spectrumHigh:[0,0,0],bandState:{bands:[]}};
+  settings.bandCompiled=bands.compileBands(settings.bandState);
+  const grid=Float32Array.from([-25,0,25,NaN]);
+  const expected=Uint8ClampedArray.from([0,255,0,255,255,0,255,38,0,0,0,255,0,0,0,0]);
+  assert.deepEqual(drape.elevationColours(grid,4,settings,new Uint8ClampedArray(16)),expected);
+  assert.deepEqual(drape.render({style:"spectrum",size:2,tiles:[grid],settings}),expected);
+  const uniforms=require("./gpu-terrain-shaders.js").uniformValues({spectrum:settings},{});
+  assert.deepEqual(uniforms.u_spectrumLow,[0,1,0]);
+  assert.deepEqual(uniforms.u_spectrumMid,[1,0,1]);
+  assert.deepEqual(uniforms.u_spectrumHigh,[0,0,0]);
+}
 async function poolTests(){
   const workers=[],fallback=[];
   const workerFactory=()=>{const worker={postMessage(packet,transfer){this.packet=structuredClone(packet,{transfer})},terminate(){this.terminated=true}};workers.push(worker);return worker};

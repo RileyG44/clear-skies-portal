@@ -1,6 +1,6 @@
 /* Clear Skies Portal — LiDAR Studio panel.
  *
- * The colour and layer controls for LiDAR terrain: a gallery of looks, a
+ * The color and layer controls for LiDAR terrain: a gallery of looks, a
  * layer stack (the base layer chosen in the style grid plus up to three
  * blended overlays), a palette and gradient editor per layer, and terrain
  * effects. All state lives in CSPLidarRender's model; this file is only the
@@ -92,7 +92,7 @@
       container.innerHTML="";
       container.toggleAttribute("data-disabled",!gpu());
       if(!gpu()){
-        container.append(el("p","control-hint ls-note","Colour layers, looks and effects need GPU rendering, which this browser doesn’t provide. The terrain modes above still work."));
+        container.append(el("p","control-hint ls-note","Color layers, looks and effects need GPU rendering, which this browser doesn’t provide. The terrain modes above still work."));
         return;
       }
       container.append(renderLayers(s),renderLooks(),renderEffects(s));
@@ -105,7 +105,7 @@
       const wrap=disclosure("looks","Looks","ls-section ls-looks-section");
       const head=el("div","ls-head",`<span class="control-hint">Apply or save a complete mix</span>`);
       const saveButton=el("button","linkbtn ls-save-look","Save current");saveButton.type="button";
-      saveButton.disabled=!style();saveButton.title=style()?"Save these colours, layers and effects as a look":"Choose a layer first";
+      saveButton.disabled=!style();saveButton.title=style()?"Save these colors, layers and effects as a look":"Choose a layer first";
       head.append(saveButton);wrap.append(head);
       wrap.append(el("p","control-hint","Presets replace the whole layer mix. Customize individual layers above."));
       const strip=el("div","ls-looks");strip.setAttribute("role","radiogroup");strip.setAttribute("aria-label","Looks");
@@ -129,7 +129,7 @@
       wrap.append(strip);
       const blurb=el("p","control-hint ls-look-blurb");blurb.setAttribute("aria-live","polite");
       const active=looks.find(l=>l.id===current);
-      blurb.textContent=!style()?"Pick a look to start, or choose a layer above.":active?active.blurb:"Custom · your own mix of colours and layers.";
+      blurb.textContent=!style()?"Pick a look to start, or choose a layer above.":active?active.blurb:"Custom · your own mix of colors and layers.";
       wrap.append(blurb);
       if(previousMix){
         const undo=el("button","linkbtn ls-undo-look","Undo preset");undo.type="button";
@@ -262,7 +262,7 @@
       return wrap;
     }
     /* New overlays get a sensible starting blend: hillshade multiplies so it
-       sculpts whatever is beneath, lines draw normally, colour layers tint. */
+       sculpts whatever is beneath, lines draw normally, color layers tint. */
     function addOverlay(styleId){
       if(layerKeys().length>=R.MAX_LAYERS) return;
       const spec=R.STYLES[styleId]||R.STYLES.hs,layer=R.defaultLayer(styleId);
@@ -351,15 +351,15 @@
         const step={ArrowRight:1,ArrowDown:1,ArrowLeft:-1,ArrowUp:-1}[event.key];if(index<0||!step) return;
         event.preventDefault();choosePalette(list[(index+step+list.length)%list.length].dataset.palette);
       });
-      const colours=disclosure("palette:"+key,"Palette & colours","ls-palette-section");
-      const summary=colours.querySelector("summary");
+      const colors=disclosure("palette:"+key,"Palette & colors","ls-palette-section");
+      const summary=colors.querySelector("summary");
       summary.append(el("span","ls-swatch","") );
       summary.lastChild.dataset.paletteSwatch="";
       summary.lastChild.style.background=R.gradientCss(R.paletteStops(layer),layer.reverse);
       const paletteName=el("span","ls-disclosure-value",esc(layer.stops?"Custom":R.PALETTES[layer.palette]?.name||""));
       paletteName.dataset.paletteName="";summary.append(paletteName);
       const colourBody=el("div","ls-disclosure-body");
-      colours.append(colourBody);editor.append(colours);
+      colors.append(colourBody);editor.append(colors);
       const colourActions=el("div","ls-actions");colourBody.append(colourActions);
       colourBody.append(palettes,renderRamp(key,layer));
       const advanced=disclosure("advanced:"+key,"Range & shading","ls-advanced");
@@ -408,11 +408,11 @@
         },"Bend the palette toward low or high values. Lift lows to pull out detail along rivers.",()=>0));
         tools.append(slider("Bands",0,24,layer.steps,layer.steps?`${layer.steps} bands`:"Smooth",value=>{
           const steps=value===1?2:value;updateLayer(key,{steps});return steps?`${steps} bands`:"Smooth";
-        },"Split the palette into flat colour bands, like a stepped elevation map.",()=>0));
+        },"Split the palette into flat color bands, like a stepped elevation map.",()=>0));
       }
       if(spec.param==="shade") tools.append(slider("Built-in shading",0,100,Math.round(layer.param*100),`${Math.round(layer.param*100)}%`,value=>{
         updateLayer(key,{param:value/100});return `${value}%`;
-      },"Shade this colour layer by itself. Add a Hillshade layer instead for blend control.",()=>0));
+      },"Shade this color layer by itself. Add a Hillshade layer instead for blend control.",()=>0));
       if(spec.param==="interval"){
         const input=el("input");input.type="number";input.min="1";input.max="5000";input.step="1";input.value=String(layer.param);
         input.setAttribute("aria-label","Contour interval in feet");
@@ -438,7 +438,7 @@
         const fresh=R.defaultLayer(layer.style);
         fresh.blend=layer.blend;fresh.opacity=layer.opacity;fresh.visible=layer.visible;
         delete fitted[key];setLayer(key,fresh);commit({rerender:true});
-      },"rotate-ccw","Reset this layer’s colours");
+      },"rotate-ccw","Reset this layer’s colors");
       colourActions.append(reset);
       if(actions.childElementCount) editor.prepend(actions);
       return editor;
@@ -478,26 +478,26 @@
       return wrap;
     }
 
-    /* Gradient bar with draggable colour stops. Click the bar to add a
-       colour; drag a stop to move it; pick or delete the selected stop. */
+    /* Gradient bar with draggable color stops. Click the bar to add a
+       color; drag a stop to move it; pick or delete the selected stop. */
     function renderRamp(key,layer){
       const wrap=el("div","ls-ramp-wrap");
-      const bar=el("div","ls-ramp");bar.setAttribute("role","group");bar.setAttribute("aria-label","Palette colours. Click to add a colour.");
+      const bar=el("div","ls-ramp");bar.setAttribute("role","group");bar.setAttribute("aria-label","Palette colors. Click to add a color.");
       const stops=()=>R.paletteStops(layerFor(key)).map(s=>s.slice());
       const paint=()=>{
         const current=layerFor(key),list=R.paletteStops(current);
         bar.style.background=`${R.gradientCss(list,current.reverse)},repeating-conic-gradient(#ccc 0 25%,#fff 0 50%) 0 0/10px 10px`;
         bar.querySelectorAll(".ls-stop").forEach((handle,index)=>{
-          const [position,colour]=list[index];const shown=current.reverse?1-position:position;
-          handle.style.left=`${shown*100}%`;handle.style.setProperty("--stop",colour.slice(0,7));
+          const [position,color]=list[index];const shown=current.reverse?1-position:position;
+          handle.style.left=`${shown*100}%`;handle.style.setProperty("--stop",color.slice(0,7));
           handle.setAttribute("aria-valuenow",String(Math.round(position*100)));
-          handle.setAttribute("aria-valuetext",`${colour.slice(0,7)} at ${Math.round(position*100)}%`);
+          handle.setAttribute("aria-valuetext",`${color.slice(0,7)} at ${Math.round(position*100)}%`);
           handle.classList.toggle("is-selected",index===selectedStop);
         });
         const swatch=container.querySelector(`[data-key="${key}"] [data-swatch]`);
         if(swatch) swatch.style.background=R.gradientCss(list,current.reverse);
         const chosen=list[selectedStop];
-        if(chosen){colour.value=chosen[1].slice(0,7);position.textContent=`${Math.round(chosen[0]*100)}%`}
+        if(chosen){color.value=chosen[1].slice(0,7);position.textContent=`${Math.round(chosen[0]*100)}%`}
         remove.disabled=list.length<=2;
       };
       /* Editing any stop turns the palette into Custom. */
@@ -520,14 +520,14 @@
       };
       stops().forEach((_,index)=>{
         const handle=el("button","ls-stop");handle.type="button";handle.setAttribute("role","slider");
-        handle.setAttribute("aria-valuemin","0");handle.setAttribute("aria-valuemax","100");handle.setAttribute("aria-label",`Colour stop ${index+1}`);
+        handle.setAttribute("aria-valuemin","0");handle.setAttribute("aria-valuemax","100");handle.setAttribute("aria-label",`Color stop ${index+1}`);
         handle.dataset.index=String(index);bar.append(handle);
       });
       const toPosition=clientX=>{const rect=bar.getBoundingClientRect();let t=clamp((clientX-rect.left)/Math.max(1,rect.width),0,1);return layerFor(key).reverse?1-t:t};
       bar.addEventListener("pointerdown",event=>{
         const handle=event.target.closest(".ls-stop");
         if(!handle){
-          /* Add a stop with the colour already shown at that point. */
+          /* Add a stop with the color already shown at that point. */
           const t=toPosition(event.clientX),list=stops();if(list.length>=R.MAX_STOPS) return;
           const tuples=list.map(([p,c])=>[p,...R.parseHex(c)]);
           const rgba=R._test.rampColour(tuples,t);
@@ -559,22 +559,22 @@
 
       const controls=el("div","ls-stop-controls");
       const colourLabel=el("label","ls-colour");
-      const colour=el("input");colour.type="color";colour.setAttribute("aria-label","Selected stop colour");
-      colourLabel.append(colour,el("span","","Colour"));
+      const color=el("input");color.type="color";color.setAttribute("aria-label","Selected stop color");
+      colourLabel.append(color,el("span","","Color"));
       const position=el("span","ls-stop-position");
       const remove=pill("",()=>{
         const list=stops();if(list.length<=2) return;
         list.splice(selectedStop,1);selectedStop=Math.max(0,selectedStop-1);writeStops(list,{rerender:true});
         container.querySelector(`[data-key="${key}"] .ls-stop[data-index="${selectedStop}"]`)?.focus();
-      },"trash-2","Delete selected colour");
-      colour.addEventListener("input",()=>{
+      },"trash-2","Delete selected color");
+      color.addEventListener("input",()=>{
         const list=stops();if(!list[selectedStop]) return;
-        const alpha=list[selectedStop][1].slice(7);list[selectedStop][1]=colour.value+alpha;writeStops(list);
+        const alpha=list[selectedStop][1].slice(7);list[selectedStop][1]=color.value+alpha;writeStops(list);
       });
       controls.append(colourLabel,position,remove);
-      wrap.append(bar,controls,el("p","control-hint ls-hint","Click the bar to add a colour. Drag a stop to move it."));
+      wrap.append(bar,controls,el("p","control-hint ls-hint","Click the bar to add a color. Drag a stop to move it."));
       paint();
-      return field("Colours",wrap,"ls-field-wide");
+      return field("Colors",wrap,"ls-field-wide");
     }
 
     /* ----------------------------------------------------------- effects */
@@ -599,7 +599,7 @@
         const remRadius=Math.round(50+19950*Math.pow(value/100,2));setEffect({remRadius});return distanceLabel(remRadius);
       },"How far relative elevation looks for the valley floor. Widen it for big rivers, narrow it for creeks."));
       wrap.append(grid);
-      const reset=el("button","linkbtn ls-reset","Reset colours &amp; layers");reset.type="button";
+      const reset=el("button","linkbtn ls-reset","Reset colors &amp; layers");reset.type="button";
       reset.onclick=()=>{
         const keep=state.userLooks;state=R.emptyState();state.userLooks=keep;fitted={};flatFitted={};expanded=null;
         commit({rerender:true});
@@ -624,7 +624,7 @@
       const active=looks.find(button=>button.dataset.look===current)||looks[0];
       looks.forEach(button=>{button.setAttribute("aria-checked",String(button.dataset.look===current));button.tabIndex=button===active?0:-1});
       const blurb=container.querySelector(".ls-look-blurb");
-      if(blurb){const active=allLooks().find(l=>l.id===current);blurb.textContent=!style()?"Pick a look to start, or choose a layer above.":active?active.blurb:"Custom · your own mix of colours and layers."}
+      if(blurb){const active=allLooks().find(l=>l.id===current);blurb.textContent=!style()?"Pick a look to start, or choose a layer above.":active?active.blurb:"Custom · your own mix of colors and layers."}
     }
 
     /* ------------------------------------------------------- range fitting */
@@ -632,7 +632,7 @@
       return layerKeys().filter(key=>{const layer=layerFor(key);return layer&&layer.visible&&layer.auto});
     }
     /* Reads the visible terrain and re-stretches auto layers. Small changes
-       are ignored so panning does not make colours shimmer. */
+       are ignored so panning does not make colors shimmer. */
     function fitFromView(force){
       const keys=autoKeys(),s=style();
       if(!s||!host.sample) return false;
@@ -673,7 +673,7 @@
       const {key,layer}=visible[0];s=layer.style;const spec=R.STYLES[s];
       const range=layer.auto&&fitted[key]?fitted[key]:[layer.min,layer.max];
       const overlays=visible.slice(1).map(entry=>(R.STYLES[entry.layer.style]||{}).label).filter(Boolean);
-      const caption=`${spec.label}${layer.stops?" · custom colours":` · ${(R.PALETTES[layer.palette]||{}).name||""}`}${overlays.length?` + ${overlays.join(" + ")}`:""}`;
+      const caption=`${spec.label}${layer.stops?" · custom colors":` · ${(R.PALETTES[layer.palette]||{}).name||""}`}${overlays.length?` + ${overlays.join(" + ")}`:""}`;
       let ticks;
       if(spec.unit==="shade") ticks=["shadow","relief","illuminated"];
       else if(spec.family==="lines") ticks=["intermediate","index"];

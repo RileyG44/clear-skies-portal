@@ -1,6 +1,6 @@
 /* Clear Skies Portal — task-oriented research interface
    Visual authority: the supplied Apple-style settings reference.
-   The map carries colour; application chrome stays quiet and legible. */
+   The map carries color; application chrome stays quiet and legible. */
 
 body.csp-redesign{
   --page:var(--ui-sunken);
@@ -565,7 +565,7 @@ body.csp-redesign .leaflet-popup-tip{background:var(--ui-surface);color:var(--ui
 /* Map tooltips are an inverted surface: the coordinate readout on a dropped
    pin, and the point tooltips on overlay features, which had their own
    hard-coded dark fill. Both take the tooltip pair, and the callout arrow takes
-   the same fill as the bubble it points out of - it was a hairline colour, so
+   the same fill as the bubble it points out of - it was a hairline color, so
    it read as a stray notch. */
 body.csp-redesign .leaflet-tooltip{
   background:var(--ui-tooltip);
@@ -1058,7 +1058,7 @@ body.csp-redesign .csp-locate-label{display:none}
 .csp-glass body.csp-redesign .csp-nav-button .csp-nav-dot{grid-column:3;grid-row:1}
 .csp-glass body.csp-redesign .csp-nav-button:hover{background:var(--ui-fill);color:var(--ui-text)}
 /* The selected row is a small piece of glass lifted off the sidebar, the way a
-   selected tab sits in an iOS 26 tab bar - not a colour wash. */
+   selected tab sits in an iOS 26 tab bar - not a color wash. */
 .csp-glass body.csp-redesign .csp-nav-button[aria-current="page"]{
   background:var(--glass-select);
   color:var(--ui-text);
@@ -1181,7 +1181,7 @@ body.csp-redesign .csp-preview-badge{
 
 /* Switch: a compact outlined groove (black in dark) with a round knob a size
    larger than it, so the knob reads as the part that moves. Off, the knob
-   rests at the start in neutral; on, it springs to the end in the colour chosen
+   rests at the start in neutral; on, it springs to the end in the color chosen
    in Settings and the outline takes a deeper shade of it. While held it
    stretches toward its travel, as an iOS switch does. */
 .csp-glass body.csp-redesign .csp-switch{display:inline-block;flex:none;width:36px;height:20px;margin:1px;cursor:pointer;-webkit-tap-highlight-color:transparent}
@@ -1208,7 +1208,7 @@ body.csp-redesign .csp-preview-badge{
 .csp-glass body.csp-redesign input[type=checkbox]{border-radius:5px;border-color:var(--ui-line-strong)}
 .csp-glass body.csp-redesign input[type=checkbox]:checked{border-color:var(--ui-accent);background-color:var(--ui-accent)}
 
-/* Slider: a 3px groove filled with the Settings colour up to a white round
+/* Slider: a 3px groove filled with the Settings color up to a white round
    thumb. Hovered or dragged, a soft halo rings the thumb, the way the active
    thumb of a range control is marked. WebKit cannot fill its own groove, so
    ui-system.js mirrors the value into --csp-fill-n (0-1); measuring the fill
@@ -2040,7 +2040,7 @@ body.csp-markup-editing .snap-sel{display:none}
 .mk-value-set{height:40px;padding:0 16px;border-radius:11px;background:var(--ui-accent);color:var(--ui-on-accent);font-size:14px;font-weight:600}
 .mk-value-error{padding:0 2px;color:var(--ui-danger);font-size:12px;line-height:1.35}
 .mk-value-error[hidden]{display:none}
-/* Toolbar popovers: the colour grid and the shape gallery. */
+/* Toolbar popovers: the color grid and the shape gallery. */
 #mkPop{position:absolute;z-index:1330;width:min(268px,calc(100vw - 16px));padding:12px;border-radius:20px;
   display:flex;flex-direction:column;gap:8px;
   background-color:var(--lg-popover);background-image:var(--lg-sheen-tall);
@@ -2267,7 +2267,7 @@ body.csp-redesign[data-csp-route="geology"] #panes #geologyIdentifyBox{margin-to
 body.csp-redesign #panes #fabricResearchBox{margin-top:0}
 body.csp-redesign #panes #terrainDownloadBox > .elev-field{margin:16px 0 8px}
 body.csp-redesign #panes #terrainDownloadBox > .control-hint{margin-bottom:0}
-/* Every checkbox in the colour card sits on the same edge as the fields below
+/* Every checkbox in the color card sits on the same edge as the fields below
    it; the row's hover padding hangs outside that edge instead of shifting it. */
 body.csp-redesign #panes .elevation-colour .check{margin-left:-9px;padding-left:8px}
 /* The view switch is its own section at the top; everything beneath it folds. */
@@ -2466,8 +2466,8 @@ body.terrain-3d.map3d-moving :is(#side,#ac,.coord-menu,.map-tool,.tool-popover,#
 /* Automatic scales for the moraine beta override the field grid layout. */
 body.csp-redesign #researchScaleField[hidden]{display:none}
 
-/* Settings page: a grouped card of colour swatches, a live preview of the
-   switch and slider they colour, and a reset when the choice is not the
+/* Settings page: a grouped card of color swatches, a live preview of the
+   switch and slider they color, and a reset when the choice is not the
    default. Swatches are a radio group; the last one opens the system picker. */
 body.csp-redesign .csp-settings-card{display:grid;gap:14px;padding:14px 16px 12px}
 body.csp-redesign .csp-setting-row{display:flex;align-items:center;justify-content:space-between;gap:12px;min-width:0}
@@ -3206,7 +3206,7 @@ body.csp-redesign #panes .csp-terrain-style:disabled{opacity:.35;cursor:default}
 .csp-reduce-motion .ls-look-preview,.csp-reduce-motion .ls-chevron{transition:none}
 body.csp-redesign #panes #terLidar > .lidar-studio{padding-top:16px}
 
-/* Surface analysis colour preview under the palette picker. */
+/* Surface analysis color preview under the palette picker. */
 body.csp-redesign #panes .research-swatch{height:8px;margin-top:2px;border-radius:999px;box-shadow:inset 0 0 0 1px var(--ui-line)}
 body.csp-redesign #panes .research-live{margin-top:8px;color:var(--ui-text-muted);font-size:12.5px}
 body.csp-redesign #panes .research-live .spin{margin-right:6px}
@@ -3235,7 +3235,7 @@ body.csp-redesign .ls-layer-label .menu-section-title{margin:0}
 
 /* Elevation: switches stay visible; settings fold into task-specific groups. */
 .elev-module-head{display:flex;align-items:center;justify-content:space-between;gap:8px}
-.elev-module-head .menu-section-title{margin:0}
+body.csp-redesign .elev-module-head .menu-section-title{margin:0}
 .elev-highlight-toggles{display:flex;gap:24px;flex-wrap:wrap}
 .elev-settings-body{display:grid;gap:16px;padding:8px 0 16px;min-width:0}
 .elev-threshold-row{display:flex;align-items:center;gap:10px;min-width:0}
@@ -3245,3 +3245,19 @@ body.csp-redesign #panes .elev-module-head :is(#elevSpectrumReset,#elevBandsRese
 body.csp-redesign #panes .elev-module-head .check{margin:0;padding-left:0}
 body.csp-redesign #panes .elev-module-head .elev-toggle{font-size:14px}
 body.csp-redesign #panes .elev-settings{border-top:1px solid var(--ui-line);margin-top:8px}
+
+/* Counts are short labels, not truncating pane status summaries. */
+.csp-glass body.csp-redesign.csp-redesign #cspWorkspace #panes .ls-layer-label .pane-n{max-width:none;overflow:visible;text-overflow:clip}
+.ls-layer-label{flex:none}
+.elev-module > summary{list-style:none;cursor:pointer;min-height:44px}
+.elev-module > summary::-webkit-details-marker{display:none}
+.elev-module > summary::before{content:"›";font-size:20px;flex:none}
+.elev-module[open] > summary::before{transform:rotate(90deg)}
+.elev-module > summary .menu-section-title{flex:1}
+.elev-module:not([open]) > :not(summary),.elev-settings:not([open]) > :not(summary){display:none}
+.elev-module-body{display:grid;gap:8px;padding-top:8px}
+.elev-spectrum-colors{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+.elev-spectrum-colors label{display:grid;gap:6px;font-size:12px}
+.elev-spectrum-colors input[type=color]{width:100%;height:36px;padding:2px;border:1px solid var(--ui-line);border-radius:6px}
+/* Native disclosure visibility wins immediately over the shared fold animation. */
+.csp-glass body.csp-redesign.csp-redesign #cspWorkspace :is(.elev-settings,.elev-module)::details-content{transition:none}

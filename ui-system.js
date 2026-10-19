@@ -35,7 +35,7 @@ const ROUTES={
   layers:{title:"Layers",description:"Everything currently drawn on the map, in render order.",icon:"layers",panes:[],custom:"layers"},
   satellite:{title:"Satellite imagery",description:"Find dated scenes, tune the search, and control the image already on the map.",icon:"satellite",panes:[...(classicUi?["filters"]:[]),"summary","passes","results","overlays"],open:[...(classicUi?["filters"]:[]),"results"],overlayGroup:"Imagery",overlayTitle:"Satellite base layers",custom:"satellite"},
   terrain:{title:"LiDAR",description:"Draw LiDAR terrain layers, fetch WA DNR surveys, and save areas for offline use.",icon:"radar",panes:["terrain"],open:["terrain"]},
-  elevation:{title:"Elevation",description:"Colour the ground by height or highlight it above and below a threshold.",icon:"mountain-snow",panes:["elevation"],open:["elevation"]},
+  elevation:{title:"Elevation",description:"Color the ground by height or highlight it above and below a threshold.",icon:"mountain-snow",panes:["elevation"],open:["elevation"]},
   analyze:{title:"Analyze",description:"Measure landform patterns or reveal features in the current view.",icon:"scan-search",panes:["research"],open:["research"],researchMode:"analyze"},
   export:{title:"Export",description:"Capture the whole view or a selected area as a PNG at your chosen resolution.",icon:"download",panes:[],custom:"export"},
   conditions:{title:"Conditions",description:"Weather, earthquakes, volcanoes, fire, snow, and other time-sensitive layers.",icon:"cloud-sun",panes:["alerts","overlays"],open:["alerts","overlays"],overlayGroup:"Conditions",overlayTitle:"Conditions layers"},
@@ -340,7 +340,7 @@ for(const grid of $$(".terrain-look-grid")){
   }
   grid.remove();
 }
-const terrainHints={off:"Choose a layer to show the shape of the ground.",hs:"Shaded relief makes landforms easier to read.",hsmulti:"Light from several directions reveals landforms with fewer deep shadows.",tint:"Colour the ground by height, with shaded relief.",rem:"Color the ground by height above the nearby valley floor.",slope:"Show how steep the ground is.",aspect:"Colour each slope by the direction it faces.",northness:"Show how strongly slopes face north or south."};
+const terrainHints={off:"Choose a layer to show the shape of the ground.",hs:"Shaded relief makes landforms easier to read.",hsmulti:"Light from several directions reveals landforms with fewer deep shadows.",tint:"Color the ground by height, with shaded relief.",rem:"Color the ground by height above the nearby valley floor.",slope:"Show how steep the ground is.",aspect:"Color each slope by the direction it faces.",northness:"Show how strongly slopes face north or south."};
 const researchHints={lrm:"Remove broad hills so smaller landforms stand out.",tpi:"Show ridges and hollows relative to surrounding ground.",tri:"Show how rough or broken the surface is.",residual:"Find bumps and dips that differ from the broader surface.",northness:"Show which way slopes face, along north–south and east–west axes.",curvature:"Show how slopes bend and where flow converges or spreads.",glacial:"Flag possible ice-margin landforms. Check candidates against geology and field evidence.",moraine:"Beta: find leads on moraine-like ridges and hummocky belts. Compare with Glacial margin; landslides and other terrain can look similar.",flood:"Flag possible flood channels. Check candidates against geology and field evidence.",
   svf:"How much open sky each spot can see. Subtle banks, pits and trails stand out with no sun angle to tune.",
   openpos:"Bright where ground stands proud: ridges, berms and crests read crisply.",
@@ -740,10 +740,10 @@ function renderExportView(){
   row.addEventListener("click",()=>{$("#terWarm")?.click();activateRoute("terrain")});card.append(row);customView.append(label,card);
 }
 
-/* Appearance. Colours, font and text size are one saved bundle on <html>; the
+/* Appearance. Colors, font and text size are one saved bundle on <html>; the
    boot script in index.html applies it before first paint, and this keeps the
    controls, the inline properties and the storage in step afterwards. The
-   toggle colour keeps its original storage key so older saved choices load. */
+   toggle color keeps its original storage key so older saved choices load. */
 const APPEARANCE_KEY="clearskies.appearance.v1";
 const CONTROL_ACCENT_KEY="clearskies.controlAccent.v1",CONTROL_ACCENT_DEFAULT="#4cd964";
 const CONTROL_ACCENTS=[["Green","#4cd964"],["Mint","#00c7be"],["Teal","#30b0c7"],["Blue","#0a84ff"],["Indigo","#5e5ce6"],
@@ -780,10 +780,10 @@ function loadAppearance(){
   base.preset=derivePresetFor(base);
   return base;
 }
-/* The preset is a fact about the colours, not a stored label: untouched
-   colours are Meadow, an exact preset palette is that preset, anything else
-   (including a colour migrated from the old single-colour setting) is Custom.
-   Font, text colour and text size never change it. */
+/* The preset is a fact about the colors, not a stored label: untouched
+   colors are Meadow, an exact preset palette is that preset, anything else
+   (including a color migrated from the old single-color setting) is Custom.
+   Font, text color and text size never change it. */
 function derivePresetFor(a){
   if(!a.toggle&&!a.track&&!a.button) return "meadow";
   const match=THEME_PRESETS.find(p=>p.toggle===a.toggle&&p.track===a.track&&p.button===a.button);
@@ -832,7 +832,7 @@ function syncAppearancePicker(){
     const nameEl=$(`#cspColorName-${key}`,view);
     if(nameEl) nameEl.textContent=key==="track"&&!value?"Auto":(CONTROL_ACCENTS.find(([,hex])=>hex===value)?.[0]||value.toUpperCase());
   }
-  /* the original accent picker's hooks, kept for the toggle colour */
+  /* the original accent picker's hooks, kept for the toggle color */
   const picker=$("#cspAccentPicker",view);
   if(picker){
     const preset=CONTROL_ACCENTS.find(([,hex])=>hex===values.toggle);
@@ -872,22 +872,22 @@ function renderAppearanceView(){
   const card=document.createElement("div");card.className="csp-card csp-settings-card";card.id="cspAppearanceCard";
   card.innerHTML=`
     <div class="csp-setting-row">
-      <div class="csp-setting-text"><strong>Preset</strong><span>Sets the colours below together. Change any one and it becomes Custom.</span></div>
+      <div class="csp-setting-text"><strong>Preset</strong><span>Sets the colors below together. Change any one and it becomes Custom.</span></div>
       <span class="csp-accent-name" id="cspPresetName" aria-live="polite"></span>
     </div>
     <div class="csp-theme-presets" role="radiogroup" aria-label="Theme preset">
       ${THEME_PRESETS.map(p=>`<button type="button" class="csp-theme-preset" role="radio" aria-checked="false" data-theme-preset="${p.id}" style="--p-toggle:${p.toggle};--p-button:${p.button};--p-track:${p.track||"var(--ui-line)"}"><span class="csp-theme-thumb" aria-hidden="true"><i class="tt-line"></i><i class="tt-toggle"></i><i class="tt-slider"><b></b></i><i class="tt-button"></i></span>${p.name}</button>`).join("")}
     </div>
-    ${colorRow("toggle","Toggle & slider colour","Fills every switch knob and the filled part of a slider when it is on.",CONTROL_ACCENTS,true)}
-    ${colorRow("track","Slider track colour","The part of the slider bar after the thumb. Auto follows light and dark mode.",TRACK_SWATCHES)}
-    ${colorRow("button","Button colour","Coloured buttons, like Capture in the camera pop-up, and links.",CONTROL_ACCENTS)}
+    ${colorRow("toggle","Toggle & slider color","Fills every switch knob and the filled part of a slider when it is on.",CONTROL_ACCENTS,true)}
+    ${colorRow("track","Slider track color","The part of the slider bar after the thumb. Auto follows light and dark mode.",TRACK_SWATCHES)}
+    ${colorRow("button","Button color","Coloured buttons, like Capture in the camera pop-up, and links.",CONTROL_ACCENTS)}
     <div class="csp-setting-row">
       <div class="csp-setting-text"><strong>Font</strong><span>The typeface for menus and panels. Map labels keep their own.</span></div>
       <select data-font-select aria-label="Font">${Object.entries(FONTS).map(([id,f])=>`<option value="${id}">${f.name}</option>`).join("")}</select>
     </div>
     <div class="csp-setting-row">
-      <div class="csp-setting-text"><strong>Text colour</strong><span>Overrides the main text colour in both light and dark mode.</span></div>
-      <span class="csp-font-color-control"><button type="button" class="linkbtn" data-font-color-auto>Auto</button><label class="csp-accent-swatch csp-accent-custom" title="Choose text colour"><input type="color" data-font-color aria-label="Text colour"></label></span>
+      <div class="csp-setting-text"><strong>Text color</strong><span>Overrides the main text color in both light and dark mode.</span></div>
+      <span class="csp-font-color-control"><button type="button" class="linkbtn" data-font-color-auto>Auto</button><label class="csp-accent-swatch csp-accent-custom" title="Choose text color"><input type="color" data-font-color aria-label="Text color"></label></span>
     </div>
     <div class="csp-setting-row">
       <div class="csp-setting-text"><strong>Text size</strong><span>Scales the sidebar and pop-up panels.</span></div>
@@ -971,7 +971,7 @@ function renderSettingsView(){
       </select>
     </div>
     <label class="csp-setting-row">
-      <span class="csp-setting-text"><strong>Map info in exports</strong><span>Coordinates, elevation and colour keys in saved images.</span></span>
+      <span class="csp-setting-text"><strong>Map info in exports</strong><span>Coordinates, elevation and color keys in saved images.</span></span>
       <span class="csp-switch"><input type="checkbox" data-export-readout role="switch"><span></span></span>
     </label>`;
   const accessLabel=document.createElement("div");accessLabel.className="csp-section-label";accessLabel.textContent="Accessibility & data";
