@@ -71,8 +71,8 @@ const steps = () => [
   ["ui-system.css", () => shrink("ui-system.css", { loader: "css", opts: { minify: true } })],
   ["vendor/maplibre-gl.css", () => shrink("vendor/maplibre-gl.css", { loader: "css", opts: { minify: true } })],
   ...["ui-system.js", "mosaic-core.js", "png-stream.js", "markup.js", "markup-3d.js", "terrain-core.js", "terrain-raster.js", "terrain-drape-core.js", "terrain-drape-pool.js", "terrain-drape-worker.js", "elevation-bands.js",
-    "elevation-tile-core.js", "public-terrain.js", "public-terrain-worker.js", "tile-pipeline.js", "gpu-terrain-shaders.js", "gpu-terrain-store.js", "gpu-terrain-engine.js", "gpu-terrain-layer.js", "gpu-terrain-3d-cache.js", "gpu-terrain-3d-renderer.js", "gpu-terrain-3d-layer.js",
-    "wa-archaeology.js", "glacial-research-core.js", "glacial-segment-core.js", "glacial-segment-features.js", "glacial-moraine-classifier.js", "glacial-zone-core.js", "glacial-zone-features.js", "glacial-belt-classifier.js", "glacial-moraine-analysis.js", "research-analysis.js", "research-worker.js",
+    "elevation-tile-core.js", "public-terrain.js", "public-terrain-worker.js", "tile-pipeline.js", "gpu-terrain-shaders.js", "lidar-render.js", "lidar-studio.js", "gpu-terrain-store.js", "gpu-terrain-engine.js", "gpu-terrain-layer.js", "gpu-terrain-3d-cache.js", "gpu-terrain-3d-renderer.js", "gpu-terrain-3d-layer.js",
+    "wa-archaeology.js", "glacial-research-core.js", "glacial-segment-core.js", "glacial-segment-features.js", "glacial-moraine-classifier.js", "glacial-zone-core.js", "glacial-zone-features.js", "glacial-belt-classifier.js", "glacial-moraine-analysis.js", "terrain-analysis-core.js", "research-analysis.js", "research-worker.js",
     "point-cloud-core.js", "point-cloud-viewer.js", "version.js"]
     .map((f) => [f, () => shrink(f, { loader: "js", opts: JS_OPTS })]),
   // Catalogs are fetched and parsed on load; they are the least dense bytes here.

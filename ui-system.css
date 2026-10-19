@@ -3200,3 +3200,10 @@ body.csp-redesign #panes .csp-terrain-style:disabled{opacity:.35;cursor:default}
 @media(prefers-reduced-motion:reduce){.ls-look-preview,.ls-chevron,.ls-layer{transition:none}}
 .csp-reduce-motion .ls-look-preview,.csp-reduce-motion .ls-chevron{transition:none}
 body.csp-redesign #panes #terLidar > .lidar-studio{padding-top:16px}
+
+/* Surface analysis colour preview under the palette picker. */
+body.csp-redesign #panes .research-swatch{height:8px;margin-top:2px;border-radius:999px;box-shadow:inset 0 0 0 1px var(--ui-line)}
+body.csp-redesign #panes .research-live{margin-top:8px;color:var(--ui-text-muted);font-size:12.5px}
+body.csp-redesign #panes .research-live .spin{margin-right:6px}
+#cursorAnalysis{margin-top:2px;font-variant-numeric:tabular-nums}
+body.csp-redesign #panes #surfaceResearchBox .elev-field[hidden]{display:none}

@@ -4,17 +4,36 @@
   "use strict";
   var api=typeof module==="object"&&module.exports
     ? factory(require("./glacial-research-core.js"),require("./glacial-zone-core.js"),
-      require("./glacial-zone-features.js"),require("./glacial-belt-classifier.js"),require("./glacial-moraine-analysis.js"))
+      require("./glacial-zone-features.js"),require("./glacial-belt-classifier.js"),require("./glacial-moraine-analysis.js"),
+      require("./terrain-analysis-core.js"))
     : factory(root&&root.CSPGlacialResearch,root&&root.CSPGlacialZones,
-      root&&root.CSPGlacialZoneFeatures,root&&root.CSPGlacialBeltClassifier,root&&root.CSPGlacialMoraineAnalysis);
+      root&&root.CSPGlacialZoneFeatures,root&&root.CSPGlacialBeltClassifier,root&&root.CSPGlacialMoraineAnalysis,
+      root&&root.CSPTerrainAnalysis);
   if(typeof module==="object"&&module.exports) module.exports=api;
   if(root) root.CSPResearchAnalysis=api;
-})(typeof globalThis!=="undefined"?globalThis:this,function(G,Z,ZF,B,M){
+})(typeof globalThis!=="undefined"?globalThis:this,function(G,Z,ZF,B,M,T){
   "use strict";
 
   var VERSION=1,PROTOCOL_VERSION=1,HEADER_BYTES=24;
-  var PRODUCTS=Object.freeze(["lrm","tpi","tri","residual","northness","curvature","glacial","moraine","flood"]);
+  var PRODUCTS=Object.freeze(["lrm","tpi","tri","residual","northness","curvature","glacial","moraine","flood",
+    "svf","openpos","openneg","rrim","geomorphons","drainage","wetness","depressions","avalanche","solar","wind"]);
   var SCALES=Object.freeze({fine:4,balanced:10,broad:24});
+  /* Horizon-search radius in cells for the lidar visualization products, and
+     the upwind search distance in metres for wind exposure, per scale. */
+  var HORIZON_CELLS=Object.freeze({fine:8,balanced:20,broad:50});
+  var WIND_METRES=Object.freeze({fine:100,balanced:300,broad:600});
+  var TERRAIN_PRODUCTS=Object.freeze(["svf","openpos","openneg","rrim","geomorphons","drainage","wetness","depressions","avalanche","solar","wind"]);
+
+  /* Product parameters. Every field is optional and clamped; anything else
+     is dropped, so the server cache key and worker input stay bounded. */
+  function analysisOptions(input){
+    var source=input&&input.options&&typeof input.options==="object"?input.options:{};
+    var out={},day=Number(source.dayOfYear),lat=Number(source.latitude),wind=Number(source.windAzimuth);
+    if(Number.isFinite(day)) out.dayOfYear=Math.max(1,Math.min(366,Math.round(day)));
+    if(Number.isFinite(lat)) out.latitude=Math.max(-85,Math.min(85,Math.round(lat*1000)/1000));
+    if(Number.isFinite(wind)) out.windAzimuth=((Math.round(wind)%360)+360)%360;
+    return out;
+  }
   var LIMITS=Object.freeze({maxWidth:1024,maxHeight:1024,maxCells:524288,minResolution:0.01,maxResolution:100000});
 
   function validate(input){
@@ -30,7 +49,7 @@
       throw new RangeError("analysis resolution is outside the safe bounds");
     if(!input.grid||typeof input.grid.length!=="number"||input.grid.length!==width*height)
       throw new RangeError("analysis grid length must equal width times height");
-    return {product:product,scale:scale,width:width,height:height,resolution:resolution,grid:input.grid};
+    return {product:product,scale:scale,width:width,height:height,resolution:resolution,grid:input.grid,options:analysisOptions(input)};
   }
 
   function validateElevations(grid){
@@ -44,9 +63,30 @@
     if(finite<9) throw new RangeError("analysis grid needs at least nine finite elevation samples");
   }
 
+  function runTerrain(request){
+    if(!T) throw new Error("CSPTerrainAnalysis is not loaded");
+    var product=request.product,width=request.width,height=request.height,grid=request.grid;
+    var options=Object.assign({cellSize:request.resolution,radiusCells:HORIZON_CELLS[request.scale]},request.options);
+    var result,label;
+    if(product==="svf"){result=T.skyViewFactor(grid,width,height,options);label="Sky-view factor"}
+    else if(product==="openpos"){result=T.openness(grid,width,height,options);label="Positive openness"}
+    else if(product==="openneg"){result=T.openness(grid,width,height,Object.assign(options,{sign:"negative"}));label="Negative openness"}
+    else if(product==="rrim"){result=T.redRelief(grid,width,height,options);label="Red relief image map"}
+    else if(product==="geomorphons"){result=T.geomorphons(grid,width,height,Object.assign(options,{radiusCells:HORIZON_CELLS[request.scale]*1.25}));label="Landforms (geomorphons)"}
+    else if(product==="drainage"){result=T.drainage(grid,width,height,options);label="Drainage network"}
+    else if(product==="wetness"){result=T.wetness(grid,width,height,options);label="Topographic wetness index"}
+    else if(product==="depressions"){result=T.depressions(grid,width,height,options);label="Depressions"}
+    else if(product==="avalanche"){result=T.avalancheSlope(grid,width,height,options);label="Avalanche slope angle"}
+    else if(product==="solar"){delete options.radiusCells;result=T.solarExposure(grid,width,height,options);label="Sun exposure"}
+    else{result=T.windExposure(grid,width,height,Object.assign(options,{searchMetres:WIND_METRES[request.scale]}));label="Wind exposure"}
+    var notice=result.metadata.caution?{warning:result.metadata.caution}:null;
+    return {data:result.data,secondary:result.secondary||null,width:width,height:height,label:label,metadata:result.metadata,notice:notice};
+  }
+
   function run(input){
-    if(!G) throw new Error("CSPGlacialResearch is not loaded");
     var request=validate(input);validateElevations(request.grid);
+    if(TERRAIN_PRODUCTS.indexOf(request.product)>=0) return runTerrain(request);
+    if(!G) throw new Error("CSPGlacialResearch is not loaded");
     var product=request.product,width=request.width,height=request.height,grid=request.grid;
     var radius=SCALES[request.scale];
     var options={cellSize:request.resolution,horizontalUnit:"m",verticalUnit:"m",rowAxis:"south",edgePolicy:"shrink"};
@@ -156,5 +196,5 @@
   }
 
   return Object.freeze({VERSION:VERSION,PROTOCOL_VERSION:PROTOCOL_VERSION,PRODUCTS:PRODUCTS,SCALES:SCALES,LIMITS:LIMITS,
-    validate:validate,run:run,encodeResult:encodeResult,decodeResult:decodeResult,shouldOffload:shouldOffload});
+    TERRAIN_PRODUCTS:TERRAIN_PRODUCTS,analysisOptions:analysisOptions,validate:validate,run:run,encodeResult:encodeResult,decodeResult:decodeResult,shouldOffload:shouldOffload});
 });

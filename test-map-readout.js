@@ -24,13 +24,37 @@ assert.deepEqual(ctx.calls[0],['transform',2,0,0,2,-876,312],'streamed blocks us
 ctx.calls=[];env.drawSnapshotReadout(ctx,{...spec,readout:null});assert.equal(ctx.calls.length,0,'disabled option paints nothing');
 const rendered=[];
 const researchEnv={document:{createElement:()=>({getContext:()=>({createImageData:(w,h)=>({data:new Uint8ClampedArray(w*h*4)}),putImageData:im=>rendered.push(im)}),toDataURL:()=>''})},researchQuantile:()=>1};
-vm.runInNewContext(take('researchColourRaster','runResearchWorker'),researchEnv);
+vm.runInNewContext(source.slice(source.indexOf('const RESEARCH_PALETTES='),source.indexOf('function runResearchWorker(')),researchEnv);
 const result=researchEnv.researchColourRaster({width:3,height:1,label:'Local relief',data:new Float32Array([-1,0,1])},'lrm');
 assert.equal(result.legend.labels[0],'-3.3 ft');assert.equal(result.legend.labels[2],'3.3 ft');
 assert(result.legend.bar.includes('rgb(65,145,245) 0%'),'legend uses the renderer’s actual negative color');
 assert.deepEqual([...rendered[0].data.slice(0,3)],[65,145,245]);
 const normalized=researchEnv.researchColourRaster({width:1,height:1,label:'Anomaly',data:new Float32Array([1])},'residual');
 assert.equal(normalized.legend.labels[2],'1 σ','standardized anomalies must not be labelled as feet');
+
+/* LiDAR analysis looks: palettes, classes and the cursor readout text. */
+researchEnv.CSPTerrainAnalysis=require('./terrain-analysis-core.js');researchEnv.reliefZFactor=c=>1;
+rendered.length=0;researchEnv.researchQuantile=(data,q)=>q<.5?0:1;
+const skyView=researchEnv.researchColourRaster({width:2,height:1,label:'Sky-view factor',data:new Float32Array([0,1])},'svf',{palette:'grey'});
+assert.deepEqual([...rendered[0].data],[11,11,13,255,255,255,255,255],'sky-view greyscale runs dark to white');
+assert.deepEqual([...skyView.legend.labels],['Enclosed','','Open sky']);
+rendered.length=0;
+researchEnv.researchColourRaster({width:3,height:1,label:'Avalanche',data:new Float32Array([20,33,40])},'avalanche',{palette:'caltopo'});
+assert.equal(rendered[0].data[3],0,'slopes under 27° stay clear');
+assert.deepEqual([...rendered[0].data.slice(4,7)],[240,122,34],'32–34° is the orange band');
+assert.deepEqual([...rendered[0].data.slice(8,11)],[224,38,43],'35–45° is the red band');
+rendered.length=0;
+researchEnv.researchColourRaster({width:2,height:1,label:'Depressions',data:new Float32Array([0,2])},'depressions',{palette:'depth'});
+assert.equal(rendered[0].data[3],0,'ground outside a sink is clear');assert(rendered[0].data[7]>200,'a deep sink is strongly painted');
+rendered.length=0;
+researchEnv.researchColourRaster({width:2,height:1,label:'Sky',data:new Float32Array([1,1])},'svf',{palette:'grey',relief:100,hillshade:new Float32Array([0,1])});
+assert(rendered[0].data[0]<rendered[0].data[4],'relief shading darkens shadowed ground');
+const looks=vm.runInNewContext('RESEARCH_LOOKS',researchEnv),palettes=vm.runInNewContext('RESEARCH_PALETTES',researchEnv);
+assert.equal(looks.geomorphons.read(3),'Ridge');
+assert.equal(looks.wind.read(4),'Sheltered 4.0° · snow loading');
+assert.equal(looks.solar.read(3.25,5.5),'3.3 kWh/m² · 5.5 h direct sun');
+for(const [product,look] of Object.entries(looks))
+  for(const id of look.palettes) assert(palettes[id],`${product} palette ${id} exists`);
 
 /* 3D cursor readout: resolved at rest, never per frame of camera motion. */
 const gateStart=source.indexOf('const CURSOR_SETTLE_MS='),gateSource=source.slice(gateStart,source.indexOf('document.addEventListener("pointermove"',gateStart));
@@ -45,7 +69,7 @@ const pending=new Set(),gate={
   readoutRoot:{querySelector:()=>({classList:{toggle:(name,on)=>on?pending.add(name):pending.delete(name)}})},
   $:sel=>sel==='#map'?{getBoundingClientRect:()=>(rectReads++,{left:10,top:20,width:800,height:600})}:text[sel],
   L:{point:(x,y)=>({x,y})},snapSel:{hidden:true},document:{body:{classList:{contains:()=>false}}},
-  cursorCoordinates:ll=>`${ll.lat},${ll.lng}`,refreshCursorElevation(){},
+  cursorCoordinates:ll=>`${ll.lat},${ll.lng}`,refreshCursorElevation(){},paintCursorAnalysis(){},
   map:{containerPointToLatLng:p=>({lat:-p.y,lng:-p.x})},
   map3d:{isMoving:()=>moving,unproject:([x,y])=>(unprojects++,{lat:y/10,lng:x/10}),project:ll=>(projects++,sky?{x:-1e6,y:0}:{x:ll.lng*10,y:ll.lat*10})},
   cursorLocation:null,cursorElevation:null,cursorPointer:null,cursorFrame:0,snapshotCursorLocation:null
