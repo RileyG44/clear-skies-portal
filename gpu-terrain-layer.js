@@ -35,7 +35,7 @@
     const dx=sel.x+width/scale/2-view.cssSize[0]/2,dy=sel.y+height/scale/2-view.cssSize[1]/2;
     const a=view.bearing*Math.PI/180,c=Math.cos(a),s=Math.sin(a),world=256*2**view.zoom;
     return {...view,centerMerc:[view.centerMerc[0]+(c*dx+s*dy)/world,view.centerMerc[1]+(-s*dx+c*dy)/world],
-      cssSize:[width/scale,height/scale],dpr:scale};
+      cssSize:[width/scale,height/scale],dpr:scale,liveDpr:view.dpr};
   }
   function install(L){
     if(L.CSPGpuTerrainLayer)return;
@@ -184,11 +184,16 @@
       _tilesNeeded:function(){return this._map?this._engine.neededTiles(this._view||this._deriveView()):[];},
       settled:function(){return this.options.store.settled(this._tilesNeeded());},
       provenance:function(){return this.options.store.provenance(this._tilesNeeded());},
+      /* canvas() renders the whole export; canvas(region) one block of it.
+         Blocks of one entry share the engine's export-wide derived fields
+         (relative-elevation base, detail blur), so a block export has no
+         seams; release() frees them once the last block is drawn. */
       snapshotEntry:function(spec){
         if(!this._container||!this._engine)return null;
-        const view=exportView(this._view||this._deriveView(),spec);
+        const view=exportView(this._view||this._deriveView(),spec),engine=this._engine;
         return {kind:"gpu-terrain",el:this._container,view,
-          canvas:()=>this._engine.renderToCanvas(view,spec.width,spec.height)};
+          canvas:region=>region?engine.renderToCanvas(view,spec.width,spec.height,region):engine.renderToCanvas(view,spec.width,spec.height),
+          release:()=>engine.releaseExport?.()};
       },
       destroy:function(){this.remove();this._engine?.destroy();this._engine=null;}
     });

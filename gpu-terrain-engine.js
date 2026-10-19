@@ -98,28 +98,32 @@
     'for(int y=0;y<2;y++)for(int x=0;x<2;x++){float v=at(b+ivec2(x,y));float w=(x==0?1.-f.x:f.x)*(y==0?1.-f.y:f.y);if(valid(v)&&w>0.){sum+=v*w;weight+=w;}}' +
     'if(weight<=0.)discard;result=vec2(sum/weight,u_rank);}\n';
   // Shade-module coordinates are top-down; framebuffer texels are bottom-up.
-  var PRELUDE = '\n#define CSP_HAS_AUX 1\nuniform highp sampler2D u_cspField,u_cspBlur,u_cspBase; uniform float u_cspBlurScale,u_cspBaseScale;\n' +
+  var PRELUDE = '\n#define CSP_HAS_AUX 1\nuniform highp sampler2D u_cspField,u_cspBlur,u_cspBase; uniform float u_cspBlurScale,u_cspBaseScale; uniform vec3 u_cspAuxFrame;\n' +
     'ivec2 csp_size(){return textureSize(u_cspField,0);}\n' +
     'vec2 csp_sample(ivec2 p){ivec2 s=csp_size();p=clamp(p,ivec2(0),s-1);return texelFetch(u_cspField,ivec2(p.x,s.y-1-p.y),0).rg;}\n' +
     'float csp_height(ivec2 p){return csp_sample(p).r;}\n' +
     'int csp_rank(ivec2 p){return int(csp_sample(p).g+.5);}\n' +
     'bool csp_valid(ivec2 p){vec2 v=csp_sample(p);return v.g>0.&&!isnan(v.r)&&!isinf(v.r)&&v.r>-1e20;}\n' +
     // Filtered fields are stored at 1/scale resolution, bottom-up like the
-    // field; read them bilinearly at the field pixel centre.
-    'bool csp_auxAt(highp sampler2D t,float f,ivec2 p,out float v){v=0.;if(f<=0.)return false;ivec2 s=csp_size();' +
-    'vec2 q=(vec2(float(p.x),float(s.y-1-p.y))+.5)/f-.5;ivec2 b=ivec2(floor(q));vec2 fr=q-vec2(b);ivec2 ts=textureSize(t,0);float sum=0.,w=0.;' +
+    // field; read them bilinearly at the field pixel centre. u_cspAuxFrame
+    // places this field inside the one the filters ran over: (left, top,
+    // height) in its pixels. A tiled export filters once for the whole image
+    // and shades piece by piece, so every piece reads the same values.
+    'bool csp_auxAt(highp sampler2D t,float f,ivec2 p,out float v){v=0.;if(f<=0.)return false;' +
+    'vec2 q=(vec2(float(p.x)+u_cspAuxFrame.x,u_cspAuxFrame.z-1.-float(p.y)-u_cspAuxFrame.y)+.5)/f-.5;ivec2 b=ivec2(floor(q));vec2 fr=q-vec2(b);ivec2 ts=textureSize(t,0);float sum=0.,w=0.;' +
     'for(int y=0;y<2;y++)for(int x=0;x<2;x++){vec2 a=texelFetch(t,clamp(b+ivec2(x,y),ivec2(0),ts-1),0).rg;float k=(x==0?1.-fr.x:fr.x)*(y==0?1.-fr.y:fr.y);' +
     'if(a.g>0.&&k>0.){sum+=a.r*k;w+=k;}}if(w<=0.)return false;v=sum/w;return true;}\n' +
     'bool csp_blur(ivec2 p,out float v){return csp_auxAt(u_cspBlur,u_cspBlurScale,p,v);}\n' +
     'bool csp_base(ivec2 p,out float v){return csp_auxAt(u_cspBase,u_cspBaseScale,p,v);}\n';
   /* Separable filters for the layer stack's derived fields. Modes: 0 and 1
    * downsample by u_factor (mean, minimum); 2 and 3 filter along u_dir
-   * (Gaussian, minimum). Output is (value, valid). */
+   * (Gaussian, minimum). Output is (value, valid). A downsample may write
+   * one piece of a larger target: u_origin is the piece's first texel. */
   var FILTER = '#version 300 es\nprecision highp float; precision highp int;\n' +
-    'uniform highp sampler2D u_src; uniform int u_mode,u_factor,u_radius; uniform ivec2 u_dir; uniform float u_sigma; layout(location=0) out vec2 result;\n' +
+    'uniform highp sampler2D u_src; uniform int u_mode,u_factor,u_radius; uniform ivec2 u_dir,u_origin; uniform float u_sigma; layout(location=0) out vec2 result;\n' +
     'bool ok(vec2 v){return v.g>0.&&!isnan(v.r)&&!isinf(v.r)&&v.r>-1e20;}\n' +
     'void main(){ivec2 o=ivec2(gl_FragCoord.xy),s=textureSize(u_src,0);float acc=(u_mode==1||u_mode==3)?3.0e38:0.,w=0.;\n' +
-    'if(u_mode<2){for(int y=0;y<u_factor;y++)for(int x=0;x<u_factor;x++){ivec2 q=o*u_factor+ivec2(x,y);if(q.x>=s.x||q.y>=s.y)continue;' +
+    'if(u_mode<2){o-=u_origin;for(int y=0;y<u_factor;y++)for(int x=0;x<u_factor;x++){ivec2 q=o*u_factor+ivec2(x,y);if(q.x>=s.x||q.y>=s.y)continue;' +
     'vec2 v=texelFetch(u_src,q,0).rg;if(!ok(v))continue;if(u_mode==1)acc=min(acc,v.r);else acc+=v.r;w+=1.;}if(w<=0.){result=vec2(0.);return;}result=vec2(u_mode==1?acc:acc/w,1.);return;}\n' +
     'for(int k=-u_radius;k<=u_radius;k++){ivec2 q=o+u_dir*k;if(q.x<0||q.y<0||q.x>=s.x||q.y>=s.y)continue;vec2 v=texelFetch(u_src,q,0).rg;if(!ok(v))continue;' +
     'if(u_mode==3){acc=min(acc,v.r);w=1.;}else{float g=exp(-float(k*k)/(2.*u_sigma*u_sigma));acc+=v.r*g;w+=g;}}\n' +
@@ -257,12 +261,12 @@
       provenanceProgram = program(FULLSCREEN, PROVENANCE);
       filterProgram = program(FULLSCREEN, FILTER);
       statsProgram = program(FULLSCREEN, STATS);
-      ['cspField', 'cspBlur', 'cspBase', 'cspBlurScale', 'cspBaseScale'].forEach(function (n) { stats[n] = gl.getUniformLocation(statsProgram, 'u_' + n); });
-      ['src', 'mode', 'factor', 'radius', 'dir', 'sigma'].forEach(function (n) { f[n] = gl.getUniformLocation(filterProgram, 'u_' + n); });
+      ['cspField', 'cspBlur', 'cspBase', 'cspBlurScale', 'cspBaseScale', 'cspAuxFrame'].forEach(function (n) { stats[n] = gl.getUniformLocation(statsProgram, 'u_' + n); });
+      ['src', 'mode', 'factor', 'radius', 'dir', 'origin', 'sigma'].forEach(function (n) { f[n] = gl.getUniformLocation(filterProgram, 'u_' + n); });
       vao = gl.createVertexArray(); resources.vaos.add(vao); gl.bindVertexArray(vao);
       ['origin', 'axisX', 'axisY', 'target', 'sampleOrigin', 'sampleX', 'sampleY', 'native', 'rank', 'smooth', 'fast'].forEach(function (n) { h[n] = gl.getUniformLocation(heightProgram, 'u_' + n); });
       shadeSetters = setters(shadeProgram);
-      ['cspBlur', 'cspBase', 'cspBlurScale', 'cspBaseScale'].forEach(function (n) { shadeAux[n] = gl.getUniformLocation(shadeProgram, 'u_' + n); });
+      ['cspBlur', 'cspBase', 'cspBlurScale', 'cspBaseScale', 'cspAuxFrame'].forEach(function (n) { shadeAux[n] = gl.getUniformLocation(shadeProgram, 'u_' + n); });
       shadeField = gl.getUniformLocation(shadeProgram, 'u_cspField'); provenanceField = gl.getUniformLocation(provenanceProgram, 'u_cspField');
       gl.disable(gl.BLEND); gl.disable(gl.DEPTH_TEST); gl.disable(gl.CULL_FACE); gl.disable(gl.SCISSOR_TEST); gl.disable(gl.DITHER);
       gl.pixelStorei(gl.UNPACK_ALIGNMENT, 1); gl.pixelStorei(gl.PACK_ALIGNMENT, 1);
@@ -415,8 +419,8 @@
           c * w, s * w, -s * ht, c * ht, p.crop, r.width * p.crop.width < w || r.height * p.crop.height < ht, p.entry.allValid);
       }
     }
-    function drawShade(t, output, view, values, aux) {
-      aux = aux || {};
+    function drawShade(t, output, view, values, aux, frame) {
+      aux = aux || {}; frame = frame || [0, 0, t.height];
       gl.bindFramebuffer(gl.FRAMEBUFFER, output ? output.framebuffer : null); gl.viewport(0, 0, t.width, t.height);
       gl.useProgram(shadeProgram);
       // Unused aux samplers still point at a valid float texture.
@@ -425,14 +429,16 @@
       gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, t.texture);
       gl.uniform1i(shadeField, 0); gl.uniform1i(shadeAux.cspBlur, 1); gl.uniform1i(shadeAux.cspBase, 2);
       gl.uniform1f(shadeAux.cspBlurScale, aux.blur ? aux.blur.factor : 0); gl.uniform1f(shadeAux.cspBaseScale, aux.base ? aux.base.factor : 0);
+      gl.uniform3f(shadeAux.cspAuxFrame, frame[0], frame[1], frame[2]);
       shadeUniforms(values || shaders.uniformValues(state, view));
       gl.drawArrays(gl.TRIANGLES, 0, 3); drawCalls++;
     }
-    function filterPass(src, dst, mode, factor, radius, dx, dy) {
-      gl.bindFramebuffer(gl.FRAMEBUFFER, dst.framebuffer); gl.viewport(0, 0, dst.width, dst.height);
+    function filterPass(src, dst, mode, factor, radius, dx, dy, piece) {
+      gl.bindFramebuffer(gl.FRAMEBUFFER, dst.framebuffer);
+      if (piece) gl.viewport(piece[0], piece[1], piece[2], piece[3]); else gl.viewport(0, 0, dst.width, dst.height);
       gl.bindVertexArray(vao); gl.useProgram(filterProgram); gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, src.texture);
       gl.uniform1i(f.src, 0); gl.uniform1i(f.mode, mode); gl.uniform1i(f.factor, factor || 1); gl.uniform1i(f.radius, radius || 0);
-      gl.uniform2i(f.dir, dx || 0, dy || 0); gl.uniform1f(f.sigma, Math.max(.5, (radius || 1) / 2));
+      gl.uniform2i(f.dir, dx || 0, dy || 0); gl.uniform2i(f.origin, piece ? piece[0] : 0, piece ? piece[1] : 0); gl.uniform1f(f.sigma, Math.max(.5, (radius || 1) / 2));
       gl.drawArrays(gl.TRIANGLES, 0, 3); drawCalls++;
     }
     /* One derived field into cache[slot]: downsample (mean or minimum), an
@@ -551,7 +557,7 @@
     function cancelReads(reason) { pendingReads.forEach(function (job) { job.cancel(reason); }); pendingReads.clear(); }
     function onLost(event) {
       event.preventDefault(); lost = true; ready = false; frameRequested = false; cancelReads('Terrain context lost');
-      cleanResources(); lru.clear(); queue.clear(); plan.length = 0; lastResult = {coverage: 0, missing: wanted.length};
+      cleanResources(); exportCache = null; lru.clear(); queue.clear(); plan.length = 0; lastResult = {coverage: 0, missing: wanted.length};
     }
     function onRestored() {
       if (destroyed) return;
@@ -567,21 +573,85 @@
       var out = Array.isArray(value) ? [] : {};
       Object.keys(value).forEach(function (key) { out[key] = copyState(value[key]); }); return out;
     }
-    async function renderToCanvas(view, width, height) {
+    /* Export-wide derived fields. The detail blur and the relative-elevation
+     * base are neighbourhood filters hundreds or thousands of pixels wide at
+     * export resolution, so a piece of a tiled export cannot derive them from
+     * its own pixels: each piece would get its own edges and its own base,
+     * and the image would come out in bands. They are filtered once over the
+     * whole export instead, on a grid anchored at its bottom-left corner like
+     * the live field's, and every piece samples them through its frame.
+     * Heights for the filters are drawn k export pixels to a texel (the
+     * downsample averages blocks anyway) in pieces aligned to the downsample,
+     * so no block straddles two pieces. The radius is the one the screen
+     * uses: the live field caps it at 64 x 32 of its own pixels. */
+    var EXPORT_AUX_TEXELS = 1 << 21, EXPORT_PIECE = 2048, exportCache = null, stateGeneration = 0;
+    function exportAuxField(view, width, height, dpr, radiusPx, minimum, limit) {
+      var liveDpr = view.liveDpr > 0 ? view.liveDpr : dpr;
+      radiusPx = Math.min(radiusPx, 64 * 32 * dpr / liveDpr);
+      if (!(radiusPx >= 1)) return null;
+      var d0 = Math.max(Math.ceil(radiusPx / 32), Math.ceil(Math.sqrt(width * height / EXPORT_AUX_TEXELS)), Math.ceil(width / limit), Math.ceil(height / limit));
+      var k = Math.max(1, Math.floor(d0 / 8)), step = Math.ceil(d0 / k), d = k * step;
+      var cw = Math.ceil(width / k), ch = Math.ceil(height / k), piece = Math.max(step, Math.floor(Math.min(EXPORT_PIECE, limit) / step) * step);
+      var radius = Math.max(1, Math.min(32, Math.round(radiusPx / d)));
+      var a = (view.bearing || 0) * DEG, c = Math.cos(a), s = Math.sin(a), worldPx = 256 * Math.pow(2, view.zoom) * dpr;
+      var entry = {a: target(Math.ceil(cw / step), Math.ceil(ch / step), true), b: null, factor: d};
+      try {
+        entry.b = target(entry.a.width, entry.a.height, true);
+        for (var by = 0; by < ch; by += piece) for (var bx = 0; bx < cw; bx += piece) {
+          var pw = Math.min(piece, cw - bx), ph = Math.min(piece, ch - by), t = null;
+          var dx = (bx + pw / 2) * k - width / 2, dy = height / 2 - (by + ph / 2) * k;
+          var sub = {centerMerc: [view.centerMerc[0] + (c * dx + s * dy) / worldPx, view.centerMerc[1] + (-s * dx + c * dy) / worldPx],
+            zoom: view.zoom, bearing: view.bearing || 0, cssSize: [pw * k / dpr, ph * k / dpr], dpr: dpr / k, dz: view.dz};
+          plan = []; buildPlan(sub);
+          try {
+            t = target(pw, ph, true); drawHeight(t, sub);
+            filterPass(t, entry.a, minimum ? 1 : 0, step, 0, 0, 0, [bx / step, by / step, Math.ceil(pw / step), Math.ceil(ph / step)]);
+          } finally { freeTarget(t); }
+        }
+        if (minimum) { filterPass(entry.a, entry.b, 3, 1, radius, 1, 0); filterPass(entry.b, entry.a, 3, 1, radius, 0, 1); }
+        filterPass(entry.a, entry.b, 2, 1, radius, 1, 0); filterPass(entry.b, entry.a, 2, 1, radius, 0, 1);
+      } catch (e) { freeTarget(entry.a); freeTarget(entry.b); throw e; }
+      freeTarget(entry.b); entry.b = null; entry.target = entry.a; return entry;
+    }
+    function exportAux(view, width, height, st, limit) {
+      var dpr = width / view.cssSize[0], radii = auxRadii(st, Object.assign({}, view, {dpr: dpr}), shaders), aux = {};
+      var savedPlan = plan, savedResult = lastResult;
+      try {
+        aux.blur = exportAuxField(view, width, height, dpr, radii.blur, false, limit);
+        aux.base = exportAuxField(view, width, height, dpr, radii.base, true, limit);
+        return aux;
+      } catch (e) { freeAux(aux); throw e; }
+      finally { plan = savedPlan; lastResult = savedResult; planDirty = true; }
+    }
+    function releaseExport() { if (exportCache) { if (!lost) freeAux(exportCache.aux); exportCache = null; } }
+    /* Renders an export of width x height for view, or only region {x, y,
+     * width, height} of it. Region calls for the same export (view, size and
+     * settings) share one set of derived fields until releaseExport(); a call
+     * without a region releases them itself. */
+    async function renderToCanvas(view, width, height, region) {
       if (!ready || destroyed) throw new Error('Terrain engine is not ready');
       width = Math.round(width); height = Math.round(height);
       if (!(width > 0 && height > 0)) throw new RangeError('Export dimensions must be positive');
-      var doc = canvas.ownerDocument || root.document, result = doc.createElement('canvas'); result.width = width; result.height = height;
+      var whole = !region;
+      region = whole ? {x: 0, y: 0, width: width, height: height}
+        : {x: Math.round(region.x || 0), y: Math.round(region.y || 0), width: Math.round(region.width), height: Math.round(region.height)};
+      if (!(region.width > 0 && region.height > 0 && region.x >= 0 && region.y >= 0 && region.x + region.width <= width && region.y + region.height <= height))
+        throw new RangeError('Export region must lie inside the export');
+      var doc = canvas.ownerDocument || root.document, result = doc.createElement('canvas'); result.width = region.width; result.height = region.height;
       var ctx = result.getContext('2d'); if (!ctx) throw new Error('2D export context unavailable');
       var exportState = copyState(state); // Settings cannot change midway through a tiled export.
       // Export keeps horizontal map extent; callers normally preserve the view aspect ratio.
       var dpr = width / view.cssSize[0], limit = Math.min(maxSize, forcedMaxSize || maxSize), stride = limit - 2;
       if (stride < 1) throw new Error('WebGL export target limit too small');
+      var key = [stateGeneration, JSON.stringify(view), width, height, limit].join('|');
+      if (!exportCache || exportCache.key !== key) { releaseExport(); exportCache = {key: key, aux: exportAux(view, width, height, exportState, limit)}; }
+      var aux = exportCache.aux;
       var a = (view.bearing || 0) * DEG, c = Math.cos(a), s = Math.sin(a), worldPx = 256 * Math.pow(2, view.zoom) * dpr;
+      var right = region.x + region.width, bottom = region.y + region.height;
       try {
-        for (var top = 0; top < height; top += stride) for (var left = 0; left < width; left += stride) {
+        for (var top = region.y; top < bottom; top += stride) for (var left = region.x; left < right; left += stride) {
           if (!ready || destroyed) throw new Error('Terrain context unavailable during export');
-          var iw = Math.min(stride, width - left), ih = Math.min(stride, height - top);
+          var iw = Math.min(stride, right - left), ih = Math.min(stride, bottom - top);
           // One-pixel halos make Sobel/outline reads identical at tile seams.
           var lx = Math.max(0, left - 1), ty = Math.max(0, top - 1), rx = Math.min(width, left + iw + 1), by = Math.min(height, top + ih + 1);
           var w = rx - lx, ht = by - ty, dx = (lx + rx) / 2 - width / 2, dy = (ty + by) / 2 - height / 2;
@@ -592,8 +662,7 @@
           plan = []; buildPlan(sub);
           try {
             t = target(w, ht, true); colour = target(w, ht, false); drawHeight(t, sub);
-            var exportAux = deriveAll(t, sub, exportState, {});
-            try { drawShade(t, colour, sub, shaders.uniformValues(exportState, sub), exportAux); } finally { freeAux(exportAux); }
+            drawShade(t, colour, sub, shaders.uniformValues(exportState, sub), aux, [lx, ty, height]);
             var pixels = new Uint8Array(w * ht * 4); gl.readPixels(0, 0, w, ht, gl.RGBA, gl.UNSIGNED_BYTE, pixels);
             var image = ctx.createImageData(iw, ih);
             for (var y = 0; y < ih; y++) for (var x = 0; x < iw; x++) {
@@ -602,12 +671,15 @@
               image.data[dst + 1] = alpha ? Math.min(255, Math.round(pixels[src + 1] * 255 / alpha)) : 0;
               image.data[dst + 2] = alpha ? Math.min(255, Math.round(pixels[src + 2] * 255 / alpha)) : 0; image.data[dst + 3] = alpha;
             }
-            ctx.putImageData(image, left, top);
+            ctx.putImageData(image, left - region.x, top - region.y);
           } finally { freeTarget(colour); freeTarget(t); plan = savedPlan; lastResult = savedResult; planDirty = true; }
           // Yield between chunks so large exports do not monopolize the UI thread.
           await new Promise(function (resolve) { setTimeout(resolve, 0); });
         }
-      } finally { gl.bindFramebuffer(gl.FRAMEBUFFER, null); dirty = heightDirty = planDirty = true; needsFrame(); }
+      } finally {
+        if (whole) releaseExport();
+        gl.bindFramebuffer(gl.FRAMEBUFFER, null); dirty = heightDirty = planDirty = true; needsFrame();
+      }
       return result;
     }
     /* Synchronous coarse readback for "fit range to view": at most 128x128
@@ -626,6 +698,7 @@
         gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, field.texture);
         gl.uniform1i(stats.cspField, 0); gl.uniform1i(stats.cspBlur, 1); gl.uniform1i(stats.cspBase, 2);
         gl.uniform1f(stats.cspBlurScale, liveAux.blur ? liveAux.blur.factor : 0); gl.uniform1f(stats.cspBaseScale, liveAux.base ? liveAux.base.factor : 0);
+        gl.uniform3f(stats.cspAuxFrame, 0, 0, field.height);
         gl.drawArrays(gl.TRIANGLES, 0, 3);
         var raw = new Float32Array(w * ht * 4), heights = [], relative = [];
         gl.readPixels(0, 0, w, ht, gl.RGBA, gl.FLOAT, raw);
@@ -681,7 +754,7 @@
       });
     }
     function destroy() {
-      if (destroyed) return; destroyed = true; ready = false; cancelReads('Terrain engine destroyed');
+      if (destroyed) return; releaseExport(); destroyed = true; ready = false; cancelReads('Terrain engine destroyed');
       if (store && store.off) store.off('tile', onTile);
       if (canvas && canvas.removeEventListener) { canvas.removeEventListener('webglcontextlost', onLost); canvas.removeEventListener('webglcontextrestored', onRestored); }
       lru.clear(); cleanResources(); queue.clear(); known.clear(); sources.clear(); plan.length = 0; wanted.length = 0;
@@ -695,12 +768,12 @@
     } catch (e) { error = String(e && e.message || e); destroy(); if (options.onError) { try { options.onError(e); } catch (_) {} } return null; }
     return {
       get ready() { return ready; },
-      setState: function (next) { state = next || {}; dirty = true; if (refreshSources()) heightDirty = planDirty = true; needsFrame(); },
+      setState: function (next) { state = next || {}; stateGeneration++; dirty = true; if (refreshSources()) heightDirty = planDirty = true; needsFrame(); },
       invalidate: function () {
         lru.entries.forEach(function (entry, key) { if (!store.get(key)) lru.delete(key); });
         coverageKey = ''; heightDirty = dirty = planDirty = true; needsFrame();
       }, render: render,
-      neededTiles: function (view) { if (refreshSources()) heightDirty = dirty = planDirty = true; return want(view); }, renderToCanvas: renderToCanvas, readProvenance: readProvenance, sampleValues: sampleValues,
+      neededTiles: function (view) { if (refreshSources()) heightDirty = dirty = planDirty = true; return want(view); }, renderToCanvas: renderToCanvas, releaseExport: releaseExport, readProvenance: readProvenance, sampleValues: sampleValues,
       stats: function () { return {textures: lru.size, textureBytes: lru.bytes, frames: frames, drawCalls: drawCalls, lastFrameMs: lastFrameMs,
         ready: ready, queuedUploads: queue.size, uploads: uploads, evictions: evictions, generation: generation, error: error,
         heightFieldBytes: field ? field.width * field.height * 8 : 0, trackedTiles: known.size,
