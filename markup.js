@@ -9,12 +9,13 @@
    Font controls use pixels at placement and retain a fixed physical size.
 
    Storage. Each layer is one GeoJSON FeatureCollection with a `markup` header.
-   The browser keeps every layer in IndexedDB, so markup works with no engine
-   at all. When the terrain engine is reachable the layers are also kept there
-   as files (server.js /api/markup), which is what shares them between
-   devices: the newer copy of a layer wins, and a deleted layer leaves a
-   tombstone so an offline device cannot resurrect it. Visibility and opacity
-   are this device's view of a layer, not part of it.
+   Layers belong to whoever runs the terrain engine: they are kept only there,
+   as files (server.js /api/markup), and loaded from whichever engine this
+   page is connected to. The site ships no layers and the browser keeps none,
+   so with no engine there is no markup, and switching engines shows that
+   engine's layers only. A deleted layer leaves a tombstone so another device
+   cannot resurrect it. Visibility and opacity are this device's view of a
+   layer, not part of it, and a layer is hidden until it is turned on here.
 
    Rendering. Each layer has its own pane (so layers stack and fade
    independently) with its own SVG renderer, inside the rotating pane. Text
@@ -195,26 +196,6 @@ const MarkupPoint=L.Layer.extend({
 });
 
 /* ------------------------------------------------------------------ storage */
-const idb=(()=>{
-  let opening=null;
-  const open=()=>opening||(opening=new Promise((resolve,reject)=>{
-    if(!window.indexedDB) return reject(new Error("no IndexedDB"));
-    const request=indexedDB.open("clearskies-markup",1);
-    request.onupgradeneeded=()=>{ request.result.createObjectStore("layers");request.result.createObjectStore("meta") };
-    request.onsuccess=()=>resolve(request.result);request.onerror=()=>reject(request.error);
-  }));
-  const run=(store,mode,fn)=>open().then(db=>new Promise((resolve,reject)=>{
-    const tx=db.transaction(store,mode),request=fn(tx.objectStore(store));
-    tx.oncomplete=()=>resolve(request?.result);tx.onerror=()=>reject(tx.error);tx.onabort=()=>reject(tx.error);
-  }));
-  return {
-    all:()=>run("layers","readonly",s=>s.getAll()).catch(()=>[]),
-    put:doc=>run("layers","readwrite",s=>s.put(doc,doc.markup.id)).catch(()=>{}),
-    del:id=>run("layers","readwrite",s=>s.delete(id)).catch(()=>{}),
-    getMeta:key=>run("meta","readonly",s=>s.get(key)).catch(()=>undefined),
-    setMeta:(key,value)=>run("meta","readwrite",s=>s.put(value,key)).catch(()=>{})
-  };
-})();
 const store={
   get(key,fallback){ try{ const v=JSON.parse(localStorage.getItem(key));return v??fallback }catch(e){ return fallback } },
   set(key,value){ try{ localStorage.setItem(key,JSON.stringify(value)) }catch(e){} }
@@ -246,7 +227,7 @@ function makeLayer(doc,view={}){
   const pane=map.getPane(paneName)||map.createPane(paneName,parent);
   pane.classList.add("csp-markup-pane");
   const layer={doc,pane,paneName,renderer:L.svg({pane:paneName,padding:0.5}),group:L.featureGroup(),
-    items:new Map(),visible:view.on!==false,opacity:Number.isFinite(view.op)?view.op:100,rank:view.rank??0,syncedAt:null,renderRevision:0};
+    items:new Map(),visible:view.on===true,opacity:Number.isFinite(view.op)?view.op:100,rank:view.rank??0,syncedAt:null,renderRevision:0};
   layer.group.addTo(map);
   layers.set(id,layer);
   renderLayer(layer);applyView(layer);
@@ -459,7 +440,6 @@ let syncTimer=null,syncing=false,syncAgain=false,lastStatus="";
 const serverState=()=>B.server?.()||{online:false};
 function touch(layer){
   layer.doc.markup.updated=Date.now();
-  idb.put(layer.doc);
   clearTimeout(syncTimer);syncTimer=setTimeout(syncAll,900);
   changed();
 }
@@ -481,7 +461,7 @@ function undoRedo(redo){
   editing.doc.features=JSON.parse(from.pop());
   deselect();renderLayer(editing);touch(editing);paintBar();
 }
-async function pendingDeletes(){ return (await idb.getMeta("pendingDeletes"))||{} }
+const pendingDeletes=new Map();   // id -> deleted at, until the engine confirms
 async function syncAll(){
   const server=serverState();
   if(!server.online) return status();
@@ -494,12 +474,11 @@ async function syncAll(){
     if(listed.status===404){ status("unsupported");return }
     if(!listed.ok) throw new Error(`markup list HTTP ${listed.status}`);
     const list=await listed.json();
-    const pending=await pendingDeletes();
-    for(const [id,at] of Object.entries(pending)){
+    for(const [id,at] of [...pendingDeletes]){
       const r=await fetch(B.api(`/api/markup/${id}/delete`),{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({at})});
-      if(r.ok){ delete pending[id];await idb.setMeta("pendingDeletes",pending) }
+      if(r.ok) pendingDeletes.delete(id);
     }
-    const remote=new Map((list.layers||[]).map(l=>[l.id,l]));
+    const remote=new Map((list.layers||[]).filter(l=>!pendingDeletes.has(l.id)).map(l=>[l.id,l]));
     for(const [id,at] of Object.entries(list.deleted||{})){
       const local=layers.get(id);
       if(local&&local.doc.markup.updated<=at) removeLocal(id);
@@ -512,6 +491,10 @@ async function syncAll(){
     }
     for(const layer of [...layers.values()]){
       const info=remote.get(layer.doc.markup.id);
+      /* A layer this engine has never had is pushed only if it was made here
+         and not saved yet; one that came from an engine and is gone from this
+         one belongs to another engine (or was deleted), so it is let go. */
+      if(!info&&layer.syncedAt!==null){ removeLocal(layer.doc.markup.id);continue }
       if(!info||layer.doc.markup.updated>info.updated) await push(layer);
     }
     status("synced");
@@ -533,7 +516,6 @@ function adopt(doc){
   if(!doc?.markup?.id) return;
   const local=layers.get(doc.markup.id);
   if(local&&editing===local&&gesture) return;      // never pull a mark out from under the pointer
-  idb.put(doc);
   if(local){ local.doc=doc;local.syncedAt=doc.markup.updated;if(selected?.layer===local) deselect();renderLayer(local) }
   else{ const view=readView()[doc.markup.id]||{};const layer=makeLayer(doc,view);layer.syncedAt=doc.markup.updated;layer.rank=nextRank();applyOrder() }
 }
@@ -541,10 +523,15 @@ function removeLocal(id){
   const layer=layers.get(id);if(!layer) return;
   if(editing===layer) stopEditing();
   layer.group.remove();layer.renderer.remove?.();layer.pane.remove();
-  layers.delete(id);schedule3d();idb.del(id);undoStacks.delete(id);redoStacks.delete(id);writeView();changed();
+  layers.delete(id);schedule3d();undoStacks.delete(id);redoStacks.delete(id);writeView();changed();
 }
 function status(state){ if(state) lastStatus=state;changed() }
-document.addEventListener("csp:server",()=>syncAll());
+/* Losing the engine unloads its layers; only edits it has not received yet
+   stay on screen, to be saved when it is back. */
+function unloadSaved(){
+  for(const layer of [...layers.values()]) if(layer.syncedAt!==null&&layer.syncedAt===layer.doc.markup.updated) removeLocal(layer.doc.markup.id);
+}
+document.addEventListener("csp:server",()=>{ if(serverState().online) syncAll();else{ unloadSaved();status() } });
 setInterval(()=>{ if(serverState().online&&!document.hidden) syncAll() },60000);
 
 /* ------------------------------------------------------------- public: CRUD */
@@ -552,7 +539,7 @@ function nextRank(){ return Math.max(0,...[...layers.values()].map(l=>l.rank+1))
 function createLayer(name,color){
   const doc={type:"FeatureCollection",markup:{id:slug(name),name:name.trim().slice(0,120)||"Markup",description:"",color,created:Date.now(),updated:Date.now()},features:[]};
   const layer=makeLayer(doc,{on:true,op:100});layer.rank=nextRank();applyOrder();writeView();
-  idb.put(doc);syncAll();changed();
+  syncAll();changed();
   return layer;
 }
 function renameLayer(layer,name){ if(!name.trim()||name.trim()===layer.doc.markup.name) return;layer.doc.markup.name=name.trim().slice(0,120);touch(layer);if(editing===layer) paintBar() }
@@ -562,10 +549,10 @@ function clearLayer(layer){
   if(selected?.layer===layer) deselect();
   layer.doc.features=[];renderLayer(layer);touch(layer);if(editing===layer) paintBar();
 }
-async function deleteLayer(layer){
-  const id=layer.doc.markup.id,at=Date.now();
+function deleteLayer(layer){
+  const id=layer.doc.markup.id;
   removeLocal(id);
-  const pending=await pendingDeletes();pending[id]=at;await idb.setMeta("pendingDeletes",pending);
+  if(layer.syncedAt!==null) pendingDeletes.set(id,Date.now());
   syncAll();
 }
 
@@ -1716,10 +1703,10 @@ function changed(){
 }
 function statusText(layer){
   const server=serverState();
-  if(!server.online) return "Saved on this device";
-  if(lastStatus==="unsupported") return "Saved on this device · engine needs an update to keep markup";
+  if(!server.online) return "Not saved · terrain engine not connected";
+  if(lastStatus==="unsupported") return "Not saved · engine needs an update to keep markup";
   if(layer.syncedAt===layer.doc.markup.updated) return "Saved to the engine";
-  return lastStatus==="error"?"Saved on this device · engine save failed":"Saving…";
+  return lastStatus==="error"?"Not saved · engine save failed":"Saving…";
 }
 const countText=n=>`${n} item${n===1?"":"s"}`;
 function renderPanel(container){
@@ -1738,15 +1725,15 @@ function renderPanel(container){
         <div class="mk-color-grid" role="radiogroup" aria-label="Layer colour">${COLOR_GRID.map(c=>`<button type="button" class="mk-swatch" role="radio" data-new-color="${c}" style="--c:${c}" aria-pressed="${c===(draftColor||DEFAULT_COLOR)}" aria-checked="${c===(draftColor||DEFAULT_COLOR)}" aria-label="Colour ${c}"></button>`).join("")}</div>
         <div class="mk-new-actions"><button type="button" class="mk-btn" data-act="cancel-new">Cancel</button><button type="button" class="mk-btn mk-btn-primary" data-act="create">Create layer</button></div>
       </div>
-      <button type="button" class="mk-add" data-act="new"><img src="${icon("plus")}" alt=""><span>New markup layer · 2D &amp; 3D</span></button>
+      <button type="button" class="mk-add" data-act="new" ${server.online&&lastStatus!=="unsupported"?"":"disabled"}><img src="${icon("plus")}" alt=""><span>New markup layer · 2D &amp; 3D</span></button>
       <div class="mk-list"></div>
-      <div class="mk-note">${!server.online?"Layers are saved on this device. Connect the terrain engine to keep them there too and share them between devices."
-        :lastStatus==="unsupported"?"This terrain engine was installed before markup existed, so layers stay on this device. Update the engine to the latest code to keep and share them."
-        :"Layers are kept by the terrain engine and on this device, so they are here offline too."}</div>
+      <div class="mk-note">${!server.online?"Markup layers are kept by the terrain engine. Connect one to see its layers or make new ones."
+        :lastStatus==="unsupported"?"This terrain engine was installed before markup existed. Update it to the latest code to keep markup layers."
+        :"Layers are kept by this terrain engine, so they belong to whoever runs it."}</div>
     </div>`;
   if(creating){ $(".mk-new",container).hidden=false;$(".mk-add",container).hidden=true;$(".mk-new-name",container).value=draftName }
   const listEl=$(".mk-list",container);
-  if(!list.length){ const empty=document.createElement("div");empty.className="mk-empty";empty.textContent="No markup layers yet.";listEl.append(empty) }
+  if(!list.length){ const empty=document.createElement("div");empty.className="mk-empty";empty.textContent=server.online?"No markup layers on this engine yet.":"No terrain engine connected.";listEl.append(empty) }
   for(const layer of list){
     const m=layer.doc.markup,n=layer.doc.features.length,active=editing===layer;
     const row=document.createElement("article");row.className="mk-layer";row.dataset.id=m.id;row.classList.toggle("mk-active",active);
@@ -1779,7 +1766,8 @@ function renderPanel(container){
     if(act==="new"){ $(".mk-new",container).hidden=false;button.hidden=true;$(".mk-new-name",container).focus();return }
     if(act==="cancel-new"){ $(".mk-new",container).hidden=true;renderPanel(container);return }
     if(act==="create"){
-      const name=$(".mk-new-name",container).value.trim()||`Markup ${layers.size+1}`;
+      const name=$(".mk-new-name",container).value.trim();
+      if(!name){ $(".mk-new-name",container).focus();return }
       const color=container.querySelector('[data-new-color][aria-pressed="true"]')?.dataset.newColor||DEFAULT_COLOR;
       $(".mk-new",container).hidden=true;
       const created=createLayer(name,color);startEditing(created);return;
@@ -1826,11 +1814,17 @@ function activeEntries(){
     opacity:l.opacity,visible:true,kind:"markup"}));
 }
 /* The map's quick-draw button: back to the layer last drawn on, or the top
-   visible one, or a new layer when there is none. */
+   visible one, or any layer. With none it makes none: layers are named by
+   the person who makes them, from the Layers panel, on a connected engine. */
 function quickDraw(){
   if(editing){ setToolsOpen(!toolsOpen);return true }
   const all=[...layers.values()].sort((a,b)=>b.rank-a.rank);
-  const layer=layers.get(lastLayerId)||all.find(l=>l.visible)||all[0]||createLayer(`Markup ${layers.size+1}`,DEFAULT_COLOR);
+  const layer=layers.get(lastLayerId)||all.find(l=>l.visible)||all[0];
+  if(!layer){
+    document.dispatchEvent(new CustomEvent("csp:open-route",{detail:{route:"markup"}}));
+    if(panel?.isConnected&&serverState().online) panel.querySelector('[data-act="new"]:not([disabled])')?.click();
+    return false;
+  }
   startEditing(layer);return true;
 }
 
@@ -1841,10 +1835,6 @@ window.CSPMarkup={prepare3d,attach3d,snapshotEntries,drawSnapshotLayer,renderPan
 
 /* ------------------------------------------------------------------- start */
 sizeEraser();
-(async()=>{
-  const view=readView();
-  for(const doc of await idb.all()) if(doc?.markup?.id&&!layers.has(doc.markup.id)) makeLayer(doc,view[doc.markup.id]||{});
-  applyOrder();changed();
-  syncAll();
-})();
+changed();
+syncAll();
 })();

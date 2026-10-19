@@ -1257,6 +1257,11 @@ for(const element of [$("#coordCopy"),$("#coordOpen"),$("#coordGoogleMaps"),$("#
 document.addEventListener("input",event=>{if(event.target.closest("#side")||event.target.closest("#pointCloudPanel")) scheduleLayerRefresh(120)},true);
 document.addEventListener("change",()=>scheduleLayerRefresh(0),true);
 document.addEventListener("csp:layers-changed",()=>scheduleLayerRefresh(80));
+/* Other modules can send the person to a section, e.g. Draw with no markup layer yet. */
+document.addEventListener("csp:open-route",event=>{
+  activateRoute(event.detail?.route);
+  if(document.body.classList.contains("collapsed")) $("#sideToggle")?.click();
+});
 new MutationObserver(()=>scheduleLayerRefresh(80)).observe($("#ctl"),{attributes:true,childList:true,subtree:true,characterData:true});
 new MutationObserver(()=>scheduleLayerRefresh(80)).observe($("#panes"),{attributes:true,subtree:true,attributeFilter:["class","hidden","aria-pressed"]});
 setInterval(()=>{ if(document.visibilityState==="visible") scheduleLayerRefresh(0) },1800);
