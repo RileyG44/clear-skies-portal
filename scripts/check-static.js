@@ -333,6 +333,10 @@ assert(index.includes('<script src="markup.js?build=')&&index.includes('window.C
        index.includes('window.CSPMarkup?.activeEntries()')&&index.includes('server:()=>({online:PROXY,base:API})'),
        "markup layers must load, list in Layers, reach the engine and appear in exports");
 assert(read(".gitignore").includes("\nmarkup/"),"markup layers are the user's files and must never be committed");
+{ const markup=read("markup.js");
+  assert(!/indexedDB|\bidb\./.test(markup),"markup layers are kept only by the running terrain engine, never in the browser");
+  assert(!markup.includes("`Markup ${"),"the site never makes a markup layer of its own; people name the layers they make");
+  assert(markup.includes("visible:view.on===true"),"markup layers stay off until turned on on this device"); }
 for(const file of ["server.js","sw.js","package.json",".github/workflows/ci.yml","scripts/minify-site.js"])
   assert(read(file).includes("markup.js"),`${file} must ship markup.js`);
 /* The elevation spectrum and highlights drape in 3D, over any terrain or
