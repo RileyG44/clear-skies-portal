@@ -229,6 +229,10 @@
       const head=el("div","ls-head ls-layers-head",`<div class="ls-layer-label"><h3 class="menu-section-title">Layers</h3><span class="pane-n">${layerKeys().length} of ${R.MAX_LAYERS}</span></div>`);
       wrap.append(head);
       wrap.append(el("p","control-hint","Open a layer to edit colors, opacity and blending. Layers at the top draw over those below."));
+      /* The host's own layers (surface analysis) draw above the terrain, so
+         they list first. */
+      const addon=host.layersAddon&&host.layersAddon();
+      if(addon) wrap.append(addon);
       if(!s)wrap.append(el("p","control-hint","Add your first layer, or choose a look below."));
       const list=el("ol","ls-layers");list.setAttribute("aria-label","Terrain layers, top first");
       const keys=layerKeys().reverse();

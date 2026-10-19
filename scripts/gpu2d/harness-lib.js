@@ -74,9 +74,7 @@ const CONTROLS = {
   feather: ['#elevBandFeather', false],
   bandOpacity: ['#elevBandAlpha', false],
   outline: ['#elevBandOutline', true],
-  readout: ['#snapshotReadout', true],
-  product: ['#researchProduct', false],
-  scale: ['#researchScale', false]
+  readout: ['#snapshotReadout', true]
 };
 
 const TERRAIN_ONLY_CSS = `
