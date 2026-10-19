@@ -3261,3 +3261,5 @@ body.csp-redesign #panes .elev-settings{border-top:1px solid var(--ui-line);marg
 .elev-spectrum-colors input[type=color]{width:100%;height:36px;padding:2px;border:1px solid var(--ui-line);border-radius:6px}
 /* Native disclosure visibility wins immediately over the shared fold animation. */
 .csp-glass body.csp-redesign.csp-redesign #cspWorkspace :is(.elev-settings,.elev-module)::details-content{transition:none}
+
+.csp-glass body.csp-redesign.csp-redesign #cspWorkspace #panes .elev-module-head label.csp-switch-row{padding:0;min-height:44px;flex:1;min-width:0;width:auto;gap:8px;font-size:13px}

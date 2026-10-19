@@ -217,6 +217,7 @@ if(!classicUi){
 }
 
 const spectrumBox=$("#elevSh")?.closest(".fabbox");if(spectrumBox) spectrumBox.id="elevSpectrumBox";
+if(!classicUi)toSwitchRow($("#lb_elevSh"));
 const bandsBox=$("#elevBandsBox"),surfaceBox=$("#researchProduct")?.closest(".fabbox"),geologyBox=$("#geologyIdentifyBox");
 const researchPane=$(".pane[data-pane='research']",panes),researchBody=$(".pane-b",researchPane);
 const fabricBox=$("#fabricResearchBox");
