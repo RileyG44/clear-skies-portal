@@ -83,6 +83,8 @@
           "elevation-tile-core.js",
           "tile-pipeline.js",
           "gpu-terrain-shaders.js",
+          "lidar-render.js",
+          "lidar-studio.js",
           "gpu-terrain-store.js",
           "gpu-terrain-engine.js",
           "gpu-terrain-layer.js", "gpu-terrain-3d-cache.js", "gpu-terrain-3d-renderer.js", "gpu-terrain-3d-layer.js",
