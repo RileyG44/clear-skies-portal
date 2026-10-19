@@ -3230,3 +3230,16 @@ body.csp-redesign #panes #surfaceResearchBox .elev-field[hidden]{display:none}
 .ls-disclosure-value{font-size:11px;font-weight:400;color:var(--ui-text-muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:80px}
 .ls-disclosure-body{display:grid;gap:14px;padding:8px 0}
 .ls-looks-section[open],.ls-disclosure.ls-section[open]{display:grid;gap:8px}
+
+/* Elevation: switches stay visible; settings fold into task-specific groups. */
+.elev-module-head{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.elev-module-head .menu-section-title{margin:0}
+.elev-highlight-toggles{display:flex;gap:24px;flex-wrap:wrap}
+.elev-settings-body{display:grid;gap:16px;padding:8px 0 16px;min-width:0}
+.elev-threshold-row{display:flex;align-items:center;gap:10px;min-width:0}
+.elev-threshold-row .unit-field{flex:1;min-width:0}
+.elev-threshold-row input[type=color]{flex:none;width:44px;height:36px;padding:2px;border:1px solid var(--ui-line);border-radius:8px}
+body.csp-redesign #panes .elev-module-head :is(#elevSpectrumReset,#elevBandsReset){width:auto;min-height:40px;margin:0!important;padding:0 8px;border:0;text-align:right;font-size:12px}
+body.csp-redesign #panes .elev-module-head .check{margin:0;padding-left:0}
+body.csp-redesign #panes .elev-module-head .elev-toggle{font-size:14px}
+body.csp-redesign #panes .elev-settings{border-top:1px solid var(--ui-line);margin-top:8px}

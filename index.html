@@ -993,8 +993,8 @@ body.pane-reordering,body.pane-reordering *{cursor:grabbing!important;user-selec
 }
 
 </style>
-<link rel="stylesheet" href="ui-theme.css?build=2026-10-19c">
-<link rel="stylesheet" href="ui-system.css?build=2026-10-19c">
+<link rel="stylesheet" href="ui-theme.css?build=2026-10-19d">
+<link rel="stylesheet" href="ui-system.css?build=2026-10-19d">
 <style>
 /* The redesign restructures the legacy DOM rather than replacing it, and the
    script that does so is the last thing on the page - so the browser paints the
@@ -1379,11 +1379,16 @@ html.csp-boot body{visibility:hidden}
           <span class="pane-x">&#9662;</span>
         </div>
         <div class="pane-b">
-          <div class="fabbox">
-            <label class="check elev-toggle" id="lb_elevSh">
-              <input type="checkbox" id="elevSh"> Elevation spectrum
-            </label>
-            <div class="elev-form">
+          <p class="control-hint">Turn on a height overlay, then open its settings to adjust it.</p>
+          <div class="fabbox" id="elevSpectrumBox">
+            <div class="elev-module-head">
+              <label class="check elev-toggle" id="lb_elevSh"><input type="checkbox" id="elevSh"> Elevation spectrum</label>
+              <button class="linkbtn" id="elevSpectrumReset" type="button">Reset</button>
+            </div>
+            <div id="elevOut" class="fabout"></div>
+            <details class="terrain-appearance elev-settings">
+              <summary>Reference & colour range</summary>
+              <div class="elev-form elev-settings-body">
               <div class="elev-field">
                 <div class="elev-control-row">
                   <div class="elev-field"><label class="elev-label" for="elevVal">Reference elevation</label><input type="number" id="elevVal" value="1100" step="10"></div>
@@ -1413,6 +1418,11 @@ html.csp-boot body{visibility:hidden}
                 <div class="elevRamp" aria-hidden="true"></div>
                 <div class="elevKey"><span><b>red</b> lower</span><span><b>white</b> reference</span><span><b>blue</b> higher</span></div>
               </div>
+              </div>
+            </details>
+            <details class="terrain-appearance elev-settings">
+              <summary>Spectrum opacity</summary>
+              <div class="elev-settings-body">
               <div class="elev-field elev-opacity-control">
                 <div class="elev-label-row">
                   <label class="elev-label" for="elevAlpha">Spectrum opacity</label>
@@ -1420,34 +1430,42 @@ html.csp-boot body{visibility:hidden}
                 </div>
                 <input type="range" id="elevAlpha" min="0" max="100" step="1" value="48" aria-label="Elevation spectrum opacity">
               </div>
-            </div>
-            <div id="elevOut" class="fabout"></div>
-            <button class="linkbtn" id="elevSpectrumReset" type="button" style="margin-top:8px">Reset spectrum</button>
+              </div>
+            </details>
           </div>
           <div class="fabbox" id="elevBandsBox">
-            <div class="elev-section-head">
-              <span class="elev-section-title">Elevation highlights</span>
-
+            <div class="elev-module-head">
+              <h3 class="menu-section-title">Elevation highlights</h3>
+              <button class="linkbtn" id="elevBandsReset" type="button">Reset</button>
             </div>
-            <p class="control-hint">Colour the ground below or above a height you choose.</p>
-            <div class="elev-band-list">
-              <div class="elev-band-row">
-                <label class="check" id="lb_elevBelow"><input type="checkbox" id="elevBelowOn"> Below</label>
-                <input type="color" id="elevBelowColor" value="#f85c6c" aria-label="Below-elevation colour">
-                <div class="unit-field">
-                  <input type="number" id="elevBelowVal" value="1000" step="10" aria-label="Shade below elevation in feet">
-                  <span class="unit-suffix">ft</span>
+            <p class="control-hint">Highlight ground below or above a height.</p>
+            <div class="elev-highlight-toggles">
+              <label class="check" id="lb_elevBelow"><input type="checkbox" id="elevBelowOn"> Below</label>
+              <label class="check" id="lb_elevAbove"><input type="checkbox" id="elevAboveOn"> Above</label>
+            </div>
+            <div class="elev-band-note" id="elevBandOut">Enable a below or above band to highlight ground at those heights.</div>
+            <details class="terrain-appearance elev-settings">
+              <summary>Thresholds & colours</summary>
+              <div class="elev-settings-body elev-thresholds">
+                <div class="elev-field">
+                  <label for="elevBelowVal">Below elevation</label>
+                  <div class="elev-threshold-row">
+                    <input type="color" id="elevBelowColor" value="#f85c6c" aria-label="Below-elevation colour">
+                    <div class="unit-field"><input type="number" id="elevBelowVal" value="1000" step="10" aria-label="Shade below elevation in feet"><span class="unit-suffix">ft</span></div>
+                  </div>
+                </div>
+                <div class="elev-field">
+                  <label for="elevAboveVal">Above elevation</label>
+                  <div class="elev-threshold-row">
+                    <input type="color" id="elevAboveColor" value="#46a0ff" aria-label="Above-elevation colour">
+                    <div class="unit-field"><input type="number" id="elevAboveVal" value="1500" step="10" aria-label="Shade above elevation in feet"><span class="unit-suffix">ft</span></div>
+                  </div>
                 </div>
               </div>
-              <div class="elev-band-row">
-                <label class="check" id="lb_elevAbove"><input type="checkbox" id="elevAboveOn"> Above</label>
-                <input type="color" id="elevAboveColor" value="#46a0ff" aria-label="Above-elevation colour">
-                <div class="unit-field">
-                  <input type="number" id="elevAboveVal" value="1500" step="10" aria-label="Shade above elevation in feet">
-                  <span class="unit-suffix">ft</span>
-                </div>
-              </div>
-            </div>
+            </details>
+            <details class="terrain-appearance elev-settings">
+              <summary>Edges & opacity</summary>
+              <div class="elev-settings-body">
             <div class="elev-band-options">
               <div class="elev-field">
                 <label class="elev-label" for="elevBandFeather">Soft transition</label>
@@ -1467,8 +1485,8 @@ html.csp-boot body{visibility:hidden}
                 <input type="checkbox" id="elevBandOutline"> White threshold line
               </label>
             </div>
-            <div class="elev-band-note" id="elevBandOut">Enable a below or above band to highlight ground at those heights.</div>
-            <button class="linkbtn" id="elevBandsReset" type="button" style="margin-top:8px">Reset highlights</button>
+              </div>
+            </details>
           </div>
         </div>
         <div class="pane-rz" title="Drag to resize"></div>
@@ -1878,7 +1896,7 @@ html.csp-boot body{visibility:hidden}
   L.Renderer.prototype.onAdd=function(map){return onAdd.call(this,map||this._map)};
 })();
 </script>
-<script src="version.js?build=2026-10-19c"></script>
+<script src="version.js?build=2026-10-19d"></script>
 <script src="mosaic-core.js"></script>
 <script src="png-stream.js"></script>
 <script src="terrain-core.js"></script>
@@ -11459,8 +11477,8 @@ $("#q").addEventListener("blur",()=>setTimeout(acHide,120));
 document.addEventListener("click",e=>{ if(!e.target.closest("#iw")) acHide() });
 })();
 </script>
-<script src="markup-3d.js?build=2026-10-19c"></script>
-<script src="markup.js?build=2026-10-19c"></script>
-<script src="ui-system.js?build=2026-10-19c"></script>
+<script src="markup-3d.js?build=2026-10-19d"></script>
+<script src="markup.js?build=2026-10-19d"></script>
+<script src="ui-system.js?build=2026-10-19d"></script>
 </body>
 </html>
