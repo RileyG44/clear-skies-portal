@@ -49,6 +49,25 @@ assert.equal(rendered[0].data[3],0,'ground outside a sink is clear');assert(rend
 rendered.length=0;
 researchEnv.researchColourRaster({width:2,height:1,label:'Sky',data:new Float32Array([1,1])},'svf',{palette:'grey',relief:100,hillshade:new Float32Array([0,1])});
 assert(rendered[0].data[0]<rendered[0].data[4],'relief shading darkens shadowed ground');
+/* Analysis layers can wear the LiDAR Studio's palettes and run them backwards. */
+researchEnv.CSPLidarRender=require('./lidar-render.js');researchEnv.CSPAnalysisLayers=require('./analysis-layers.js');
+const svfChoices=researchEnv.researchPaletteChoices('svf').map(p=>p.id);
+assert(svfChoices.includes('studio:magma')&&svfChoices[0]==='grey','ramp analyses list their own palettes first, then the studio\'s');
+assert(!svfChoices.includes('studio:default-tint')&&!svfChoices.includes('studio:ice-glow'),'fixed-range and see-through studio palettes stay out');
+assert.deepEqual([...researchEnv.researchPaletteChoices('avalanche').map(p=>p.id)],['caltopo','fatmap'],'class looks keep only their own palettes');
+assert.equal(researchEnv.researchPaletteId('svf','studio:magma'),'studio:magma');
+assert.equal(researchEnv.researchPaletteId('avalanche','studio:magma'),'caltopo','a palette the look cannot wear falls back');
+rendered.length=0;
+researchEnv.researchColourRaster({width:2,height:1,label:'Sky',data:new Float32Array([0,1])},'svf',{palette:'studio:magma'});
+assert.deepEqual([...rendered[0].data.slice(0,3)],[0,0,4],'studio magma starts black');
+rendered.length=0;
+researchEnv.researchColourRaster({width:2,height:1,label:'Sky',data:new Float32Array([0,1])},'svf',{palette:'grey',reverse:true});
+assert.deepEqual([...rendered[0].data],[255,255,255,255,11,11,13,255],'reverse flips the ramp');
+assert.match(researchEnv.researchPaletteCss('grey',true),/^linear-gradient\(90deg,#ffffff 0%,#0b0b0d 100%\)$/);
+assert.deepEqual([...researchEnv.researchParamKeys('solar')],['sunDate']);assert.deepEqual([...researchEnv.researchParamKeys('wind')],['scale','wind']);
+const catalogIds=vm.runInNewContext('RESEARCH_CATALOG',researchEnv).flatMap(g=>g.items.map(i=>i[0]));
+assert.equal(new Set(catalogIds).size,catalogIds.length,'every analysis is listed once');
+for(const id of catalogIds) assert(vm.runInNewContext('RESEARCH_HINTS',researchEnv)[id],`${id} has a hint`);
 const looks=vm.runInNewContext('RESEARCH_LOOKS',researchEnv),palettes=vm.runInNewContext('RESEARCH_PALETTES',researchEnv);
 assert.equal(looks.geomorphons.read(3),'Ridge');
 assert.equal(looks.wind.read(4),'Sheltered 4.0° · snow loading');

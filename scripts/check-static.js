@@ -768,7 +768,7 @@ assert(server.includes("const TTL_SNOW   = 2*3600*1000"),
        "the M2 snow cache must not hide most of NOAA's four daily updates");
 for(const asset of ["mosaic-core.js","terrain-core.js","terrain-raster.js","elevation-bands.js","elevation-tile-core.js","wa-archaeology.js",
                     "glacial-research-core.js","terrain-analysis-core.js","research-analysis.js","research-worker.js","maxar-catalog.json",
-                    "lidar-render.js","lidar-studio.js"])
+                    "lidar-render.js","lidar-studio.js","analysis-layers.js"])
   assert(read(".github/workflows/ci.yml").includes(asset),`Pages artifact must include ${asset}`);
 
 /* Global imagery. The portal shipped without any: cartographic basemaps plus a
@@ -816,7 +816,7 @@ for(const file of [".github/workflows/ci.yml","sw.js","server.js","scripts/insta
 /* The LiDAR colour studio loads from index.html, so every runtime that
    serves the page has to carry it. */
 for(const file of ["server.js","sw.js","package.json","scripts/install-mac-service.sh","scripts/minify-site.js"])
-  for(const asset of ["lidar-render.js","lidar-studio.js"])
+  for(const asset of ["lidar-render.js","lidar-studio.js","analysis-layers.js"])
     assert(read(file).includes(asset),`${file} must ship ${asset}`);
 /* Server-only cache logic must ship with both runtime distributions without
    becoming a browser asset or a service-worker precache entry. */

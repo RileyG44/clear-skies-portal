@@ -45,14 +45,17 @@ async function cursorText(page) {
 async function researchText(page) {
   await h.expandSidebar(page);
   await h.openPane(page, 'research');
-  await h.setControls(page, { product: 'lrm', scale: 'balanced' });
-  await page.evaluate(() => document.querySelector('#researchRun')?.click());
+  await page.evaluate(() => {
+    document.querySelector('#researchReset')?.click();
+    document.querySelector('#researchLayers .ls-add-button')?.click();
+    document.querySelector('#researchLayers [data-add-product="lrm"]')?.click();
+  });
   try {
     await page.waitForFunction(() => {
       const out = document.querySelector('#researchOut');
       if (!out) return false;
       const text = out.textContent || '';
-      const busy = !!out.querySelector('.spin') || /assembling the best|Analyzing elevation/.test(text);
+      const busy = !!out.querySelector('.spin') || /Reading elevation|Analyzing this view|Updating for this view/.test(text);
       return text.length > 40 && !busy;
     }, { timeout: 90000 });
   } catch (error) {

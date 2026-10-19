@@ -210,6 +210,10 @@
       const wrap=el("div","ls-section");
       const head=el("div","ls-head",`<h3 class="menu-section-title">Layers</h3><span class="pane-n">${layerKeys().length} of ${R.MAX_LAYERS}</span>`);
       wrap.append(head);
+      /* The host's own layers (surface analysis) draw above the terrain, so
+         they list first. */
+      const addon=host.layersAddon&&host.layersAddon();
+      if(addon) wrap.append(addon);
       if(!s){wrap.append(el("p","control-hint","Choose a LiDAR layer above, or a look, to start styling."));return wrap}
       const list=el("ol","ls-layers");list.setAttribute("aria-label","Terrain layers, top first");
       const keys=layerKeys().reverse();
