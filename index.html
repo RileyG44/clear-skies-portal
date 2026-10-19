@@ -993,8 +993,8 @@ body.pane-reordering,body.pane-reordering *{cursor:grabbing!important;user-selec
 }
 
 </style>
-<link rel="stylesheet" href="ui-theme.css?build=2026-10-18a">
-<link rel="stylesheet" href="ui-system.css?build=2026-10-18a">
+<link rel="stylesheet" href="ui-theme.css?build=2026-10-18b">
+<link rel="stylesheet" href="ui-system.css?build=2026-10-18b">
 <style>
 /* The redesign restructures the legacy DOM rather than replacing it, and the
    script that does so is the last thing on the page - so the browser paints the
@@ -1260,6 +1260,7 @@ html.csp-boot body{visibility:hidden}
                 <option value="hs">Hillshade</option>
                 <option value="hsmulti">Hillshade (multi-directional)</option>
                 <option value="tint">Elevation tinted</option>
+                <option value="rem">Relative elevation</option>
                 <option value="slope">Slope</option>
                 <option value="aspect">Aspect</option>
                 <option value="northness">North&ndash;south exposure</option>
@@ -1290,6 +1291,7 @@ html.csp-boot body{visibility:hidden}
               <div class="dnr-status-row"><div id="dnrAreaMsg" class="warmmsg" role="status" aria-live="polite">No downloaded areas</div>
                 <button class="linkbtn" id="dnrClear" type="button">Clear areas</button></div>
             </div>
+            <div class="terrain-subsection lidar-studio" id="terStudio" aria-label="LiDAR colours, layers and effects"></div>
             <div class="terrain-subsection" id="terAppearance">
               <h3 class="menu-section-title">Layer appearance <span class="pane-n" id="terLookStyle">per layer</span></h3>
               <div class="terrain-look-grid">
@@ -1862,7 +1864,7 @@ html.csp-boot body{visibility:hidden}
   L.Renderer.prototype.onAdd=function(map){return onAdd.call(this,map||this._map)};
 })();
 </script>
-<script src="version.js?build=2026-10-18a"></script>
+<script src="version.js?build=2026-10-18b"></script>
 <script src="mosaic-core.js"></script>
 <script src="png-stream.js"></script>
 <script src="terrain-core.js"></script>
@@ -1874,6 +1876,8 @@ html.csp-boot body{visibility:hidden}
 <script src="public-terrain.js"></script>
 <script src="tile-pipeline.js"></script>
 <script src="gpu-terrain-shaders.js"></script>
+<script src="lidar-render.js"></script>
+<script src="lidar-studio.js"></script>
 <script src="gpu-terrain-store.js"></script>
 <script src="gpu-terrain-engine.js"></script>
 <script src="gpu-terrain-layer.js"></script>
@@ -5651,7 +5655,7 @@ const DEP_RULE = { hs:"Hillshade Gray", hsmulti:"Hillshade Multidirectional",
                    northness:"Aspect Map",
                    c2:"Preset 2ft Contour Interval", c5:"Preset 5ft Contour Interval",
                    c10:"Preset 10ft Contour Interval", c25:"Contour Smoothed 25" };
-const STYLE_NAME = { hs:"Hillshade", hsmulti:"Hillshade (multi-directional)", tint:"Elevation tinted",
+const STYLE_NAME = { hs:"Hillshade", hsmulti:"Hillshade (multi-directional)", tint:"Elevation tinted", rem:"Relative elevation",
                      slope:"Slope", aspect:"Aspect", northness:"North–south exposure", c2:"2 ft contours", c5:"5 ft contours",
                      c10:"10 ft contours", c25:"25 ft contours" };
 /* WA DNR publishes one pre-rendered DTM hillshade. It cannot honestly stand in
@@ -5909,6 +5913,16 @@ let terLayer=null, terBase=null, PROXY=false, WA_LAYERS=null, waCover=null, terT
 // imagery is 410, terrain 440, spectrum 450 and research 455.
 let gpuTerrainLayer=null,gpuTerrainStore=null,gpuTerrainEnabled=false,gpuTerrainDecided=false,gpuSourceKey=null,gpuTerrainOrderZ=null;
 let gpuSourceSpecs=null,gpuSourceSpecsKey=null;
+/* LiDAR Studio (lidar-studio.js) is mounted with the terrain controls below;
+   until then, and without a GPU, terrain draws its classic look. */
+let lidarStudio=null,studioFitTimer=0;
+function studioStack(style,options){ return style&&style!=="off"&&lidarStudio?lidarStudio.stack(style,options):null }
+/* Auto ranges follow the view once the terrain has settled after a pan. */
+function scheduleStudioFit(){
+  if(!lidarStudio?.needsFit())return;
+  clearTimeout(studioFitTimer);
+  studioFitTimer=setTimeout(()=>lidarStudio?.fitFromView(),450);
+}
 function initGpuTerrain(){
   if(gpuTerrainDecided)return gpuTerrainEnabled;
   gpuTerrainDecided=true;
@@ -5921,10 +5935,12 @@ function initGpuTerrain(){
     gpuTerrainLayer=L.cspGpuTerrainLayer({store:gpuTerrainStore,state:gpuTerrainState(),zIndex:440,
       maxTextureBytes:(matchMedia("(pointer:coarse)").matches?64:192)*1024*1024});
     gpuTerrainEnabled=!!gpuTerrainLayer.getEngine();
+    gpuTerrainLayer.on("render",scheduleStudioFit);
     if(!gpuTerrainEnabled){gpuTerrainLayer.destroy();gpuTerrainLayer=null;
       try{gpuTerrainStore.destroy()}catch{}gpuTerrainStore=null;}
   }
   document.documentElement.dataset.gpu2d=gpuTerrainEnabled?"on":"off";
+  if(!gpuTerrainEnabled)lidarStudio?.refresh();
   return gpuTerrainEnabled;
 }
 function gpuElevationRequest(url,options={}){
@@ -5957,9 +5973,13 @@ function gpuElevationSources(){
 }
 function gpuTerrainState(){
   const style=$("#terStyle").value;
-  return CSPGpuTerrainLayer.buildState({style:style!=="off"&&chooseTerrain(style).src!=="wadnr"?style:"off",
+  const drawn=style!=="off"&&chooseTerrain(style).src!=="wadnr"?style:"off";
+  const state=CSPGpuTerrainLayer.buildState({style:drawn,
     opacity:terrainOpacity()/100,look:terrainLook(style),lighting:terrainLighting(),
     spectrum:elevationRenderSettings(),spectrumOpacity:1});
+  const stack=drawn!=="off"?studioStack(drawn):null;
+  if(stack)state.terrain.stack=stack;
+  return state;
 }
 function syncGpuTerrain(){
   if(!gpuTerrainEnabled)return;
@@ -6479,8 +6499,9 @@ function map3dStructureKey(){
 }
 function gpu3dStates(){
   const style=$("#terStyle").value;
+  const stack=studioStack(style==="off"?null:style,{flat:true});
   return {analysis:{terrain:{style:style==="off"?"hs":style,opacity:1,look:terrainLook(style),
-    ...(["hs","hsmulti","tint","off"].includes(style)?{lighting:terrainLighting()}:{})},spectrumOpacity:0},
+    ...(stack||["hs","hsmulti","tint","off"].includes(style)?{lighting:terrainLighting()}:{}),...(stack?{stack}:{})},spectrumOpacity:0},
     elevspec:{terrain:{style:"off"},spectrum:elevationRenderSettings(),spectrumOpacity:1}};
 }
 function initGpu3d(module){
@@ -6502,6 +6523,9 @@ function terrainRasterStyle(){
      ground. With neither on, 3D shows the default hillshade as before. */
   const spectrumAlone=$("#terStyle").value==="off"&&elevationActive();
   const theme=terrainTheme(),style=$("#terStyle").value==="off"?"hs":$("#terStyle").value,gpu=gpu3dPreferred();
+  /* A styled scene (LiDAR Studio colours or layers) draws through the GPU
+     analysis drape, never MapLibre's own hillshade and tint. */
+  const styled=gpu&&!!studioStack($("#terStyle").value),plain=(style==="hs"||style==="hsmulti")&&!styled;
   const light=terrainLighting(),opacity=terrainOpacity()/100,pick=chooseTerrain(style);
   const directions=style==="hsmulti"?[light.azimuth,(light.azimuth+90)%360,(light.azimuth+180)%360,(light.azimuth+270)%360]:light.azimuth;
   const altitudes=style==="hsmulti"?[light.altitude,light.altitude,light.altitude,light.altitude]:light.altitude;
@@ -6526,9 +6550,9 @@ function terrainRasterStyle(){
   /* Elevation tint under the shading, for every case where the ground would
      otherwise be bare hillshade or a published drape. */
   if(gpu||!spectrumAlone&&(style==="hs"||style==="hsmulti"||pick.src==="wadnr")) layers.push({id:"terrain-relief",type:"color-relief",source:"demShade",
-    layout:{visibility:!spectrumAlone&&(style==="hs"||style==="hsmulti"||pick.src==="wadnr")?"visible":"none"},
+    layout:{visibility:!spectrumAlone&&(plain||!styled&&pick.src==="wadnr")?"visible":"none"},
     paint:{"color-relief-color":hypsometricRamp(),"color-relief-opacity":theme==="dark"?.32:.4}});
-  if(gpu||style==="hs"||style==="hsmulti") layers.push({id:"terrain-hillshade",type:"hillshade",source:"demShade",layout:{visibility:style==="hs"||style==="hsmulti"?"visible":"none"},paint:{
+  if(gpu||style==="hs"||style==="hsmulti") layers.push({id:"terrain-hillshade",type:"hillshade",source:"demShade",layout:{visibility:plain?"visible":"none"},paint:{
     "hillshade-method":style==="hsmulti"?"multidirectional":"standard",
     "hillshade-illumination-direction":directions,"hillshade-illumination-altitude":altitudes,
     "hillshade-illumination-anchor":"map","hillshade-exaggeration":Math.max(.05,Math.min(1,opacity*1.15)),
@@ -6540,7 +6564,7 @@ function terrainRasterStyle(){
   }});
   if(gpu||!(style==="hs"||style==="hsmulti")){
     sources.analysis={type:"raster",tiles:[gpu?"cspgpu3d://analysis/{z}/{x}/{y}.png":`cspterrain://${style}/{z}/{x}/{y}.png?r=${++map3dStyleRevision}`],tileSize:256,maxzoom:18};
-    layers.push({id:"terrain-analysis",type:"raster",source:"analysis",layout:{visibility:style!=="hs"&&style!=="hsmulti"?"visible":"none"},paint:{"raster-opacity":opacity,"raster-fade-duration":0}});
+    layers.push({id:"terrain-analysis",type:"raster",source:"analysis",layout:{visibility:!plain?"visible":"none"},paint:{"raster-opacity":opacity,"raster-fade-duration":0}});
   }
   if(spectrumAlone){
     /* The hillshade above was built at full terrain strength; standing alone
@@ -6901,8 +6925,9 @@ function apply3dLighting(){
     if(map3d.getTerrain()?.exaggeration!==light.exaggeration)map3d.setTerrain({source:"dem",exaggeration:light.exaggeration});
     if(gpu3d?.enabled){
       const actual=style==="off"?"hs":style,pick=chooseTerrain(actual),spectrumAlone=style==="off"&&elevationActive();
-      const visible={"terrain-analysis":actual!=="hs"&&actual!=="hsmulti","terrain-hillshade":actual==="hs"||actual==="hsmulti",
-        "terrain-relief":!spectrumAlone&&(actual==="hs"||actual==="hsmulti"||pick.src==="wadnr"),"elev-spectrum":elevationActive()};
+      const plain=(actual==="hs"||actual==="hsmulti")&&!studioStack(style);
+      const visible={"terrain-analysis":!plain,"terrain-hillshade":plain,
+        "terrain-relief":!spectrumAlone&&(plain||!studioStack(style)&&pick.src==="wadnr"),"elev-spectrum":elevationActive()};
       for(const [id,on] of Object.entries(visible))if(map3d.getLayer(id)&&map3d.getLayoutProperty(id,"visibility")!==(on?"visible":"none"))map3d.setLayoutProperty(id,"visibility",on?"visible":"none");
       map3d.setPaintProperty("terrain-hillshade","hillshade-method",actual==="hsmulti"?"multidirectional":"standard");
       gpu3d.update();
@@ -7076,6 +7101,9 @@ function terrainLighting(){
       ago at a wider zoom does nothing here, with no explanation. */
 function sunEffect(){
   const style=$("#terStyle").value;
+  const stack=gpuTerrainEnabled?studioStack(style):null;
+  if(stack&&stack.layers.some(layer=>layer.style==="hs"||layer.style==="hsmulti"||(layer.style==="tint"||layer.style==="rem")&&layer.param>0))
+    return {live:true,why:"Shaded layers in this look relight instantly."};
   const verdict=CSPTerrain.sunAffectsTerrain(style,style==="off"?null:chooseTerrain(style).src);
   if(verdict.reason==="off") return {live:false,why:"Terrain is off, so there is nothing here to light."};
   if(verdict.reason==="derived"){
@@ -7103,7 +7131,7 @@ function syncTerrainLighting(){
 }
 const TERRAIN_LOOK_DEFAULTS={
   hs:{contrast:100,saturation:100,brightness:100},hsmulti:{contrast:100,saturation:100,brightness:100},
-  tint:{contrast:100,saturation:100,brightness:100},slope:{contrast:100,saturation:100,brightness:100},
+  tint:{contrast:100,saturation:100,brightness:100},rem:{contrast:100,saturation:100,brightness:100},slope:{contrast:100,saturation:100,brightness:100},
   aspect:{contrast:100,saturation:100,brightness:100},c2:{contrast:100,saturation:100,brightness:100},
   northness:{contrast:100,saturation:100,brightness:100},
   c5:{contrast:100,saturation:100,brightness:100},c10:{contrast:100,saturation:100,brightness:100},
@@ -7485,6 +7513,12 @@ function paintTerrainInfo(pick){
 
 function paintTerrainLegend(style){
   const el=$("#terLegend"); if(!el) return;
+  const studio=gpuTerrainEnabled&&style!=="off"?lidarStudio?.legend(style):null;
+  if(studio){
+    el.className="terlegend on";
+    el.innerHTML=`<div class="caption">${esc(studio.caption)}</div><div class="bar" style="background:${studio.bar}"></div><div class="ticks">${studio.ticks.map(t=>`<span>${esc(t)}</span>`).join("")}</div>`;
+    return;
+  }
   const intervals={c2:"2 ft",c5:"5 ft",c10:"10 ft",c25:"25 ft"};
   if(style==="off"){ el.className="terlegend";el.innerHTML="";return }
   let bar="",ticks="",caption="";
@@ -7565,7 +7599,17 @@ async function refreshTerrainCoverage(force){
   paintElevOut();applyTerrain();
 }
 
-$("#terStyle").onchange=()=>{ syncTerrainLookControls();saveTerrainPrefs(); applyTerrain(true);refreshTerrainCoverage(false);schedule3dStyle() };
+lidarStudio=window.CSPLidarStudio?.mount($("#terStudio"),{
+  getStyle:()=>$("#terStyle").value,
+  setStyle:style=>{$("#terStyle").value=style;$("#terStyle").dispatchEvent(new Event("change",{bubbles:true}))},
+  onChange:()=>{syncGpuTerrain();schedule3dStyle();paintTerrainInfo();scheduleStudioFit()},
+  sample:()=>gpuTerrainEnabled&&gpuTerrainLayer&&map.hasLayer(gpuTerrainLayer)?gpuTerrainLayer.getEngine()?.sampleValues():null,
+  gpuAvailable:()=>gpuTerrainDecided?gpuTerrainEnabled:true,
+  getOpacity:()=>terrainOpacity(),
+  setOpacity:value=>{const input=$("#terOp");input.value=Math.round(value);input.dispatchEvent(new Event("input",{bubbles:true}))},
+  lighting:()=>terrainLighting()
+})||null;
+$("#terStyle").onchange=()=>{ syncTerrainLookControls();saveTerrainPrefs(); applyTerrain(true);refreshTerrainCoverage(false);schedule3dStyle();lidarStudio?.refresh() };
 $("#terSrc").onchange=()=>{ saveTerrainPrefs();applyTerrain(true);applyElev();refreshTerrainCoverage(false);resetMeshSources();schedule3dStyle() };
 function terrainOpacity(){
   const value=+$("#terOp").value;
@@ -11395,8 +11439,8 @@ $("#q").addEventListener("blur",()=>setTimeout(acHide,120));
 document.addEventListener("click",e=>{ if(!e.target.closest("#iw")) acHide() });
 })();
 </script>
-<script src="markup-3d.js?build=2026-10-18a"></script>
-<script src="markup.js?build=2026-10-18a"></script>
-<script src="ui-system.js?build=2026-10-18a"></script>
+<script src="markup-3d.js?build=2026-10-18b"></script>
+<script src="markup.js?build=2026-10-18b"></script>
+<script src="ui-system.js?build=2026-10-18b"></script>
 </body>
 </html>

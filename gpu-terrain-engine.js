@@ -98,12 +98,58 @@
     'for(int y=0;y<2;y++)for(int x=0;x<2;x++){float v=at(b+ivec2(x,y));float w=(x==0?1.-f.x:f.x)*(y==0?1.-f.y:f.y);if(valid(v)&&w>0.){sum+=v*w;weight+=w;}}' +
     'if(weight<=0.)discard;result=vec2(sum/weight,u_rank);}\n';
   // Shade-module coordinates are top-down; framebuffer texels are bottom-up.
-  var PRELUDE = '\nuniform highp sampler2D u_cspField;\n' +
+  var PRELUDE = '\n#define CSP_HAS_AUX 1\nuniform highp sampler2D u_cspField,u_cspBlur,u_cspBase; uniform float u_cspBlurScale,u_cspBaseScale;\n' +
     'ivec2 csp_size(){return textureSize(u_cspField,0);}\n' +
     'vec2 csp_sample(ivec2 p){ivec2 s=csp_size();p=clamp(p,ivec2(0),s-1);return texelFetch(u_cspField,ivec2(p.x,s.y-1-p.y),0).rg;}\n' +
     'float csp_height(ivec2 p){return csp_sample(p).r;}\n' +
     'int csp_rank(ivec2 p){return int(csp_sample(p).g+.5);}\n' +
-    'bool csp_valid(ivec2 p){vec2 v=csp_sample(p);return v.g>0.&&!isnan(v.r)&&!isinf(v.r)&&v.r>-1e20;}\n';
+    'bool csp_valid(ivec2 p){vec2 v=csp_sample(p);return v.g>0.&&!isnan(v.r)&&!isinf(v.r)&&v.r>-1e20;}\n' +
+    // Filtered fields are stored at 1/scale resolution, bottom-up like the
+    // field; read them bilinearly at the field pixel centre.
+    'bool csp_auxAt(highp sampler2D t,float f,ivec2 p,out float v){v=0.;if(f<=0.)return false;ivec2 s=csp_size();' +
+    'vec2 q=(vec2(float(p.x),float(s.y-1-p.y))+.5)/f-.5;ivec2 b=ivec2(floor(q));vec2 fr=q-vec2(b);ivec2 ts=textureSize(t,0);float sum=0.,w=0.;' +
+    'for(int y=0;y<2;y++)for(int x=0;x<2;x++){vec2 a=texelFetch(t,clamp(b+ivec2(x,y),ivec2(0),ts-1),0).rg;float k=(x==0?1.-fr.x:fr.x)*(y==0?1.-fr.y:fr.y);' +
+    'if(a.g>0.&&k>0.){sum+=a.r*k;w+=k;}}if(w<=0.)return false;v=sum/w;return true;}\n' +
+    'bool csp_blur(ivec2 p,out float v){return csp_auxAt(u_cspBlur,u_cspBlurScale,p,v);}\n' +
+    'bool csp_base(ivec2 p,out float v){return csp_auxAt(u_cspBase,u_cspBaseScale,p,v);}\n';
+  /* Separable filters for the layer stack's derived fields. Modes: 0 and 1
+   * downsample by u_factor (mean, minimum); 2 and 3 filter along u_dir
+   * (Gaussian, minimum). Output is (value, valid). */
+  var FILTER = '#version 300 es\nprecision highp float; precision highp int;\n' +
+    'uniform highp sampler2D u_src; uniform int u_mode,u_factor,u_radius; uniform ivec2 u_dir; uniform float u_sigma; layout(location=0) out vec2 result;\n' +
+    'bool ok(vec2 v){return v.g>0.&&!isnan(v.r)&&!isinf(v.r)&&v.r>-1e20;}\n' +
+    'void main(){ivec2 o=ivec2(gl_FragCoord.xy),s=textureSize(u_src,0);float acc=(u_mode==1||u_mode==3)?3.0e38:0.,w=0.;\n' +
+    'if(u_mode<2){for(int y=0;y<u_factor;y++)for(int x=0;x<u_factor;x++){ivec2 q=o*u_factor+ivec2(x,y);if(q.x>=s.x||q.y>=s.y)continue;' +
+    'vec2 v=texelFetch(u_src,q,0).rg;if(!ok(v))continue;if(u_mode==1)acc=min(acc,v.r);else acc+=v.r;w+=1.;}if(w<=0.){result=vec2(0.);return;}result=vec2(u_mode==1?acc:acc/w,1.);return;}\n' +
+    'for(int k=-u_radius;k<=u_radius;k++){ivec2 q=o+u_dir*k;if(q.x<0||q.y<0||q.x>=s.x||q.y>=s.y)continue;vec2 v=texelFetch(u_src,q,0).rg;if(!ok(v))continue;' +
+    'if(u_mode==3){acc=min(acc,v.r);w=1.;}else{float g=exp(-float(k*k)/(2.*u_sigma*u_sigma));acc+=v.r*g;w+=g;}}\n' +
+    'if(w<=0.){result=vec2(0.);return;}result=vec2(u_mode==3?acc:acc/w,1.);}\n';
+  /* Samples the visible height (and relative-elevation base) on a coarse
+   * grid for range fitting: (height, valid, base, baseValid). */
+  var STATS = '#version 300 es\nprecision highp float; precision highp int;\n' + PRELUDE +
+    'in vec2 v_screenUv; out vec4 o; void main(){ivec2 s=csp_size();ivec2 p=clamp(ivec2(floor(v_screenUv*vec2(s))),ivec2(0),s-1);' +
+    'float b;bool hb=csp_base(p,b);o=vec4(csp_height(p),csp_valid(p)?1.:0.,b,hb?1.:0.);}\n';
+  /* Plan for one derived field: a downsample factor that keeps the dense
+   * filter radius at most 32 texels, and at most 64x64 source texels per
+   * downsampled texel. Radii below one field pixel produce nothing. */
+  function auxPlan(radiusPx, width, height) {
+    if (!(radiusPx >= 1)) return null;
+    var factor = Math.min(64, Math.max(1, Math.ceil(radiusPx / 32)));
+    return {factor: factor, radius: Math.max(1, Math.min(32, Math.round(radiusPx / factor))),
+      width: Math.max(1, Math.ceil(width / factor)), height: Math.max(1, Math.ceil(height / factor))};
+  }
+  /* Derived-field radii in field pixels for a state and view: the detail
+   * blur and the relative-elevation base. Only layers that need them ask. */
+  function auxRadii(state, view, shaders) {
+    var stack = state && state.terrain && state.terrain.stack, out = {blur: 0, base: 0};
+    if (!stack || !Array.isArray(stack.layers) || !stack.layers.length || !shaders.metersPerPixel) return out;
+    var mpp = shaders.metersPerPixel(view);
+    if (!(mpp > 0)) return out;
+    if (Number(stack.detail) && Number(stack.detailRadius) > 0) out.blur = Number(stack.detailRadius) / mpp;
+    if (Number(stack.remRadius) > 0 && stack.layers.some(function (layer) { return layer && layer.style === 'rem'; }))
+      out.base = Number(stack.remRadius) / mpp;
+    return out;
+  }
   var FULLSCREEN = '#version 300 es\nout vec2 v_screenUv;void main(){vec2 p=vec2(float((gl_VertexID<<1)&2),float(gl_VertexID&2));v_screenUv=vec2(p.x,1.-p.y);gl_Position=vec4(p*2.-1.,0.,1.);}\n';
   var PROVENANCE = '#version 300 es\nprecision highp float; precision highp int;\nuniform highp sampler2D u_cspField;in vec2 v_screenUv;out vec4 colour;' +
     'void main(){ivec2 s=textureSize(u_cspField,0);ivec2 p=clamp(ivec2(vec2(v_screenUv.x,1.-v_screenUv.y)*vec2(s)),ivec2(0),s-1);float r=texelFetch(u_cspField,p,0).g;colour=vec4(r/255.,0.,0.,1.);}\n';
@@ -123,7 +169,8 @@
     var queue = new Map(), known = new Map(), sources = new Map(), sourceList = [], plan = [], planDirty = true;
     var wanted = [], coverageKey = '', viewScalars = new Float64Array(8), lastResult = {coverage: 0, missing: 0};
     viewScalars.fill(NaN);
-    var state = {}, field = null, heightProgram, shadeProgram, provenanceProgram, vao, shadeSetters;
+    var state = {}, field = null, heightProgram, shadeProgram, provenanceProgram, filterProgram, statsProgram, stats = {}, vao, shadeSetters;
+    var liveAux = {}, auxKey = '', f = {}, shadeAux = {};
     var h = {}, maxSize = 0, forcedMaxSize = 0, pendingReads = new Set(), frameRequested = false;
     var resources = {textures: new Set(), framebuffers: new Set(), programs: new Set(), buffers: new Set(), syncs: new Set(), vaos: new Set()};
     var lru = new TextureLRU(options.maxTextureBytes === undefined ? DEFAULT_BYTES : options.maxTextureBytes, function (entry) {
@@ -169,7 +216,7 @@
         resources.framebuffers.forEach(function (f) { gl.deleteFramebuffer(f); }); resources.textures.forEach(function (t) { gl.deleteTexture(t); });
         resources.programs.forEach(function (p) { gl.deleteProgram(p); }); resources.vaos.forEach(function (v) { gl.deleteVertexArray(v); });
       }
-      Object.keys(resources).forEach(function (k) { resources[k].clear(); }); field = null;
+      Object.keys(resources).forEach(function (k) { resources[k].clear(); }); field = null; liveAux = {}; auxKey = '';
     }
     function setters(p) {
       var types = new Map(), out = [];
@@ -208,9 +255,14 @@
       heightProgram = program(HEIGHT_VERTEX, HEIGHT_FRAGMENT);
       shadeProgram = program(shaders.fullscreenVertexSource, shaders.shadeFragmentSource(PRELUDE));
       provenanceProgram = program(FULLSCREEN, PROVENANCE);
+      filterProgram = program(FULLSCREEN, FILTER);
+      statsProgram = program(FULLSCREEN, STATS);
+      ['cspField', 'cspBlur', 'cspBase', 'cspBlurScale', 'cspBaseScale'].forEach(function (n) { stats[n] = gl.getUniformLocation(statsProgram, 'u_' + n); });
+      ['src', 'mode', 'factor', 'radius', 'dir', 'sigma'].forEach(function (n) { f[n] = gl.getUniformLocation(filterProgram, 'u_' + n); });
       vao = gl.createVertexArray(); resources.vaos.add(vao); gl.bindVertexArray(vao);
       ['origin', 'axisX', 'axisY', 'target', 'sampleOrigin', 'sampleX', 'sampleY', 'native', 'rank', 'smooth', 'fast'].forEach(function (n) { h[n] = gl.getUniformLocation(heightProgram, 'u_' + n); });
       shadeSetters = setters(shadeProgram);
+      ['cspBlur', 'cspBase', 'cspBlurScale', 'cspBaseScale'].forEach(function (n) { shadeAux[n] = gl.getUniformLocation(shadeProgram, 'u_' + n); });
       shadeField = gl.getUniformLocation(shadeProgram, 'u_cspField'); provenanceField = gl.getUniformLocation(provenanceProgram, 'u_cspField');
       gl.disable(gl.BLEND); gl.disable(gl.DEPTH_TEST); gl.disable(gl.CULL_FACE); gl.disable(gl.SCISSOR_TEST); gl.disable(gl.DITHER);
       gl.pixelStorei(gl.UNPACK_ALIGNMENT, 1); gl.pixelStorei(gl.PACK_ALIGNMENT, 1);
@@ -363,12 +415,46 @@
           c * w, s * w, -s * ht, c * ht, p.crop, r.width * p.crop.width < w || r.height * p.crop.height < ht, p.entry.allValid);
       }
     }
-    function drawShade(t, output, view, values) {
+    function drawShade(t, output, view, values, aux) {
+      aux = aux || {};
       gl.bindFramebuffer(gl.FRAMEBUFFER, output ? output.framebuffer : null); gl.viewport(0, 0, t.width, t.height);
-      gl.useProgram(shadeProgram); gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, t.texture);
-      gl.uniform1i(shadeField, 0); shadeUniforms(values || shaders.uniformValues(state, view));
+      gl.useProgram(shadeProgram);
+      // Unused aux samplers still point at a valid float texture.
+      gl.activeTexture(gl.TEXTURE1); gl.bindTexture(gl.TEXTURE_2D, aux.blur ? aux.blur.target.texture : t.texture);
+      gl.activeTexture(gl.TEXTURE2); gl.bindTexture(gl.TEXTURE_2D, aux.base ? aux.base.target.texture : t.texture);
+      gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, t.texture);
+      gl.uniform1i(shadeField, 0); gl.uniform1i(shadeAux.cspBlur, 1); gl.uniform1i(shadeAux.cspBase, 2);
+      gl.uniform1f(shadeAux.cspBlurScale, aux.blur ? aux.blur.factor : 0); gl.uniform1f(shadeAux.cspBaseScale, aux.base ? aux.base.factor : 0);
+      shadeUniforms(values || shaders.uniformValues(state, view));
       gl.drawArrays(gl.TRIANGLES, 0, 3); drawCalls++;
     }
+    function filterPass(src, dst, mode, factor, radius, dx, dy) {
+      gl.bindFramebuffer(gl.FRAMEBUFFER, dst.framebuffer); gl.viewport(0, 0, dst.width, dst.height);
+      gl.bindVertexArray(vao); gl.useProgram(filterProgram); gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, src.texture);
+      gl.uniform1i(f.src, 0); gl.uniform1i(f.mode, mode); gl.uniform1i(f.factor, factor || 1); gl.uniform1i(f.radius, radius || 0);
+      gl.uniform2i(f.dir, dx || 0, dy || 0); gl.uniform1f(f.sigma, Math.max(.5, (radius || 1) / 2));
+      gl.drawArrays(gl.TRIANGLES, 0, 3); drawCalls++;
+    }
+    /* One derived field into cache[slot]: downsample (mean or minimum), an
+     * optional separable minimum, then a separable Gaussian. Targets are
+     * reused while their size holds. */
+    function derive(src, radiusPx, minimum, cache, slot) {
+      var plan = auxPlan(radiusPx, src.width, src.height), entry = cache[slot];
+      if (!plan) { if (entry) { freeTarget(entry.a); freeTarget(entry.b); cache[slot] = null; } return null; }
+      if (!entry || entry.a.width !== plan.width || entry.a.height !== plan.height) {
+        if (entry) { freeTarget(entry.a); freeTarget(entry.b); }
+        entry = cache[slot] = {a: target(plan.width, plan.height, true), b: target(plan.width, plan.height, true)};
+      }
+      filterPass(src, entry.a, minimum ? 1 : 0, plan.factor);
+      if (minimum) { filterPass(entry.a, entry.b, 3, 1, plan.radius, 1, 0); filterPass(entry.b, entry.a, 3, 1, plan.radius, 0, 1); }
+      filterPass(entry.a, entry.b, 2, 1, plan.radius, 1, 0); filterPass(entry.b, entry.a, 2, 1, plan.radius, 0, 1);
+      entry.target = entry.a; entry.factor = plan.factor; return entry;
+    }
+    function deriveAll(t, view, st, cache) {
+      var radii = auxRadii(st, view, shaders);
+      return {blur: derive(t, radii.blur, false, cache, 'blur'), base: derive(t, radii.base, true, cache, 'base')};
+    }
+    function freeAux(cache) { ['blur', 'base'].forEach(function (k) { var e = cache[k]; if (e) { freeTarget(e.a); freeTarget(e.b); } cache[k] = null; }); }
     function readFloat(t) {
       // RG32F is a renderable format but portable WebGL float readback uses RGBA.
       var rgba = new Float32Array(t.width * t.height * 4), out = new Float32Array(t.width * t.height * 2);
@@ -455,8 +541,10 @@
           canvas.width = w; canvas.height = ht;
         }
         if (planDirty) buildPlan(view);
-        if (heightDirty) { drawHeight(field, view); heightDirty = false; dirty = true; }
-        if (dirty) { drawShade(field, null, view); dirty = false; frames++; }
+        var radii = auxRadii(state, view, shaders), key = [Math.round(radii.blur * 4), Math.round(radii.base), field.width, field.height].join(',');
+        if (heightDirty) { drawHeight(field, view); heightDirty = false; dirty = true; auxKey = ''; }
+        if (key !== auxKey) { liveAux = deriveAll(field, view, state, liveAux); auxKey = key; dirty = true; }
+        if (dirty) { drawShade(field, null, view, null, liveAux); dirty = false; frames++; }
       } catch (e) { error = String(e && e.message || e); ready = false; }
       lastFrameMs = now() - start; return lastResult;
     }
@@ -503,7 +591,9 @@
           var savedPlan = plan, savedResult = lastResult, t = null, colour = null;
           plan = []; buildPlan(sub);
           try {
-            t = target(w, ht, true); colour = target(w, ht, false); drawHeight(t, sub); drawShade(t, colour, sub, shaders.uniformValues(exportState, sub));
+            t = target(w, ht, true); colour = target(w, ht, false); drawHeight(t, sub);
+            var exportAux = deriveAll(t, sub, exportState, {});
+            try { drawShade(t, colour, sub, shaders.uniformValues(exportState, sub), exportAux); } finally { freeAux(exportAux); }
             var pixels = new Uint8Array(w * ht * 4); gl.readPixels(0, 0, w, ht, gl.RGBA, gl.UNSIGNED_BYTE, pixels);
             var image = ctx.createImageData(iw, ih);
             for (var y = 0; y < ih; y++) for (var x = 0; x < iw; x++) {
@@ -519,6 +609,33 @@
         }
       } finally { gl.bindFramebuffer(gl.FRAMEBUFFER, null); dirty = heightDirty = planDirty = true; needsFrame(); }
       return result;
+    }
+    /* Synchronous coarse readback for "fit range to view": at most 128x128
+     * samples of the current field. Returns finite heights and, where the
+     * relative-elevation base exists, height above it. */
+    function sampleValues() {
+      if (!ready || !field || destroyed) return null;
+      var w = Math.min(128, field.width), ht = Math.min(128, field.height), t = texture(), fb = framebuffer();
+      try {
+        gl.bindTexture(gl.TEXTURE_2D, t); params();
+        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA32F, w, ht, 0, gl.RGBA, gl.FLOAT, null);
+        gl.bindFramebuffer(gl.FRAMEBUFFER, fb); gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, t, 0);
+        gl.viewport(0, 0, w, ht); gl.bindVertexArray(vao); gl.useProgram(statsProgram);
+        gl.activeTexture(gl.TEXTURE1); gl.bindTexture(gl.TEXTURE_2D, liveAux.blur ? liveAux.blur.target.texture : field.texture);
+        gl.activeTexture(gl.TEXTURE2); gl.bindTexture(gl.TEXTURE_2D, liveAux.base ? liveAux.base.target.texture : field.texture);
+        gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, field.texture);
+        gl.uniform1i(stats.cspField, 0); gl.uniform1i(stats.cspBlur, 1); gl.uniform1i(stats.cspBase, 2);
+        gl.uniform1f(stats.cspBlurScale, liveAux.blur ? liveAux.blur.factor : 0); gl.uniform1f(stats.cspBaseScale, liveAux.base ? liveAux.base.factor : 0);
+        gl.drawArrays(gl.TRIANGLES, 0, 3);
+        var raw = new Float32Array(w * ht * 4), heights = [], relative = [];
+        gl.readPixels(0, 0, w, ht, gl.RGBA, gl.FLOAT, raw);
+        for (var i = 0; i < raw.length; i += 4) {
+          if (!(raw[i + 1] > 0) || !Number.isFinite(raw[i])) continue;
+          heights.push(raw[i]);
+          if (raw[i + 3] > 0 && Number.isFinite(raw[i + 2])) relative.push(Math.max(0, raw[i] - raw[i + 2]));
+        }
+        return {heights: Float32Array.from(heights), relative: Float32Array.from(relative), samples: w * ht};
+      } finally { deleteTexture(t); deleteFramebuffer(fb); gl.bindFramebuffer(gl.FRAMEBUFFER, null); }
     }
     function readProvenance(view) {
       if (!ready || !field || destroyed) return Promise.resolve({ranks: {}});
@@ -583,7 +700,7 @@
         lru.entries.forEach(function (entry, key) { if (!store.get(key)) lru.delete(key); });
         coverageKey = ''; heightDirty = dirty = planDirty = true; needsFrame();
       }, render: render,
-      neededTiles: function (view) { if (refreshSources()) heightDirty = dirty = planDirty = true; return want(view); }, renderToCanvas: renderToCanvas, readProvenance: readProvenance,
+      neededTiles: function (view) { if (refreshSources()) heightDirty = dirty = planDirty = true; return want(view); }, renderToCanvas: renderToCanvas, readProvenance: readProvenance, sampleValues: sampleValues,
       stats: function () { return {textures: lru.size, textureBytes: lru.bytes, frames: frames, drawCalls: drawCalls, lastFrameMs: lastFrameMs,
         ready: ready, queuedUploads: queue.size, uploads: uploads, evictions: evictions, generation: generation, error: error,
         heightFieldBytes: field ? field.width * field.height * 8 : 0, trackedTiles: known.size,
@@ -594,5 +711,5 @@
     };
   }
   return Object.freeze({VERSION: '1', create: create, _test: Object.freeze({tileLevel: tileLevel, coverageTiles: coverageTiles,
-    cropFor: cropFor, TextureLRU: TextureLRU, drainUploads: drainUploads})});
+    cropFor: cropFor, TextureLRU: TextureLRU, drainUploads: drainUploads, auxPlan: auxPlan, auxRadii: auxRadii})});
 }));
