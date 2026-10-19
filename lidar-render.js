@@ -50,6 +50,13 @@
       .sort((a,b)=>a[0]-b[0]).slice(0,MAX_STOPS);
     return out.length>=2?out:null;
   }
+  // Keep the selected color's identity when it crosses another stop.
+  function moveStop(stops,index,position){
+    const list=stops.map(stop=>stop.slice()),moved=list[index];
+    if(!moved)return {stops:list,index};
+    moved[0]=clamp(position,0,1);list.sort((a,b)=>a[0]-b[0]);
+    return {stops:list,index:list.indexOf(moved)};
+  }
 
   /* --------------------------------------------------------------- palettes
      kinds: which layer families list the palette first. "shade" palettes
@@ -253,7 +260,8 @@
       layers.push({style:layer.style,opacity:layer.opacity,blend:layer.blend,stops:resolveStops(layer),
         min,max,gamma:layer.gamma,steps:layer.steps,param:layer.style==="contour"||STYLES[layer.style].param?layer.param:0});
     }
-    if(!layers.length) return null;
+    // An explicitly empty mix must stay transparent, not fall back to the
+    // legacy base layer when the user hides the last visible layer.
     const effects=state.effects;
     return {layers,detail:effects.detail,detailRadius:effects.detailRadius,reliefExag:effects.reliefExag,
       remRadius:effects.remRadius,remFlatBase:finite(opts.remFlatBase,0)};
@@ -341,7 +349,8 @@
   function matchLook(state,style,looks){
     const current=JSON.stringify(captureScene(state,style));
     const all=(looks||LOOKS).concat(state.userLooks||[]);
-    const hit=all.find(look=>JSON.stringify(look.scene)===current);
+    const matches=look=>JSON.stringify(look.scene)===current;
+    const hit=all.find(look=>look.id===state.look&&matches(look))||all.find(matches);
     return hit?hit.id:null;
   }
 
@@ -545,7 +554,7 @@
   function fromDisplay(style,value){ return (STYLES[style]||{}).unit==="m"?value/FT:(STYLES[style]||{}).unit==="shade"?value/100:value }
 
   return Object.freeze({VERSION,MAX_LAYERS,MAX_STOPS,FT,PALETTES,STYLES,OVERLAY_STYLES,BLENDS,LOOKS,EFFECT_DEFAULTS,
-    parseHex,toHex,normalizeStops,registerStyle,defaultLayer,normalizeLayer,resolveStops,paletteStops,isDefaultLayer,
+    parseHex,toHex,normalizeStops,moveStop,registerStyle,defaultLayer,normalizeLayer,resolveStops,paletteStops,isDefaultLayer,
     emptyState,normalizeState,normalizeEffects,baseLayer,isLegacy,buildStack,fitRange,normalizeScene,captureScene,applyScene,
     matchLook,gradientCss,palettesFor,formatValue,toDisplay,fromDisplay,
     previewTerrain,renderStack,renderScenePreview,blendColour,composite,_test:Object.freeze({filterGrid,rampColour,paletteColour})});

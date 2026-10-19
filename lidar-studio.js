@@ -42,7 +42,7 @@
     if(!container) return null;
     host=host||{};
     const storage=host.storage!==undefined?host.storage:(()=>{try{return globalThis.localStorage}catch(_){return null}})();
-    let state=load(),fitted={},flatFitted={},remFloor=null,expanded=null,selectedStop=0,saveTimer=0,commitFrame=0,destroyed=false;
+    let state=load(),fitted={},flatFitted={},remFloor=null,expanded=null,selectedStop=0,saveTimer=0,commitFrame=0,destroyed=false,previousMix=null;
     const previews=new Map();let previewQueue=[],previewTimer=0;
     const dem=R.previewTerrain(168,112);
 
@@ -87,10 +87,11 @@
 
     function render(){
       const s=style(),scroll=container.closest(".pane-b")?.scrollTop;
+      state.look=s?R.matchLook(state,s):null;
       container.innerHTML="";
       container.toggleAttribute("data-disabled",!gpu());
       if(!gpu()){
-        container.append(el("p","control-hint ls-note","Colour layers, looks and effects need GPU rendering, which this browser doesn’t provide. The classic styles above still work."));
+        container.append(el("p","control-hint ls-note","Colour layers, looks and effects need GPU rendering, which this browser doesn’t provide. The classic styles below still work."));
         return;
       }
       container.append(renderLooks(),renderLayers(s),renderEffects(s));
@@ -105,13 +106,14 @@
       const saveButton=el("button","linkbtn ls-save-look","Save current");saveButton.type="button";
       saveButton.disabled=!style();saveButton.title=style()?"Save these colours, layers and effects as a look":"Choose a layer first";
       head.append(saveButton);wrap.append(head);
+      wrap.append(el("p","control-hint","Presets replace the whole layer mix. Customize each layer below."));
       const strip=el("div","ls-looks");strip.setAttribute("role","radiogroup");strip.setAttribute("aria-label","Looks");
       const current=style()?state.look:null,looks=allLooks();
       looks.forEach(look=>{
         const button=el("button","ls-look");button.type="button";button.setAttribute("role","radio");
         button.dataset.look=look.id;button.setAttribute("aria-checked",String(current===look.id));
         button.tabIndex=(current===look.id||(!looks.some(l=>l.id===current)&&look===looks[0]))?0:-1;
-        button.title=look.blurb||look.name;
+        button.title=`Apply ${look.name} · replaces the current layer mix`;
         const canvas=document.createElement("canvas");canvas.width=dem.width;canvas.height=dem.height;canvas.className="ls-look-preview";
         canvas.setAttribute("aria-hidden","true");
         const name=el("span","ls-look-name",esc(look.name));
@@ -128,6 +130,16 @@
       const active=looks.find(l=>l.id===current);
       blurb.textContent=!style()?"Pick a look to start, or choose a layer above.":active?active.blurb:"Custom · your own mix of colours and layers.";
       wrap.append(blurb);
+      if(previousMix){
+        const undo=el("button","linkbtn ls-undo-look","Undo preset");undo.type="button";
+        undo.onclick=()=>{
+          const previous=previousMix,looks=state.userLooks;previousMix=null;state=previous.state;state.userLooks=looks;fitted={};flatFitted={};remFloor=null;expanded=null;
+          host.setStyle&&host.setStyle(previous.style);
+          if(Number.isFinite(previous.opacity)&&host.setOpacity)host.setOpacity(previous.opacity);
+          save();render();host.onChange&&host.onChange();
+        };
+        wrap.append(undo);
+      }
       const saveRow=el("form","ls-save-row");saveRow.hidden=true;
       saveRow.innerHTML=`<input type="text" maxlength="40" placeholder="Name this look" aria-label="Look name" required><button type="submit" class="ls-pill ls-pill-primary">Save</button><button type="button" class="ls-pill" data-cancel>Cancel</button>`;
       wrap.append(saveRow);
@@ -150,18 +162,22 @@
       strip.addEventListener("keydown",event=>{
         const buttons=[...strip.querySelectorAll(".ls-look")],index=buttons.indexOf(event.target.closest(".ls-look"));
         if(index<0) return;
-        const step={ArrowRight:1,ArrowDown:1,ArrowLeft:-1,ArrowUp:-1}[event.key];
+        const columns=Math.max(1,getComputedStyle(strip).gridTemplateColumns.trim().split(/\s+/).length);
+        const step={ArrowRight:1,ArrowDown:columns,ArrowLeft:-1,ArrowUp:-columns}[event.key];
         if(event.key==="Delete"||event.key==="Backspace"){const r=buttons[index].querySelector("[data-remove-look]");if(r){event.preventDefault();r.click()}return}
-        if(!step) return;
-        event.preventDefault();const next=buttons[(index+step+buttons.length)%buttons.length];
+        if(!step&&event.key!=="Home"&&event.key!=="End") return;
+        const target=event.key==="Home"?0:event.key==="End"?buttons.length-1:
+          event.key==="ArrowDown"||event.key==="ArrowUp"?clamp(index+step,0,buttons.length-1):(index+step+buttons.length)%buttons.length;
+        event.preventDefault();const next=buttons[target];
         next.focus();applyLook(next.dataset.look);
       });
       return wrap;
     }
     function applyLook(id){
       const look=allLooks().find(l=>l.id===id);if(!look) return;
+      previousMix={state:JSON.parse(JSON.stringify(state)),style:host.getStyle?host.getStyle():style(),opacity:host.getOpacity?host.getOpacity():undefined};
       const result=R.applyScene(state,look.scene,look.id);
-      state=result.state;fitted={};flatFitted={};expanded=null;save();
+      state=result.state;fitted={};flatFitted={};remFloor=null;expanded=null;save();
       if(host.getStyle&&host.getStyle()!==result.style&&host.setStyle) host.setStyle(result.style);
       /* Looks are designed at their own strength; the classic look keeps the
          usual see-through terrain. */
@@ -192,7 +208,8 @@
 
     /* ------------------------------------------------------------ layers */
     function layerKeys(){
-      const keys=style()?["base"]:[];
+      if(!style())return [];
+      const keys=["base"];
       state.overlays.forEach((_,i)=>keys.push("overlay:"+i));
       return keys;
     }
@@ -202,7 +219,7 @@
     }
     function layerMeta(key,layer){
       const palette=layer.stops?"Custom":(R.PALETTES[layer.palette]||{}).name||"";
-      if(key==="base") return `Base · ${palette}`;
+      if(key==="base") return `${layer.visible?"Bottom layer":"Hidden"} · ${Math.round(layer.opacity*100)}% · ${palette}`;
       const blend=(R.BLENDS.find(b=>b.id===layer.blend)||R.BLENDS[0]).label;
       return `${blend} · ${Math.round(layer.opacity*100)}% · ${palette}`;
     }
@@ -210,7 +227,8 @@
       const wrap=el("div","ls-section");
       const head=el("div","ls-head",`<h3 class="menu-section-title">Layers</h3><span class="pane-n">${layerKeys().length} of ${R.MAX_LAYERS}</span>`);
       wrap.append(head);
-      if(!s){wrap.append(el("p","control-hint","Choose a LiDAR layer above, or a look, to start styling."));return wrap}
+      wrap.append(el("p","control-hint","Open a layer to edit colors, opacity and blending. Layers at the top draw over those below."));
+      if(!s)wrap.append(el("p","control-hint","Add your first layer, or choose a preset above."));
       const list=el("ol","ls-layers");list.setAttribute("aria-label","Terrain layers, top first");
       const keys=layerKeys().reverse();
       keys.forEach(key=>list.append(renderLayer(key)));
@@ -220,7 +238,8 @@
       addButton.type="button";addButton.disabled=layerKeys().length>=R.MAX_LAYERS;addButton.setAttribute("aria-haspopup","menu");addButton.setAttribute("aria-expanded","false");
       if(addButton.disabled) addButton.title=`Up to ${R.MAX_LAYERS} layers`;
       const menu=el("div","ls-menu");menu.setAttribute("role","menu");menu.hidden=true;
-      R.OVERLAY_STYLES.forEach(id=>{
+      const choices=s?R.OVERLAY_STYLES:Object.keys(R.STYLES).filter(id=>id!=="contour"&&!R.STYLES[id].registered);
+      choices.forEach(id=>{
         const spec=R.STYLES[id];if(!spec) return;
         const item=el("button","ls-menu-item",`<span class="ls-swatch" style="background:${R.gradientCss(R.PALETTES[spec.palette].stops)}"></span><span>${esc(spec.label)}</span>`);
         item.type="button";item.setAttribute("role","menuitem");item.dataset.addStyle=id;menu.append(item);
@@ -246,6 +265,10 @@
     function addOverlay(styleId){
       if(layerKeys().length>=R.MAX_LAYERS) return;
       const spec=R.STYLES[styleId]||R.STYLES.hs,layer=R.defaultLayer(styleId);
+      if(!style()){
+        state.base[styleId]=layer;state.overlays=[];fitted={};flatFitted={};remFloor=null;
+        host.setStyle&&host.setStyle(styleId);expanded="base";selectedStop=0;commit({rerender:true});return;
+      }
       if(spec.family==="shade"){layer.blend="multiply";layer.opacity=.75}
       else if(spec.family!=="lines"){layer.blend="color";layer.opacity=.7;if(styleId==="tint"){layer.palette="viridis";layer.auto=true;layer.param=0}}
       state.overlays.push(layer);
@@ -261,9 +284,10 @@
       const eye=el("button","ls-icon-button ls-eye",`<img src="${icon(layer.visible?"eye":"eye-off")}" alt="">`);
       eye.type="button";eye.setAttribute("aria-pressed",String(layer.visible));
       eye.setAttribute("aria-label",`${layer.visible?"Hide":"Show"} ${layerTitle(key,layer)}`);
-      if(key==="base"){eye.disabled=true;eye.title="The base layer is always shown. Use Opacity above to fade it.";eye.setAttribute("aria-label","Base layer, always shown")}
-      eye.onclick=()=>updateLayer(key,{visible:!layer.visible},{rerender:true});
+      eye.title=`${layer.visible?"Hide":"Show"} this layer`;
+      eye.onclick=()=>{updateLayer(key,{visible:!layer.visible},{rerender:true});container.querySelector(`[data-key="${key}"] .ls-eye`)?.focus()};
       const main=el("button","ls-layer-main");main.type="button";main.setAttribute("aria-expanded",String(open));
+      main.title="Edit colors, opacity and blending";
       main.setAttribute("aria-controls",`ls-editor-${key.replace(":","-")}`);
       main.innerHTML=`<span class="ls-swatch" data-swatch style="background:${R.gradientCss(R.paletteStops(layer),layer.reverse)}"></span>`+
         `<span class="ls-layer-text"><span class="ls-layer-name">${esc(layerTitle(key,layer))}</span><span class="ls-layer-meta" data-meta>${esc(layerMeta(key,layer))}</span></span>`+
@@ -278,7 +302,27 @@
     function renderEditor(key,layer){
       const spec=R.STYLES[layer.style]||R.STYLES.hs,editor=el("div","ls-editor");
       editor.id=`ls-editor-${key.replace(":","-")}`;
+      const type=el("select","ls-select");type.setAttribute("aria-label","Layer type");
+      const types=key==="base"?Object.keys(R.STYLES).filter(id=>id!=="contour"&&!R.STYLES[id].registered):R.OVERLAY_STYLES;
+      types.forEach(id=>{const option=document.createElement("option");option.value=id;option.textContent=R.STYLES[id].label;type.append(option)});
+      type.value=layer.style;
+      type.onchange=()=>{
+        delete fitted[key];delete flatFitted[key];
+        if(key==="base")host.setStyle&&host.setStyle(type.value);
+        else setLayer(key,Object.assign(R.defaultLayer(type.value),{opacity:layer.opacity,blend:layer.blend,visible:layer.visible}));
+        commit({rerender:true});container.querySelector(`[data-key="${key}"] [aria-label="Layer type"]`)?.focus();
+      };
+      editor.append(field("Layer type",type));
       if(spec.hint) editor.append(el("p","control-hint ls-hint",esc(spec.hint)));
+      const mix=el("div","ls-sliders ls-mix-controls");
+      const blend=el("select","ls-select");blend.setAttribute("aria-label","Blend mode");
+      R.BLENDS.forEach(b=>{const o=document.createElement("option");o.value=b.id;o.textContent=b.label;blend.append(o)});
+      blend.value=layer.blend;blend.onchange=()=>updateLayer(key,{blend:blend.value});
+      mix.append(field("Blend",blend));
+      mix.append(slider("Layer opacity",0,100,Math.round(layer.opacity*100),`${Math.round(layer.opacity*100)}%`,value=>{
+        updateLayer(key,{opacity:value/100});return `${value}%`;
+      },"",()=>100));
+      editor.append(mix);
 
       /* Palette chips */
       const palettes=el("div","ls-palettes");palettes.setAttribute("role","radiogroup");palettes.setAttribute("aria-label","Palette");
@@ -365,15 +409,6 @@
         input.onchange=()=>updateLayer(key,{param:clamp(+input.value||20,1,5000)});
         const wrap=el("div","ls-range-inputs");wrap.append(input,el("span","ls-unit","ft"));
         tools.append(field("Interval",wrap));
-      }
-      if(key!=="base"){
-        const select=el("select","ls-select");select.setAttribute("aria-label","Blend mode");
-        R.BLENDS.forEach(b=>{const o=document.createElement("option");o.value=b.id;o.textContent=b.label;select.append(o)});
-        select.value=layer.blend;select.onchange=()=>updateLayer(key,{blend:select.value});
-        tools.append(field("Blend",select));
-        tools.append(slider("Opacity",0,100,Math.round(layer.opacity*100),`${Math.round(layer.opacity*100)}%`,value=>{
-          updateLayer(key,{opacity:value/100});return `${value}%`;
-        },"",()=>100));
       }
       editor.append(tools);
 
@@ -485,9 +520,9 @@
           return;
         }
         event.preventDefault();
-        const index=+handle.dataset.index;selectedStop=index;handle.focus();paint();
+        let index=+handle.dataset.index;selectedStop=index;handle.focus();paint();
         handle.setPointerCapture(event.pointerId);
-        const move=e=>{const list=stops();list[index][0]=toPosition(e.clientX);writeStops(list)};
+        const move=e=>{const moved=R.moveStop(stops(),index,toPosition(e.clientX));index=selectedStop=moved.index;writeStops(moved.stops)};
         const up=()=>{handle.removeEventListener("pointermove",move);handle.removeEventListener("pointerup",up);handle.removeEventListener("pointercancel",up);
           /* Re-sort after a drag so stops keep their order. */
           const list=stops(),moved=list[index];list.sort((a,b)=>a[0]-b[0]);selectedStop=list.indexOf(moved);writeStops(list,{rerender:true});
@@ -499,7 +534,8 @@
         const index=+handle.dataset.index,list=stops();
         const flip=layerFor(key).reverse?-1:1;
         const step={ArrowRight:.01,ArrowUp:.01,ArrowLeft:-.01,ArrowDown:-.01}[event.key];
-        if(step){event.preventDefault();list[index][0]=clamp(list[index][0]+step*flip*(event.shiftKey?10:1),0,1);selectedStop=index;writeStops(list);return}
+        if(step){event.preventDefault();const moved=R.moveStop(list,index,list[index][0]+step*flip*(event.shiftKey?10:1));selectedStop=moved.index;writeStops(moved.stops);
+          bar.querySelector(`[data-index="${selectedStop}"]`)?.focus();return}
         if(event.key==="Delete"||event.key==="Backspace"){event.preventDefault();remove.click()}
       });
       bar.addEventListener("focusin",event=>{const h=event.target.closest(".ls-stop");if(h){selectedStop=+h.dataset.index;paint()}});
@@ -565,7 +601,9 @@
         if(meta) meta.textContent=layerMeta(key,layer);
       });
       const current=style()?state.look:null;
-      container.querySelectorAll(".ls-look").forEach(button=>button.setAttribute("aria-checked",String(button.dataset.look===current)));
+      const looks=[...container.querySelectorAll(".ls-look")];
+      const active=looks.find(button=>button.dataset.look===current)||looks[0];
+      looks.forEach(button=>{button.setAttribute("aria-checked",String(button.dataset.look===current));button.tabIndex=button===active?0:-1});
       const blurb=container.querySelector(".ls-look-blurb");
       if(blurb){const active=allLooks().find(l=>l.id===current);blurb.textContent=!style()?"Pick a look to start, or choose a layer above.":active?active.blurb:"Custom · your own mix of colours and layers."}
     }
@@ -611,9 +649,11 @@
     function needsFit(){ return autoKeys().length>0 }
     function legend(s){
       s=s||style();const st=stack(s);if(!st) return null;
-      const layer=R.baseLayer(state,s),spec=R.STYLES[s];
-      const range=layer.auto&&fitted.base?fitted.base:[layer.min,layer.max];
-      const overlays=state.overlays.filter(l=>l.visible).map(l=>(R.STYLES[l.style]||{}).label).filter(Boolean);
+      const visible=layerKeys().map(key=>({key,layer:layerFor(key)})).filter(entry=>entry.layer.visible&&entry.layer.opacity>0);
+      if(!visible.length)return {hidden:true};
+      const {key,layer}=visible[0];s=layer.style;const spec=R.STYLES[s];
+      const range=layer.auto&&fitted[key]?fitted[key]:[layer.min,layer.max];
+      const overlays=visible.slice(1).map(entry=>(R.STYLES[entry.layer.style]||{}).label).filter(Boolean);
       const caption=`${spec.label}${layer.stops?" · custom colours":` · ${(R.PALETTES[layer.palette]||{}).name||""}`}${overlays.length?` + ${overlays.join(" + ")}`:""}`;
       let ticks;
       if(spec.unit==="shade") ticks=["shadow","relief","illuminated"];
