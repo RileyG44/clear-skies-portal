@@ -865,7 +865,7 @@ assert(index.includes('id="pointCloudPanel"')&&index.includes('id="terModePoints
     .replace(/\/\*[\s\S]*?\*\//g,"")          // block comments
     .replace(/^\s*\/\/.*$/gm,"")               // line comments
     .replace(/https?:\/\/[^\s"'`)]+/g,"")      // urls
-    .replace(/usgs-lidar-public|lidarportal|lidar-research|point-cloud/g,"");
+    .replace(/usgs-lidar-public|lidarportal|lidar-research|lidar-render|lidar-studio|point-cloud/g,"");
   const stragglers=[...visible.matchAll(/.{0,40}\blidar\b.{0,25}/gi)]
     .map(m=>m[0].trim())
     .filter(hit=>!/LiDAR/.test(hit));

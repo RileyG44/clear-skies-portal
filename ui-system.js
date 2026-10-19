@@ -246,7 +246,7 @@ const terrainStyleControl=createTerrainStyleButtons();
 function createTerrainStyleButtons(){
   const select=$("#terStyle");if(!select) return null;
   const styles={
-    off:"circle",hs:"mountain-snow",hsmulti:"cloud-sun",tint:"image",
+    off:"circle",hs:"mountain-snow",hsmulti:"cloud-sun",tint:"image",rem:"waves",
     slope:"move-up-right",aspect:"navigation",northness:"chevron-up",
     c2:"layers",c5:"layers",c10:"layers",c25:"layers"
   };

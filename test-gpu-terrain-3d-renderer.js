@@ -61,6 +61,7 @@ class GL {
   getUniformLocation(p, name) { return {p, name}; }
   uniform1i(l, v) { l.p.uniforms[l.name] = v; } uniform1f(l, v) { l.p.uniforms[l.name] = v; }
   uniform2f(l, ...v) { l.p.uniforms[l.name] = v; } uniform3f(l, ...v) { l.p.uniforms[l.name] = v; }
+  uniform4fv(l, v) { l.p.uniforms[l.name] = Array.from(v); }
   texStorage2D(_, levels, format, w, h) { this.count("storage"); Object.assign(this.textures.get(this.p.get(this.ACTIVE_TEXTURE)), {levels, format, w, h}); }
   texParameteri() {}
   texSubImage2D(_, __, ___, ____, w, h, format, type, data) {
