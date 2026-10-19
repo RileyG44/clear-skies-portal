@@ -3215,6 +3215,8 @@ body.csp-redesign #panes #surfaceResearchBox .elev-field[hidden]{display:none}
 
 /* Keep the primary layer workflow compact; optional tools open on demand. */
 .ls-layers-head{align-items:center;flex-wrap:wrap}
+.ls-layer-label{display:flex;align-items:baseline;gap:8px;min-width:0}
+body.csp-redesign .ls-layer-label .menu-section-title{margin:0}
 .ls-layers-head .pane-n{margin-left:0}
 .ls-layers-head .ls-add{margin-left:auto}
 .ls-layers-head .ls-add-button{width:auto;padding:0 10px}

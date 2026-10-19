@@ -132,7 +132,8 @@ function createWindow(){
     width: 1400, height: 900, minWidth: 900, minHeight: 600,
     backgroundColor: "#0b0f14",
     title: "Clear Skies Portal",
-    titleBarStyle: "hiddenInset",
+    // Reserve native window chrome so traffic lights never cover page controls.
+    titleBarStyle: "default",
     webPreferences: {contextIsolation: true, nodeIntegration: false},
   });
 

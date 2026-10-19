@@ -226,7 +226,7 @@
     }
     function renderLayers(s){
       const wrap=el("div","ls-section");
-      const head=el("div","ls-head ls-layers-head",`<h3 class="menu-section-title">Layers</h3><span class="pane-n">${layerKeys().length} of ${R.MAX_LAYERS}</span>`);
+      const head=el("div","ls-head ls-layers-head",`<div class="ls-layer-label"><h3 class="menu-section-title">Layers</h3><span class="pane-n">${layerKeys().length} of ${R.MAX_LAYERS}</span></div>`);
       wrap.append(head);
       wrap.append(el("p","control-hint","Open a layer to edit colors, opacity and blending. Layers at the top draw over those below."));
       if(!s)wrap.append(el("p","control-hint","Add your first layer, or choose a look below."));
