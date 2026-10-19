@@ -3098,18 +3098,18 @@ body.csp-redesign #panes .csp-terrain-style:disabled{opacity:.35;cursor:default}
 .ls-head .menu-section-title{margin:0}
 .ls-head .pane-n,.ls-head .linkbtn{margin-left:auto;font-size:12px}
 .ls .control-hint{margin:0}
-.ls-looks{display:grid;grid-auto-flow:column;grid-auto-columns:92px;gap:8px;overflow-x:auto;overscroll-behavior-x:contain;
-  scroll-snap-type:x proximity;padding:2px 2px 8px;margin:0 -2px;scrollbar-width:thin}
+.ls-looks{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(74px,100%),1fr));gap:12px 10px;
+  padding:4px;min-width:0}
 .ls-look{position:relative;display:grid;gap:6px;justify-items:stretch;padding:0;border:0;background:transparent;color:inherit;
-  font:inherit;font-size:11.5px;font-weight:500;text-align:center;cursor:pointer;scroll-snap-align:start;min-height:44px}
-.ls-look-preview{display:block;width:92px;height:61px;border-radius:var(--ls-radius);background:var(--ui-sunken);
+  font:inherit;font-size:11.5px;font-weight:500;text-align:center;cursor:pointer;min-width:0;min-height:44px;align-content:start}
+.ls-look-preview{display:block;width:100%;height:auto;aspect-ratio:3/2;border-radius:var(--ls-radius);background:var(--ui-sunken);
   box-shadow:inset 0 0 0 1px var(--ui-shadow-3);transition:box-shadow .16s ease,transform .16s cubic-bezier(.2,.8,.2,1)}
 .ls-look:hover .ls-look-preview{transform:translateY(-1px)}
 .ls-look[aria-checked="true"] .ls-look-preview{box-shadow:0 0 0 2px var(--ui-surface),0 0 0 4px var(--ui-accent)}
 .ls-look[aria-checked="true"] .ls-look-name{color:var(--ui-accent);font-weight:650}
 .ls-look:focus-visible{outline:none}
 .ls-look:focus-visible .ls-look-preview{box-shadow:0 0 0 2px var(--ui-surface),0 0 0 4px var(--ui-accent)}
-.ls-look-name{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ls-look-name{line-height:1.35;white-space:normal;overflow-wrap:anywhere}
 .ls-look-remove{position:absolute;top:4px;right:4px;display:grid;place-items:center;width:22px;height:22px;border-radius:50%;
   background:var(--ui-tooltip);opacity:0;transition:opacity .14s ease}
 .ls-look-remove img{width:13px;height:13px;filter:brightness(0) invert(1)}
@@ -3128,6 +3128,11 @@ body.csp-redesign #panes .csp-terrain-style:disabled{opacity:.35;cursor:default}
 .ls-icon-button img{width:17px;height:17px;filter:var(--ui-icon-filter)}
 .ls-icon-button:disabled{cursor:default;opacity:.4}
 .ls-icon-button:hover:not(:disabled){background:var(--ui-hover)}
+.ls-eye[aria-pressed="true"]{background:var(--ui-selected);box-shadow:inset 0 0 0 1px var(--ui-accent)}
+.ls-eye[aria-pressed="false"]{opacity:.65}
+/* The studio edits types in each layer. Retain the classic picker for the
+   CPU fallback instead of presenting two competing layer selectors. */
+html[data-gpu2d="on"] #cspTerrainStyles,html[data-gpu2d="on"] #terStyleHint{display:none}
 .ls-layer-main{display:flex;align-items:center;gap:10px;flex:1;min-width:0;min-height:44px;padding:6px 8px 6px 2px;border:0;border-radius:10px;
   background:transparent;color:inherit;font:inherit;text-align:left;cursor:pointer}
 .ls-layer-main:hover{background:var(--ui-hover)}

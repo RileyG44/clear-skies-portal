@@ -264,7 +264,7 @@
 
   /* stack: {layers: [{style, opacity, blend, stops: [[position 0..1, r, g, b, a] in 0..1],
    *   min, max, gamma, steps, param}], detail, reliefExag, remFlatBase}.
-   * An absent or empty stack turns the stack off. */
+   * An absent stack uses legacy rendering; an empty stack is transparent. */
   function stackUniforms(stack) {
     var layers = stack && Array.isArray(stack.layers) ? stack.layers : [];
     var a = new Array(MAX_LAYERS * 4).fill(0), b = new Array(MAX_LAYERS * 4).fill(0), c = new Array(MAX_LAYERS * 4).fill(0);
@@ -292,7 +292,7 @@
       }
       count++;
     }
-    var on = count > 0 ? 1 : 0;
+    var on = stack && Array.isArray(stack.layers) ? 1 : 0;
     return {on: on, count: count, a: a, b: b, c: c, pos: pos, colors: colors,
       detail: on ? clamp(finiteOr(stack.detail, 0), -1, 4) : 0,
       reliefExag: on ? clamp(finiteOr(stack.reliefExag, 1), 0.1, 20) : 1,
