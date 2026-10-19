@@ -28,8 +28,15 @@ const inside=async(page,selector)=>{
       const page=await context.newPage(),errors=[];page.on('pageerror',error=>errors.push(error.message));
       // Browser tests must never sync their temporary drawing layers to a
       // person's terrain engine. Persistence itself has separate unit tests.
-      await page.route('**/api/markup**',route=>route.fulfill({json:route.request().method()==='GET'?{layers:[],deleted:{}}:{ok:true}}));
+      // The site ships no markup layers, so the stand-in engine supplies one.
+      const fixture={type:'FeatureCollection',markup:{id:'ui-test',name:'UI test',description:'',color:'#ff3b30',created:1,updated:1},features:[]};
+      await page.route('**/api/markup**',route=>{
+        if(route.request().method()!=='GET') return route.fulfill({json:{ok:true}});
+        if(new URL(route.request().url()).pathname.endsWith('/api/markup/ui-test')) return route.fulfill({json:fixture});
+        return route.fulfill({json:{layers:[{id:'ui-test',name:'UI test',color:'#ff3b30',updated:1,count:0}],deleted:{}}});
+      });
       await page.goto(base,{waitUntil:'domcontentloaded'});
+      await page.waitForFunction(()=>window.CSPMarkup?._layers.size>0);
       await page.locator('#quickDraw').click();
       await page.locator('#mkBar').waitFor({state:'visible'});
       await page.waitForTimeout(220);
