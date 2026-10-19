@@ -84,9 +84,6 @@ body.csp-redesign #cspNav{
   overflow:hidden;
 }
 
-body.csp-redesign #cspNav > header{
-  display:none;
-}
 
 body.csp-redesign #cspNav h1{
   font-size:15px;
@@ -840,7 +837,7 @@ body.csp-redesign .csp-locate-label{display:none}
    - SF Pro where the system has it, Inter (vendored) where it does not.
    - On a phone the sidebar becomes a bottom sheet with a grabber and two
      detents, the pattern people know from Maps.
-   Everything here is scoped to html.csp-glass; ?ui=classic removes it.
+   The single supported shell uses html.csp-glass at every viewport size.
    ====================================================================== */
 
 .csp-glass body.csp-redesign{
@@ -2410,12 +2407,12 @@ body.csp-redesign:not([data-csp-route="satellite"]) #cspWorkspace #status[data-k
   --ui-frost:var(--map3d-motion-fill);--ui-frost-weak:var(--map3d-motion-fill);
 }
 .csp-glass body.csp-redesign.terrain-3d.map3d-moving{--map3d-motion-fill:var(--ui-surface);--map3d-motion-panel:var(--ui-rail)}
-body.terrain-3d.map3d-moving :is(#side,#ac,.coord-menu,.map-tool,.tool-popover,#snapshotStatus,.snap-sel-size,.snap-sel-bar,#ctl,#menu,#blk,#pointCloudPanel,.pc-head,.pane-drag-ghost,.ovgrp,#newBuild,.leaflet-control-zoom,.leaflet-control-zoom a,.leaflet-control-attribution,.leaflet-popup-content-wrapper,.leaflet-tooltip,#mapDock,#mapReadout,#panes .grp,#side #q,#side #loc,#map3d .maplibregl-ctrl-attrib,#mkBar,#mkPop,.mk-selbar,.csp-sat-suggest){
+body.terrain-3d.map3d-moving :is(#side,#ac,.coord-menu,.map-tool,.tool-popover,#snapshotStatus,.snap-sel-size,.snap-sel-bar,#ctl,#menu,#blk,#pointCloudPanel,.pc-head,.pane-drag-ghost,.ovgrp,#newBuild,#cspElectronTitlebar,.leaflet-control-zoom,.leaflet-control-zoom a,.leaflet-control-attribution,.leaflet-popup-content-wrapper,.leaflet-tooltip,#mapDock,#mapReadout,#panes .grp,#side #q,#side #loc,#map3d .maplibregl-ctrl-attrib,#mkBar,#mkPop,.mk-selbar,.csp-sat-suggest){
   -webkit-backdrop-filter:none!important;backdrop-filter:none!important;
 }
 /* Classic is already opaque. Glass controls keep their hover/selected fill
    instead of replacing that feedback with the neutral motion material. */
-.csp-glass body.terrain-3d.map3d-moving :is(#ac,.coord-menu,.map-tool:not(:hover):not(.active):not([aria-pressed="true"]),.tool-popover,#snapshotStatus,.snap-sel-bar,#ctl,#menu,#blk,#pointCloudPanel,.pc-head,.pane-drag-ghost,#newBuild,.leaflet-control-zoom,.leaflet-control-zoom a:not(:hover),.leaflet-control-attribution,.leaflet-popup-content-wrapper,.leaflet-tooltip,#mapDock,#mapReadout,#map3d .maplibregl-ctrl-attrib,#mkBar,#mkPop,.mk-selbar,.csp-sat-suggest){background-color:var(--map3d-motion-fill)!important}
+.csp-glass body.terrain-3d.map3d-moving :is(#ac,.coord-menu,.map-tool:not(:hover):not(.active):not([aria-pressed="true"]),.tool-popover,#snapshotStatus,.snap-sel-bar,#ctl,#menu,#blk,#pointCloudPanel,.pc-head,.pane-drag-ghost,#newBuild,#cspElectronTitlebar,.leaflet-control-zoom,.leaflet-control-zoom a:not(:hover),.leaflet-control-attribution,.leaflet-popup-content-wrapper,.leaflet-tooltip,#mapDock,#mapReadout,#map3d .maplibregl-ctrl-attrib,#mkBar,#mkPop,.mk-selbar,.csp-sat-suggest){background-color:var(--map3d-motion-fill)!important}
 /* Unknown pseudo-elements invalidate ordinary selector lists. Keep native
    picker enhancements separate from the motion safeguards every engine needs. */
 @supports selector(select::picker(select)){
@@ -3263,3 +3260,9 @@ body.csp-redesign #panes .elev-settings{border-top:1px solid var(--ui-line);marg
 .csp-glass body.csp-redesign.csp-redesign #cspWorkspace :is(.elev-settings,.elev-module)::details-content{transition:none}
 
 .csp-glass body.csp-redesign.csp-redesign #cspWorkspace #panes .elev-module-head label.csp-switch-row{padding:0;min-height:44px;flex:1;min-width:0;width:auto;gap:8px;font-size:13px}
+
+/* Electron's titleless drag strip shares the map controls' reserved top edge. */
+:root.csp-electron{--safe-top:calc(env(safe-area-inset-top,0px) + 32px)}
+#cspElectronTitlebar{position:fixed;inset:0 0 auto;height:32px;z-index:20000;pointer-events:auto;
+  background:color-mix(in srgb,var(--ui-surface) 90%,transparent);border-bottom:1px solid var(--ui-line);
+  backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);-webkit-app-region:drag;app-region:drag}

@@ -7,17 +7,14 @@ const icon=name=>`vendor/icons/${name}.svg`;
 const compactShell=matchMedia("(max-width:1050px)");
 const side=$("#side"),panes=$("#panes"),status=$("#status"),mapEl=$("#map");
 const bridge=window.ClearSkiesPortalBridge;
-/* The page is held at first paint until this fires; every exit from here has to
-   reach it, including the one where the redesign declines to run at all. */
+/* The one supported shell is already present in the document. */
 const ready=()=>document.documentElement.dispatchEvent(new Event("csp:ready"));
-if(!side||!panes||!status||!mapEl||!bridge){ ready(); return; }
+if(!side||!panes||!status||!mapEl||!bridge){
+  window.CSPBoot?.fail("The portal could not initialize its map controls. Reload to recover.");return;
+}
 
 document.body.classList.add("csp-redesign");
-/* The Liquid Glass layer is on by default; ?ui=classic shows the previous
-   palette and shell for side-by-side review. Set before the boot guard lifts,
-   so neither look flashes on the way to the other. */
-const classicUi=new URLSearchParams(location.search).get("ui")==="classic";
-document.documentElement.classList.toggle("csp-glass",!classicUi);
+document.documentElement.classList.add("csp-glass");
 document.documentElement.style.setProperty("--side-w","580px");
 side.style.width="580px";
 /* The placeholder follows the field's own width, not the window's: the rail
@@ -33,7 +30,7 @@ side.style.width="580px";
 
 const ROUTES={
   layers:{title:"Layers",description:"Everything currently drawn on the map, in render order.",icon:"layers",panes:[],custom:"layers"},
-  satellite:{title:"Satellite imagery",description:"Find dated scenes, tune the search, and control the image already on the map.",icon:"satellite",panes:[...(classicUi?["filters"]:[]),"summary","passes","results","overlays"],open:[...(classicUi?["filters"]:[]),"results"],overlayGroup:"Imagery",overlayTitle:"Satellite base layers",custom:"satellite"},
+  satellite:{title:"Satellite imagery",description:"Find dated scenes, tune the search, and control the image already on the map.",icon:"satellite",panes:["summary","passes","results","overlays"],open:["results"],overlayGroup:"Imagery",overlayTitle:"Satellite base layers",custom:"satellite"},
   terrain:{title:"LiDAR",description:"Draw LiDAR terrain layers, fetch WA DNR surveys, and save areas for offline use.",icon:"radar",panes:["terrain"],open:["terrain"]},
   elevation:{title:"Elevation",description:"Color the ground by height or highlight it above and below a threshold.",icon:"mountain-snow",panes:["elevation"],open:["elevation"]},
   analyze:{title:"Analyze",description:"Measure landform patterns or reveal features in the current view.",icon:"scan-search",panes:["research"],open:["research"],researchMode:"analyze"},
@@ -47,20 +44,8 @@ const ROUTES={
   settings:{title:"Settings",description:"Terrain engine, export defaults and accessibility for this browser.",icon:"settings",panes:[],custom:"settings"}
 };
 
-const oldHeader=$(":scope > header",side),searchbox=$(":scope > .searchbox",side),foot=$(":scope > .foot",side),drag=$("#drag",side);
-const nav=document.createElement("nav");nav.id="cspNav";nav.setAttribute("aria-label","Clear Skies workspace");
-const navScroll=document.createElement("div");navScroll.id="cspNavScroll";
-const workspace=document.createElement("main");workspace.id="cspWorkspace";
-workspace.innerHTML=`
-  <header id="cspWorkspaceHeader">
-    <button id="cspBack" type="button"><img src="${icon("arrow-left")}" alt=""> All tools</button>
-    <h2 id="cspWorkspaceTitle"></h2>
-    <p id="cspWorkspaceDescription"></p>
-  </header>
-  <div id="cspWorkspaceScroll"><div id="cspCustomView"></div></div>`;
-
-side.insertBefore(nav,oldHeader);
-nav.append(oldHeader,searchbox);
+const nav=$("#cspNav",side),navScroll=$("#cspNavScroll",side),workspace=$("#cspWorkspace",side),foot=$(".foot",nav);
+const workspaceScroll=$("#cspWorkspaceScroll",workspace),customView=$("#cspCustomView",workspace);
 
 const coordinateActions=document.createElement("div");coordinateActions.className="csp-coordinate-actions";
 coordinateActions.innerHTML=`
@@ -73,11 +58,7 @@ coordinateActions.innerHTML=`
   <button type="button" data-coordinate="earth" title="Open coordinates in Google Earth" aria-label="Open coordinates in Google Earth">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"/></svg><span>Earth</span>
   </button>`;
-nav.append(coordinateActions,navScroll);
-nav.append(foot);
-side.insertBefore(workspace,drag);
-const workspaceScroll=$("#cspWorkspaceScroll",workspace),customView=$("#cspCustomView",workspace);
-workspaceScroll.append(status,panes);
+navScroll.before(coordinateActions);
 
 function navGroup(label,items){
   const group=document.createElement("div");
@@ -150,7 +131,7 @@ coordinateActions.addEventListener("click",event=>{
   q?.addEventListener("focus",()=>{if(coordinates.test(q.value)) setTimeout(()=>{if(document.activeElement===q) q.select()},0)});
 }
 const locateButton=$("#loc");
-if(locateButton) locateButton.innerHTML=`<img src="${icon(classicUi?"map-pinned":"navigation")}" alt=""><span class="csp-locate-label">Locate me</span>`;
+if(locateButton) locateButton.innerHTML=`<img src="${icon("navigation")}" alt=""><span class="csp-locate-label">Locate me</span>`;
 
 const SEARCH_ROUTES=new Map([
   ["layers","layers"],["active layers","layers"],
@@ -211,13 +192,13 @@ function toSwitchRow(label){
   input.setAttribute("role","switch");
   label.classList.add("csp-switch-row");label.append(control);
 }
-if(!classicUi){
+{
   wrapFieldRows($(".pane[data-pane='filters'] .fgrid",panes));
   for(const label of $$(".pane[data-pane='filters'] .toggles > .check,.pane[data-pane='alerts'] .alert-sources > .check,.pane[data-pane='alerts'] .alert-options > .check",panes)) toSwitchRow(label);
 }
 
 const spectrumBox=$("#elevSh")?.closest(".fabbox");if(spectrumBox) spectrumBox.id="elevSpectrumBox";
-if(!classicUi)toSwitchRow($("#lb_elevSh"));
+toSwitchRow($("#lb_elevSh"));
 const bandsBox=$("#elevBandsBox"),surfaceBox=$("#researchProduct")?.closest(".fabbox"),geologyBox=$("#geologyIdentifyBox");
 const researchPane=$(".pane[data-pane='research']",panes),researchBody=$(".pane-b",researchPane);
 const fabricBox=$("#fabricResearchBox");
@@ -709,9 +690,8 @@ function buildSatelliteSearch(){
   return wrap;
 }
 function renderSatelliteView(){
-  if(classicUi) clearCustom();
-  else if(!satelliteSearch) satelliteSearch=buildSatelliteSearch();
-  if(!classicUi&&satelliteSearch.parentElement!==customView){
+  if(!satelliteSearch) satelliteSearch=buildSatelliteSearch();
+  if(satelliteSearch.parentElement!==customView){
     clearCustom();
     customView.append(satelliteSearch);
     $(".csp-sat-filters",satelliteSearch).append(...filterParts);
@@ -1090,7 +1070,7 @@ navScroll.addEventListener("click",event=>{const route=event.target.closest("[da
    Reduce Motion disables the halo and lens entirely. */
 const reducedMotion=matchMedia("(prefers-reduced-motion: reduce)");
 const calmMotion=()=>reducedMotion.matches||document.documentElement.classList.contains("csp-reduce-motion");
-if(!classicUi){
+{
   const finePointer=matchMedia("(hover:hover) and (pointer:fine)");
   const enabled=()=>finePointer.matches&&!calmMotion()&&document.documentElement.classList.contains("csp-glass");
   const layer=document.createElement("div");layer.className="csp-halo-layer";layer.setAttribute("aria-hidden","true");
@@ -1601,10 +1581,10 @@ if(/^https?:$/.test(location.protocol)&&!/\.github\.io$/.test(location.hostname)
   }).catch(()=>{});
 }
 
-const savedRoute=localStorage.getItem("clearskies.workspace.v1");
+let savedRoute=null;try{savedRoute=localStorage.getItem("clearskies.workspace.v1")}catch(_){}
 activateRoute(Object.prototype.hasOwnProperty.call(ROUTES,savedRoute)?savedRoute:"layers",{stayOnNav:compactShell.matches});
 document.body.dataset.cspView=compactShell.matches?"nav":"detail";
-$$(".csp-nav-button[data-route]").forEach(button=>button.addEventListener("click",()=>localStorage.setItem("clearskies.workspace.v1",button.dataset.route)));
+$$(".csp-nav-button[data-route]").forEach(button=>button.addEventListener("click",()=>{try{localStorage.setItem("clearskies.workspace.v1",button.dataset.route)}catch(_){}}));
 syncModeBar();updateCounts();
 /* One frame later, so the reveal shows a settled layout rather than the route
    activating in front of the user. */

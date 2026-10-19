@@ -198,25 +198,13 @@ assert(index.includes('id="buildDiag"'),"the geometry readout must be reachable 
          /csp-point-tip\{[^}]*background:var\(--ui-tooltip\)/.test(uiCss),
     "the point tooltip's hard-coded fill must be overridden by a themed one");
 
-  /* The redesign restructures the legacy DOM in a script at the end of the
-     page, so without a hold the browser paints the old interface first and the
-     new one lands on top. The hold has to expire by itself: if the script never
-     runs, a page held forever is worse than a page that flashes. */
-  assert(/html\.csp-boot body\{visibility:hidden\}/.test(index),
-    "first paint must wait for the restructure, and wait by visibility so layout still measures");
-  assert(/setTimeout\(reveal,\s*\d+\)/.test(index),
-    "the paint hold must expire on its own if the interface script never runs");
-  /* The hold expires on a timer, the restructure happens at the end of the page,
-     and on a slow load the timer wins - which used to reveal the legacy design
-     and then snap to the redesign in front of the user. Claim the redesign in
-     the body before anything can be painted, so whichever way the hold ends the
-     new interface is what appears. */
-  const claim = index.indexOf('document.body.classList.add("csp-redesign")');
-  assert(claim !== -1 && claim < index.indexOf('src="ui-system.js'),
-    "the redesign must be claimed before first paint, not only when the interface script runs");
-  assert(uiSystem.includes('dispatchEvent(new Event("csp:ready"))')&&
-         /if\(!side\|\|!panes\|\|!status\|\|!mapEl\|\|!bridge\)\{ ready\(\); return; \}/.test(uiSystem),
-    "every exit from the interface script must release the paint hold, including the early one");
+  /* There is one shell in the document; failures must show recovery, never the removed sidebar. */
+  assert(index.includes('id="cspNav"')&&index.includes('id="cspWorkspace"'),"the modern shell must be static HTML");
+  assert(/html\.csp-boot #app\{visibility:hidden\}/.test(index),"startup must keep map geometry measurable");
+  assert(index.includes('window.CSPBoot')&&index.includes('id="cspStartupRetry"'),"startup errors need an explicit recovery view");
+  assert(!uiSystem.includes('classicUi')&&!uiSystem.includes('oldHeader'),"the classic shell must not be selectable or constructed");
+  assert(uiSystem.includes('dispatchEvent(new Event("csp:ready"))')&&uiSystem.includes('window.CSPBoot?.fail'),"startup must distinguish ready from failure");
+
 }
 
 /* A selector list that ends in a comma swallows the next rule's selector. It

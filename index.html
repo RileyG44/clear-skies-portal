@@ -993,22 +993,18 @@ body.pane-reordering,body.pane-reordering *{cursor:grabbing!important;user-selec
 }
 
 </style>
-<link rel="stylesheet" href="ui-theme.css?build=2026-10-19g">
-<link rel="stylesheet" href="ui-system.css?build=2026-10-19g">
+<link rel="stylesheet" href="ui-theme.css?build=2026-10-19h">
+<link rel="stylesheet" href="ui-system.css?build=2026-10-19h">
 <style>
-/* The redesign restructures the legacy DOM rather than replacing it, and the
-   script that does so is the last thing on the page - so the browser paints the
-   old sidebar first and the new one lands on top of it a moment later. Holding
-   the first paint until the restructure is done is what makes it one interface
-   instead of two. visibility, not display: the boxes still lay out, so Leaflet
-   measures its container correctly while the page is held.
-
-   The timer is the whole safety story. If ui-system.js never runs - a syntax
-   error, a blocked request, an exception in the inline application script that
-   stops the parser before it - the page must still arrive, so the hold expires
-   on its own and the legacy interface appears. */
+/* Keep layout measurable during startup, with a separate recovery view if a
+   required script fails. The legacy interface is no longer a fallback. */
 html.csp-boot{background:var(--ui-sunken)}
-html.csp-boot body{visibility:hidden}
+html.csp-boot #app{visibility:hidden}
+#cspStartup{position:fixed;inset:0;z-index:10000;display:grid;place-content:center;gap:12px;padding:28px;background:var(--ui-sunken);color:var(--ui-text);font:15px/1.5 system-ui;text-align:center}
+#cspStartup[hidden]{display:none}
+#cspStartup h1{margin:0;font-size:22px}
+#cspStartup p{max-width:420px;margin:0}
+#cspStartup button{justify-self:center;min-height:44px;padding:0 20px;border:1px solid var(--ui-line);border-radius:9px;background:var(--ui-surface);color:inherit;font:inherit}
 </style>
 <script>
 (function(){
@@ -1024,26 +1020,34 @@ html.csp-boot body{visibility:hidden}
     if(fonts[ap.font])root.style.setProperty("--csp-font-family",fonts[ap.font]);
     if([0.92,1.12].indexOf(Number(ap.textSize))>=0)root.style.setProperty("--csp-text-zoom",String(ap.textSize));
     if(localStorage.getItem("clearskies.reduceMotion.v1")==="1")root.classList.add("csp-reduce-motion")}catch(e){}
-  var reveal=function(){root.classList.remove("csp-boot")};
-  var timer=setTimeout(reveal,4000);
-  root.addEventListener("csp:ready",function(){clearTimeout(timer);reveal()},{once:true});
+  var boot=window.CSPBoot={done:false,message:"Loading your map and tools…"};
+  var paint=function(){
+    var panel=document.getElementById("cspStartup"),text=document.getElementById("cspStartupMessage"),retry=document.getElementById("cspStartupRetry");
+    if(panel)panel.hidden=boot.done;
+    if(text)text.textContent=boot.message;
+    if(retry)retry.onclick=function(){location.reload()};
+  };
+  boot.fail=function(message){if(boot.done)return;boot.message=message||"The portal could not finish starting. Reload to try again.";paint()};
+  var timer=setTimeout(function(){boot.fail("The portal is taking longer to start. Check your connection, then reload.")},12000);
+  root.addEventListener("csp:ready",function(){boot.done=true;clearTimeout(timer);root.classList.remove("csp-boot");paint()},{once:true});
+  document.addEventListener("DOMContentLoaded",paint,{once:true});
+  window.addEventListener("error",function(event){
+    if(event.error||event.target?.tagName==="SCRIPT")boot.fail("A required app file could not start. Reload the portal to recover.");
+  },true);
 })();
 </script>
 </head>
 <body>
-<!-- The redesigned shell is the intended look, so claim it before the first paint instead of
-     waiting for ui-system.js (the last script on the page) to run. The boot guard above keeps
-     the page hidden until it is ready, so this cannot flash a half-built layout; it only stops
-     the 4 s guard from revealing the legacy design first. ui-system.js drops the class again if
-     it genuinely cannot run. -->
-<script>document.body.classList.add("csp-redesign");document.documentElement.classList.toggle("csp-glass",new URLSearchParams(location.search).get("ui")!=="classic");</script>
+<!-- The modern shell is the only interface, at every viewport size. -->
+<script>document.body.classList.add("csp-redesign");document.documentElement.classList.toggle("csp-glass",true);</script>
+<section id="cspStartup" role="status" aria-live="polite">
+  <h1>Clear Skies</h1>
+  <p id="cspStartupMessage">Loading your map and tools…</p>
+  <button id="cspStartupRetry" type="button">Reload portal</button>
+</section>
 <div id="app">
   <div id="side">
-    <header>
-      <h1>Clear Skies <span class="portal">Portal</span></h1>
-      <div class="sub">Latest available imagery by source and date, for any location</div>
-    </header>
-
+    <nav id="cspNav" aria-label="Clear Skies workspace">
     <div class="searchbox">
       <div class="row search-row">
         <div id="iw">
@@ -1059,6 +1063,7 @@ html.csp-boot body{visibility:hidden}
             <line x1="1" y1="12" x2="3.6" y2="12"/><line x1="20.4" y1="12" x2="23" y2="12"/>
           </svg>
         </button>
+        <div id="cspCoordinateCommands" hidden>
         <button class="search-action" id="coordCopy" type="button" disabled
                 title="Select a point or enter coordinates first">Copy</button>
         <div class="coord-launch">
@@ -1070,10 +1075,32 @@ html.csp-boot body{visibility:hidden}
             <a id="coordGoogleEarth" role="menuitem" target="_blank" rel="noopener noreferrer">Google Earth</a>
           </div>
         </div>
+        </div>
         <button id="go">Search</button>
       </div>
     </div>
 
+      <div id="cspNavScroll"></div>
+    <div class="foot">
+      <div class="foot-meta">
+        <div id="buildStamp" title="Which build this device is running"></div>
+        <button class="linkbtn" id="resetPanes" title="Restore default order, sizes and collapse state">Reset layout</button>
+      </div>
+      <details class="about-disclosure">
+        <summary>Sources &amp; credits</summary>
+        <div class="about-copy">Copernicus Data Space &middot; Microsoft Planetary Computer &middot; AWS Earth Search / Terrain Tiles &middot; NASA GIBS &middot; NISAR.
+        All free, no API key. Place search by Photon (OpenStreetMap). Basemap by Esri.</div>
+      </details>
+    </div>
+    </nav>
+    <main id="cspWorkspace">
+      <header id="cspWorkspaceHeader">
+        <button id="cspBack" type="button"><img src="vendor/icons/arrow-left.svg" alt=""> All tools</button>
+        <h2 id="cspWorkspaceTitle"></h2>
+        <p id="cspWorkspaceDescription"></p>
+      </header>
+      <div id="cspWorkspaceScroll">
+        <div id="cspCustomView"></div>
     <div id="status" data-kind="idle">Enter a location, or click anywhere on the map.</div>
 
     <div id="panes">
@@ -1705,17 +1732,8 @@ html.csp-boot body{visibility:hidden}
 
     </div>
 
-    <div class="foot">
-      <div class="foot-meta">
-        <div id="buildStamp" title="Which build this device is running"></div>
-        <button class="linkbtn" id="resetPanes" title="Restore default order, sizes and collapse state">Reset layout</button>
       </div>
-      <details class="about-disclosure">
-        <summary>Sources &amp; credits</summary>
-        <div class="about-copy">Copernicus Data Space &middot; Microsoft Planetary Computer &middot; AWS Earth Search / Terrain Tiles &middot; NASA GIBS &middot; NISAR.
-        All free, no API key. Place search by Photon (OpenStreetMap). Basemap by Esri.</div>
-      </details>
-    </div>
+    </main>
     <div id="drag" title="Drag to resize"></div>
   </div>
 
@@ -1924,7 +1942,7 @@ html.csp-boot body{visibility:hidden}
   L.Renderer.prototype.onAdd=function(map){return onAdd.call(this,map||this._map)};
 })();
 </script>
-<script src="version.js?build=2026-10-19g"></script>
+<script src="version.js?build=2026-10-19h"></script>
 <script src="mosaic-core.js"></script>
 <script src="png-stream.js"></script>
 <script src="terrain-core.js"></script>
@@ -10967,17 +10985,14 @@ $("#elevPaletteReverse").onclick=()=>applySpectrumColors(spectrumHexColors().rev
 $("#elevPaletteReset").onclick=()=>applySpectrumColors(SPECTRUM_PALETTES.classic);
 syncSpectrumPalette();
 loadTerrainPrefs();
-initGpuTerrain();
 // The studio mounts before preferences hydrate the native style field.
 // Reconcile its rows and selected look with the restored map, including Off.
 lidarStudio?.refresh();
-if(gpuTerrainLayer)gpuTerrainLayer.on("tilerefine",()=>{scheduleTerrainStatus();paintElevOut();});
 syncElevSpanSlider();
 syncTerrainOpacity();
 syncTerrainLookControls();
 syncTerrainLighting();
-if($("#terStyle").value!=="off") applyTerrain(true);
-if(elevationActive()) applyElev(); else syncElevationChecks();
+syncElevationChecks();
 $("#elevSh").addEventListener("change",()=>{ saveTerrainPrefs(); applyElev() });
 $("#elevSlide").addEventListener("input", syncElevFromSlider);
 $("#elevVal").addEventListener("input", syncElevFromBox);
@@ -11144,7 +11159,7 @@ function cspSetLayerOrder(order){
   // using the uppermost requested stack position for that surface.
   const gpuIds=["terrain","elevation-spectrum","elevation-bands"];
   const gpuIndex=(order||[]).findIndex(id=>gpuIds.includes(id));
-  if(gpuTerrainEnabled&&gpuIndex>=0){gpuTerrainOrderZ=top-gpuIndex*8+1;gpuTerrainLayer.setZIndex(gpuTerrainOrderZ);}
+  if(gpuIndex>=0){gpuTerrainOrderZ=top-gpuIndex*8+1;if(gpuTerrainEnabled)gpuTerrainLayer.setZIndex(gpuTerrainOrderZ);}
   (order||[]).forEach((id,index)=>{
     const z=top-index*8;
     if(id==="scene"){
@@ -11190,6 +11205,24 @@ window.ClearSkiesPortalBridge={
   searchLabel:()=>committedLocation?.label||"",
   searchState:()=>committedLocation?{...committedLocation,coordinates:{...committedLocation.coordinates}}:{version:0,label:"",coordinates:null}
 };
+
+/* Optional rendering starts in its own task after navigation is usable. A
+   device-specific GPU failure must never abort the shell's initialization. */
+document.documentElement.addEventListener("csp:ready",()=>requestAnimationFrame(()=>{
+  try{initGpuTerrain()}catch(error){
+    gpuTerrainEnabled=false;
+    try{gpuTerrainLayer?.destroy();gpuTerrainStore?.destroy()}catch(_){}
+    gpuTerrainLayer=null;gpuTerrainStore=null;
+    document.documentElement.dataset.gpu2d="off";lidarStudio?.refresh();
+    console.warn("Terrain GPU unavailable; using the CPU renderer",error);
+  }
+  if(gpuTerrainLayer)gpuTerrainLayer.on("tilerefine",()=>{scheduleTerrainStatus();paintElevOut()});
+  try{
+    if($("#terStyle").value!=="off")applyTerrain(true);
+    if(elevationActive())applyElev();else syncElevationChecks();
+  }catch(error){console.warn("Initial terrain rendering failed",error)}
+}),{once:true});
+
 
 if("serviceWorker" in navigator && (location.protocol==="https:" || location.hostname==="localhost"))
   addEventListener("load",()=>navigator.serviceWorker.register("sw.js",{updateViaCache:"none"})
@@ -11548,8 +11581,8 @@ $("#q").addEventListener("blur",()=>setTimeout(acHide,120));
 document.addEventListener("click",e=>{ if(!e.target.closest("#iw")) acHide() });
 })();
 </script>
-<script src="markup-3d.js?build=2026-10-19g"></script>
-<script src="markup.js?build=2026-10-19g"></script>
-<script src="ui-system.js?build=2026-10-19g"></script>
+<script src="markup-3d.js?build=2026-10-19h"></script>
+<script src="markup.js?build=2026-10-19h"></script>
+<script src="ui-system.js?build=2026-10-19h"></script>
 </body>
 </html>
