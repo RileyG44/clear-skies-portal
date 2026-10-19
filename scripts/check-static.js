@@ -118,21 +118,21 @@ assert(uiSystem.includes('data-coordinate="copy"')&&uiSystem.includes('data-coor
        "map coordinates must retain direct copy, Google Maps, and Google Earth research actions");
 assert(index.includes("refreshOverlayStatus:paintOverlayNote")&&index.includes("function visibleOverlayGroup()"),
        "overlay counts, loading, failures and notes must follow the visible catalog group");
-assert(index.includes('<script src="mosaic-core.js"></script>'),"index must load the tested mosaic core");
-assert(index.includes('<script src="terrain-core.js"></script>')&&index.includes('<script src="terrain-raster.js"></script>'),
+assert(index.includes(`<script src="mosaic-core.js?build=${versionSandbox.CSP_BUILD}"></script>`),"index must load the tested mosaic core");
+assert(index.includes(`<script src="terrain-core.js?build=${versionSandbox.CSP_BUILD}"></script>`)&&index.includes(`<script src="terrain-raster.js?build=${versionSandbox.CSP_BUILD}"></script>`),
        "index must load tested terrain primitives and the deterministic display rasterizer");
-assert(index.includes('<script src="elevation-bands.js"></script>'),"index must load the tested elevation-band core");
-assert(index.includes('<script src="elevation-tile-core.js"></script>'),"index must decode packed elevation before resampling");
-assert(index.includes('<script src="public-terrain.js"></script>'),"index must load the public terrain source registry");
+assert(index.includes(`<script src="elevation-bands.js?build=${versionSandbox.CSP_BUILD}"></script>`),"index must load the tested elevation-band core");
+assert(index.includes(`<script src="elevation-tile-core.js?build=${versionSandbox.CSP_BUILD}"></script>`),"index must decode packed elevation before resampling");
+assert(index.includes(`<script src="public-terrain.js?build=${versionSandbox.CSP_BUILD}"></script>`),"index must load the public terrain source registry");
 for(const asset of ["public-terrain.js","public-terrain-worker.js"])
   assert(fs.existsSync(path.join(root,asset)),`public terrain asset is missing: ${asset}`);
 for(const asset of ["LercDecode.js","LercDecode.es.js","lerc-wasm.wasm"])
   assert(fs.existsSync(path.join(root,"vendor","lerc",asset)),`LERC decoder asset is missing: ${asset}`);
 assert(read("sw.js").includes('"./public-terrain-worker.js"'),"the offline shell must cache the public terrain worker");
 assert(deploymentWorkflow.includes("public-terrain.js public-terrain-worker.js"),"GitHub Pages must ship the public terrain assets");
-assert(index.includes('<script src="wa-archaeology.js"></script>'),"index must load the public-safe archaeology index");
-assert(index.includes('<script src="glacial-research-core.js"></script>'),"index must load geomorphology primitives");
-assert(index.includes('<script src="research-analysis.js"></script>'),"index must load the shared analysis dispatcher");
+assert(index.includes(`<script src="wa-archaeology.js?build=${versionSandbox.CSP_BUILD}"></script>`),"index must load the public-safe archaeology index");
+assert(index.includes(`<script src="glacial-research-core.js?build=${versionSandbox.CSP_BUILD}"></script>`),"index must load geomorphology primitives");
+assert(index.includes(`<script src="research-analysis.js?build=${versionSandbox.CSP_BUILD}"></script>`),"index must load the shared analysis dispatcher");
 assert(read("sw.js").includes(`const CSP_BUILD = "${versionSandbox.CSP_BUILD}";`),
        "service worker cache namespace must use the page build version");
 /* Shipping a fix is not the same as anyone receiving it. Same-origin assets are
@@ -324,7 +324,7 @@ assert(index.includes('SNAPSHOT_SCALES=[1,2,4,8,16,32]')&&index.includes('snapsh
        "higher-resolution exports must request bounded source tiles for the selected area, a few at a time");
 /* Big exports are drawn in blocks and streamed to a PNG, never one canvas:
    that is what lifts the browser's 16.7 MP / 16,384 px canvas caps. */
-assert(index.includes('<script src="png-stream.js"></script>')&&index.includes('CSPPngStream.create(')&&
+assert(index.includes(`<script src="png-stream.js?build=${versionSandbox.CSP_BUILD}"></script>`)&&index.includes('CSPPngStream.create(')&&
        index.includes('async function composeSnapshotStream(')&&index.includes('SNAPSHOT_BLOCK_EDGE=4096'),
        "large exports must stream through the tested PNG encoder in bounded blocks");
 /* Markup layers: the user's own drawings, kept on this machine (gitignored)
