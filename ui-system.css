@@ -3283,3 +3283,28 @@ body.csp-redesign #panes .elev-settings{border-top:1px solid var(--ui-line);marg
    by default); a soft dark halo keeps a light dot readable on snow, light
    basemaps and bright imagery without changing its size or shape. */
 .leaflet-interactive.csp-location-dot{filter:var(--csp-location-dot-halo)}
+
+/* Clear (×) for the search field: it sits just inside the field, before the
+   go button, whenever there is text or a selected place to clear. */
+.csp-glass body.csp-redesign #cspNav #qClear{
+  grid-column:1;grid-row:1;
+  justify-self:end;align-self:center;
+  position:relative;z-index:1;
+  display:grid;place-items:center;
+  width:var(--go);min-width:var(--go);height:var(--go);min-height:var(--go);
+  margin:0 calc(var(--go) + 7px) 0 0;padding:0;
+  border:0;border-radius:50%;background:transparent;box-shadow:none;
+  font-size:0;cursor:pointer;
+}
+.csp-glass body.csp-redesign #cspNav #qClear[hidden]{display:none}
+.csp-glass body.csp-redesign #cspNav #qClear::before{
+  content:"";width:14px;height:14px;
+  background-color:var(--ui-text-muted);
+  -webkit-mask:url("vendor/icons/x.svg") center/contain no-repeat;mask:url("vendor/icons/x.svg") center/contain no-repeat;
+}
+.csp-glass body.csp-redesign #cspNav #qClear:hover{background:var(--ui-fill-2)}
+.csp-glass body.csp-redesign #cspNav #qClear:hover::before{background-color:var(--ui-text)}
+.csp-glass body.csp-redesign #cspNav #qClear:focus-visible{outline:0;box-shadow:0 0 0 3px var(--ui-ring)}
+.csp-glass body.csp-redesign #cspNav .search-row:has(#q:placeholder-shown) #qClear{margin-right:5px}
+.csp-glass body.csp-redesign #cspNav .search-row:has(#qClear:not([hidden])) #q{padding-right:calc(var(--go)*2 + 14px)}
+.csp-glass body.csp-redesign #cspNav .search-row:has(#q:placeholder-shown):has(#qClear:not([hidden])) #q{padding-right:calc(var(--go) + 10px)}
