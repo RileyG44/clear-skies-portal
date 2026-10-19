@@ -124,6 +124,26 @@ async function noArchiveChecks(){
   projects[0].datasets[0].XMax=-120;projects[0].datasets[0].YMin=47;
 }
 
+async function reEvictionSafetyChecks(){
+  for(const damage of ["missing-raster","missing-overview","corrupt-raster"]){
+    const {store,dir,archiveRoot,west}=setup(damage);
+    try{
+      store.maxBytes=7000;await store.makeRoom(1000,[-100,40,-99,41]);
+      const restored=await store.archive.restore(store.archive.entries.get(west.key),dir);
+      store.index.files.push(restored);
+      const folder=path.join(archiveRoot,"files",west.key);
+      if(damage==="missing-raster")fs.unlinkSync(path.join(folder,west.file));
+      else if(damage==="missing-overview")fs.unlinkSync(path.join(folder,west.overviewDir,"2.f32"));
+      else fs.writeFileSync(path.join(folder,west.file),Buffer.alloc(4000,9));
+      store.maxBytes=1000;
+      await assert.rejects(store.makeRoom(1,[-100,40,-99,41]),/missing|does not match|incomplete/);
+      assert.equal(fs.readFileSync(path.join(dir,west.file))[0],1,`${damage}: keep the valid local raster`);
+      assert.equal(fs.readFileSync(path.join(dir,west.overviewDir,"2.f32"))[0],2,`${damage}: keep local overviews`);
+      assert(store.index.files.some(file=>file.key===west.key),`${damage}: restore the local sampling index after refusing eviction`);
+    }finally{await store.close();}
+  }
+}
+
 function rootChecks(){
   assert.equal(defaultArchiveRoot({CSP_DNR_ARCHIVE_DIR:"off"}),null);
   const custom=path.join(root,"custom-icloud");
@@ -140,6 +160,7 @@ async function main(){
   await restoreChecks();
   await incompleteRestoreChecks();
   await noArchiveChecks();
+  await reEvictionSafetyChecks();
   console.log("dnr archive: all checks passed");
 }
 main().catch(error=>{console.error(error);process.exitCode=1;}).finally(()=>fs.rmSync(root,{recursive:true,force:true}));

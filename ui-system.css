@@ -1,6 +1,6 @@
 /* Clear Skies Portal — task-oriented research interface
    Visual authority: the supplied Apple-style settings reference.
-   The map carries colour; application chrome stays quiet and legible. */
+   The map carries color; application chrome stays quiet and legible. */
 
 body.csp-redesign{
   --page:var(--ui-sunken);
@@ -84,9 +84,6 @@ body.csp-redesign #cspNav{
   overflow:hidden;
 }
 
-body.csp-redesign #cspNav > header{
-  display:none;
-}
 
 body.csp-redesign #cspNav h1{
   font-size:15px;
@@ -565,7 +562,7 @@ body.csp-redesign .leaflet-popup-tip{background:var(--ui-surface);color:var(--ui
 /* Map tooltips are an inverted surface: the coordinate readout on a dropped
    pin, and the point tooltips on overlay features, which had their own
    hard-coded dark fill. Both take the tooltip pair, and the callout arrow takes
-   the same fill as the bubble it points out of - it was a hairline colour, so
+   the same fill as the bubble it points out of - it was a hairline color, so
    it read as a stray notch. */
 body.csp-redesign .leaflet-tooltip{
   background:var(--ui-tooltip);
@@ -755,7 +752,7 @@ body.csp-redesign .csp-locate-label{display:none}
   body.csp-redesign .terrain-action-row > *{width:100%;min-width:0;min-height:44px;white-space:normal}
   body.csp-redesign .terrain-look-reset,
   body.csp-redesign .linkbtn,
-  body.csp-redesign .terrain-appearance summary,
+  body.csp-redesign .terrain-appearance > summary,
   body.csp-redesign .terrain-lighting summary{min-height:44px}
   body.csp-redesign .terrain-look-grid,
   body.csp-redesign .terrain-lighting .terrain-look-grid{grid-template-columns:minmax(0,1fr) auto;gap:4px 8px;padding:8px 0 2px}
@@ -840,7 +837,7 @@ body.csp-redesign .csp-locate-label{display:none}
    - SF Pro where the system has it, Inter (vendored) where it does not.
    - On a phone the sidebar becomes a bottom sheet with a grabber and two
      detents, the pattern people know from Maps.
-   Everything here is scoped to html.csp-glass; ?ui=classic removes it.
+   The single supported shell uses html.csp-glass at every viewport size.
    ====================================================================== */
 
 .csp-glass body.csp-redesign{
@@ -1058,7 +1055,7 @@ body.csp-redesign .csp-locate-label{display:none}
 .csp-glass body.csp-redesign .csp-nav-button .csp-nav-dot{grid-column:3;grid-row:1}
 .csp-glass body.csp-redesign .csp-nav-button:hover{background:var(--ui-fill);color:var(--ui-text)}
 /* The selected row is a small piece of glass lifted off the sidebar, the way a
-   selected tab sits in an iOS 26 tab bar - not a colour wash. */
+   selected tab sits in an iOS 26 tab bar - not a color wash. */
 .csp-glass body.csp-redesign .csp-nav-button[aria-current="page"]{
   background:var(--glass-select);
   color:var(--ui-text);
@@ -1181,7 +1178,7 @@ body.csp-redesign .csp-preview-badge{
 
 /* Switch: a compact outlined groove (black in dark) with a round knob a size
    larger than it, so the knob reads as the part that moves. Off, the knob
-   rests at the start in neutral; on, it springs to the end in the colour chosen
+   rests at the start in neutral; on, it springs to the end in the color chosen
    in Settings and the outline takes a deeper shade of it. While held it
    stretches toward its travel, as an iOS switch does. */
 .csp-glass body.csp-redesign .csp-switch{display:inline-block;flex:none;width:36px;height:20px;margin:1px;cursor:pointer;-webkit-tap-highlight-color:transparent}
@@ -1208,7 +1205,7 @@ body.csp-redesign .csp-preview-badge{
 .csp-glass body.csp-redesign input[type=checkbox]{border-radius:5px;border-color:var(--ui-line-strong)}
 .csp-glass body.csp-redesign input[type=checkbox]:checked{border-color:var(--ui-accent);background-color:var(--ui-accent)}
 
-/* Slider: a 3px groove filled with the Settings colour up to a white round
+/* Slider: a 3px groove filled with the Settings color up to a white round
    thumb. Hovered or dragged, a soft halo rings the thumb, the way the active
    thumb of a range control is marked. WebKit cannot fill its own groove, so
    ui-system.js mirrors the value into --csp-fill-n (0-1); measuring the fill
@@ -2040,7 +2037,7 @@ body.csp-markup-editing .snap-sel{display:none}
 .mk-value-set{height:40px;padding:0 16px;border-radius:11px;background:var(--ui-accent);color:var(--ui-on-accent);font-size:14px;font-weight:600}
 .mk-value-error{padding:0 2px;color:var(--ui-danger);font-size:12px;line-height:1.35}
 .mk-value-error[hidden]{display:none}
-/* Toolbar popovers: the colour grid and the shape gallery. */
+/* Toolbar popovers: the color grid and the shape gallery. */
 #mkPop{position:absolute;z-index:1330;width:min(268px,calc(100vw - 16px));padding:12px;border-radius:20px;
   display:flex;flex-direction:column;gap:8px;
   background-color:var(--lg-popover);background-image:var(--lg-sheen-tall);
@@ -2267,7 +2264,7 @@ body.csp-redesign[data-csp-route="geology"] #panes #geologyIdentifyBox{margin-to
 body.csp-redesign #panes #fabricResearchBox{margin-top:0}
 body.csp-redesign #panes #terrainDownloadBox > .elev-field{margin:16px 0 8px}
 body.csp-redesign #panes #terrainDownloadBox > .control-hint{margin-bottom:0}
-/* Every checkbox in the colour card sits on the same edge as the fields below
+/* Every checkbox in the color card sits on the same edge as the fields below
    it; the row's hover padding hangs outside that edge instead of shifting it. */
 body.csp-redesign #panes .elevation-colour .check{margin-left:-9px;padding-left:8px}
 /* The view switch is its own section at the top; everything beneath it folds. */
@@ -2295,8 +2292,8 @@ body.csp-redesign #panes :is(#researchRun,#terWarm){color:var(--ui-control-ink);
 body.csp-redesign #panes .linkbtn{color:var(--ui-text-muted);text-decoration:none;font-size:12.5px;min-height:40px;text-align:left}
 body.csp-redesign #panes .linkbtn:hover{color:var(--ui-text);text-decoration:underline}
 body.csp-redesign #panes :is(.terrain-look-reset,#terReset,#researchReset,#elevSpectrumReset,#elevBandsReset){width:100%;margin-top:16px!important;padding:10px 0;border:0;border-top:1px solid var(--ui-line);border-radius:0;background:transparent;box-shadow:none;color:var(--ui-text-muted);text-align:left;font-size:12.5px}
-body.csp-redesign #panes .terrain-appearance summary{min-height:44px;padding:4px 0;font-size:14px;font-weight:600;border-radius:0;background:transparent}
-body.csp-redesign #panes .terrain-appearance summary .pane-n{margin-left:auto;font-size:12px;font-weight:400;max-width:45%;text-align:right}
+body.csp-redesign #panes .terrain-appearance > summary{min-height:44px;padding:4px 0;font-size:14px;font-weight:600;border-radius:0;background:transparent}
+body.csp-redesign #panes .terrain-appearance > summary .pane-n{margin-left:auto;font-size:12px;font-weight:400;max-width:45%;text-align:right}
 body.csp-redesign #panes .terrain-appearance > .elev-field{margin-top:16px}
 body.csp-redesign #panes .elev-section-title{font-size:15px;font-weight:650}
 body.csp-redesign #panes .elev-section-head{margin-bottom:8px}
@@ -2410,12 +2407,12 @@ body.csp-redesign:not([data-csp-route="satellite"]) #cspWorkspace #status[data-k
   --ui-frost:var(--map3d-motion-fill);--ui-frost-weak:var(--map3d-motion-fill);
 }
 .csp-glass body.csp-redesign.terrain-3d.map3d-moving{--map3d-motion-fill:var(--ui-surface);--map3d-motion-panel:var(--ui-rail)}
-body.terrain-3d.map3d-moving :is(#side,#ac,.coord-menu,.map-tool,.tool-popover,#snapshotStatus,.snap-sel-size,.snap-sel-bar,#ctl,#menu,#blk,#pointCloudPanel,.pc-head,.pane-drag-ghost,.ovgrp,#newBuild,.leaflet-control-zoom,.leaflet-control-zoom a,.leaflet-control-attribution,.leaflet-popup-content-wrapper,.leaflet-tooltip,#mapDock,#mapReadout,#panes .grp,#side #q,#side #loc,#map3d .maplibregl-ctrl-attrib,#mkBar,#mkPop,.mk-selbar,.csp-sat-suggest){
+body.terrain-3d.map3d-moving :is(#side,#ac,.coord-menu,.map-tool,.tool-popover,#snapshotStatus,.snap-sel-size,.snap-sel-bar,#ctl,#menu,#blk,#pointCloudPanel,.pc-head,.pane-drag-ghost,.ovgrp,#newBuild,#cspElectronTitlebar,.leaflet-control-zoom,.leaflet-control-zoom a,.leaflet-control-attribution,.leaflet-popup-content-wrapper,.leaflet-tooltip,#mapDock,#mapReadout,#panes .grp,#side #q,#side #loc,#map3d .maplibregl-ctrl-attrib,#mkBar,#mkPop,.mk-selbar,.csp-sat-suggest){
   -webkit-backdrop-filter:none!important;backdrop-filter:none!important;
 }
 /* Classic is already opaque. Glass controls keep their hover/selected fill
    instead of replacing that feedback with the neutral motion material. */
-.csp-glass body.terrain-3d.map3d-moving :is(#ac,.coord-menu,.map-tool:not(:hover):not(.active):not([aria-pressed="true"]),.tool-popover,#snapshotStatus,.snap-sel-bar,#ctl,#menu,#blk,#pointCloudPanel,.pc-head,.pane-drag-ghost,#newBuild,.leaflet-control-zoom,.leaflet-control-zoom a:not(:hover),.leaflet-control-attribution,.leaflet-popup-content-wrapper,.leaflet-tooltip,#mapDock,#mapReadout,#map3d .maplibregl-ctrl-attrib,#mkBar,#mkPop,.mk-selbar,.csp-sat-suggest){background-color:var(--map3d-motion-fill)!important}
+.csp-glass body.terrain-3d.map3d-moving :is(#ac,.coord-menu,.map-tool:not(:hover):not(.active):not([aria-pressed="true"]),.tool-popover,#snapshotStatus,.snap-sel-bar,#ctl,#menu,#blk,#pointCloudPanel,.pc-head,.pane-drag-ghost,#newBuild,#cspElectronTitlebar,.leaflet-control-zoom,.leaflet-control-zoom a:not(:hover),.leaflet-control-attribution,.leaflet-popup-content-wrapper,.leaflet-tooltip,#mapDock,#mapReadout,#map3d .maplibregl-ctrl-attrib,#mkBar,#mkPop,.mk-selbar,.csp-sat-suggest){background-color:var(--map3d-motion-fill)!important}
 /* Unknown pseudo-elements invalidate ordinary selector lists. Keep native
    picker enhancements separate from the motion safeguards every engine needs. */
 @supports selector(select::picker(select)){
@@ -2465,8 +2462,8 @@ body.terrain-3d.map3d-moving :is(#side,#ac,.coord-menu,.map-tool,.tool-popover,#
 
 /* Automatic scales for the moraine beta override the field grid layout. */
 
-/* Settings page: a grouped card of colour swatches, a live preview of the
-   switch and slider they colour, and a reset when the choice is not the
+/* Settings page: a grouped card of color swatches, a live preview of the
+   switch and slider they color, and a reset when the choice is not the
    default. Swatches are a radio group; the last one opens the system picker. */
 body.csp-redesign .csp-settings-card{display:grid;gap:14px;padding:14px 16px 12px}
 body.csp-redesign .csp-setting-row{display:flex;align-items:center;justify-content:space-between;gap:12px;min-width:0}
@@ -2850,11 +2847,11 @@ body.csp-redesign .csp-setting-foot[hidden]{display:none}
 .csp-glass body.csp-redesign.csp-redesign #cspWorkspace #panes :is(.elev-value,output){font-size:12.5px;color:var(--t3-desc)}
 
 /* Collapsible sections inside cards (terrain): T3 rows that fold. */
-.csp-glass body.csp-redesign.csp-redesign #cspWorkspace #panes .terrain-appearance summary{
+.csp-glass body.csp-redesign.csp-redesign #cspWorkspace #panes .terrain-appearance > summary{
   min-height:46px;padding:8px 0;color:var(--ui-text);font-size:14px;font-weight:500;letter-spacing:-.006em;
 }
-.csp-glass body.csp-redesign.csp-redesign #cspWorkspace #panes .terrain-appearance summary::before{transition:transform .32s var(--ease-mac)}
-.csp-glass body.csp-redesign.csp-redesign #cspWorkspace #panes .terrain-appearance summary .pane-n{color:var(--t3-desc);font-size:12px}
+.csp-glass body.csp-redesign.csp-redesign #cspWorkspace #panes .terrain-appearance > summary::before{transition:transform .32s var(--ease-mac)}
+.csp-glass body.csp-redesign.csp-redesign #cspWorkspace #panes .terrain-appearance > summary .pane-n{color:var(--t3-desc);font-size:12px}
 .csp-glass body.csp-redesign.csp-redesign #cspWorkspace #panes .terrain-appearance + :is(.terrain-appearance,#terReset){border-top:1px solid var(--t3-divider)}
 
 /* ---- fields, buttons and menus ------------------------------------------ */
@@ -3097,18 +3094,18 @@ body.csp-redesign #panes .csp-terrain-style:disabled{opacity:.35;cursor:default}
 .ls-head .menu-section-title{margin:0}
 .ls-head .pane-n,.ls-head .linkbtn{margin-left:auto;font-size:12px}
 .ls .control-hint{margin:0}
-.ls-looks{display:grid;grid-auto-flow:column;grid-auto-columns:92px;gap:8px;overflow-x:auto;overscroll-behavior-x:contain;
-  scroll-snap-type:x proximity;padding:2px 2px 8px;margin:0 -2px;scrollbar-width:thin}
+.ls-looks{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(74px,100%),1fr));gap:12px 10px;
+  padding:4px;min-width:0}
 .ls-look{position:relative;display:grid;gap:6px;justify-items:stretch;padding:0;border:0;background:transparent;color:inherit;
-  font:inherit;font-size:11.5px;font-weight:500;text-align:center;cursor:pointer;scroll-snap-align:start;min-height:44px}
-.ls-look-preview{display:block;width:92px;height:61px;border-radius:var(--ls-radius);background:var(--ui-sunken);
+  font:inherit;font-size:11.5px;font-weight:500;text-align:center;cursor:pointer;min-width:0;min-height:44px;align-content:start}
+.ls-look-preview{display:block;width:100%;height:auto;aspect-ratio:3/2;border-radius:var(--ls-radius);background:var(--ui-sunken);
   box-shadow:inset 0 0 0 1px var(--ui-shadow-3);transition:box-shadow .16s ease,transform .16s cubic-bezier(.2,.8,.2,1)}
 .ls-look:hover .ls-look-preview{transform:translateY(-1px)}
 .ls-look[aria-checked="true"] .ls-look-preview{box-shadow:0 0 0 2px var(--ui-surface),0 0 0 4px var(--ui-accent)}
 .ls-look[aria-checked="true"] .ls-look-name{color:var(--ui-accent);font-weight:650}
 .ls-look:focus-visible{outline:none}
 .ls-look:focus-visible .ls-look-preview{box-shadow:0 0 0 2px var(--ui-surface),0 0 0 4px var(--ui-accent)}
-.ls-look-name{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ls-look-name{line-height:1.35;white-space:normal;overflow-wrap:anywhere}
 .ls-look-remove{position:absolute;top:4px;right:4px;display:grid;place-items:center;width:22px;height:22px;border-radius:50%;
   background:var(--ui-tooltip);opacity:0;transition:opacity .14s ease}
 .ls-look-remove img{width:13px;height:13px;filter:brightness(0) invert(1)}
@@ -3127,6 +3124,11 @@ body.csp-redesign #panes .csp-terrain-style:disabled{opacity:.35;cursor:default}
 .ls-icon-button img{width:17px;height:17px;filter:var(--ui-icon-filter)}
 .ls-icon-button:disabled{cursor:default;opacity:.4}
 .ls-icon-button:hover:not(:disabled){background:var(--ui-hover)}
+.ls-eye[aria-pressed="true"]{background:var(--ui-selected);box-shadow:inset 0 0 0 1px var(--ui-accent)}
+.ls-eye[aria-pressed="false"]{opacity:.65}
+/* The studio edits types in each layer. Retain the classic picker for the
+   CPU fallback instead of presenting two competing layer selectors. */
+
 .ls-layer-main{display:flex;align-items:center;gap:10px;flex:1;min-width:0;min-height:44px;padding:6px 8px 6px 2px;border:0;border-radius:10px;
   background:transparent;color:inherit;font:inherit;text-align:left;cursor:pointer}
 .ls-layer-main:hover{background:var(--ui-hover)}
@@ -3219,3 +3221,60 @@ body.csp-redesign #panes #surfaceResearchBox .research-live-toggle{margin-top:4p
 body.csp-redesign #panes .research-live{margin-top:8px;color:var(--ui-text-muted);font-size:12.5px}
 body.csp-redesign #panes .research-live .spin{margin-right:6px}
 #cursorAnalysis{margin-top:2px;font-variant-numeric:tabular-nums}
+
+/* Keep the primary layer workflow compact; optional tools open on demand. */
+.ls-layers-head{align-items:center;flex-wrap:wrap}
+.ls-layer-label{display:flex;align-items:baseline;gap:8px;min-width:0}
+body.csp-redesign .ls-layer-label .menu-section-title{margin:0}
+.ls-layers-head .pane-n{margin-left:0}
+.ls-layers-head .ls-add{margin-left:auto}
+.ls-layers-head .ls-add-button{width:auto;padding:0 10px}
+.ls-layers-head .ls-menu{left:auto;min-width:220px;max-width:255px}
+.ls-disclosure{min-width:0;border-top:1px solid var(--ui-line);padding-top:4px}
+.ls-disclosure > summary{display:flex;align-items:center;gap:8px;min-height:44px;cursor:pointer;font-size:13px;font-weight:600;list-style:none}
+.ls-disclosure > summary::-webkit-details-marker{display:none}
+.ls-disclosure > summary::before{content:"›";font-size:20px;transition:transform .15s}
+.ls-disclosure[open] > summary::before{transform:rotate(90deg)}
+.ls-disclosure > summary:focus-visible{outline:2px solid var(--ui-accent);outline-offset:2px;border-radius:6px}
+.ls-disclosure:not([open]) > :not(summary){display:none}
+.ls-disclosure > summary .ls-swatch{width:28px;height:14px;margin-left:auto}
+.ls-disclosure-value{font-size:11px;font-weight:400;color:var(--ui-text-muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:80px}
+.ls-disclosure-body{display:grid;gap:14px;padding:8px 0}
+.ls-looks-section[open],.ls-disclosure.ls-section[open]{display:grid;gap:8px}
+
+/* Elevation: switches stay visible; settings fold into task-specific groups. */
+.elev-module-head{display:flex;align-items:center;justify-content:space-between;gap:8px}
+body.csp-redesign .elev-module-head .menu-section-title{margin:0}
+.elev-highlight-toggles{display:flex;gap:24px;flex-wrap:wrap}
+.elev-settings-body{display:grid;gap:16px;padding:8px 0 16px;min-width:0}
+.elev-threshold-row{display:flex;align-items:center;gap:10px;min-width:0}
+.elev-threshold-row .unit-field{flex:1;min-width:0}
+.elev-threshold-row input[type=color]{flex:none;width:44px;height:36px;padding:2px;border:1px solid var(--ui-line);border-radius:8px}
+body.csp-redesign #panes .elev-module-head :is(#elevSpectrumReset,#elevBandsReset){width:auto;min-height:40px;margin:0!important;padding:0 8px;border:0;text-align:right;font-size:12px}
+body.csp-redesign #panes .elev-module-head .check{margin:0;padding-left:0}
+body.csp-redesign #panes .elev-module-head .elev-toggle{font-size:14px}
+body.csp-redesign #panes .elev-settings{border-top:1px solid var(--ui-line);margin-top:8px}
+
+/* Counts are short labels, not truncating pane status summaries. */
+.csp-glass body.csp-redesign.csp-redesign #cspWorkspace #panes .ls-layer-label .pane-n{max-width:none;overflow:visible;text-overflow:clip}
+.ls-layer-label{flex:none}
+.elev-module > summary{list-style:none;cursor:pointer;min-height:44px}
+.elev-module > summary::-webkit-details-marker{display:none}
+.elev-module > summary::before{content:"›";font-size:20px;flex:none}
+.elev-module[open] > summary::before{transform:rotate(90deg)}
+.elev-module > summary .menu-section-title{flex:1}
+.elev-module:not([open]) > :not(summary),.elev-settings:not([open]) > :not(summary){display:none}
+.elev-module-body{display:grid;gap:8px;padding-top:8px}
+.elev-spectrum-colors{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+.elev-spectrum-colors label{display:grid;gap:6px;font-size:12px}
+.elev-spectrum-colors input[type=color]{width:100%;height:36px;padding:2px;border:1px solid var(--ui-line);border-radius:6px}
+/* Native disclosure visibility wins immediately over the shared fold animation. */
+.csp-glass body.csp-redesign.csp-redesign #cspWorkspace :is(.elev-settings,.elev-module)::details-content{transition:none}
+
+.csp-glass body.csp-redesign.csp-redesign #cspWorkspace #panes .elev-module-head label.csp-switch-row{padding:0;min-height:44px;flex:1;min-width:0;width:auto;gap:8px;font-size:13px}
+
+/* Electron's titleless drag strip shares the map controls' reserved top edge. */
+:root.csp-electron{--safe-top:calc(env(safe-area-inset-top,0px) + 32px)}
+#cspElectronTitlebar{position:fixed;inset:0 0 auto;height:32px;z-index:20000;pointer-events:auto;
+  background:color-mix(in srgb,var(--ui-surface) 90%,transparent);border-bottom:1px solid var(--ui-line);
+  backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);-webkit-app-region:drag;app-region:drag}

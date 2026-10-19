@@ -24,6 +24,7 @@
     return grid;
   }
   function elevationColours(elev,count,settings,out,width=count,stride=width,offset=0){
+    const low=settings.spectrumLow||[248,92,108],mid=settings.spectrumMid||[255,255,250],high=settings.spectrumHigh||[70,160,255];
     for(let i=0;i<count;i++){
       const v=elev[offset+Math.floor(i/width)*stride+(i%width)],o=i*4;
       if(v!==v) continue;
@@ -32,9 +33,10 @@
       if(settings.spectrumOn){
         const d=(v-settings.level)/Math.max(1,settings.span),t=Math.min(1,Math.abs(d));
         const smooth=t*t*(3-2*t),hi=d>=0,a=settings.spectrumAlpha*(.15+.85*t);
-        over((255+((hi?70:248)-255)*smooth)/255,
-             (255+((hi?160:92)-255)*smooth)/255,
-             (250+((hi?255:108)-250)*smooth)/255,a);
+        const target=hi?high:low;
+        over((mid[0]+(target[0]-mid[0])*smooth)/255,
+             (mid[1]+(target[1]-mid[1])*smooth)/255,
+             (mid[2]+(target[2]-mid[2])*smooth)/255,a);
       }
       const band=settings.bandCompiled.rgba(v,"premultiplied"),ba=band[3]/255;
       if(ba>0){ pr=band[0]/255+pr*(1-ba);pg=band[1]/255+pg*(1-ba);

@@ -6,7 +6,7 @@
 /* Bump this on every deploy. Keeping the build literal here, plus a versioned
    page-script URL, prevents an older worker from serving a stale version.js
    while a newer HTML shell is already live. */
-const CSP_BUILD = "2026-10-19b";
+const CSP_BUILD = "2026-10-19j";
 const SHELL = `clear-skies-shell-${CSP_BUILD}`;
 const POTREE = `clear-skies-potree-${CSP_BUILD}`;
 const ASSETS = ["./", "./index.html", "./manifest.json", "./ui-theme.css", "./ui-system.css", "./ui-system.js", "./mosaic-core.js", "./png-stream.js", "./markup.js", "./markup-3d.js", "./terrain-core.js", "./terrain-raster.js", "./terrain-drape-core.js", "./terrain-drape-pool.js", "./terrain-drape-worker.js",
@@ -15,9 +15,10 @@ const ASSETS = ["./", "./index.html", "./manifest.json", "./ui-theme.css", "./ui
                 "./vendor/maplibre-gl.mjs", "./vendor/maplibre-gl-shared.mjs", "./vendor/maplibre-gl-worker.mjs", "./vendor/maplibre-gl.css", "./vendor/leaflet-rotate.umd.min.js",
                 "./vendor/icons/arrow-left.svg", "./vendor/icons/arrow-right.svg", "./vendor/icons/navigation.svg", "./vendor/fonts/inter-latin-wght-normal.woff2", "./vendor/icons/chevron-down.svg", "./vendor/icons/chevron-right.svg", "./vendor/icons/chevron-up.svg", "./vendor/icons/cloud-sun.svg", "./vendor/icons/download.svg", "./vendor/icons/history.svg", "./vendor/icons/image.svg", "./vendor/icons/layers.svg", "./vendor/icons/map-pinned.svg", "./vendor/icons/mountain-snow.svg", "./vendor/icons/radar.svg", "./vendor/icons/radio.svg", "./vendor/icons/rotate-ccw.svg", "./vendor/icons/satellite.svg", "./vendor/icons/scan-search.svg", "./vendor/icons/search.svg", "./vendor/icons/settings-2.svg", "./vendor/icons/sliders-horizontal.svg", "./vendor/icons/tags.svg", "./vendor/icons/triangle-alert.svg", "./vendor/icons/pen-line.svg", "./vendor/icons/hand.svg", "./vendor/icons/mouse-pointer-2.svg", "./vendor/icons/pencil.svg", "./vendor/icons/minus.svg", "./vendor/icons/move-up-right.svg", "./vendor/icons/pentagon.svg", "./vendor/icons/square.svg", "./vendor/icons/circle.svg", "./vendor/icons/type.svg", "./vendor/icons/map-pin.svg", "./vendor/icons/undo-2.svg", "./vendor/icons/trash-2.svg", "./vendor/icons/check.svg", "./vendor/icons/plus.svg", "./vendor/icons/highlighter.svg", "./vendor/icons/eraser.svg", "./vendor/icons/redo-2.svg", "./vendor/icons/copy.svg",
                 `./version.js?build=${CSP_BUILD}`, "./icon-180.png", "./icon-192.png", "./icon-512.png"];
+const SHELL_ASSETS = ASSETS.map(asset=>/\.(?:js|css)$/.test(asset)?`${asset}?build=${CSP_BUILD}`:asset);
 
 self.addEventListener("install", e => {
-  e.waitUntil(caches.open(SHELL).then(c => c.addAll(ASSETS)).then(() => self.skipWaiting()));
+  e.waitUntil(caches.open(SHELL).then(c => c.addAll(SHELL_ASSETS)).then(() => self.skipWaiting()));
 });
 
 self.addEventListener("activate", e => {
@@ -51,5 +52,9 @@ self.addEventListener("fetch", e => {
       .catch(() => caches.match("./index.html")));
     return;
   }
-  e.respondWith(caches.match(req).then(hit => hit || fetch(req)));
+  // Worker importScripts() and module dependencies keep literal file paths.
+  // Resolve those to the same fresh bytes as the versioned document scripts.
+  const cachedURL = new URL(req.url);
+  if(!cachedURL.search&&/\.(?:js|css)$/.test(cachedURL.pathname))cachedURL.searchParams.set("build",CSP_BUILD);
+  e.respondWith(caches.match(cachedURL.href).then(hit => hit || fetch(req)));
 });

@@ -24,7 +24,7 @@
   const clamp=(value,low,high)=>Math.min(high,Math.max(low,value));
   const finite=(value,fallback)=>{const n=Number(value);return Number.isFinite(n)?n:fallback};
 
-  /* ---------------------------------------------------------------- colour */
+  /* ---------------------------------------------------------------- color */
   function parseHex(value){
     const match=/^#?([0-9a-f]{6})([0-9a-f]{2})?$/i.exec(String(value||"").trim());
     if(!match) return null;
@@ -37,10 +37,10 @@
   }
   const validHex=value=>!!parseHex(value);
 
-  /* Stops are [position 0..1, "#rrggbb[aa]"]. A bare list of colours is
+  /* Stops are [position 0..1, "#rrggbb[aa]"]. A bare list of colors is
      spaced evenly. */
-  function evenStops(colours){
-    return colours.map((colour,index)=>[colours.length===1?0:index/(colours.length-1),colour]);
+  function evenStops(colors){
+    return colors.map((color,index)=>[colors.length===1?0:index/(colors.length-1),color]);
   }
   function normalizeStops(stops){
     if(!Array.isArray(stops)) return null;
@@ -50,10 +50,17 @@
       .sort((a,b)=>a[0]-b[0]).slice(0,MAX_STOPS);
     return out.length>=2?out:null;
   }
+  // Keep the selected color's identity when it crosses another stop.
+  function moveStop(stops,index,position){
+    const list=stops.map(stop=>stop.slice()),moved=list[index];
+    if(!moved)return {stops:list,index};
+    moved[0]=clamp(position,0,1);list.sort((a,b)=>a[0]-b[0]);
+    return {stops:list,index:list.indexOf(moved)};
+  }
 
   /* --------------------------------------------------------------- palettes
      kinds: which layer families list the palette first. "shade" palettes
-     map hillshade darkness to colour; "cyclic" ones wrap for aspect. */
+     map hillshade darkness to color; "cyclic" ones wrap for aspect. */
   const RELIEF_TINT=[[-500,"#162e48"],[0,"#28465f"],[300,"#466e46"],[900,"#808c5c"],[1600,"#a08c6c"],
     [2400,"#beb4aa"],[3200,"#f5f6fa"],[6000,"#ffffff"]];
   const PALETTES={
@@ -146,7 +153,7 @@
   const BLENDS=Object.freeze([
     {id:"normal",label:"Normal"},{id:"multiply",label:"Multiply"},{id:"screen",label:"Screen"},
     {id:"overlay",label:"Overlay"},{id:"soft-light",label:"Soft light"},{id:"hard-light",label:"Hard light"},
-    {id:"darken",label:"Darken"},{id:"lighten",label:"Lighten"},{id:"color",label:"Colour"},{id:"luminosity",label:"Luminosity"}
+    {id:"darken",label:"Darken"},{id:"lighten",label:"Lighten"},{id:"color",label:"Color"},{id:"luminosity",label:"Luminosity"}
   ]);
   const BLEND_IDS=new Set(BLENDS.map(blend=>blend.id));
 
@@ -189,7 +196,7 @@
   }
   /* The stops a layer draws with, reversed if asked, as shader tuples. */
   function resolveStops(layer){
-    const stops=paletteStops(layer).map(([position,colour])=>[layer.reverse?1-position:position,...parseHex(colour)]);
+    const stops=paletteStops(layer).map(([position,color])=>[layer.reverse?1-position:position,...parseHex(color)]);
     return stops.sort((a,b)=>a[0]-b[0]);
   }
   function isDefaultLayer(layer,style){
@@ -253,7 +260,8 @@
       layers.push({style:layer.style,opacity:layer.opacity,blend:layer.blend,stops:resolveStops(layer),
         min,max,gamma:layer.gamma,steps:layer.steps,param:layer.style==="contour"||STYLES[layer.style].param?layer.param:0});
     }
-    if(!layers.length) return null;
+    // An explicitly empty mix must stay transparent, not fall back to the
+    // legacy base layer when the user hides the last visible layer.
     const effects=state.effects;
     return {layers,detail:effects.detail,detailRadius:effects.detailRadius,reliefExag:effects.reliefExag,
       remRadius:effects.remRadius,remFlatBase:finite(opts.remFlatBase,0)};
@@ -284,7 +292,7 @@
     return normalizeScene({style,base:baseLayer(state,style),overlays:state.overlays,effects:state.effects});
   }
   /* Applying a scene replaces the overlays and effects and the base layer of
-     its style; other styles keep their own saved colours. */
+     its style; other styles keep their own saved colors. */
   function applyScene(state,scene,lookId){
     const next=normalizeState(state),clean=normalizeScene(scene);
     next.base[clean.style]=clean.base;next.overlays=clean.overlays;next.effects=clean.effects;next.look=lookId||null;
@@ -307,7 +315,7 @@
       scene:{style:"hs",base:layer("hs",{palette:"glacier-shade",gamma:1.4}),
         overlays:[layer("tint",{palette:"ice-glow",auto:true,param:0,blend:"screen",opacity:1})],
         effects:{detail:.3,detailRadius:6,reliefExag:1.6,remRadius:1500}}},
-    {id:"swiss",name:"Swiss Relief",blurb:"Soft hypsometric colour under warm cartographic shading.",
+    {id:"swiss",name:"Swiss Relief",blurb:"Soft hypsometric color under warm cartographic shading.",
       scene:{style:"tint",base:layer("tint",{palette:"hypsometric",auto:true,param:0}),
         overlays:[layer("hsmulti",{palette:"swiss",blend:"multiply",opacity:.85})],
         effects:{detail:.2,detailRadius:6,reliefExag:1.4,remRadius:1500}}},
@@ -315,7 +323,7 @@
       scene:{style:"rem",base:layer("rem",{palette:"aurora",reverse:true,gamma:.7}),
         overlays:[layer("hs",{palette:"moonlight",blend:"soft-light",opacity:.9})],
         effects:{detail:.3,detailRadius:8,reliefExag:2,remRadius:3000}}},
-    {id:"neon-slope",name:"Neon Slope",blurb:"Steepness in electric colour. Cliffs and scarps pop.",
+    {id:"neon-slope",name:"Neon Slope",blurb:"Steepness in electric color. Cliffs and scarps pop.",
       scene:{style:"slope",base:layer("slope",{palette:"neon",min:0,max:45,gamma:.8}),
         overlays:[layer("hs",{blend:"soft-light",opacity:.7})],
         effects:{detail:.5,detailRadius:5,reliefExag:1.5,remRadius:1500}}},
@@ -330,7 +338,7 @@
       scene:{style:"aspect",base:layer("aspect",{palette:"hue-wheel"}),
         overlays:[layer("hs",{blend:"multiply",opacity:.75})],
         effects:{detail:.3,detailRadius:5,reliefExag:1.6,remRadius:1500}}},
-    {id:"topo",name:"Topographic",blurb:"Classic map colours, relief and index contours.",
+    {id:"topo",name:"Topographic",blurb:"Classic map colors, relief and index contours.",
       scene:{style:"tint",base:layer("tint",{palette:"hypsometric",auto:true,param:0}),
         overlays:[layer("hs",{blend:"multiply",opacity:.6}),layer("contour",{palette:"default-contour",param:40,opacity:.9})],
         effects:{detail:0,detailRadius:6,reliefExag:1.2,remRadius:1500}}}
@@ -341,7 +349,8 @@
   function matchLook(state,style,looks){
     const current=JSON.stringify(captureScene(state,style));
     const all=(looks||LOOKS).concat(state.userLooks||[]);
-    const hit=all.find(look=>JSON.stringify(look.scene)===current);
+    const matches=look=>JSON.stringify(look.scene)===current;
+    const hit=all.find(look=>look.id===state.look&&matches(look))||all.find(matches);
     return hit?hit.id:null;
   }
 
@@ -411,10 +420,10 @@
     }
   }
   /* Premultiplied source-over with a separable blend (W3C Compositing). */
-  function composite(backdrop,colour,alpha,mode){
+  function composite(backdrop,color,alpha,mode){
     const ab=backdrop[3],b=ab>0?backdrop.slice(0,3).map(v=>v/ab):[0,0,0];
-    const blended=blendColour(mode,b,colour).map(v=>clamp(v,0,1));
-    const mixed=colour.map((v,i)=>(1-ab)*v+ab*blended[i]);
+    const blended=blendColour(mode,b,color).map(v=>clamp(v,0,1));
+    const mixed=color.map((v,i)=>(1-ab)*v+ab*blended[i]);
     return [0,1,2].map(i=>alpha*mixed[i]+(1-alpha)*backdrop[i]).concat(alpha+ab*(1-alpha));
   }
   function rampColour(stops,t){
@@ -487,13 +496,13 @@
           }
         }
         if(!(coverage>0)) continue;
-        const colour=paletteColour(layer,value);
+        const color=paletteColour(layer,value);
         if((layer.style==="tint"||layer.style==="rem")&&layer.param>0){
           const shade=light.ambient+(1-light.ambient)*directShade(sdx,sdy,light.azimuth,light.altitude),m=1+(.33+.82*shade-1)*clamp(layer.param,0,1);
-          for(let i=0;i<3;i++) colour[i]=Math.min(1,colour[i]*m);
+          for(let i=0;i<3;i++) color[i]=Math.min(1,color[i]*m);
         }
-        const alpha=clamp(colour[3]*coverage*layer.opacity,0,1);
-        if(alpha>0) acc=composite(acc,colour.slice(0,3),alpha,layer.blend);
+        const alpha=clamp(color[3]*coverage*layer.opacity,0,1);
+        if(alpha>0) acc=composite(acc,color.slice(0,3),alpha,layer.blend);
       }
       const o=(y*w+x)*4;
       if(acc[3]>0){out[o]=Math.round(acc[0]/acc[3]*255);out[o+1]=Math.round(acc[1]/acc[3]*255);out[o+2]=Math.round(acc[2]/acc[3]*255);out[o+3]=Math.round(acc[3]*255)}
@@ -520,9 +529,9 @@
 
   /* ------------------------------------------------------------ presentation */
   function gradientCss(stops,reverse){
-    const list=(stops||[]).map(([position,colour])=>[reverse?1-position:position,colour]).sort((a,b)=>a[0]-b[0]);
-    return "linear-gradient(90deg,"+list.map(([position,colour])=>{
-      const c=parseHex(colour);
+    const list=(stops||[]).map(([position,color])=>[reverse?1-position:position,color]).sort((a,b)=>a[0]-b[0]);
+    return "linear-gradient(90deg,"+list.map(([position,color])=>{
+      const c=parseHex(color);
       return `rgba(${Math.round(c[0]*255)},${Math.round(c[1]*255)},${Math.round(c[2]*255)},${+c[3].toFixed(3)}) ${+(position*100).toFixed(2)}%`;
     }).join(",")+")";
   }
@@ -545,7 +554,7 @@
   function fromDisplay(style,value){ return (STYLES[style]||{}).unit==="m"?value/FT:(STYLES[style]||{}).unit==="shade"?value/100:value }
 
   return Object.freeze({VERSION,MAX_LAYERS,MAX_STOPS,FT,PALETTES,STYLES,OVERLAY_STYLES,BLENDS,LOOKS,EFFECT_DEFAULTS,
-    parseHex,toHex,normalizeStops,registerStyle,defaultLayer,normalizeLayer,resolveStops,paletteStops,isDefaultLayer,
+    parseHex,toHex,normalizeStops,moveStop,registerStyle,defaultLayer,normalizeLayer,resolveStops,paletteStops,isDefaultLayer,
     emptyState,normalizeState,normalizeEffects,baseLayer,isLegacy,buildStack,fitRange,normalizeScene,captureScene,applyScene,
     matchLook,gradientCss,palettesFor,formatValue,toDisplay,fromDisplay,
     previewTerrain,renderStack,renderScenePreview,blendColour,composite,_test:Object.freeze({filterGrid,rampColour,paletteColour})});

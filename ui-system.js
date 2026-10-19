@@ -7,17 +7,14 @@ const icon=name=>`vendor/icons/${name}.svg`;
 const compactShell=matchMedia("(max-width:1050px)");
 const side=$("#side"),panes=$("#panes"),status=$("#status"),mapEl=$("#map");
 const bridge=window.ClearSkiesPortalBridge;
-/* The page is held at first paint until this fires; every exit from here has to
-   reach it, including the one where the redesign declines to run at all. */
+/* The one supported shell is already present in the document. */
 const ready=()=>document.documentElement.dispatchEvent(new Event("csp:ready"));
-if(!side||!panes||!status||!mapEl||!bridge){ ready(); return; }
+if(!side||!panes||!status||!mapEl||!bridge){
+  window.CSPBoot?.fail("The portal could not initialize its map controls. Reload to recover.");return;
+}
 
 document.body.classList.add("csp-redesign");
-/* The Liquid Glass layer is on by default; ?ui=classic shows the previous
-   palette and shell for side-by-side review. Set before the boot guard lifts,
-   so neither look flashes on the way to the other. */
-const classicUi=new URLSearchParams(location.search).get("ui")==="classic";
-document.documentElement.classList.toggle("csp-glass",!classicUi);
+document.documentElement.classList.add("csp-glass");
 document.documentElement.style.setProperty("--side-w","580px");
 side.style.width="580px";
 /* The placeholder follows the field's own width, not the window's: the rail
@@ -33,9 +30,9 @@ side.style.width="580px";
 
 const ROUTES={
   layers:{title:"Layers",description:"Everything currently drawn on the map, in render order.",icon:"layers",panes:[],custom:"layers"},
-  satellite:{title:"Satellite imagery",description:"Find dated scenes, tune the search, and control the image already on the map.",icon:"satellite",panes:[...(classicUi?["filters"]:[]),"summary","passes","results","overlays"],open:[...(classicUi?["filters"]:[]),"results"],overlayGroup:"Imagery",overlayTitle:"Satellite base layers",custom:"satellite"},
+  satellite:{title:"Satellite imagery",description:"Find dated scenes, tune the search, and control the image already on the map.",icon:"satellite",panes:["summary","passes","results","overlays"],open:["results"],overlayGroup:"Imagery",overlayTitle:"Satellite base layers",custom:"satellite"},
   terrain:{title:"LiDAR",description:"Draw LiDAR terrain layers, fetch WA DNR surveys, and save areas for offline use.",icon:"radar",panes:["terrain"],open:["terrain"]},
-  elevation:{title:"Elevation",description:"Colour the ground by height or highlight it above and below a threshold.",icon:"mountain-snow",panes:["elevation"],open:["elevation"]},
+  elevation:{title:"Elevation",description:"Color the ground by height or highlight it above and below a threshold.",icon:"mountain-snow",panes:["elevation"],open:["elevation"]},
   analyze:{title:"Analyze",description:"Measure landform patterns or reveal features in the current view.",icon:"scan-search",panes:["research"],open:["research"],researchMode:"analyze"},
   export:{title:"Export",description:"Capture the whole view or a selected area as a PNG at your chosen resolution.",icon:"download",panes:[],custom:"export"},
   conditions:{title:"Conditions",description:"Weather, earthquakes, volcanoes, fire, snow, and other time-sensitive layers.",icon:"cloud-sun",panes:["alerts","overlays"],open:["alerts","overlays"],overlayGroup:"Conditions",overlayTitle:"Conditions layers"},
@@ -47,20 +44,8 @@ const ROUTES={
   settings:{title:"Settings",description:"Terrain engine, export defaults and accessibility for this browser.",icon:"settings",panes:[],custom:"settings"}
 };
 
-const oldHeader=$(":scope > header",side),searchbox=$(":scope > .searchbox",side),foot=$(":scope > .foot",side),drag=$("#drag",side);
-const nav=document.createElement("nav");nav.id="cspNav";nav.setAttribute("aria-label","Clear Skies workspace");
-const navScroll=document.createElement("div");navScroll.id="cspNavScroll";
-const workspace=document.createElement("main");workspace.id="cspWorkspace";
-workspace.innerHTML=`
-  <header id="cspWorkspaceHeader">
-    <button id="cspBack" type="button"><img src="${icon("arrow-left")}" alt=""> All tools</button>
-    <h2 id="cspWorkspaceTitle"></h2>
-    <p id="cspWorkspaceDescription"></p>
-  </header>
-  <div id="cspWorkspaceScroll"><div id="cspCustomView"></div></div>`;
-
-side.insertBefore(nav,oldHeader);
-nav.append(oldHeader,searchbox);
+const nav=$("#cspNav",side),navScroll=$("#cspNavScroll",side),workspace=$("#cspWorkspace",side),foot=$(".foot",nav);
+const workspaceScroll=$("#cspWorkspaceScroll",workspace),customView=$("#cspCustomView",workspace);
 
 const coordinateActions=document.createElement("div");coordinateActions.className="csp-coordinate-actions";
 coordinateActions.innerHTML=`
@@ -73,11 +58,7 @@ coordinateActions.innerHTML=`
   <button type="button" data-coordinate="earth" title="Open coordinates in Google Earth" aria-label="Open coordinates in Google Earth">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"/></svg><span>Earth</span>
   </button>`;
-nav.append(coordinateActions,navScroll);
-nav.append(foot);
-side.insertBefore(workspace,drag);
-const workspaceScroll=$("#cspWorkspaceScroll",workspace),customView=$("#cspCustomView",workspace);
-workspaceScroll.append(status,panes);
+navScroll.before(coordinateActions);
 
 function navGroup(label,items){
   const group=document.createElement("div");
@@ -150,7 +131,7 @@ coordinateActions.addEventListener("click",event=>{
   q?.addEventListener("focus",()=>{if(coordinates.test(q.value)) setTimeout(()=>{if(document.activeElement===q) q.select()},0)});
 }
 const locateButton=$("#loc");
-if(locateButton) locateButton.innerHTML=`<img src="${icon(classicUi?"map-pinned":"navigation")}" alt=""><span class="csp-locate-label">Locate me</span>`;
+if(locateButton) locateButton.innerHTML=`<img src="${icon("navigation")}" alt=""><span class="csp-locate-label">Locate me</span>`;
 
 const SEARCH_ROUTES=new Map([
   ["layers","layers"],["active layers","layers"],
@@ -211,12 +192,13 @@ function toSwitchRow(label){
   input.setAttribute("role","switch");
   label.classList.add("csp-switch-row");label.append(control);
 }
-if(!classicUi){
+{
   wrapFieldRows($(".pane[data-pane='filters'] .fgrid",panes));
   for(const label of $$(".pane[data-pane='filters'] .toggles > .check,.pane[data-pane='alerts'] .alert-sources > .check,.pane[data-pane='alerts'] .alert-options > .check",panes)) toSwitchRow(label);
 }
 
 const spectrumBox=$("#elevSh")?.closest(".fabbox");if(spectrumBox) spectrumBox.id="elevSpectrumBox";
+toSwitchRow($("#lb_elevSh"));
 const bandsBox=$("#elevBandsBox"),surfaceBox=$("#surfaceResearchBox"),geologyBox=$("#geologyIdentifyBox");
 const researchPane=$(".pane[data-pane='research']",panes),researchBody=$(".pane-b",researchPane);
 const fabricBox=$("#fabricResearchBox");
@@ -340,7 +322,7 @@ for(const grid of $$(".terrain-look-grid")){
   }
   grid.remove();
 }
-const terrainHints={off:"Choose a layer to show the shape of the ground.",hs:"Shaded relief makes landforms easier to read.",hsmulti:"Light from several directions reveals landforms with fewer deep shadows.",tint:"Colour the ground by height, with shaded relief.",slope:"Show how steep the ground is.",aspect:"Colour each slope by the direction it faces.",northness:"Show how strongly slopes face north or south."};
+const terrainHints={off:"Choose a layer to show the shape of the ground.",hs:"Shaded relief makes landforms easier to read.",hsmulti:"Light from several directions reveals landforms with fewer deep shadows.",tint:"Color the ground by height, with shaded relief.",rem:"Color the ground by height above the nearby valley floor.",slope:"Show how steep the ground is.",aspect:"Color each slope by the direction it faces.",northness:"Show how strongly slopes face north or south."};
 function syncMenuHints(){
   const style=$("#terStyle")?.value,source=$("#terSrc")?.value;
   const setHint=(id,text)=>{const hint=$(id);if(hint)hint.textContent=text};
@@ -685,9 +667,8 @@ function buildSatelliteSearch(){
   return wrap;
 }
 function renderSatelliteView(){
-  if(classicUi) clearCustom();
-  else if(!satelliteSearch) satelliteSearch=buildSatelliteSearch();
-  if(!classicUi&&satelliteSearch.parentElement!==customView){
+  if(!satelliteSearch) satelliteSearch=buildSatelliteSearch();
+  if(satelliteSearch.parentElement!==customView){
     clearCustom();
     customView.append(satelliteSearch);
     $(".csp-sat-filters",satelliteSearch).append(...filterParts);
@@ -717,10 +698,10 @@ function renderExportView(){
   row.addEventListener("click",()=>{$("#terWarm")?.click();activateRoute("terrain")});card.append(row);customView.append(label,card);
 }
 
-/* Appearance. Colours, font and text size are one saved bundle on <html>; the
+/* Appearance. Colors, font and text size are one saved bundle on <html>; the
    boot script in index.html applies it before first paint, and this keeps the
    controls, the inline properties and the storage in step afterwards. The
-   toggle colour keeps its original storage key so older saved choices load. */
+   toggle color keeps its original storage key so older saved choices load. */
 const APPEARANCE_KEY="clearskies.appearance.v1";
 const CONTROL_ACCENT_KEY="clearskies.controlAccent.v1",CONTROL_ACCENT_DEFAULT="#4cd964";
 const CONTROL_ACCENTS=[["Green","#4cd964"],["Mint","#00c7be"],["Teal","#30b0c7"],["Blue","#0a84ff"],["Indigo","#5e5ce6"],
@@ -757,10 +738,10 @@ function loadAppearance(){
   base.preset=derivePresetFor(base);
   return base;
 }
-/* The preset is a fact about the colours, not a stored label: untouched
-   colours are Meadow, an exact preset palette is that preset, anything else
-   (including a colour migrated from the old single-colour setting) is Custom.
-   Font, text colour and text size never change it. */
+/* The preset is a fact about the colors, not a stored label: untouched
+   colors are Meadow, an exact preset palette is that preset, anything else
+   (including a color migrated from the old single-color setting) is Custom.
+   Font, text color and text size never change it. */
 function derivePresetFor(a){
   if(!a.toggle&&!a.track&&!a.button) return "meadow";
   const match=THEME_PRESETS.find(p=>p.toggle===a.toggle&&p.track===a.track&&p.button===a.button);
@@ -809,7 +790,7 @@ function syncAppearancePicker(){
     const nameEl=$(`#cspColorName-${key}`,view);
     if(nameEl) nameEl.textContent=key==="track"&&!value?"Auto":(CONTROL_ACCENTS.find(([,hex])=>hex===value)?.[0]||value.toUpperCase());
   }
-  /* the original accent picker's hooks, kept for the toggle colour */
+  /* the original accent picker's hooks, kept for the toggle color */
   const picker=$("#cspAccentPicker",view);
   if(picker){
     const preset=CONTROL_ACCENTS.find(([,hex])=>hex===values.toggle);
@@ -849,22 +830,22 @@ function renderAppearanceView(){
   const card=document.createElement("div");card.className="csp-card csp-settings-card";card.id="cspAppearanceCard";
   card.innerHTML=`
     <div class="csp-setting-row">
-      <div class="csp-setting-text"><strong>Preset</strong><span>Sets the colours below together. Change any one and it becomes Custom.</span></div>
+      <div class="csp-setting-text"><strong>Preset</strong><span>Sets the colors below together. Change any one and it becomes Custom.</span></div>
       <span class="csp-accent-name" id="cspPresetName" aria-live="polite"></span>
     </div>
     <div class="csp-theme-presets" role="radiogroup" aria-label="Theme preset">
       ${THEME_PRESETS.map(p=>`<button type="button" class="csp-theme-preset" role="radio" aria-checked="false" data-theme-preset="${p.id}" style="--p-toggle:${p.toggle};--p-button:${p.button};--p-track:${p.track||"var(--ui-line)"}"><span class="csp-theme-thumb" aria-hidden="true"><i class="tt-line"></i><i class="tt-toggle"></i><i class="tt-slider"><b></b></i><i class="tt-button"></i></span>${p.name}</button>`).join("")}
     </div>
-    ${colorRow("toggle","Toggle & slider colour","Fills every switch knob and the filled part of a slider when it is on.",CONTROL_ACCENTS,true)}
-    ${colorRow("track","Slider track colour","The part of the slider bar after the thumb. Auto follows light and dark mode.",TRACK_SWATCHES)}
-    ${colorRow("button","Button colour","Coloured buttons, like Capture in the camera pop-up, and links.",CONTROL_ACCENTS)}
+    ${colorRow("toggle","Toggle & slider color","Fills every switch knob and the filled part of a slider when it is on.",CONTROL_ACCENTS,true)}
+    ${colorRow("track","Slider track color","The part of the slider bar after the thumb. Auto follows light and dark mode.",TRACK_SWATCHES)}
+    ${colorRow("button","Button color","Coloured buttons, like Capture in the camera pop-up, and links.",CONTROL_ACCENTS)}
     <div class="csp-setting-row">
       <div class="csp-setting-text"><strong>Font</strong><span>The typeface for menus and panels. Map labels keep their own.</span></div>
       <select data-font-select aria-label="Font">${Object.entries(FONTS).map(([id,f])=>`<option value="${id}">${f.name}</option>`).join("")}</select>
     </div>
     <div class="csp-setting-row">
-      <div class="csp-setting-text"><strong>Text colour</strong><span>Overrides the main text colour in both light and dark mode.</span></div>
-      <span class="csp-font-color-control"><button type="button" class="linkbtn" data-font-color-auto>Auto</button><label class="csp-accent-swatch csp-accent-custom" title="Choose text colour"><input type="color" data-font-color aria-label="Text colour"></label></span>
+      <div class="csp-setting-text"><strong>Text color</strong><span>Overrides the main text color in both light and dark mode.</span></div>
+      <span class="csp-font-color-control"><button type="button" class="linkbtn" data-font-color-auto>Auto</button><label class="csp-accent-swatch csp-accent-custom" title="Choose text color"><input type="color" data-font-color aria-label="Text color"></label></span>
     </div>
     <div class="csp-setting-row">
       <div class="csp-setting-text"><strong>Text size</strong><span>Scales the sidebar and pop-up panels.</span></div>
@@ -948,7 +929,7 @@ function renderSettingsView(){
       </select>
     </div>
     <label class="csp-setting-row">
-      <span class="csp-setting-text"><strong>Map info in exports</strong><span>Coordinates, elevation and colour keys in saved images.</span></span>
+      <span class="csp-setting-text"><strong>Map info in exports</strong><span>Coordinates, elevation and color keys in saved images.</span></span>
       <span class="csp-switch"><input type="checkbox" data-export-readout role="switch"><span></span></span>
     </label>`;
   const accessLabel=document.createElement("div");accessLabel.className="csp-section-label";accessLabel.textContent="Accessibility & data";
@@ -1066,7 +1047,7 @@ navScroll.addEventListener("click",event=>{const route=event.target.closest("[da
    Reduce Motion disables the halo and lens entirely. */
 const reducedMotion=matchMedia("(prefers-reduced-motion: reduce)");
 const calmMotion=()=>reducedMotion.matches||document.documentElement.classList.contains("csp-reduce-motion");
-if(!classicUi){
+{
   const finePointer=matchMedia("(hover:hover) and (pointer:fine)");
   const enabled=()=>finePointer.matches&&!calmMotion()&&document.documentElement.classList.contains("csp-glass");
   const layer=document.createElement("div");layer.className="csp-halo-layer";layer.setAttribute("aria-hidden","true");
@@ -1577,10 +1558,10 @@ if(/^https?:$/.test(location.protocol)&&!/\.github\.io$/.test(location.hostname)
   }).catch(()=>{});
 }
 
-const savedRoute=localStorage.getItem("clearskies.workspace.v1");
+let savedRoute=null;try{savedRoute=localStorage.getItem("clearskies.workspace.v1")}catch(_){}
 activateRoute(Object.prototype.hasOwnProperty.call(ROUTES,savedRoute)?savedRoute:"layers",{stayOnNav:compactShell.matches});
 document.body.dataset.cspView=compactShell.matches?"nav":"detail";
-$$(".csp-nav-button[data-route]").forEach(button=>button.addEventListener("click",()=>localStorage.setItem("clearskies.workspace.v1",button.dataset.route)));
+$$(".csp-nav-button[data-route]").forEach(button=>button.addEventListener("click",()=>{try{localStorage.setItem("clearskies.workspace.v1",button.dataset.route)}catch(_){}}));
 syncModeBar();updateCounts();
 /* One frame later, so the reveal shows a settled layout rather than the route
    activating in front of the user. */

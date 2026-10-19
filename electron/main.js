@@ -132,8 +132,10 @@ function createWindow(){
     width: 1400, height: 900, minWidth: 900, minHeight: 600,
     backgroundColor: "#0b0f14",
     title: "Clear Skies Portal",
-    titleBarStyle: "hiddenInset",
-    webPreferences: {contextIsolation: true, nodeIntegration: false},
+    // macOS keeps native window buttons; preload reserves their own drag strip.
+    titleBarStyle: process.platform==="darwin"?"hiddenInset":"default",
+    ...(process.platform==="darwin"?{trafficLightPosition:{x:12,y:9}}:{}),
+    webPreferences: {contextIsolation: true, nodeIntegration: false, preload:path.join(__dirname,"preload.js")},
   });
 
   win.loadURL(`${internalOrigin}/`);

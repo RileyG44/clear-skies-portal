@@ -25,7 +25,7 @@
   const BLENDS=Object.freeze([
     {id:"normal",label:"Normal"},{id:"multiply",label:"Multiply"},{id:"screen",label:"Screen"},
     {id:"overlay",label:"Overlay"},{id:"soft-light",label:"Soft light"},{id:"hard-light",label:"Hard light"},
-    {id:"darken",label:"Darken"},{id:"lighten",label:"Lighten"},{id:"color",label:"Colour"},{id:"luminosity",label:"Luminosity"}
+    {id:"darken",label:"Darken"},{id:"lighten",label:"Lighten"},{id:"color",label:"Color"},{id:"luminosity",label:"Luminosity"}
   ]);
   const BLEND_IDS=new Set(BLENDS.map(blend=>blend.id));
   const clamp=(value,low,high)=>Math.min(high,Math.max(low,value));
@@ -183,12 +183,12 @@
       const tools=el("div","ls-sliders");
       if(layer.relief!==null&&layer.relief!==undefined) tools.append(slider("Relief shading",0,100,layer.relief,`${layer.relief}%`,value=>{
         change(layer.id,{relief:value});return `${value}%`;
-      },"Mix hillshade into the colours so the layer keeps the shape of the ground.",0));
+      },"Mix hillshade into the colors so the layer keeps the shape of the ground.",0));
       const blend=el("select","ls-select");blend.dataset.focus="blend";blend.setAttribute("aria-label","Blend mode");
       BLENDS.forEach(b=>{const o=document.createElement("option");o.value=b.id;o.textContent=b.label;blend.append(o)});
       blend.value=layer.blend;blend.onchange=()=>change(layer.id,{blend:blend.value});
       const blendField=field("Blend",blend);
-      blendField.append(el("p","control-hint","Blends with the terrain and map beneath. Multiply darkens, Screen lightens, Colour tints."));
+      blendField.append(el("p","control-hint","Blends with the terrain and map beneath. Multiply darkens, Screen lightens, Color tints."));
       tools.append(blendField);
       tools.append(slider("Opacity",0,100,Math.round(layer.opacity*100),`${Math.round(layer.opacity*100)}%`,value=>{
         change(layer.id,{opacity:value/100});return `${value}%`;

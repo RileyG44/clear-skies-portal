@@ -1,6 +1,6 @@
 /* Clear Skies Portal — LiDAR Studio panel.
  *
- * The colour and layer controls for LiDAR terrain: a gallery of looks, a
+ * The color and layer controls for LiDAR terrain: a gallery of looks, a
  * layer stack (the base layer chosen in the style grid plus up to three
  * blended overlays), a palette and gradient editor per layer, and terrain
  * effects. All state lives in CSPLidarRender's model; this file is only the
@@ -42,7 +42,8 @@
     if(!container) return null;
     host=host||{};
     const storage=host.storage!==undefined?host.storage:(()=>{try{return globalThis.localStorage}catch(_){return null}})();
-    let state=load(),fitted={},flatFitted={},remFloor=null,expanded=null,selectedStop=0,saveTimer=0,commitFrame=0,destroyed=false;
+    let state=load(),fitted={},flatFitted={},remFloor=null,expanded=null,selectedStop=0,saveTimer=0,commitFrame=0,destroyed=false,previousMix=null;
+    const disclosures=new Set();
     const previews=new Map();let previewQueue=[],previewTimer=0;
     const dem=R.previewTerrain(168,112);
 
@@ -87,31 +88,33 @@
 
     function render(){
       const s=style(),scroll=container.closest(".pane-b")?.scrollTop;
+      state.look=s?R.matchLook(state,s):null;
       container.innerHTML="";
       container.toggleAttribute("data-disabled",!gpu());
       if(!gpu()){
-        container.append(el("p","control-hint ls-note","Colour layers, looks and effects need GPU rendering, which this browser doesn’t provide. The classic styles above still work."));
+        container.append(el("p","control-hint ls-note","Color layers, looks and effects need GPU rendering, which this browser doesn’t provide. The terrain modes above still work."));
         return;
       }
-      container.append(renderLooks(),renderLayers(s),renderEffects(s));
+      container.append(renderLayers(s),renderLooks(),renderEffects(s));
       if(scroll!==undefined) container.closest(".pane-b").scrollTop=scroll;
     }
 
     /* ------------------------------------------------------------- looks */
     function allLooks(){ return R.LOOKS.map(l=>Object.assign({user:false},l)).concat(state.userLooks.map(l=>Object.assign({user:true,blurb:"Your saved look."},l))) }
     function renderLooks(){
-      const wrap=el("div","ls-section ls-looks-section");
-      const head=el("div","ls-head",`<h3 class="menu-section-title">Looks</h3>`);
+      const wrap=disclosure("looks","Looks","ls-section ls-looks-section");
+      const head=el("div","ls-head",`<span class="control-hint">Apply or save a complete mix</span>`);
       const saveButton=el("button","linkbtn ls-save-look","Save current");saveButton.type="button";
-      saveButton.disabled=!style();saveButton.title=style()?"Save these colours, layers and effects as a look":"Choose a layer first";
+      saveButton.disabled=!style();saveButton.title=style()?"Save these colors, layers and effects as a look":"Choose a layer first";
       head.append(saveButton);wrap.append(head);
+      wrap.append(el("p","control-hint","Presets replace the whole layer mix. Customize individual layers above."));
       const strip=el("div","ls-looks");strip.setAttribute("role","radiogroup");strip.setAttribute("aria-label","Looks");
       const current=style()?state.look:null,looks=allLooks();
       looks.forEach(look=>{
         const button=el("button","ls-look");button.type="button";button.setAttribute("role","radio");
         button.dataset.look=look.id;button.setAttribute("aria-checked",String(current===look.id));
         button.tabIndex=(current===look.id||(!looks.some(l=>l.id===current)&&look===looks[0]))?0:-1;
-        button.title=look.blurb||look.name;
+        button.title=`Apply ${look.name} · replaces the current layer mix`;
         const canvas=document.createElement("canvas");canvas.width=dem.width;canvas.height=dem.height;canvas.className="ls-look-preview";
         canvas.setAttribute("aria-hidden","true");
         const name=el("span","ls-look-name",esc(look.name));
@@ -126,8 +129,18 @@
       wrap.append(strip);
       const blurb=el("p","control-hint ls-look-blurb");blurb.setAttribute("aria-live","polite");
       const active=looks.find(l=>l.id===current);
-      blurb.textContent=!style()?"Pick a look to start, or choose a layer above.":active?active.blurb:"Custom · your own mix of colours and layers.";
+      blurb.textContent=!style()?"Pick a look to start, or choose a layer above.":active?active.blurb:"Custom · your own mix of colors and layers.";
       wrap.append(blurb);
+      if(previousMix){
+        const undo=el("button","linkbtn ls-undo-look","Undo preset");undo.type="button";
+        undo.onclick=()=>{
+          const previous=previousMix,looks=state.userLooks;previousMix=null;state=previous.state;state.userLooks=looks;fitted={};flatFitted={};remFloor=null;expanded=null;
+          host.setStyle&&host.setStyle(previous.style);
+          if(Number.isFinite(previous.opacity)&&host.setOpacity)host.setOpacity(previous.opacity);
+          save();render();host.onChange&&host.onChange();
+        };
+        wrap.append(undo);
+      }
       const saveRow=el("form","ls-save-row");saveRow.hidden=true;
       saveRow.innerHTML=`<input type="text" maxlength="40" placeholder="Name this look" aria-label="Look name" required><button type="submit" class="ls-pill ls-pill-primary">Save</button><button type="button" class="ls-pill" data-cancel>Cancel</button>`;
       wrap.append(saveRow);
@@ -150,18 +163,22 @@
       strip.addEventListener("keydown",event=>{
         const buttons=[...strip.querySelectorAll(".ls-look")],index=buttons.indexOf(event.target.closest(".ls-look"));
         if(index<0) return;
-        const step={ArrowRight:1,ArrowDown:1,ArrowLeft:-1,ArrowUp:-1}[event.key];
+        const columns=Math.max(1,getComputedStyle(strip).gridTemplateColumns.trim().split(/\s+/).length);
+        const step={ArrowRight:1,ArrowDown:columns,ArrowLeft:-1,ArrowUp:-columns}[event.key];
         if(event.key==="Delete"||event.key==="Backspace"){const r=buttons[index].querySelector("[data-remove-look]");if(r){event.preventDefault();r.click()}return}
-        if(!step) return;
-        event.preventDefault();const next=buttons[(index+step+buttons.length)%buttons.length];
+        if(!step&&event.key!=="Home"&&event.key!=="End") return;
+        const target=event.key==="Home"?0:event.key==="End"?buttons.length-1:
+          event.key==="ArrowDown"||event.key==="ArrowUp"?clamp(index+step,0,buttons.length-1):(index+step+buttons.length)%buttons.length;
+        event.preventDefault();const next=buttons[target];
         next.focus();applyLook(next.dataset.look);
       });
       return wrap;
     }
     function applyLook(id){
       const look=allLooks().find(l=>l.id===id);if(!look) return;
+      previousMix={state:JSON.parse(JSON.stringify(state)),style:host.getStyle?host.getStyle():style(),opacity:host.getOpacity?host.getOpacity():undefined};
       const result=R.applyScene(state,look.scene,look.id);
-      state=result.state;fitted={};flatFitted={};expanded=null;save();
+      state=result.state;fitted={};flatFitted={};remFloor=null;expanded=null;save();
       if(host.getStyle&&host.getStyle()!==result.style&&host.setStyle) host.setStyle(result.style);
       /* Looks are designed at their own strength; the classic look keeps the
          usual see-through terrain. */
@@ -192,7 +209,8 @@
 
     /* ------------------------------------------------------------ layers */
     function layerKeys(){
-      const keys=style()?["base"]:[];
+      if(!style())return [];
+      const keys=["base"];
       state.overlays.forEach((_,i)=>keys.push("overlay:"+i));
       return keys;
     }
@@ -202,19 +220,20 @@
     }
     function layerMeta(key,layer){
       const palette=layer.stops?"Custom":(R.PALETTES[layer.palette]||{}).name||"";
-      if(key==="base") return `Base · ${palette}`;
+      if(key==="base") return `${layer.visible?"Bottom layer":"Hidden"} · ${Math.round(layer.opacity*100)}% · ${palette}`;
       const blend=(R.BLENDS.find(b=>b.id===layer.blend)||R.BLENDS[0]).label;
       return `${blend} · ${Math.round(layer.opacity*100)}% · ${palette}`;
     }
     function renderLayers(s){
       const wrap=el("div","ls-section");
-      const head=el("div","ls-head",`<h3 class="menu-section-title">Layers</h3><span class="pane-n">${layerKeys().length} of ${R.MAX_LAYERS}</span>`);
+      const head=el("div","ls-head ls-layers-head",`<div class="ls-layer-label"><h3 class="menu-section-title">Layers</h3><span class="pane-n">${layerKeys().length} of ${R.MAX_LAYERS}</span></div>`);
       wrap.append(head);
+      wrap.append(el("p","control-hint","Open a layer to edit colors, opacity and blending. Layers at the top draw over those below."));
       /* The host's own layers (surface analysis) draw above the terrain, so
          they list first. */
       const addon=host.layersAddon&&host.layersAddon();
       if(addon) wrap.append(addon);
-      if(!s){wrap.append(el("p","control-hint","Choose a LiDAR layer above, or a look, to start styling."));return wrap}
+      if(!s)wrap.append(el("p","control-hint","Add your first layer, or choose a look below."));
       const list=el("ol","ls-layers");list.setAttribute("aria-label","Terrain layers, top first");
       const keys=layerKeys().reverse();
       keys.forEach(key=>list.append(renderLayer(key)));
@@ -224,7 +243,8 @@
       addButton.type="button";addButton.disabled=layerKeys().length>=R.MAX_LAYERS;addButton.setAttribute("aria-haspopup","menu");addButton.setAttribute("aria-expanded","false");
       if(addButton.disabled) addButton.title=`Up to ${R.MAX_LAYERS} layers`;
       const menu=el("div","ls-menu");menu.setAttribute("role","menu");menu.hidden=true;
-      R.OVERLAY_STYLES.forEach(id=>{
+      const choices=s?R.OVERLAY_STYLES:Object.keys(R.STYLES).filter(id=>id!=="contour"&&!R.STYLES[id].registered);
+      choices.forEach(id=>{
         const spec=R.STYLES[id];if(!spec) return;
         const item=el("button","ls-menu-item",`<span class="ls-swatch" style="background:${R.gradientCss(R.PALETTES[spec.palette].stops)}"></span><span>${esc(spec.label)}</span>`);
         item.type="button";item.setAttribute("role","menuitem");item.dataset.addStyle=id;menu.append(item);
@@ -242,14 +262,18 @@
         event.preventDefault();items[(index+step+items.length)%items.length].focus();
       });
       menu.addEventListener("focusout",event=>{if(!add.contains(event.relatedTarget)) closeMenu()});
-      add.append(addButton,menu);wrap.append(add);
+      add.append(addButton,menu);head.append(add);
       return wrap;
     }
     /* New overlays get a sensible starting blend: hillshade multiplies so it
-       sculpts whatever is beneath, lines draw normally, colour layers tint. */
+       sculpts whatever is beneath, lines draw normally, color layers tint. */
     function addOverlay(styleId){
       if(layerKeys().length>=R.MAX_LAYERS) return;
       const spec=R.STYLES[styleId]||R.STYLES.hs,layer=R.defaultLayer(styleId);
+      if(!style()){
+        state.base[styleId]=layer;state.overlays=[];fitted={};flatFitted={};remFloor=null;
+        host.setStyle&&host.setStyle(styleId);expanded="base";selectedStop=0;commit({rerender:true});return;
+      }
       if(spec.family==="shade"){layer.blend="multiply";layer.opacity=.75}
       else if(spec.family!=="lines"){layer.blend="color";layer.opacity=.7;if(styleId==="tint"){layer.palette="viridis";layer.auto=true;layer.param=0}}
       state.overlays.push(layer);
@@ -265,9 +289,10 @@
       const eye=el("button","ls-icon-button ls-eye",`<img src="${icon(layer.visible?"eye":"eye-off")}" alt="">`);
       eye.type="button";eye.setAttribute("aria-pressed",String(layer.visible));
       eye.setAttribute("aria-label",`${layer.visible?"Hide":"Show"} ${layerTitle(key,layer)}`);
-      if(key==="base"){eye.disabled=true;eye.title="The base layer is always shown. Use Opacity above to fade it.";eye.setAttribute("aria-label","Base layer, always shown")}
-      eye.onclick=()=>updateLayer(key,{visible:!layer.visible},{rerender:true});
+      eye.title=`${layer.visible?"Hide":"Show"} this layer`;
+      eye.onclick=()=>{updateLayer(key,{visible:!layer.visible},{rerender:true});container.querySelector(`[data-key="${key}"] .ls-eye`)?.focus()};
       const main=el("button","ls-layer-main");main.type="button";main.setAttribute("aria-expanded",String(open));
+      main.title="Edit colors, opacity and blending";
       main.setAttribute("aria-controls",`ls-editor-${key.replace(":","-")}`);
       main.innerHTML=`<span class="ls-swatch" data-swatch style="background:${R.gradientCss(R.paletteStops(layer),layer.reverse)}"></span>`+
         `<span class="ls-layer-text"><span class="ls-layer-name">${esc(layerTitle(key,layer))}</span><span class="ls-layer-meta" data-meta>${esc(layerMeta(key,layer))}</span></span>`+
@@ -282,7 +307,27 @@
     function renderEditor(key,layer){
       const spec=R.STYLES[layer.style]||R.STYLES.hs,editor=el("div","ls-editor");
       editor.id=`ls-editor-${key.replace(":","-")}`;
+      const type=el("select","ls-select");type.setAttribute("aria-label","Layer type");
+      const types=key==="base"?Object.keys(R.STYLES).filter(id=>id!=="contour"&&!R.STYLES[id].registered):R.OVERLAY_STYLES;
+      types.forEach(id=>{const option=document.createElement("option");option.value=id;option.textContent=R.STYLES[id].label;type.append(option)});
+      type.value=layer.style;
+      type.onchange=()=>{
+        delete fitted[key];delete flatFitted[key];
+        if(key==="base")host.setStyle&&host.setStyle(type.value);
+        else setLayer(key,Object.assign(R.defaultLayer(type.value),{opacity:layer.opacity,blend:layer.blend,visible:layer.visible}));
+        commit({rerender:true});container.querySelector(`[data-key="${key}"] [aria-label="Layer type"]`)?.focus();
+      };
+      editor.append(field("Layer type",type));
       if(spec.hint) editor.append(el("p","control-hint ls-hint",esc(spec.hint)));
+      const mix=el("div","ls-sliders ls-mix-controls");
+      const blend=el("select","ls-select");blend.setAttribute("aria-label","Blend mode");
+      R.BLENDS.forEach(b=>{const o=document.createElement("option");o.value=b.id;o.textContent=b.label;blend.append(o)});
+      blend.value=layer.blend;blend.onchange=()=>updateLayer(key,{blend:blend.value});
+      mix.append(field("Blend",blend));
+      mix.append(slider("Layer opacity",0,100,Math.round(layer.opacity*100),`${Math.round(layer.opacity*100)}%`,value=>{
+        updateLayer(key,{opacity:value/100});return `${value}%`;
+      },"",()=>100));
+      editor.append(mix);
 
       /* Palette chips */
       const palettes=el("div","ls-palettes");palettes.setAttribute("role","radiogroup");palettes.setAttribute("aria-label","Palette");
@@ -310,10 +355,19 @@
         const step={ArrowRight:1,ArrowDown:1,ArrowLeft:-1,ArrowUp:-1}[event.key];if(index<0||!step) return;
         event.preventDefault();choosePalette(list[(index+step+list.length)%list.length].dataset.palette);
       });
-      editor.append(field("Palette",palettes,"ls-field-wide"));
-
-      /* Gradient editor */
-      editor.append(renderRamp(key,layer));
+      const colors=disclosure("palette:"+key,"Palette & colors","ls-palette-section");
+      const summary=colors.querySelector("summary");
+      summary.append(el("span","ls-swatch","") );
+      summary.lastChild.dataset.paletteSwatch="";
+      summary.lastChild.style.background=R.gradientCss(R.paletteStops(layer),layer.reverse);
+      const paletteName=el("span","ls-disclosure-value",esc(layer.stops?"Custom":R.PALETTES[layer.palette]?.name||""));
+      paletteName.dataset.paletteName="";summary.append(paletteName);
+      const colourBody=el("div","ls-disclosure-body");
+      colors.append(colourBody);editor.append(colors);
+      const colourActions=el("div","ls-actions");colourBody.append(colourActions);
+      colourBody.append(palettes,renderRamp(key,layer));
+      const advanced=disclosure("advanced:"+key,"Range & shading","ls-advanced");
+      const advancedBody=el("div","ls-disclosure-body");advanced.append(advancedBody);editor.append(advanced);
 
       /* Range */
       if(spec.family!=="lines"&&spec.unit!=="shade"){
@@ -347,7 +401,7 @@
           };
           range.append(auto);
         }
-        editor.append(field("Range",range,"ls-field-wide"));
+        advancedBody.append(field("Range",range,"ls-field-wide"));
       }
 
       /* Curve and bands */
@@ -358,11 +412,11 @@
         },"Bend the palette toward low or high values. Lift lows to pull out detail along rivers.",()=>0));
         tools.append(slider("Bands",0,24,layer.steps,layer.steps?`${layer.steps} bands`:"Smooth",value=>{
           const steps=value===1?2:value;updateLayer(key,{steps});return steps?`${steps} bands`:"Smooth";
-        },"Split the palette into flat colour bands, like a stepped elevation map.",()=>0));
+        },"Split the palette into flat color bands, like a stepped elevation map.",()=>0));
       }
       if(spec.param==="shade") tools.append(slider("Built-in shading",0,100,Math.round(layer.param*100),`${Math.round(layer.param*100)}%`,value=>{
         updateLayer(key,{param:value/100});return `${value}%`;
-      },"Shade this colour layer by itself. Add a Hillshade layer instead for blend control.",()=>0));
+      },"Shade this color layer by itself. Add a Hillshade layer instead for blend control.",()=>0));
       if(spec.param==="interval"){
         const input=el("input");input.type="number";input.min="1";input.max="5000";input.step="1";input.value=String(layer.param);
         input.setAttribute("aria-label","Contour interval in feet");
@@ -370,22 +424,13 @@
         const wrap=el("div","ls-range-inputs");wrap.append(input,el("span","ls-unit","ft"));
         tools.append(field("Interval",wrap));
       }
-      if(key!=="base"){
-        const select=el("select","ls-select");select.setAttribute("aria-label","Blend mode");
-        R.BLENDS.forEach(b=>{const o=document.createElement("option");o.value=b.id;o.textContent=b.label;select.append(o)});
-        select.value=layer.blend;select.onchange=()=>updateLayer(key,{blend:select.value});
-        tools.append(field("Blend",select));
-        tools.append(slider("Opacity",0,100,Math.round(layer.opacity*100),`${Math.round(layer.opacity*100)}%`,value=>{
-          updateLayer(key,{opacity:value/100});return `${value}%`;
-        },"",()=>100));
-      }
-      editor.append(tools);
+      advancedBody.append(tools);
 
       /* Actions */
       const actions=el("div","ls-actions");
       const reverse=pill("Reverse",()=>{updateLayer(key,{reverse:!layerFor(key).reverse},{rerender:true});container.querySelector(`[data-key="${key}"] [data-action="reverse"]`)?.focus()});
       reverse.dataset.action="reverse";reverse.setAttribute("aria-pressed",String(layer.reverse));
-      actions.append(reverse);
+      colourActions.append(reverse);
       if(key!=="base"){
         const index=+key.split(":")[1];
         const up=pill("",()=>moveOverlay(index,1),"arrow-up","Move layer up");up.disabled=index>=state.overlays.length-1;
@@ -393,13 +438,13 @@
         const remove=pill("Remove",()=>{state.overlays.splice(index,1);expanded=null;commit({rerender:true});container.querySelector(".ls-add-button")?.focus()},"trash-2");
         actions.append(up,down,remove);
       }
-      const reset=pill("Reset",()=>{
+      const reset=pill("Reset colors",()=>{
         const fresh=R.defaultLayer(layer.style);
-        if(key!=="base"){fresh.blend=layer.blend;fresh.opacity=layer.opacity}
+        fresh.blend=layer.blend;fresh.opacity=layer.opacity;fresh.visible=layer.visible;
         delete fitted[key];setLayer(key,fresh);commit({rerender:true});
-      },"rotate-ccw","Reset this layer’s colours");
-      actions.append(reset);
-      editor.append(actions);
+      },"rotate-ccw","Reset this layer’s colors");
+      colourActions.append(reset);
+      if(actions.childElementCount) editor.prepend(actions);
       return editor;
     }
     function moveOverlay(index,direction){
@@ -408,6 +453,13 @@
       const a=fitted["overlay:"+index],b=fitted["overlay:"+target];fitted["overlay:"+index]=b;fitted["overlay:"+target]=a;
       expanded="overlay:"+target;commit({rerender:true});
       container.querySelector(`[data-key="${expanded}"] .ls-layer-main`)?.focus();
+    }
+    function disclosure(id,label,cls){
+      const wrap=el("details","ls-disclosure "+(cls||""));
+      wrap.open=disclosures.has(id);
+      wrap.append(el("summary","",esc(label)));
+      wrap.addEventListener("toggle",()=>{if(wrap.isConnected){if(wrap.open)disclosures.add(id);else disclosures.delete(id)}});
+      return wrap;
     }
     function pill(label,onclick,iconName,aria){
       const b=el("button","ls-pill",(iconName?`<img src="${icon(iconName)}" alt="" aria-hidden="true">`:"")+(label?`<span>${esc(label)}</span>`:""));
@@ -430,26 +482,26 @@
       return wrap;
     }
 
-    /* Gradient bar with draggable colour stops. Click the bar to add a
-       colour; drag a stop to move it; pick or delete the selected stop. */
+    /* Gradient bar with draggable color stops. Click the bar to add a
+       color; drag a stop to move it; pick or delete the selected stop. */
     function renderRamp(key,layer){
       const wrap=el("div","ls-ramp-wrap");
-      const bar=el("div","ls-ramp");bar.setAttribute("role","group");bar.setAttribute("aria-label","Palette colours. Click to add a colour.");
+      const bar=el("div","ls-ramp");bar.setAttribute("role","group");bar.setAttribute("aria-label","Palette colors. Click to add a color.");
       const stops=()=>R.paletteStops(layerFor(key)).map(s=>s.slice());
       const paint=()=>{
         const current=layerFor(key),list=R.paletteStops(current);
         bar.style.background=`${R.gradientCss(list,current.reverse)},repeating-conic-gradient(#ccc 0 25%,#fff 0 50%) 0 0/10px 10px`;
         bar.querySelectorAll(".ls-stop").forEach((handle,index)=>{
-          const [position,colour]=list[index];const shown=current.reverse?1-position:position;
-          handle.style.left=`${shown*100}%`;handle.style.setProperty("--stop",colour.slice(0,7));
+          const [position,color]=list[index];const shown=current.reverse?1-position:position;
+          handle.style.left=`${shown*100}%`;handle.style.setProperty("--stop",color.slice(0,7));
           handle.setAttribute("aria-valuenow",String(Math.round(position*100)));
-          handle.setAttribute("aria-valuetext",`${colour.slice(0,7)} at ${Math.round(position*100)}%`);
+          handle.setAttribute("aria-valuetext",`${color.slice(0,7)} at ${Math.round(position*100)}%`);
           handle.classList.toggle("is-selected",index===selectedStop);
         });
         const swatch=container.querySelector(`[data-key="${key}"] [data-swatch]`);
         if(swatch) swatch.style.background=R.gradientCss(list,current.reverse);
         const chosen=list[selectedStop];
-        if(chosen){colour.value=chosen[1].slice(0,7);position.textContent=`${Math.round(chosen[0]*100)}%`}
+        if(chosen){color.value=chosen[1].slice(0,7);position.textContent=`${Math.round(chosen[0]*100)}%`}
         remove.disabled=list.length<=2;
       };
       /* Editing any stop turns the palette into Custom. */
@@ -472,14 +524,14 @@
       };
       stops().forEach((_,index)=>{
         const handle=el("button","ls-stop");handle.type="button";handle.setAttribute("role","slider");
-        handle.setAttribute("aria-valuemin","0");handle.setAttribute("aria-valuemax","100");handle.setAttribute("aria-label",`Colour stop ${index+1}`);
+        handle.setAttribute("aria-valuemin","0");handle.setAttribute("aria-valuemax","100");handle.setAttribute("aria-label",`Color stop ${index+1}`);
         handle.dataset.index=String(index);bar.append(handle);
       });
       const toPosition=clientX=>{const rect=bar.getBoundingClientRect();let t=clamp((clientX-rect.left)/Math.max(1,rect.width),0,1);return layerFor(key).reverse?1-t:t};
       bar.addEventListener("pointerdown",event=>{
         const handle=event.target.closest(".ls-stop");
         if(!handle){
-          /* Add a stop with the colour already shown at that point. */
+          /* Add a stop with the color already shown at that point. */
           const t=toPosition(event.clientX),list=stops();if(list.length>=R.MAX_STOPS) return;
           const tuples=list.map(([p,c])=>[p,...R.parseHex(c)]);
           const rgba=R._test.rampColour(tuples,t);
@@ -489,9 +541,9 @@
           return;
         }
         event.preventDefault();
-        const index=+handle.dataset.index;selectedStop=index;handle.focus();paint();
+        let index=+handle.dataset.index;selectedStop=index;handle.focus();paint();
         handle.setPointerCapture(event.pointerId);
-        const move=e=>{const list=stops();list[index][0]=toPosition(e.clientX);writeStops(list)};
+        const move=e=>{const moved=R.moveStop(stops(),index,toPosition(e.clientX));index=selectedStop=moved.index;writeStops(moved.stops)};
         const up=()=>{handle.removeEventListener("pointermove",move);handle.removeEventListener("pointerup",up);handle.removeEventListener("pointercancel",up);
           /* Re-sort after a drag so stops keep their order. */
           const list=stops(),moved=list[index];list.sort((a,b)=>a[0]-b[0]);selectedStop=list.indexOf(moved);writeStops(list,{rerender:true});
@@ -503,35 +555,35 @@
         const index=+handle.dataset.index,list=stops();
         const flip=layerFor(key).reverse?-1:1;
         const step={ArrowRight:.01,ArrowUp:.01,ArrowLeft:-.01,ArrowDown:-.01}[event.key];
-        if(step){event.preventDefault();list[index][0]=clamp(list[index][0]+step*flip*(event.shiftKey?10:1),0,1);selectedStop=index;writeStops(list);return}
+        if(step){event.preventDefault();const moved=R.moveStop(list,index,list[index][0]+step*flip*(event.shiftKey?10:1));selectedStop=moved.index;writeStops(moved.stops);
+          bar.querySelector(`[data-index="${selectedStop}"]`)?.focus();return}
         if(event.key==="Delete"||event.key==="Backspace"){event.preventDefault();remove.click()}
       });
       bar.addEventListener("focusin",event=>{const h=event.target.closest(".ls-stop");if(h){selectedStop=+h.dataset.index;paint()}});
 
       const controls=el("div","ls-stop-controls");
       const colourLabel=el("label","ls-colour");
-      const colour=el("input");colour.type="color";colour.setAttribute("aria-label","Selected stop colour");
-      colourLabel.append(colour,el("span","","Colour"));
+      const color=el("input");color.type="color";color.setAttribute("aria-label","Selected stop color");
+      colourLabel.append(color,el("span","","Color"));
       const position=el("span","ls-stop-position");
       const remove=pill("",()=>{
         const list=stops();if(list.length<=2) return;
         list.splice(selectedStop,1);selectedStop=Math.max(0,selectedStop-1);writeStops(list,{rerender:true});
         container.querySelector(`[data-key="${key}"] .ls-stop[data-index="${selectedStop}"]`)?.focus();
-      },"trash-2","Delete selected colour");
-      colour.addEventListener("input",()=>{
+      },"trash-2","Delete selected color");
+      color.addEventListener("input",()=>{
         const list=stops();if(!list[selectedStop]) return;
-        const alpha=list[selectedStop][1].slice(7);list[selectedStop][1]=colour.value+alpha;writeStops(list);
+        const alpha=list[selectedStop][1].slice(7);list[selectedStop][1]=color.value+alpha;writeStops(list);
       });
       controls.append(colourLabel,position,remove);
-      wrap.append(bar,controls,el("p","control-hint ls-hint","Click the bar to add a colour. Drag a stop to move it."));
+      wrap.append(bar,controls,el("p","control-hint ls-hint","Click the bar to add a color. Drag a stop to move it."));
       paint();
-      return field("Colours",wrap,"ls-field-wide");
+      return field("Colors",wrap,"ls-field-wide");
     }
 
     /* ----------------------------------------------------------- effects */
     function renderEffects(s){
-      const wrap=el("div","ls-section");
-      wrap.append(el("div","ls-head",`<h3 class="menu-section-title">Effects</h3>`));
+      const wrap=disclosure("effects","Terrain effects","ls-section");
       if(!s){wrap.append(el("p","control-hint","Effects apply once a layer is on."));return wrap}
       const e=state.effects,grid=el("div","ls-sliders");
       const setEffect=patch=>{state.effects=R.normalizeEffects(Object.assign({},state.effects,patch));commit()};
@@ -551,7 +603,7 @@
         const remRadius=Math.round(50+19950*Math.pow(value/100,2));setEffect({remRadius});return distanceLabel(remRadius);
       },"How far relative elevation looks for the valley floor. Widen it for big rivers, narrow it for creeks."));
       wrap.append(grid);
-      const reset=el("button","linkbtn ls-reset","Reset colours &amp; layers");reset.type="button";
+      const reset=el("button","linkbtn ls-reset","Reset colors &amp; layers");reset.type="button";
       reset.onclick=()=>{
         const keep=state.userLooks;state=R.emptyState();state.userLooks=keep;fitted={};flatFitted={};expanded=null;
         commit({rerender:true});
@@ -567,11 +619,16 @@
         const swatch=li.querySelector("[data-swatch]"),meta=li.querySelector("[data-meta]");
         if(swatch) swatch.style.background=R.gradientCss(R.paletteStops(layer),layer.reverse);
         if(meta) meta.textContent=layerMeta(key,layer);
+        const paletteName=li.querySelector("[data-palette-name]"),paletteSwatch=li.querySelector("[data-palette-swatch]");
+        if(paletteName)paletteName.textContent=layer.stops?"Custom":R.PALETTES[layer.palette]?.name||"";
+        if(paletteSwatch)paletteSwatch.style.background=R.gradientCss(R.paletteStops(layer),layer.reverse);
       });
       const current=style()?state.look:null;
-      container.querySelectorAll(".ls-look").forEach(button=>button.setAttribute("aria-checked",String(button.dataset.look===current)));
+      const looks=[...container.querySelectorAll(".ls-look")];
+      const active=looks.find(button=>button.dataset.look===current)||looks[0];
+      looks.forEach(button=>{button.setAttribute("aria-checked",String(button.dataset.look===current));button.tabIndex=button===active?0:-1});
       const blurb=container.querySelector(".ls-look-blurb");
-      if(blurb){const active=allLooks().find(l=>l.id===current);blurb.textContent=!style()?"Pick a look to start, or choose a layer above.":active?active.blurb:"Custom · your own mix of colours and layers."}
+      if(blurb){const active=allLooks().find(l=>l.id===current);blurb.textContent=!style()?"Pick a look to start, or choose a layer above.":active?active.blurb:"Custom · your own mix of colors and layers."}
     }
 
     /* ------------------------------------------------------- range fitting */
@@ -579,7 +636,7 @@
       return layerKeys().filter(key=>{const layer=layerFor(key);return layer&&layer.visible&&layer.auto});
     }
     /* Reads the visible terrain and re-stretches auto layers. Small changes
-       are ignored so panning does not make colours shimmer. */
+       are ignored so panning does not make colors shimmer. */
     function fitFromView(force){
       const keys=autoKeys(),s=style();
       if(!s||!host.sample) return false;
@@ -615,10 +672,12 @@
     function needsFit(){ return autoKeys().length>0 }
     function legend(s){
       s=s||style();const st=stack(s);if(!st) return null;
-      const layer=R.baseLayer(state,s),spec=R.STYLES[s];
-      const range=layer.auto&&fitted.base?fitted.base:[layer.min,layer.max];
-      const overlays=state.overlays.filter(l=>l.visible).map(l=>(R.STYLES[l.style]||{}).label).filter(Boolean);
-      const caption=`${spec.label}${layer.stops?" · custom colours":` · ${(R.PALETTES[layer.palette]||{}).name||""}`}${overlays.length?` + ${overlays.join(" + ")}`:""}`;
+      const visible=layerKeys().map(key=>({key,layer:layerFor(key)})).filter(entry=>entry.layer.visible&&entry.layer.opacity>0);
+      if(!visible.length)return {hidden:true};
+      const {key,layer}=visible[0];s=layer.style;const spec=R.STYLES[s];
+      const range=layer.auto&&fitted[key]?fitted[key]:[layer.min,layer.max];
+      const overlays=visible.slice(1).map(entry=>(R.STYLES[entry.layer.style]||{}).label).filter(Boolean);
+      const caption=`${spec.label}${layer.stops?" · custom colors":` · ${(R.PALETTES[layer.palette]||{}).name||""}`}${overlays.length?` + ${overlays.join(" + ")}`:""}`;
       let ticks;
       if(spec.unit==="shade") ticks=["shadow","relief","illuminated"];
       else if(spec.family==="lines") ticks=["intermediate","index"];

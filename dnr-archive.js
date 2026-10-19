@@ -13,6 +13,7 @@
 const fs=require("node:fs"),fsp=fs.promises,path=require("node:path"),os=require("node:os");
 const {execFile}=require("node:child_process");
 const {pipeline}=require("node:stream/promises");
+const {createHash}=require("node:crypto");
 const ICLOUD=path.join(os.homedir(),"Library","Mobile Documents","com~apple~CloudDocs");
 const intersects=(a,b)=>a[0]<b[2]&&a[2]>b[0]&&a[1]<b[3]&&a[3]>b[1];
 
@@ -69,6 +70,11 @@ async function copyTree(from,to,timeoutMs){
   await pipeline(fs.createReadStream(from),fs.createWriteStream(to,{flags:"wx"}));
   return (await fsp.stat(to)).size;
 }
+async function digest(file){
+  const hash=createHash("sha256");
+  for await(const chunk of fs.createReadStream(file))hash.update(chunk);
+  return hash.digest("hex");
+}
 
 class DnrArchive {
   constructor(root,{downloadTimeoutMs=10*60*1000}={}){
@@ -115,12 +121,25 @@ class DnrArchive {
     let bytes=0;for(const e of this.entries.values())bytes+=e.bytes||0;
     return {available:this.available,root:this.root,files:this.entries.size,bytes,error:this.error};
   }
-  /* Move one prepared raster out of localDir. A raster already archived (it
-     was restored earlier) only needs its local copy removed. */
+  /* Move one prepared raster out of localDir. Before removing a restored
+     copy, prove that every archived payload still matches the local data.
+     An index entry alone cannot establish that the cloud copy survived. */
   async store(localDir,record,{lastUsed=null}={}){
     if(!this.root)throw new Error("No iCloud archive is configured");
     const local=[path.join(localDir,record.file),path.join(localDir,record.overviewDir)];
     if(this.entries.has(record.key)){
+      const folder=path.join(this.root,"files",record.key);
+      const payloads=[record.file,...(record.levels||[]).map(level=>path.join(record.overviewDir,level.path))];
+      let bytes=0;
+      for(const relative of payloads){
+        const archived=path.join(folder,relative),current=path.join(localDir,relative);
+        await materialize(archived,this.downloadTimeoutMs);
+        const [a,b]=await Promise.all([fsp.stat(archived),fsp.stat(current)]);
+        if(!a.isFile()||!b.isFile()||a.size!==b.size||await digest(archived)!==await digest(current))
+          throw new Error("Archived DNR payload does not match the local copy; keeping local data");
+        bytes+=b.size;
+      }
+      if(record.bytes&&bytes!==record.bytes)throw new Error("Archived DNR payload is incomplete; keeping local data");
       for(const p of local)await fsp.rm(p,{recursive:true,force:true});
       return this.entries.get(record.key);
     }

@@ -20,6 +20,12 @@ assert.deepEqual(render.normalizeStops([[1, "#FFFFFF"], [0, "#000000"], [0.5, "n
   [[0, "#000000"], [1, "#ffffff"]], "stops sort, lower-case and drop invalid colours");
 assert.equal(render.normalizeStops(["#000000"]), null, "a ramp needs two stops");
 assert.equal(render.normalizeStops(Array.from({ length: 20 }, () => "#123456")).length, render.MAX_STOPS);
+{
+  let moved=render.moveStop([[0,"#ff0000"],[.5,"#00ff00"],[1,"#0000ff"]],0,.75);
+  moved=render.moveStop(moved.stops,moved.index,.8);
+  assert.deepEqual(moved.stops,[[.5,"#00ff00"],[.8,"#ff0000"],[1,"#0000ff"]],"crossing a stop keeps moving the selected color");
+  assert.equal(moved.index,1);
+}
 
 /* Every palette parses, every style's default palette exists, every look
  * normalises to itself (so the gallery can recognise the active look). */
@@ -75,6 +81,16 @@ assert.equal(render.MAX_STOPS, shaders.MAX_STOPS);
   assert.deepEqual(packed.a.slice(4, 8), [shaders.STYLE_IDS.slope, 0.5, shaders.BLEND_IDS.multiply, stack.layers[1].stops.length]);
   close(packed.b[2], 1.4, 1e-9, "gamma packs into the second vector");
 }
+{
+  const state=render.emptyState();
+  state.base.hs={...render.defaultLayer("hs"),visible:false};
+  const stack=render.buildStack(state,"hs");
+  assert.deepEqual(stack.layers,[],"hiding the only layer preserves an explicitly empty mix");
+  assert.equal(shaders.stackUniforms(stack).on,1,"empty mix must not draw the legacy hillshade");
+  assert.equal(shaders.stackUniforms(null).on,0,"untouched legacy rendering stays available");
+  state.overlays=[render.defaultLayer("tint")];
+  assert.deepEqual(render.buildStack(state,"hs").layers.map(layer=>layer.style),["tint"],"an overlay can draw without the bottom layer");
+}
 
 /* Saved state survives junk: unknown styles and bad numbers are dropped or
  * clamped, never thrown. */
@@ -93,6 +109,21 @@ assert.equal(render.MAX_STOPS, shaders.MAX_STOPS);
   assert.equal(state.effects.remRadius, render.EFFECT_DEFAULTS.remRadius);
   assert.equal(state.userLooks.length, 1);
   assert.equal(render.normalizeState(null).look, "classic");
+}
+
+/* A preset can be undone without changing another style's saved colors. */
+{
+  const original=render.emptyState();
+  original.base.tint={...render.defaultLayer("tint"),palette:"viridis",opacity:.42};
+  const snapshot=JSON.stringify(original);
+  const lava=render.LOOKS.find(look=>look.id==="lava-river");
+  const result=render.applyScene(original,lava.scene,lava.id);
+  assert.equal(JSON.stringify(original),snapshot,"preset application leaves the previous mix available for undo");
+  assert.equal(result.state.base.tint.palette,"viridis","other base styles retain their saved palette");
+  assert.equal(result.state.base.tint.opacity,.42);
+  const saved={id:"user-mix",name:"My mix",scene:render.captureScene(result.state,result.style)};
+  result.state.userLooks.push(saved);result.state.look=saved.id;
+  assert.equal(render.matchLook(result.state,result.style),saved.id,"a named saved preset remains selected even when its scene matches a built-in");
 }
 
 /* Fit to view: percentiles ignore outliers; relative elevation starts at 0. */
