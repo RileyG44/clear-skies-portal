@@ -67,6 +67,7 @@ new vm.Script(read("elevation-bands.js"),{filename:"elevation-bands.js"});
 new vm.Script(read("elevation-tile-core.js"),{filename:"elevation-tile-core.js"});
 new vm.Script(read("wa-archaeology.js"),{filename:"wa-archaeology.js"});
 new vm.Script(read("glacial-research-core.js"),{filename:"glacial-research-core.js"});
+new vm.Script(read("terrain-analysis-core.js"),{filename:"terrain-analysis-core.js"});
 new vm.Script(read("research-analysis.js"),{filename:"research-analysis.js"});
 const uiSystem=read("ui-system.js"),uiStyles=read("ui-system.css");
 new vm.Script(uiSystem,{filename:"ui-system.js"});
@@ -766,7 +767,8 @@ assert(server.includes('"earthquake.usgs.gov"')&&server.includes('"tiles.arcgis.
 assert(server.includes("const TTL_SNOW   = 2*3600*1000"),
        "the M2 snow cache must not hide most of NOAA's four daily updates");
 for(const asset of ["mosaic-core.js","terrain-core.js","terrain-raster.js","elevation-bands.js","elevation-tile-core.js","wa-archaeology.js",
-                    "glacial-research-core.js","research-analysis.js","research-worker.js","maxar-catalog.json"])
+                    "glacial-research-core.js","terrain-analysis-core.js","research-analysis.js","research-worker.js","maxar-catalog.json",
+                    "lidar-render.js","lidar-studio.js"])
   assert(read(".github/workflows/ci.yml").includes(asset),`Pages artifact must include ${asset}`);
 
 /* Global imagery. The portal shipped without any: cartographic basemaps plus a
@@ -811,6 +813,11 @@ assert(index.includes("ovSliceData(o,result.data)")&&index.includes('id="ovTime_
        "a time-sliced overlay must draw one slice and expose its slider");
 for(const file of [".github/workflows/ci.yml","sw.js","server.js","scripts/install-mac-service.sh","scripts/minify-site.js"])
   assert(read(file).includes("nadi1-cordilleran.json"),`${file} must ship the NADI-1 ice-margin slices`);
+/* The LiDAR colour studio loads from index.html, so every runtime that
+   serves the page has to carry it. */
+for(const file of ["server.js","sw.js","package.json","scripts/install-mac-service.sh","scripts/minify-site.js"])
+  for(const asset of ["lidar-render.js","lidar-studio.js"])
+    assert(read(file).includes(asset),`${file} must ship ${asset}`);
 /* Server-only cache logic must ship with both runtime distributions without
    becoming a browser asset or a service-worker precache entry. */
 for(const file of ["package.json","scripts/install-mac-service.sh"])
@@ -818,7 +825,7 @@ for(const file of ["package.json","scripts/install-mac-service.sh"])
 assert(!read("sw.js").includes("cache-budget.js"),"cache budget is server-only");
 const installer=read("scripts/install-mac-service.sh");
 for(const asset of ["terrain-core.js","terrain-raster.js","elevation-bands.js","elevation-tile-core.js","wa-archaeology.js",
-                    "glacial-research-core.js","research-analysis.js","research-worker.js"])
+                    "glacial-research-core.js","terrain-analysis-core.js","research-analysis.js","research-worker.js"])
   assert(installer.includes(asset),`installed M2 runtime must include ${asset}`);
 for(const script of ["scripts/launch-terrain-engine.sh","scripts/install-mac-service.sh"]){
   const source=read(script);
@@ -865,7 +872,7 @@ assert(index.includes('id="pointCloudPanel"')&&index.includes('id="terModePoints
     .replace(/\/\*[\s\S]*?\*\//g,"")          // block comments
     .replace(/^\s*\/\/.*$/gm,"")               // line comments
     .replace(/https?:\/\/[^\s"'`)]+/g,"")      // urls
-    .replace(/usgs-lidar-public|lidarportal|lidar-research|point-cloud/g,"");
+    .replace(/usgs-lidar-public|lidarportal|lidar-research|lidar-render|lidar-studio|point-cloud/g,"");
   const stragglers=[...visible.matchAll(/.{0,40}\blidar\b.{0,25}/gi)]
     .map(m=>m[0].trim())
     .filter(hit=>!/LiDAR/.test(hit));

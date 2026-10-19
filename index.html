@@ -993,8 +993,8 @@ body.pane-reordering,body.pane-reordering *{cursor:grabbing!important;user-selec
 }
 
 </style>
-<link rel="stylesheet" href="ui-theme.css?build=2026-10-18a">
-<link rel="stylesheet" href="ui-system.css?build=2026-10-18a">
+<link rel="stylesheet" href="ui-theme.css?build=2026-10-19a">
+<link rel="stylesheet" href="ui-system.css?build=2026-10-19a">
 <style>
 /* The redesign restructures the legacy DOM rather than replacing it, and the
    script that does so is the last thing on the page - so the browser paints the
@@ -1260,6 +1260,7 @@ html.csp-boot body{visibility:hidden}
                 <option value="hs">Hillshade</option>
                 <option value="hsmulti">Hillshade (multi-directional)</option>
                 <option value="tint">Elevation tinted</option>
+                <option value="rem">Relative elevation</option>
                 <option value="slope">Slope</option>
                 <option value="aspect">Aspect</option>
                 <option value="northness">North&ndash;south exposure</option>
@@ -1290,6 +1291,7 @@ html.csp-boot body{visibility:hidden}
               <div class="dnr-status-row"><div id="dnrAreaMsg" class="warmmsg" role="status" aria-live="polite">No downloaded areas</div>
                 <button class="linkbtn" id="dnrClear" type="button">Clear areas</button></div>
             </div>
+            <div class="terrain-subsection lidar-studio" id="terStudio" aria-label="LiDAR colours, layers and effects"></div>
             <div class="terrain-subsection" id="terAppearance">
               <h3 class="menu-section-title">Layer appearance <span class="pane-n" id="terLookStyle">per layer</span></h3>
               <div class="terrain-look-grid">
@@ -1490,17 +1492,65 @@ html.csp-boot body{visibility:hidden}
               <div class="elev-field">
                 <label class="elev-label" for="researchProduct">Analysis</label>
                 <select id="researchProduct" aria-describedby="researchProductHint">
-                  <option value="lrm">Local relief model</option>
-                  <option value="tpi">Terrain position index</option>
-                  <option value="tri">Terrain ruggedness</option>
-                  <option value="residual">Multi-scale residual anomalies</option>
-                  <option value="northness">Aspect northness / eastness</option>
-                  <option value="curvature">Profile / plan curvature</option>
-                  <option value="glacial">Glacial-margin candidate screen</option>
-                  <option value="moraine">Glacial moraine leads (Beta)</option>
-                  <option value="flood">Flood-channel candidate screen</option>
+                  <optgroup label="LiDAR visualization">
+                    <option value="svf">Sky-view factor</option>
+                    <option value="openpos">Positive openness</option>
+                    <option value="openneg">Negative openness</option>
+                    <option value="rrim">Red relief image map</option>
+                  </optgroup>
+                  <optgroup label="Landforms">
+                    <option value="geomorphons">Landforms (geomorphons)</option>
+                    <option value="lrm">Local relief model</option>
+                    <option value="tpi">Terrain position index</option>
+                    <option value="tri">Terrain ruggedness</option>
+                    <option value="residual">Multi-scale residual anomalies</option>
+                    <option value="northness">Aspect northness / eastness</option>
+                    <option value="curvature">Profile / plan curvature</option>
+                  </optgroup>
+                  <optgroup label="Water">
+                    <option value="drainage">Drainage network</option>
+                    <option value="wetness">Topographic wetness index</option>
+                    <option value="depressions">Depressions and sinks</option>
+                  </optgroup>
+                  <optgroup label="Snow and sun">
+                    <option value="avalanche">Avalanche slope angle</option>
+                    <option value="solar">Sun exposure</option>
+                    <option value="wind">Wind exposure and snow loading</option>
+                  </optgroup>
+                  <optgroup label="Geomorphology screens">
+                    <option value="glacial">Glacial-margin candidate screen</option>
+                    <option value="moraine">Glacial moraine leads (Beta)</option>
+                    <option value="flood">Flood-channel candidate screen</option>
+                  </optgroup>
                 </select>
                 <p class="control-hint" id="researchProductHint"></p>
+              </div>
+              <div class="elev-field" id="researchSunField" hidden>
+                <label for="researchSunDate">Date</label>
+                <select id="researchSunDate" aria-label="Sun exposure date">
+                  <option value="355">Midwinter (Dec 21)</option>
+                  <option value="46">Late winter (Feb 15)</option>
+                  <option value="79">Spring equinox (Mar 20)</option>
+                  <option value="121">Late spring (May 1)</option>
+                  <option value="172">Midsummer (Jun 21)</option>
+                  <option value="265">Autumn equinox (Sep 22)</option>
+                  <option value="today">Today</option>
+                </select>
+                <p class="control-hint">Clear-sky sunshine for one day, with shadows cast by the surrounding terrain.</p>
+              </div>
+              <div class="elev-field" id="researchWindField" hidden>
+                <label for="researchWind">Wind from</label>
+                <select id="researchWind" aria-label="Wind direction">
+                  <option value="0">North</option>
+                  <option value="45">Northeast</option>
+                  <option value="90">East</option>
+                  <option value="135">Southeast</option>
+                  <option value="180">South</option>
+                  <option value="225" selected>Southwest</option>
+                  <option value="270">West</option>
+                  <option value="315">Northwest</option>
+                </select>
+                <p class="control-hint">Snow drifts onto slopes sheltered from this wind and is stripped from exposed ones.</p>
               </div>
               <div class="elev-field" id="researchScaleField">
                 <label for="researchScale">Scale</label>
@@ -1518,6 +1568,35 @@ html.csp-boot body{visibility:hidden}
                 </div>
                 <input type="range" id="researchOpacity" min="0" max="100" step="1" value="82">
               </div>
+              <div class="elev-field" id="researchPaletteField">
+                <label for="researchPalette">Colours</label>
+                <select id="researchPalette" aria-label="Analysis colours"></select>
+                <div class="research-swatch" id="researchSwatch" aria-hidden="true"></div>
+              </div>
+              <div class="elev-field" id="researchReliefField">
+                <div class="elev-label-row">
+                  <label class="elev-label" for="researchRelief">Relief shading</label>
+                  <span class="elev-value" id="researchReliefOut">0%</span>
+                </div>
+                <input type="range" id="researchRelief" min="0" max="100" step="1" value="0" aria-label="Hillshade mixed into the analysis colours">
+              </div>
+              <div class="elev-field">
+                <label for="researchBlend">Blend with the map</label>
+                <select id="researchBlend" aria-label="Analysis blend mode">
+                  <option value="auto" selected>Automatic</option>
+                  <option value="normal">Normal</option>
+                  <option value="multiply">Multiply</option>
+                  <option value="overlay">Overlay</option>
+                  <option value="soft-light">Soft light</option>
+                  <option value="hard-light">Hard light</option>
+                  <option value="screen">Screen</option>
+                  <option value="darken">Darken</option>
+                  <option value="lighten">Lighten</option>
+                  <option value="color">Colour only</option>
+                  <option value="luminosity">Brightness only</option>
+                </select>
+              </div>
+              <label class="check"><input type="checkbox" id="researchLive" checked> Update as the map moves</label>
             </div>
             <button class="ghost" id="researchRun" type="button">Analyze this view</button>
             <div id="researchOut" class="fabout" role="status" aria-live="polite">Choose an analysis, then analyze the visible map.</div>
@@ -1785,7 +1864,7 @@ html.csp-boot body{visibility:hidden}
   L.Renderer.prototype.onAdd=function(map){return onAdd.call(this,map||this._map)};
 })();
 </script>
-<script src="version.js?build=2026-10-18a"></script>
+<script src="version.js?build=2026-10-19a"></script>
 <script src="mosaic-core.js"></script>
 <script src="png-stream.js"></script>
 <script src="terrain-core.js"></script>
@@ -1797,6 +1876,8 @@ html.csp-boot body{visibility:hidden}
 <script src="public-terrain.js"></script>
 <script src="tile-pipeline.js"></script>
 <script src="gpu-terrain-shaders.js"></script>
+<script src="lidar-render.js"></script>
+<script src="lidar-studio.js"></script>
 <script src="gpu-terrain-store.js"></script>
 <script src="gpu-terrain-engine.js"></script>
 <script src="gpu-terrain-layer.js"></script>
@@ -1812,6 +1893,7 @@ html.csp-boot body{visibility:hidden}
 <script src="glacial-zone-features.js"></script>
 <script src="glacial-belt-classifier.js"></script>
 <script src="glacial-moraine-analysis.js"></script>
+<script src="terrain-analysis-core.js"></script>
 <script src="research-analysis.js"></script>
 <script src="point-cloud-core.js"></script>
 <script src="point-cloud-viewer.js"></script>
@@ -5573,7 +5655,7 @@ const DEP_RULE = { hs:"Hillshade Gray", hsmulti:"Hillshade Multidirectional",
                    northness:"Aspect Map",
                    c2:"Preset 2ft Contour Interval", c5:"Preset 5ft Contour Interval",
                    c10:"Preset 10ft Contour Interval", c25:"Contour Smoothed 25" };
-const STYLE_NAME = { hs:"Hillshade", hsmulti:"Hillshade (multi-directional)", tint:"Elevation tinted",
+const STYLE_NAME = { hs:"Hillshade", hsmulti:"Hillshade (multi-directional)", tint:"Elevation tinted", rem:"Relative elevation",
                      slope:"Slope", aspect:"Aspect", northness:"North–south exposure", c2:"2 ft contours", c5:"5 ft contours",
                      c10:"10 ft contours", c25:"25 ft contours" };
 /* WA DNR publishes one pre-rendered DTM hillshade. It cannot honestly stand in
@@ -5831,6 +5913,16 @@ let terLayer=null, terBase=null, PROXY=false, WA_LAYERS=null, waCover=null, terT
 // imagery is 410, terrain 440, spectrum 450 and research 455.
 let gpuTerrainLayer=null,gpuTerrainStore=null,gpuTerrainEnabled=false,gpuTerrainDecided=false,gpuSourceKey=null,gpuTerrainOrderZ=null;
 let gpuSourceSpecs=null,gpuSourceSpecsKey=null;
+/* LiDAR Studio (lidar-studio.js) is mounted with the terrain controls below;
+   until then, and without a GPU, terrain draws its classic look. */
+let lidarStudio=null,studioFitTimer=0;
+function studioStack(style,options){ return style&&style!=="off"&&lidarStudio?lidarStudio.stack(style,options):null }
+/* Auto ranges follow the view once the terrain has settled after a pan. */
+function scheduleStudioFit(){
+  if(!lidarStudio?.needsFit())return;
+  clearTimeout(studioFitTimer);
+  studioFitTimer=setTimeout(()=>lidarStudio?.fitFromView(),450);
+}
 function initGpuTerrain(){
   if(gpuTerrainDecided)return gpuTerrainEnabled;
   gpuTerrainDecided=true;
@@ -5843,10 +5935,12 @@ function initGpuTerrain(){
     gpuTerrainLayer=L.cspGpuTerrainLayer({store:gpuTerrainStore,state:gpuTerrainState(),zIndex:440,
       maxTextureBytes:(matchMedia("(pointer:coarse)").matches?64:192)*1024*1024});
     gpuTerrainEnabled=!!gpuTerrainLayer.getEngine();
+    gpuTerrainLayer.on("render",scheduleStudioFit);
     if(!gpuTerrainEnabled){gpuTerrainLayer.destroy();gpuTerrainLayer=null;
       try{gpuTerrainStore.destroy()}catch{}gpuTerrainStore=null;}
   }
   document.documentElement.dataset.gpu2d=gpuTerrainEnabled?"on":"off";
+  if(!gpuTerrainEnabled)lidarStudio?.refresh();
   return gpuTerrainEnabled;
 }
 function gpuElevationRequest(url,options={}){
@@ -5879,9 +5973,13 @@ function gpuElevationSources(){
 }
 function gpuTerrainState(){
   const style=$("#terStyle").value;
-  return CSPGpuTerrainLayer.buildState({style:style!=="off"&&chooseTerrain(style).src!=="wadnr"?style:"off",
+  const drawn=style!=="off"&&chooseTerrain(style).src!=="wadnr"?style:"off";
+  const state=CSPGpuTerrainLayer.buildState({style:drawn,
     opacity:terrainOpacity()/100,look:terrainLook(style),lighting:terrainLighting(),
     spectrum:elevationRenderSettings(),spectrumOpacity:1});
+  const stack=drawn!=="off"?studioStack(drawn):null;
+  if(stack)state.terrain.stack=stack;
+  return state;
 }
 function syncGpuTerrain(){
   if(!gpuTerrainEnabled)return;
@@ -5942,6 +6040,8 @@ function elevationSourceOptions(){
 function dnrAcquisitionText(){
   const active=dnrStatus?.active;
   if(!active)return dnrLastError?`DNR elevation unavailable · ${dnrLastError}`:"";
+  if(active.state==="restoring")return `Loading DNR elevation from iCloud · ${active.project}`;
+  if(active.state==="archiving")return "Moving older DNR elevation to iCloud to make room";
   return active.state==="preparing"?`Preparing DNR elevation overviews · ${active.project}`:
     `Downloading DNR elevation · ${active.project}${active.bytes?` · ${(active.bytes/1048576).toFixed(0)} MiB`:""}`;
 }
@@ -6401,8 +6501,9 @@ function map3dStructureKey(){
 }
 function gpu3dStates(){
   const style=$("#terStyle").value;
+  const stack=studioStack(style==="off"?null:style,{flat:true});
   return {analysis:{terrain:{style:style==="off"?"hs":style,opacity:1,look:terrainLook(style),
-    ...(["hs","hsmulti","tint","off"].includes(style)?{lighting:terrainLighting()}:{})},spectrumOpacity:0},
+    ...(stack||["hs","hsmulti","tint","off"].includes(style)?{lighting:terrainLighting()}:{}),...(stack?{stack}:{})},spectrumOpacity:0},
     elevspec:{terrain:{style:"off"},spectrum:elevationRenderSettings(),spectrumOpacity:1}};
 }
 function initGpu3d(module){
@@ -6424,6 +6525,9 @@ function terrainRasterStyle(){
      ground. With neither on, 3D shows the default hillshade as before. */
   const spectrumAlone=$("#terStyle").value==="off"&&elevationActive();
   const theme=terrainTheme(),style=$("#terStyle").value==="off"?"hs":$("#terStyle").value,gpu=gpu3dPreferred();
+  /* A styled scene (LiDAR Studio colours or layers) draws through the GPU
+     analysis drape, never MapLibre's own hillshade and tint. */
+  const styled=gpu&&!!studioStack($("#terStyle").value),plain=(style==="hs"||style==="hsmulti")&&!styled;
   const light=terrainLighting(),opacity=terrainOpacity()/100,pick=chooseTerrain(style);
   const directions=style==="hsmulti"?[light.azimuth,(light.azimuth+90)%360,(light.azimuth+180)%360,(light.azimuth+270)%360]:light.azimuth;
   const altitudes=style==="hsmulti"?[light.altitude,light.altitude,light.altitude,light.altitude]:light.altitude;
@@ -6448,9 +6552,9 @@ function terrainRasterStyle(){
   /* Elevation tint under the shading, for every case where the ground would
      otherwise be bare hillshade or a published drape. */
   if(gpu||!spectrumAlone&&(style==="hs"||style==="hsmulti"||pick.src==="wadnr")) layers.push({id:"terrain-relief",type:"color-relief",source:"demShade",
-    layout:{visibility:!spectrumAlone&&(style==="hs"||style==="hsmulti"||pick.src==="wadnr")?"visible":"none"},
+    layout:{visibility:!spectrumAlone&&(plain||!styled&&pick.src==="wadnr")?"visible":"none"},
     paint:{"color-relief-color":hypsometricRamp(),"color-relief-opacity":theme==="dark"?.32:.4}});
-  if(gpu||style==="hs"||style==="hsmulti") layers.push({id:"terrain-hillshade",type:"hillshade",source:"demShade",layout:{visibility:style==="hs"||style==="hsmulti"?"visible":"none"},paint:{
+  if(gpu||style==="hs"||style==="hsmulti") layers.push({id:"terrain-hillshade",type:"hillshade",source:"demShade",layout:{visibility:plain?"visible":"none"},paint:{
     "hillshade-method":style==="hsmulti"?"multidirectional":"standard",
     "hillshade-illumination-direction":directions,"hillshade-illumination-altitude":altitudes,
     "hillshade-illumination-anchor":"map","hillshade-exaggeration":Math.max(.05,Math.min(1,opacity*1.15)),
@@ -6462,7 +6566,7 @@ function terrainRasterStyle(){
   }});
   if(gpu||!(style==="hs"||style==="hsmulti")){
     sources.analysis={type:"raster",tiles:[gpu?"cspgpu3d://analysis/{z}/{x}/{y}.png":`cspterrain://${style}/{z}/{x}/{y}.png?r=${++map3dStyleRevision}`],tileSize:256,maxzoom:18};
-    layers.push({id:"terrain-analysis",type:"raster",source:"analysis",layout:{visibility:style!=="hs"&&style!=="hsmulti"?"visible":"none"},paint:{"raster-opacity":opacity,"raster-fade-duration":0}});
+    layers.push({id:"terrain-analysis",type:"raster",source:"analysis",layout:{visibility:!plain?"visible":"none"},paint:{"raster-opacity":opacity,"raster-fade-duration":0}});
   }
   if(spectrumAlone){
     /* The hillshade above was built at full terrain strength; standing alone
@@ -6823,8 +6927,9 @@ function apply3dLighting(){
     if(map3d.getTerrain()?.exaggeration!==light.exaggeration)map3d.setTerrain({source:"dem",exaggeration:light.exaggeration});
     if(gpu3d?.enabled){
       const actual=style==="off"?"hs":style,pick=chooseTerrain(actual),spectrumAlone=style==="off"&&elevationActive();
-      const visible={"terrain-analysis":actual!=="hs"&&actual!=="hsmulti","terrain-hillshade":actual==="hs"||actual==="hsmulti",
-        "terrain-relief":!spectrumAlone&&(actual==="hs"||actual==="hsmulti"||pick.src==="wadnr"),"elev-spectrum":elevationActive()};
+      const plain=(actual==="hs"||actual==="hsmulti")&&!studioStack(style);
+      const visible={"terrain-analysis":!plain,"terrain-hillshade":plain,
+        "terrain-relief":!spectrumAlone&&(plain||!studioStack(style)&&pick.src==="wadnr"),"elev-spectrum":elevationActive()};
       for(const [id,on] of Object.entries(visible))if(map3d.getLayer(id)&&map3d.getLayoutProperty(id,"visibility")!==(on?"visible":"none"))map3d.setLayoutProperty(id,"visibility",on?"visible":"none");
       map3d.setPaintProperty("terrain-hillshade","hillshade-method",actual==="hsmulti"?"multidirectional":"standard");
       gpu3d.update();
@@ -6998,6 +7103,9 @@ function terrainLighting(){
       ago at a wider zoom does nothing here, with no explanation. */
 function sunEffect(){
   const style=$("#terStyle").value;
+  const stack=gpuTerrainEnabled?studioStack(style):null;
+  if(stack&&stack.layers.some(layer=>layer.style==="hs"||layer.style==="hsmulti"||(layer.style==="tint"||layer.style==="rem")&&layer.param>0))
+    return {live:true,why:"Shaded layers in this look relight instantly."};
   const verdict=CSPTerrain.sunAffectsTerrain(style,style==="off"?null:chooseTerrain(style).src);
   if(verdict.reason==="off") return {live:false,why:"Terrain is off, so there is nothing here to light."};
   if(verdict.reason==="derived"){
@@ -7025,7 +7133,7 @@ function syncTerrainLighting(){
 }
 const TERRAIN_LOOK_DEFAULTS={
   hs:{contrast:100,saturation:100,brightness:100},hsmulti:{contrast:100,saturation:100,brightness:100},
-  tint:{contrast:100,saturation:100,brightness:100},slope:{contrast:100,saturation:100,brightness:100},
+  tint:{contrast:100,saturation:100,brightness:100},rem:{contrast:100,saturation:100,brightness:100},slope:{contrast:100,saturation:100,brightness:100},
   aspect:{contrast:100,saturation:100,brightness:100},c2:{contrast:100,saturation:100,brightness:100},
   northness:{contrast:100,saturation:100,brightness:100},
   c5:{contrast:100,saturation:100,brightness:100},c10:{contrast:100,saturation:100,brightness:100},
@@ -7407,6 +7515,12 @@ function paintTerrainInfo(pick){
 
 function paintTerrainLegend(style){
   const el=$("#terLegend"); if(!el) return;
+  const studio=gpuTerrainEnabled&&style!=="off"?lidarStudio?.legend(style):null;
+  if(studio){
+    el.className="terlegend on";
+    el.innerHTML=`<div class="caption">${esc(studio.caption)}</div><div class="bar" style="background:${studio.bar}"></div><div class="ticks">${studio.ticks.map(t=>`<span>${esc(t)}</span>`).join("")}</div>`;
+    return;
+  }
   const intervals={c2:"2 ft",c5:"5 ft",c10:"10 ft",c25:"25 ft"};
   if(style==="off"){ el.className="terlegend";el.innerHTML="";return }
   let bar="",ticks="",caption="";
@@ -7487,7 +7601,17 @@ async function refreshTerrainCoverage(force){
   paintElevOut();applyTerrain();
 }
 
-$("#terStyle").onchange=()=>{ syncTerrainLookControls();saveTerrainPrefs(); applyTerrain(true);refreshTerrainCoverage(false);schedule3dStyle() };
+lidarStudio=window.CSPLidarStudio?.mount($("#terStudio"),{
+  getStyle:()=>$("#terStyle").value,
+  setStyle:style=>{$("#terStyle").value=style;$("#terStyle").dispatchEvent(new Event("change",{bubbles:true}))},
+  onChange:()=>{syncGpuTerrain();schedule3dStyle();paintTerrainInfo();scheduleStudioFit()},
+  sample:()=>gpuTerrainEnabled&&gpuTerrainLayer&&map.hasLayer(gpuTerrainLayer)?gpuTerrainLayer.getEngine()?.sampleValues():null,
+  gpuAvailable:()=>gpuTerrainDecided?gpuTerrainEnabled:true,
+  getOpacity:()=>terrainOpacity(),
+  setOpacity:value=>{const input=$("#terOp");input.value=Math.round(value);input.dispatchEvent(new Event("input",{bubbles:true}))},
+  lighting:()=>terrainLighting()
+})||null;
+$("#terStyle").onchange=()=>{ syncTerrainLookControls();saveTerrainPrefs(); applyTerrain(true);refreshTerrainCoverage(false);schedule3dStyle();lidarStudio?.refresh() };
 $("#terSrc").onchange=()=>{ saveTerrainPrefs();applyTerrain(true);applyElev();refreshTerrainCoverage(false);resetMeshSources();schedule3dStyle() };
 function terrainOpacity(){
   const value=+$("#terOp").value;
@@ -10050,12 +10174,22 @@ const AnalyticTerrainLayer=ElevLayer.extend({
 
 /* ------------------------------- viewport-scale geomorphology research */
 let researchLayer=null,researchWorker=null,researchServerController=null,researchToken=0;
+/* The last analysis stays in memory so colours, relief shading and blend
+   change instantly without recomputing, and the cursor readout can sample it. */
+let researchLast=null,researchPalettes={},researchLiveTimer=0;
 const RESEARCH_PREF_KEY="clearskies.research.v1";
+const researchSelectHas=(id,value)=>[...$(id).options].some(o=>o.value===String(value));
 try{
   const p=JSON.parse(localStorage.getItem(RESEARCH_PREF_KEY)||"null");
-  if(p){ if([...$("#researchProduct").options].some(o=>o.value===p.product)) $("#researchProduct").value=p.product;
-         if([...$("#researchScale").options].some(o=>o.value===p.scale)) $("#researchScale").value=p.scale;
-         if(Number.isFinite(+p.opacity)) $("#researchOpacity").value=Math.max(0,Math.min(100,+p.opacity)) }
+  if(p){ if(researchSelectHas("#researchProduct",p.product)) $("#researchProduct").value=p.product;
+         if(researchSelectHas("#researchScale",p.scale)) $("#researchScale").value=p.scale;
+         if(Number.isFinite(+p.opacity)) $("#researchOpacity").value=Math.max(0,Math.min(100,+p.opacity));
+         if(Number.isFinite(+p.relief)) $("#researchRelief").value=Math.max(0,Math.min(100,+p.relief));
+         if(researchSelectHas("#researchBlend",p.blend)) $("#researchBlend").value=p.blend;
+         if(researchSelectHas("#researchSunDate",p.sunDate)) $("#researchSunDate").value=p.sunDate;
+         if(researchSelectHas("#researchWind",p.wind)) $("#researchWind").value=p.wind;
+         if(typeof p.live==="boolean") $("#researchLive").checked=p.live;
+         if(p.palettes&&typeof p.palettes==="object") researchPalettes={...p.palettes} }
 }catch(e){}
 function researchOpacity(){ const value=+$("#researchOpacity").value; return Math.max(0,Math.min(100,Number.isFinite(value)?value:82)) }
 function syncResearchOpacity(){
@@ -10064,7 +10198,9 @@ function syncResearchOpacity(){
 }
 syncResearchOpacity();
 function saveResearchPrefs(){
-  try{ localStorage.setItem(RESEARCH_PREF_KEY,JSON.stringify({product:$("#researchProduct").value,scale:$("#researchScale").value,opacity:researchOpacity()})) }catch(e){}
+  try{ localStorage.setItem(RESEARCH_PREF_KEY,JSON.stringify({product:$("#researchProduct").value,scale:$("#researchScale").value,opacity:researchOpacity(),
+    relief:+$("#researchRelief").value,blend:$("#researchBlend").value,sunDate:$("#researchSunDate").value,wind:$("#researchWind").value,
+    live:$("#researchLive").checked,palettes:researchPalettes})) }catch(e){}
 }
 function waitForElevationLayer(layer,timeout=15000){
   return new Promise(resolve=>{
@@ -10082,13 +10218,13 @@ function waitForElevationLayer(layer,timeout=15000){
     };poll();
   });
 }
-async function researchElevationSource(){
+async function researchElevationSource(timeout=15000){
   if(gpuTerrainEnabled){
     const temporary=!map.hasLayer(gpuTerrainLayer);
     if(temporary)gpuTerrainLayer.addTo(map);
-    await waitForElevationLayer(gpuTerrainLayer);return {layer:gpuTerrainLayer,temporary};
+    await waitForElevationLayer(gpuTerrainLayer,timeout);return {layer:gpuTerrainLayer,temporary};
   }
-  if(elevLayer&&elevLayer._store.size){ await waitForElevationLayer(elevLayer,4500);return {layer:elevLayer,temporary:false} }
+  if(elevLayer&&elevLayer._store.size){ await waitForElevationLayer(elevLayer,Math.min(4500,timeout));return {layer:elevLayer,temporary:false} }
   const layer=new ElevLayer({...elevationSourceOptions(),fallbackNativeZoom:15,nationalNativeZoom:17,
     render:elevationRenderSettings(),maxZoom:VIEW_MAX,maxNativeZoom:17,zIndex:1,opacity:0,keepBuffer:0,
     updateWhenIdle:true,updateWhenZooming:false,maxRetries:0});
@@ -10131,9 +10267,97 @@ function researchQuantile(data,q){
   for(let i=0;i<data.length;i+=step) if(Number.isFinite(data[i])) values.push(data[i]);
   if(!values.length) return NaN;values.sort((a,b)=>a-b);return values[Math.max(0,Math.min(values.length-1,Math.round((values.length-1)*q)))];
 }
-function researchColourRaster(result,product){
-  const canvas=document.createElement("canvas");canvas.width=result.width;canvas.height=result.height;
-  const image=canvas.getContext("2d").createImageData(result.width,result.height),data=result.data,secondary=result.secondary;
+/* Colour looks for the lidar analysis products. Stops are [0..1, "#hex"],
+   the shape terrain-core's normalizeColorRamp takes, so a shared palette
+   editor can drive them later. Fixed-value classes (avalanche) use
+   [degrees, "#hex"] and paint each band flat. */
+const RESEARCH_PALETTES={
+  grey:{name:"Greyscale",stops:[[0,"#0b0b0d"],[1,"#ffffff"]]},
+  paper:{name:"Ink on paper",stops:[[0,"#1b1f2a"],[.55,"#8a8f99"],[1,"#f6f1e7"]]},
+  glacier:{name:"Glacier ice",stops:[[0,"#0d1b2a"],[.45,"#2e6f8e"],[.75,"#8fd3e0"],[1,"#f4fbff"]]},
+  ember:{name:"Ember",stops:[[0,"#140a07"],[.4,"#7a2414"],[.7,"#e0782f"],[1,"#fff2c8"]]},
+  lava:{name:"Lava river",stops:[[0,"#0b1f4b"],[.3,"#4b2a8a"],[.55,"#c04a7a"],[.75,"#f08a3c"],[.9,"#f9d057"],[1,"#fffbe8"]]},
+  viridis:{name:"Viridis",stops:[[0,"#440154"],[.25,"#3b528b"],[.5,"#21918c"],[.75,"#5ec962"],[1,"#fde725"]]},
+  inferno:{name:"Inferno",stops:[[0,"#000004"],[.25,"#57106e"],[.5,"#bc3754"],[.75,"#f98e09"],[1,"#fcffa4"]]},
+  daylight:{name:"Daylight",stops:[[0,"#1d2b53"],[.35,"#5b4a8b"],[.6,"#e07a5f"],[.85,"#f2cc8f"],[1,"#fff8e1"]]},
+  snowpack:{name:"Snowpack",stops:[[0,"#f4fbff"],[.4,"#a9d6f0"],[.75,"#5a8fc2"],[1,"#24345e"]]},
+  wet:{name:"Dry to wet",stops:[[0,"#e9dcc0"],[.35,"#b9cf8f"],[.6,"#5fae8c"],[.8,"#2f7fb5"],[1,"#163d7a"]]},
+  water:{name:"River blue",stops:[[0,"#9ed4ff"],[.5,"#2f8fe0"],[1,"#0b3c91"]]},
+  glow:{name:"Glowing streams",stops:[[0,"#3b3f9a"],[.5,"#36b6ff"],[1,"#e8fbff"]]},
+  depth:{name:"Pool depth",stops:[[0,"#cfeeff"],[.5,"#4a9ee0"],[1,"#0d2f75"]]},
+  wind:{name:"Scour to drift",stops:[[0,"#d9622b"],[.35,"#f3c48a"],[.5,"#f7f5ef"],[.65,"#9cc3e6"],[1,"#3b4cc0"]]},
+  windPurple:{name:"Orange to purple",stops:[[0,"#b35806"],[.5,"#f7f7f7"],[1,"#542788"]]},
+  caltopo:{name:"Slope classes",classes:[[27,"#f7e95b"],[30,"#f9b233"],[32,"#f07a22"],[35,"#e0262b"],[46,"#a31f83"],[51,"#3a3fbf"],[60,"#1a1a1a"]]},
+  fatmap:{name:"Simple 30/35/40/45",classes:[[30,"#ffd24d"],[35,"#ff8a2a"],[40,"#e8303a"],[45,"#8a2be2"],[50,"#222222"]]},
+  red:{name:"Red relief",tint:"#d7301f"},
+  ochre:{name:"Ochre relief",tint:"#c77c12"},
+  blue:{name:"Blue relief",tint:"#2166ac"},
+  geoClassic:{name:"Classic landforms",categories:["#dcdcdc","#380000","#c80000","#ff5014","#fad23c","#ffff3c","#b4e614","#3cfa96","#0000ff","#000038"]},
+  geoEarth:{name:"Earth tones",categories:["#ece6d6","#5b2c0f","#9c4a1a","#cf8a4a","#e8c27a","#f1e3b0","#a9c47f","#6aa88a","#2f6f9a","#1b2f55"]},
+  standard:{name:"Standard"}
+};
+const RESEARCH_LOOKS={
+  svf:{palettes:["grey","paper","glacier","ember","lava"],range:"quantile",blend:"multiply",
+    labels:["Enclosed","","Open sky"],read:v=>`Sky view ${Math.round(v*100)}%`},
+  openpos:{palettes:["grey","paper","glacier","ember","lava"],range:"quantile",blend:"multiply",
+    labels:["Hollow","","Crest"],read:v=>`Positive openness ${v.toFixed(1)}°`},
+  openneg:{palettes:["grey","paper","glacier","ember","lava"],range:"quantile",blend:"multiply",
+    labels:["Crest","","Hollow"],read:v=>`Negative openness ${v.toFixed(1)}°`},
+  rrim:{palettes:["red","ochre","blue"],range:"rrim",blend:"normal",
+    labels:["Hollow","Steep","Ridge"],read:(v,s)=>`Slope ${Math.round(s)}° · ${v>=0?"convex":"concave"} ${Math.abs(v).toFixed(1)}°`},
+  geomorphons:{palettes:["geoEarth","geoClassic"],range:"categories",blend:"normal",alpha:.86,
+    read:v=>CSPTerrainAnalysis.GEOMORPHON_CLASSES[v]||""},
+  drainage:{palettes:["water","glow","lava"],range:"log",blend:"normal",
+    labels:["Rill","","Main stem"],read:v=>`Drains ${researchArea(v)}`},
+  wetness:{palettes:["wet","viridis","glacier"],range:"quantile",blend:"normal",alpha:.86,
+    labels:["Dry","","Wet"],read:v=>`Wetness index ${v.toFixed(1)}`},
+  depressions:{palettes:["depth","glacier","lava"],range:"positive",blend:"normal",
+    read:v=>v>0?`Sink depth ${researchFeet(v)}`:"No closed depression"},
+  avalanche:{palettes:["caltopo","fatmap"],range:"classes",blend:"normal",alpha:.78,
+    read:v=>`Slope ${v.toFixed(0)}°${v>=30&&v<=45?" · prime avalanche start zone":""}`},
+  solar:{palettes:["daylight","inferno","snowpack","grey"],range:"quantile",blend:"normal",alpha:.86,
+    labels:null,read:(v,s)=>`${v.toFixed(1)} kWh/m² · ${s.toFixed(1)} h direct sun`},
+  wind:{palettes:["wind","windPurple"],range:"symmetric",blend:"normal",alpha:.8,
+    labels:["Scoured","Neutral","Loaded"],read:v=>Math.abs(v)<.5?"Neutral to the wind":v>0?`Sheltered ${v.toFixed(1)}° · snow loading`:`Exposed ${(-v).toFixed(1)}° · wind scour`}
+};
+function researchFeet(metres){ const feet=metres/.3048;return `${feet<10?feet.toFixed(1):Math.round(feet).toLocaleString()} ft` }
+function researchArea(m2){
+  const acres=m2/4046.856;
+  return acres>=640?`${(acres/640).toFixed(acres>=6400?0:1)} sq mi`:acres>=1?`${acres<10?acres.toFixed(1):Math.round(acres).toLocaleString()} acres`:`${Math.round(m2/.0929).toLocaleString()} sq ft`;
+}
+function researchPaletteId(product){
+  const look=RESEARCH_LOOKS[product];if(!look) return "standard";
+  const saved=researchPalettes[product];return look.palettes.includes(saved)?saved:look.palettes[0];
+}
+function researchHex(hex){ const n=parseInt(hex.slice(1),16);return [(n>>16)&255,(n>>8)&255,n&255] }
+function researchRamp(stops){
+  const parsed=stops.map(([t,hex])=>[t,researchHex(hex)]);
+  return t=>{
+    if(!(t>parsed[0][0])) return parsed[0][1];
+    for(let i=1;i<parsed.length;i++) if(t<=parsed[i][0]){
+      const [t0,a]=parsed[i-1],[t1,b]=parsed[i],f=(t-t0)/(t1-t0||1);
+      return [a[0]+(b[0]-a[0])*f,a[1]+(b[1]-a[1])*f,a[2]+(b[2]-a[2])*f];
+    }
+    return parsed[parsed.length-1][1];
+  };
+}
+function researchCss(rgb){ return `rgb(${rgb.map(Math.round).join(",")})` }
+/* Hillshade of the analysed DEM, 0..1, for mixing into the colours. */
+function researchHillshade(elevation,width,height,resolution){
+  const out=new Float32Array(width*height),res=resolution/reliefZFactor(resolution);
+  const az=315*Math.PI/180,alt=45*Math.PI/180,sa=Math.sin(alt),ca=Math.cos(alt),sz=Math.sin(az),cz=Math.cos(az);
+  const at=(x,y,z)=>{const v=elevation[Math.max(0,Math.min(height-1,y))*width+Math.max(0,Math.min(width-1,x))];return v===v?v:z};
+  for(let y=0;y<height;y++) for(let x=0;x<width;x++){
+    const i=y*width+x,z=elevation[i];if(z!==z){out[i]=1;continue}
+    const a=at(x-1,y-1,z),b=at(x,y-1,z),c=at(x+1,y-1,z),d=at(x-1,y,z),f=at(x+1,y,z),g=at(x-1,y+1,z),h=at(x,y+1,z),k=at(x+1,y+1,z);
+    const east=((c+2*f+k)-(a+2*d+g))/(8*res),north=-((g+2*h+k)-(a+2*b+c))/(8*res);
+    out[i]=Math.max(0,Math.min(1,(sa-east*ca*sz-north*ca*cz)/Math.sqrt(1+east*east+north*north)));
+  }
+  return out;
+}
+/* Legacy research products keep their original colours and keys. */
+function researchLegacyColours(result,product){
+  const data=result.data,secondary=result.secondary;
   const signed=["lrm","tpi","residual","curvature"].includes(product);
   const lo=researchQuantile(data,.03),hi=researchQuantile(data,.97),span=signed?Math.max(Math.abs(lo||0),Math.abs(hi||0),1e-9):Math.max(hi||0,1e-9);
   const hsv=(h,s,v)=>{ h=((h%360)+360)%360;const c=v*s,x=c*(1-Math.abs((h/60)%2-1)),m=v-c;let r=0,g=0,b=0;
@@ -10152,23 +10376,91 @@ function researchColourRaster(result,product){
     }
     return {rgb,alpha};
   };
-  for(let i=0;i<data.length;i++){
-    const value=data[i],o=i*4;if(!Number.isFinite(value)) continue;
-    const {rgb,alpha}=colourAt(value,secondary?.[i]);
-    image.data[o]=Math.round(rgb[0]);image.data[o+1]=Math.round(rgb[1]);image.data[o+2]=Math.round(rgb[2]);image.data[o+3]=Math.round(255*alpha);
-  }
   const directional=product==="northness",screen=product==="glacial"||product==="moraine"||product==="flood";
   const start=directional?0:signed?-span:screen?0:Math.min(0,lo||0),end=directional?360:screen?1:signed?span:start+span;
   const stops=Array.from({length:17},(_,i)=>{
     const value=start+(end-start)*i/16,a=value*Math.PI/180;
     const {rgb}=colourAt(directional?Math.cos(a):value,directional?Math.sin(a):undefined);
-    return `rgb(${rgb.map(Math.round).join(",")}) ${i/16*100}%`;
+    return `${researchCss(rgb)} ${i/16*100}%`;
   });
   const tick=v=>["lrm","tpi","tri"].includes(product)?`${+(v/.3048).toFixed(1)} ft`:
     product==="residual"?`${+v.toPrecision(3)} σ`:product==="curvature"?`${+(v*.3048).toPrecision(3)} /ft`:+v.toPrecision(3);
   const legend={name:result.label,bar:`linear-gradient(90deg,${stops.join(",")})`,
     labels:directional?["N","E","S","W","N"]:product==="moraine"?["Low support","Possible lead","Strong lead"]:screen?["0","Candidate score","1"]:[tick(start),signed?"0":"",tick(end)]};
-  canvas.getContext("2d").putImageData(image,0,0);return {url:canvas.toDataURL("image/png"),lo,hi,legend};
+  return {colourAt:(value,i)=>colourAt(value,secondary?.[i]),legend};
+}
+/* One colour function per look: (value, index) -> {rgb, alpha}. */
+function researchLookColours(result,product,paletteId){
+  const look=RESEARCH_LOOKS[product],palette=RESEARCH_PALETTES[paletteId],data=result.data,secondary=result.secondary;
+  const alpha=look.alpha??1,name=result.label;
+  if(look.range==="categories"){
+    const colours=palette.categories.map(researchHex),classes=CSPTerrainAnalysis.GEOMORPHON_CLASSES;
+    const order=[2,3,4,5,6,7,8,9,10,1],width=100/order.length;
+    return {colourAt:value=>value>=1&&value<=10?{rgb:colours[value-1],alpha}:null,
+      legend:{name,bar:`linear-gradient(90deg,${order.map((c,i)=>`${palette.categories[c-1]} ${i*width}% ${(i+1)*width}%`).join(",")})`,labels:[classes[2],classes[6],classes[10]+" · flat"]}};
+  }
+  if(look.range==="classes"){
+    const bands=palette.classes.map(([value,hex])=>[value,researchHex(hex)]),top=bands[bands.length-1][0]+10,from=bands[0][0];
+    const pos=v=>(v-from)/(top-from)*100;
+    return {colourAt:value=>{
+        if(!(value>=from)) return null;
+        let rgb=bands[0][1];for(const [edge,c] of bands) if(value>=edge) rgb=c;
+        return {rgb,alpha};
+      },
+      legend:{name,bar:`linear-gradient(90deg,${bands.map(([v,c],i)=>`${researchCss(c)} ${pos(v)}% ${pos(i+1<bands.length?bands[i+1][0]:top)}%`).join(",")})`,
+        labels:[`${from}°`,"35–45°",`${bands[bands.length-1][0]}°+`]}};
+  }
+  if(look.range==="rrim"){
+    const tint=researchHex(palette.tint),lo=researchQuantile(data,.02),hi=researchQuantile(data,.98),span=Math.max(1e-6,hi-lo);
+    const colour=(t,s)=>{const shade=.12+.88*t;return [0,1,2].map(c=>(255+(tint[c]-255)*s)*shade)};
+    return {colourAt:(value,i)=>{
+        const t=Math.max(0,Math.min(1,(value-lo)/span)),s=Math.max(0,Math.min(1,(secondary?.[i]||0)/45));
+        return {rgb:colour(t,s),alpha};
+      },
+      legend:{name,bar:`linear-gradient(90deg,${researchCss(colour(0,.2))},${researchCss(colour(.55,1))},${researchCss(colour(1,.15))})`,labels:look.labels}};
+  }
+  const ramp=researchRamp(palette.stops);
+  let lo,hi;
+  if(look.range==="log"){
+    const cellArea=result.metadata?.cellArea||1,peak=result.metadata?.maxArea||cellArea*100;
+    lo=Math.log(Math.max(cellArea*250,peak*6e-4));hi=Math.max(lo+1,Math.log(peak));
+    const start=Math.exp(lo);
+    return {colourAt:value=>{
+        if(!(value>=start)) return null;
+        const t=Math.max(0,Math.min(1,(Math.log(value)-lo)/(hi-lo)));return {rgb:ramp(t),alpha:.45+.55*t};
+      },
+      legend:{name,bar:`linear-gradient(90deg,${[0,.25,.5,.75,1].map(t=>`${researchCss(ramp(t))} ${t*100}%`).join(",")})`,
+        labels:[researchArea(start),"",researchArea(Math.exp(hi))]}};
+  }
+  if(look.range==="positive"){
+    const positive=data.filter(v=>v>0),deep=Math.max(.05,researchQuantile(positive.length?positive:[1],.98));
+    return {colourAt:value=>{
+        if(!(value>0)) return null;
+        const t=Math.max(0,Math.min(1,value/deep));return {rgb:ramp(t),alpha:.35+.6*t};
+      },
+      legend:{name,bar:`linear-gradient(90deg,${[0,.5,1].map(t=>`${researchCss(ramp(t))} ${t*100}%`).join(",")})`,labels:["Shallow","",`${researchFeet(deep)}+`]}};
+  }
+  if(look.range==="symmetric"){
+    const span=Math.max(1,Math.abs(researchQuantile(data,.02)),Math.abs(researchQuantile(data,.98)));lo=-span;hi=span;
+  }else{lo=researchQuantile(data,.02);hi=researchQuantile(data,.98);if(!(hi>lo)) hi=lo+1e-6}
+  const labels=look.labels||(product==="solar"?[`${lo.toFixed(1)} kWh/m²`,"",`${hi.toFixed(1)} kWh/m²`]:["","",""]);
+  return {colourAt:value=>({rgb:ramp(Math.max(0,Math.min(1,(value-lo)/(hi-lo)))),alpha}),
+    legend:{name,bar:`linear-gradient(90deg,${[0,.25,.5,.75,1].map(t=>`${researchCss(ramp(t))} ${t*100}%`).join(",")})`,labels}};
+}
+function researchColourRaster(result,product,options={}){
+  const canvas=document.createElement("canvas");canvas.width=result.width;canvas.height=result.height;
+  const image=canvas.getContext("2d").createImageData(result.width,result.height),data=result.data;
+  const look=RESEARCH_LOOKS[product]?researchLookColours(result,product,options.palette||researchPaletteId(product)):researchLegacyColours(result,product);
+  const relief=Math.max(0,Math.min(1,(options.relief||0)/100)),shade=relief>0&&options.hillshade;
+  for(let i=0;i<data.length;i++){
+    const value=data[i],o=i*4;if(!Number.isFinite(value)) continue;
+    const colour=look.colourAt(value,i);if(!colour||!(colour.alpha>0)) continue;
+    /* Multiply-style relief: full shadow keeps a quarter of the colour. */
+    const k=shade?1-relief+relief*(.25+.95*shade[i]):1;
+    image.data[o]=Math.min(255,Math.round(colour.rgb[0]*k));image.data[o+1]=Math.min(255,Math.round(colour.rgb[1]*k));
+    image.data[o+2]=Math.min(255,Math.round(colour.rgb[2]*k));image.data[o+3]=Math.round(255*colour.alpha);
+  }
+  canvas.getContext("2d").putImageData(image,0,0);return {url:canvas.toDataURL("image/png"),legend:look.legend};
 }
 function runResearchWorker(payload){
   if(researchWorker) researchWorker.terminate();
@@ -10192,6 +10484,10 @@ async function runResearchServer(payload){
   const timer=setTimeout(()=>{timedOut=true;controller.abort()},45000);
   const query=new URLSearchParams({product:payload.product,scale:payload.scale,width:String(payload.width),
     height:String(payload.height),resolution:String(payload.resolution)});
+  const extra=payload.options||{};
+  if(Number.isFinite(extra.dayOfYear)) query.set("day",String(extra.dayOfYear));
+  if(Number.isFinite(extra.latitude)) query.set("lat",extra.latitude.toFixed(3));
+  if(Number.isFinite(extra.windAzimuth)) query.set("wind",String(extra.windAzimuth));
   try{
     const response=await fetch(api("/api/terrain/analyze?"+query),{method:"POST",body:payload.grid,
       headers:{"Content-Type":"application/octet-stream"},cache:"no-store",signal:controller.signal});
@@ -10214,48 +10510,152 @@ async function runAdaptiveResearch(payload,preferServer){
   }
   return {...await runResearchWorker(payload),engine:"browser worker"};
 }
-async function runSurfaceResearch(){
+function researchDayOfYear(){
+  const value=$("#researchSunDate").value;
+  if(value!=="today") return +value;
+  const now=new Date();return Math.round((Date.UTC(now.getFullYear(),now.getMonth(),now.getDate())-Date.UTC(now.getFullYear(),0,0))/864e5);
+}
+function researchRequestOptions(product){
+  if(product==="solar") return {dayOfYear:researchDayOfYear(),latitude:map.getCenter().lat};
+  if(product==="wind") return {windAzimuth:+$("#researchWind").value};
+  return {};
+}
+function researchBlendMode(product){
+  const chosen=$("#researchBlend").value;
+  return chosen==="auto"?RESEARCH_LOOKS[product]?.blend||"normal":chosen;
+}
+/* Blending needs the terrain and basemap as its backdrop, and those live in
+   the tile pane; the overlay pane is its own compositing group. A normal
+   layer stays in the overlay pane so it keeps its place in the layer stack. */
+function placeResearchOverlay(url,bounds,label,product){
+  const blend=researchBlendMode(product),pane=blend==="normal"?"overlayPane":"tilePane";
+  if(researchLayer&&researchLayer.options.pane===pane&&researchLayer.getBounds().equals(bounds)) researchLayer.setUrl(url);
+  else{
+    const zIndex=researchLayer?.options.zIndex??455;if(researchLayer) map.removeLayer(researchLayer);
+    researchLayer=L.imageOverlay(url,bounds,{opacity:researchOpacity()/100,zIndex,interactive:false,alt:label,pane,className:"csp-research-overlay"}).addTo(map);
+  }
+  const element=researchLayer.getElement();if(element) element.style.mixBlendMode=blend;
+}
+function researchPaletteOptions(){
+  const product=$("#researchProduct").value,look=RESEARCH_LOOKS[product],select=$("#researchPalette");
+  const ids=look?look.palettes:["standard"],current=researchPaletteId(product);
+  select.innerHTML=ids.map(id=>`<option value="${id}"${id===current?" selected":""}>${esc(RESEARCH_PALETTES[id].name)}</option>`).join("");
+  select.disabled=ids.length<2;
+  const palette=RESEARCH_PALETTES[current],swatch=$("#researchSwatch");
+  const stops=palette.stops?palette.stops.map(([t,c])=>`${c} ${t*100}%`):
+    palette.classes?palette.classes.map(([,c],i,all)=>`${c} ${i/all.length*100}% ${(i+1)/all.length*100}%`):
+    palette.categories?palette.categories.map((c,i,all)=>`${c} ${i/all.length*100}% ${(i+1)/all.length*100}%`):
+    palette.tint?[`#ffffff 0%`,`${palette.tint} 60%`,`#1a0d0a 100%`]:null;
+  swatch.style.backgroundImage=stops?`linear-gradient(90deg,${stops.join(",")})`:"";
+  swatch.hidden=!stops;
+}
+/* Recolour the cached result: palette, relief shading and blend changes are
+   instant and never touch the elevation or the worker. */
+function repaintResearch(){
+  const last=researchLast;if(!last) return;
+  const relief=+$("#researchRelief").value;
+  if(relief>0&&!last.hillshade) last.hillshade=researchHillshade(last.elevation,last.width,last.height,last.resolution);
+  const coloured=researchColourRaster(last.result,last.product,{relief,hillshade:last.hillshade});
+  placeResearchOverlay(coloured.url,last.bounds,last.result.label,last.product);
+  researchLayer._cspLegend=coloured.legend;
+  paintMapReadoutKeys();document.dispatchEvent(new CustomEvent("csp:layers-changed"));
+}
+let researchRepaintFrame=0;
+function scheduleResearchRepaint(){ if(!researchRepaintFrame) researchRepaintFrame=requestAnimationFrame(()=>{researchRepaintFrame=0;repaintResearch()}) }
+function syncResearchRelief(){ $("#researchReliefOut").textContent=$("#researchRelief").value+"%" }
+syncResearchRelief();researchPaletteOptions();
+
+async function runSurfaceResearch(options={}){
   const token=++researchToken,button=$("#researchRun"),out=$("#researchOut"),product=$("#researchProduct").value,scale=$("#researchScale").value;
-  saveResearchPrefs();button.disabled=true;out.innerHTML='<span class="spin"></span> assembling the best elevation available for this view…';
+  const quiet=!!options.quiet&&!!researchLayer;
+  saveResearchPrefs();button.disabled=true;
+  if(quiet) out.querySelector(".research-live")?.replaceChildren(Object.assign(document.createElement("span"),{className:"spin"}),"Updating for this view…");
+  else out.innerHTML='<span class="spin"></span> assembling the best elevation available for this view…';
   let source;
   try{
-    source=await researchElevationSource();if(token!==researchToken) return;
-    const raster=researchElevationGrid(source.layer);
+    /* Following the map should feel immediate: analyse what has loaded after
+       a short wait rather than holding for the last refinement. */
+    source=await researchElevationSource(quiet?4000:15000);if(token!==researchToken) return;
+    const raster=researchElevationGrid(source.layer),elevation=raster.grid.slice();
     const preferServer=shouldOffloadResearch(raster);
-    out.innerHTML='<span class="spin"></span> Analyzing elevation in this view…';
-    const result=await runAdaptiveResearch({id:token,product,scale,grid:raster.grid,width:raster.width,height:raster.height,resolution:raster.resolution},preferServer);
+    if(!quiet) out.innerHTML='<span class="spin"></span> Analyzing elevation in this view…';
+    const result=await runAdaptiveResearch({id:token,product,scale,grid:raster.grid,width:raster.width,height:raster.height,resolution:raster.resolution,
+      options:researchRequestOptions(product)},preferServer);
     if(token!==researchToken) return;
-    const coloured=researchColourRaster(result,product);
-    if(researchLayer) map.removeLayer(researchLayer);
-    researchLayer=L.imageOverlay(coloured.url,raster.bounds,{opacity:researchOpacity()/100,zIndex:455,interactive:false,alt:result.label}).addTo(map);
-    researchLayer._cspLegend=coloured.legend;
-    document.dispatchEvent(new CustomEvent("csp:layers-changed"));
-    const caution=result.notice?.warning||result.metadata?.caution||"Morphology is observational and must be checked against mapped geology and field evidence.";
+    researchLast={result,product,elevation,width:raster.width,height:raster.height,resolution:raster.resolution,bounds:raster.bounds,hillshade:null};
+    repaintResearch();
+    const meta=result.metadata||{};
+    const caution=result.notice?.warning||meta.caution||"Morphology is observational and must be checked against mapped geology and field evidence.";
+    const extra=product==="solar"?`<div class="fr"><span class="fk">Day</span><span class="fv">${meta.daylightHours} h daylight · noon sun ${meta.noonSunAltitude}°</span></div>`:
+      product==="wind"?`<div class="fr"><span class="fk">Wind from</span><span class="fv">${esc($("#researchWind").selectedOptions[0].textContent)} · ${researchFeet(meta.searchMetres)} upwind</span></div>`:
+      product==="avalanche"?`<div class="fr"><span class="fk">30–45° ground</span><span class="fv">${Math.round(meta.startZoneShare*100)}% of this view</span></div>`:
+      meta.radiusMetres?`<div class="fr"><span class="fk">Search radius</span><span class="fv">${researchFeet(meta.radiusMetres)}</span></div>`:"";
+    const fixed=["moraine","drainage","wetness","depressions","avalanche","solar"].includes(product);
     out.innerHTML=`<div class="fr"><span class="fk">Layer</span><span class="fv">${esc(result.label)}</span></div>`+
-      `<div class="fr"><span class="fk">Sampling</span><span class="fv">${(raster.resolution*3.28084).toFixed(1)} ft/pixel · z${raster.z}</span></div>`+
+      `<div class="fr"><span class="fk">Sampling</span><span class="fv">${(raster.resolution*3.28084).toFixed(1)} ft/pixel · z${raster.z}</span></div>`+extra+
       `<div class="fr"><span class="fk">Elevation used</span><span class="fv">${esc(raster.provenance.join(" + "))}${raster.provisional?" (still refining at capture)":""}</span></div>`+
       `<div class="note">Sample spacing is not survey accuracy. Mixed sources and survey edges can affect terrain derivatives.</div>`+
-      `<div class="fr"><span class="fk">Scale</span><span class="fv">${esc(product==="moraine"?"Automatic":scale)}</span></div>`+
-      `<div class="note">${esc(caution)}</div><button class="ghost" id="researchClear" type="button" style="width:100%;margin-top:8px">Clear analysis layer</button>`;
+      `<div class="fr"><span class="fk">Scale</span><span class="fv">${esc(fixed?"Automatic":scale)}</span></div>`+
+      `<div class="note">${esc(caution)}</div><div class="research-live" aria-live="polite">${$("#researchLive").checked?"Follows the map: pan or zoom and it re-analyzes.":""}</div>`+
+      `<button class="ghost" id="researchClear" type="button" style="width:100%;margin-top:8px">Clear analysis layer</button>`;
     $("#researchClear").onclick=()=>clearResearchLayer("Analysis layer cleared.");
     setCount("research",result.label);
-  }catch(error){ if(token===researchToken) out.innerHTML=`<span class="warn">${esc(error.message||"Analysis failed.")}</span>` }
+  }catch(error){
+    if(token!==researchToken) return;
+    if(quiet){const live=out.querySelector(".research-live");if(live) live.textContent=error.message||"Could not update this view."}
+    else out.innerHTML=`<span class="warn">${esc(error.message||"Analysis failed.")}</span>`;
+  }
   finally{ if(source?.temporary) map.removeLayer(source.layer);if(token===researchToken) button.disabled=false }
 }
-$("#researchRun").onclick=runSurfaceResearch;
-$("#researchProduct").onchange=saveResearchPrefs;$("#researchScale").onchange=saveResearchPrefs;
+/* Live mode: once a layer is showing, panning or zooming re-runs it for the
+   new view after the map settles, and parameter changes re-run at once. */
+function scheduleResearchLive(delay=650){
+  clearTimeout(researchLiveTimer);
+  if(!researchLayer||!$("#researchLive").checked||map3d) return;
+  researchLiveTimer=setTimeout(()=>{if(researchLayer&&!map3d) runSurfaceResearch({quiet:true})},delay);
+}
+map.on("moveend",()=>scheduleResearchLive());
+$("#researchRun").onclick=()=>runSurfaceResearch();
+$("#researchProduct").onchange=()=>{saveResearchPrefs();researchPaletteOptions();if(researchLayer) runSurfaceResearch({quiet:true})};
+for(const id of ["#researchScale","#researchSunDate","#researchWind"]) $(id).onchange=()=>{saveResearchPrefs();if(researchLayer) runSurfaceResearch({quiet:true})};
+$("#researchPalette").onchange=()=>{researchPalettes[$("#researchProduct").value]=$("#researchPalette").value;saveResearchPrefs();researchPaletteOptions();repaintResearch()};
+$("#researchRelief").addEventListener("input",()=>{syncResearchRelief();scheduleResearchRepaint()});
+$("#researchRelief").addEventListener("change",saveResearchPrefs);
+$("#researchBlend").onchange=()=>{saveResearchPrefs();repaintResearch()};
+$("#researchLive").onchange=()=>{saveResearchPrefs();const live=$("#researchOut .research-live");if(live) live.textContent=$("#researchLive").checked?"Follows the map: pan or zoom and it re-analyzes.":""};
 $("#researchOpacity").addEventListener("input",syncResearchOpacity);
 $("#researchOpacity").addEventListener("change",saveResearchPrefs);
 function clearResearchLayer(message){
-  if(researchLayer){map.removeLayer(researchLayer);researchLayer=null}setCount("research","");
-  $("#researchOut").textContent=message;
+  ++researchToken;clearTimeout(researchLiveTimer);
+  if(researchLayer){map.removeLayer(researchLayer);researchLayer=null}researchLast=null;setCount("research","");
+  $("#researchOut").textContent=message;$("#researchRun").disabled=false;paintCursorAnalysis();
+  document.dispatchEvent(new CustomEvent("csp:layers-changed"));
 }
 $("#researchReset").onclick=()=>{
-  ++researchToken;researchServerController?.abort();researchServerController=null;
+  researchServerController?.abort();researchServerController=null;
   $("#researchProduct").value="lrm";$("#researchScale").value="balanced";$("#researchOpacity").value=82;
-  syncResearchOpacity();clearResearchLayer("Analysis reset. Choose a product and analyze the current view.");
-  $("#researchRun").disabled=false;saveResearchPrefs();
+  $("#researchRelief").value=0;$("#researchBlend").value="auto";$("#researchSunDate").value="355";$("#researchWind").value="225";
+  $("#researchLive").checked=true;researchPalettes={};
+  syncResearchOpacity();syncResearchRelief();researchPaletteOptions();
+  clearResearchLayer("Analysis reset. Choose a product and analyze the current view.");saveResearchPrefs();
 };
+/* Cursor readout: the analysed value under the pointer, from the cached
+   raster. Rows are linear in Web-Mercator y, like the grid itself. */
+function researchValueAt(ll){
+  const last=researchLast;if(!last||!ll||!researchLayer) return null;
+  const b=last.bounds,mx=lng=>(lng+180)/360,my=lat=>{const s=Math.sin(lat*Math.PI/180);return .5-Math.log((1+s)/(1-s))/(4*Math.PI)};
+  const x=Math.floor((mx(ll.lng)-mx(b.getWest()))/(mx(b.getEast())-mx(b.getWest()))*last.width);
+  const y=Math.floor((my(ll.lat)-my(b.getNorth()))/(my(b.getSouth())-my(b.getNorth()))*last.height);
+  if(x<0||y<0||x>=last.width||y>=last.height) return null;
+  const i=y*last.width+x,value=last.result.data[i];
+  return Number.isFinite(value)?{value,secondary:last.result.secondary?.[i],product:last.product}:null;
+}
+function paintCursorAnalysis(){
+  const element=$("#cursorAnalysis");if(!element) return;
+  const sample=researchOpacity()>0?researchValueAt(cursorLocation):null,look=sample&&RESEARCH_LOOKS[sample.product];
+  const text=look?look.read(sample.value,sample.secondary):"";
+  element.hidden=!text;if(element.textContent!==text) element.textContent=text;
+}
 
 const ELEV_UNIT={m:1, ft:0.3048, yd:0.9144};
 let elevLayer=null;
@@ -10811,7 +11211,7 @@ function cursorLoadedElevation(ll){
 }
 const readoutRoot=document.createElement("aside");readoutRoot.id="mapReadout";
 readoutRoot.setAttribute("aria-label","Cursor location and visible layer color keys");
-readoutRoot.innerHTML='<div class="cursor-location"><div id="cursorCoordinates">Move the cursor over the map</div><div id="cursorElevation">Elevation —</div></div><div class="map-colour-keys"></div>';
+readoutRoot.innerHTML='<div class="cursor-location"><div id="cursorCoordinates">Move the cursor over the map</div><div id="cursorElevation">Elevation —</div><div id="cursorAnalysis" hidden></div></div><div class="map-colour-keys"></div>';
 $("#app").append(readoutRoot);
 let cursorLocation=null,cursorElevation=null,cursorPointer=null,cursorFrame=0,cursorTimer=null,cursorRequest=null,snapshotCursorLocation=null;
 const cursorTiles=new Map(),snowColourKeys=new Map();
@@ -10939,7 +11339,7 @@ function updateCursorLocation(){
     }
   }else ll=map.containerPointToLatLng(p);
   setCursorStale(false);cursorLocation={lat:ll.lat,lng:((ll.lng+180)%360+360)%360-180};
-  $("#cursorCoordinates").textContent=cursorCoordinates(cursorLocation);refreshCursorElevation();
+  $("#cursorCoordinates").textContent=cursorCoordinates(cursorLocation);refreshCursorElevation();paintCursorAnalysis();
 }
 document.addEventListener("pointermove",event=>{
   if(event.pointerType&&event.pointerType!=="mouse")return;
@@ -11041,8 +11441,8 @@ $("#q").addEventListener("blur",()=>setTimeout(acHide,120));
 document.addEventListener("click",e=>{ if(!e.target.closest("#iw")) acHide() });
 })();
 </script>
-<script src="markup-3d.js?build=2026-10-18a"></script>
-<script src="markup.js?build=2026-10-18a"></script>
-<script src="ui-system.js?build=2026-10-18a"></script>
+<script src="markup-3d.js?build=2026-10-19a"></script>
+<script src="markup.js?build=2026-10-19a"></script>
+<script src="ui-system.js?build=2026-10-19a"></script>
 </body>
 </html>

@@ -110,7 +110,8 @@
       const location = name === "u_size" ? sizeLocation : name === "u_height" ? heightLocation : locations[name];
       if (location !== null && location !== undefined) {
         if (Array.isArray(value)) {
-          if (value.length === 2) gl.uniform2f(location, ...value);
+          if (shaders.UNIFORM_ARRAYS && shaders.UNIFORM_ARRAYS[name] === 4) gl.uniform4fv(location, value);
+          else if (value.length === 2) gl.uniform2f(location, ...value);
           else gl.uniform3f(location, ...value);
         } else if (integer) gl.uniform1i(location, value);
         else gl.uniform1f(location, value);

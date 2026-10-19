@@ -15,7 +15,7 @@ const cog   = require("./cog.js");
 const cacheBudgetCore=require("./cache-budget.js");
 const {TerrainPool,TerrainPoolError}=require("./terrain-pool.js");
 const researchAnalysis=require("./research-analysis.js");
-const {DnrStore}=require("./wadnr.js");
+const {DnrStore,tileBounds:dnrTileBounds}=require("./wadnr.js");
 
 const ROOT  = __dirname;
 const PORT  = Number(process.env.PORT || 8765);
@@ -43,7 +43,7 @@ const MIME = {".html":"text/html; charset=utf-8",".js":"text/javascript",".mjs":
   ".svg":"image/svg+xml",".wasm":"application/wasm",".md":"text/markdown; charset=utf-8",".txt":"text/plain; charset=utf-8",".woff2":"font/woff2"};
 const PUBLIC_FILES = new Set(["index.html","version.js","ui-theme.css","ui-system.css","ui-system.js","mosaic-core.js","terrain-core.js","terrain-raster.js", "terrain-drape-core.js", "terrain-drape-pool.js", "terrain-drape-worker.js",
   "public-terrain.js","public-terrain-worker.js","vendor/lerc/LercDecode.js","vendor/lerc/LercDecode.es.js","vendor/lerc/lerc-wasm.wasm",
-  "elevation-bands.js","elevation-tile-core.js","tile-pipeline.js","gpu-terrain-shaders.js","gpu-terrain-store.js","gpu-terrain-engine.js","gpu-terrain-layer.js", "gpu-terrain-3d-cache.js", "gpu-terrain-3d-renderer.js", "gpu-terrain-3d-layer.js","png-stream.js","markup.js", "markup-3d.js","wa-archaeology.js","glacial-research-core.js","glacial-segment-core.js","glacial-segment-features.js","glacial-moraine-classifier.js","glacial-zone-core.js","glacial-zone-features.js","glacial-belt-classifier.js","glacial-moraine-analysis.js","research-analysis.js","research-worker.js","sw.js","manifest.json",
+  "elevation-bands.js","elevation-tile-core.js","tile-pipeline.js","gpu-terrain-shaders.js","lidar-render.js","lidar-studio.js","gpu-terrain-store.js","gpu-terrain-engine.js","gpu-terrain-layer.js", "gpu-terrain-3d-cache.js", "gpu-terrain-3d-renderer.js", "gpu-terrain-3d-layer.js","png-stream.js","markup.js", "markup-3d.js","wa-archaeology.js","glacial-research-core.js","glacial-segment-core.js","glacial-segment-features.js","glacial-moraine-classifier.js","glacial-zone-core.js","glacial-zone-features.js","glacial-belt-classifier.js","glacial-moraine-analysis.js","terrain-analysis-core.js","research-analysis.js","research-worker.js","sw.js","manifest.json",
   "point-cloud-core.js","point-cloud-viewer.js","point-cloud-catalog.json","maxar-catalog.json","nadi1-cordilleran.json",
   "icon-180.png","icon-192.png","icon-512.png","vendor/maplibre-gl.mjs","vendor/maplibre-gl-shared.mjs",
   "vendor/maplibre-gl-worker.mjs","vendor/maplibre-gl.css","vendor/leaflet-rotate.umd.min.js"]);
@@ -778,7 +778,9 @@ function validateAnalysisParams(searchParams){
     throw new HttpError(400,"terrain analysis dimensions are outside the safe bounds");
   if(!Number.isFinite(resolution)||resolution<limits.minResolution||resolution>limits.maxResolution)
     throw new HttpError(400,"terrain analysis resolution is outside the safe bounds");
-  return {product,scale,width,height,resolution,bytes:width*height*4};
+  const options=researchAnalysis.analysisOptions({options:{dayOfYear:searchParams.get("day")??undefined,
+    latitude:searchParams.get("lat")??undefined,windAzimuth:searchParams.get("wind")??undefined}});
+  return {product,scale,width,height,resolution,options,bytes:width*height*4};
 }
 
 /* -------------------------------------------------- area manifests
@@ -1058,7 +1060,7 @@ const server = http.createServer(async (req,res)=>{
       const upload=await readBody(req,MAX_ANALYSIS_BODY);
       if(upload.length!==params.bytes) throw new HttpError(400,"terrain analysis payload length does not match its dimensions");
       const digest=crypto.createHash("sha256").update(upload).digest("hex");
-      const analysisKey=`research-v1:${params.product}:${params.scale}:${params.width}x${params.height}:${params.resolution}:${digest}`;
+      const analysisKey=`research-v1:${params.product}:${params.scale}:${params.width}x${params.height}:${params.resolution}:${JSON.stringify(params.options)}:${digest}`;
       const hit=analysisCacheGet(analysisKey);
       if(hit) return send(res,200,ANALYSIS_MIME,hit,{"X-Cache":"HIT","X-CSP-Analysis-Engine":"m2-worker-thread","Cache-Control":"no-store"});
 
@@ -1113,6 +1115,10 @@ const server = http.createServer(async (req,res)=>{
     }
     if(p==="/api/wadnr/status")
       return send(res,200,"application/json",Buffer.from(JSON.stringify(dnr.status())),{"Cache-Control":"no-store"});
+    /* What has moved to iCloud Drive. Selecting DNR over one of these areas, or
+       fetching it, copies it back instead of downloading it again. */
+    if(p==="/api/wadnr/archive")
+      return send(res,200,"application/json",jsonBody({...dnr.archive.status(),files:dnr.archive.list()}),{"Cache-Control":"no-store"});
     if(p==="/api/wadnr/warm"){
       const job=await readJson(req,{});
       if(!validBbox(job.bbox)||job.bbox[1]<-85||job.bbox[3]>85)throw new HttpError(400,"bbox=w,s,e,n required");
@@ -1533,7 +1539,8 @@ const server = http.createServer(async (req,res)=>{
       const z=+m[1],x=+m[2],y=+m[3],limit=2**z;
       if(z<0||z>18||x>=limit||y>=limit)throw new HttpError(400,"bad tile coordinates");
       let state={state:"ready",revision:dnr.index.revision};
-      if(u.searchParams.get("acquire")!=="0"){
+      if(u.searchParams.get("acquire")==="0")dnr.touch(dnrTileBounds(z,x,y));
+      else{
         try{state=await dnr.ensureTile(z,x,y);}
         catch(error){state={state:"error",error:String(error.message||error),revision:dnr.index.revision};}
       }

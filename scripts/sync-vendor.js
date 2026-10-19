@@ -33,7 +33,9 @@ const iconNames=[
   "search","settings","settings-2","sliders-horizontal","tags","triangle-alert",
   /* markup tools */
   "pen-line","hand","mouse-pointer-2","pencil","minus","move-up-right","pentagon","square","circle","type","map-pin",
-  "undo-2","trash-2","check","plus"
+  "undo-2","trash-2","check","plus",
+  /* LiDAR Studio */
+  "waves","eye","eye-off","palette","sparkles","blend","x","arrow-up","arrow-down"
 ];
 const iconDir=path.join(vendor,"icons");
 fs.mkdirSync(iconDir,{recursive:true});
