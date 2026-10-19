@@ -220,9 +220,23 @@ Download this view acquires DNR rasters when DNR is explicitly selected.
 The first download can take minutes because DNR provides ZIP archives containing
 large TIFFs. A single ingestion worker streams downloads to disk and builds
 small numeric overviews; map requests use bounded windows and share cached
-requests. The default DNR cache budget is 4 GiB, the per-archive limit 2 GiB, and
-the normal 8 GiB free-disk reserve remains enforced. Configure
-`CSP_DNR_CACHE_GB` and `CSP_DNR_ARCHIVE_GB` if needed. View downloads are limited
+requests. The default DNR cache budget is 32 GiB (up to 1024), the per-archive
+limit 2 GiB, and the normal 8 GiB free-disk reserve remains enforced. Configure
+`CSP_DNR_CACHE_GB` and `CSP_DNR_ARCHIVE_GB` if needed.
+
+When the budget is full, the least recently used DNR rasters move to iCloud
+Drive under `Clear Skies Portal/WA DNR lidar` instead of blocking new downloads.
+Each archived raster is a folder holding the native TIFF, its overviews and a
+`record.json`; `index.json` beside them is a spatial index rebuilt from those
+records if it is lost. Selecting DNR over an archived area, or fetching it,
+copies the rasters back from iCloud (downloading them first if macOS offloaded
+them) with no new DNR request, and the status line reads "Loading DNR elevation
+from iCloud". The iCloud copy stays, so archiving it again is a local delete.
+`GET /api/wadnr/archive` lists what is archived. Set `CSP_DNR_ARCHIVE_DIR` to
+use another folder, or `off` to disable archiving; without an archive the store
+pauses at its budget as before and deletes nothing. Moving files into iCloud
+frees the cache budget, but disk space returns only when macOS offloads them
+(Optimize Mac Storage). View downloads are limited
 to 32 acquisition cells; zoom in if the view exceeds that bound. Completed
 rasters persist across restarts and styles. Existing imagery, markup, and USGS
 caches remain intact.

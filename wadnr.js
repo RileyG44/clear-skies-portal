@@ -4,6 +4,7 @@
 const fs=require("node:fs"),path=require("node:path"),https=require("node:https");
 const zlib=require("node:zlib");
 const {Worker}=require("node:worker_threads");
+const {DnrArchive,defaultArchiveRoot}=require("./dnr-archive.js");
 const HOST="lidarportal.dnr.wa.gov",TTL=7*86400000;
 const intersects=(a,b)=>a[0]<b[2]&&a[2]>b[0]&&a[1]<b[3]&&a[3]>b[1];
 const contains=(a,b)=>a[0]<=b[0]&&a[1]<=b[1]&&a[2]>=b[2]&&a[3]>=b[3];
@@ -57,12 +58,13 @@ function jsonRequest(pathname,body){
   });
 }
 class DnrStore {
-  constructor(cacheDir,{request=jsonRequest,workerFactory=options=>new Worker(path.join(__dirname,"wadnr-ingest-worker.js"),options)}={}){
+  constructor(cacheDir,{request=jsonRequest,workerFactory=options=>new Worker(path.join(__dirname,"wadnr-ingest-worker.js"),options),
+    archive}={}){
     this.cacheDir=cacheDir;this.dir=path.join(cacheDir,"wadnr");fs.mkdirSync(this.dir,{recursive:true});
     this.request=request;this.workerFactory=workerFactory;this.catalogue=null;this.cataloguePending=null;this.retryAt=0;
     this.queue=new Map();this.active=null;this.worker=null;this.errors=new Map();this.closed=false;
     this.warm={running:false,total:0,done:0,bytes:0,error:null};
-    this.maxBytes=Math.max(1,Math.min(16,Number(process.env.CSP_DNR_CACHE_GB)||4))*1073741824;
+    this.maxBytes=Math.max(1,Math.min(1024,Number(process.env.CSP_DNR_CACHE_GB)||32))*1073741824;
     this.maxArchiveBytes=Math.min(this.maxBytes,Math.max(.1,Math.min(4,Number(process.env.CSP_DNR_ARCHIVE_GB)||2))*1073741824);
     this.minFreeBytes=Math.max(0,Number(process.env.CSP_CACHE_MIN_FREE_GB)||8)*1073741824;
     try{this.index=JSON.parse(fs.readFileSync(path.join(this.dir,"index.json"),"utf8"));}
@@ -70,6 +72,48 @@ class DnrStore {
     // Only completed, atomically installed rasters enter the persisted index.
     this.index.files=this.index.files.filter(f=>fs.existsSync(path.join(this.dir,f.file))&&
       (f.levels||[]).every(l=>fs.existsSync(path.join(this.dir,f.overviewDir,l.path))));
+    for(const name of fs.readdirSync(this.dir))
+      if(name.startsWith("restore-"))fs.rmSync(path.join(this.dir,name),{recursive:true,force:true});
+    // Over budget, the least recently used rasters move to iCloud Drive.
+    this.archive=archive===undefined?new DnrArchive(defaultArchiveRoot()):archive||new DnrArchive(null);
+    // Last-use times live apart from index.json so map reads do not make the
+    // terrain workers reload the index.
+    try{this.usage=JSON.parse(fs.readFileSync(path.join(this.dir,"usage.json"),"utf8"));}catch{this.usage={};}
+    this.usageTimer=null;
+  }
+  touch(bbox){
+    const now=Date.now();let changed=false;
+    for(const f of this.index.files)if(intersects(f.bounds,bbox)&&now-(this.usage[f.key]||0)>60000){this.usage[f.key]=now;changed=true;}
+    if(changed&&!this.usageTimer){
+      this.usageTimer=setTimeout(()=>{this.usageTimer=null;this.saveUsage();},30000);this.usageTimer.unref?.();
+    }
+  }
+  saveUsage(){
+    const keys=new Set(this.index.files.map(f=>f.key));
+    for(const key of Object.keys(this.usage))if(!keys.has(key))delete this.usage[key];
+    try{atomic(path.join(this.dir,"usage.json"),this.usage);}catch{}
+  }
+  lastUsed(f){return this.usage[f.key]||f.addedAt||0;}
+  /* Archive least recently used rasters until `need` bytes fit the budget.
+     Rasters overlapping `protect` (the area being prepared) always stay. */
+  async makeRoom(need,protect){
+    if(!this.archive.available)return;
+    const used=()=>this.index.files.reduce((sum,f)=>sum+(f.bytes||0),0);
+    const candidates=this.index.files.filter(f=>!intersects(f.bounds,protect)).sort((a,b)=>this.lastUsed(a)-this.lastUsed(b));
+    for(const f of candidates){
+      if(this.maxBytes-used()>=need||this.closed)return;
+      if(this.active)this.active.state="archiving";
+      // Unlist first so no tile reads a raster mid-move.
+      this.index.files=this.index.files.filter(x=>x.key!==f.key);
+      this.index.regions=this.index.regions.filter(r=>!(r.datasetId===f.datasetId&&intersects(r.bbox,f.bounds)));
+      this.index.revision++;this.save();
+      try{await this.archive.store(this.dir,f,{lastUsed:this.usage[f.key]||null});}
+      catch(error){
+        this.index.files.push(f);this.index.revision++;this.save();
+        throw new Error(`Could not move DNR data to iCloud: ${error.message||error}`);
+      }
+      delete this.usage[f.key];
+    }
   }
   async catalog(){
     if(this.catalogue&&Date.now()-this.catalogue.at<TTL)return this.catalogue;
@@ -108,7 +152,7 @@ class DnrStore {
   }
   status(){
     return {revision:this.index.revision,files:this.index.files.length,
-      bytes:this.index.files.reduce((sum,f)=>sum+(f.bytes||0),0),maxBytes:this.maxBytes,
+      bytes:this.index.files.reduce((sum,f)=>sum+(f.bytes||0),0),maxBytes:this.maxBytes,archive:this.archive.status(),
       active:this.active?{project:this.active.project,state:this.active.state,bytes:this.active.bytes||0,fraction:this.active.fraction||0}:null,
       queued:this.queue.size};
   }
@@ -142,7 +186,8 @@ class DnrStore {
     this.warm.stop=true;return {...this.warm,cancelled:true};
   }
   async ensureTile(z,x,y){
-    const bbox=tileBounds(z,x,y),catalogue=await this.catalog();
+    const bbox=tileBounds(z,x,y);this.touch(bbox);
+    const catalogue=await this.catalog();
     const projects=catalogue.projects.filter(p=>p.dtmDataset!=null&&intersects(p.bounds,bbox));
     if(!projects.length)return {state:"empty",revision:this.index.revision};
     // Nearby cached native rasters can serve any zoom. Acquire only at useful
@@ -176,12 +221,25 @@ class DnrStore {
     const job=[...this.queue.values()].sort((a,b)=>b.touched-a.touched)[0];this.queue.delete(job.id);
     const bytes=this.status().bytes,remaining=this.maxBytes-bytes;
     const stat=fs.statfsSync(this.cacheDir),free=Number(stat.bavail)*Number(stat.bsize);
-    if(remaining<64*1024*1024||free<this.minFreeBytes+64*1024*1024){
-      this.errors.set(job.id,{at:Date.now(),message:"DNR acquisition paused at its storage budget"});
+    if(free<this.minFreeBytes+64*1024*1024||(remaining<64*1024*1024&&!this.archive.available)){
+      const message=free<this.minFreeBytes+64*1024*1024?"DNR acquisition paused: the disk is near its free-space reserve":
+        "DNR acquisition paused at its storage budget; iCloud Drive is not available to archive older data";
+      this.errors.set(job.id,{at:Date.now(),message});
       this.queue.clear();return;
     }
     this.active=job;job.state="checking";
     (async()=>{
+      // Rasters archived to iCloud come back before anything is downloaded.
+      const archived=this.archive.find(job.datasetId,job.bbox).filter(e=>!this.index.files.some(f=>f.key===e.key));
+      for(const entry of archived){
+        await this.makeRoom((entry.bytes||0)+64*1024*1024,job.bbox);
+        if(this.closed)return;
+        job.state="restoring";
+        const record=await this.archive.restore(entry,this.dir);
+        if(this.closed)return;
+        this.index.files.push({...record,addedAt:Date.now()});this.usage[record.key]=Date.now();
+        this.index.revision++;this.save();
+      }
       const known=this.index.files.filter(f=>f.datasetId===job.datasetId);
       const parts=uncovered(job.bbox,known.map(f=>f.bounds));
       if(!parts.length){this.index.regions.push({datasetId:job.datasetId,bbox:job.bbox});this.save();return;}
@@ -192,13 +250,16 @@ class DnrStore {
       if(!Array.isArray(rows))throw new Error("Invalid DNR download coverage response");
       const dataset=rows.find(r=>r.dataset_id===job.datasetId&&r.dataset_name==="DTM");
       if(!dataset){this.index.regions.push({datasetId:job.datasetId,bbox:job.bbox});this.save();return;}
+      await this.makeRoom(this.maxArchiveBytes,job.bbox);
+      if(this.closed)return;
+      const left=this.maxBytes-this.status().bytes;
       // Temporary ZIP plus extracted raster both occupy disk during ingestion.
-      const limit=Math.min(this.maxArchiveBytes,remaining,(free-this.minFreeBytes-64*1024*1024)/2.1);
+      const limit=Math.min(this.maxArchiveBytes,left,(free-this.minFreeBytes-64*1024*1024)/2.1);
       if(dataset.bytes>limit||dataset.files>32)throw new Error("DNR area exceeds the download budget; zoom in to a smaller area");
       job.state="downloading";
       const result=await this.acquire({...job,geometry:shape,cacheDir:this.cacheDir,maxBytes:limit,minFreeBytes:this.minFreeBytes,known});
       const files=new Map(this.index.files.map(f=>[f.key,f]));
-      for(const f of result.files)files.set(f.key,{...f,year:job.year});
+      for(const f of result.files)files.set(f.key,{addedAt:Date.now(),...f,year:job.year});
       this.index.files=[...files.values()];this.index.regions.push({datasetId:job.datasetId,bbox:job.bbox});
       this.index.revision++;this.save();
     })().catch(error=>{
@@ -231,7 +292,7 @@ class DnrStore {
   }
   save(){atomic(path.join(this.dir,"index.json"),this.index);}
   async close(){
-    this.closed=true;this.queue.clear();this.warm.stop=true;
+    this.closed=true;clearTimeout(this.usageTimer);this.usageTimer=null;this.saveUsage();this.queue.clear();this.warm.stop=true;
     const temp=this.active?.tempDir;
     await this.worker?.terminate();
     if(temp&&path.dirname(temp)===this.dir&&path.basename(temp).startsWith("download-"))
