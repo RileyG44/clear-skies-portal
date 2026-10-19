@@ -43,6 +43,7 @@
     host=host||{};
     const storage=host.storage!==undefined?host.storage:(()=>{try{return globalThis.localStorage}catch(_){return null}})();
     let state=load(),fitted={},flatFitted={},remFloor=null,expanded=null,selectedStop=0,saveTimer=0,commitFrame=0,destroyed=false,previousMix=null;
+    const disclosures=new Set();
     const previews=new Map();let previewQueue=[],previewTimer=0;
     const dem=R.previewTerrain(168,112);
 
@@ -91,22 +92,22 @@
       container.innerHTML="";
       container.toggleAttribute("data-disabled",!gpu());
       if(!gpu()){
-        container.append(el("p","control-hint ls-note","Colour layers, looks and effects need GPU rendering, which this browser doesn’t provide. The classic styles below still work."));
+        container.append(el("p","control-hint ls-note","Colour layers, looks and effects need GPU rendering, which this browser doesn’t provide. The terrain modes above still work."));
         return;
       }
-      container.append(renderLooks(),renderLayers(s),renderEffects(s));
+      container.append(renderLayers(s),renderLooks(),renderEffects(s));
       if(scroll!==undefined) container.closest(".pane-b").scrollTop=scroll;
     }
 
     /* ------------------------------------------------------------- looks */
     function allLooks(){ return R.LOOKS.map(l=>Object.assign({user:false},l)).concat(state.userLooks.map(l=>Object.assign({user:true,blurb:"Your saved look."},l))) }
     function renderLooks(){
-      const wrap=el("div","ls-section ls-looks-section");
-      const head=el("div","ls-head",`<h3 class="menu-section-title">Looks</h3>`);
+      const wrap=disclosure("looks","Looks","ls-section ls-looks-section");
+      const head=el("div","ls-head",`<span class="control-hint">Apply or save a complete mix</span>`);
       const saveButton=el("button","linkbtn ls-save-look","Save current");saveButton.type="button";
       saveButton.disabled=!style();saveButton.title=style()?"Save these colours, layers and effects as a look":"Choose a layer first";
       head.append(saveButton);wrap.append(head);
-      wrap.append(el("p","control-hint","Presets replace the whole layer mix. Customize each layer below."));
+      wrap.append(el("p","control-hint","Presets replace the whole layer mix. Customize individual layers above."));
       const strip=el("div","ls-looks");strip.setAttribute("role","radiogroup");strip.setAttribute("aria-label","Looks");
       const current=style()?state.look:null,looks=allLooks();
       looks.forEach(look=>{
@@ -225,10 +226,10 @@
     }
     function renderLayers(s){
       const wrap=el("div","ls-section");
-      const head=el("div","ls-head",`<h3 class="menu-section-title">Layers</h3><span class="pane-n">${layerKeys().length} of ${R.MAX_LAYERS}</span>`);
+      const head=el("div","ls-head ls-layers-head",`<h3 class="menu-section-title">Layers</h3><span class="pane-n">${layerKeys().length} of ${R.MAX_LAYERS}</span>`);
       wrap.append(head);
       wrap.append(el("p","control-hint","Open a layer to edit colors, opacity and blending. Layers at the top draw over those below."));
-      if(!s)wrap.append(el("p","control-hint","Add your first layer, or choose a preset above."));
+      if(!s)wrap.append(el("p","control-hint","Add your first layer, or choose a look below."));
       const list=el("ol","ls-layers");list.setAttribute("aria-label","Terrain layers, top first");
       const keys=layerKeys().reverse();
       keys.forEach(key=>list.append(renderLayer(key)));
@@ -257,7 +258,7 @@
         event.preventDefault();items[(index+step+items.length)%items.length].focus();
       });
       menu.addEventListener("focusout",event=>{if(!add.contains(event.relatedTarget)) closeMenu()});
-      add.append(addButton,menu);wrap.append(add);
+      add.append(addButton,menu);head.append(add);
       return wrap;
     }
     /* New overlays get a sensible starting blend: hillshade multiplies so it
@@ -350,10 +351,19 @@
         const step={ArrowRight:1,ArrowDown:1,ArrowLeft:-1,ArrowUp:-1}[event.key];if(index<0||!step) return;
         event.preventDefault();choosePalette(list[(index+step+list.length)%list.length].dataset.palette);
       });
-      editor.append(field("Palette",palettes,"ls-field-wide"));
-
-      /* Gradient editor */
-      editor.append(renderRamp(key,layer));
+      const colours=disclosure("palette:"+key,"Palette & colours","ls-palette-section");
+      const summary=colours.querySelector("summary");
+      summary.append(el("span","ls-swatch","") );
+      summary.lastChild.dataset.paletteSwatch="";
+      summary.lastChild.style.background=R.gradientCss(R.paletteStops(layer),layer.reverse);
+      const paletteName=el("span","ls-disclosure-value",esc(layer.stops?"Custom":R.PALETTES[layer.palette]?.name||""));
+      paletteName.dataset.paletteName="";summary.append(paletteName);
+      const colourBody=el("div","ls-disclosure-body");
+      colours.append(colourBody);editor.append(colours);
+      const colourActions=el("div","ls-actions");colourBody.append(colourActions);
+      colourBody.append(palettes,renderRamp(key,layer));
+      const advanced=disclosure("advanced:"+key,"Range & shading","ls-advanced");
+      const advancedBody=el("div","ls-disclosure-body");advanced.append(advancedBody);editor.append(advanced);
 
       /* Range */
       if(spec.family!=="lines"&&spec.unit!=="shade"){
@@ -387,7 +397,7 @@
           };
           range.append(auto);
         }
-        editor.append(field("Range",range,"ls-field-wide"));
+        advancedBody.append(field("Range",range,"ls-field-wide"));
       }
 
       /* Curve and bands */
@@ -410,13 +420,13 @@
         const wrap=el("div","ls-range-inputs");wrap.append(input,el("span","ls-unit","ft"));
         tools.append(field("Interval",wrap));
       }
-      editor.append(tools);
+      advancedBody.append(tools);
 
       /* Actions */
       const actions=el("div","ls-actions");
       const reverse=pill("Reverse",()=>{updateLayer(key,{reverse:!layerFor(key).reverse},{rerender:true});container.querySelector(`[data-key="${key}"] [data-action="reverse"]`)?.focus()});
       reverse.dataset.action="reverse";reverse.setAttribute("aria-pressed",String(layer.reverse));
-      actions.append(reverse);
+      colourActions.append(reverse);
       if(key!=="base"){
         const index=+key.split(":")[1];
         const up=pill("",()=>moveOverlay(index,1),"arrow-up","Move layer up");up.disabled=index>=state.overlays.length-1;
@@ -424,13 +434,13 @@
         const remove=pill("Remove",()=>{state.overlays.splice(index,1);expanded=null;commit({rerender:true});container.querySelector(".ls-add-button")?.focus()},"trash-2");
         actions.append(up,down,remove);
       }
-      const reset=pill("Reset",()=>{
+      const reset=pill("Reset colors",()=>{
         const fresh=R.defaultLayer(layer.style);
-        if(key!=="base"){fresh.blend=layer.blend;fresh.opacity=layer.opacity}
+        fresh.blend=layer.blend;fresh.opacity=layer.opacity;fresh.visible=layer.visible;
         delete fitted[key];setLayer(key,fresh);commit({rerender:true});
       },"rotate-ccw","Reset this layer’s colours");
-      actions.append(reset);
-      editor.append(actions);
+      colourActions.append(reset);
+      if(actions.childElementCount) editor.prepend(actions);
       return editor;
     }
     function moveOverlay(index,direction){
@@ -439,6 +449,13 @@
       const a=fitted["overlay:"+index],b=fitted["overlay:"+target];fitted["overlay:"+index]=b;fitted["overlay:"+target]=a;
       expanded="overlay:"+target;commit({rerender:true});
       container.querySelector(`[data-key="${expanded}"] .ls-layer-main`)?.focus();
+    }
+    function disclosure(id,label,cls){
+      const wrap=el("details","ls-disclosure "+(cls||""));
+      wrap.open=disclosures.has(id);
+      wrap.append(el("summary","",esc(label)));
+      wrap.addEventListener("toggle",()=>{if(wrap.isConnected){if(wrap.open)disclosures.add(id);else disclosures.delete(id)}});
+      return wrap;
     }
     function pill(label,onclick,iconName,aria){
       const b=el("button","ls-pill",(iconName?`<img src="${icon(iconName)}" alt="" aria-hidden="true">`:"")+(label?`<span>${esc(label)}</span>`:""));
@@ -562,8 +579,7 @@
 
     /* ----------------------------------------------------------- effects */
     function renderEffects(s){
-      const wrap=el("div","ls-section");
-      wrap.append(el("div","ls-head",`<h3 class="menu-section-title">Effects</h3>`));
+      const wrap=disclosure("effects","Terrain effects","ls-section");
       if(!s){wrap.append(el("p","control-hint","Effects apply once a layer is on."));return wrap}
       const e=state.effects,grid=el("div","ls-sliders");
       const setEffect=patch=>{state.effects=R.normalizeEffects(Object.assign({},state.effects,patch));commit()};
@@ -599,6 +615,9 @@
         const swatch=li.querySelector("[data-swatch]"),meta=li.querySelector("[data-meta]");
         if(swatch) swatch.style.background=R.gradientCss(R.paletteStops(layer),layer.reverse);
         if(meta) meta.textContent=layerMeta(key,layer);
+        const paletteName=li.querySelector("[data-palette-name]"),paletteSwatch=li.querySelector("[data-palette-swatch]");
+        if(paletteName)paletteName.textContent=layer.stops?"Custom":R.PALETTES[layer.palette]?.name||"";
+        if(paletteSwatch)paletteSwatch.style.background=R.gradientCss(R.paletteStops(layer),layer.reverse);
       });
       const current=style()?state.look:null;
       const looks=[...container.querySelectorAll(".ls-look")];

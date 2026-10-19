@@ -993,8 +993,8 @@ body.pane-reordering,body.pane-reordering *{cursor:grabbing!important;user-selec
 }
 
 </style>
-<link rel="stylesheet" href="ui-theme.css?build=2026-10-19b">
-<link rel="stylesheet" href="ui-system.css?build=2026-10-19b">
+<link rel="stylesheet" href="ui-theme.css?build=2026-10-19c">
+<link rel="stylesheet" href="ui-system.css?build=2026-10-19c">
 <style>
 /* The redesign restructures the legacy DOM rather than replacing it, and the
    script that does so is the last thing on the page - so the browser paints the
@@ -1253,9 +1253,8 @@ html.csp-boot body{visibility:hidden}
           </div>
           <details class="terrain-appearance terrain-layer-section" id="terLidar" open>
             <summary>LiDAR Terrain Mode <span class="pane-n" id="terLidarState">off</span></summary>
-            <div class="terrain-subsection lidar-studio" id="terStudio" aria-label="LiDAR colours, layers and effects"></div>
             <div class="fgrid terrain-fields">
-              <label for="terStyle">Bottom layer</label>
+              <label for="terStyle">Terrain mode</label>
               <select id="terStyle" aria-describedby="terStyleHint">
                 <option value="off" selected>Off</option>
                 <option value="hs">Hillshade</option>
@@ -1271,6 +1270,11 @@ html.csp-boot body{visibility:hidden}
                 <option value="c25">Contours &mdash; 25 ft</option>
               </select>
               <p class="control-hint" id="terStyleHint"></p>
+            </div>
+            <div class="terrain-subsection lidar-studio" id="terStudio" aria-label="LiDAR colours, layers and effects"></div>
+            <details class="terrain-appearance terrain-data-settings">
+              <summary>Data source & overall opacity</summary>
+              <div class="fgrid terrain-fields">
               <label for="terSrc">LiDAR source preference</label>
               <select id="terSrc" aria-describedby="terSrcHint">
                 <option value="auto" selected>Best available</option>
@@ -1283,6 +1287,9 @@ html.csp-boot body{visibility:hidden}
                 <input type="range" id="terOp" min="0" max="100" value="70">
               </div>
             </div>
+            </details>
+            <details class="terrain-appearance terrain-download-settings">
+              <summary>WA DNR downloads</summary>
             <div class="terdl dnr-module" id="dnrAreaPanel">
               <h3 class="menu-section-title">WA DNR LiDAR</h3>
               <p class="control-hint">Download Washington state LiDAR for an area you choose. USGS stays active elsewhere.</p>
@@ -1292,6 +1299,7 @@ html.csp-boot body{visibility:hidden}
               <div class="dnr-status-row"><div id="dnrAreaMsg" class="warmmsg" role="status" aria-live="polite">No downloaded areas</div>
                 <button class="linkbtn" id="dnrClear" type="button">Clear areas</button></div>
             </div>
+            </details>
             <div class="terrain-subsection" id="terAppearance">
               <h3 class="menu-section-title">Layer appearance <span class="pane-n" id="terLookStyle">per layer</span></h3>
               <div class="terrain-look-grid">
@@ -1307,7 +1315,9 @@ html.csp-boot body{visibility:hidden}
               </div>
               <button class="ghost terrain-look-reset" id="terLookReset" type="button">Reset this layer</button>
             </div>
-            <div class="terrain-subsection terrain-lighting" id="terLighting">
+            <details class="terrain-appearance terrain-lighting" id="terLighting">
+              <summary>Lighting & 3D relief</summary>
+              <div class="terrain-subsection">
               <h3 class="menu-section-title">Terrain lighting <span class="pane-n">shared 2D + 3D</span></h3>
               <div class="terrain-look-grid">
                 <label for="terSunAz">Sun azimuth</label>
@@ -1325,7 +1335,8 @@ html.csp-boot body{visibility:hidden}
               </div>
               <div class="note" id="terLightNote">Hillshade and elevation tint relight instantly.</div>
               <button class="ghost terrain-look-reset" id="terLightReset" type="button">Reset lighting</button>
-            </div>
+              </div>
+            </details>
           </details>
           <button class="linkbtn" id="terReset" type="button" style="margin-top:8px">Reset terrain panel</button>
           <details class="terrain-appearance terrain-offline" id="terrainDownloadBox">
@@ -1864,7 +1875,7 @@ html.csp-boot body{visibility:hidden}
   L.Renderer.prototype.onAdd=function(map){return onAdd.call(this,map||this._map)};
 })();
 </script>
-<script src="version.js?build=2026-10-19b"></script>
+<script src="version.js?build=2026-10-19c"></script>
 <script src="mosaic-core.js"></script>
 <script src="png-stream.js"></script>
 <script src="terrain-core.js"></script>
@@ -11445,8 +11456,8 @@ $("#q").addEventListener("blur",()=>setTimeout(acHide,120));
 document.addEventListener("click",e=>{ if(!e.target.closest("#iw")) acHide() });
 })();
 </script>
-<script src="markup-3d.js?build=2026-10-19b"></script>
-<script src="markup.js?build=2026-10-19b"></script>
-<script src="ui-system.js?build=2026-10-19b"></script>
+<script src="markup-3d.js?build=2026-10-19c"></script>
+<script src="markup.js?build=2026-10-19c"></script>
+<script src="ui-system.js?build=2026-10-19c"></script>
 </body>
 </html>
