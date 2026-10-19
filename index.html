@@ -601,11 +601,11 @@ a:hover{text-decoration:underline}
 .terlegend .ticks{display:flex;justify-content:space-between;gap:3px;font-variant-numeric:tabular-nums}
 .terlegend .caption{font-size:10.5px;color:var(--ink-2);font-weight:600}
 .terrain-appearance{margin-top:11px;padding-top:10px;border-top:1px solid var(--line)}
-.terrain-appearance summary{list-style:none;display:flex;align-items:center;gap:7px;min-height:28px;color:var(--ink-2);font-size:11.5px;font-weight:600;cursor:pointer;border-radius:7px;padding:3px 5px}
-.terrain-appearance summary::-webkit-details-marker{display:none}
-.terrain-appearance summary::before{content:"";width:6px;height:6px;border-right:1.5px solid var(--ink-3);border-bottom:1.5px solid var(--ink-3);transform:rotate(-45deg);transition:transform var(--dur)}
-.terrain-appearance[open] summary::before{transform:rotate(45deg) translate(-1px,-1px)}
-.terrain-appearance summary:hover{background:var(--hover)}
+.terrain-appearance > summary{list-style:none;display:flex;align-items:center;gap:7px;min-height:28px;color:var(--ink-2);font-size:11.5px;font-weight:600;cursor:pointer;border-radius:7px;padding:3px 5px}
+.terrain-appearance > summary::-webkit-details-marker{display:none}
+.terrain-appearance > summary::before{content:"";width:6px;height:6px;border-right:1.5px solid var(--ink-3);border-bottom:1.5px solid var(--ink-3);transform:rotate(-45deg);transition:transform var(--dur)}
+.terrain-appearance[open] > summary::before{transform:rotate(45deg) translate(-1px,-1px)}
+.terrain-appearance > summary:hover{background:var(--hover)}
 .terrain-look-grid{display:grid;grid-template-columns:82px minmax(0,1fr) 38px;gap:7px 8px;align-items:center;padding:8px 5px 2px}
 .terrain-look-grid label{font-size:11px;color:var(--ink-3)}
 .terrain-look-grid output{font-size:10.5px;color:var(--ink-3);text-align:right;font-variant-numeric:tabular-nums}
@@ -1300,7 +1300,9 @@ html.csp-boot body{visibility:hidden}
                 <button class="linkbtn" id="dnrClear" type="button">Clear areas</button></div>
             </div>
             </details>
-            <div class="terrain-subsection" id="terAppearance">
+            <details class="terrain-appearance" id="terAppearance">
+              <summary>Brightness & contrast</summary>
+              <div class="terrain-subsection">
               <h3 class="menu-section-title">Layer appearance <span class="pane-n" id="terLookStyle">per layer</span></h3>
               <div class="terrain-look-grid">
                 <label for="terContrast">Contrast</label>
@@ -1314,7 +1316,8 @@ html.csp-boot body{visibility:hidden}
                 <output id="terBrightnessOut" for="terBrightness">106%</output>
               </div>
               <button class="ghost terrain-look-reset" id="terLookReset" type="button">Reset this layer</button>
-            </div>
+              </div>
+            </details>
             <details class="terrain-appearance terrain-lighting" id="terLighting">
               <summary>Lighting & 3D relief</summary>
               <div class="terrain-subsection">

@@ -755,7 +755,7 @@ body.csp-redesign .csp-locate-label{display:none}
   body.csp-redesign .terrain-action-row > *{width:100%;min-width:0;min-height:44px;white-space:normal}
   body.csp-redesign .terrain-look-reset,
   body.csp-redesign .linkbtn,
-  body.csp-redesign .terrain-appearance summary,
+  body.csp-redesign .terrain-appearance > summary,
   body.csp-redesign .terrain-lighting summary{min-height:44px}
   body.csp-redesign .terrain-look-grid,
   body.csp-redesign .terrain-lighting .terrain-look-grid{grid-template-columns:minmax(0,1fr) auto;gap:4px 8px;padding:8px 0 2px}
@@ -2295,8 +2295,8 @@ body.csp-redesign #panes :is(#researchRun,#terWarm){color:var(--ui-control-ink);
 body.csp-redesign #panes .linkbtn{color:var(--ui-text-muted);text-decoration:none;font-size:12.5px;min-height:40px;text-align:left}
 body.csp-redesign #panes .linkbtn:hover{color:var(--ui-text);text-decoration:underline}
 body.csp-redesign #panes :is(.terrain-look-reset,#terReset,#researchReset,#elevSpectrumReset,#elevBandsReset){width:100%;margin-top:16px!important;padding:10px 0;border:0;border-top:1px solid var(--ui-line);border-radius:0;background:transparent;box-shadow:none;color:var(--ui-text-muted);text-align:left;font-size:12.5px}
-body.csp-redesign #panes .terrain-appearance summary{min-height:44px;padding:4px 0;font-size:14px;font-weight:600;border-radius:0;background:transparent}
-body.csp-redesign #panes .terrain-appearance summary .pane-n{margin-left:auto;font-size:12px;font-weight:400;max-width:45%;text-align:right}
+body.csp-redesign #panes .terrain-appearance > summary{min-height:44px;padding:4px 0;font-size:14px;font-weight:600;border-radius:0;background:transparent}
+body.csp-redesign #panes .terrain-appearance > summary .pane-n{margin-left:auto;font-size:12px;font-weight:400;max-width:45%;text-align:right}
 body.csp-redesign #panes .terrain-appearance > .elev-field{margin-top:16px}
 body.csp-redesign #panes .elev-section-title{font-size:15px;font-weight:650}
 body.csp-redesign #panes .elev-section-head{margin-bottom:8px}
@@ -2851,11 +2851,11 @@ body.csp-redesign .csp-setting-foot[hidden]{display:none}
 .csp-glass body.csp-redesign.csp-redesign #cspWorkspace #panes :is(.elev-value,output){font-size:12.5px;color:var(--t3-desc)}
 
 /* Collapsible sections inside cards (terrain): T3 rows that fold. */
-.csp-glass body.csp-redesign.csp-redesign #cspWorkspace #panes .terrain-appearance summary{
+.csp-glass body.csp-redesign.csp-redesign #cspWorkspace #panes .terrain-appearance > summary{
   min-height:46px;padding:8px 0;color:var(--ui-text);font-size:14px;font-weight:500;letter-spacing:-.006em;
 }
-.csp-glass body.csp-redesign.csp-redesign #cspWorkspace #panes .terrain-appearance summary::before{transition:transform .32s var(--ease-mac)}
-.csp-glass body.csp-redesign.csp-redesign #cspWorkspace #panes .terrain-appearance summary .pane-n{color:var(--t3-desc);font-size:12px}
+.csp-glass body.csp-redesign.csp-redesign #cspWorkspace #panes .terrain-appearance > summary::before{transition:transform .32s var(--ease-mac)}
+.csp-glass body.csp-redesign.csp-redesign #cspWorkspace #panes .terrain-appearance > summary .pane-n{color:var(--t3-desc);font-size:12px}
 .csp-glass body.csp-redesign.csp-redesign #cspWorkspace #panes .terrain-appearance + :is(.terrain-appearance,#terReset){border-top:1px solid var(--t3-divider)}
 
 /* ---- fields, buttons and menus ------------------------------------------ */
