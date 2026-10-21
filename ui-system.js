@@ -1181,7 +1181,10 @@ modeToggle?.addEventListener("click",event=>{
 modeMenu.addEventListener("click",event=>{
   const item=event.target.closest("[data-mode]");if(!item) return;
   const target=MODES.find(entry=>entry.mode===item.dataset.mode);
-  if(target&&currentMode()!==target.mode) $(target.control)?.click();
+  /* The mode buttons live inside the sheet. A bubbling click reached the
+     sheet's tap-to-open handler while it peeked, and opening the sheet on a
+     phone closes the point cloud that the same click had just opened. */
+  if(target&&currentMode()!==target.mode) $(target.control)?.dispatchEvent(new MouseEvent("click",{bubbles:false,cancelable:true}));
   syncModeBar();
   setModeMenu(false,{restore:event.detail===0});
 });
