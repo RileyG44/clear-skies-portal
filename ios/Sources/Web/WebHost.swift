@@ -1,6 +1,7 @@
 import SwiftUI
 import UIKit
 import WebKit
+import os
 
 /// Owns the web view that runs the Clear Skies map engine, and everything the
 /// page needs from iOS: bundled files, the engine hop, dialogs, links,
@@ -61,7 +62,30 @@ final class WebHost: NSObject {
 
     func pageReady() {
         onReady?()
+        #if DEBUG
+        runDebugScript()
+        #endif
     }
+
+    #if DEBUG
+    /// Verification hook for Debug builds only: `-cspDebugScript '<js>'` on
+    /// the launch command line runs that async function body once the page is
+    /// ready and writes its result to the system log (subsystem = bundle ID,
+    /// category "debug"). Launch arguments also override stored defaults, so
+    /// `-clearskies.engineBase.v1 <url>` sets the engine for one run.
+    private func runDebugScript() {
+        guard let script = UserDefaults.standard.string(forKey: "cspDebugScript"), !script.isEmpty else { return }
+        let log = Logger(subsystem: Bundle.main.bundleIdentifier ?? "ClearSkies", category: "debug")
+        Task {
+            do {
+                let result = try await webView.callAsyncJavaScript(script, arguments: [:], contentWorld: .page)
+                log.notice("debug script result: \(String(describing: result ?? "nil"), privacy: .public)")
+            } catch {
+                log.error("debug script failed: \(String(describing: error), privacy: .public)")
+            }
+        }
+    }
+    #endif
 
     func deliverWatch(id: Int, fix: [String: Any]?, failure: String?) {
         webView.callAsyncJavaScript(
