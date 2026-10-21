@@ -237,6 +237,37 @@ returns to Riley; 2027-01-31 remains the outer limit.
 
 ## Implementation and verification
 
-PR / commit:
-Evidence:
+PR / commit: local branch `ios/native-shell`, not pushed: ceeb9f9 (these
+records), d025cf8 (Map view point-cloud fix), 06a8d85 (native-host mode, web
+build 2026-10-21a), 255a071 (Stage 1 app), 7a4fcd2 (TestFlight script fix).
+Item 3: 6b58059 on local branch `archive/grok-native-rewrite`.
+Evidence (Stage 1, 2026-10-21, coordinating agent):
+- Xcode 27.1 / iOS 27.1 SDK: Debug build and Release archive succeed with no
+  warnings; 8.9 MB app. Export with a cloud-managed Apple Distribution
+  certificate succeeds. The TestFlight upload stopped before sending anything:
+  App Store Connect has no app record for dev.riley.ClearSkies.
+- macOS WebKit harness compiled from the app's own SiteSchemeHandler,
+  EngineProxy and EngineSettings sources plus native-host.js, in a 430×932
+  window against the engine at 127.0.0.1:8765. The page was ready in 0.8–1.9 s;
+  the engine connected through the proxy; GPU 2D terrain was on and hillshade
+  rendered. The elevation spectrum drew; scene search returned 250 scenes from
+  AWS Earth Search; 3D terrain started; the point cloud streamed
+  WA_NorthCentral_1_2021 after d025cf8; the engine markup list returned through
+  the proxy. No JavaScript errors or warnings were logged.
+- The same harness on the plain static site (no native host) started on build
+  2026-10-21a and opened the point cloud.
+- `npm run check` passes. With Node 24, 52 of 53 test files pass. The other,
+  test-server.js, fails identically on main bc3cb41: /api/health now exceeds
+  the 1,024-byte compression threshold the test assumes. Not introduced here.
+- Route checklist, Stage 1: all 13 routes use the web client's own controls; no
+  route is native yet. Nothing was removed.
 Remaining limitations:
+- Not yet run on an iPhone: it was not connected, and TestFlight needs the app
+  record. On-device location, export share sheet, keyboard, memory and frame
+  rate are unverified.
+- The harness is macOS WebKit with a fine pointer. iOS-only paths (coarse
+  pointer budgets, iOS export limits) are unverified.
+- The Mac engine serves web build 2026-10-19o from the unmerged branch
+  claude/fix-capture-custom-layers-odd4w8; the app bundles this branch and lacks
+  that export fix until it merges.
+- Stage 2 (native chrome) has not started.
