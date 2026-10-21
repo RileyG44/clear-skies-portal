@@ -1,0 +1,6 @@
+// Clear Skies for iPhone (CR-001). Each Mac keeps its signing team in
+// Local.xcconfig, copied from Local.example.xcconfig and never committed.
+MARKETING_VERSION = 1.0
+CURRENT_PROJECT_VERSION = 1
+CSP_BUNDLE_ID = dev.riley.ClearSkies
+#include? "Local.xcconfig"
