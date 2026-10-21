@@ -12,10 +12,11 @@ export DEVELOPER_DIR=${DEVELOPER_DIR:-/Applications/Xcode.app/Contents/Developer
 # Minutes since 1970: always increasing, and small enough for CFBundleVersion.
 build=$(( $(date +%s) / 60 ))
 work=$(mktemp -d)
-options=Config/ExportOptions-TestFlight.plist
+# Not "options": that name is zsh's own table of shell options.
+export_options=Config/ExportOptions-TestFlight.plist
 if [[ ${1:-} == --export ]]; then
-  sed 's#<string>upload</string>#<string>export</string>#' "$options" > "$work/ExportOptions.plist"
-  options="$work/ExportOptions.plist"
+  sed 's#<string>upload</string>#<string>export</string>#' "$export_options" > "$work/ExportOptions.plist"
+  export_options="$work/ExportOptions.plist"
 fi
 
 xcodegen generate --quiet
@@ -23,7 +24,7 @@ xcodebuild -project ClearSkies.xcodeproj -scheme ClearSkies -configuration Relea
   -destination 'generic/platform=iOS' -archivePath "$work/ClearSkies.xcarchive" \
   -allowProvisioningUpdates CURRENT_PROJECT_VERSION="$build" archive
 xcodebuild -exportArchive -archivePath "$work/ClearSkies.xcarchive" -exportPath "$work/export" \
-  -exportOptionsPlist "$options" -allowProvisioningUpdates
+  -exportOptionsPlist "$export_options" -allowProvisioningUpdates
 
 if [[ ${1:-} == --export ]]; then
   echo "Exported build $build to $work/export"
