@@ -279,18 +279,21 @@
       gl.texImage2D(gl.TEXTURE_2D, 0, gl.R32F, record.width, record.height, 0, gl.RED, gl.FLOAT, record.grid);
       return t;
     }
-    function upload(record) {
-      if (!record || !record.grid || !record.width || !record.height) return;
-      var bytes = record.width * record.height * 4, existing = lru.peek(record.key);
-      if (existing && existing.revision === record.revision) return;
-      if (bytes > lru.maxBytes) { known.delete(record.key); return; }
+    function nativeEntry(record) {
       var allValid = true, hasData = false;
       for (var i = 0; i < record.grid.length; i++) {
         if (Number.isFinite(record.grid[i]) && record.grid[i] > -1e20) hasData = true; else allValid = false;
       }
       var metadata = {key: record.key, sourceId: record.sourceId, rank: record.rank, z: record.z, x: record.x, y: record.y, width: record.width, height: record.height};
       // GPU residency must not pin CPU grids outside the store's own byte LRU.
-      var t = makeNative(record), e = {allValid: allValid, hasData: hasData, key: record.key, texture: t, bytes: bytes, record: metadata, revision: record.revision};
+      return {allValid: allValid, hasData: hasData, key: record.key, texture: makeNative(record), bytes: record.width * record.height * 4, record: metadata, revision: record.revision};
+    }
+    function upload(record) {
+      if (!record || !record.grid || !record.width || !record.height) return;
+      var bytes = record.width * record.height * 4, existing = lru.peek(record.key);
+      if (existing && existing.revision === record.revision) return;
+      if (bytes > lru.maxBytes) { known.delete(record.key); return; }
+      var e = nativeEntry(record), t = e.texture;
       if (!lru.set(record.key, e)) deleteTexture(t);
       else { known.set(record.key, {sourceId: record.sourceId, z: record.z, x: record.x, y: record.y}); uploads++; heightDirty = dirty = planDirty = true; }
     }
@@ -343,13 +346,15 @@
         }
       }
     }
-    function buildPlan(view) {
+    function buildPlan(view, extra) {
       plan.length = 0;
       // Include fallback ancestors even when a finer tile has no-data holes.
       // Draw every overlapping resident native record coarse→fine at each rank.
       var b = coverageBounds(view, 0, boundsScratch), n = b.n, residents = [];
       planBounds.z = b.z; planBounds.x0 = b.x0; planBounds.x1 = b.x1; planBounds.y0 = b.y0; planBounds.y1 = b.y1;
       lru.entries.forEach(function (e) { if (e.hasData && (!activeSources || activeSources.has(e.record.sourceId))) residents.push(e); });
+      // Export-only detail records (see exportTiles); a key already resident is drawn once.
+      if (extra) for (var xi = 0; xi < extra.length; xi++) if (extra[xi].hasData && !lru.peek(extra[xi].key)) residents.push(extra[xi]);
       residents.sort(function (a, b) { return a.record.rank - b.record.rank || a.record.z - b.record.z || a.key.localeCompare(b.key); });
       var total = 0, covered = 0;
       for (var y = b.y0; y <= b.y1; y++) for (var wx = b.x0; wx <= b.x1; wx++) {
@@ -585,6 +590,10 @@
      * so no block straddles two pieces. The radius is the one the screen
      * uses: the live field caps it at 64 x 32 of its own pixels. */
     var EXPORT_AUX_TEXELS = 1 << 21, EXPORT_PIECE = 2048, exportCache = null, stateGeneration = 0;
+    // Detail exports: the export's own native-texture budget, and the largest
+    // piece drawn at once (a 2048 px piece at one sample per pixel is ~100 tiles).
+    var exportTextureBytes = options.exportTextureBytes === undefined ? 128 * 1024 * 1024 : Math.max(0, options.exportTextureBytes);
+    var exportChunk = Math.max(256, options.exportChunk || 2048);
     function exportAuxField(view, width, height, dpr, radiusPx, minimum, limit) {
       var liveDpr = view.liveDpr > 0 ? view.liveDpr : dpr;
       radiusPx = Math.min(radiusPx, 64 * 32 * dpr / liveDpr);
@@ -623,12 +632,71 @@
       } catch (e) { freeAux(aux); throw e; }
       finally { plan = savedPlan; lastResult = savedResult; planDirty = true; }
     }
-    function releaseExport() { if (exportCache) { if (!lost) freeAux(exportCache.aux); exportCache = null; } }
+    function releaseExport() {
+      if (!exportCache) return;
+      if (!lost) { freeAux(exportCache.aux); exportCache.tiles.forEach(function (e) { deleteTexture(e.texture); }); }
+      exportCache = null;
+    }
+    /* The level an export of view at dpr output pixels per CSS pixel draws
+     * from: one elevation sample per output pixel, rounding up past a quarter
+     * level (as imagery exports do), but never past the finest level any
+     * source has, and never coarser than the live view's own level. */
+    function maxNativeLevel() {
+      refreshSources();
+      var max = 0;
+      for (var i = 0; i < sourceRefs.length; i++) {
+        var n = sourceRefs[i].nativeZoom, z = typeof n === 'function' ? n(22) : (n === undefined ? 22 : +n);
+        if (z > max) max = z;
+      }
+      return sourceRefs.length ? Math.min(22, Math.floor(max)) : 22;
+    }
+    function exportLevel(view, dpr) {
+      var live = tileLevel(view), ideal = Math.ceil(view.zoom + Math.log2(Math.max(1e-6, dpr)) - .25);
+      return Math.max(live, Math.min(ideal, maxNativeLevel()));
+    }
+    /* {z, live, tiles}: the export's elevation level, the live view's, and
+     * how many display tiles an export finer than the view will request. */
+    function exportDetail(view, width) {
+      var dpr = width / view.cssSize[0], z = exportLevel(view, dpr), live = tileLevel(view);
+      if (z <= live) return {z: z, live: live, tiles: 0};
+      var b = coverageBounds(Object.assign({}, view, {dpr: dpr, dz: z - Math.round(view.zoom)}), 0, {});
+      return {z: z, live: live, tiles: Math.max(0, Math.min(b.x1 - b.x0 + 1, b.n)) * Math.max(0, b.y1 - b.y0 + 1)};
+    }
+    /* Native records for one export piece at its detail level, uploaded into
+     * the export's own texture cache rather than the live LRU, so a large
+     * export neither evicts the view's tiles nor is limited to them. */
+    async function exportTiles(sub, cache, options) {
+      // Pieces share edge tiles; progress counts each display tile once per export.
+      var onTile = options.onTile && function (d) { var k = d.z + '/' + d.x + '/' + d.y; if (!cache.seen.has(k)) { cache.seen.add(k); options.onTile(d); } };
+      var got = await store.loadDetail(coverageTiles(sub, 0), {signal: options.signal, onTile: onTile, reuse: function (key) {
+        var e = cache.tiles.get(key) || lru.peek(key); return e ? {hasData: e.hasData, allValid: e.allValid} : null;
+      }});
+      if (cache !== exportCache || !ready || destroyed || lost) throw new Error('Terrain context unavailable during export');
+      if (options.signal && options.signal.aborted) throw new Error('Export cancelled');
+      var entries = [];
+      for (var i = 0; i < got.length; i++) {
+        var g = got[i], e = cache.tiles.get(g.key);
+        if (e) { cache.tiles.delete(g.key); cache.tiles.set(g.key, e); }
+        else if (g.reused) continue; // Live residents are already in every plan.
+        else if (g.grid && g.width && g.height) { e = nativeEntry(g); cache.tiles.set(g.key, e); cache.bytes += e.bytes; }
+        if (e) entries.push(e);
+      }
+      return entries;
+    }
+    function trimExportTiles(cache) {
+      while (cache.bytes > exportTextureBytes && cache.tiles.size) {
+        var key = cache.tiles.keys().next().value, e = cache.tiles.get(key);
+        cache.tiles.delete(key); cache.bytes -= e.bytes; if (!lost) deleteTexture(e.texture);
+      }
+    }
     /* Renders an export of width x height for view, or only region {x, y,
      * width, height} of it. Region calls for the same export (view, size and
      * settings) share one set of derived fields until releaseExport(); a call
-     * without a region releases them itself. */
-    async function renderToCanvas(view, width, height, region) {
+     * without a region releases them itself. An export finer than the view
+     * fetches the elevation it needs piece by piece (options: signal, onTile
+     * per display tile, detail:false to draw only resident data). */
+    async function renderToCanvas(view, width, height, region, options) {
+      options = options || {};
       if (!ready || destroyed) throw new Error('Terrain engine is not ready');
       width = Math.round(width); height = Math.round(height);
       if (!(width > 0 && height > 0)) throw new RangeError('Export dimensions must be positive');
@@ -643,9 +711,12 @@
       // Export keeps horizontal map extent; callers normally preserve the view aspect ratio.
       var dpr = width / view.cssSize[0], limit = Math.min(maxSize, forcedMaxSize || maxSize), stride = limit - 2;
       if (stride < 1) throw new Error('WebGL export target limit too small');
+      var level = exportLevel(view, dpr), detail = options.detail !== false && level > tileLevel(view) && typeof store.loadDetail === 'function';
+      // Pieces small enough that their native tiles fit the export cache.
+      if (detail) stride = Math.max(1, Math.min(stride, exportChunk - 2));
       var key = [stateGeneration, JSON.stringify(view), width, height, limit].join('|');
-      if (!exportCache || exportCache.key !== key) { releaseExport(); exportCache = {key: key, aux: exportAux(view, width, height, exportState, limit)}; }
-      var aux = exportCache.aux;
+      if (!exportCache || exportCache.key !== key) { releaseExport(); exportCache = {key: key, aux: exportAux(view, width, height, exportState, limit), tiles: new Map(), bytes: 0, seen: new Set()}; }
+      var cache = exportCache, aux = cache.aux;
       var a = (view.bearing || 0) * DEG, c = Math.cos(a), s = Math.sin(a), worldPx = 256 * Math.pow(2, view.zoom) * dpr;
       var right = region.x + region.width, bottom = region.y + region.height;
       try {
@@ -656,10 +727,12 @@
           var lx = Math.max(0, left - 1), ty = Math.max(0, top - 1), rx = Math.min(width, left + iw + 1), by = Math.min(height, top + ih + 1);
           var w = rx - lx, ht = by - ty, dx = (lx + rx) / 2 - width / 2, dy = (ty + by) / 2 - height / 2;
           var sub = {centerMerc: [view.centerMerc[0] + (c * dx + s * dy) / worldPx, view.centerMerc[1] + (-s * dx + c * dy) / worldPx],
-            zoom: view.zoom, bearing: view.bearing || 0, cssSize: [w / dpr, ht / dpr], dpr: dpr, dz: view.dz};
-          // Export consumes resident data and never drains the upload queue synchronously.
+            zoom: view.zoom, bearing: view.bearing || 0, cssSize: [w / dpr, ht / dpr], dpr: dpr, dz: detail ? level - Math.round(view.zoom) : view.dz};
+          // Export draws resident data plus, when finer than the view, its own
+          // detail records; it never drains the live upload queue synchronously.
+          var extra = detail ? await exportTiles(sub, cache, options) : null;
           var savedPlan = plan, savedResult = lastResult, t = null, colour = null;
-          plan = []; buildPlan(sub);
+          plan = []; buildPlan(sub, extra);
           try {
             t = target(w, ht, true); colour = target(w, ht, false); drawHeight(t, sub);
             drawShade(t, colour, sub, shaders.uniformValues(exportState, sub), aux, [lx, ty, height]);
@@ -672,7 +745,7 @@
               image.data[dst + 2] = alpha ? Math.min(255, Math.round(pixels[src + 2] * 255 / alpha)) : 0; image.data[dst + 3] = alpha;
             }
             ctx.putImageData(image, left - region.x, top - region.y);
-          } finally { freeTarget(colour); freeTarget(t); plan = savedPlan; lastResult = savedResult; planDirty = true; }
+          } finally { freeTarget(colour); freeTarget(t); plan = savedPlan; lastResult = savedResult; planDirty = true; if (detail) trimExportTiles(cache); }
           // Yield between chunks so large exports do not monopolize the UI thread.
           await new Promise(function (resolve) { setTimeout(resolve, 0); });
         }
@@ -773,10 +846,11 @@
         lru.entries.forEach(function (entry, key) { if (!store.get(key)) lru.delete(key); });
         coverageKey = ''; heightDirty = dirty = planDirty = true; needsFrame();
       }, render: render,
-      neededTiles: function (view) { if (refreshSources()) heightDirty = dirty = planDirty = true; return want(view); }, renderToCanvas: renderToCanvas, releaseExport: releaseExport, readProvenance: readProvenance, sampleValues: sampleValues,
+      neededTiles: function (view) { if (refreshSources()) heightDirty = dirty = planDirty = true; return want(view); }, renderToCanvas: renderToCanvas, releaseExport: releaseExport, exportDetail: exportDetail, readProvenance: readProvenance, sampleValues: sampleValues,
       stats: function () { return {textures: lru.size, textureBytes: lru.bytes, frames: frames, drawCalls: drawCalls, lastFrameMs: lastFrameMs,
         ready: ready, queuedUploads: queue.size, uploads: uploads, evictions: evictions, generation: generation, error: error,
         heightFieldBytes: field ? field.width * field.height * 8 : 0, trackedTiles: known.size,
+        exportTextures: exportCache ? exportCache.tiles.size : 0, exportTextureBytes: exportCache ? exportCache.bytes : 0,
         coverageKind: 'resident tile overlap estimate; readProvenance returns sampled pixel coverage', fallback: 'CPU when float targets or self-test unavailable'}; },
       // Diagnostics are deliberately synchronous and are never called by render().
       debugReadHeight: function () { if (!field || !ready) throw new Error('No height field'); return readFloat(field); },
