@@ -182,6 +182,32 @@ const data=values=>({width:2,height:2,grid:new Float32Array(values)});
   assert.equal(noCoverageRequests,1,'explicit provider no-coverage is cached, not retried');
   assert.equal(noCoverage._retryTimer,0);assert.equal(noCoverage.finestFor('s',{z:3,x:0,y:0}).validCount,0);noCoverage.destroy();
 
+  // Export detail: each display tile takes the best-ranked source at its own
+  // finest level and falls back only where that record has holes. Records
+  // go to the caller, never into the live store, and held keys are reused.
+  const detailCalls=[];
+  const detail=new ElevationTileStore({sources:[source('survey',5,6),source('national',2,5),source('overview',1,3)],
+    mask:(g,w,h,c,s)=>s.id==='survey'&&c.x===0?g.fill(NaN):g,
+    request:async(url,o)=>{detailCalls.push({url,...o});return data(url.startsWith('survey/6/1/')?[7,NaN,7,7]:[2,2,2,2]);}});
+  await detail.want([{z:3,x:0,y:0}]);await tick();
+  const liveTiles=detail.stats().tiles,liveCalls=detailCalls.length;detailCalls.length=0;
+  const seen=[];
+  const got=await detail.loadDetail([{z:6,x:0,y:0},{z:6,x:1,y:0},{z:6,x:1,y:1}],{onTile:d=>seen.push(d),
+    reuse:key=>key==='survey/6/1/1'?{hasData:true,allValid:true}:null});
+  assert.deepEqual(detailCalls.map(c=>c.url).sort(),['national/5/0/0','survey/6/0/0','survey/6/1/0'],
+    'finest survey first; national once for the masked tile and the partial one; held full tile stops the chain');
+  assert.ok(detailCalls.every(c=>c.priority===-1),'export detail queues behind the live view');
+  assert.deepEqual(got.map(r=>r.key).sort(),['national/5/0/0','survey/6/1/0','survey/6/1/1']);
+  assert.equal(got.find(r=>r.key==='survey/6/1/1').reused,true);
+  assert.equal(got.find(r=>r.key==='survey/6/1/0').validCount,3);
+  assert.equal(seen.length,3,'progress per display tile');
+  assert.equal(detail.stats().tiles,liveTiles,'export records never enter the live store');
+  assert.ok(liveCalls>0);
+  const aborted=new AbortController();aborted.abort();detailCalls.length=0;
+  assert.deepEqual(await detail.loadDetail([{z:6,x:2,y:2}],{signal:aborted.signal}),[]);
+  assert.equal(detailCalls.length,0,'a cancelled export requests nothing');
+  detail.destroy();
+
   const sources=buildSources({dnrEndpoint:'/dnr',rawEndpoint:'/raw',nationalEndpoint:'/national',fallback:'/base/{z}/{x}/{y}',fallbackNativeZoom:15,refineOverview:true},
     {proxy:true,api:x=>x,dz:1,dnrRevision:7,dnrTileAllowed:()=>true,rawCoverageQuery:'r=1'});
   assert.equal(sources.find(s=>s.id==='raw').allowed({z:13}),false);

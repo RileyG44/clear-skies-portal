@@ -187,13 +187,21 @@
       /* canvas() renders the whole export; canvas(region) one block of it.
          Blocks of one entry share the engine's export-wide derived fields
          (relative-elevation base, detail blur), so a block export has no
-         seams; release() frees them once the last block is drawn. */
-      snapshotEntry:function(spec){
+         seams; release() frees them once the last block is drawn. An export
+         finer than the view fetches its own elevation (options.onTile counts
+         it, options.signal cancels it). */
+      snapshotEntry:function(spec,options){
         if(!this._container||!this._engine)return null;
         const view=exportView(this._view||this._deriveView(),spec),engine=this._engine;
         return {kind:"gpu-terrain",el:this._container,view,
-          canvas:region=>region?engine.renderToCanvas(view,spec.width,spec.height,region):engine.renderToCanvas(view,spec.width,spec.height),
+          canvas:region=>engine.renderToCanvas(view,spec.width,spec.height,region||undefined,options),
           release:()=>engine.releaseExport?.()};
+      },
+      /* {z, live, tiles} for an export spec: its elevation level, the view's,
+         and the elevation tiles it would fetch beyond what is on screen. */
+      exportDetail:function(spec){
+        if(!this._container||!this._engine?.exportDetail)return null;
+        return this._engine.exportDetail(exportView(this._view||this._deriveView(),spec),spec.width??Math.round(spec.sel.w*spec.scale));
       },
       destroy:function(){this.remove();this._engine?.destroy();this._engine=null;}
     });

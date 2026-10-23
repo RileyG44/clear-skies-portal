@@ -80,6 +80,67 @@
     },Math.max(0,next-Date.now()));
     this._retryTimer?.unref?.();
   };
+  /* A decoded response as a native record: masked, sentinels as NaN. */
+  ElevationTileStore.prototype._record=function(job,data){
+    const {key,source,c}=job;
+    if(!data)throw new Error('Elevation tile unavailable');
+    const width=data.width,height=data.height;
+    if(!Number.isInteger(width)||width<1||!Number.isInteger(height)||height<1||!data.grid||data.grid.length!==width*height)throw new Error('Invalid native elevation grid');
+    // Decoder caches may share the returned array. Masking and sentinel
+    // normalization must never alter a different consumer's native data.
+    let grid=data.grid instanceof Float32Array?data.grid:new Float32Array(data.grid);
+    if(this.options.mask)grid=this.options.mask(grid.slice(),width,height,c,source);
+    let normalized=false;
+    for(const value of grid)if(!valid(value)&&!Number.isNaN(value)){normalized=true;break;}
+    if(normalized){grid=grid.slice();for(let i=0;i<grid.length;i++)if(!valid(grid[i]))grid[i]=NaN;}
+    if(!(grid instanceof Float32Array)||grid.length!==width*height)throw new Error('Invalid masked elevation grid');
+    const r={key,url:job.url,sourceId:source.id,rank:source.rank,label:source.label,z:c.z,x:c.x,y:c.y,width,height,grid,
+      sampleMeters:typeof source.sampleMeters==='function'?source.sampleMeters(c):source.sampleMeters??resolution(c,width),
+      surveys:data.surveys||[],revision:++this._revision,validCount:0};
+    for(const value of grid)if(valid(value))r.validCount++;
+    return r;
+  };
+  /* Native records for an export finer than the view: for each display tile,
+   * the best-ranked source at its own finest level, and lower ranks only
+   * where that record leaves samples missing - the order the live view
+   * refines in. Records are handed to the caller, never kept here, so an
+   * export cannot evict the live view's tiles. reuse(key) lets the caller
+   * skip records it already holds: it returns {hasData, allValid} or null,
+   * and such a key comes back as {key, reused: true}. */
+  ElevationTileStore.prototype.loadDetail=function(displayTiles,options){
+    options=options||{};
+    if(this._destroyed)return Promise.resolve([]);
+    const sources=(this._sources.length?this._sources:(typeof this.options.sources==='function'?this.options.sources():this.options.sources||[]))
+      .slice().sort((a,b)=>b.rank-a.rank);
+    const signal=options.signal,reuse=options.reuse,loads=new Map(),out=new Map();
+    const fetchOne=(source,c)=>{
+      const key=tileKey(source.id,c.z,c.x,c.y);
+      if(loads.has(key))return loads.get(key);
+      let promise;
+      const held=reuse&&reuse(key);
+      if(held)promise=Promise.resolve({key,reused:true,hasData:!!held.hasData,allValid:!!held.allValid});
+      else if(this._tiles.has(key))promise=Promise.resolve(this._tiles.get(key));
+      else{
+        const job={key,source,c,url:sourceUrl(source,c),sharp:false};
+        promise=Promise.resolve().then(()=>signal&&signal.aborted?null:this.options.request(job.url,{
+          signal,priority:-1,group:source.group||'overview',kind:source.kind
+        })).then(data=>data&&!this._destroyed?this._record(job,data):null).catch(()=>null);
+      }
+      loads.set(key,promise);return promise;
+    };
+    return Promise.all(displayTiles.map(async d=>{
+      for(const source of sources){
+        if(signal&&signal.aborted)break;
+        if(source.allowed&&!source.allowed(d))continue;
+        const got=await fetchOne(source,coords(d,native(source,d.z)));
+        if(!got)continue;
+        const hasData=got.reused?got.hasData:got.validCount>0,full=got.reused?got.allValid:got.validCount===got.grid.length;
+        if(hasData)out.set(got.key,got);
+        if(full)break;
+      }
+      if(options.onTile)options.onTile(d);
+    })).then(()=>[...out.values()]);
+  };
   ElevationTileStore.prototype._load=function(job){
     const {key,source,c,sharp}=job;
     if(this._tiles.has(key))return Promise.resolve(this._tiles.get(key));
@@ -92,23 +153,9 @@
       group:sharp?'sharp':source.group||'overview',kind:source.kind
     });}).then(data=>{
       if(controller.signal.aborted||epoch!==this._epoch||this._destroyed)return null;
-      if(!data)throw new Error('Elevation tile unavailable');
-      const width=data.width,height=data.height;
-      if(!Number.isInteger(width)||width<1||!Number.isInteger(height)||height<1||!data.grid||data.grid.length!==width*height)throw new Error('Invalid native elevation grid');
-      // Decoder caches may share the returned array. Masking and sentinel
-      // normalization must never alter a different consumer's native data.
-      let grid=data.grid instanceof Float32Array?data.grid:new Float32Array(data.grid);
-      if(this.options.mask)grid=this.options.mask(grid.slice(),width,height,c,source);
-      let normalized=false;
-      for(const value of grid)if(!valid(value)&&!Number.isNaN(value)){normalized=true;break;}
-      if(normalized){grid=grid.slice();for(let i=0;i<grid.length;i++)if(!valid(grid[i]))grid[i]=NaN;}
-      if(!(grid instanceof Float32Array)||grid.length!==width*height)throw new Error('Invalid masked elevation grid');
-      const r={key,url:job.url,sourceId:source.id,rank:source.rank,label:source.label,z:c.z,x:c.x,y:c.y,width,height,grid,
-        sampleMeters:typeof source.sampleMeters==='function'?source.sampleMeters(c):source.sampleMeters??resolution(c,width),
-        surveys:data.surveys||[],revision:++this._revision,validCount:0};
-      for(const value of grid)if(valid(value))r.validCount++;
-      if(grid.byteLength>this.maxBytes){this._failed.set(key,Date.now()+30000);return null;}
-      this._tiles.set(key,r);this._bytes+=grid.byteLength;
+      const r=this._record(job,data);
+      if(r.grid.byteLength>this.maxBytes){this._failed.set(key,Date.now()+30000);return null;}
+      this._tiles.set(key,r);this._bytes+=r.grid.byteLength;
       let levels=this._levels.get(r.sourceId);if(!levels)this._levels.set(r.sourceId,levels=new Map());
       levels.set(r.z,(levels.get(r.z)||0)+1);this._invalidateSummaries(r);this._evict();
       this._emit('tile',r);return r;
