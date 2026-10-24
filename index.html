@@ -3492,6 +3492,10 @@ window.addEventListener("resize",()=>{
 });
 
 function setCollapsed(on){
+  /* In the iPhone app (docs/ios CR-001) a native sheet replaces this panel,
+     which stays collapsed and out of sight. Opening it would also close the
+     point cloud on a phone. Read at call time: this can run during startup. */
+  if(!on&&window.CSPNativeHost) return;
   if(!on&&compactSidebar()&&pointCloudPanel?.active) pointCloudPanel.close();
   document.body.classList.toggle("collapsed", on);
   sideEl.inert=on;

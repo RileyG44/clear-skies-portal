@@ -71,8 +71,9 @@ function navGroup(label,items){
   }
   navScroll.append(group);
 }
-navGroup("Map",["layers","satellite","terrain","elevation","analyze","export"]);
-navGroup("Layer groups",["conditions","geology","past","labels","markup"]);
+const NAV_GROUPS=[["Map",["layers","satellite","terrain","elevation","analyze","export"]],
+  ["Layer groups",["conditions","geology","past","labels","markup"]]];
+for(const [label,items] of NAV_GROUPS) navGroup(label,items);
 
 const appearanceNav=document.createElement("div");appearanceNav.id="cspAppearanceNav";
 appearanceNav.innerHTML=`<button class="csp-nav-button" type="button" data-route="appearance"><img src="${icon("sliders-horizontal")}" alt=""><span>Appearance</span></button>`;
@@ -1590,6 +1591,23 @@ activateRoute(Object.prototype.hasOwnProperty.call(ROUTES,savedRoute)?savedRoute
 document.body.dataset.cspView=compactShell.matches?"nav":"detail";
 $$(".csp-nav-button[data-route]").forEach(button=>button.addEventListener("click",()=>{try{localStorage.setItem("clearskies.workspace.v1",button.dataset.route)}catch(_){}}));
 syncModeBar();updateCounts();
+/* The iPhone app (docs/ios CR-001) draws this shell natively. It lists these
+   routes and opens them here, so each page keeps its live controls and this
+   page stays their source of truth. Only the app defines CSPNativeHost. */
+if(window.CSPNativeHost) window.CSPShell=Object.freeze({
+  groups:()=>[...NAV_GROUPS,["",["appearance","settings"]]].map(([label,keys])=>({label,
+    routes:keys.map(key=>({key,title:ROUTES[key].title,description:ROUTES[key].description,icon:ROUTES[key].icon}))})),
+  activate:key=>{
+    if(!ROUTES[key]) return false;
+    activateRoute(key);try{localStorage.setItem("clearskies.workspace.v1",key)}catch(_){}
+    return true;
+  },
+  current:()=>currentRoute,
+  routeForText:text=>SEARCH_ROUTES.get(String(text||"").trim().toLocaleLowerCase().replace(/\s+/g," "))||null,
+  /* The words the search field already accepts for each page, so the app's
+     search can offer a page while it is typed. */
+  keywords:()=>[...SEARCH_ROUTES]
+});
 /* One frame later, so the reveal shows a settled layout rather than the route
    activating in front of the user. */
 requestAnimationFrame(ready);

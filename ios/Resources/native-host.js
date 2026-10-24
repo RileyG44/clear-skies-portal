@@ -61,14 +61,33 @@
     return nativeFetch(input, init);
   };
 
-  /* The status bar and system sheets follow the map's light or dark theme. */
   const root = document.documentElement;
-  const sendTheme = () => {
-    const theme = root.dataset.uiTheme;
-    if (theme) post("theme", { theme }).catch(() => {});
-  };
-  new MutationObserver(sendTheme).observe(root, { attributes: true, attributeFilter: ["data-ui-theme"] });
-  root.addEventListener("csp:ready", () => { sendTheme(); post("ready").catch(() => {}) }, { once: true });
+
+  /* Native chrome replaces the web panel (Stage 2). The panel stays in the
+     page, laid out and live, because its controls remain the source of truth;
+     it only moves out of sight and out of reach of touches. Added before the
+     first paint so it never flashes. */
+  const chrome = document.createElement("style");
+  /* On a phone the collapsed panel shows its search strip and drops the page
+     body (display:none). Here the page body is what the native sheet mirrors,
+     so it keeps its layout while the panel stays collapsed. */
+  chrome.textContent = "html.csp-native-chrome #side{translate:-400vw 0!important;pointer-events:none!important}"
+    + "html.csp-native-chrome #sideToggleDock{display:none!important}"
+    + "html.csp-native-chrome body.csp-redesign #side #cspWorkspace{display:flex!important}"
+    + "html.csp-native-chrome body.csp-redesign #side #cspWorkspaceScroll{visibility:visible!important}"
+    /* The map tools, the view menu and these pop-ups are drawn natively from
+       the same elements (native-shell.js). The markup tools, point-cloud
+       viewer and map selections stay web for now and remain visible. */
+    + "html.csp-native-chrome :is(#mapDock,#mapModeMenu){display:none!important}"
+    /* Pop-up controls need their layout boxes too: the adapter uses layout
+       to distinguish visible controls from conditional ones. display:none
+       on a pop-up would also erase its native fields, sliders and buttons. */
+    + "html.csp-native-chrome :is(#serverPanel,#snapshotPanel,#terrainSourcePanel,#ctl){translate:-400vw 0!important;pointer-events:none!important}";
+  root.classList.add("csp-native-chrome");
+  root.append(chrome);
+  /* The app follows the system's light or dark appearance; the map's own
+     theme is a map style and stays the page's. */
+  root.addEventListener("csp:ready", () => { post("ready").catch(() => {}) }, { once: true });
 
   Object.defineProperty(window, "CSPNativeHost", {
     value: Object.freeze({

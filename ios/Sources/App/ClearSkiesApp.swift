@@ -12,26 +12,29 @@ struct ClearSkiesApp: App {
 }
 
 /// App-wide state the native layer needs from the page.
-@Observable
+@MainActor @Observable
 final class PortalModel {
-    /// The page's light or dark map, so the status bar and system sheets match.
-    var theme: String?
     var ready = false
+    /// True while the page reloads after iOS ended its process.
+    var restoring = false
 
     @ObservationIgnored let host: WebHost
+    @ObservationIgnored let shell = ShellModel()
 
     init() {
         host = WebHost(engine: EngineSettings())
-        host.onTheme = { [weak self] theme in self?.theme = theme }
-        host.onReady = { [weak self] in self?.ready = true }
-        host.load()
-    }
-
-    var colorScheme: ColorScheme? {
-        switch theme {
-        case "dark": .dark
-        case "light": .light
-        default: nil
+        shell.host = host
+        host.onReady = { [weak self] in
+            self?.ready = true
+            self?.restoring = false
         }
+        host.onShell = { [weak self] json in self?.shell.apply(json: json) }
+        host.onTerminate = { [weak self] in
+            guard let self else { return }
+            restoring = true
+            ready = false
+            shell.reset()
+        }
+        host.load()
     }
 }

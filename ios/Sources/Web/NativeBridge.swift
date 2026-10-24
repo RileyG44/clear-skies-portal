@@ -52,12 +52,13 @@ final class NativeBridge: NSObject, WKScriptMessageHandlerWithReply {
             if let id = body["id"] as? Int { location.clear(id: id) }
             return (true, nil)
 
-        case "theme":
-            host?.themeChanged(body["theme"] as? String)
-            return (true, nil)
-
         case "ready":
             host?.pageReady()
+            return (true, nil)
+
+        case "shell":
+            guard let json = body["json"] as? String else { return (nil, "Missing update") }
+            host?.shellMessage(json)
             return (true, nil)
 
         default:

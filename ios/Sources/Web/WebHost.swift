@@ -8,8 +8,11 @@ import os
 /// downloads and location.
 final class WebHost: NSObject {
     let webView: WKWebView
-    var onTheme: ((String) -> Void)?
     var onReady: (() -> Void)?
+    /// Updates from native-shell.js, as JSON text.
+    var onShell: ((String) -> Void)?
+    /// iOS ended the page's process; the page is reloading.
+    var onTerminate: (() -> Void)?
 
     private let engine: EngineSettings
     private let location = LocationService()
@@ -46,18 +49,20 @@ final class WebHost: NSObject {
         // env(safe-area-inset-*), as it does when installed from Safari.
         webView.scrollView.contentInsetAdjustmentBehavior = .never
         webView.scrollView.bounces = false
+        // Touches reach the map at once; the page never scrolls as a document.
+        webView.scrollView.delaysContentTouches = false
         webView.isOpaque = false
         webView.backgroundColor = UIColor(named: "CanvasBackground")
         webView.scrollView.backgroundColor = webView.backgroundColor
+        webView.underPageBackgroundColor = webView.backgroundColor
     }
 
     func load() {
         webView.load(URLRequest(url: SiteSchemeHandler.startURL))
     }
 
-    func themeChanged(_ theme: String?) {
-        guard let theme else { return }
-        onTheme?(theme)
+    func shellMessage(_ json: String) {
+        onShell?(json)
     }
 
     func pageReady() {
@@ -70,17 +75,25 @@ final class WebHost: NSObject {
     #if DEBUG
     /// Verification hook for Debug builds only: `-cspDebugScript '<js>'` on
     /// the launch command line runs that async function body once the page is
-    /// ready and writes its result to the system log (subsystem = bundle ID,
-    /// category "debug"). Launch arguments also override stored defaults, so
+    /// ready and writes its result to Library/Caches/csp-debug-result.json
+    /// and the system log (subsystem = bundle ID, category "debug").
+    /// Launch arguments also override stored defaults, so
     /// `-clearskies.engineBase.v1 <url>` sets the engine for one run.
     private func runDebugScript() {
         guard let script = UserDefaults.standard.string(forKey: "cspDebugScript"), !script.isEmpty else { return }
+        let runID = UserDefaults.standard.string(forKey: "cspDebugRunID") ?? ""
         let log = Logger(subsystem: Bundle.main.bundleIdentifier ?? "ClearSkies", category: "debug")
         Task {
+            let output = URL.cachesDirectory.appending(path: "csp-debug-result.json")
             do {
                 let result = try await webView.callAsyncJavaScript(script, arguments: [:], contentWorld: .page)
+                let data = try JSONSerialization.data(withJSONObject: ["ok": true, "runID": runID, "result": result ?? NSNull()],
+                                                      options: [.prettyPrinted, .sortedKeys])
+                try data.write(to: output, options: .atomic)
                 log.notice("debug script result: \(String(describing: result ?? "nil"), privacy: .public)")
             } catch {
+                let data = try? JSONSerialization.data(withJSONObject: ["ok": false, "runID": runID, "error": error.localizedDescription])
+                try? data?.write(to: output, options: .atomic)
                 log.error("debug script failed: \(String(describing: error), privacy: .public)")
             }
         }
@@ -95,20 +108,29 @@ final class WebHost: NSObject {
     }
 
     /// The page reads the engine address synchronously while it starts, so
-    /// the script that carries it is rebuilt before every load.
+    /// the script that carries it is rebuilt before every load. The native
+    /// shell adapter runs once the page's own scripts have run.
     private func installBootstrap() {
         let controller = webView.configuration.userContentController
         controller.removeAllUserScripts()
         controller.addUserScript(WKUserScript(source: Self.bootstrapSource(engineBase: engine.base),
                                               injectionTime: .atDocumentStart,
                                               forMainFrameOnly: true, in: .page))
+        controller.addUserScript(WKUserScript(source: Self.resource("native-shell"),
+                                              injectionTime: .atDocumentEnd,
+                                              forMainFrameOnly: true, in: .page))
+    }
+
+    private static func resource(_ name: String) -> String {
+        guard let url = Bundle.main.url(forResource: name, withExtension: "js"),
+              let source = try? String(contentsOf: url, encoding: .utf8) else {
+            preconditionFailure("\(name).js is missing from the app bundle")
+        }
+        return source
     }
 
     private static func bootstrapSource(engineBase: String) -> String {
-        guard let url = Bundle.main.url(forResource: "native-host", withExtension: "js"),
-              let template = try? String(contentsOf: url, encoding: .utf8) else {
-            preconditionFailure("native-host.js is missing from the app bundle")
-        }
+        let template = resource("native-host")
         let config: [String: Any] = ["engineBase": engineBase, "appVersion": appVersion]
         let json = (try? JSONSerialization.data(withJSONObject: config)).flatMap { String(data: $0, encoding: .utf8) } ?? "{}"
         return template.replacingOccurrences(of: "__CSP_NATIVE_CONFIG__", with: json)
@@ -189,6 +211,7 @@ extension WebHost: WKNavigationDelegate {
     /// iOS may end the page's process under memory pressure, most often while
     /// the app is in the background. The page restores itself from storage.
     func webViewWebContentProcessDidTerminate(_ webView: WKWebView) {
+        onTerminate?()
         installBootstrap()
         load()
     }

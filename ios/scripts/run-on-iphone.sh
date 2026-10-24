@@ -1,7 +1,15 @@
 #!/bin/zsh
 # Build Clear Skies, install it on the paired iPhone and open it. The phone
 # must be connected by cable or on the same network, and unlocked to open.
+# Pass --no-activate to install and launch without taking over the screen.
 set -euo pipefail
+launch_options=(--terminate-existing)
+if [[ ${1:-} == --no-activate ]]; then
+  launch_options+=(--no-activate)
+elif [[ $# -gt 0 ]]; then
+  echo "Usage: $0 [--no-activate]" >&2
+  exit 2
+fi
 cd "${0:A:h}/.."
 export DEVELOPER_DIR=${DEVELOPER_DIR:-/Applications/Xcode.app/Contents/Developer}
 # Outside ~/Documents: iCloud Drive tags files there, and codesign rejects them.
@@ -29,5 +37,5 @@ if [[ -z $device ]]; then
 fi
 
 xcrun devicectl device install app --device "$device" "$app"
-xcrun devicectl device process launch --device "$device" --terminate-existing "$bundle" \
+xcrun devicectl device process launch --device "$device" "${launch_options[@]}" "$bundle" \
   || echo "Installed. Unlock the iPhone and open Clear Skies."

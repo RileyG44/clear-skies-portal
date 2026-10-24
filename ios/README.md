@@ -24,8 +24,13 @@ Swift. The app adds the iOS layer around it:
 - `WebHost` handles links out of the app, dialogs, exports (downloads become a
   share sheet) and recovery if iOS ends the page's process.
 
-Stage 1 shows the web client's own controls. Stage 2 replaces them, route by
-route, with native SwiftUI screens that call the same web functions.
+The current Stage 2 build draws search, the map dock, the tool sheet, all 13
+tool routes and the engine/layers/export/scene popovers in SwiftUI. The web
+controls stay laid out off screen as the bridge's source of truth. Map
+selections, the markup drawing toolbar and point-cloud viewer controls remain
+web controls at this stage. See [the implementation checklist](../docs/ios/STAGE2_VERIFICATION.md)
+for verification and remaining work; this is an internal build, not a parity
+or release-gate acceptance claim.
 
 The bundled site is the GitHub Pages artifact. `scripts/assemble_site.py` reads
 the file list from the "Assemble the static site" step in
@@ -41,6 +46,7 @@ and `Config/Local.xcconfig` containing your team ID (copy
 cd ios
 xcodegen generate                 # after changing project.yml
 scripts/run-on-iphone.sh          # build, install and open on the paired iPhone
+scripts/run-on-iphone.sh --no-activate # install without taking over the screen
 scripts/testflight.sh             # archive and upload for internal TestFlight
 scripts/testflight.sh --export    # archive and export the .ipa without uploading
 ```
@@ -55,3 +61,27 @@ build in `~/Library/Developer/Xcode/DerivedData`.
 
 Change web files in the repository root, never in the app bundle. Any web
 change ships with the next app build (engineering contract 9).
+
+## Verify the native bridge
+
+After installing the current Debug build, run from the repository root:
+
+```
+xcrun devicectl list devices
+python3 ios/scripts/verify_shell_on_device.py <device-id> --output /tmp/clear-skies-shell-check.json
+```
+
+The probe launches only Clear Skies, without activating it or capturing the
+screen. It describes all 13 live tool routes and opens/closes the engine,
+export and layers popovers, checking their native controls against the actual
+visible web inputs. It also checks elevation thresholds, color wells and
+Reset. Results carry a per-run ID so a stale result cannot count as a pass.
+The probe does not run analyses, export an image or change engine settings.
+Background execution can be suspended by iOS; if no result arrives, unlock
+the phone and open the Debug app before retrying.
+
+Debug-only launch arguments also allow app-scoped visual verification:
+`-cspDebugPage terrain -cspDebugDetent large`, `-cspDebugSection Lighting`,
+`-cspDebugPanel serverPanel`, and `-cspDebugAppearance light` or `dark`.
+Appearance overrides affect that app launch and do not change system settings.
+These hooks and their cached JSON output are excluded from Release builds.
