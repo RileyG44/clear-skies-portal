@@ -29,8 +29,8 @@ struct ChoicesRow: View {
                                 .foregroundStyle(on ? AnyShapeStyle(.tint) : AnyShapeStyle(.secondary))
                                 .frame(height: 20)
                             Text(option.label.replacingOccurrences(of: "Contours — ", with: "Contours\n"))
-                                .font(.caption2.weight(on ? .semibold : .regular))
-                                .foregroundStyle(on ? AnyShapeStyle(.tint) : AnyShapeStyle(.primary))
+                                .portalFont(.caption2, weight: on ? .semibold : .regular)
+                                .foregroundStyle(on ? AnyShapeStyle(.tint) : AnyShapeStyle(PortalPrimary()))
                                 .multilineTextAlignment(.center)
                                 .lineLimit(2)
                                 .minimumScaleFactor(0.85)
@@ -80,7 +80,7 @@ struct LooksRow: View {
                             .clipShape(.rect(cornerRadius: 8))
                             .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(on ? AnyShapeStyle(.tint) : AnyShapeStyle(.primary.opacity(0.08)), lineWidth: on ? 2 : 0.5))
                             Text(look.label)
-                                .font(.caption2.weight(on ? .semibold : .regular))
+                                .portalFont(.caption2, weight: on ? .semibold : .regular)
                                 .foregroundStyle(on ? AnyShapeStyle(.tint) : AnyShapeStyle(.secondary))
                                 .lineLimit(1)
                                 .frame(width: 100, alignment: .leading)
@@ -118,7 +118,7 @@ struct PalettesRow: View {
                                 .frame(width: 76, height: 16)
                                 .overlay(Capsule().strokeBorder(on ? AnyShapeStyle(.tint) : AnyShapeStyle(.primary.opacity(0.12)), lineWidth: on ? 2 : 0.5))
                             Text(palette.label)
-                                .font(.caption2.weight(on ? .semibold : .regular))
+                                .portalFont(.caption2, weight: on ? .semibold : .regular)
                                 .foregroundStyle(on ? AnyShapeStyle(.tint) : AnyShapeStyle(.secondary))
                         }
                     }
@@ -167,9 +167,9 @@ struct LidarLayerLabel: View {
         HStack(spacing: 10) {
             Button { shell.act(item.eye) } label: {
                 Image(systemName: item.visible == false ? "eye.slash" : "eye")
-                    .font(.footnote)
+                    .portalFont(.footnote)
                     .foregroundStyle(item.visible == false ? AnyShapeStyle(.tertiary) : AnyShapeStyle(.secondary))
-                    .frame(width: 28, height: 28)
+                    .frame(width: 44, height: 44)
                     .contentShape(.rect)
             }
             .buttonStyle(.borderless)
@@ -177,7 +177,7 @@ struct LidarLayerLabel: View {
             GradientBar(stops: item.stops).frame(width: 30, height: 12)
             VStack(alignment: .leading, spacing: 1) {
                 Text(item.text).fontWeight(.medium)
-                if let detail = item.detail { Text(detail).font(.caption).foregroundStyle(.secondary) }
+                if let detail = item.detail { Text(detail).portalFont(.caption).foregroundStyle(.secondary) }
             }
             .opacity(item.visible == false ? 0.55 : 1)
         }
@@ -214,7 +214,9 @@ struct RampEditor: View {
                             .overlay(Circle().strokeBorder(.white, lineWidth: handle.selected ? 2.5 : 1.5))
                             .shadow(color: .black.opacity(0.3), radius: 1.5, y: 0.5)
                             .frame(width: handle.selected ? 22 : 17, height: handle.selected ? 22 : 17)
-                            .position(x: at * width, y: 13)
+                            .frame(width: 44, height: 44)
+                            .contentShape(.rect)
+                            .position(x: at * width, y: 22)
                             .gesture(
                                 DragGesture(minimumDistance: 0)
                                     .onChanged { value in
@@ -233,11 +235,17 @@ struct RampEditor: View {
                                         dragging = nil
                                     }
                             )
-                            .accessibilityLabel("Color stop at \(Int((handle.at * 100).rounded())) percent")
+                            .accessibilityLabel("Color stop")
+                            .accessibilityValue("\(Int((handle.at * 100).rounded())) percent")
+                            .accessibilityAdjustableAction { direction in
+                                let next = max(0, min(1, handle.at + (direction == .increment ? 0.01 : -0.01)))
+                                shell.act(handle.ref, .focus)
+                                shell.act(handle.ref, .rampMove, next)
+                            }
                     }
                 }
             }
-            .frame(height: 26)
+            .frame(height: 44)
             HStack(spacing: 12) {
                 if let well = item.well {
                     ColorPicker(selection: Binding(get: { Color(hex: well.value?.string) ?? .black }, set: { picked in
@@ -246,7 +254,7 @@ struct RampEditor: View {
                     .fixedSize()
                 }
                 if let position = item.position {
-                    Text(position).font(.footnote.monospacedDigit()).foregroundStyle(.secondary)
+                    Text(position).portalFont(.footnote, digits: true).foregroundStyle(.secondary)
                 }
                 Spacer()
                 if let remove = item.remove {
@@ -257,7 +265,7 @@ struct RampEditor: View {
                 }
             }
             Text("Tap the bar to add a color. Drag a stop to move it.")
-                .font(.caption).foregroundStyle(.secondary)
+                .portalFont(.caption).foregroundStyle(.secondary)
         }
         .padding(.vertical, 2)
     }
@@ -312,8 +320,8 @@ struct SunDial: View {
                     ForEach(Array(["N", "E", "S", "W"].enumerated()), id: \.offset) { index, letter in
                         let theta = Angle.degrees(Double(index) * 90 - 90).radians
                         Text(letter)
-                            .font(.caption2.weight(letter == "N" ? .bold : .medium))
-                            .foregroundStyle(letter == "N" ? AnyShapeStyle(.primary) : AnyShapeStyle(.secondary))
+                            .portalFont(.caption2, weight: letter == "N" ? .bold : .medium)
+                            .foregroundStyle(letter == "N" ? AnyShapeStyle(PortalPrimary()) : AnyShapeStyle(.secondary))
                             .position(x: center.x + cos(theta) * (radius + 10), y: center.y + sin(theta) * (radius + 10))
                     }
                     Path { path in
@@ -365,20 +373,25 @@ struct SunDial: View {
         }
         .padding(.vertical, 6)
         .sensoryFeedback(.selection, trigger: Int(azimuth / 45))
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel("Sun direction")
-        .accessibilityValue("Azimuth \(Int(azimuth)) degrees \(compass(azimuth)), altitude \(Int(altitude)) degrees")
-        .accessibilityAdjustableAction { direction in
-            let next = direction == .increment ? (azimuth + 15).truncatingRemainder(dividingBy: 360) : (azimuth + 345).truncatingRemainder(dividingBy: 360)
-            shell.act(azimuthSpec?.ref, .commit, next)
+        .accessibilityRepresentation {
+            VStack {
+                Slider(value: Binding(get: { azimuth }, set: { shell.act(azimuthSpec?.ref, .commit, $0) }), in: 0...359, step: 1) {
+                    Text("Sun azimuth")
+                }
+                .accessibilityValue("\(Int(azimuth)) degrees \(compass(azimuth))")
+                Slider(value: Binding(get: { altitude }, set: { shell.act(altitudeSpec?.ref, .commit, $0) }), in: minAltitude...maxAltitude, step: 1) {
+                    Text("Sun altitude")
+                }
+                .accessibilityValue("\(Int(altitude)) degrees")
+            }
         }
     }
 
     private func readout(title: String, value: String, detail: String) -> some View {
         VStack(spacing: 1) {
-            Text(title).font(.caption2).foregroundStyle(.secondary).textCase(.uppercase)
-            Text(value).font(.subheadline.weight(.medium).monospacedDigit()).contentTransition(.numericText())
-            Text(detail).font(.caption2).foregroundStyle(.secondary)
+            Text(title).portalFont(.caption2).foregroundStyle(.secondary).textCase(.uppercase)
+            Text(value).portalFont(.subheadline, weight: .medium, digits: true).contentTransition(.numericText())
+            Text(detail).portalFont(.caption2).foregroundStyle(.secondary)
         }
         .frame(maxWidth: .infinity)
     }

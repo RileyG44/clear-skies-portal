@@ -99,7 +99,7 @@ struct ToolButton: View {
         let active = tool.pressed == true || tool.expanded == true || (panel != nil && shell.presentedPanel == panel)
         return Image(systemName: symbol)
             .font(.system(size: 15, weight: .medium))
-            .foregroundStyle(active ? AnyShapeStyle(.tint) : AnyShapeStyle(.primary))
+            .foregroundStyle(active ? AnyShapeStyle(.tint) : AnyShapeStyle(PortalPrimary()))
             .rotationEffect(.degrees(tool.tool == "bearing" ? -shell.map.bearing : 0))
             .frame(width: 44, height: 44)
             .contentShape(.rect)
@@ -132,15 +132,15 @@ struct TerrainStatusCapsule: View {
             } label: {
                 HStack(spacing: 8) {
                     icon(terrain.state)
-                        .font(.footnote)
+                        .portalFont(.footnote)
                     if !folded {
                         VStack(alignment: .leading, spacing: 1) {
                             Text(parts.title)
-                                .font(.caption.weight(.medium))
+                                .portalFont(.caption, weight: .medium)
                                 .contentTransition(.interpolate)
                             if !parts.detail.isEmpty {
                                 Text(parts.detail)
-                                    .font(.caption2)
+                                    .portalFont(.caption2)
                                     .foregroundStyle(.secondary)
                                     .lineLimit(2)
                             }
@@ -180,8 +180,12 @@ struct TerrainStatusCapsule: View {
             ProgressView().controlSize(.mini)
         case "partial":
             Image(systemName: "exclamationmark.triangle").foregroundStyle(.orange)
-        default:
+        case "ready":
             Image(systemName: "checkmark.seal").foregroundStyle(.green)
+        case "offline":
+            Image(systemName: "wifi.slash").foregroundStyle(.secondary)
+        default:
+            Image(systemName: "exclamationmark.triangle").foregroundStyle(.orange)
         }
     }
 
@@ -209,16 +213,16 @@ struct SearchCapsule: View {
             HStack(spacing: 10) {
                 Button { shell.openSheet(.medium) } label: {
                     HStack(spacing: 8) {
-                        Image(systemName: "magnifyingglass").font(.footnote.weight(.medium)).foregroundStyle(.secondary)
+                        Image(systemName: "magnifyingglass").portalFont(.footnote, weight: .medium).foregroundStyle(.secondary)
                         if shell.search.label.isEmpty {
                             Text("Search places, layers…").foregroundStyle(.secondary)
                         } else {
-                            Text(shell.search.label).foregroundStyle(.primary).lineLimit(1)
+                            Text(shell.search.label).foregroundStyle(PortalPrimary()).lineLimit(1)
                         }
                         Spacer(minLength: 0)
                         if let route = shell.path.last { RouteGlyph(key: route) }
                     }
-                    .font(.subheadline)
+                    .portalFont(.subheadline)
                     .padding(.horizontal, 16)
                     .frame(height: 46)
                     .contentShape(.capsule)
@@ -232,7 +236,7 @@ struct SearchCapsule: View {
                 Button { shell.locate() } label: {
                     Image(systemName: "location")
                         .font(.system(size: 15, weight: .medium))
-                        .foregroundStyle(.primary)
+                        .foregroundStyle(PortalPrimary())
                         .frame(width: 46, height: 46)
                         .contentShape(.circle)
                 }
@@ -271,7 +275,9 @@ struct Toasts: View {
         .animation(.spring(duration: 0.35), value: shell.status.snapshot)
         .animation(.spring(duration: 0.35), value: shownError)
         .onChange(of: shell.status.message) { _, message in
-            guard let message, message.error == true, !message.text.isEmpty, shell.activeSheet == nil else { return }
+            guard let message, message.error == true, !message.text.isEmpty else { return }
+            AccessibilityNotification.Announcement(message.text).post()
+            guard shell.activeSheet == nil else { return }
             shownError = message.text
             hideTask?.cancel()
             hideTask = Task {
@@ -289,7 +295,7 @@ struct Toasts: View {
         } icon: {
             Image(systemName: symbol).foregroundStyle(tint)
         }
-        .font(.footnote)
+        .portalFont(.footnote)
         .padding(.horizontal, 14)
         .padding(.vertical, 9)
         .chromeGlass(in: .capsule, interactive: false)
@@ -311,9 +317,9 @@ struct LaunchCover: View {
                     .foregroundStyle(.secondary)
                     .symbolEffect(.pulse, options: .repeating)
                 VStack(spacing: 2) {
-                    Text("Clear Skies").font(.headline)
+                    Text("Clear Skies").portalFont(.headline)
                     Text(restoring ? "Restoring your map…" : "Loading your map and tools…")
-                        .font(.footnote)
+                        .portalFont(.footnote)
                         .foregroundStyle(.secondary)
                 }
             }

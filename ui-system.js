@@ -1603,6 +1603,7 @@ if(window.CSPNativeHost) window.CSPShell=Object.freeze({
     return true;
   },
   current:()=>currentRoute,
+  appearance:()=>({...appearance}),
   routeForText:text=>SEARCH_ROUTES.get(String(text||"").trim().toLocaleLowerCase().replace(/\s+/g," "))||null,
   /* The words the search field already accepts for each page, so the app's
      search can offer a page while it is typed. */

@@ -122,15 +122,22 @@
 
   /* Canvas pictures (look previews, legends) are encoded once per canvas and
      again at most every two seconds; a description never stalls on them. */
-  const pictures = new WeakMap();
+  const pictures = new WeakMap(), imageAssets = new Map(), activeImages = new Set(), changedImages = new Map();
   const pictureOf = canvas => {
     if (!canvas.width || !canvas.height || canvas.width * canvas.height > 600000) return undefined;
     const now = performance.now(), cached = pictures.get(canvas);
-    if (cached && (now - cached.at < 2000 || cached.w !== canvas.width)) return cached.src;
+    const keep = (src, key) => {
+      activeImages.add(key);
+      if (imageAssets.get(key) !== src) { imageAssets.set(key, src); changedImages.set(key, src); }
+      return key;
+    };
+    if (cached && now - cached.at < 2000 && cached.w === canvas.width && cached.h === canvas.height)
+      return keep(cached.src, cached.key);
     try {
       const src = canvas.toDataURL("image/png");
-      pictures.set(canvas, { src, at: now, w: canvas.width });
-      return src;
+      const key = "csp-image:" + refOf(canvas);
+      pictures.set(canvas, { src, key, at: now, w: canvas.width, h: canvas.height });
+      return keep(src, key);
     } catch (error) { return undefined; }
   };
 
@@ -171,6 +178,9 @@
       input: tag === "textarea" ? "multiline" : (type || "text"), min: el.min || undefined, max: el.max || undefined, step: el.step || undefined,
       unit: unitOf(el) };
     if (el.getAttribute("role") === "slider") return { kind: "text", style: "hint", title: clean(el.getAttribute("aria-valuetext") || el.getAttribute("aria-label")) };
+    // Analysis choices have a short name and a separate scientific description.
+    if (el.matches(".al-menu-item")) return {kind:"button",...base,role:"option",
+      title:clean($(".al-menu-text > span",el)?.textContent),detail:clean($(".al-menu-hint",el)?.textContent)||undefined};
     // Buttons and links.
     const own = textWithout(el, "svg,img");
     const aria = clean(el.getAttribute("aria-label"));
@@ -504,7 +514,22 @@
     if (id === "ctl") {
       items.push({ kind: "text", style: "row", title: clean($("#ctlName")?.textContent), detail: clean($("#ctlDate")?.textContent) || undefined });
     }
-    if (body) for (const child of body.children) if (!handle(child, items)) walk(child, items);
+    if (id === "terrainSourcePanel" && body) {
+      const status = $(".terrain-source-panel-status", body);
+      if (status && !status.hidden) items.push({kind: "text", title: clean(status.textContent), style: "status"});
+      for (const row of $$(".terrain-source-panel-row", body)) {
+        const controls = $$("label.tsp-control", row).map(label => controlItem($("input", label),
+          {title: clean($("span", label)?.textContent), output: $("output", label)}));
+        const name = $(".terrain-source-panel-name", row);
+        if (name?.matches("button")) controls.unshift(controlItem(name, {title: "Edit layer"}));
+        items.push({kind: "group", title: clean(name?.textContent),
+          detail: clean($(".terrain-source-panel-meta", row)?.textContent), items: controls});
+      }
+      const references = $("#mapSourceReferences", body);
+      for (const note of $$(".terrain-source-panel-note", body).filter(el => el !== references))
+        items.push({kind: "text", style: "hint", title: clean(note.textContent)});
+      if (references) items.push({kind: "text", title: "Map source references", markdown: tidyMarkdown(markdownOf(references))});
+    } else     if (body) for (const child of body.children) if (!handle(child, items)) walk(child, items);
     return { id, title: spec.title || clean($(".tool-popover-title", el)?.textContent), state: clean($(".tool-popover-state", el)?.textContent) || undefined, items };
   }
 
@@ -549,6 +574,18 @@
     };
   }
 
+  function appearanceState() {
+    const settings = window.CSPShell?.appearance?.();
+    if (settings) return settings;
+    const root=document.documentElement, style=root.style;
+    return {toggle:style.getPropertyValue("--csp-control-on").trim()||null,
+      track:style.getPropertyValue("--csp-slider-track").trim()||null,
+      button:style.getPropertyValue("--ui-accent").trim()||null,
+      fontColor:style.getPropertyValue("--ui-text").trim()||null,
+      font:$("[data-font-select]")?.value||"system",
+      textSize:Number(style.getPropertyValue("--csp-text-zoom"))||1};
+  }
+
   function dockState() {
     return $$("#mapDock > .map-tool").map(button => ({
       ref: refOf(button), id: button.id, tool: button.dataset.tool || button.id,
@@ -579,6 +616,7 @@
   let timer = 0, forceNext = false;
   function publish() {
     timer = 0;
+    activeImages.clear();
     const force = forceNext;
     forceNext = false;
     const update = {};
@@ -590,11 +628,19 @@
     offer("counts", counts());
     offer("search", searchState());
     offer("map", mapState());
+    offer("appearance", appearanceState());
+    if (bridge()?.sessionState) offer("session", bridge().sessionState());
     offer("dock", dockState());
     offer("status", statusState());
     offer("panelOpen", openPanel());
     if (view.sheet !== "closed" && view.page) offer("page", describePage());
     if (view.panel) offer("panel", describePanel(view.panel));
+    for (const key of imageAssets.keys()) if (!activeImages.has(key)) { imageAssets.delete(key); changedImages.delete(key); }
+    // Pictures travel once, separately from frequently changing control values.
+    // Retain only the assets referenced by the currently presented page/panel.
+    offer("imageKeys", [...activeImages]);
+    if (force || changedImages.size) update.images = Object.fromEntries(force ? imageAssets : changedImages);
+    changedImages.clear();
     if (Object.keys(update).length) send(update);
   }
   const schedule = (delay = 60) => { if (!timer) timer = setTimeout(publish, delay); };
@@ -666,7 +712,7 @@
   }
 
   /* ------------------------------------------------------------- search */
-  let places = [], suggestAbort = null;
+  let places = [], suggestAbort = null, suggestionVersion = 0;
   const shell = window.CSPShell;
   window.CSPNativeShell = Object.freeze({
     /* {sheet:"closed"|"medium"|"large", page:route|null, panel:id|null} */
@@ -694,13 +740,15 @@
         const found = await bridge().placeSuggestions(text, signal) || [];
         if (signal.aborted) return null;
         places = found;
-        return found.map((place, index) => ({ index, primary: place.primary || "", secondary: place.secondary || "", kind: place.kind || "" }));
+        const version = ++suggestionVersion;
+        return found.map((place, index) => ({ index, version, primary: place.primary || "", secondary: place.secondary || "", kind: place.kind || "" }));
       } catch (error) {
         if (error?.name === "AbortError" || signal.aborted) return null;
         throw error;
       }
     },
-    pick(index) {
+    pick(index, version) {
+      if (version !== suggestionVersion) return false;
       const place = places[index];
       if (!place) return false;
       bridge().searchPlace(place);
@@ -750,7 +798,11 @@
   });
 
   /* -------------------------------------------------------------- watching */
-  const start = () => {
+  const start = async () => {
+    if (window.CSPNativeHost.resume) {
+      try { await bridge()?.restoreSession?.(window.CSPNativeHost.resume); }
+      catch (error) { console.warn("Map recovery could not restore 3D", error); }
+    }
     // The web panel stays collapsed for good inside the app.
     if (!document.body.classList.contains("collapsed")) $("#sideToggle")?.click();
     // These controls have native equivalents. Moving them off screen keeps
@@ -771,6 +823,7 @@
     flags.observe(document.documentElement, { attributes: true, attributeFilter: ["data-ui-theme"] });
     document.addEventListener("input", () => schedule(), true);
     document.addEventListener("change", () => schedule(), true);
+    document.addEventListener("csp:appearance", () => schedule(0));
     document.addEventListener("csp:location", () => schedule(0));
     document.addEventListener("csp:layers-changed", () => schedule());
     document.addEventListener("csp:open-route", event => {
@@ -786,15 +839,17 @@
       if (!bearingTimer) bearingTimer = setTimeout(() => { bearingTimer = 0; schedule(0); }, 80);
     };
     bridge()?.map?.on?.("rotate", rotate);
+    bridge()?.map?.on?.("moveend", () => schedule(0));
     let watched3d = null;
     new MutationObserver(() => {
       const map3d = bridge()?.map3d?.();
-      if (map3d && map3d !== watched3d) { watched3d = map3d; map3d.on("rotate", rotate); }
+      if (map3d && map3d !== watched3d) { watched3d = map3d; map3d.on("rotate", rotate); map3d.on("moveend", () => schedule(0)); }
       rotate();
     }).observe(document.body, { attributes: true, attributeFilter: ["class"] });
     send({ groups: window.CSPNativeShell.groups(), ready: true });
     forceNext = true;
     flush();
+    handler.postMessage({type: "ready"}).catch(() => {});
   };
   if (document.documentElement.classList.contains("csp-boot")) {
     document.documentElement.addEventListener("csp:ready", start, { once: true });

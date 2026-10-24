@@ -27,6 +27,8 @@ targets:
         CFBundleVersion: $(CURRENT_PROJECT_VERSION)
         LSApplicationCategoryType: public.app-category.navigation
         ITSAppUsesNonExemptEncryption: false
+        UIAppFonts:
+          - Inter.ttf
         UILaunchScreen:
           UIColorName: CanvasBackground
         UIApplicationSceneManifest:
@@ -38,6 +40,7 @@ targets:
         # Native sheets, glass and scrolling run at the display's full rate on
         # ProMotion iPhones instead of the 60 Hz default.
         CADisableMinimumFrameDurationOnPhone: true
+        NSPhotoLibraryAddUsageDescription: Clear Skies saves exported map images to Photos only when you choose Save Image.
         NSLocationWhenInUseUsageDescription: Clear Skies moves the map to where you are when you tap Locate.
         NSLocalNetworkUsageDescription: Clear Skies connects to the terrain engine you set up on your own network.
         NSAppTransportSecurity:

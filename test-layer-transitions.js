@@ -100,6 +100,25 @@ async function main(){
   await search.run();
   assert(cleared,'new search clears any previous scene');
   assert.equal(search.ITEMS[0],result,'scene catalog still loads in the background');
+  // Exercise the actual status painter after a replacement fails, in 3D,
+  // and when offline. Retaining old tiles must never claim the request succeeded.
+  const statusControls={'#terStyle':{value:'hs'},'#terrainSourceSummary':{innerHTML:''}};
+  let is3d=false,summary={sources:[],coverage:100,refining:false,failed:false},text3d='3D mesh: ready. Analytical drape: waiting for data.';
+  const status={document:{body:{classList:{contains:()=>is3d}}},navigator:{onLine:true},$:id=>statusControls[id],
+    terrainLoadStatus:{hidden:false,dataset:{},textContent:''},terrainSwap:null,terrainSwapMessage:'Requested terrain unavailable · previous map preserved.',
+    terLayer:null,elevLayer:null,dnrAreas:[],terrainLayerSummary:()=>summary,elevationActive:()=>false,
+    public3dSourceText:()=>text3d,dnrAcquisitionText:()=>'',esc:value=>value,renderTerrainSourcePanel:()=>{},CompositeTerrainLayer:class{}};
+  vm.createContext(status);
+  vm.runInContext(section('function paintTerrainStatus(','\nmap.on("moveend",scheduleTerrainStatus);'),status);
+  status.paintTerrainStatus();assert.equal(status.terrainLoadStatus.dataset.state,'partial','failed replacement stays partial after repaint');
+  status.terrainSwapMessage='';status.paintTerrainStatus();assert.equal(status.terrainLoadStatus.dataset.state,'ready');
+  is3d=true;status.paintTerrainStatus();assert.equal(status.terrainLoadStatus.dataset.state,'loading','3D readiness cannot come from the ready 2D layer');
+  text3d='3D mesh: USGS. Analytical drape: USGS.';status.paintTerrainStatus();assert.equal(status.terrainLoadStatus.dataset.state,'ready');
+  status.navigator.onLine=false;status.paintTerrainStatus();assert.equal(status.terrainLoadStatus.dataset.state,'offline');
+  assert(status.terrainLoadStatus.textContent.includes('reconnect'));
+  status.navigator.onLine=true;is3d=false;summary={sources:[],coverage:0,refining:true,failed:true};
+  status.paintTerrainStatus();assert.equal(status.terrainLoadStatus.dataset.state,'partial','failed empty terrain stops the indefinite loading status');
+
   console.log('layer transition checks passed (staging, rollback, mosaic cleanup, scene Off, late responses, search without auto-selection)');
 }
 main().catch(error=>{console.error(error);process.exitCode=1;});

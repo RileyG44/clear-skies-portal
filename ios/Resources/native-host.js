@@ -91,11 +91,12 @@
   root.append(chrome);
   /* native-shell.js reports the page's selected theme; SwiftUI mirrors it
      for the native controls and sheets as well as the web map. */
-  root.addEventListener("csp:ready", () => { post("ready").catch(() => {}) }, { once: true });
+  // The shell reports ready after applying any in-memory recovery checkpoint.
 
   Object.defineProperty(window, "CSPNativeHost", {
     value: Object.freeze({
       platform: "ios",
+      resume: config.resume || null,
       appVersion: String(config.appVersion || ""),
       /* The engine address belongs to the app. The page keeps its requests
          relative and the app forwards them, so nothing is cross-origin. */

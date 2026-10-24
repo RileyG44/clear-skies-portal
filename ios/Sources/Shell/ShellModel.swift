@@ -21,6 +21,8 @@ final class ShellModel {
     var page: ShellPage?
     var panel: ShellPanel?
     var connected = false
+    var images: [String: String] = [:]
+    var appearance = NativeAppearance()
 
     // Native presentation. One sheet at a time: the tool sheet, or a map
     // tool's pop-up. Changing it swaps one sheet for the other.
@@ -54,6 +56,12 @@ final class ShellModel {
     @ObservationIgnored private let log = Logger(subsystem: Bundle.main.bundleIdentifier ?? "ClearSkies", category: "shell")
     @ObservationIgnored private let decoder = JSONDecoder()
 
+    init() {
+        // Cache only the existing selected UI theme, so the first native frame
+        // already agrees with the web preference that will be published next.
+        map.theme = UserDefaults.standard.string(forKey: "clearskies.native.theme.v1") ?? ""
+    }
+
     var sheetPresented: Bool { activeSheet == .tools }
     var presentedPanel: String? { if case .panel(let id)? = activeSheet { id } else { nil } }
     /// The page the sheet is showing, if any.
@@ -71,6 +79,12 @@ final class ShellModel {
             log.error("shell update could not be read: \(String(describing: error), privacy: .public)")
             return
         }
+        if let images = update.images { self.images.merge(images) { _, next in next } }
+        if let keys = update.imageKeys {
+            let keep = Set(keys)
+            images = images.filter { keep.contains($0.key) }
+        }
+        if let appearance = update.appearance { self.appearance = appearance }
         if update.ready == true {
             connected = true
             lastView = ""
@@ -126,6 +140,9 @@ final class ShellModel {
     private func applyMap(_ next: MapState) {
         let wasBusy = mapBusy
         map = next
+        if next.theme == "light" || next.theme == "dark" {
+            UserDefaults.standard.set(next.theme, forKey: "clearskies.native.theme.v1")
+        }
         if mapBusy, !wasBusy, activeSheet != nil { activeSheet = nil }
     }
 
@@ -143,6 +160,7 @@ final class ShellModel {
     /// The page's process ended; everything mirrored from it is stale.
     func reset() {
         connected = false
+        images = [:]
         lastView = ""
         page = nil
         panel = nil
@@ -282,8 +300,9 @@ final class ShellModel {
         let result = try await evaluateThrowing("return await CSPNativeShell.suggest(text)", ["text": text])
         guard let places = result as? [[String: Any]] else { return [] }
         return places.compactMap { place in
-            guard let index = (place["index"] as? NSNumber)?.intValue else { return nil }
-            return PlaceSuggestion(index: index, primary: place["primary"] as? String ?? "",
+            guard let index = (place["index"] as? NSNumber)?.intValue,
+                  let version = (place["version"] as? NSNumber)?.intValue else { return nil }
+            return PlaceSuggestion(index: index, version: version, primary: place["primary"] as? String ?? "",
                                    secondary: place["secondary"] as? String ?? "", kind: place["kind"] as? String ?? "")
         }
     }
@@ -303,7 +322,7 @@ final class ShellModel {
     }
 
     func pick(_ place: PlaceSuggestion) {
-        call("CSPNativeShell.pick(index)", ["index": place.index])
+        call("CSPNativeShell.pick(index, version)", ["index": place.index, "version": place.version])
         finishSearch()
     }
 

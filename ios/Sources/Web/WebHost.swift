@@ -19,7 +19,14 @@ final class WebHost: NSObject {
     private let proxy = EngineProxy()
     private let schemeHandler: SiteSchemeHandler
     private let bridge: NativeBridge
+    // One current recovery checkpoint, held only in this app process's memory.
+    private var session: [String: Any]?
     private var downloads: [ObjectIdentifier: URL] = [:]
+    #if DEBUG
+    private var debugScriptStarted = false
+    private var debugReadyGeneration = 0
+    private var debugRecoveryRun: String?
+    #endif
 
     init(engine: EngineSettings) {
         self.engine = engine
@@ -42,7 +49,9 @@ final class WebHost: NSObject {
 
         webView.navigationDelegate = self
         webView.uiDelegate = self
+        #if DEBUG
         webView.isInspectable = true
+        #endif
         webView.allowsLinkPreview = false
         webView.allowsBackForwardNavigationGestures = false
         // The page lays itself out edge to edge and pads its own controls with
@@ -62,17 +71,82 @@ final class WebHost: NSObject {
     }
 
     func shellMessage(_ json: String) {
+        if let data = json.data(using: .utf8),
+           let update = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+           let state = update["session"] as? [String: Any] { session = state }
         onShell?(json)
     }
 
     func pageReady() {
         onReady?()
         #if DEBUG
+        debugReadyGeneration += 1
         runDebugScript()
         #endif
     }
 
     #if DEBUG
+    func debugConfiguration() -> [String: Any] {
+        var sliders: [[String: Any]] = []
+        func color(_ value: UIColor?) -> String {
+            guard let value else { return "auto" }
+            var r: CGFloat = 0, g: CGFloat = 0, b: CGFloat = 0, a: CGFloat = 0
+            value.getRed(&r, green: &g, blue: &b, alpha: &a)
+            return String(format: "#%02x%02x%02x", Int((r * 255).rounded()), Int((g * 255).rounded()), Int((b * 255).rounded()))
+        }
+        func visit(_ view: UIView) {
+            if let slider = view as? UISlider {
+                sliders.append(["title": slider.accessibilityLabel ?? "", "fill": color(slider.minimumTrackTintColor),
+                                "track": color(slider.maximumTrackTintColor), "height": slider.bounds.height])
+            }
+            view.subviews.forEach(visit)
+        }
+        var controller = webView.window?.rootViewController
+        while let current = controller { visit(current.view); controller = current.presentedViewController }
+        return ["photosAddUsage": Bundle.main.object(forInfoDictionaryKey: "NSPhotoLibraryAddUsageDescription") as? String ?? "",
+                "interFont": UIFont(name: "Inter-Regular", size: 17)?.fontName ?? "",
+                "inspectable": webView.isInspectable, "sliders": sliders]
+    }
+
+    /// Exercises the actual recovery delegate, retaining the native process.
+    /// It writes the result after the replacement WebContent page is ready.
+    func debugRecovery(runID: String, original: [String: Any]?) {
+        guard let expected = session else { return }
+        debugRecoveryRun = runID
+        let previous = debugReadyGeneration
+        webViewWebContentProcessDidTerminate(webView)
+        Task {
+            do {
+                for _ in 0..<150 where debugReadyGeneration == previous {
+                    try await Task.sleep(for: .milliseconds(100))
+                }
+                guard debugReadyGeneration > previous else { throw NSError(domain: "Recovery timed out", code: 1) }
+                let result = try await webView.callAsyncJavaScript("""
+                    const current=ClearSkiesPortalBridge.sessionState(), failures=[];
+                    const close=(a,b)=>Math.abs(a-b)<1e-5;
+                    if(!current.center.every((n,i)=>close(n,expected.center[i]))||!close(current.zoom,expected.zoom)) failures.push('Viewpoint changed');
+                    if(!close(current.bearing,expected.bearing)||current.mode!==expected.mode) failures.push('Mode or bearing changed');
+                    if(!!current.location!==!!expected.location||current.location&&(!close(current.location.lat,expected.location.lat)||!close(current.location.lng,expected.location.lng)||current.location.label!==expected.location.label)) failures.push('Selected location changed');
+                    return {passed:!failures.length,failures,checks:['Native recovery delegate preserves viewpoint, mode, bearing and selected place'],method:'Actual recovery delegate with a WebContent reload'};
+                    """, arguments: ["expected": expected], contentWorld: .page)
+                if let original {
+                    _ = try await webView.callAsyncJavaScript("""
+                        await ClearSkiesPortalBridge.restoreSession(original.session);
+                        CSPNativeShell.act('#terStyle','select',original.style);
+                        if(original.preferences===null)localStorage.removeItem('clearskies.terrain.v2');
+                        else localStorage.setItem('clearskies.terrain.v2',original.preferences);
+                        """, arguments: ["original": original], contentWorld: .page)
+                }
+                let data = try JSONSerialization.data(withJSONObject: ["ok": true, "runID": runID, "result": result ?? NSNull()], options: [.prettyPrinted])
+                try data.write(to: URL.cachesDirectory.appending(path: "csp-debug-result.json"), options: .atomic)
+            } catch {
+                let data = try? JSONSerialization.data(withJSONObject: ["ok": false, "runID": runID, "error": error.localizedDescription])
+                try? data?.write(to: URL.cachesDirectory.appending(path: "csp-debug-result.json"), options: .atomic)
+            }
+            debugRecoveryRun = nil
+        }
+    }
+
     /// Read native traits from an app-scoped probe; no screenshot or device
     /// settings change is needed to verify that the web and SwiftUI agree.
     func debugAppearance() -> [String: Any] {
@@ -100,17 +174,20 @@ final class WebHost: NSObject {
     /// `-clearskies.engineBase.v1 <url>` sets the engine for one run.
     private func runDebugScript() {
         guard let script = UserDefaults.standard.string(forKey: "cspDebugScript"), !script.isEmpty else { return }
+        guard !debugScriptStarted else { return }
+        debugScriptStarted = true
         let runID = UserDefaults.standard.string(forKey: "cspDebugRunID") ?? ""
         let log = Logger(subsystem: Bundle.main.bundleIdentifier ?? "ClearSkies", category: "debug")
         Task {
             let output = URL.cachesDirectory.appending(path: "csp-debug-result.json")
             do {
-                let result = try await webView.callAsyncJavaScript(script, arguments: [:], contentWorld: .page)
+                let result = try await webView.callAsyncJavaScript(script, arguments: ["__cspDebugRunID": runID], contentWorld: .page)
                 let data = try JSONSerialization.data(withJSONObject: ["ok": true, "runID": runID, "result": result ?? NSNull()],
                                                       options: [.prettyPrinted, .sortedKeys])
                 try data.write(to: output, options: .atomic)
                 log.notice("debug script result: \(String(describing: result ?? "nil"), privacy: .public)")
             } catch {
+                if debugRecoveryRun == runID { return }
                 let data = try? JSONSerialization.data(withJSONObject: ["ok": false, "runID": runID, "error": error.localizedDescription])
                 try? data?.write(to: output, options: .atomic)
                 log.error("debug script failed: \(String(describing: error), privacy: .public)")
@@ -132,7 +209,7 @@ final class WebHost: NSObject {
     private func installBootstrap() {
         let controller = webView.configuration.userContentController
         controller.removeAllUserScripts()
-        controller.addUserScript(WKUserScript(source: Self.bootstrapSource(engineBase: engine.base),
+        controller.addUserScript(WKUserScript(source: Self.bootstrapSource(engineBase: engine.base, session: session),
                                               injectionTime: .atDocumentStart,
                                               forMainFrameOnly: true, in: .page))
         controller.addUserScript(WKUserScript(source: Self.resource("native-shell"),
@@ -148,9 +225,9 @@ final class WebHost: NSObject {
         return source
     }
 
-    private static func bootstrapSource(engineBase: String) -> String {
+    private static func bootstrapSource(engineBase: String, session: [String: Any]?) -> String {
         let template = resource("native-host")
-        let config: [String: Any] = ["engineBase": engineBase, "appVersion": appVersion]
+        let config: [String: Any] = ["engineBase": engineBase, "appVersion": appVersion, "resume": session ?? NSNull()]
         let json = (try? JSONSerialization.data(withJSONObject: config)).flatMap { String(data: $0, encoding: .utf8) } ?? "{}"
         return template.replacingOccurrences(of: "__CSP_NATIVE_CONFIG__", with: json)
     }
