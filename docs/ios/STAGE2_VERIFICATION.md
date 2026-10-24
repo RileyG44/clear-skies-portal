@@ -117,8 +117,16 @@ so it does not need to take over the phone's screen.
 
 **Internal TestFlight upload succeeded at 21:53 PDT on 2026-10-23.**
 Xcode reported `Upload succeeded`, `Uploaded package is processing`, and
-`EXPORT SUCCEEDED` for version 1.0, build 29880283. Apple processing completion
-and availability to an internal tester have not yet been confirmed.
+`EXPORT SUCCEEDED` for version 1.0, build 29880283.
+
+Follow-up on 2026-10-23 after Riley signed in to the shared browser:
+App Store Connect confirmed **Ready to Test** for this build. The internal
+group **Riley** was created with automatic distribution enabled, and its
+Builds tab shows 1.0 (29880283), Internal, Ready to Test. Riley's existing
+Account Holder account is the group's only tester; its invitation status is
+**Invited** (10:17 PM PDT). No additional testers were added. Accepting the
+invitation and installing through the TestFlight app remain Riley's next
+steps; TestFlight installation has not been observed.
 
 The missing app record was created through Xcode's existing signed-in account,
 using the project's full name **Clear Skies Portal** because both "Clear Skies"
