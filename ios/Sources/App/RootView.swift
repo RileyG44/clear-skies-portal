@@ -23,8 +23,6 @@ struct RootView: View {
         .background(Color("CanvasBackground").ignoresSafeArea())
         .animation(.easeOut(duration: 0.35), value: portal.ready)
         .environment(shell)
-        // The app follows the system's light or dark appearance; the map's
-        // own dark theme is a map style, not the app's.
         .sheet(item: $shell.activeSheet) { sheet in
             Group {
                 switch sheet {
@@ -33,6 +31,7 @@ struct RootView: View {
                 }
             }
             .environment(shell)
+            .preferredColorScheme(appearance)
             .presentationDetents([.medium, .expanded], selection: $shell.detent)
             // The map stays live behind the sheet at every height, so iOS
             // neither dims nor shrinks it and the glass shows the map.
@@ -44,21 +43,26 @@ struct RootView: View {
             .presentationBackground { SheetGlass() }
         }
         .sensoryFeedback(.selection, trigger: shell.feedback)
-        #if DEBUG
-        // Verify both appearances without changing the device's settings.
-        .preferredColorScheme(debugAppearance)
-        #endif
+        .preferredColorScheme(appearance)
     }
 
-    #if DEBUG
-    private var debugAppearance: ColorScheme? {
+    /// The page's theme control owns both the map and the interface. Use the
+    /// system only until that saved/selected choice arrives through the bridge.
+    private var appearance: ColorScheme? {
+        #if DEBUG
+        // Verification overrides affect this launch only, never saved choices.
         switch UserDefaults.standard.string(forKey: "cspDebugAppearance") {
-        case "light": .light
-        case "dark": .dark
-        default: nil
+        case "light": return .light
+        case "dark": return .dark
+        default: break
+        }
+        #endif
+        switch portal.shell.map.theme {
+        case "light": return .light
+        case "dark": return .dark
+        default: return nil
         }
     }
-    #endif
 }
 
 /// The status bar sits on the map, which may be dark in light mode or light

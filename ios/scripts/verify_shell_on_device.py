@@ -17,6 +17,8 @@ def main():
     parser.add_argument("--probe", type=Path, default=Path(__file__).with_name("verify_shell.js"),
                         help="Async JavaScript verification body (default: verify_shell.js)")
     parser.add_argument("--timeout", type=float, default=90, help="Seconds to wait for this run's result")
+    parser.add_argument("--page", help="Open a native tool sheet using the existing Debug page hook")
+    parser.add_argument("--panel", help="Open a native popover using the existing Debug panel hook")
     args = parser.parse_args()
     env = dict(os.environ)
     env.setdefault("DEVELOPER_DIR", "/Applications/Xcode.app/Contents/Developer")
@@ -27,9 +29,14 @@ def main():
         return subprocess.run(["xcrun", "devicectl", "device", *arguments], env=env,
                               capture_output=True, text=True, timeout=30)
 
+    launch_arguments = ["-cspDebugScript", probe, "-cspDebugRunID", run_id]
+    if args.page:
+        launch_arguments += ["-cspDebugPage", args.page]
+    if args.panel:
+        launch_arguments += ["-cspDebugPanel", args.panel]
     launch = device_command("process", "launch", "--device", args.device, "--no-activate",
                             "--terminate-existing", "dev.riley.ClearSkies", "--",
-                            "-cspDebugScript", probe, "-cspDebugRunID", run_id)
+                            *launch_arguments)
     if launch.returncode:
         raise RuntimeError(launch.stdout + launch.stderr)
 

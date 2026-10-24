@@ -73,6 +73,25 @@ final class WebHost: NSObject {
     }
 
     #if DEBUG
+    /// Read native traits from an app-scoped probe; no screenshot or device
+    /// settings change is needed to verify that the web and SwiftUI agree.
+    func debugAppearance() -> [String: Any] {
+        func name(_ style: UIUserInterfaceStyle?) -> String {
+            switch style {
+            case .light: "light"
+            case .dark: "dark"
+            default: "unspecified"
+            }
+        }
+        return ["web": name(webView.traitCollection.userInterfaceStyle),
+                "root": name(webView.window?.rootViewController?.traitCollection.userInterfaceStyle),
+                "presented": name(presenter?.traitCollection.userInterfaceStyle),
+                "hasWindow": webView.window != nil,
+                "hasSheet": webView.window?.rootViewController?.presentedViewController != nil,
+                "expectsSheet": UserDefaults.standard.string(forKey: "cspDebugPage") != nil
+                    || UserDefaults.standard.string(forKey: "cspDebugPanel") != nil]
+    }
+
     /// Verification hook for Debug builds only: `-cspDebugScript '<js>'` on
     /// the launch command line runs that async function body once the page is
     /// ready and writes its result to Library/Caches/csp-debug-result.json

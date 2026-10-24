@@ -97,6 +97,11 @@ For Capture handle and Aurora 32× export verification, see the reproducible
 the installed selection handlers and the actual GPU/streamed PNG pipeline
 without activating the app or capturing the phone screen.
 
+For selected-theme synchronization across the map, native controls and sheets,
+see the [appearance repair checks](../docs/ios/APPEARANCE_FIX_VERIFICATION.md).
+The device runner accepts `--page terrain` or `--panel snapshotPanel` to verify
+the same transition while an actual native sheet is presented.
+
 Debug-only launch arguments also allow app-scoped visual verification:
 `-cspDebugPage terrain -cspDebugDetent large`, `-cspDebugSection Lighting`,
 `-cspDebugPanel serverPanel`, and `-cspDebugAppearance light` or `dark`.

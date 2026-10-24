@@ -61,6 +61,11 @@ final class NativeBridge: NSObject, WKScriptMessageHandlerWithReply {
             host?.shellMessage(json)
             return (true, nil)
 
+        #if DEBUG
+        case "debug.appearance":
+            return (host?.debugAppearance() ?? [:], nil)
+        #endif
+
         default:
             return (nil, "Unknown message \(type)")
         }

@@ -89,8 +89,8 @@
     + "html.csp-native-chrome :is(#serverPanel,#snapshotPanel,#terrainSourcePanel,#ctl){translate:-400vw 0!important;pointer-events:none!important}";
   root.classList.add("csp-native-chrome");
   root.append(chrome);
-  /* The app follows the system's light or dark appearance; the map's own
-     theme is a map style and stays the page's. */
+  /* native-shell.js reports the page's selected theme; SwiftUI mirrors it
+     for the native controls and sheets as well as the web map. */
   root.addEventListener("csp:ready", () => { post("ready").catch(() => {}) }, { once: true });
 
   Object.defineProperty(window, "CSPNativeHost", {

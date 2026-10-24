@@ -112,6 +112,12 @@ correction. The earlier physical-device checks establish the reported selection
 and Aurora 32× fixes; they do not validate the final context-restoration cleanup
 on that device.
 
+Follow-up: Riley confirmed the phone was unlocked. The subsequent CoreDevice
+launch returned error 4016 and the device list marked it **unavailable** (trusted
+connectivity/services could not be asserted). The outstanding recovery rerun now
+requires restoring that connection, not another unlock. Riley asked to continue
+through Xcode and deferred App Store Connect sign-in until returning to the desk.
+
 Signed Release archive/local IPA export **1.0 (29880791)** passed. The packaged
 HTML, engine, layer and version stamp match reproducible minification of the
 tested source, verified by SHA-256. The preceding **29880780** internal upload
