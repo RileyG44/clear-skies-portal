@@ -35,7 +35,7 @@
     const dx=sel.x+width/scale/2-view.cssSize[0]/2,dy=sel.y+height/scale/2-view.cssSize[1]/2;
     const a=view.bearing*Math.PI/180,c=Math.cos(a),s=Math.sin(a),world=256*2**view.zoom;
     return {...view,centerMerc:[view.centerMerc[0]+(c*dx+s*dy)/world,view.centerMerc[1]+(-s*dx+c*dy)/world],
-      cssSize:[width/scale,height/scale],dpr:scale};
+      cssSize:[width/scale,height/scale],dpr:scale,liveDpr:view.dpr};
   }
   function install(L){
     if(L.CSPGpuTerrainLayer)return;
@@ -184,17 +184,29 @@
       _tilesNeeded:function(){return this._map?this._engine.neededTiles(this._view||this._deriveView()):[];},
       settled:function(){return this.options.store.settled(this._tilesNeeded());},
       provenance:function(){return this.options.store.provenance(this._tilesNeeded());},
-      snapshotEntry:function(spec){
+      /* canvas() renders the whole export; canvas(region) one block of it.
+         Blocks of one entry share the engine's export-wide derived fields
+         (relative-elevation base, detail blur), so a block export has no
+         seams; release() frees them once the last block is drawn. An export
+         finer than the view fetches its own elevation (options.onTile counts
+         it, options.signal cancels it). */
+      snapshotEntry:function(spec,options){
         if(!this._container||!this._engine)return null;
         const current=this._view||this._deriveView(),base={...current,centerMerc:[...current.centerMerc],cssSize:[...current.cssSize]};
-        const engine=this._engine,view=exportView(base,spec);
+        const view=exportView(base,spec),engine=this._engine;
         let snapshot=null;
+        const dispose=()=>{snapshot?.release();snapshot=null;};
         return {kind:"gpu-terrain",el:this._container,view,
-          canvas:(block=spec)=>{
-            if(!snapshot&&engine.createSnapshot)snapshot=engine.createSnapshot(base);
-            return engine.renderToCanvas(exportView(base,block),block.width,block.height,snapshot);
-          },
-          dispose:()=>{snapshot?.release();snapshot=null;}};
+          canvas:region=>{
+            if(!snapshot)snapshot=engine.createSnapshot(base);
+            return engine.renderToCanvas(view,spec.width,spec.height,region,{...options,snapshot});
+          },dispose,release:dispose};
+      },
+      /* {z, live, tiles} for an export spec: its elevation level, the view's,
+         and the elevation tiles it would fetch beyond what is on screen. */
+      exportDetail:function(spec){
+        if(!this._container||!this._engine?.exportDetail)return null;
+        return this._engine.exportDetail(exportView(this._view||this._deriveView(),spec),spec.width??Math.round(spec.sel.w*spec.scale));
       },
       destroy:function(){this.remove();this._engine?.destroy();this._engine=null;}
     });
