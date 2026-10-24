@@ -90,3 +90,43 @@ testing, maximum-size export and manual accessibility coverage remain outside
 this verification. This is Riley's internal build, not external TestFlight,
 App Store submission, BASE-001 approval or G3 acceptance. The private archived
 rewrite is intentionally kept local under CR-001.
+
+## Map control sizing and layer editor follow-up
+
+Riley subsequently requested controls about 10% larger and reported duplicate
+edit menu entries and layer titles that did not open the native editor. These
+are native presentation and bridge parity repairs under CR-001; normative
+requirements, shared web behavior and scientific calculations are unchanged.
+
+- Toolbar buttons increase from 44 to **48 points** (9%); search and Locate
+  increase from 46 to **52 points** (13%). Symbols increase from 15 to 17 points,
+  and search text uses the 16-point callout style rather than 15-point subheadline.
+  Short viewports use balanced toolbar columns to preserve these targets above
+  the search bar. Physical landscape review remains unverified.
+- The Layers popover now presents each layer title as the navigation button,
+  followed by its controls. It no longer repeats the title as a heading with
+  a separate Edit layer row. Clicking it explicitly requests the native tools
+  sheet, including when the selected web route is already the correct route.
+- Full layer cards expose a clickable title and one edit menu entry. The title
+  and pencil previously became two menu entries for the same action. Compact
+  cards inside the satellite editor do not offer editing that same editor.
+- The signed Debug app was installed on the iPhone. Its app-window map capture
+  was visually reviewed at **430 × 932 points**, and the editor capture shows
+  that a toolbar layer title opens the native LiDAR tools sheet. These app-only
+  captures exclude system status-bar/Dynamic Island pixels. Capture and native
+  navigation readback are Debug-only and are excluded from Release.
+- The actual device navigation probe verifies the tools sheet and selected
+  route, plus menu uniqueness. The independent 13-route/3-popover probe passes.
+  Chrome and WebKit adapter tests verify navigation to a different route and
+  reopening the same route, unique menu entries and a compact satellite card
+  with explicit fixture scene metadata. No imagery or scientific result is
+  claimed validated by that fixture.
+
+Initial build **1.0 (29881154)** uploaded successfully before these follow-up
+requests. The final build supersedes it. GitHub Pages at the initial merge
+serves **2026-10-24e** and initializes the real app; these follow-up edits change
+only native code and its verification. The Mac application and installed engine
+were updated, with 62 root assets matching the repository, a healthy local
+engine, and the new application process running. Previous app and engine copies
+are retained locally for rollback. Final TestFlight/build/deployment evidence
+continues in the per-run evidence directory cited above.

@@ -23,6 +23,7 @@ final class WebHost: NSObject {
     private var session: [String: Any]?
     private var downloads: [ObjectIdentifier: URL] = [:]
     #if DEBUG
+    var debugNavigation: (() -> [String: Any])?
     private var debugScriptStarted = false
     private var debugReadyGeneration = 0
     private var debugRecoveryRun: String?
@@ -86,6 +87,22 @@ final class WebHost: NSObject {
     }
 
     #if DEBUG
+    /// Capture only this app's window for native map-control layout review.
+    func debugMapSnapshot() -> [String: Any] {
+        guard let window = webView.window else { return ["passed": false, "error": "No app window"] }
+        var drawn = false
+        let image = UIGraphicsImageRenderer(bounds: window.bounds).image { _ in
+            drawn = window.drawHierarchy(in: window.bounds, afterScreenUpdates: true)
+        }
+        guard drawn, let data = image.pngData() else { return ["passed": false, "error": "Window rendering failed"] }
+        do {
+            try data.write(to: URL.cachesDirectory.appending(path: "csp-map-layout.png"), options: .atomic)
+            return ["passed": true, "width": Double(window.bounds.width), "height": Double(window.bounds.height)]
+        } catch {
+            return ["passed": false, "error": error.localizedDescription]
+        }
+    }
+
     func debugConfiguration() -> [String: Any] {
         var sliders: [[String: Any]] = []
         func color(_ value: UIColor?) -> String {
@@ -105,7 +122,8 @@ final class WebHost: NSObject {
         while let current = controller { visit(current.view); controller = current.presentedViewController }
         return ["photosAddUsage": Bundle.main.object(forInfoDictionaryKey: "NSPhotoLibraryAddUsageDescription") as? String ?? "",
                 "interFont": UIFont(name: "Inter-Regular", size: 17)?.fontName ?? "",
-                "inspectable": webView.isInspectable, "sliders": sliders]
+                "inspectable": webView.isInspectable, "sliders": sliders,
+                "navigation": debugNavigation?() ?? [:]]
     }
 
     /// Exercises the actual recovery delegate, retaining the native process.
