@@ -155,6 +155,7 @@ struct ShellItem: Decodable, Hashable {
     var locked: Bool? = nil
     var toggle: SubControl? = nil
     var opacity: SubControl? = nil
+    var edit: SubControl? = nil
     var actions: [LayerAction]? = nil
     var rename: String? = nil
     var active: Bool? = nil

@@ -115,7 +115,16 @@ struct LayerCard: View {
                 }
                 VStack(alignment: .leading, spacing: 2) {
                     HStack(spacing: 5) {
-                        Text(item.text).fontWeight(.medium)
+                        if let edit = item.edit {
+                            Button(item.text) { shell.act(edit.ref) }
+                                .buttonStyle(.borderless)
+                                .foregroundStyle(PortalPrimary())
+                                .fontWeight(.medium)
+                                .frame(minHeight: 44, alignment: .leading)
+                                .accessibilityHint("Open layer settings")
+                        } else {
+                            Text(item.text).fontWeight(.medium)
+                        }
                         if item.locked == true {
                             Image(systemName: "lock").portalFont(.caption2).foregroundStyle(.tertiary)
                         }

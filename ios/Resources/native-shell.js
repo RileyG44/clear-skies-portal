@@ -234,11 +234,17 @@
 
   function layerCard(el) {
     const toggle = $(".csp-switch input", el), range = $(".csp-layer-range", el), title = $(".csp-layer-name", el);
-    const actions = $$(".csp-layer-tools button,button.csp-layer-title", el).map(button => ({
+    // The title and pencil are the same action. Keep one menu entry, and no
+    // edit entry on a compact card inside the editor that is already open.
+    const actionButtons = $$(".csp-layer-tools button", el);
+    if (!actionButtons.some(button => button.dataset.action === "edit") &&
+        !el.classList.contains("csp-layer-compact") && title?.matches("button")) actionButtons.push(title);
+    const actions = actionButtons.map(button => ({
       ref: refOf(button), action: button.dataset.action || "", title: clean(button.getAttribute("aria-label") || button.title || button.textContent),
       disabled: button.disabled || undefined }));
     return { kind: "layer", ref: refOf(el), id: el.dataset.layerId, title: clean(title?.textContent), detail: clean($(".csp-layer-meta", el)?.textContent) || undefined,
       locked: el.classList.contains("csp-layer-locked") || undefined,
+      edit: title?.matches("button") && !el.classList.contains("csp-layer-compact") ? {ref: refOf(title)} : undefined,
       toggle: toggle ? { ref: refOf(toggle), value: toggle.checked, disabled: toggle.disabled || undefined } : undefined,
       opacity: range ? { ref: refOf(range), value: Number(range.value), display: clean($(".csp-layer-opacity output", el)?.textContent) } : undefined,
       actions };
@@ -521,9 +527,10 @@
         const controls = $$("label.tsp-control", row).map(label => controlItem($("input", label),
           {title: clean($("span", label)?.textContent), output: $("output", label)}));
         const name = $(".terrain-source-panel-name", row);
-        if (name?.matches("button")) controls.unshift(controlItem(name, {title: "Edit layer"}));
-        items.push({kind: "group", title: clean(name?.textContent),
-          detail: clean($(".terrain-source-panel-meta", row)?.textContent), items: controls});
+        const detail = clean($(".terrain-source-panel-meta", row)?.textContent);
+        controls.unshift(name?.matches("button") ? controlItem(name, {detail})
+          : {kind: "text", title: clean(name?.textContent), detail, style: "row"});
+        items.push({kind: "group", ref: "source:" + row.dataset.id, items: controls});
       }
       const references = $("#mapSourceReferences", body);
       for (const note of $$(".terrain-source-panel-note", body).filter(el => el !== references))
@@ -652,6 +659,9 @@
   function act(ref, op, value) {
     const el = elementFor(ref);
     if (!el) { schedule(0); return false; }
+    const routeBefore = window.CSPShell?.current?.();
+    const editsLayer = el.matches(".csp-layer-title,[data-action=edit]");
+    const fromPanel = !!view.panel;
     switch (op) {
       case "toggle":
         if (el.checked !== !!value) el.click();
@@ -707,6 +717,10 @@
       default:
         el.click();
     }
+    const routeAfter = window.CSPShell?.current?.();
+    // A toolbar popover is a different native sheet from the tool editor.
+    // A route report alone cannot switch sheets (or reopen the same route).
+    if (fromPanel && routeAfter && (routeAfter !== routeBefore || editsLayer)) send({openRoute: routeAfter});
     schedule(0);
     return true;
   }

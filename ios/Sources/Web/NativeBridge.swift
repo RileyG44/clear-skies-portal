@@ -66,6 +66,8 @@ final class NativeBridge: NSObject, WKScriptMessageHandlerWithReply {
             return (host?.debugAppearance() ?? [:], nil)
         case "debug.configuration":
             return (host?.debugConfiguration() ?? [:], nil)
+        case "debug.mapSnapshot":
+            return (host?.debugMapSnapshot() ?? ["passed": false], nil)
         case "debug.recovery":
             guard let runID = body["runID"] as? String else { return (nil, "Missing run ID") }
             host?.debugRecovery(runID: runID, original: body["original"] as? [String: Any])

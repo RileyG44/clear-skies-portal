@@ -29,6 +29,13 @@ final class PortalModel {
             self?.restoring = false
         }
         host.onShell = { [weak self] json in self?.shell.apply(json: json) }
+        #if DEBUG
+        host.debugNavigation = { [weak self] in
+            guard let shell = self?.shell else { return [:] }
+            return ["route": shell.visibleRoute ?? "", "path": shell.path,
+                    "sheet": shell.sheetPresented ? "tools" : shell.presentedPanel ?? "closed"]
+        }
+        #endif
         host.onTerminate = { [weak self] in
             guard let self else { return }
             restoring = true

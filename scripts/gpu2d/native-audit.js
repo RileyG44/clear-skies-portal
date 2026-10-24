@@ -72,6 +72,32 @@ const server=http.createServer((req,res)=>{
      const stale=CSPNativeShell.pick(old[0].index,old[0].version),fresh=CSPNativeShell.pick(now[0].index,now[0].version);
      return {stale,fresh,chosen};
     });assert.deepEqual(race,{stale:false,fresh:true,chosen:1});
+    const layerNavigation=await page.evaluate(async()=>{
+     const S=CSPNativeShell,B=ClearSkiesPortalBridge,wait=ms=>new Promise(r=>setTimeout(r,ms));
+     const flatten=items=>(items||[]).flatMap(item=>[item,...flatten(item.items)]);
+     S.open('layers');await wait(200);
+     const cards=flatten(S.describe().items).filter(item=>item.kind==='layer');
+     const duplicateEdits=cards.filter(card=>(card.actions||[]).filter(a=>a.action==='edit').length>1).length;
+     S.tool('terrainSourceToggle');S.setView({sheet:'medium',page:null,panel:'terrainSourcePanel'});await wait(200);
+     const row=S.describePanel('terrainSourcePanel').items.find(item=>item.items?.[0]?.kind==='button');
+     if(!row)throw Error('No editable toolbar layer');
+     const before=__messages.length;S.act(row.items[0].ref,'click');await wait(100);
+     const target=CSPShell.current(),opened=__messages.slice(before).some(m=>m.openRoute===target);
+     S.tool('terrainSourceToggle');S.setView({sheet:'medium',page:null,panel:'terrainSourcePanel'});await wait(200);
+     const sameRow=S.describePanel('terrainSourcePanel').items.find(item=>item.items?.[0]?.kind==='button');
+     const sameBefore=__messages.length;S.act(sameRow.items[0].ref,'click');await wait(100);
+     const sameRoute=__messages.slice(sameBefore).some(m=>m.openRoute===target);
+     // A compact satellite card exists only with a scene. Supply metadata in
+     // this isolated adapter fixture; no imagery/scientific result is mocked.
+     const activeLayers=B.activeLayers;B.activeLayers=()=>[{id:'scene',name:'Fixture scene',meta:'Fixture metadata',visible:true,opacity:100}];
+     S.setView({sheet:'large',page:'satellite',panel:null});S.open('satellite');await wait(100);
+     const compact=flatten(S.describe().items).find(item=>item.kind==='layer'&&item.id==='scene');
+     B.activeLayers=activeLayers;
+     return {cards:cards.length,duplicateEdits,opened,sameRoute,compactHasEdit:!!compact?.edit||(compact?.actions||[]).some(a=>a.action==='edit'),compactPresent:!!compact};
+    });
+    assert(layerNavigation.cards>0&&layerNavigation.duplicateEdits===0);
+    assert(layerNavigation.opened&&layerNavigation.sameRoute,'Toolbar layer titles must request the native editor even when its route was already selected');
+    assert(layerNavigation.compactPresent&&!layerNavigation.compactHasEdit,'Compact editor card must not offer editing itself');
     await page.evaluate(()=>CSPNativeShell.open('analyze'));await page.waitForTimeout(800);
     const curvature=await page.evaluate(()=>{document.querySelector('#researchLayers .ls-add-button').click();return JSON.stringify(CSPNativeShell.describe())});
     assert(curvature.includes('Surface curvature (Laplacian)')&&!curvature.includes('Profile / plan curvature'));
@@ -88,7 +114,7 @@ const server=http.createServer((req,res)=>{
     const outage=await offline.page.evaluate(()=>({state:document.querySelector('#terrainLoadStatus').dataset.state,message:document.querySelector('#blk')?.textContent||''}));
     assert(!outage.message.includes('index.html')&&!outage.message.includes('Chrome'));
     assert.deepEqual(errors,[]);assert.deepEqual(recovered.errors,[]);assert.deepEqual(offline.errors,[]);
-    results[name]={passed:true,network:fixtureNetwork?'fixture':'live',colorPersistence:true,traffic,suggestionRace:race,recovery:true,curvature:true,outage};
+    results[name]={passed:true,network:fixtureNetwork?'fixture':'live',colorPersistence:true,traffic,suggestionRace:race,layerNavigation,recovery:true,curvature:true,outage};
    }finally{await Promise.all(contexts.map(c=>c.close()));await browser.close()}
   }
  }finally{await new Promise(resolve=>server.close(resolve))}

@@ -1,55 +1,73 @@
 import SwiftUI
 
+private enum MapControlSize {
+    static let tool: CGFloat = 48
+    static let search: CGFloat = 52
+    static let icon: CGFloat = 17
+}
+
 /// Everything drawn over the map: the map tools, the terrain status, and the
 /// search capsule the sheet collapses into.
 struct MapChrome: View {
     @Environment(ShellModel.self) private var shell
 
     var body: some View {
-        ZStack {
-            VStack(alignment: .trailing, spacing: 0) {
-                HStack(alignment: .top, spacing: 10) {
-                    TerrainStatusCapsule()
+        GeometryReader { geometry in
+            ZStack {
+                VStack(alignment: .trailing, spacing: 0) {
+                    HStack(alignment: .top, spacing: 10) {
+                        TerrainStatusCapsule()
+                        Spacer(minLength: 0)
+                        MapTools(maxHeight: geometry.size.height - MapControlSize.search - 20)
+                    }
+                    .padding(.horizontal, 12)
+                    .padding(.top, 6)
                     Spacer(minLength: 0)
-                    MapTools()
                 }
-                .padding(.horizontal, 12)
-                .padding(.top, 6)
-                Spacer(minLength: 0)
-            }
-            VStack {
-                Spacer()
-                if shell.activeSheet == nil, !shell.mapBusy {
-                    SearchCapsule()
-                        .padding(.horizontal, 14)
-                        .padding(.bottom, 6)
-                        .transition(.move(edge: .bottom).combined(with: .opacity))
+                VStack {
+                    Spacer()
+                    if shell.activeSheet == nil, !shell.mapBusy {
+                        SearchCapsule()
+                            .padding(.horizontal, 14)
+                            .padding(.bottom, 6)
+                            .transition(.move(edge: .bottom).combined(with: .opacity))
+                    }
                 }
+                Toasts()
             }
-            Toasts()
+            .animation(.spring(duration: 0.4, bounce: 0.18), value: shell.activeSheet == nil && !shell.mapBusy)
         }
-        .animation(.spring(duration: 0.4, bounce: 0.18), value: shell.activeSheet == nil && !shell.mapBusy)
     }
 }
 
-/// The web dock's tools, in the web's own order, as one Liquid Glass column.
+/// Preserve the dock's order; use balanced columns when a short view cannot
+/// fit the tools above the search bar.
 struct MapTools: View {
     @Environment(ShellModel.self) private var shell
     @Namespace private var glass
+    let maxHeight: CGFloat
 
     var body: some View {
         let tools = shell.dock.filter { $0.hidden != true }
+        let height = CGFloat(tools.count) * MapControlSize.tool + CGFloat(max(0, tools.count - 1))
+        let columns = height > maxHeight ? 2 : 1
+        let rows = (tools.count + columns - 1) / columns
         GlassEffectContainer(spacing: 8) {
-            VStack(spacing: 0) {
-                ForEach(tools) { tool in
-                    ToolButton(tool: tool)
-                        .glassEffectID(tool.id, in: glass)
-                    if tool.id != tools.last?.id {
-                        Divider().frame(width: 22).opacity(0.5)
+            HStack(alignment: .top, spacing: 8) {
+                ForEach(0..<columns, id: \.self) { index in
+                    let column = Array(tools.dropFirst(index * rows).prefix(rows))
+                    VStack(spacing: 0) {
+                        ForEach(column) { tool in
+                            ToolButton(tool: tool)
+                                .glassEffectID(tool.id, in: glass)
+                            if tool.id != column.last?.id {
+                                Divider().frame(width: 24).opacity(0.5)
+                            }
+                        }
                     }
+                    .chromeGlass(in: .capsule)
                 }
             }
-            .chromeGlass(in: .capsule)
         }
         .animation(.spring(duration: 0.35, bounce: 0.2), value: tools.map(\.id))
     }
@@ -98,10 +116,10 @@ struct ToolButton: View {
         let panel = ShellModel.toolPanels[tool.tool]
         let active = tool.pressed == true || tool.expanded == true || (panel != nil && shell.presentedPanel == panel)
         return Image(systemName: symbol)
-            .font(.system(size: 15, weight: .medium))
+            .font(.system(size: MapControlSize.icon, weight: .medium))
             .foregroundStyle(active ? AnyShapeStyle(.tint) : AnyShapeStyle(PortalPrimary()))
             .rotationEffect(.degrees(tool.tool == "bearing" ? -shell.map.bearing : 0))
-            .frame(width: 44, height: 44)
+            .frame(width: MapControlSize.tool, height: MapControlSize.tool)
             .contentShape(.rect)
             .overlay(alignment: .topTrailing) {
                 if tool.tool == "server", let dot = tool.dot {
@@ -213,7 +231,9 @@ struct SearchCapsule: View {
             HStack(spacing: 10) {
                 Button { shell.openSheet(.medium) } label: {
                     HStack(spacing: 8) {
-                        Image(systemName: "magnifyingglass").portalFont(.footnote, weight: .medium).foregroundStyle(.secondary)
+                        Image(systemName: "magnifyingglass")
+                            .font(.system(size: MapControlSize.icon, weight: .medium))
+                            .foregroundStyle(.secondary)
                         if shell.search.label.isEmpty {
                             Text("Search places, layers…").foregroundStyle(.secondary)
                         } else {
@@ -222,9 +242,9 @@ struct SearchCapsule: View {
                         Spacer(minLength: 0)
                         if let route = shell.path.last { RouteGlyph(key: route) }
                     }
-                    .portalFont(.subheadline)
+                    .portalFont(.callout)
                     .padding(.horizontal, 16)
-                    .frame(height: 46)
+                    .frame(height: MapControlSize.search)
                     .contentShape(.capsule)
                 }
                 .buttonStyle(.plain)
@@ -235,9 +255,9 @@ struct SearchCapsule: View {
 
                 Button { shell.locate() } label: {
                     Image(systemName: "location")
-                        .font(.system(size: 15, weight: .medium))
+                        .font(.system(size: MapControlSize.icon, weight: .medium))
                         .foregroundStyle(PortalPrimary())
-                        .frame(width: 46, height: 46)
+                        .frame(width: MapControlSize.search, height: MapControlSize.search)
                         .contentShape(.circle)
                 }
                 .buttonStyle(.plain)
