@@ -65,8 +65,17 @@ weakened. The Python runner and async JavaScript probe passed syntax checks;
 Signed Release archive and local IPA export passed: **1.0 (29880844)**, shared
 web bundle **2026-10-24c**. Packaged web assets match the prior verified Capture
 build, native adapter resources match this source, and the Release executable
-contains no `debug.appearance` endpoint. Xcode is uploading this internal build;
-App Store Connect browser verification remains deferred at Riley's request.
+contains no `debug.appearance` endpoint. Xcode confirmed **Upload succeeded**
+and **EXPORT SUCCEEDED** for this internal build on 2026-10-24. App Store
+Connect browser verification remains deferred at Riley's request.
+
+The requested full-app audit was handed to **Claude Opus 5.5**, provider
+`claudeAgent`, model `claude-opus-5-5`, with the tool-confirmed option
+`effort=high`. Its immutable product baseline is
+`eb4b460dadebf3a0f0cca9c68a772fec401ae05b`. The audit is read-only for the
+repository and includes the current native shell, shared web/engine and
+cross-cutting rendering/loading/UX behavior. It explicitly records the missing
+physical-device appearance/recovery checks and does not treat them as passes.
 
 Evidence is retained in
 `~/Library/Developer/ClearSkiesVerification/evidence/appearance-*`.
