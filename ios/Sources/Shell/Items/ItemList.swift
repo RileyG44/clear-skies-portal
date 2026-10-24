@@ -17,7 +17,7 @@ struct ItemList: View {
                 // A plain row rather than a header: header vibrancy on the
                 // glass sheet washes the text out.
                 Text(description)
-                    .font(.subheadline)
+                    .portalFont(.subheadline)
                     .foregroundStyle(.secondary)
                     .listRowBackground(Color.clear)
                     .listRowInsets(EdgeInsets(top: 2, leading: 4, bottom: 2, trailing: 4))
@@ -284,7 +284,7 @@ struct SubheaderRow: View {
                 Text(detail).foregroundStyle(.tertiary)
             }
         }
-        .font(.footnote)
+        .portalFont(.footnote)
         .foregroundStyle(.secondary)
         .padding(.top, 4)
         .accessibilityAddTraits(.isHeader)
@@ -308,7 +308,7 @@ struct GradientRow: View {
                                           alignment: index == 0 ? .leading : index == labels.count - 1 ? .trailing : .center)
                     }
                 }
-                .font(.caption2)
+                .portalFont(.caption2)
                 .foregroundStyle(.secondary)
             }
         }
@@ -347,7 +347,7 @@ struct GroupRow: View {
                     Text(item.text).fontWeight(.medium)
                     Spacer(minLength: 8)
                     if let detail = item.detail, !detail.isEmpty {
-                        Text(detail).font(.footnote).foregroundStyle(.secondary).lineLimit(1)
+                        Text(detail).portalFont(.footnote).foregroundStyle(.secondary).lineLimit(1)
                     }
                 }
             }
@@ -370,7 +370,7 @@ struct SceneSearchRow: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 8) {
-                Image(systemName: "magnifyingglass").font(.footnote.weight(.medium)).foregroundStyle(.secondary)
+                Image(systemName: "magnifyingglass").portalFont(.footnote, weight: .medium).foregroundStyle(.secondary)
                 TextField(item.placeholder ?? "Place or coordinates", text: $text)
                     .focused($focused)
                     .submitLabel(.search)
@@ -379,15 +379,15 @@ struct SceneSearchRow: View {
                     .onSubmit { submit() }
                     .onChange(of: text) { suggest() }
                 Button { shell.searchMapCenter(); text = "" } label: {
-                    Image(systemName: "scope").foregroundStyle(.secondary)
+                    Image(systemName: "scope").foregroundStyle(.secondary).frame(width: 44, height: 44)
                 }
                 .buttonStyle(.borderless)
                 .accessibilityLabel("Search scenes at the map centre")
             }
             .padding(.horizontal, 12)
-            .frame(height: 36)
+            .frame(minHeight: 44)
             .background(.fill.tertiary, in: .capsule)
-            if let note { Text(note).font(.footnote).foregroundStyle(.secondary) }
+            if let note { Text(note).portalFont(.footnote).foregroundStyle(.secondary) }
             ForEach(places) { place in
                 Button {
                     shell.pick(place)
@@ -442,14 +442,14 @@ struct PlaceRowLabel: View {
                 .foregroundStyle(.secondary)
                 .frame(width: 22)
             VStack(alignment: .leading, spacing: 1) {
-                Text(place.primary).foregroundStyle(.primary)
+                Text(place.primary).foregroundStyle(PortalPrimary())
                 if !place.secondary.isEmpty {
-                    Text(place.secondary).font(.caption).foregroundStyle(.secondary).lineLimit(1)
+                    Text(place.secondary).portalFont(.caption).foregroundStyle(.secondary).lineLimit(1)
                 }
             }
             Spacer(minLength: 0)
             if !place.kind.isEmpty {
-                Text(place.kind.capitalized).font(.caption2).foregroundStyle(.tertiary)
+                Text(place.kind.capitalized).portalFont(.caption2).foregroundStyle(.tertiary)
             }
         }
         .contentShape(.rect)
@@ -468,7 +468,7 @@ struct SectionTitle: View {
             Spacer(minLength: 8)
             if let detail, !detail.isEmpty { Text(detail).monospacedDigit().textCase(nil) }
         }
-        .font(.caption.weight(.semibold))
+        .portalFont(.caption, weight: .semibold)
         .foregroundStyle(.secondary)
     }
 }
@@ -478,7 +478,7 @@ struct SectionTitle: View {
 struct SheetStyle: ViewModifier {
     func body(content: Content) -> some View {
         content
-            .font(.subheadline)
+            .portalFont(.subheadline)
             .environment(\.defaultMinListRowHeight, 40)
     }
 }

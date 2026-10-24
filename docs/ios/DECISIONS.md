@@ -28,8 +28,8 @@ Owner review: see OWNER_REVIEW.md; technical review is not product approval.
 Approved architecture: NONE for the baseline. Native client: CR-001 (D-02).
 Approved release deferrals: NONE
 Approved trial replacement: NONE
-Accepted change requests/exceptions: CR-001 (accepted 2026-10-21), a supplement
-to this draft; SPEC.md text unchanged.
+Accepted change requests/exceptions: CR-001 (accepted 2026-10-21) and CR-002
+(accepted 2026-10-24), supplements to this draft; SPEC.md text unchanged.
 Note: on 2026-10-21, before CR-001, Riley told the earlier agent in T3 thread
 56d5529a-7bb5-43e5-ac76-eebcb30229ca (item 43): "a September spec would have
 been based on a now extremely outdated version of this app, so don't refer to
@@ -116,6 +116,54 @@ Follow-up: before any baseline is put to Riley, reconcile ARCH-02, ARCH-03 and
 D-02 with CR-001, or record that CR-001 is superseded.
 Implementation status: not started. Evidence: none yet.
 
+## CR-002 — truthful surface curvature label
+
+Status: ACCEPTED 2026-10-24
+Type: permanent wording clarification, D-06 curvature label only
+Request: change-requests/CR-002-curvature-label.md, revision r1
+Digest: SHA-256 808d43d5bf10a8d1c7e5846f5d42b4864f6261623c121bf23cc8db2877dd919f
+over the UTF-8/LF bytes before the request's "## Riley approval" heading, with
+its status line read as "Status: DRAFT". Independently reproduced by the owner
+on 2026-10-24; the original proposal is 2,130 bytes. Later workflow status changes
+are normalized to that original line, as with CR-001. The uncommitted request's
+digest is the binding; the proposal text is otherwise unchanged.
+Approval evidence: [parent T3 Code thread](t3-thread://v1/12850bd3-bebe-4837-b8d1-0ed4492f4146),
+activity position 1548 (structured question) and position 1561 (actual user
+response). Riley answered "Approve CR-002 r1" to the question asking approval of
+the rename, clarified description, unchanged calculations and a Spec Owner to
+record that exact correction. The owner independently read the question and
+user_message through t3_thread_read, view: activity. Full exact question and
+available response metadata are in the request's approval record.
+Approval scope: the exact r1 correction and restoration of one dedicated Spec
+Owner session to review and record it; this single approval covers both.
+Owner: dedicated Spec Owner review sub-agent (Codex), re-established 2026-10-24
+for CR-002 r1 only. This session ends at handoff. It does not restore an ongoing
+background owner or authorize other requests.
+Accepted change: shared Analyze "Profile / plan curvature" becomes "Surface
+curvature (Laplacian)". Its description becomes "Show local surface bending as the
+elevation Laplacian. Profile and plan curvature are not displayed." Native mirrors
+the exact shared strings. The digest-bound request's wording governs.
+Affected IDs: CAP-08, DATA-06, D-06 (this label only), CR-001 parity conditions.
+Consistency evidence: research-analysis.js selects result.laplacian for the
+curvature product. glacial-research-core.js computes that Laplacian as r + t,
+the east-west plus north-south elevation second derivatives. Its separate profile
+and plan arrays are not displayed by this product. The index.html legend retains
+the existing v * .3048 conversion and /ft suffix. No math, unit, value, sign,
+product identifier, color, export or other product behavior change is accepted.
+Spec treatment: CR-002 supplements SPEC.md 0.1.0-draft without changing its text
+or approving BASE-001. The wording correction is permanent. CR-001's conditions
+and its before-baseline exception expiry are unchanged. All other D-06 questions
+remain open; numerical validation and release gates are not passed by this review.
+Next authorized action: the implementer may apply the two exact shared strings,
+preserve their exact native mirror, and run the request's verification plan under
+CR-001's existing conditions, including shared checks and the matching iOS bundle.
+Further Riley approval: none for this exact correction. Any substantive change or
+broader D-06 decision needs its own Riley-approved request and owner record.
+Implementation status: acceptance recorded only; the owner changed no app code
+and ran no runtime/numerical regression checks. F11 remains open until the
+implementer supplies implementation and verification evidence. These decision,
+request and handoff edits are left uncommitted for the parent.
+
 ## Open decisions
 
 D-01 and D-03 through D-08 in SPEC.md remain unresolved. D-02 is resolved for
@@ -123,6 +171,8 @@ the native client only, by CR-001, until an approved CR supersedes it. Build
 settings needed for CR-001's internal builds do not resolve D-01. BASE-001
 remains pending and the PERF gates remain proposed. No recommendation, draft PR,
 implementation artifact or agent review resolves them on Riley's behalf.
+CR-002 resolves only the misleading curvature name/description referenced by
+DATA-06; all broader D-06 decisions remain open.
 
 ## Version log
 
@@ -133,3 +183,8 @@ implementation artifact or agent review resolves them on Riley's behalf.
   revision or text change. For the native client, ARCH-02 and ARCH-03 are
   replaced and D-02 is resolved by CR-001. One owner interpretation logged for
   CR-001 item 1. BASE-001 remains pending.
+- 2026-10-24: CR-002 r1 accepted as a permanent wording clarification supplement
+  to 0.1.0-draft after independent digest and Riley approval verification. Only the
+  shared/native Analyze curvature name and description are authorized to change;
+  calculations and units are unchanged. SPEC.md is unchanged, BASE-001 remains
+  pending and no other D-06 decision is resolved.

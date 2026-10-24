@@ -23,6 +23,7 @@ struct ToggleRow: View {
                 RowLabel(title: item.text, detail: item.detail, badge: item.badge)
             }
         }
+        .tint(Color(hex: shell.appearance.toggle) ?? .green)
         .disabled(item.isDisabled)
         .onChange(of: item.value) { pending = nil }
     }
@@ -39,14 +40,14 @@ struct RowLabel: View {
                 Text(title)
                 if let badge, !badge.isEmpty {
                     Text(badge)
-                        .font(.caption2.weight(.medium).monospacedDigit())
+                        .portalFont(.caption2, weight: .medium, digits: true)
                         .padding(.horizontal, 5).padding(.vertical, 1)
                         .background(.fill.tertiary, in: .capsule)
                         .foregroundStyle(.secondary)
                 }
             }
             if let detail, !detail.isEmpty {
-                Text(detail).font(.caption).foregroundStyle(.secondary)
+                Text(detail).portalFont(.caption).foregroundStyle(.secondary)
             }
         }
     }
@@ -108,14 +109,14 @@ struct SliderRow: View {
                     NumberEntry(control: entry)
                 } else if let display, !display.isEmpty {
                     Text(display)
-                        .font(.footnote.monospacedDigit())
+                        .portalFont(.footnote, digits: true)
                         .foregroundStyle(.secondary)
                         .contentTransition(.numericText())
                 }
             }
             slider
             if let detail, !detail.isEmpty {
-                Text(detail).font(.caption).foregroundStyle(.secondary)
+                Text(detail).portalFont(.caption).foregroundStyle(.secondary)
             }
         }
         .padding(.vertical, 6)
@@ -126,10 +127,9 @@ struct SliderRow: View {
     /// Continuous, then snapped to the web's step: a stepped Slider draws a
     /// tick for every step, which reads as a dotted line on fine ranges.
     private var slider: some View {
-        Slider(value: Binding(get: { local ?? value }, set: { send(snapped($0)) }), in: range) {
-            Text(title)
-        } onEditingChanged: { editingChanged($0) }
-        .controlSize(.small)
+        PortalSlider(value: Binding(get: { local ?? value }, set: { send(snapped($0)) }),
+                     range: range, title: title, onEditingChanged: editingChanged)
+            .frame(minHeight: 44)
     }
 
     private func snapped(_ next: Double) -> Double {
@@ -141,6 +141,8 @@ struct SliderRow: View {
 
     private func send(_ next: Double) {
         local = next
+        // VoiceOver/keyboard adjustments need a committed value too.
+        if !editing { shell.act(ref, .commit, next); return }
         let now = Date()
         if now.timeIntervalSince(lastSent) >= 1.0 / 60 {
             lastSent = now
@@ -187,7 +189,8 @@ struct PickerRow: View {
                     }
                     .pickerStyle(.segmented)
                     .labelsHidden()
-                    .fixedSize()
+                    .frame(width: 44, height: 44)
+                    .contentShape(.rect)
                 }
             } else {
                 // The value reads as quiet text on one line; a menu picker's
@@ -207,7 +210,7 @@ struct PickerRow: View {
                         HStack(spacing: 4) {
                             Text(options.first { ($0.value ?? $0.label) == selection.wrappedValue }?.label ?? selection.wrappedValue)
                                 .lineLimit(1)
-                            Image(systemName: "chevron.up.chevron.down").font(.caption2.weight(.semibold))
+                            Image(systemName: "chevron.up.chevron.down").portalFont(.caption2, weight: .semibold)
                         }
                         .foregroundStyle(.secondary)
                         .contentShape(.rect)
@@ -232,31 +235,43 @@ struct FieldRow: View {
     @State private var editing = false
     @FocusState private var focused: Bool
 
-    private static let dateFormat: DateFormatter = {
-        let format = DateFormatter()
-        format.calendar = Calendar(identifier: .gregorian)
-        format.locale = Locale(identifier: "en_US_POSIX")
-        format.timeZone = TimeZone(secondsFromGMT: 0)
-        format.dateFormat = "yyyy-MM-dd"
-        return format
-    }()
-
     var body: some View {
         if item.input == "date" {
-            let date = Self.dateFormat.date(from: item.value?.string ?? "") ?? .now
-            DatePicker(selection: Binding(get: { date }, set: { shell.act(item.ref, .commit, Self.dateFormat.string(from: $0)) }),
-                       displayedComponents: .date) {
-                RowLabel(title: item.text, detail: item.detail)
+            HStack {
+                if let date = HTMLDate.date(item.value?.string) {
+                    DatePicker(selection: Binding(get: { date }, set: { shell.act(item.ref, .commit, HTMLDate.string($0)) }),
+                               in: (HTMLDate.date(item.min?.string) ?? .distantPast)...(HTMLDate.date(item.max?.string) ?? .distantFuture),
+                               displayedComponents: .date) {
+                        RowLabel(title: item.text, detail: item.detail)
+                    }
+                    .environment(\.calendar, HTMLDate.calendar)
+                    .environment(\.timeZone, HTMLDate.timeZone)
+                    Button { shell.act(item.ref, .commit, "") } label: {
+                        Image(systemName: "xmark.circle.fill").frame(width: 44, height: 44)
+                    }
+                    .buttonStyle(.borderless)
+                    .accessibilityLabel("Clear \(item.text)")
+                } else {
+                    RowLabel(title: item.text, detail: item.detail)
+                    Spacer()
+                    Button("Any date") {
+                        let date = min(HTMLDate.date(item.max?.string) ?? .now, .now)
+                        shell.act(item.ref, .commit, HTMLDate.string(date))
+                    }
+                    .frame(minHeight: 44)
+                    .accessibilityHint("Set a date; leave empty for an open-ended range")
+                }
             }
             .disabled(item.isDisabled)
         } else if item.input == "number" {
             HStack(spacing: 10) {
                 if let well = item.well {
                     ColorPicker(selection: Binding(get: { Color(hex: well.value?.string) ?? .white }, set: { color in
-                        shell.act(well.ref, .input, color.hexString)
+                        shell.act(well.ref, .commit, color.hexString)
                     }), supportsOpacity: false) { Text(well.title ?? "Color") }
                     .labelsHidden()
-                    .fixedSize()
+                    .frame(width: 44, height: 44)
+                    .contentShape(.rect)
                 }
                 RowLabel(title: item.text, detail: item.detail)
                 Spacer(minLength: 8)
@@ -265,7 +280,7 @@ struct FieldRow: View {
             }
         } else {
             VStack(alignment: .leading, spacing: 6) {
-                if !item.text.isEmpty { Text(item.text).font(.footnote).foregroundStyle(.secondary) }
+                if !item.text.isEmpty { Text(item.text).portalFont(.footnote).foregroundStyle(.secondary) }
                 field
             }
             .onAppear { text = item.value?.string ?? "" }
@@ -312,7 +327,7 @@ struct NumberEntry: View {
     var body: some View {
         HStack(spacing: 4) {
             TextField(control.title ?? "", text: $text)
-                .font(.footnote.monospacedDigit())
+                .portalFont(.footnote, digits: true)
                 .multilineTextAlignment(.trailing)
                 .keyboardType(.numbersAndPunctuation)
                 .submitLabel(.done)
@@ -324,7 +339,7 @@ struct NumberEntry: View {
                 .onSubmit(commit)
                 .onChange(of: focused) { if !focused { commit() } }
             if let unit = control.unit, !unit.isEmpty {
-                Text(unit).font(.footnote).foregroundStyle(.secondary)
+                Text(unit).portalFont(.footnote).foregroundStyle(.secondary)
             }
         }
         .disabled(control.disabled ?? false)
@@ -347,7 +362,7 @@ struct ColorRow: View {
 
     var body: some View {
         ColorPicker(selection: Binding(get: { Color(hex: value) ?? .white }, set: { color in
-            shell.act(ref, .input, color.hexString)
+            shell.act(ref, .commit, color.hexString)
         }), supportsOpacity: false) {
             Text(title.isEmpty ? "Custom color" : title)
         }
@@ -377,11 +392,11 @@ struct ButtonRow: View {
             Button { shell.act(item.ref) } label: {
                 HStack {
                     RowLabel(title: item.text, detail: item.detail)
-                        .foregroundStyle(.primary)
+                        .foregroundStyle(PortalPrimary())
                     Spacer()
                     if item.role != "option" {
                         Image(systemName: item.role == "group" ? "chevron.up.chevron.down" : "chevron.right")
-                            .font(.caption.weight(.semibold))
+                            .portalFont(.caption, weight: .semibold)
                             .foregroundStyle(.tertiary)
                     }
                 }
@@ -398,15 +413,15 @@ struct ButtonRow: View {
                     VStack(alignment: .leading, spacing: 2) {
                         Text(item.text)
                         if let detail = item.detail, !detail.isEmpty {
-                            Text(detail).font(.caption).foregroundStyle(.secondary)
+                            Text(detail).portalFont(.caption).foregroundStyle(.secondary)
                         }
                     }
                     Spacer(minLength: 0)
                     if item.pressed == true {
-                        Image(systemName: "checkmark").font(.caption.weight(.bold))
+                        Image(systemName: "checkmark").portalFont(.caption, weight: .bold)
                     } else if item.expanded != nil {
                         Image(systemName: "chevron.down")
-                            .font(.caption.weight(.semibold))
+                            .portalFont(.caption, weight: .semibold)
                             .rotationEffect(.degrees(item.expanded == true ? 180 : 0))
                             .foregroundStyle(.tertiary)
                     }
@@ -428,7 +443,7 @@ struct LinkRow: View {
                 HStack {
                     Text(item.text)
                     Spacer()
-                    Image(systemName: "arrow.up.forward").font(.caption.weight(.semibold)).foregroundStyle(.tertiary)
+                    Image(systemName: "arrow.up.forward").portalFont(.caption, weight: .semibold).foregroundStyle(.tertiary)
                 }
             }
         }
@@ -454,17 +469,17 @@ struct TextRow: View {
             LabeledContent(item.text, value: item.value?.string ?? "")
         case "warning":
             Label { content } icon: { Image(systemName: "exclamationmark.triangle").foregroundStyle(.orange) }
-                .font(.footnote)
+                .portalFont(.footnote)
         case "success":
             Label { content } icon: { Image(systemName: "checkmark.circle").foregroundStyle(.green) }
-                .font(.footnote)
+                .portalFont(.footnote)
         case "status":
             Label { content } icon: { Image(systemName: "info.circle").foregroundStyle(.secondary) }
-                .font(.footnote)
+                .portalFont(.footnote)
         case "hint":
-            content.font(.caption).foregroundStyle(.secondary)
+            content.portalFont(.caption).foregroundStyle(.secondary)
         default:
-            content.font(.footnote)
+            content.portalFont(.footnote)
         }
     }
 
@@ -492,16 +507,20 @@ struct ProgressRow: View {
 
 /// Pictures from the page: remote URLs, or a canvas encoded as a data URL.
 struct ShellImage: View {
+    @Environment(ShellModel.self) private var shell
     let src: String
     var contentMode: ContentMode = .fill
 
     var body: some View {
+        let src = shell.images[src] ?? src
         if src.hasPrefix("data:") {
             if let image = DataImageCache.shared.image(for: src) {
                 Image(uiImage: image).resizable().aspectRatio(contentMode: contentMode)
             } else {
                 Color.secondary.opacity(0.15)
             }
+        } else if src.hasPrefix("csp-image:") {
+            Color.secondary.opacity(0.15)
         } else if let url = URL(string: src) {
             AsyncImage(url: url, transaction: Transaction(animation: .easeOut(duration: 0.2))) { phase in
                 switch phase {

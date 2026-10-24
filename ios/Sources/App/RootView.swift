@@ -13,7 +13,6 @@ struct RootView: View {
         ZStack {
             PortalWebView(webView: portal.host.webView)
                 .ignoresSafeArea()
-            StatusBarEdge()
             MapChrome()
                 .opacity(portal.ready ? 1 : 0)
             if !portal.ready {
@@ -23,6 +22,10 @@ struct RootView: View {
         .background(Color("CanvasBackground").ignoresSafeArea())
         .animation(.easeOut(duration: 0.35), value: portal.ready)
         .environment(shell)
+            .environment(\.portalAppearance, shell.appearance)
+            .tint(Color(hex: shell.appearance.button) ?? .accentColor)
+            .foregroundStyle(PortalPrimary())
+            .portalFont(.body)
         .sheet(item: $shell.activeSheet) { sheet in
             Group {
                 switch sheet {
@@ -31,6 +34,10 @@ struct RootView: View {
                 }
             }
             .environment(shell)
+            .environment(\.portalAppearance, shell.appearance)
+            .tint(Color(hex: shell.appearance.button) ?? .accentColor)
+            .foregroundStyle(PortalPrimary())
+            .portalFont(.body)
             .preferredColorScheme(appearance)
             .presentationDetents([.medium, .expanded], selection: $shell.detent)
             // The map stays live behind the sheet at every height, so iOS
@@ -62,28 +69,6 @@ struct RootView: View {
         case "dark": return .dark
         default: return nil
         }
-    }
-}
-
-/// The status bar sits on the map, which may be dark in light mode or light
-/// in dark mode. A soft material edge under it keeps the time and battery
-/// legible either way, as scroll edges do elsewhere in iOS.
-struct StatusBarEdge: View {
-    var body: some View {
-        GeometryReader { geometry in
-            let height = geometry.safeAreaInsets.top
-            if height > 0 {
-                Rectangle()
-                    .fill(.ultraThinMaterial)
-                    .mask(LinearGradient(stops: [.init(color: .black, location: 0), .init(color: .black, location: 0.6),
-                                                 .init(color: .clear, location: 1)],
-                                         startPoint: .top, endPoint: .bottom))
-                    .frame(height: height + 10)
-                    .ignoresSafeArea(edges: .top)
-            }
-        }
-        .allowsHitTesting(false)
-        .accessibilityHidden(true)
     }
 }
 

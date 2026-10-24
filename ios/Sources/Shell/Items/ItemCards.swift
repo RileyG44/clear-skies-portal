@@ -25,9 +25,9 @@ struct SegmentedRow: View {
                             let on = option.id == selected
                             Button { choose(option.id, in: options) } label: {
                                 Text(option.label)
-                                    .font(.footnote.weight(on ? .semibold : .regular))
+                                    .portalFont(.footnote, weight: on ? .semibold : .regular)
                                     .padding(.horizontal, 12).padding(.vertical, 6)
-                                    .foregroundStyle(on ? AnyShapeStyle(.tint) : AnyShapeStyle(.primary))
+                                    .foregroundStyle(on ? AnyShapeStyle(.tint) : AnyShapeStyle(PortalPrimary()))
                                     .background(on ? AnyShapeStyle(.tint.opacity(0.14)) : AnyShapeStyle(.fill.quaternary), in: .capsule)
                             }
                             .buttonStyle(.plain)
@@ -79,16 +79,18 @@ struct SwatchesRow: View {
                             .padding(3)
                             .overlay(Circle().strokeBorder(on ? AnyShapeStyle(.tint) : AnyShapeStyle(.clear), lineWidth: 2))
                     }
+                    .frame(minWidth: 44, minHeight: 44)
+                    .contentShape(.rect)
                     .buttonStyle(.plain)
                     .accessibilityLabel(option.label)
                     .accessibilityAddTraits(on ? .isSelected : [])
                 }
                 if let custom = item.custom {
                     ColorPicker(selection: Binding(get: { Color(hex: custom.value?.string) ?? .white }, set: { color in
-                        shell.act(custom.ref, .input, color.hexString)
+                        shell.act(custom.ref, .commit, color.hexString)
                     }), supportsOpacity: false) { Text(custom.title ?? "Custom color") }
                         .labelsHidden()
-                        .frame(width: 32, height: 32)
+                        .frame(width: 44, height: 44)
                 }
             }
             .padding(.vertical, 2)
@@ -115,14 +117,14 @@ struct LayerCard: View {
                     HStack(spacing: 5) {
                         Text(item.text).fontWeight(.medium)
                         if item.locked == true {
-                            Image(systemName: "lock").font(.caption2).foregroundStyle(.tertiary)
+                            Image(systemName: "lock").portalFont(.caption2).foregroundStyle(.tertiary)
                         }
                         if item.active == true {
-                            Image(systemName: "pencil").font(.caption).foregroundStyle(.tint)
+                            Image(systemName: "pencil").portalFont(.caption).foregroundStyle(.tint)
                         }
                     }
                     if let detail = item.detail, !detail.isEmpty {
-                        Text(detail).font(.caption).foregroundStyle(.secondary)
+                        Text(detail).portalFont(.caption).foregroundStyle(.secondary)
                     }
                 }
                 Spacer(minLength: 8)
@@ -145,7 +147,7 @@ struct LayerCard: View {
                 }
             }
             if let confirm = item.confirm {
-                Text(confirm).font(.caption).foregroundStyle(.secondary)
+                Text(confirm).portalFont(.caption).foregroundStyle(.secondary)
             }
             if let buttons = item.buttons, !buttons.isEmpty {
                 ScrollView(.horizontal, showsIndicators: false) {
@@ -154,7 +156,7 @@ struct LayerCard: View {
                             Button(role: button.role == "destructive" ? .destructive : nil) { shell.act(button.ref) } label: {
                                 Label(button.text, systemImage: Symbols.icon(button.icon) ?? "circle")
                                     .labelStyle(button.icon == nil ? AnyLabelStyle(.titleOnly) : AnyLabelStyle(.titleAndIcon))
-                                    .font(.footnote)
+                                    .portalFont(.footnote)
                                     .lineLimit(1)
                             }
                             .buttonStyle(.bordered)
@@ -177,7 +179,7 @@ struct LayerCard: View {
     private func actionsMenu(_ actions: [LayerAction]) -> some View {
         Menu { actionButtons(actions) } label: {
             Image(systemName: "ellipsis").foregroundStyle(.secondary)
-                .frame(width: 36, height: 36)
+                .frame(width: 44, height: 44)
                 .contentShape(.rect)
         }
         .menuOrder(.fixed)
@@ -221,17 +223,17 @@ struct OpacitySlider: View {
     var body: some View {
         let value = local ?? control.value?.number ?? 100
         HStack(spacing: 10) {
-            Image(systemName: "circle.lefthalf.filled").font(.caption).foregroundStyle(.secondary)
-            Slider(value: Binding(get: { value }, set: { next in
+            Image(systemName: "circle.lefthalf.filled").portalFont(.caption).foregroundStyle(.secondary)
+            PortalSlider(value: Binding(get: { value }, set: { next in
                 local = next.rounded()
-                shell.act(control.ref, .input, next.rounded())
-            }), in: 0...100) { Text(title) } onEditingChanged: { isEditing in
+                shell.act(control.ref, editing ? .input : .commit, next.rounded())
+            }), range: 0...100, title: title, onEditingChanged: { isEditing in
                 editing = isEditing
                 if !isEditing { shell.act(control.ref, .commit, (local ?? value).rounded()) }
-            }
-            .controlSize(.small)
+            })
+            .frame(minHeight: 44)
             Text("\(Int(value.rounded()))%")
-                .font(.caption.monospacedDigit())
+                .portalFont(.caption, digits: true)
                 .foregroundStyle(.secondary)
                 .frame(width: 36, alignment: .trailing)
         }
@@ -255,13 +257,13 @@ struct SceneRow: View {
                 .frame(width: 48, height: 48)
                 .clipShape(.rect(cornerRadius: 8))
                 VStack(alignment: .leading, spacing: 3) {
-                    Text(item.text).fontWeight(.medium).foregroundStyle(.primary)
-                    if let detail = item.detail { Text(detail).font(.caption.monospacedDigit()).foregroundStyle(.secondary) }
+                    Text(item.text).fontWeight(.medium).foregroundStyle(PortalPrimary())
+                    if let detail = item.detail { Text(detail).portalFont(.caption, digits: true).foregroundStyle(.secondary) }
                     if let tags = item.tags, !tags.isEmpty {
                         HStack(spacing: 4) {
                             ForEach(Array(tags.prefix(4).enumerated()), id: \.offset) { _, tag in
                                 Text(tag.title)
-                                    .font(.caption2.weight(.medium))
+                                    .portalFont(.caption2, weight: .medium)
                                     .padding(.horizontal, 6).padding(.vertical, 2)
                                     .background(.fill.tertiary, in: .capsule)
                                     .foregroundStyle(.secondary)
@@ -271,7 +273,7 @@ struct SceneRow: View {
                 }
                 Spacer(minLength: 0)
                 if item.selected == true {
-                    Image(systemName: "checkmark").font(.footnote.weight(.semibold)).foregroundStyle(.tint)
+                    Image(systemName: "checkmark").portalFont(.footnote, weight: .semibold).foregroundStyle(.tint)
                 }
             }
             .contentShape(.rect)

@@ -259,10 +259,11 @@ struct StatusState: Decodable, Hashable {
 
 struct PlaceSuggestion: Hashable, Identifiable {
     let index: Int
+    let version: Int
     let primary: String
     let secondary: String
     let kind: String
-    var id: Int { index }
+    var id: String { "\(version):\(index)" }
 }
 
 struct RouteMatch: Hashable, Identifiable {
@@ -274,7 +275,19 @@ struct RouteMatch: Hashable, Identifiable {
 /// One message from the page: only the parts that changed. A key that is
 /// present with null (no pop-up open) differs from an absent key (unchanged),
 /// so this decodes by hand.
+nonisolated struct NativeAppearance: Decodable, Hashable, Sendable {
+    var toggle: String? = nil
+    var track: String? = nil
+    var button: String? = nil
+    var fontColor: String? = nil
+    var font: String = "system"
+    var textSize: Double = 1
+}
+
 struct ShellUpdate: Decodable {
+    var appearance: NativeAppearance?
+    var images: [String: String]?
+    var imageKeys: [String]?
     var groups: [RouteGroup]?
     var ready: Bool?
     var route: String?
@@ -289,11 +302,14 @@ struct ShellUpdate: Decodable {
     var openRoute: String?
 
     enum Key: String, CodingKey {
-        case groups, ready, route, counts, search, map, dock, status, panelOpen, page, panel, openRoute
+        case groups, ready, route, counts, search, map, dock, status, panelOpen, page, panel, openRoute, images, imageKeys, appearance
     }
 
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: Key.self)
+        images = try container.decodeIfPresent([String: String].self, forKey: .images)
+        imageKeys = try container.decodeIfPresent([String].self, forKey: .imageKeys)
+        appearance = try container.decodeIfPresent(NativeAppearance.self, forKey: .appearance)
         groups = try container.decodeIfPresent([RouteGroup].self, forKey: .groups)
         ready = try container.decodeIfPresent(Bool.self, forKey: .ready)
         route = try container.decodeIfPresent(String.self, forKey: .route)
@@ -358,4 +374,29 @@ extension StatusState {
         snapshot = try container.decodeIfPresent(String.self, forKey: .snapshot)
         engine = try container.decodeIfPresent(EngineStatus.self, forKey: .engine) ?? EngineStatus()
     }
+}
+
+/// HTML date fields represent a Gregorian calendar day, independent of the
+/// device time zone. The same calendar governs parsing, display and emission.
+enum HTMLDate {
+    static let timeZone = TimeZone(secondsFromGMT: 0)!
+    static var calendar: Calendar {
+        var value = Calendar(identifier: .gregorian)
+        value.timeZone = timeZone
+        return value
+    }
+    private static var formatter: DateFormatter {
+        let value = DateFormatter()
+        value.calendar = calendar
+        value.locale = Locale(identifier: "en_US_POSIX")
+        value.timeZone = timeZone
+        value.dateFormat = "yyyy-MM-dd"
+        value.isLenient = false
+        return value
+    }
+    static func date(_ value: String?) -> Date? {
+        guard let value, !value.isEmpty else { return nil }
+        return formatter.date(from: value)
+    }
+    static func string(_ value: Date) -> String { formatter.string(from: value) }
 }

@@ -30,7 +30,7 @@ struct HomeView: View {
                 if let message = shell.status.message, message.kind == "general", !message.text.isEmpty {
                     Section {
                         Label {
-                            Text(message.text).font(.footnote)
+                            Text(message.text).portalFont(.footnote)
                         } icon: {
                             Image(systemName: message.error == true ? "exclamationmark.triangle" : "info.circle")
                                 .foregroundStyle(message.error == true ? AnyShapeStyle(.orange) : AnyShapeStyle(.secondary))
@@ -80,7 +80,7 @@ struct SearchBar: View {
         HStack(spacing: 8) {
             HStack(spacing: 6) {
                 Image(systemName: "magnifyingglass")
-                    .font(.footnote.weight(.medium))
+                    .portalFont(.footnote, weight: .medium)
                     .foregroundStyle(.secondary)
                 TextField("Search places, layers…", text: $shell.query)
                     .focused(focused)
@@ -90,14 +90,14 @@ struct SearchBar: View {
                     .onSubmit { shell.submit() }
                 if !shell.query.isEmpty {
                     Button { shell.query = "" } label: {
-                        Image(systemName: "xmark.circle.fill").foregroundStyle(.tertiary)
+                        Image(systemName: "xmark.circle.fill").foregroundStyle(.tertiary).frame(width: 44, height: 44)
                     }
                     .buttonStyle(.plain)
                     .accessibilityLabel("Clear search text")
                 }
             }
             .padding(.horizontal, 12)
-            .frame(height: 36)
+            .frame(minHeight: 44)
             .background(.fill.tertiary, in: .capsule)
             if focused.wrappedValue {
                 Button(role: .close) {
@@ -109,7 +109,7 @@ struct SearchBar: View {
             } else {
                 Button { shell.locate() } label: {
                     Image(systemName: "location")
-                        .font(.footnote.weight(.semibold))
+                        .portalFont(.footnote, weight: .semibold)
                         .frame(width: 22, height: 22)
                 }
                 .buttonStyle(.glass)
@@ -132,7 +132,7 @@ struct RouteRow: View {
             Spacer(minLength: 8)
             if let count, !count.isEmpty {
                 Text(count)
-                    .font(.footnote.monospacedDigit())
+                    .portalFont(.footnote, digits: true)
                     .foregroundStyle(.secondary)
                     .contentTransition(.numericText())
             }
@@ -173,7 +173,7 @@ struct LocationSection: View {
                         Text(search.label).fontWeight(.semibold).lineLimit(2)
                         if let lat = search.lat, let lng = search.lng {
                             Text(Self.coordinates(lat: lat, lng: lng))
-                                .font(.caption.monospacedDigit())
+                                .portalFont(.caption, digits: true)
                                 .foregroundStyle(.secondary)
                                 .textSelection(.enabled)
                         }
@@ -183,7 +183,7 @@ struct LocationSection: View {
                         Button { shell.clearLocation() } label: {
                             Image(systemName: "xmark.circle.fill")
                                 .symbolRenderingMode(.hierarchical)
-                                .font(.body)
+                                .portalFont(.body)
                         }
                         .buttonStyle(.borderless)
                         .foregroundStyle(.secondary)
@@ -205,7 +205,7 @@ struct LocationSection: View {
                 .buttonBorderShape(.capsule)
                 .controlSize(.small)
                 .tint(.primary)
-                .font(.footnote)
+                .portalFont(.footnote)
                 .lineLimit(1)
                 .fixedSize()
             }
@@ -241,8 +241,8 @@ struct SuggestionSections: View {
                         HStack(spacing: 12) {
                             RouteGlyph(key: match.route)
                             VStack(alignment: .leading, spacing: 1) {
-                                Text(shell.title(for: match.route)).foregroundStyle(.primary)
-                                Text(match.keyword.capitalized).font(.caption).foregroundStyle(.secondary)
+                                Text(shell.title(for: match.route)).foregroundStyle(PortalPrimary())
+                                Text(match.keyword.capitalized).portalFont(.caption).foregroundStyle(.secondary)
                             }
                         }
                     }
@@ -265,13 +265,13 @@ struct SuggestionSections: View {
                 }
             }
             if let note = shell.suggestionNote {
-                Text(note).font(.footnote).foregroundStyle(.secondary)
+                Text(note).portalFont(.footnote).foregroundStyle(.secondary)
             }
             Button {
                 focus.wrappedValue = false
                 shell.submit()
             } label: {
-                Label { Text("Search “\(text)”").foregroundStyle(.primary) } icon: {
+                Label { Text("Search “\(text)”").foregroundStyle(PortalPrimary()) } icon: {
                     Image(systemName: "magnifyingglass").foregroundStyle(.secondary)
                 }
             }
@@ -279,7 +279,7 @@ struct SuggestionSections: View {
                 focus.wrappedValue = false
                 shell.searchMapCenter()
             } label: {
-                Label { Text("Search at the map centre").foregroundStyle(.primary) } icon: {
+                Label { Text("Search at the map centre").foregroundStyle(PortalPrimary()) } icon: {
                     Image(systemName: "scope").foregroundStyle(.secondary)
                 }
             }
@@ -306,7 +306,7 @@ struct RoutePageView: View {
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .principal) {
-                Text(shell.title(for: route)).font(.subheadline.weight(.semibold))
+                Text(shell.title(for: route)).portalFont(.subheadline, weight: .semibold)
             }
         }
     }
@@ -334,10 +334,10 @@ struct PanelSheet: View {
             .toolbar {
                 ToolbarItem(placement: .principal) {
                     VStack(spacing: 2) {
-                        Text(panel?.title ?? "").font(.subheadline.weight(.semibold))
+                        Text(panel?.title ?? "").portalFont(.subheadline, weight: .semibold)
                         if let state = panel?.state, !state.isEmpty {
                             Text(state)
-                                .font(.caption2)
+                                .portalFont(.caption2)
                                 .foregroundStyle(.secondary)
                                 .lineLimit(1)
                         }

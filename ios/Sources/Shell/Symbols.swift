@@ -85,7 +85,7 @@ enum Symbols {
 
 extension Color {
     /// "#rrggbb" from the page.
-    init?(hex: String?) {
+    nonisolated init?(hex: String?) {
         guard let hex, hex.hasPrefix("#"), hex.count == 7, let value = UInt32(hex.dropFirst(), radix: 16) else { return nil }
         self.init(.sRGB, red: Double((value >> 16) & 0xff) / 255, green: Double((value >> 8) & 0xff) / 255,
                   blue: Double(value & 0xff) / 255, opacity: 1)
