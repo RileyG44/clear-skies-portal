@@ -71,7 +71,11 @@
   /* On a phone the collapsed panel shows its search strip and drops the page
      body (display:none). Here the page body is what the native sheet mirrors,
      so it keeps its layout while the panel stays collapsed. */
-  chrome.textContent = "html.csp-native-chrome #side{translate:-400vw 0!important;pointer-events:none!important}"
+  chrome.textContent = "html.csp-native-chrome *{-webkit-user-select:none!important;user-select:none!important;-webkit-touch-callout:none!important}"
+    /* Map double taps and long presses belong to the map, not WebKit's
+       document selection. Keep normal editing/copying in the web tools. */
+    + "html.csp-native-chrome :is(input,textarea,[contenteditable=true],[contenteditable=plaintext-only]),html.csp-native-chrome :is([contenteditable=true],[contenteditable=plaintext-only]) *{-webkit-user-select:text!important;user-select:text!important;-webkit-touch-callout:default!important}"
+    + "html.csp-native-chrome #side{translate:-400vw 0!important;pointer-events:none!important}"
     + "html.csp-native-chrome #sideToggleDock{display:none!important}"
     + "html.csp-native-chrome body.csp-redesign #side #cspWorkspace{display:flex!important}"
     + "html.csp-native-chrome body.csp-redesign #side #cspWorkspaceScroll{visibility:visible!important}"

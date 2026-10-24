@@ -80,6 +80,18 @@ The probe does not run analyses, export an image or change engine settings.
 Background execution can be suspended by iOS; if no result arrives, unlock
 the phone and open the Debug app before retrying.
 
+For a live satellite scene search, application, disclosure/panel reopening and
+zoom-refinement check, use the satellite probe:
+
+```
+python3 ios/scripts/verify_shell_on_device.py <device-id> --probe ios/scripts/verify_satellite.js --output /tmp/clear-skies-satellite-check.json
+```
+
+It uses live catalogs and scene tiles, verifies decoded tile sizes and finer
+zoom requests with Auto Fill disabled, then clears its test scene and restores
+the previous viewpoint and filter controls. See
+[satellite repair evidence](../docs/ios/SATELLITE_FIX_VERIFICATION.md).
+
 Debug-only launch arguments also allow app-scoped visual verification:
 `-cspDebugPage terrain -cspDebugDetent large`, `-cspDebugSection Lighting`,
 `-cspDebugPanel serverPanel`, and `-cspDebugAppearance light` or `dark`.

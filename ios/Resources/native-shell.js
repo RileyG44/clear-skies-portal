@@ -493,7 +493,7 @@
     snapshotPanel: { body: ".snapshot-export-body", close: "#snapshotClose" },
     serverPanel: { body: "#srvBox", close: "#srvClose" },
     terrainSourcePanel: { body: "#terrainSourcePanelBody", close: "#terrainSourceClose" },
-    ctl: { body: "#ctlBody", close: "#mapInfoToggle", title: "Displayed on map" }
+    ctl: { body: "#ctlBody", close: "#ctlCollapse", title: "Displayed on map" }
   };
   const openPanel = () => Object.keys(PANELS).find(id => { const el = document.getElementById(id); return el && !el.hidden; }) || null;
   function describePanel(id) {

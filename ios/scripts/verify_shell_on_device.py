@@ -14,11 +14,14 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("device", help="A paired iPhone identifier from xcrun devicectl list devices")
     parser.add_argument("--output", type=Path, help="Save the JSON verification result")
+    parser.add_argument("--probe", type=Path, default=Path(__file__).with_name("verify_shell.js"),
+                        help="Async JavaScript verification body (default: verify_shell.js)")
+    parser.add_argument("--timeout", type=float, default=90, help="Seconds to wait for this run's result")
     args = parser.parse_args()
     env = dict(os.environ)
     env.setdefault("DEVELOPER_DIR", "/Applications/Xcode.app/Contents/Developer")
     run_id = str(uuid.uuid4())
-    probe = Path(__file__).with_name("verify_shell.js").read_text()
+    probe = args.probe.read_text()
 
     def device_command(*arguments):
         return subprocess.run(["xcrun", "devicectl", "device", *arguments], env=env,
@@ -32,7 +35,8 @@ def main():
 
     with tempfile.TemporaryDirectory(prefix="clearskies-shell-") as temporary:
         local = Path(temporary) / "result.json"
-        for _ in range(15):
+        deadline = time.monotonic() + args.timeout
+        while time.monotonic() < deadline:
             copy = device_command("copy", "from", "--device", args.device,
                                   "--domain-type", "appDataContainer", "--domain-identifier", "dev.riley.ClearSkies",
                                   "--source", "Library/Caches/csp-debug-result.json", "--destination", str(local),
@@ -48,7 +52,10 @@ def main():
                     result = payload["result"]
                     if not result.get("passed"):
                         raise RuntimeError("\n".join(result.get("failures", [])))
-                    print(f"Native shell checks passed: {len(result['pages'])} routes, {len(result['panels'])} popovers")
+                    if "pages" in result:
+                        print(f"Native shell checks passed: {len(result['pages'])} routes, {len(result['panels'])} popovers")
+                    else:
+                        print("Device checks passed: " + args.probe.name)
                     return
             time.sleep(0.5)
     raise RuntimeError("No result from this run. Install the current Debug build and unlock the iPhone if needed.")
