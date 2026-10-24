@@ -1,0 +1,804 @@
+/* Clear Skies native shell adapter (docs/ios CR-001, Stage 2).
+
+   The iPhone app draws the search, sheet, route pages, map tools and pop-ups
+   natively. This script describes the web client's live controls for it and
+   applies native changes back to those same controls, so the web code stays
+   the only owner of state, sources, loading and rendering. Nothing here
+   re-implements app behaviour: a native switch clicks the web switch, a native
+   slider sets the web slider and sends the input and change events a person
+   would, and a native search calls the bridge the web search calls.
+
+   Injected by the app after the page's own scripts; absent everywhere else.
+   One message type carries every update to the app: {type:"shell", json},
+   where json holds only the parts that changed since the last message. */
+(() => {
+  "use strict";
+  const handler = window.webkit?.messageHandlers?.cspNative;
+  if (!handler || !window.CSPNativeHost || window.CSPNativeShell) return;
+  const send = update => handler.postMessage({ type: "shell", json: JSON.stringify(update) }).catch(() => {});
+  const $ = (selector, root = document) => root.querySelector(selector);
+  const $$ = (selector, root = document) => [...root.querySelectorAll(selector)];
+  const clean = text => String(text || "").replace(/\s+/g, " ").trim();
+  const bridge = () => window.ClearSkiesPortalBridge;
+
+  /* ---------------------------------------------------------------- refs
+     Elements keep their own id where they have one; others get a data
+     attribute the first time they are described. A ref that no longer
+     resolves (the web rebuilt that part) fails quietly and the page is
+     described again. */
+  let nextRef = 1;
+  const REF = "data-cspn";
+  const refOf = el => {
+    if (el.id) return "#" + el.id;
+    let ref = el.getAttribute(REF);
+    if (!ref) { ref = "n" + nextRef++; el.setAttribute(REF, ref); }
+    return "@" + ref;
+  };
+  const elementFor = ref => {
+    if (typeof ref !== "string") return null;
+    if (ref.startsWith("#")) return document.getElementById(ref.slice(1));
+    if (ref.startsWith("@")) return document.querySelector(`[${REF}="${CSS.escape(ref.slice(1))}"]`);
+    return null;
+  };
+
+  /* --------------------------------------------------------- visibility
+     The web panel is moved off screen in the app, never hidden, so layout
+     still says what the web itself shows. Closed <details>, [hidden] and
+     route-hidden panes have no boxes. display:contents has no box of its
+     own; it is shown when anything inside it is. */
+  const shown = el => {
+    if (!el || el.nodeType !== 1) return false;
+    const style = getComputedStyle(el);
+    if (style.display === "none") return false;
+    if (style.display === "contents") return [...el.children].some(shown);
+    return style.visibility !== "hidden" && el.getClientRects().length > 0;
+  };
+
+  const FORM = "input,select,textarea,button,[role=button],[role=radio],[role=option],[role=switch],[role=slider]";
+  const CONTROLS = FORM + ",a[href]";
+  const iconOf = el => {
+    const img = el?.matches?.("img") ? el : el?.querySelector?.("img[src*='icons/']");
+    const match = img && (img.getAttribute("src") || "").match(/icons\/([a-z0-9-]+)\.svg/);
+    return match ? match[1] : undefined;
+  };
+  /* Text a person reads, without the control's own text or icons. */
+  const textWithout = (el, exclude) => {
+    const copy = el.cloneNode(true);
+    for (const node of copy.querySelectorAll(exclude)) node.remove();
+    return clean(copy.textContent);
+  };
+  const labelFor = el => {
+    const own = el.labels?.[0];
+    const text = own ? textWithout(own, CONTROLS + ",output,.csp-switch") : "";
+    if (text) return text;
+    return clean(el.getAttribute("aria-label") || el.closest("label[aria-label]")?.getAttribute("aria-label") || el.title || el.placeholder || "");
+  };
+  /* "ft" beside a number field belongs to the field. */
+  const unitOf = el => clean(el.closest(".unit-field")?.querySelector(".unit-suffix")?.textContent) || undefined;
+  const toHex = value => {
+    const text = String(value || "").trim();
+    if (/^#[0-9a-f]{6}$/i.test(text)) return text.toLowerCase();
+    if (/^#[0-9a-f]{3}$/i.test(text)) return "#" + [...text.slice(1)].map(c => c + c).join("").toLowerCase();
+    const match = text.match(/rgba?\(([^)]+)\)/);
+    if (!match) return undefined;
+    const [r, g, b, a] = match[1].split(/[ ,/]+/).filter(Boolean).map(Number);
+    if (a === 0) return undefined;
+    return "#" + [r, g, b].map(n => Math.round(n).toString(16).padStart(2, "0")).join("");
+  };
+  const colorOf = el => {
+    const style = getComputedStyle(el);
+    const swatch = style.getPropertyValue("--swatch").trim() || style.getPropertyValue("--c").trim();
+    return toHex(swatch || style.backgroundColor);
+  };
+  /* The first CSS linear-gradient on an element as [{color, opacity, at}],
+     for a native gradient. Later layers (a checkerboard under a ramp) are
+     backdrops, not colors. */
+  const firstGradient = text => {
+    const start = text.indexOf("linear-gradient(");
+    if (start < 0) return "";
+    let depth = 0;
+    for (let i = start + 15; i < text.length; i++) {
+      if (text[i] === "(") depth++;
+      else if (text[i] === ")" && --depth === 0) return text.slice(start + 16, i);
+    }
+    return "";
+  };
+  const gradientOf = el => {
+    if (!el) return undefined;
+    const text = firstGradient(el.style.background || el.style.backgroundImage || "") || firstGradient(getComputedStyle(el).backgroundImage || "");
+    const stops = [];
+    for (const match of text.matchAll(/(rgba?\([^)]*\)|#[0-9a-f]{3,8}\b)\s*(-?[\d.]+%)?/gi)) {
+      const color = match[1];
+      let opacity = 1;
+      const rgba = color.match(/rgba?\(([^)]+)\)/);
+      if (rgba) { const parts = rgba[1].split(/[ ,/]+/).filter(Boolean).map(Number); if (parts.length > 3) opacity = parts[3]; }
+      const hex = rgba ? "#" + rgba[1].split(/[ ,/]+/).filter(Boolean).slice(0, 3).map(n => Math.round(Number(n)).toString(16).padStart(2, "0")).join("") : toHex(color);
+      stops.push({ color: hex || "#000000", opacity, at: match[2] === undefined ? undefined : parseFloat(match[2]) / 100 });
+    }
+    if (stops.length < 2) return undefined;
+    stops.forEach((stop, index) => { if (stop.at === undefined) stop.at = index / (stops.length - 1); });
+    return stops;
+  };
+
+  /* Canvas pictures (look previews, legends) are encoded once per canvas and
+     again at most every two seconds; a description never stalls on them. */
+  const pictures = new WeakMap();
+  const pictureOf = canvas => {
+    if (!canvas.width || !canvas.height || canvas.width * canvas.height > 600000) return undefined;
+    const now = performance.now(), cached = pictures.get(canvas);
+    if (cached && (now - cached.at < 2000 || cached.w !== canvas.width)) return cached.src;
+    try {
+      const src = canvas.toDataURL("image/png");
+      pictures.set(canvas, { src, at: now, w: canvas.width });
+      return src;
+    } catch (error) { return undefined; }
+  };
+
+  /* Inline text with links, as Markdown the app renders with live links. */
+  const escapeMarkdown = text => text.replace(/([\\[\]*_`])/g, "\\$1");
+  function markdownOf(el) {
+    let out = "";
+    for (const node of el.childNodes) {
+      if (node.nodeType === 3) { out += escapeMarkdown(node.textContent.replace(/\s+/g, " ")); continue; }
+      if (node.nodeType !== 1 || !shown(node)) continue;
+      const tag = node.tagName;
+      if (tag === "BR") { out += "\n"; continue; }
+      if (tag === "A" && node.href && /^https?:/i.test(node.href)) { out += `[${escapeMarkdown(clean(node.textContent))}](${node.href.replace(/\)/g, "%29")})`; continue; }
+      const inner = markdownOf(node);
+      if (tag === "B" || tag === "STRONG") out += inner.trim() ? `**${inner.trim()}**` : "";
+      else if (/^(P|DIV|LI|H\d)$/.test(tag)) out += "\n" + inner.trim() + "\n";
+      else out += inner;
+    }
+    return out;
+  }
+  const tidyMarkdown = text => text.replace(/[ \t]+\n/g, "\n").replace(/\n{3,}/g, "\n\n").trim();
+
+  /* ---------------------------------------------------------- describe */
+  function controlItem(el, context = {}) {
+    const tag = el.tagName.toLowerCase(), type = (el.getAttribute("type") || "").toLowerCase();
+    const title = context.title ?? labelFor(el);
+    const base = { ref: refOf(el), title, detail: context.detail || undefined, disabled: !!el.disabled || el.getAttribute("aria-disabled") === "true" };
+    if (tag === "input" && (type === "checkbox" || type === "radio")) return { kind: "toggle", ...base, value: el.checked, radio: type === "radio" || undefined };
+    if (tag === "input" && type === "range") {
+      const output = context.output || (el.id && $(`output[for~="${CSS.escape(el.id)}"]`)) || (el.nextElementSibling?.matches("output") ? el.nextElementSibling : null);
+      return { kind: "slider", ...base, value: Number(el.value), min: Number(el.min || 0), max: Number(el.max === "" ? 100 : el.max),
+        step: el.step === "any" ? 0 : Number(el.step || 1), display: output ? clean(output.textContent) : undefined };
+    }
+    if (tag === "input" && type === "color") return { kind: "color", ...base, value: el.value };
+    if (tag === "select") return { kind: "picker", ...base, value: el.value,
+      options: [...el.options].map(option => ({ value: option.value, title: clean(option.textContent), disabled: option.disabled || undefined })) };
+    if (tag === "input" || tag === "textarea") return { kind: "field", ...base, value: el.value, placeholder: el.placeholder || undefined,
+      input: tag === "textarea" ? "multiline" : (type || "text"), min: el.min || undefined, max: el.max || undefined, step: el.step || undefined,
+      unit: unitOf(el) };
+    if (el.getAttribute("role") === "slider") return { kind: "text", style: "hint", title: clean(el.getAttribute("aria-valuetext") || el.getAttribute("aria-label")) };
+    // Buttons and links.
+    const own = textWithout(el, "svg,img");
+    const aria = clean(el.getAttribute("aria-label"));
+    const label = context.title || own || aria || clean(el.title);
+    const classes = el.classList;
+    const role = classes.contains("linkbtn") ? "link"
+      : classes.contains("snapshot-action-primary") || classes.contains("primary") || classes.contains("ls-pill-primary") || classes.contains("snap-sel-save") ? "primary"
+      : classes.contains("danger") || classes.contains("mk-btn-danger") || classes.contains("mk-btn-danger-text") ? "destructive" : undefined;
+    return { kind: tag === "a" ? "link" : "button", ...base, title: label, accessibility: aria && aria !== label ? aria : undefined, icon: iconOf(el),
+      pressed: el.hasAttribute("aria-pressed") ? el.getAttribute("aria-pressed") === "true" : undefined,
+      expanded: el.hasAttribute("aria-expanded") ? el.getAttribute("aria-expanded") === "true" : undefined,
+      role, href: tag === "a" ? el.href : undefined };
+  }
+
+  function choiceGroup(el) {
+    const options = $$("[role=radio],button[aria-pressed]", el).filter(shown).filter(option => option.closest("[role=radiogroup],[role=group]") === el);
+    const swatches = options.length && options.every(option => !clean(option.textContent) && colorOf(option));
+    const title = clean(el.getAttribute("aria-label"));
+    if (swatches) {
+      const custom = $$("input[type=color]", el.parentElement || el).find(shown);
+      return { kind: "swatches", ref: refOf(el), title,
+        options: options.map(option => ({ ref: refOf(option), title: clean(option.getAttribute("aria-label") || option.title), color: colorOf(option),
+          selected: option.getAttribute("aria-checked") === "true" || option.getAttribute("aria-pressed") === "true" })),
+        custom: custom ? { ref: refOf(custom), value: custom.value, title: labelFor(custom) } : undefined };
+    }
+    const icons = options.some(option => iconOf(option));
+    return { kind: icons ? "choices" : "segmented", ref: refOf(el), title,
+      disabled: el.getAttribute("aria-disabled") === "true" || undefined,
+      options: options.map(option => ({ ref: refOf(option), title: clean(option.getAttribute("aria-label") || option.textContent), icon: iconOf(option),
+        selected: option.getAttribute("aria-checked") === "true" || option.getAttribute("aria-pressed") === "true", disabled: option.disabled || undefined })) };
+  }
+
+  /* A labelled row: settings rows, field rows and switch rows put a title
+     (and sometimes a description) beside one control. */
+  function row(el, out) {
+    const text = $(".csp-setting-text", el);
+    const strong = text ? $("strong", text) : null;
+    const title = strong ? clean(strong.textContent) : text ? textWithout(text, CONTROLS) : textWithout(el, CONTROLS + ",output,.csp-switch,.csp-accent-name");
+    const detailEl = text ? $$("span", text).find(span => !span.querySelector("strong") && clean(span.textContent)) : null;
+    const detail = detailEl && clean(detailEl.textContent) !== title ? clean(detailEl.textContent) : undefined;
+    const value = $(".csp-accent-name", el);
+    const controls = $$("input,select,textarea,button,a[href]", el).filter(shown).filter(c => !c.closest(".csp-setting-text"));
+    const group = $("[role=group],[role=radiogroup]", el);
+    if (group && shown(group)) { out.push({ ...choiceGroup(group), title, detail }); return; }
+    if (!controls.length) { out.push({ kind: "text", style: "row", title, detail, value: value ? clean(value.textContent) || undefined : undefined }); return; }
+    if (controls.length === 1) { out.push(controlItem(controls[0], { title, detail })); return; }
+    // Several controls in one row (for example Auto plus a color well).
+    out.push({ kind: "text", style: "row", title, detail });
+    for (const control of controls) out.push(controlItem(control));
+  }
+
+  function layerCard(el) {
+    const toggle = $(".csp-switch input", el), range = $(".csp-layer-range", el), title = $(".csp-layer-name", el);
+    const actions = $$(".csp-layer-tools button,button.csp-layer-title", el).map(button => ({
+      ref: refOf(button), action: button.dataset.action || "", title: clean(button.getAttribute("aria-label") || button.title || button.textContent),
+      disabled: button.disabled || undefined }));
+    return { kind: "layer", ref: refOf(el), id: el.dataset.layerId, title: clean(title?.textContent), detail: clean($(".csp-layer-meta", el)?.textContent) || undefined,
+      locked: el.classList.contains("csp-layer-locked") || undefined,
+      toggle: toggle ? { ref: refOf(toggle), value: toggle.checked, disabled: toggle.disabled || undefined } : undefined,
+      opacity: range ? { ref: refOf(range), value: Number(range.value), display: clean($(".csp-layer-opacity output", el)?.textContent) } : undefined,
+      actions };
+  }
+
+  /* Markup layers: a colored dot, a name, a switch and a row of actions, or
+     a confirmation in their place. */
+  function markupCard(el) {
+    const toggle = $(".csp-switch input", el), confirm = $(".mk-confirm", el);
+    const buttons = $$(".mk-actions button", el).filter(shown);
+    return { kind: "layer", ref: refOf(el), id: "markup:" + (el.dataset.id || ""), title: clean($(".mk-layer-title", el)?.textContent),
+      detail: clean($(".mk-layer-meta", el)?.textContent) || undefined, color: colorOf($(".mk-dot", el) || el),
+      rename: $(".mk-layer-title", el) ? refOf($(".mk-layer-title", el)) : undefined,
+      active: el.classList.contains("mk-active") || undefined,
+      toggle: toggle ? { ref: refOf(toggle), value: toggle.checked, disabled: toggle.disabled || undefined } : undefined,
+      confirm: confirm ? clean($("p", confirm)?.textContent) : undefined,
+      buttons: buttons.map(button => controlItem(button)) };
+  }
+
+  function overlayRow(el) {
+    const input = $("input[type=checkbox]", el);
+    return { kind: "toggle", ref: input ? refOf(input) : refOf(el), title: clean($(".nm", el)?.textContent) || labelFor(input),
+      detail: clean($(".via", el)?.textContent) || undefined, badge: clean($(".nc", el)?.textContent) || undefined,
+      color: $(".sw", el) ? colorOf($(".sw", el)) : undefined, value: !!input?.checked, disabled: !!input?.disabled || el.classList.contains("dead") || undefined };
+  }
+
+  function sceneItem(el) {
+    const img = $("img.thumb", el);
+    return { kind: "scene", ref: refOf(el), title: clean($(".ttl", el)?.textContent), detail: clean($(".dt", el)?.textContent),
+      tags: $$(".tag", el).map(tag => ({ title: clean(tag.textContent), style: [...tag.classList].filter(c => c !== "tag").join(" ") || undefined })),
+      src: img && img.style.visibility !== "hidden" && /^https?:|^data:/.test(img.src) ? img.src : undefined, selected: el.classList.contains("sel") || undefined };
+  }
+
+  /* ------------------------------------------------------ LiDAR studio */
+  function looksItem(el) {
+    return { kind: "looks", ref: refOf(el), title: clean(el.getAttribute("aria-label")) || "Looks",
+      options: $$(".ls-look", el).map(look => {
+        const remove = $("[data-remove-look]", look);
+        return { ref: refOf(look), title: clean($(".ls-look-name", look)?.textContent), selected: look.getAttribute("aria-checked") === "true",
+          src: $("canvas", look) ? pictureOf($("canvas", look)) : undefined, remove: remove ? refOf(remove) : undefined };
+      }) };
+  }
+  function palettesItem(el) {
+    return { kind: "palettes", ref: refOf(el), title: clean(el.getAttribute("aria-label")) || "Palette",
+      options: $$("[data-palette]", el).map(chip => ({ ref: refOf(chip), title: clean($(".ls-palette-name", chip)?.textContent),
+        stops: gradientOf($(".ls-palette-bar", chip)), selected: chip.getAttribute("aria-checked") === "true" })) };
+  }
+  function lidarLayer(el, out) {
+    const eye = $(".ls-eye", el), main = $(".ls-layer-main", el), editor = $(".ls-editor", el);
+    const items = [];
+    if (editor && shown(editor)) walk(editor, items);
+    out.push({ kind: "lidarLayer", ref: main ? refOf(main) : refOf(el), title: clean($(".ls-layer-name", el)?.textContent),
+      detail: clean($(".ls-layer-meta", el)?.textContent) || undefined, stops: gradientOf($("[data-swatch]", el)),
+      visible: eye ? eye.getAttribute("aria-pressed") === "true" : true, eye: eye ? refOf(eye) : undefined,
+      open: el.classList.contains("is-open"), items });
+  }
+  function rampItem(el) {
+    const bar = $(".ls-ramp", el), color = $(".ls-colour input[type=color]", el), remove = $(".ls-stop-controls .ls-pill", el);
+    const position = $(".ls-stop-position", el);
+    return { kind: "ramp", ref: bar ? refOf(bar) : refOf(el), title: "Colors", stops: gradientOf(bar),
+      handles: $$(".ls-stop", el).map(stop => ({ ref: refOf(stop), at: (parseFloat(stop.style.left) || 0) / 100,
+        color: toHex(stop.style.getPropertyValue("--stop")) || "#000000", selected: stop.classList.contains("is-selected") })),
+      well: color ? { ref: refOf(color), value: color.value } : undefined,
+      position: position ? clean(position.textContent) : undefined,
+      remove: remove ? { ref: refOf(remove), disabled: remove.disabled || undefined } : undefined };
+  }
+  /* The two sun sliders are one dial in the app. */
+  function sunItem() {
+    const az = $("#terSunAz"), alt = $("#terSunAlt");
+    if (!az || !alt) return null;
+    const slider = input => controlItem(input, { output: $(`output[for="${input.id}"]`) });
+    return { kind: "sun", ref: refOf(az), title: "Sun", azimuth: slider(az), altitude: slider(alt) };
+  }
+
+  function walk(root, out) {
+    for (const el of root.children) {
+      if (!shown(el)) continue;
+      if (handle(el, out)) continue;
+      walk(el, out);
+    }
+  }
+
+  function handle(el, out) {
+    const tag = el.tagName.toLowerCase();
+    if (tag === "script" || tag === "style" || tag === "template") return true;
+    if (el.matches(".pane")) {
+      const head = $(":scope > .pane-h", el), title = head && $(".pane-t", head), toggle = head && $(".pane-x", head);
+      const body = $(":scope > .pane-b", el), open = !el.classList.contains("min");
+      const items = [];
+      if (open && body && shown(body)) walk(body, items);
+      if (title && shown(head)) out.push({ kind: "group", ref: refOf(toggle || head), pane: true, title: clean(title.textContent),
+        detail: clean($(".pane-n", head)?.textContent) || undefined, open, items });
+      else out.push(...items);
+      return true;
+    }
+    if (tag === "details") {
+      const summary = $(":scope > summary", el);
+      const items = [];
+      if (el.open) for (const child of el.children) if (child !== summary && shown(child) && !handle(child, items)) walk(child, items);
+      /* A button in the summary (Elevation highlights' Reset) acts on the
+         whole section, so it ends the section's rows. */
+      if (summary) for (const button of $$("button", summary).filter(shown)) items.push(controlItem(button));
+      const swatch = summary && $(".ls-swatch", summary);
+      out.push({ kind: "group", ref: refOf(el), title: summary ? textWithout(summary, ".pane-n,button,.ls-disclosure-value,.ls-swatch") : "",
+        detail: summary ? clean($(".pane-n,.ls-disclosure-value", summary)?.textContent) || undefined : undefined,
+        stops: swatch ? gradientOf(swatch) : undefined, open: el.open, items });
+      return true;
+    }
+    if (el.matches(".csp-section-label,.menu-section-title,.ovgrp,h1,h2,h3,h4")) {
+      const count = $(".pane-n", el);
+      out.push({ kind: "header", title: count ? textWithout(el, ".pane-n") : clean(el.textContent), detail: count ? clean(count.textContent) || undefined : undefined });
+      return true;
+    }
+    if (el.matches(".csp-sat-search")) {
+      const input = $("#cspSatQuery", el);
+      out.push({ kind: "scenesearch", ref: input ? refOf(input) : refOf(el), placeholder: input?.placeholder, value: input?.value || undefined });
+      const note = $("#cspSatNote", el);
+      if (note && shown(note)) out.push({ kind: "text", style: "status", title: clean(note.textContent) });
+      for (const child of $(".csp-sat-card", el)?.children || []) {
+        if (child.matches("form,.csp-sat-filters,#cspSatNote") || !shown(child)) continue;
+        if (!handle(child, out)) walk(child, out);
+      }
+      const filters = $(".csp-sat-filters", el);
+      if (filters && shown(filters)) walk(filters, out);
+      return true;
+    }
+    if (el.matches(".ls-looks")) { out.push(looksItem(el)); return true; }
+    if (el.matches(".ls-palettes")) { out.push(palettesItem(el)); return true; }
+    if (el.matches(".ls-layer")) { lidarLayer(el, out); return true; }
+    if (el.matches(".ls-ramp-wrap")) { out.push(rampItem(el)); return true; }
+    if (el.matches(".ls-field") && !el.matches(".ls-field-wide")) {
+      const label = $(".ls-field-label", el), control = $$(CONTROLS, el).find(shown);
+      if (label && control && !control.matches("input[type=number]")) { out.push(controlItem(control, { title: clean(label.textContent) })); return true; }
+    }
+    if (el.matches(".csp-setting-row,.csp-field-row")) { row(el, out); return true; }
+    if (el.matches(".mk-layer")) { out.push(markupCard(el)); return true; }
+    if (el.matches("label") && $("input[type=checkbox],input[type=radio]", el)) {
+      const input = $("input[type=checkbox],input[type=radio]", el);
+      out.push(controlItem(input, { title: textWithout(el, CONTROLS + ",.csp-switch") || labelFor(input) }));
+      return true;
+    }
+    if (el.matches(".elev-field,.ls-slider")) {
+      const range = $("input[type=range]", el);
+      if (range) {
+        if (range.id === "terSunAlt") return true;
+        if (range.id === "terSunAz") { const sun = sunItem(); if (sun) { out.push(sun); return true; } }
+        /* A slider and the number field beside it set one value; the app
+           shows them as one row, each still driving its own web input. */
+        const head = $(".elev-label-row", el), entry = $$("input[type=number]", el).find(shown);
+        const slider = controlItem(range, { title: head ? textWithout(head, "output,.elev-value," + CONTROLS) : entry ? labelFor(entry) : labelFor(range),
+          output: $("output", el) || $(".elev-value", el) });
+        if (entry) slider.entry = { ref: refOf(entry), value: entry.value, unit: unitOf(entry) || $("select", el)?.value || undefined,
+          disabled: entry.disabled || undefined };
+        out.push(slider);
+        for (const extra of $$(CONTROLS, el).filter(c => c !== range && c !== entry && shown(c))) out.push(controlItem(extra));
+        const hint = $$(".control-hint", el).find(h => !h.matches("label") && shown(h));
+        if (hint) out.push({ kind: "text", style: "hint", title: clean(hint.textContent) });
+        return true;
+      }
+      const threshold = $(".elev-threshold-row", el);
+      if (threshold) {
+        const number = $("input[type=number]", threshold), color = $("input[type=color]", threshold);
+        if (number && color) {
+          out.push({ ...controlItem(number), title: labelFor(number), well: { ref: refOf(color), value: color.value, title: labelFor(color) } });
+          return true;
+        }
+      }
+    }
+    if (el.matches(".unit-suffix")) return true;
+    if (el.matches(".elev-spectrum-scale,.elevRamp")) {
+      const bar = el.matches(".elevRamp") ? el : $(".elevRamp", el), stops = gradientOf(bar);
+      if (stops) out.push({ kind: "gradient", ref: bar.id ? "#" + bar.id : undefined, stops,
+        labels: $$(".elevKey span", el).map(span => clean(span.textContent)).filter(Boolean) });
+      return true;
+    }
+    if (el.matches(".ovrow")) { out.push(overlayRow(el)); return true; }
+    if (el.matches(".ov-line-control")) {
+      const range = $("input[type=range]", el);
+      if (range) out.push(controlItem(range, { title: textWithout($(".ov-line-label", el) || el, "output," + CONTROLS) || "Opacity", output: $("output", el) }));
+      return true;
+    }
+    if (el.matches(".csp-layer-card")) { out.push(layerCard(el)); return true; }
+    if (el.matches(".item[data-i]")) { out.push(sceneItem(el)); return true; }
+    if (el.matches(".grp[data-g]")) { out.push({ kind: "button", ref: refOf(el), role: "group", title: textWithout(el, ".car"), detail: clean($(".car", el)?.textContent) || undefined }); return true; }
+    if (el.matches(".csp-available-row")) {
+      out.push({ kind: "button", ref: refOf(el), role: "navigate", title: clean($("strong", el)?.textContent), detail: clean($("span", el)?.textContent) || undefined,
+        icon: undefined, disabled: el.disabled || undefined });
+      return true;
+    }
+    if (el.matches("[role=radiogroup],[role=group]") && $$("[role=radio],button[aria-pressed]", el).some(shown)) { out.push(choiceGroup(el)); return true; }
+    if (el.matches("[role=listbox]")) {
+      for (const option of $$("[role=option]", el).filter(shown)) out.push({ kind: "button", ref: refOf(option), role: "option", title: clean(option.textContent) });
+      return true;
+    }
+    if (el.matches("input,select,textarea,button,a[href],[role=button],[role=slider]")) {
+      if (el.matches("input[type=hidden]")) return true;
+      out.push(controlItem(el));
+      return true;
+    }
+    if (tag === "img") {
+      if (!/icons\//.test(el.getAttribute("src") || "") && el.naturalWidth > 32) out.push({ kind: "image", src: el.src, title: el.alt || undefined, aspect: el.naturalWidth / Math.max(1, el.naturalHeight) });
+      return true;
+    }
+    if (tag === "canvas") {
+      const src = pictureOf(el);
+      if (src) out.push({ kind: "image", src, aspect: el.width / el.height, ref: refOf(el) });
+      return true;
+    }
+    if (tag === "svg") return true;
+    if (el.matches(".fr") && $(".fk", el) && $(".fv", el)) { out.push({ kind: "text", style: "pair", title: clean($(".fk", el).textContent), value: clean($(".fv", el).textContent) }); return true; }
+    if (el.matches("progress")) { out.push({ kind: "progress", value: el.max ? Number(el.value) / Number(el.max) : undefined }); return true; }
+    if (!el.querySelector(FORM + ",details,canvas,progress,img:not([src*='icons/'])")) {
+      if (el.querySelector("a[href]")) {
+        const markdown = tidyMarkdown(markdownOf(el));
+        if (markdown) out.push({ kind: "text", ref: el.id ? "#" + el.id : undefined, title: clean(el.textContent), markdown, style: textStyle(el) });
+        return true;
+      }
+      const text = clean(el.innerText);
+      if (text) out.push({ kind: "text", ref: el.id ? "#" + el.id : undefined, title: text, style: textStyle(el) });
+      return true;
+    }
+    return false;
+  }
+
+  function textStyle(el) {
+    const classes = typeof el.className === "string" ? el.className : "";
+    if (/\b(err|warn)\b/.test(classes) || el.querySelector(".err,.warn") || el.dataset.state === "partial") return "warning";
+    if (/\bok\b/.test(classes) || el.querySelector(".ok")) return "success";
+    if (el.getAttribute("role") === "status" || el.id === "status" || /\b(status|warmmsg)\b/.test(classes)) return "status";
+    if (/hint|note|meta|via|empty|foot|blurb/.test(classes) || el.tagName === "SMALL") return "hint";
+    return "body";
+  }
+
+  function describeRoot(root) {
+    const items = [];
+    if (root && shown(root)) walk(root, items);
+    else if (root) for (const child of root.children) if (shown(child) && !handle(child, items)) walk(child, items);
+    return items;
+  }
+
+  /* The app groups a page's sections into its own list, so the web sections
+     behind it are kept open: every row is described and none waits on a tap.
+     Opening one only syncs its label and remembers it is open
+     (ui-system.js, lidar-studio.js); nothing loads. */
+  const openSections = root => { if (root) for (const details of $$("details:not([open])", root)) details.open = true; };
+
+  function describePage() {
+    const shell = window.CSPShell;
+    const description = $("#cspWorkspaceDescription"), scroll = $("#cspWorkspaceScroll");
+    openSections(scroll);
+    return {
+      route: shell?.current?.() || "",
+      title: clean($("#cspWorkspaceTitle")?.textContent),
+      description: description?.hidden ? "" : clean(description?.textContent),
+      items: describeRoot(scroll)
+    };
+  }
+
+  /* Pop-ups the app presents natively. Each keeps its web element as the
+     source of truth; closing the native sheet closes the web pop-up. */
+  const PANELS = {
+    snapshotPanel: { body: ".snapshot-export-body", close: "#snapshotClose" },
+    serverPanel: { body: "#srvBox", close: "#srvClose" },
+    terrainSourcePanel: { body: "#terrainSourcePanelBody", close: "#terrainSourceClose" },
+    ctl: { body: "#ctlBody", close: "#ctlCollapse", title: "Displayed on map" }
+  };
+  const openPanel = () => Object.keys(PANELS).find(id => { const el = document.getElementById(id); return el && !el.hidden; }) || null;
+  function describePanel(id) {
+    const spec = PANELS[id], el = document.getElementById(id);
+    if (!spec || !el || el.hidden) return null;
+    const body = $(spec.body, el);
+    const items = [];
+    if (id === "ctl") {
+      items.push({ kind: "text", style: "row", title: clean($("#ctlName")?.textContent), detail: clean($("#ctlDate")?.textContent) || undefined });
+    }
+    if (body) for (const child of body.children) if (!handle(child, items)) walk(child, items);
+    return { id, title: spec.title || clean($(".tool-popover-title", el)?.textContent), state: clean($(".tool-popover-state", el)?.textContent) || undefined, items };
+  }
+
+  /* ------------------------------------------------------------- state */
+  function counts() {
+    const result = {};
+    for (const badge of $$(".csp-nav-count[data-count]")) { const text = clean(badge.textContent); if (text) result[badge.dataset.count] = text; }
+    return result;
+  }
+
+  function searchState() {
+    const state = bridge()?.searchState?.() || { version: 0, label: "", coordinates: null };
+    const copy = $("#coordCopy"), open = $("#coordOpen");
+    const available = !!copy && !copy.disabled;
+    return {
+      version: state.version || 0,
+      label: state.label || "",
+      lat: state.coordinates?.lat ?? undefined, lng: state.coordinates?.lng ?? undefined,
+      query: $("#q")?.value || "",
+      canCopy: available,
+      coordinates: available ? clean((copy.title || "").replace(/^Copy\s+/, "")) : "",
+      mapsURL: open && !open.disabled ? $("#coordGoogleMaps")?.href || "" : "",
+      earthURL: open && !open.disabled ? $("#coordGoogleEarth")?.href || "" : "",
+      canClear: !!$("#qClear") && !$("#qClear").hidden
+    };
+  }
+
+  const currentMode = () => $("#terModePoints")?.getAttribute("aria-pressed") === "true" ? "points"
+    : $("#terMode3d")?.getAttribute("aria-pressed") === "true" ? "3d" : "2d";
+  let bearing = 0;
+  function mapState() {
+    const body = document.body;
+    const visible = id => { const el = document.getElementById(id); return !!el && !el.hidden; };
+    return {
+      mode: currentMode(),
+      theme: document.documentElement.dataset.uiTheme || "",
+      pointCloud: body.classList.contains("point-cloud-open"),
+      terrain3d: body.classList.contains("terrain-3d"),
+      selecting: body.classList.contains("dnr-selecting") || visible("snapSel") || visible("dnrSelectionBar"),
+      drawing: visible("mkBar"),
+      bearing: Math.round(bearing * 10) / 10
+    };
+  }
+
+  function dockState() {
+    return $$("#mapDock > .map-tool").map(button => ({
+      ref: refOf(button), id: button.id, tool: button.dataset.tool || button.id,
+      title: clean(button.getAttribute("aria-label") || button.title),
+      hidden: button.hidden || undefined, disabled: button.disabled || undefined,
+      pressed: button.getAttribute("aria-pressed") === "true" || button.classList.contains("active") || undefined,
+      expanded: button.getAttribute("aria-expanded") === "true" || undefined,
+      dot: button.id === "serverToggle" ? ($("#srvDot")?.classList.contains("on") ? "on" : "off") : undefined
+    }));
+  }
+
+  function statusState() {
+    const terrain = $("#terrainLoadStatus"), message = $("#status"), snapshot = $("#snapshotStatus");
+    return {
+      terrain: terrain && !terrain.hidden && clean(terrain.textContent) ? { state: terrain.dataset.state || "", text: clean(terrain.textContent) } : null,
+      message: message ? { kind: message.dataset.kind || "", text: clean(message.textContent), error: !!$(".err", message) } : null,
+      snapshot: snapshot && clean(snapshot.textContent) ? clean(snapshot.textContent) : null,
+      engine: { online: !!$("#srvDot")?.classList.contains("on"), state: clean($("#srvState")?.textContent) }
+    };
+  }
+
+  /* --------------------------------------------------------- publishing
+     The app says what it shows; only that is described. The route page is
+     not walked while the sheet is closed, nor a pop-up while it is not
+     presented, so map gestures never wait on a description. */
+  const view = { sheet: "closed", page: null, panel: null };
+  const last = {};
+  let timer = 0, forceNext = false;
+  function publish() {
+    timer = 0;
+    const force = forceNext;
+    forceNext = false;
+    const update = {};
+    const offer = (key, value) => {
+      const json = JSON.stringify(value);
+      if (force || json !== last[key]) { last[key] = json; update[key] = value; }
+    };
+    offer("route", window.CSPShell?.current?.() || "");
+    offer("counts", counts());
+    offer("search", searchState());
+    offer("map", mapState());
+    offer("dock", dockState());
+    offer("status", statusState());
+    offer("panelOpen", openPanel());
+    if (view.sheet !== "closed" && view.page) offer("page", describePage());
+    if (view.panel) offer("panel", describePanel(view.panel));
+    if (Object.keys(update).length) send(update);
+  }
+  const schedule = (delay = 60) => { if (!timer) timer = setTimeout(publish, delay); };
+  const flush = () => { clearTimeout(timer); timer = 0; publish(); };
+
+  /* -------------------------------------------------------------- acting */
+  const fire = (el, type) => el.dispatchEvent(new Event(type, { bubbles: true }));
+  const key = (el, name, shift = false) => el.dispatchEvent(new KeyboardEvent("keydown", { key: name, shiftKey: shift, bubbles: true, cancelable: true }));
+  function act(ref, op, value) {
+    const el = elementFor(ref);
+    if (!el) { schedule(0); return false; }
+    switch (op) {
+      case "toggle":
+        if (el.checked !== !!value) el.click();
+        break;
+      case "input":
+        el.value = String(value);
+        fire(el, "input");
+        break;
+      case "commit":
+        if (value !== undefined && value !== null) { el.value = String(value); fire(el, "input"); }
+        fire(el, "change");
+        break;
+      case "select":
+        el.value = String(value);
+        fire(el, "input");
+        fire(el, "change");
+        break;
+      case "open":
+        if (el.matches("details")) el.open = !!value;
+        else if (el.matches(".pane-x,.pane-h")) { const pane = el.closest(".pane"); if (pane && pane.classList.contains("min") === !!value) el.click(); }
+        else el.click();
+        break;
+      case "focus":
+        el.focus({ preventScroll: true });
+        break;
+      case "rampAdd": {
+        /* The bar adds a stop where it is pressed, with the color shown there. */
+        const rect = el.getBoundingClientRect(), x = rect.left + Math.max(0, Math.min(1, Number(value))) * rect.width;
+        el.dispatchEvent(new PointerEvent("pointerdown", { clientX: x, clientY: rect.top + rect.height / 2, bubbles: true, cancelable: true, pointerId: 1, isPrimary: true }));
+        break;
+      }
+      case "rampMove": {
+        /* Stops move with the bar's own arrow keys: one percent per step,
+           ten with Shift. ArrowRight always moves a stop right as drawn,
+           reversed palette or not, so the app works in drawn positions. */
+        el.focus({ preventScroll: true });
+        let steps = Math.round(Number(value) * 100) - Math.round(parseFloat(el.style.left) || 0);
+        for (let guard = 0; steps !== 0 && guard < 120; guard++) {
+          const target = document.activeElement?.closest?.(".ls-stop") || el;
+          const big = Math.abs(steps) >= 10;
+          key(target, steps > 0 ? "ArrowRight" : "ArrowLeft", big);
+          steps -= Math.sign(steps) * (big ? 10 : 1);
+        }
+        break;
+      }
+      case "key":
+        key(el, String(value));
+        break;
+      case "submit":
+        if (el.form) el.form.requestSubmit(); else el.closest("form")?.requestSubmit();
+        break;
+      case "click":
+      default:
+        el.click();
+    }
+    schedule(0);
+    return true;
+  }
+
+  /* ------------------------------------------------------------- search */
+  let places = [], suggestAbort = null;
+  const shell = window.CSPShell;
+  window.CSPNativeShell = Object.freeze({
+    /* {sheet:"closed"|"medium"|"large", page:route|null, panel:id|null} */
+    setView(next) {
+      Object.assign(view, next || {});
+      forceNext = true;
+      flush();
+    },
+    groups: () => shell?.groups?.() || [],
+    open(route) {
+      const opened = !!shell?.activate?.(route);
+      view.page = route;
+      flush();
+      return opened;
+    },
+    refresh() { forceNext = true; flush(); },
+    describe: () => describePage(),
+    describePanel,
+    act,
+    async suggest(text) {
+      suggestAbort?.abort();
+      suggestAbort = new AbortController();
+      const signal = suggestAbort.signal;
+      try {
+        const found = await bridge().placeSuggestions(text, signal) || [];
+        if (signal.aborted) return null;
+        places = found;
+        return found.map((place, index) => ({ index, primary: place.primary || "", secondary: place.secondary || "", kind: place.kind || "" }));
+      } catch (error) {
+        if (error?.name === "AbortError" || signal.aborted) return null;
+        throw error;
+      }
+    },
+    pick(index) {
+      const place = places[index];
+      if (!place) return false;
+      bridge().searchPlace(place);
+      schedule(0);
+      return true;
+    },
+    routeMatches(text) {
+      const query = String(text || "").trim().toLocaleLowerCase().replace(/\s+/g, " ");
+      if (query.length < 2 || !shell?.keywords) return [];
+      const found = new Map();
+      for (const [keyword, route] of shell.keywords()) if (keyword.startsWith(query) || (query.length >= 3 && keyword.includes(query))) {
+        if (!found.has(route)) found.set(route, keyword);
+      }
+      return [...found].map(([route, keyword]) => ({ route, keyword }));
+    },
+    submit(text) {
+      const route = shell?.routeForText?.(text);
+      if (route) return { route };
+      bridge().searchText(text);
+      schedule(0);
+      return {};
+    },
+    searchText(text) { bridge().searchText(String(text || "")); schedule(0); },
+    searchMapCenter() { bridge().searchMapCenter(); schedule(0); },
+    clear() { $("#qClear")?.click(); schedule(0); },
+    locate() { $("#loc")?.click(); schedule(0); },
+    copyCoordinates() { $("#coordCopy")?.click(); schedule(0); },
+    setMode(mode) {
+      const item = $(`#mapModeMenu [data-mode="${CSS.escape(String(mode))}"]`);
+      if (item) item.click();
+      schedule(0);
+    },
+    tool(id) {
+      const button = document.getElementById(String(id));
+      if (!button || !button.closest("#mapDock")) return false;
+      button.click();
+      flush();
+      return true;
+    },
+    closePanel(id) {
+      const spec = PANELS[id], el = document.getElementById(id);
+      if (spec && el && !el.hidden) $(spec.close)?.click();
+      if (view.panel === id) view.panel = null;
+      schedule(0);
+    },
+    statusText: () => clean($("#status")?.textContent)
+  });
+
+  /* -------------------------------------------------------------- watching */
+  const start = () => {
+    // The web panel stays collapsed for good inside the app.
+    if (!document.body.classList.contains("collapsed")) $("#sideToggle")?.click();
+    // These controls have native equivalents. Moving them off screen keeps
+    // layout available to the adapter; hide the duplicates from VoiceOver.
+    for (const selector of ["#side", ...Object.keys(PANELS).map(id => "#" + id)])
+      $(selector)?.setAttribute("aria-hidden", "true");
+    const observer = new MutationObserver(records => {
+      if (records.every(record => record.type === "attributes" && record.attributeName === REF)) return;
+      schedule();
+    });
+    const watched = ["#side", "#mapDock", "#serverPanel", "#snapshotPanel", "#terrainSourcePanel", "#ctl", "#snapshotStatus"];
+    for (const target of watched.map(selector => $(selector)).filter(Boolean))
+      observer.observe(target, { subtree: true, childList: true, attributes: true, characterData: true });
+    const flags = new MutationObserver(() => schedule());
+    for (const target of ["#pointCloudPanel", "#mkBar", "#snapSel", "#dnrSelectionBar", "#mapModeMenu"].map(selector => $(selector)).filter(Boolean))
+      flags.observe(target, { attributes: true, attributeFilter: ["hidden"] });
+    flags.observe(document.body, { attributes: true, attributeFilter: ["class", "data-csp-route"] });
+    flags.observe(document.documentElement, { attributes: true, attributeFilter: ["data-ui-theme"] });
+    document.addEventListener("input", () => schedule(), true);
+    document.addEventListener("change", () => schedule(), true);
+    document.addEventListener("csp:location", () => schedule(0));
+    document.addEventListener("csp:layers-changed", () => schedule());
+    document.addEventListener("csp:open-route", event => {
+      const route = event.detail?.route || event.detail;
+      if (typeof route === "string") send({ openRoute: route });
+    });
+    /* The compass follows the map. Rotation fires per frame; the app only
+       needs the needle's angle a few times a second. */
+    let bearingTimer = 0;
+    const rotate = () => {
+      const map = bridge()?.map, map3d = bridge()?.map3d?.();
+      bearing = document.body.classList.contains("terrain-3d") && map3d ? map3d.getBearing() : (map?.getBearing?.() || 0);
+      if (!bearingTimer) bearingTimer = setTimeout(() => { bearingTimer = 0; schedule(0); }, 80);
+    };
+    bridge()?.map?.on?.("rotate", rotate);
+    let watched3d = null;
+    new MutationObserver(() => {
+      const map3d = bridge()?.map3d?.();
+      if (map3d && map3d !== watched3d) { watched3d = map3d; map3d.on("rotate", rotate); }
+      rotate();
+    }).observe(document.body, { attributes: true, attributeFilter: ["class"] });
+    send({ groups: window.CSPNativeShell.groups(), ready: true });
+    forceNext = true;
+    flush();
+  };
+  if (document.documentElement.classList.contains("csp-boot")) {
+    document.documentElement.addEventListener("csp:ready", start, { once: true });
+  } else {
+    start();
+  }
+})();

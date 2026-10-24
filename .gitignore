@@ -43,3 +43,7 @@ build/icon-1024.png
 
 # Markup (annotation) layers live on this machine only
 markup/
+
+# Native iOS app (docs/ios CR-001): this Mac's signing team and Xcode user state
+ios/Config/Local.xcconfig
+ios/**/xcuserdata/

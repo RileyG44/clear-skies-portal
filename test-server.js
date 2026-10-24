@@ -225,8 +225,12 @@ async function main(){
       assert.deepEqual(decode(packed.body),page.body,`${encoding} shell decodes to the same page`);
       assert.notEqual(packed.headers.etag,page.headers.etag,"each encoding has its own validator");
     }
-    const health2=await request(port,"/api/health",{headers:{"Accept-Encoding":"gzip"}});
-    assert.equal(health2.headers["content-encoding"],undefined,"tiny bodies are not worth compressing");
+    // Health includes growing diagnostics and is no longer a tiny fixture.
+    // Use a deterministic short response to verify compression passthrough.
+    const missing=await request(port,"/missing-compression-fixture.txt",{headers:{"Accept-Encoding":"gzip"}});
+    assert.equal(missing.status,404);
+    assert.equal(missing.body.toString(),"not found");
+    assert.equal(missing.headers["content-encoding"],undefined,"tiny bodies are not worth compressing");
 
     const maplibreModule=await request(port,"/vendor/maplibre-gl.mjs");
     assert.equal(maplibreModule.status,200,"the vendored 3D renderer must be served locally");

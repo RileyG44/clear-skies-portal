@@ -1,0 +1,74 @@
+# Clear Skies for iPhone (CR-001). Generate the Xcode project with:
+#   cd ios && xcodegen generate
+name: ClearSkies
+options:
+  bundleIdPrefix: dev.riley
+  deploymentTarget:
+    # Provisional for internal builds; the supported range is open (D-01).
+    iOS: "26.0"
+  createIntermediateGroups: true
+  groupSortPosition: top
+configFiles:
+  Debug: Config/Base.xcconfig
+  Release: Config/Base.xcconfig
+targets:
+  ClearSkies:
+    type: application
+    platform: iOS
+    sources:
+      - path: Sources
+      - path: Resources
+        buildPhase: resources
+    info:
+      path: Config/Info.plist
+      properties:
+        CFBundleDisplayName: Clear Skies
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        LSApplicationCategoryType: public.app-category.navigation
+        ITSAppUsesNonExemptEncryption: false
+        UILaunchScreen:
+          UIColorName: CanvasBackground
+        UIApplicationSceneManifest:
+          UIApplicationSupportsMultipleScenes: false
+        UISupportedInterfaceOrientations:
+          - UIInterfaceOrientationPortrait
+          - UIInterfaceOrientationLandscapeLeft
+          - UIInterfaceOrientationLandscapeRight
+        # Native sheets, glass and scrolling run at the display's full rate on
+        # ProMotion iPhones instead of the 60 Hz default.
+        CADisableMinimumFrameDurationOnPhone: true
+        NSLocationWhenInUseUsageDescription: Clear Skies moves the map to where you are when you tap Locate.
+        NSLocalNetworkUsageDescription: Clear Skies connects to the terrain engine you set up on your own network.
+        NSAppTransportSecurity:
+          NSAllowsLocalNetworking: true
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: $(CSP_BUNDLE_ID)
+        PRODUCT_NAME: ClearSkies
+        # iPhone only for internal builds; iPad scope is open (D-01).
+        TARGETED_DEVICE_FAMILY: "1"
+        SWIFT_VERSION: "6.0"
+        SWIFT_DEFAULT_ACTOR_ISOLATION: MainActor
+        SWIFT_APPROACHABLE_CONCURRENCY: YES
+        GENERATE_INFOPLIST_FILE: NO
+        CODE_SIGN_STYLE: Automatic
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
+        # The bundling step reads the repository's web client, outside the
+        # project's declared inputs.
+        ENABLE_USER_SCRIPT_SANDBOXING: NO
+    postCompileScripts:
+      - name: Bundle the web client
+        script: |
+          "${SRCROOT}/scripts/bundle_site.sh" "${SRCROOT}/.." "${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/site" "${CONFIGURATION}"
+        basedOnDependencyAnalysis: false
+schemes:
+  ClearSkies:
+    build:
+      targets:
+        ClearSkies: all
+    run:
+      config: Debug
+    archive:
+      config: Release

@@ -26,6 +26,21 @@
 
   var DEFAULT_BYTES = 192 * 1024 * 1024, UPLOAD_MS = 4, DEG = Math.PI / 180;
   function mod(a, n) { return ((a % n) + n) % n; }
+  var IDENTITY = [1, 0, 0, 0, 1, 0, 0, 0, 1];
+  /* Bottom-up field pixels -> the frozen map field's bottom-up pixels.
+     Export crops/density change sampling, never the terrain-effect footprint. */
+  function snapshotAuxTransform(reference, view, width, height) {
+    var refPx = 256 * Math.pow(2, reference.zoom) * reference.dpr;
+    var scale = refPx / (256 * Math.pow(2, view.zoom) * view.dpr);
+    var angle = ((reference.bearing || 0) - (view.bearing || 0)) * DEG;
+    var a = scale * Math.cos(angle), b = -scale * Math.sin(angle), c = -b, d = a;
+    var bearing = (reference.bearing || 0) * DEG, cs = Math.cos(bearing), sn = Math.sin(bearing);
+    var dx = (view.centerMerc[0] - reference.centerMerc[0]) * refPx;
+    var dy = (view.centerMerc[1] - reference.centerMerc[1]) * refPx;
+    var x = reference.cssSize[0] * reference.dpr / 2 + cs * dx - sn * dy;
+    var y = reference.cssSize[1] * reference.dpr / 2 - sn * dx - cs * dy;
+    return [a, b, 0, c, d, 0, x - a * width / 2 - c * height / 2, y - b * width / 2 - d * height / 2, 1];
+  }
   function tileLevel(view) {
     return Math.min(22, Math.max(0, Math.round(view.zoom) +
       (view.dz === undefined ? (view.dpr >= 1.5 ? 1 : 0) : view.dz)));
@@ -98,32 +113,28 @@
     'for(int y=0;y<2;y++)for(int x=0;x<2;x++){float v=at(b+ivec2(x,y));float w=(x==0?1.-f.x:f.x)*(y==0?1.-f.y:f.y);if(valid(v)&&w>0.){sum+=v*w;weight+=w;}}' +
     'if(weight<=0.)discard;result=vec2(sum/weight,u_rank);}\n';
   // Shade-module coordinates are top-down; framebuffer texels are bottom-up.
-  var PRELUDE = '\n#define CSP_HAS_AUX 1\nuniform highp sampler2D u_cspField,u_cspBlur,u_cspBase; uniform float u_cspBlurScale,u_cspBaseScale; uniform vec3 u_cspAuxFrame;\n' +
+  var PRELUDE = '\n#define CSP_HAS_AUX 1\nuniform highp sampler2D u_cspField,u_cspBlur,u_cspBase; uniform float u_cspBlurScale,u_cspBaseScale; uniform mat3 u_cspAuxTransform;\n' +
     'ivec2 csp_size(){return textureSize(u_cspField,0);}\n' +
     'vec2 csp_sample(ivec2 p){ivec2 s=csp_size();p=clamp(p,ivec2(0),s-1);return texelFetch(u_cspField,ivec2(p.x,s.y-1-p.y),0).rg;}\n' +
     'float csp_height(ivec2 p){return csp_sample(p).r;}\n' +
     'int csp_rank(ivec2 p){return int(csp_sample(p).g+.5);}\n' +
     'bool csp_valid(ivec2 p){vec2 v=csp_sample(p);return v.g>0.&&!isnan(v.r)&&!isinf(v.r)&&v.r>-1e20;}\n' +
     // Filtered fields are stored at 1/scale resolution, bottom-up like the
-    // field; read them bilinearly at the field pixel centre. u_cspAuxFrame
-    // places this field inside the one the filters ran over: (left, top,
-    // height) in its pixels. A tiled export filters once for the whole image
-    // and shades piece by piece, so every piece reads the same values.
-    'bool csp_auxAt(highp sampler2D t,float f,ivec2 p,out float v){v=0.;if(f<=0.)return false;' +
-    'vec2 q=(vec2(float(p.x)+u_cspAuxFrame.x,u_cspAuxFrame.z-1.-float(p.y)-u_cspAuxFrame.y)+.5)/f-.5;ivec2 b=ivec2(floor(q));vec2 fr=q-vec2(b);ivec2 ts=textureSize(t,0);float sum=0.,w=0.;' +
+    // field; read them bilinearly at the field pixel centre.
+    'bool csp_auxAt(highp sampler2D t,float f,ivec2 p,out float v){v=0.;if(f<=0.)return false;ivec2 s=csp_size();' +
+    'vec2 q=(u_cspAuxTransform*vec3(vec2(float(p.x),float(s.y-1-p.y))+.5,1.)).xy/f-.5;ivec2 b=ivec2(floor(q));vec2 fr=q-vec2(b);ivec2 ts=textureSize(t,0);float sum=0.,w=0.;' +
     'for(int y=0;y<2;y++)for(int x=0;x<2;x++){vec2 a=texelFetch(t,clamp(b+ivec2(x,y),ivec2(0),ts-1),0).rg;float k=(x==0?1.-fr.x:fr.x)*(y==0?1.-fr.y:fr.y);' +
     'if(a.g>0.&&k>0.){sum+=a.r*k;w+=k;}}if(w<=0.)return false;v=sum/w;return true;}\n' +
     'bool csp_blur(ivec2 p,out float v){return csp_auxAt(u_cspBlur,u_cspBlurScale,p,v);}\n' +
     'bool csp_base(ivec2 p,out float v){return csp_auxAt(u_cspBase,u_cspBaseScale,p,v);}\n';
   /* Separable filters for the layer stack's derived fields. Modes: 0 and 1
    * downsample by u_factor (mean, minimum); 2 and 3 filter along u_dir
-   * (Gaussian, minimum). Output is (value, valid). A downsample may write
-   * one piece of a larger target: u_origin is the piece's first texel. */
+   * (Gaussian, minimum). Output is (value, valid). */
   var FILTER = '#version 300 es\nprecision highp float; precision highp int;\n' +
-    'uniform highp sampler2D u_src; uniform int u_mode,u_factor,u_radius; uniform ivec2 u_dir,u_origin; uniform float u_sigma; layout(location=0) out vec2 result;\n' +
+    'uniform highp sampler2D u_src; uniform int u_mode,u_factor,u_radius; uniform ivec2 u_dir; uniform float u_sigma; layout(location=0) out vec2 result;\n' +
     'bool ok(vec2 v){return v.g>0.&&!isnan(v.r)&&!isinf(v.r)&&v.r>-1e20;}\n' +
     'void main(){ivec2 o=ivec2(gl_FragCoord.xy),s=textureSize(u_src,0);float acc=(u_mode==1||u_mode==3)?3.0e38:0.,w=0.;\n' +
-    'if(u_mode<2){o-=u_origin;for(int y=0;y<u_factor;y++)for(int x=0;x<u_factor;x++){ivec2 q=o*u_factor+ivec2(x,y);if(q.x>=s.x||q.y>=s.y)continue;' +
+    'if(u_mode<2){for(int y=0;y<u_factor;y++)for(int x=0;x<u_factor;x++){ivec2 q=o*u_factor+ivec2(x,y);if(q.x>=s.x||q.y>=s.y)continue;' +
     'vec2 v=texelFetch(u_src,q,0).rg;if(!ok(v))continue;if(u_mode==1)acc=min(acc,v.r);else acc+=v.r;w+=1.;}if(w<=0.){result=vec2(0.);return;}result=vec2(u_mode==1?acc:acc/w,1.);return;}\n' +
     'for(int k=-u_radius;k<=u_radius;k++){ivec2 q=o+u_dir*k;if(q.x<0||q.y<0||q.x>=s.x||q.y>=s.y)continue;vec2 v=texelFetch(u_src,q,0).rg;if(!ok(v))continue;' +
     'if(u_mode==3){acc=min(acc,v.r);w=1.;}else{float g=exp(-float(k*k)/(2.*u_sigma*u_sigma));acc+=v.r*g;w+=g;}}\n' +
@@ -176,6 +187,7 @@
     var state = {}, field = null, heightProgram, shadeProgram, provenanceProgram, filterProgram, statsProgram, stats = {}, vao, shadeSetters;
     var liveAux = {}, auxKey = '', f = {}, shadeAux = {};
     var h = {}, maxSize = 0, forcedMaxSize = 0, pendingReads = new Set(), frameRequested = false;
+    var snapshots = new Set(), deferredInvalidate = false;
     var resources = {textures: new Set(), framebuffers: new Set(), programs: new Set(), buffers: new Set(), syncs: new Set(), vaos: new Set()};
     var lru = new TextureLRU(options.maxTextureBytes === undefined ? DEFAULT_BYTES : options.maxTextureBytes, function (entry) {
       if (entry.texture && !lost) deleteTexture(entry.texture);
@@ -261,12 +273,12 @@
       provenanceProgram = program(FULLSCREEN, PROVENANCE);
       filterProgram = program(FULLSCREEN, FILTER);
       statsProgram = program(FULLSCREEN, STATS);
-      ['cspField', 'cspBlur', 'cspBase', 'cspBlurScale', 'cspBaseScale', 'cspAuxFrame'].forEach(function (n) { stats[n] = gl.getUniformLocation(statsProgram, 'u_' + n); });
-      ['src', 'mode', 'factor', 'radius', 'dir', 'origin', 'sigma'].forEach(function (n) { f[n] = gl.getUniformLocation(filterProgram, 'u_' + n); });
+      ['cspField', 'cspBlur', 'cspBase', 'cspBlurScale', 'cspBaseScale', 'cspAuxTransform'].forEach(function (n) { stats[n] = gl.getUniformLocation(statsProgram, 'u_' + n); });
+      ['src', 'mode', 'factor', 'radius', 'dir', 'sigma'].forEach(function (n) { f[n] = gl.getUniformLocation(filterProgram, 'u_' + n); });
       vao = gl.createVertexArray(); resources.vaos.add(vao); gl.bindVertexArray(vao);
       ['origin', 'axisX', 'axisY', 'target', 'sampleOrigin', 'sampleX', 'sampleY', 'native', 'rank', 'smooth', 'fast'].forEach(function (n) { h[n] = gl.getUniformLocation(heightProgram, 'u_' + n); });
       shadeSetters = setters(shadeProgram);
-      ['cspBlur', 'cspBase', 'cspBlurScale', 'cspBaseScale', 'cspAuxFrame'].forEach(function (n) { shadeAux[n] = gl.getUniformLocation(shadeProgram, 'u_' + n); });
+      ['cspBlur', 'cspBase', 'cspBlurScale', 'cspBaseScale', 'cspAuxTransform'].forEach(function (n) { shadeAux[n] = gl.getUniformLocation(shadeProgram, 'u_' + n); });
       shadeField = gl.getUniformLocation(shadeProgram, 'u_cspField'); provenanceField = gl.getUniformLocation(provenanceProgram, 'u_cspField');
       gl.disable(gl.BLEND); gl.disable(gl.DEPTH_TEST); gl.disable(gl.CULL_FACE); gl.disable(gl.SCISSOR_TEST); gl.disable(gl.DITHER);
       gl.pixelStorei(gl.UNPACK_ALIGNMENT, 1); gl.pixelStorei(gl.PACK_ALIGNMENT, 1);
@@ -424,8 +436,8 @@
           c * w, s * w, -s * ht, c * ht, p.crop, r.width * p.crop.width < w || r.height * p.crop.height < ht, p.entry.allValid);
       }
     }
-    function drawShade(t, output, view, values, aux, frame) {
-      aux = aux || {}; frame = frame || [0, 0, t.height];
+    function drawShade(t, output, view, values, aux, transform) {
+      aux = aux || {};
       gl.bindFramebuffer(gl.FRAMEBUFFER, output ? output.framebuffer : null); gl.viewport(0, 0, t.width, t.height);
       gl.useProgram(shadeProgram);
       // Unused aux samplers still point at a valid float texture.
@@ -434,16 +446,15 @@
       gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, t.texture);
       gl.uniform1i(shadeField, 0); gl.uniform1i(shadeAux.cspBlur, 1); gl.uniform1i(shadeAux.cspBase, 2);
       gl.uniform1f(shadeAux.cspBlurScale, aux.blur ? aux.blur.factor : 0); gl.uniform1f(shadeAux.cspBaseScale, aux.base ? aux.base.factor : 0);
-      gl.uniform3f(shadeAux.cspAuxFrame, frame[0], frame[1], frame[2]);
+      gl.uniformMatrix3fv(shadeAux.cspAuxTransform, false, transform || IDENTITY);
       shadeUniforms(values || shaders.uniformValues(state, view));
       gl.drawArrays(gl.TRIANGLES, 0, 3); drawCalls++;
     }
-    function filterPass(src, dst, mode, factor, radius, dx, dy, piece) {
-      gl.bindFramebuffer(gl.FRAMEBUFFER, dst.framebuffer);
-      if (piece) gl.viewport(piece[0], piece[1], piece[2], piece[3]); else gl.viewport(0, 0, dst.width, dst.height);
+    function filterPass(src, dst, mode, factor, radius, dx, dy) {
+      gl.bindFramebuffer(gl.FRAMEBUFFER, dst.framebuffer); gl.viewport(0, 0, dst.width, dst.height);
       gl.bindVertexArray(vao); gl.useProgram(filterProgram); gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, src.texture);
       gl.uniform1i(f.src, 0); gl.uniform1i(f.mode, mode); gl.uniform1i(f.factor, factor || 1); gl.uniform1i(f.radius, radius || 0);
-      gl.uniform2i(f.dir, dx || 0, dy || 0); gl.uniform2i(f.origin, piece ? piece[0] : 0, piece ? piece[1] : 0); gl.uniform1f(f.sigma, Math.max(.5, (radius || 1) / 2));
+      gl.uniform2i(f.dir, dx || 0, dy || 0); gl.uniform1f(f.sigma, Math.max(.5, (radius || 1) / 2));
       gl.drawArrays(gl.TRIANGLES, 0, 3); drawCalls++;
     }
     /* One derived field into cache[slot]: downsample (mean or minimum), an
@@ -543,8 +554,10 @@
         }
         want(view);
         if (planDirty) { refreshSources(); seed(); }
-        drainUploads(queue, upload, now, UPLOAD_MS);
-        if (queue.size) needsFrame();
+        // A capture owns one immutable set of resident sources. Refinement is
+        // queued until it releases them, so later blocks cannot change surveys.
+        if (!snapshots.size) drainUploads(queue, upload, now, UPLOAD_MS);
+        if (queue.size && !snapshots.size) needsFrame();
         var w = Math.max(1, Math.round(view.cssSize[0] * view.dpr)), ht = Math.max(1, Math.round(view.cssSize[1] * view.dpr));
         if (w > maxSize || ht > maxSize) throw new Error('Interactive viewport exceeds WebGL target limits');
         if (!field || field.width !== w || field.height !== ht) {
@@ -562,7 +575,8 @@
     function cancelReads(reason) { pendingReads.forEach(function (job) { job.cancel(reason); }); pendingReads.clear(); }
     function onLost(event) {
       event.preventDefault(); lost = true; ready = false; frameRequested = false; cancelReads('Terrain context lost');
-      cleanResources(); exportCache = null; lru.clear(); queue.clear(); plan.length = 0; lastResult = {coverage: 0, missing: wanted.length};
+      snapshots.forEach(function (snapshot) { snapshot.invalid = true; });
+      cleanResources(); lru.clear(); queue.clear(); plan.length = 0; lastResult = {coverage: 0, missing: wanted.length};
     }
     function onRestored() {
       if (destroyed) return;
@@ -578,69 +592,12 @@
       var out = Array.isArray(value) ? [] : {};
       Object.keys(value).forEach(function (key) { out[key] = copyState(value[key]); }); return out;
     }
-    /* Export-wide derived fields. The detail blur and the relative-elevation
-     * base are neighbourhood filters hundreds or thousands of pixels wide at
-     * export resolution, so a piece of a tiled export cannot derive them from
-     * its own pixels: each piece would get its own edges and its own base,
-     * and the image would come out in bands. They are filtered once over the
-     * whole export instead, on a grid anchored at its bottom-left corner like
-     * the live field's, and every piece samples them through its frame.
-     * Heights for the filters are drawn k export pixels to a texel (the
-     * downsample averages blocks anyway) in pieces aligned to the downsample,
-     * so no block straddles two pieces. The radius is the one the screen
-     * uses: the live field caps it at 64 x 32 of its own pixels. */
-    var EXPORT_AUX_TEXELS = 1 << 21, EXPORT_PIECE = 2048, exportCache = null, stateGeneration = 0;
-    // Detail exports: the export's own native-texture budget, and the largest
-    // piece drawn at once (a 2048 px piece at one sample per pixel is ~100 tiles).
+    // Keep main's separate native-detail budget; capture freezes the live LRU.
     var exportTextureBytes = options.exportTextureBytes === undefined ? 128 * 1024 * 1024 : Math.max(0, options.exportTextureBytes);
-    var exportChunk = Math.max(256, options.exportChunk || 2048);
-    function exportAuxField(view, width, height, dpr, radiusPx, minimum, limit) {
-      var liveDpr = view.liveDpr > 0 ? view.liveDpr : dpr;
-      radiusPx = Math.min(radiusPx, 64 * 32 * dpr / liveDpr);
-      if (!(radiusPx >= 1)) return null;
-      var d0 = Math.max(Math.ceil(radiusPx / 32), Math.ceil(Math.sqrt(width * height / EXPORT_AUX_TEXELS)), Math.ceil(width / limit), Math.ceil(height / limit));
-      var k = Math.max(1, Math.floor(d0 / 8)), step = Math.ceil(d0 / k), d = k * step;
-      var cw = Math.ceil(width / k), ch = Math.ceil(height / k), piece = Math.max(step, Math.floor(Math.min(EXPORT_PIECE, limit) / step) * step);
-      var radius = Math.max(1, Math.min(32, Math.round(radiusPx / d)));
-      var a = (view.bearing || 0) * DEG, c = Math.cos(a), s = Math.sin(a), worldPx = 256 * Math.pow(2, view.zoom) * dpr;
-      var entry = {a: target(Math.ceil(cw / step), Math.ceil(ch / step), true), b: null, factor: d};
-      try {
-        entry.b = target(entry.a.width, entry.a.height, true);
-        for (var by = 0; by < ch; by += piece) for (var bx = 0; bx < cw; bx += piece) {
-          var pw = Math.min(piece, cw - bx), ph = Math.min(piece, ch - by), t = null;
-          var dx = (bx + pw / 2) * k - width / 2, dy = height / 2 - (by + ph / 2) * k;
-          var sub = {centerMerc: [view.centerMerc[0] + (c * dx + s * dy) / worldPx, view.centerMerc[1] + (-s * dx + c * dy) / worldPx],
-            zoom: view.zoom, bearing: view.bearing || 0, cssSize: [pw * k / dpr, ph * k / dpr], dpr: dpr / k, dz: view.dz};
-          plan = []; buildPlan(sub);
-          try {
-            t = target(pw, ph, true); drawHeight(t, sub);
-            filterPass(t, entry.a, minimum ? 1 : 0, step, 0, 0, 0, [bx / step, by / step, Math.ceil(pw / step), Math.ceil(ph / step)]);
-          } finally { freeTarget(t); }
-        }
-        if (minimum) { filterPass(entry.a, entry.b, 3, 1, radius, 1, 0); filterPass(entry.b, entry.a, 3, 1, radius, 0, 1); }
-        filterPass(entry.a, entry.b, 2, 1, radius, 1, 0); filterPass(entry.b, entry.a, 2, 1, radius, 0, 1);
-      } catch (e) { freeTarget(entry.a); freeTarget(entry.b); throw e; }
-      freeTarget(entry.b); entry.b = null; entry.target = entry.a; return entry;
-    }
-    function exportAux(view, width, height, st, limit) {
-      var dpr = width / view.cssSize[0], radii = auxRadii(st, Object.assign({}, view, {dpr: dpr}), shaders), aux = {};
-      var savedPlan = plan, savedResult = lastResult;
-      try {
-        aux.blur = exportAuxField(view, width, height, dpr, radii.blur, false, limit);
-        aux.base = exportAuxField(view, width, height, dpr, radii.base, true, limit);
-        return aux;
-      } catch (e) { freeAux(aux); throw e; }
-      finally { plan = savedPlan; lastResult = savedResult; planDirty = true; }
-    }
+    var exportChunk = Math.max(256, options.exportChunk || 2048), exportCache = null;
     function releaseExport() {
-      if (!exportCache) return;
-      if (!lost) { freeAux(exportCache.aux); exportCache.tiles.forEach(function (e) { deleteTexture(e.texture); }); }
-      exportCache = null;
+      if (exportCache) { var previous = exportCache; exportCache = null; previous.snapshot.release(); }
     }
-    /* The level an export of view at dpr output pixels per CSS pixel draws
-     * from: one elevation sample per output pixel, rounding up past a quarter
-     * level (as imagery exports do), but never past the finest level any
-     * source has, and never coarser than the live view's own level. */
     function maxNativeLevel() {
       refreshSources();
       var max = 0;
@@ -671,7 +628,7 @@
       var got = await store.loadDetail(coverageTiles(sub, 0), {signal: options.signal, onTile: onTile, reuse: function (key) {
         var e = cache.tiles.get(key) || lru.peek(key); return e ? {hasData: e.hasData, allValid: e.allValid} : null;
       }});
-      if (cache !== exportCache || !ready || destroyed || lost) throw new Error('Terrain context unavailable during export');
+      if (cache.released || cache.invalid || !ready || destroyed || lost) throw new Error('Terrain context unavailable during export');
       if (options.signal && options.signal.aborted) throw new Error('Export cancelled');
       var entries = [];
       for (var i = 0; i < got.length; i++) {
@@ -689,13 +646,43 @@
         cache.tiles.delete(key); cache.bytes -= e.bytes; if (!lost) deleteTexture(e.texture);
       }
     }
-    /* Renders an export of width x height for view, or only region {x, y,
-     * width, height} of it. Region calls for the same export (view, size and
-     * settings) share one set of derived fields until releaseExport(); a call
-     * without a region releases them itself. An export finer than the view
-     * fetches the elevation it needs piece by piece (options: signal, onTile
-     * per display tile, detail:false to draw only resident data). */
+    function createSnapshot(view) {
+      if (!ready || destroyed) throw new Error('Terrain engine is not ready');
+      render(view);
+      if (!ready || destroyed) throw new Error('Terrain engine is not ready');
+      var aux = {}, snapshot, savedPlan = plan, savedResult = lastResult;
+      try {
+        // Copy only the small derived fields. Native elevations stay resident
+        // under the existing LRU; uploads resume when the capture is released.
+        ['blur', 'base'].forEach(function (name) {
+          var entry = liveAux[name]; if (!entry) return;
+          var source = entry.target, t = target(source.width, source.height, true);
+          aux[name] = {a: t, target: t, factor: entry.factor};
+          gl.bindFramebuffer(gl.READ_FRAMEBUFFER, source.framebuffer); gl.bindFramebuffer(gl.DRAW_FRAMEBUFFER, t.framebuffer);
+          gl.blitFramebuffer(0, 0, source.width, source.height, 0, 0, t.width, t.height, gl.COLOR_BUFFER_BIT, gl.NEAREST);
+        });
+        // Include the neighbouring sample required by Sobel/outline at a crop
+        // edge, using the same already-resident sources as the map.
+        plan = []; buildPlan(Object.assign({}, view, {cssSize: [view.cssSize[0] + 2 / view.dpr, view.cssSize[1] + 2 / view.dpr]}));
+        snapshot = {view: copyState(view), state: copyState(state), aux: aux,
+          plan: plan.slice(), tiles: new Map(), bytes: 0, seen: new Set(), released: false, release: function () {
+            if (snapshot.released) return;
+            snapshot.released = true; snapshots.delete(snapshot);
+            // Context loss already invalidated/freed these objects. A later
+            // release must not delete old-generation handles after restore.
+            if (!lost && !snapshot.invalid) { freeAux(aux); snapshot.tiles.forEach(function (entry) { deleteTexture(entry.texture); }); }
+            else { aux.blur = null; aux.base = null; }
+            snapshot.tiles.clear(); snapshot.bytes = 0;
+            if (!snapshots.size && deferredInvalidate) { deferredInvalidate = false; invalidate(); }
+            dirty = heightDirty = planDirty = true; needsFrame();
+          }};
+        snapshots.add(snapshot); return snapshot;
+      } catch (e) { freeAux(aux); throw e; }
+      finally { plan = savedPlan; lastResult = savedResult; planDirty = true; gl.bindFramebuffer(gl.FRAMEBUFFER, null); }
+    }
     async function renderToCanvas(view, width, height, region, options) {
+      // The existing capture probes may pass a frozen snapshot directly.
+      if (region && region.release && region.view) { options = Object.assign({}, options, {snapshot: region}); region = null; }
       options = options || {};
       if (!ready || destroyed) throw new Error('Terrain engine is not ready');
       width = Math.round(width); height = Math.round(height);
@@ -707,35 +694,40 @@
         throw new RangeError('Export region must lie inside the export');
       var doc = canvas.ownerDocument || root.document, result = doc.createElement('canvas'); result.width = region.width; result.height = region.height;
       var ctx = result.getContext('2d'); if (!ctx) throw new Error('2D export context unavailable');
-      var exportState = copyState(state); // Settings cannot change midway through a tiled export.
       // Export keeps horizontal map extent; callers normally preserve the view aspect ratio.
       var dpr = width / view.cssSize[0], limit = Math.min(maxSize, forcedMaxSize || maxSize), stride = limit - 2;
       if (stride < 1) throw new Error('WebGL export target limit too small');
+      var snapshot = options.snapshot, ownsSnapshot = !snapshot && whole;
+      if (!snapshot && !whole) {
+        var key = [JSON.stringify(view), width, height].join('|');
+        if (!exportCache || exportCache.key !== key) { releaseExport(); exportCache = {key: key, snapshot: createSnapshot(view)}; }
+        snapshot = exportCache.snapshot;
+      }
+      snapshot = snapshot || createSnapshot(view);
+      if (snapshot.released || snapshot.invalid) throw new Error('Terrain capture is unavailable');
+      var exportState = snapshot.state;
       var level = exportLevel(view, dpr), detail = options.detail !== false && level > tileLevel(view) && typeof store.loadDetail === 'function';
-      // Pieces small enough that their native tiles fit the export cache.
       if (detail) stride = Math.max(1, Math.min(stride, exportChunk - 2));
-      var key = [stateGeneration, JSON.stringify(view), width, height, limit].join('|');
-      if (!exportCache || exportCache.key !== key) { releaseExport(); exportCache = {key: key, aux: exportAux(view, width, height, exportState, limit), tiles: new Map(), bytes: 0, seen: new Set()}; }
-      var cache = exportCache, aux = cache.aux;
-      var a = (view.bearing || 0) * DEG, c = Math.cos(a), s = Math.sin(a), worldPx = 256 * Math.pow(2, view.zoom) * dpr;
       var right = region.x + region.width, bottom = region.y + region.height;
+      var a = (view.bearing || 0) * DEG, c = Math.cos(a), s = Math.sin(a), worldPx = 256 * Math.pow(2, view.zoom) * dpr;
       try {
         for (var top = region.y; top < bottom; top += stride) for (var left = region.x; left < right; left += stride) {
-          if (!ready || destroyed) throw new Error('Terrain context unavailable during export');
+          if (!ready || destroyed || snapshot.invalid) throw new Error('Terrain context unavailable during export');
           var iw = Math.min(stride, right - left), ih = Math.min(stride, bottom - top);
           // One-pixel halos make Sobel/outline reads identical at tile seams.
-          var lx = Math.max(0, left - 1), ty = Math.max(0, top - 1), rx = Math.min(width, left + iw + 1), by = Math.min(height, top + ih + 1);
+          var lx = left - 1, ty = top - 1, rx = left + iw + 1, by = top + ih + 1;
           var w = rx - lx, ht = by - ty, dx = (lx + rx) / 2 - width / 2, dy = (ty + by) / 2 - height / 2;
           var sub = {centerMerc: [view.centerMerc[0] + (c * dx + s * dy) / worldPx, view.centerMerc[1] + (-s * dx + c * dy) / worldPx],
             zoom: view.zoom, bearing: view.bearing || 0, cssSize: [w / dpr, ht / dpr], dpr: dpr, dz: detail ? level - Math.round(view.zoom) : view.dz};
-          // Export draws resident data plus, when finer than the view, its own
-          // detail records; it never drains the live upload queue synchronously.
-          var extra = detail ? await exportTiles(sub, cache, options) : null;
+          // Fetch detail separately while the live sources/effect fields stay frozen.
+          var extra = detail ? await exportTiles(sub, snapshot, options) : null;
           var savedPlan = plan, savedResult = lastResult, t = null, colour = null;
-          plan = []; buildPlan(sub, extra);
+          plan = snapshot.plan;
+          if (detail) { plan = []; buildPlan(sub, extra); }
           try {
             t = target(w, ht, true); colour = target(w, ht, false); drawHeight(t, sub);
-            drawShade(t, colour, sub, shaders.uniformValues(exportState, sub), aux, [lx, ty, height]);
+            drawShade(t, colour, sub, shaders.uniformValues(exportState, sub), snapshot.aux,
+              snapshotAuxTransform(snapshot.view, sub, w, ht));
             var pixels = new Uint8Array(w * ht * 4); gl.readPixels(0, 0, w, ht, gl.RGBA, gl.UNSIGNED_BYTE, pixels);
             var image = ctx.createImageData(iw, ih);
             for (var y = 0; y < ih; y++) for (var x = 0; x < iw; x++) {
@@ -745,14 +737,11 @@
               image.data[dst + 2] = alpha ? Math.min(255, Math.round(pixels[src + 2] * 255 / alpha)) : 0; image.data[dst + 3] = alpha;
             }
             ctx.putImageData(image, left - region.x, top - region.y);
-          } finally { freeTarget(colour); freeTarget(t); plan = savedPlan; lastResult = savedResult; planDirty = true; if (detail) trimExportTiles(cache); }
+          } finally { freeTarget(colour); freeTarget(t); plan = savedPlan; lastResult = savedResult; planDirty = true; if (detail) trimExportTiles(snapshot); }
           // Yield between chunks so large exports do not monopolize the UI thread.
           await new Promise(function (resolve) { setTimeout(resolve, 0); });
         }
-      } finally {
-        if (whole) releaseExport();
-        gl.bindFramebuffer(gl.FRAMEBUFFER, null); dirty = heightDirty = planDirty = true; needsFrame();
-      }
+      } finally { if (ownsSnapshot) snapshot.release(); gl.bindFramebuffer(gl.FRAMEBUFFER, null); dirty = heightDirty = planDirty = true; needsFrame(); }
       return result;
     }
     /* Synchronous coarse readback for "fit range to view": at most 128x128
@@ -771,7 +760,7 @@
         gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, field.texture);
         gl.uniform1i(stats.cspField, 0); gl.uniform1i(stats.cspBlur, 1); gl.uniform1i(stats.cspBase, 2);
         gl.uniform1f(stats.cspBlurScale, liveAux.blur ? liveAux.blur.factor : 0); gl.uniform1f(stats.cspBaseScale, liveAux.base ? liveAux.base.factor : 0);
-        gl.uniform3f(stats.cspAuxFrame, 0, 0, field.height);
+        gl.uniformMatrix3fv(stats.cspAuxTransform, false, IDENTITY);
         gl.drawArrays(gl.TRIANGLES, 0, 3);
         var raw = new Float32Array(w * ht * 4), heights = [], relative = [];
         gl.readPixels(0, 0, w, ht, gl.RGBA, gl.FLOAT, raw);
@@ -827,7 +816,8 @@
       });
     }
     function destroy() {
-      if (destroyed) return; releaseExport(); destroyed = true; ready = false; cancelReads('Terrain engine destroyed');
+      if (destroyed) return; destroyed = true; ready = false; cancelReads('Terrain engine destroyed');
+      Array.from(snapshots).forEach(function (snapshot) { snapshot.release(); }); exportCache = null;
       if (store && store.off) store.off('tile', onTile);
       if (canvas && canvas.removeEventListener) { canvas.removeEventListener('webglcontextlost', onLost); canvas.removeEventListener('webglcontextrestored', onRestored); }
       lru.clear(); cleanResources(); queue.clear(); known.clear(); sources.clear(); plan.length = 0; wanted.length = 0;
@@ -839,18 +829,21 @@
       init(); refreshSources(); store.on('tile', onTile);
       canvas.addEventListener('webglcontextlost', onLost); canvas.addEventListener('webglcontextrestored', onRestored);
     } catch (e) { error = String(e && e.message || e); destroy(); if (options.onError) { try { options.onError(e); } catch (_) {} } return null; }
+    function invalidate() {
+      if (snapshots.size) { deferredInvalidate = true; return; }
+      lru.entries.forEach(function (entry, key) { if (!store.get(key)) lru.delete(key); });
+      coverageKey = ''; heightDirty = dirty = planDirty = true; needsFrame();
+    }
     return {
       get ready() { return ready; },
-      setState: function (next) { state = next || {}; stateGeneration++; dirty = true; if (refreshSources()) heightDirty = planDirty = true; needsFrame(); },
-      invalidate: function () {
-        lru.entries.forEach(function (entry, key) { if (!store.get(key)) lru.delete(key); });
-        coverageKey = ''; heightDirty = dirty = planDirty = true; needsFrame();
-      }, render: render,
-      neededTiles: function (view) { if (refreshSources()) heightDirty = dirty = planDirty = true; return want(view); }, renderToCanvas: renderToCanvas, releaseExport: releaseExport, exportDetail: exportDetail, readProvenance: readProvenance, sampleValues: sampleValues,
+      setState: function (next) { state = next || {}; dirty = true; if (refreshSources()) heightDirty = planDirty = true; needsFrame(); },
+      invalidate: invalidate, render: render, createSnapshot: createSnapshot,
+      releaseExport: releaseExport, exportDetail: exportDetail, neededTiles: function (view) { if (refreshSources()) heightDirty = dirty = planDirty = true; return want(view); }, renderToCanvas: renderToCanvas, readProvenance: readProvenance, sampleValues: sampleValues,
       stats: function () { return {textures: lru.size, textureBytes: lru.bytes, frames: frames, drawCalls: drawCalls, lastFrameMs: lastFrameMs,
-        ready: ready, queuedUploads: queue.size, uploads: uploads, evictions: evictions, generation: generation, error: error,
+        ready: ready, queuedUploads: queue.size,
+        exportTextures: Array.from(snapshots).reduce(function (n, capture) { return n + capture.tiles.size; }, 0),
+        exportTextureBytes: Array.from(snapshots).reduce(function (n, capture) { return n + capture.bytes; }, 0), uploads: uploads, evictions: evictions, generation: generation, error: error,
         heightFieldBytes: field ? field.width * field.height * 8 : 0, trackedTiles: known.size,
-        exportTextures: exportCache ? exportCache.tiles.size : 0, exportTextureBytes: exportCache ? exportCache.bytes : 0,
         coverageKind: 'resident tile overlap estimate; readProvenance returns sampled pixel coverage', fallback: 'CPU when float targets or self-test unavailable'}; },
       // Diagnostics are deliberately synchronous and are never called by render().
       debugReadHeight: function () { if (!field || !ready) throw new Error('No height field'); return readFloat(field); },
@@ -858,5 +851,5 @@
     };
   }
   return Object.freeze({VERSION: '1', create: create, _test: Object.freeze({tileLevel: tileLevel, coverageTiles: coverageTiles,
-    cropFor: cropFor, TextureLRU: TextureLRU, drainUploads: drainUploads, auxPlan: auxPlan, auxRadii: auxRadii})});
+    cropFor: cropFor, TextureLRU: TextureLRU, drainUploads: drainUploads, auxPlan: auxPlan, auxRadii: auxRadii, snapshotAuxTransform: snapshotAuxTransform})});
 }));

@@ -192,10 +192,15 @@
          it, options.signal cancels it). */
       snapshotEntry:function(spec,options){
         if(!this._container||!this._engine)return null;
-        const view=exportView(this._view||this._deriveView(),spec),engine=this._engine;
+        const current=this._view||this._deriveView(),base={...current,centerMerc:[...current.centerMerc],cssSize:[...current.cssSize]};
+        const view=exportView(base,spec),engine=this._engine;
+        let snapshot=null;
+        const dispose=()=>{snapshot?.release();snapshot=null;};
         return {kind:"gpu-terrain",el:this._container,view,
-          canvas:region=>engine.renderToCanvas(view,spec.width,spec.height,region||undefined,options),
-          release:()=>engine.releaseExport?.()};
+          canvas:region=>{
+            if(!snapshot)snapshot=engine.createSnapshot(base);
+            return engine.renderToCanvas(view,spec.width,spec.height,region,{...options,snapshot});
+          },dispose,release:dispose};
       },
       /* {z, live, tiles} for an export spec: its elevation level, the view's,
          and the elevation tiles it would fetch beyond what is on screen. */

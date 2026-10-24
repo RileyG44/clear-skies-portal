@@ -85,6 +85,16 @@ assert(uiSystem.includes("renderSettingsView")&&uiSystem.includes("data-open-eng
        "Settings must carry the terrain engine instead of a footer engine item");
 assert(uiSystem.includes("derivePresetFor")&&uiSystem.includes("pointercancel"),
        "appearance presets must derive from colours and cancelled drags must disarm");
+assert(uiSystem.includes('$(target.control)?.dispatchEvent(new MouseEvent("click",{bubbles:false')&&
+       !uiSystem.includes("$(target.control)?.click()"),
+       "Map view must switch modes without a click bubbling into the peeking sheet, which closes the phone point cloud");
+/* The iPhone app (docs/ios CR-001) forwards relative /api requests to the
+   engine itself. A URL built from API directly would bypass that hop and fail
+   as a cross-origin request inside the app. */
+assert(!/\$\{API\}\/api\//.test(index)&&!/API\s*\+\s*["'`]\/api\//.test(index),
+       "engine URLs must be built with api(), never from API directly");
+assert(index.includes('const api = p => (NATIVE_HOST ? "" : API) + p;'),
+       "inside the iPhone app engine requests must stay relative for the app to forward");
 assert(!uiStyles.includes(".tool-popover{zoom:var(--csp-text-zoom"),
        "popovers must not zoom; their positioner uses unscaled dimensions");
 const versionSandbox={};

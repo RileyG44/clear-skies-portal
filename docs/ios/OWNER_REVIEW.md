@@ -81,3 +81,10 @@ approved by this review. The next authorized step is to present the immutable
 initial baseline package to Riley for approval; no implementation is authorized.
 The dedicated owner remains the assigned custodian in this conversation. Future
 owner requests require Riley's authorization under GOVERNANCE.md.
+
+## Addendum — 2026-10-21
+
+CR-001 r1 was accepted on 2026-10-21 after Riley approved its exact text. It
+authorizes bounded native implementation and internal TestFlight before
+BASE-001. The 2026-09-06 findings above are unchanged. For current status, see
+SPEC_OWNER.md and DECISIONS.md.

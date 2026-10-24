@@ -1,7 +1,15 @@
 /* Generates build/icon.icns with no dependencies — the project ships none,
    so the icon is drawn pixel by pixel and PNG-encoded with zlib.
-   Run: node build/make-icon.js   (then iconutil, see the npm script) */
+   Run: node build/make-icon.js   (then iconutil, see the npm script)
+
+   The iPhone app needs the same artwork full-bleed and opaque, because iOS
+   masks the corners itself and rejects an App Store icon with alpha:
+     node build/make-icon.js --ios ios/Resources/Assets.xcassets/AppIcon.appiconset/AppIcon.png
+   That samples the inset macOS square across the whole canvas. */
 const fs = require("fs"), zlib = require("zlib"), path = require("path");
+
+const IOS_OUT = process.argv.includes("--ios") ? process.argv[process.argv.indexOf("--ios") + 1] : null;
+if (process.argv.includes("--ios") && !IOS_OUT) throw new Error("--ios needs an output path");
 
 const S = 1024;                      // master size
 const MARGIN = 100, R = 180;         // macOS icons sit inset in their canvas
@@ -36,31 +44,34 @@ const SUN_CX = 707, SUN_CY = 322, SUN_R = 58;
 for (let y = 0; y < S; y++){
   for (let x = 0; x < S; x++){
     const i = (y*S + x)*4;
-    const inside = clamp(0.5 - sdRoundRect(x+0.5, y+0.5), 0, 1);
+    // Pixel centre in the macOS master; for iOS, the inset square scaled to fill.
+    const cx = IOS_OUT ? X0 + (x+0.5)*(X1-X0)/S : x+0.5;
+    const cy = IOS_OUT ? Y0 + (y+0.5)*(Y1-Y0)/S : y+0.5;
+    const inside = IOS_OUT ? 1 : clamp(0.5 - sdRoundRect(x+0.5, y+0.5), 0, 1);
     if (inside <= 0) continue;
 
     // night sky, deep at the top easing to a lit horizon
-    const t = (y - Y0) / (Y1 - Y0);
+    const t = ((IOS_OUT ? cy-0.5 : y) - Y0) / (Y1 - Y0);
     over(i, mix(9,26,t*1.15), mix(20,63,t*1.15), mix(38,104,t*1.15), inside);
 
     // stars, fixed so the icon is byte-identical every build
     for (const [sx,sy,sr,sa] of [[236,250,4,.95],[330,392,3,.7],[190,455,2.5,.6],
                                  [420,205,3,.8],[560,300,2.5,.55],[820,470,3,.65],
                                  [274,600,2.5,.5],[880,250,2.5,.6],[640,150,2,.5]]){
-      const d = Math.hypot(x+0.5-sx, y+0.5-sy);
+      const d = Math.hypot(cx-sx, cy-sy);
       const a = clamp(sr - d, 0, 1) * sa * inside;
       if (a > 0) over(i, 226, 240, 255, a);
     }
 
     // sun low over the limb, with a soft bloom
-    const ds = Math.hypot(x+0.5-SUN_CX, y+0.5-SUN_CY);
+    const ds = Math.hypot(cx-SUN_CX, cy-SUN_CY);
     const bloom = clamp(1 - (ds - SUN_R)/190, 0, 1);
     if (bloom > 0) over(i, 150, 205, 255, bloom*bloom*0.30*inside);
     const sa2 = clamp(SUN_R - ds + 0.5, 0, 1) * inside;
     if (sa2 > 0) over(i, 247, 251, 255, sa2);
 
     // the planet
-    const de = Math.hypot(x+0.5-EARTH_CX, y+0.5-EARTH_CY);
+    const de = Math.hypot(cx-EARTH_CX, cy-EARTH_CY);
     const ea = clamp(EARTH_R - de + 0.5, 0, 1) * inside;
     if (ea > 0){
       const shade = clamp((EARTH_R - de)/EARTH_R, 0, 1);
@@ -85,17 +96,23 @@ function chunk(type, data){
   const crc = Buffer.alloc(4); crc.writeUInt32BE(crc32(td));
   return Buffer.concat([len, td, crc]);
 }
-const raw = Buffer.alloc(S*(S*4+1));
-for (let y=0;y<S;y++){ raw[y*(S*4+1)] = 0; px.copy(raw, y*(S*4+1)+1, y*S*4, (y+1)*S*4); }
+// RGBA for macOS; RGB for iOS, where every pixel is opaque anyway.
+const CH = IOS_OUT ? 3 : 4;
+const raw = Buffer.alloc(S*(S*CH+1));
+for (let y=0;y<S;y++){
+  raw[y*(S*CH+1)] = 0;
+  if (CH === 4) px.copy(raw, y*(S*4+1)+1, y*S*4, (y+1)*S*4);
+  else for (let x=0;x<S;x++) px.copy(raw, y*(S*3+1)+1+x*3, (y*S+x)*4, (y*S+x)*4+3);
+}
 const ihdr = Buffer.alloc(13);
 ihdr.writeUInt32BE(S,0); ihdr.writeUInt32BE(S,4);
-ihdr[8]=8; ihdr[9]=6; ihdr[10]=0; ihdr[11]=0; ihdr[12]=0;
+ihdr[8]=8; ihdr[9]=CH === 4 ? 6 : 2; ihdr[10]=0; ihdr[11]=0; ihdr[12]=0;
 const png = Buffer.concat([
   Buffer.from([0x89,0x50,0x4E,0x47,0x0D,0x0A,0x1A,0x0A]),
   chunk("IHDR", ihdr),
   chunk("IDAT", zlib.deflateSync(raw, {level:9})),
   chunk("IEND", Buffer.alloc(0)),
 ]);
-const out = path.join(__dirname, "icon-1024.png");
+const out = IOS_OUT ? path.resolve(IOS_OUT) : path.join(__dirname, "icon-1024.png");
 fs.writeFileSync(out, png);
 console.log(`wrote ${out} (${(png.length/1024).toFixed(1)} KB)`);
