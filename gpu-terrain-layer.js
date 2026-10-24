@@ -186,9 +186,15 @@
       provenance:function(){return this.options.store.provenance(this._tilesNeeded());},
       snapshotEntry:function(spec){
         if(!this._container||!this._engine)return null;
-        const view=exportView(this._view||this._deriveView(),spec);
+        const current=this._view||this._deriveView(),base={...current,centerMerc:[...current.centerMerc],cssSize:[...current.cssSize]};
+        const engine=this._engine,view=exportView(base,spec);
+        let snapshot=null;
         return {kind:"gpu-terrain",el:this._container,view,
-          canvas:()=>this._engine.renderToCanvas(view,spec.width,spec.height)};
+          canvas:(block=spec)=>{
+            if(!snapshot&&engine.createSnapshot)snapshot=engine.createSnapshot(base);
+            return engine.renderToCanvas(exportView(base,block),block.width,block.height,snapshot);
+          },
+          dispose:()=>{snapshot?.release();snapshot=null;}};
       },
       destroy:function(){this.remove();this._engine?.destroy();this._engine=null;}
     });

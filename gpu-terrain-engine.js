@@ -26,6 +26,21 @@
 
   var DEFAULT_BYTES = 192 * 1024 * 1024, UPLOAD_MS = 4, DEG = Math.PI / 180;
   function mod(a, n) { return ((a % n) + n) % n; }
+  var IDENTITY = [1, 0, 0, 0, 1, 0, 0, 0, 1];
+  /* Bottom-up field pixels -> the frozen map field's bottom-up pixels.
+     Export crops/density change sampling, never the terrain-effect footprint. */
+  function snapshotAuxTransform(reference, view, width, height) {
+    var refPx = 256 * Math.pow(2, reference.zoom) * reference.dpr;
+    var scale = refPx / (256 * Math.pow(2, view.zoom) * view.dpr);
+    var angle = ((reference.bearing || 0) - (view.bearing || 0)) * DEG;
+    var a = scale * Math.cos(angle), b = -scale * Math.sin(angle), c = -b, d = a;
+    var bearing = (reference.bearing || 0) * DEG, cs = Math.cos(bearing), sn = Math.sin(bearing);
+    var dx = (view.centerMerc[0] - reference.centerMerc[0]) * refPx;
+    var dy = (view.centerMerc[1] - reference.centerMerc[1]) * refPx;
+    var x = reference.cssSize[0] * reference.dpr / 2 + cs * dx - sn * dy;
+    var y = reference.cssSize[1] * reference.dpr / 2 - sn * dx - cs * dy;
+    return [a, b, 0, c, d, 0, x - a * width / 2 - c * height / 2, y - b * width / 2 - d * height / 2, 1];
+  }
   function tileLevel(view) {
     return Math.min(22, Math.max(0, Math.round(view.zoom) +
       (view.dz === undefined ? (view.dpr >= 1.5 ? 1 : 0) : view.dz)));
@@ -98,7 +113,7 @@
     'for(int y=0;y<2;y++)for(int x=0;x<2;x++){float v=at(b+ivec2(x,y));float w=(x==0?1.-f.x:f.x)*(y==0?1.-f.y:f.y);if(valid(v)&&w>0.){sum+=v*w;weight+=w;}}' +
     'if(weight<=0.)discard;result=vec2(sum/weight,u_rank);}\n';
   // Shade-module coordinates are top-down; framebuffer texels are bottom-up.
-  var PRELUDE = '\n#define CSP_HAS_AUX 1\nuniform highp sampler2D u_cspField,u_cspBlur,u_cspBase; uniform float u_cspBlurScale,u_cspBaseScale;\n' +
+  var PRELUDE = '\n#define CSP_HAS_AUX 1\nuniform highp sampler2D u_cspField,u_cspBlur,u_cspBase; uniform float u_cspBlurScale,u_cspBaseScale; uniform mat3 u_cspAuxTransform;\n' +
     'ivec2 csp_size(){return textureSize(u_cspField,0);}\n' +
     'vec2 csp_sample(ivec2 p){ivec2 s=csp_size();p=clamp(p,ivec2(0),s-1);return texelFetch(u_cspField,ivec2(p.x,s.y-1-p.y),0).rg;}\n' +
     'float csp_height(ivec2 p){return csp_sample(p).r;}\n' +
@@ -107,7 +122,7 @@
     // Filtered fields are stored at 1/scale resolution, bottom-up like the
     // field; read them bilinearly at the field pixel centre.
     'bool csp_auxAt(highp sampler2D t,float f,ivec2 p,out float v){v=0.;if(f<=0.)return false;ivec2 s=csp_size();' +
-    'vec2 q=(vec2(float(p.x),float(s.y-1-p.y))+.5)/f-.5;ivec2 b=ivec2(floor(q));vec2 fr=q-vec2(b);ivec2 ts=textureSize(t,0);float sum=0.,w=0.;' +
+    'vec2 q=(u_cspAuxTransform*vec3(vec2(float(p.x),float(s.y-1-p.y))+.5,1.)).xy/f-.5;ivec2 b=ivec2(floor(q));vec2 fr=q-vec2(b);ivec2 ts=textureSize(t,0);float sum=0.,w=0.;' +
     'for(int y=0;y<2;y++)for(int x=0;x<2;x++){vec2 a=texelFetch(t,clamp(b+ivec2(x,y),ivec2(0),ts-1),0).rg;float k=(x==0?1.-fr.x:fr.x)*(y==0?1.-fr.y:fr.y);' +
     'if(a.g>0.&&k>0.){sum+=a.r*k;w+=k;}}if(w<=0.)return false;v=sum/w;return true;}\n' +
     'bool csp_blur(ivec2 p,out float v){return csp_auxAt(u_cspBlur,u_cspBlurScale,p,v);}\n' +
@@ -172,6 +187,7 @@
     var state = {}, field = null, heightProgram, shadeProgram, provenanceProgram, filterProgram, statsProgram, stats = {}, vao, shadeSetters;
     var liveAux = {}, auxKey = '', f = {}, shadeAux = {};
     var h = {}, maxSize = 0, forcedMaxSize = 0, pendingReads = new Set(), frameRequested = false;
+    var snapshots = new Set(), deferredInvalidate = false;
     var resources = {textures: new Set(), framebuffers: new Set(), programs: new Set(), buffers: new Set(), syncs: new Set(), vaos: new Set()};
     var lru = new TextureLRU(options.maxTextureBytes === undefined ? DEFAULT_BYTES : options.maxTextureBytes, function (entry) {
       if (entry.texture && !lost) deleteTexture(entry.texture);
@@ -257,12 +273,12 @@
       provenanceProgram = program(FULLSCREEN, PROVENANCE);
       filterProgram = program(FULLSCREEN, FILTER);
       statsProgram = program(FULLSCREEN, STATS);
-      ['cspField', 'cspBlur', 'cspBase', 'cspBlurScale', 'cspBaseScale'].forEach(function (n) { stats[n] = gl.getUniformLocation(statsProgram, 'u_' + n); });
+      ['cspField', 'cspBlur', 'cspBase', 'cspBlurScale', 'cspBaseScale', 'cspAuxTransform'].forEach(function (n) { stats[n] = gl.getUniformLocation(statsProgram, 'u_' + n); });
       ['src', 'mode', 'factor', 'radius', 'dir', 'sigma'].forEach(function (n) { f[n] = gl.getUniformLocation(filterProgram, 'u_' + n); });
       vao = gl.createVertexArray(); resources.vaos.add(vao); gl.bindVertexArray(vao);
       ['origin', 'axisX', 'axisY', 'target', 'sampleOrigin', 'sampleX', 'sampleY', 'native', 'rank', 'smooth', 'fast'].forEach(function (n) { h[n] = gl.getUniformLocation(heightProgram, 'u_' + n); });
       shadeSetters = setters(shadeProgram);
-      ['cspBlur', 'cspBase', 'cspBlurScale', 'cspBaseScale'].forEach(function (n) { shadeAux[n] = gl.getUniformLocation(shadeProgram, 'u_' + n); });
+      ['cspBlur', 'cspBase', 'cspBlurScale', 'cspBaseScale', 'cspAuxTransform'].forEach(function (n) { shadeAux[n] = gl.getUniformLocation(shadeProgram, 'u_' + n); });
       shadeField = gl.getUniformLocation(shadeProgram, 'u_cspField'); provenanceField = gl.getUniformLocation(provenanceProgram, 'u_cspField');
       gl.disable(gl.BLEND); gl.disable(gl.DEPTH_TEST); gl.disable(gl.CULL_FACE); gl.disable(gl.SCISSOR_TEST); gl.disable(gl.DITHER);
       gl.pixelStorei(gl.UNPACK_ALIGNMENT, 1); gl.pixelStorei(gl.PACK_ALIGNMENT, 1);
@@ -415,7 +431,7 @@
           c * w, s * w, -s * ht, c * ht, p.crop, r.width * p.crop.width < w || r.height * p.crop.height < ht, p.entry.allValid);
       }
     }
-    function drawShade(t, output, view, values, aux) {
+    function drawShade(t, output, view, values, aux, transform) {
       aux = aux || {};
       gl.bindFramebuffer(gl.FRAMEBUFFER, output ? output.framebuffer : null); gl.viewport(0, 0, t.width, t.height);
       gl.useProgram(shadeProgram);
@@ -425,6 +441,7 @@
       gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, t.texture);
       gl.uniform1i(shadeField, 0); gl.uniform1i(shadeAux.cspBlur, 1); gl.uniform1i(shadeAux.cspBase, 2);
       gl.uniform1f(shadeAux.cspBlurScale, aux.blur ? aux.blur.factor : 0); gl.uniform1f(shadeAux.cspBaseScale, aux.base ? aux.base.factor : 0);
+      gl.uniformMatrix3fv(shadeAux.cspAuxTransform, false, transform || IDENTITY);
       shadeUniforms(values || shaders.uniformValues(state, view));
       gl.drawArrays(gl.TRIANGLES, 0, 3); drawCalls++;
     }
@@ -532,8 +549,10 @@
         }
         want(view);
         if (planDirty) { refreshSources(); seed(); }
-        drainUploads(queue, upload, now, UPLOAD_MS);
-        if (queue.size) needsFrame();
+        // A capture owns one immutable set of resident sources. Refinement is
+        // queued until it releases them, so later blocks cannot change surveys.
+        if (!snapshots.size) drainUploads(queue, upload, now, UPLOAD_MS);
+        if (queue.size && !snapshots.size) needsFrame();
         var w = Math.max(1, Math.round(view.cssSize[0] * view.dpr)), ht = Math.max(1, Math.round(view.cssSize[1] * view.dpr));
         if (w > maxSize || ht > maxSize) throw new Error('Interactive viewport exceeds WebGL target limits');
         if (!field || field.width !== w || field.height !== ht) {
@@ -551,6 +570,7 @@
     function cancelReads(reason) { pendingReads.forEach(function (job) { job.cancel(reason); }); pendingReads.clear(); }
     function onLost(event) {
       event.preventDefault(); lost = true; ready = false; frameRequested = false; cancelReads('Terrain context lost');
+      snapshots.forEach(function (snapshot) { snapshot.invalid = true; });
       cleanResources(); lru.clear(); queue.clear(); plan.length = 0; lastResult = {coverage: 0, missing: wanted.length};
     }
     function onRestored() {
@@ -567,33 +587,69 @@
       var out = Array.isArray(value) ? [] : {};
       Object.keys(value).forEach(function (key) { out[key] = copyState(value[key]); }); return out;
     }
-    async function renderToCanvas(view, width, height) {
+    function createSnapshot(view) {
+      if (!ready || destroyed) throw new Error('Terrain engine is not ready');
+      render(view);
+      if (!ready || destroyed) throw new Error('Terrain engine is not ready');
+      var aux = {}, snapshot, savedPlan = plan, savedResult = lastResult;
+      try {
+        // Copy only the small derived fields. Native elevations stay resident
+        // under the existing LRU; uploads resume when the capture is released.
+        ['blur', 'base'].forEach(function (name) {
+          var entry = liveAux[name]; if (!entry) return;
+          var source = entry.target, t = target(source.width, source.height, true);
+          aux[name] = {a: t, target: t, factor: entry.factor};
+          gl.bindFramebuffer(gl.READ_FRAMEBUFFER, source.framebuffer); gl.bindFramebuffer(gl.DRAW_FRAMEBUFFER, t.framebuffer);
+          gl.blitFramebuffer(0, 0, source.width, source.height, 0, 0, t.width, t.height, gl.COLOR_BUFFER_BIT, gl.NEAREST);
+        });
+        // Include the neighbouring sample required by Sobel/outline at a crop
+        // edge, using the same already-resident sources as the map.
+        plan = []; buildPlan(Object.assign({}, view, {cssSize: [view.cssSize[0] + 2 / view.dpr, view.cssSize[1] + 2 / view.dpr]}));
+        snapshot = {view: copyState(view), state: copyState(state), aux: aux,
+          plan: plan.slice(), released: false, release: function () {
+            if (snapshot.released) return;
+            snapshot.released = true; snapshots.delete(snapshot);
+            // Context loss already invalidated/freed these objects. A later
+            // release must not delete old-generation handles after restore.
+            if (!lost && !snapshot.invalid) freeAux(aux);
+            else { aux.blur = null; aux.base = null; }
+            if (!snapshots.size && deferredInvalidate) { deferredInvalidate = false; invalidate(); }
+            dirty = heightDirty = planDirty = true; needsFrame();
+          }};
+        snapshots.add(snapshot); return snapshot;
+      } catch (e) { freeAux(aux); throw e; }
+      finally { plan = savedPlan; lastResult = savedResult; planDirty = true; gl.bindFramebuffer(gl.FRAMEBUFFER, null); }
+    }
+    async function renderToCanvas(view, width, height, snapshot) {
       if (!ready || destroyed) throw new Error('Terrain engine is not ready');
       width = Math.round(width); height = Math.round(height);
       if (!(width > 0 && height > 0)) throw new RangeError('Export dimensions must be positive');
       var doc = canvas.ownerDocument || root.document, result = doc.createElement('canvas'); result.width = width; result.height = height;
       var ctx = result.getContext('2d'); if (!ctx) throw new Error('2D export context unavailable');
-      var exportState = copyState(state); // Settings cannot change midway through a tiled export.
       // Export keeps horizontal map extent; callers normally preserve the view aspect ratio.
       var dpr = width / view.cssSize[0], limit = Math.min(maxSize, forcedMaxSize || maxSize), stride = limit - 2;
       if (stride < 1) throw new Error('WebGL export target limit too small');
+      var ownsSnapshot = !snapshot;
+      snapshot = snapshot || createSnapshot(view);
+      if (snapshot.released) throw new Error('Terrain capture has been released');
+      var exportState = snapshot.state;
       var a = (view.bearing || 0) * DEG, c = Math.cos(a), s = Math.sin(a), worldPx = 256 * Math.pow(2, view.zoom) * dpr;
       try {
         for (var top = 0; top < height; top += stride) for (var left = 0; left < width; left += stride) {
-          if (!ready || destroyed) throw new Error('Terrain context unavailable during export');
+          if (!ready || destroyed || snapshot.invalid) throw new Error('Terrain context unavailable during export');
           var iw = Math.min(stride, width - left), ih = Math.min(stride, height - top);
           // One-pixel halos make Sobel/outline reads identical at tile seams.
-          var lx = Math.max(0, left - 1), ty = Math.max(0, top - 1), rx = Math.min(width, left + iw + 1), by = Math.min(height, top + ih + 1);
+          var lx = left - 1, ty = top - 1, rx = left + iw + 1, by = top + ih + 1;
           var w = rx - lx, ht = by - ty, dx = (lx + rx) / 2 - width / 2, dy = (ty + by) / 2 - height / 2;
           var sub = {centerMerc: [view.centerMerc[0] + (c * dx + s * dy) / worldPx, view.centerMerc[1] + (-s * dx + c * dy) / worldPx],
             zoom: view.zoom, bearing: view.bearing || 0, cssSize: [w / dpr, ht / dpr], dpr: dpr, dz: view.dz};
           // Export consumes resident data and never drains the upload queue synchronously.
           var savedPlan = plan, savedResult = lastResult, t = null, colour = null;
-          plan = []; buildPlan(sub);
+          plan = snapshot.plan;
           try {
             t = target(w, ht, true); colour = target(w, ht, false); drawHeight(t, sub);
-            var exportAux = deriveAll(t, sub, exportState, {});
-            try { drawShade(t, colour, sub, shaders.uniformValues(exportState, sub), exportAux); } finally { freeAux(exportAux); }
+            drawShade(t, colour, sub, shaders.uniformValues(exportState, sub), snapshot.aux,
+              snapshotAuxTransform(snapshot.view, sub, w, ht));
             var pixels = new Uint8Array(w * ht * 4); gl.readPixels(0, 0, w, ht, gl.RGBA, gl.UNSIGNED_BYTE, pixels);
             var image = ctx.createImageData(iw, ih);
             for (var y = 0; y < ih; y++) for (var x = 0; x < iw; x++) {
@@ -607,7 +663,7 @@
           // Yield between chunks so large exports do not monopolize the UI thread.
           await new Promise(function (resolve) { setTimeout(resolve, 0); });
         }
-      } finally { gl.bindFramebuffer(gl.FRAMEBUFFER, null); dirty = heightDirty = planDirty = true; needsFrame(); }
+      } finally { if (ownsSnapshot) snapshot.release(); gl.bindFramebuffer(gl.FRAMEBUFFER, null); dirty = heightDirty = planDirty = true; needsFrame(); }
       return result;
     }
     /* Synchronous coarse readback for "fit range to view": at most 128x128
@@ -626,6 +682,7 @@
         gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, field.texture);
         gl.uniform1i(stats.cspField, 0); gl.uniform1i(stats.cspBlur, 1); gl.uniform1i(stats.cspBase, 2);
         gl.uniform1f(stats.cspBlurScale, liveAux.blur ? liveAux.blur.factor : 0); gl.uniform1f(stats.cspBaseScale, liveAux.base ? liveAux.base.factor : 0);
+        gl.uniformMatrix3fv(stats.cspAuxTransform, false, IDENTITY);
         gl.drawArrays(gl.TRIANGLES, 0, 3);
         var raw = new Float32Array(w * ht * 4), heights = [], relative = [];
         gl.readPixels(0, 0, w, ht, gl.RGBA, gl.FLOAT, raw);
@@ -693,13 +750,15 @@
       init(); refreshSources(); store.on('tile', onTile);
       canvas.addEventListener('webglcontextlost', onLost); canvas.addEventListener('webglcontextrestored', onRestored);
     } catch (e) { error = String(e && e.message || e); destroy(); if (options.onError) { try { options.onError(e); } catch (_) {} } return null; }
+    function invalidate() {
+      if (snapshots.size) { deferredInvalidate = true; return; }
+      lru.entries.forEach(function (entry, key) { if (!store.get(key)) lru.delete(key); });
+      coverageKey = ''; heightDirty = dirty = planDirty = true; needsFrame();
+    }
     return {
       get ready() { return ready; },
       setState: function (next) { state = next || {}; dirty = true; if (refreshSources()) heightDirty = planDirty = true; needsFrame(); },
-      invalidate: function () {
-        lru.entries.forEach(function (entry, key) { if (!store.get(key)) lru.delete(key); });
-        coverageKey = ''; heightDirty = dirty = planDirty = true; needsFrame();
-      }, render: render,
+      invalidate: invalidate, render: render, createSnapshot: createSnapshot,
       neededTiles: function (view) { if (refreshSources()) heightDirty = dirty = planDirty = true; return want(view); }, renderToCanvas: renderToCanvas, readProvenance: readProvenance, sampleValues: sampleValues,
       stats: function () { return {textures: lru.size, textureBytes: lru.bytes, frames: frames, drawCalls: drawCalls, lastFrameMs: lastFrameMs,
         ready: ready, queuedUploads: queue.size, uploads: uploads, evictions: evictions, generation: generation, error: error,
@@ -711,5 +770,5 @@
     };
   }
   return Object.freeze({VERSION: '1', create: create, _test: Object.freeze({tileLevel: tileLevel, coverageTiles: coverageTiles,
-    cropFor: cropFor, TextureLRU: TextureLRU, drainUploads: drainUploads, auxPlan: auxPlan, auxRadii: auxRadii})});
+    cropFor: cropFor, TextureLRU: TextureLRU, drainUploads: drainUploads, auxPlan: auxPlan, auxRadii: auxRadii, snapshotAuxTransform: snapshotAuxTransform})});
 }));

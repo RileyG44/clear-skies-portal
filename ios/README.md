@@ -92,6 +92,11 @@ zoom requests with Auto Fill disabled, then clears its test scene and restores
 the previous viewpoint and filter controls. See
 [satellite repair evidence](../docs/ios/SATELLITE_FIX_VERIFICATION.md).
 
+For Capture handle and Aurora 32× export verification, see the reproducible
+[Capture repair checks](../docs/ios/CAPTURE_FIX_VERIFICATION.md). They exercise
+the installed selection handlers and the actual GPU/streamed PNG pipeline
+without activating the app or capturing the phone screen.
+
 Debug-only launch arguments also allow app-scoped visual verification:
 `-cspDebugPage terrain -cspDebugDetent large`, `-cspDebugSection Lighting`,
 `-cspDebugPanel serverPanel`, and `-cspDebugAppearance light` or `dark`.
