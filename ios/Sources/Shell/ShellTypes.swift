@@ -200,6 +200,13 @@ struct ShellPanel: Decodable, Hashable {
     let items: [ShellItem]
 }
 
+/// A native-only notice; a new id shows it again even with the same text.
+struct ShellNotice: Hashable {
+    let id: Int
+    let text: String
+    let applied: Bool
+}
+
 struct SearchState: Decodable, Hashable {
     var version = 0
     var label = ""

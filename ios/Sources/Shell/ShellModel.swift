@@ -50,6 +50,10 @@ final class ShellModel {
     var suggestionNote: String?
     /// Bumped by actions that deserve a haptic (route opened, tool toggled).
     var feedback = 0
+    /// True while the map's imagery button waits for its search and pick.
+    var imageryBusy = false
+    /// A short confirmation shown over the map, such as the scene applied.
+    var notice: ShellNotice?
 
     @ObservationIgnored weak var host: WebHost?
     @ObservationIgnored private var suggestTask: Task<Void, Never>?
@@ -69,6 +73,8 @@ final class ShellModel {
     var visibleRoute: String? { sheetPresented ? path.last : nil }
     /// Modes whose own controls take the bottom of the screen.
     var mapBusy: Bool { map.pointCloud || map.selecting || map.drawing }
+    /// A place is committed on the map (a tapped point or a found place).
+    var hasLocation: Bool { search.lat != nil && search.lng != nil }
 
     // MARK: - Updates from the page
 
@@ -391,6 +397,21 @@ final class ShellModel {
     func copyCoordinates() {
         call("CSPNativeShell.copyCoordinates()")
         feedback += 1
+    }
+
+    /// Searches imagery at the selected place and applies the web's own
+    /// Best photo pick. The page chooses the scene; this only reports it.
+    func applyBestImagery() {
+        guard !imageryBusy else { return }
+        imageryBusy = true
+        feedback += 1
+        Task {
+            let result = await evaluate("return await CSPNativeShell.bestImagery()") as? [String: Any]
+            imageryBusy = false
+            if let text = result?["message"] as? String, !text.isEmpty {
+                notice = ShellNotice(id: (notice?.id ?? 0) + 1, text: text, applied: result?["applied"] as? Bool == true)
+            }
+        }
     }
 
     // MARK: - JavaScript

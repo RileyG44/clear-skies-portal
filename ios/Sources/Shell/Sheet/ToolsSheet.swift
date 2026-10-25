@@ -65,9 +65,10 @@ struct HomeView: View {
                 .padding(.top, 12)
                 .padding(.bottom, 12)
         }
-        .navigationTitle("Explore")
+        .navigationTitle("ClearSkies")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
+            ToolbarItem(placement: .principal) { Wordmark() }
             ToolbarItem(placement: .topBarTrailing) { CloseSheetButton() }
         }
         .onChange(of: searchFocused) {
@@ -77,6 +78,20 @@ struct HomeView: View {
             if shell.searchRequested { searchFocused = true; shell.searchRequested = false }
         }
         .onChange(of: shell.query) { shell.queryChanged() }
+    }
+}
+
+/// The app's name atop the menu, in the rounded script of Riley's app icons.
+/// Pacifico ships in the bundle; it scales with Dynamic Type from 22 points.
+struct Wordmark: View {
+    var body: some View {
+        Text("ClearSkies")
+            .font(.custom("Pacifico-Regular", size: 22, relativeTo: .title3))
+            .foregroundStyle(PortalPrimary())
+            .lineLimit(1)
+            .minimumScaleFactor(0.7)
+            .accessibilityLabel("Clear Skies")
+            .accessibilityAddTraits(.isHeader)
     }
 }
 

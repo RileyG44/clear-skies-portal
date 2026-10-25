@@ -15,6 +15,8 @@
 		5732EE83C8E842896D5D8E3F /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 47F27A7230DA03E6A7594F4B /* Assets.xcassets */; };
 		5D04D08A745F73F15EB7C49C /* LidarViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = AD778F6DCD08A6110F2A40D4 /* LidarViews.swift */; };
 		648E8C9F3B9D80963407B266 /* Inter.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 31F1DF520F5757709F6401FF /* Inter.ttf */; };
+		7A1C0B2E9F4D3A6B5C8E1F01 /* Pacifico.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 7A1C0B2E9F4D3A6B5C8E1F03 /* Pacifico.ttf */; };
+		7A1C0B2E9F4D3A6B5C8E1F02 /* Pacifico-LICENSE.txt in Resources */ = {isa = PBXBuildFile; fileRef = 7A1C0B2E9F4D3A6B5C8E1F04 /* Pacifico-LICENSE.txt */; };
 		688D7112D165DC54281C3B01 /* RootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AD9CF122C30D300F9A9C44C6 /* RootView.swift */; };
 		6C14F7E3B1E463ECCFC912B4 /* NativeAppearance.swift in Sources */ = {isa = PBXBuildFile; fileRef = B8F2FF76EE46EFDE0E50BFEF /* NativeAppearance.swift */; };
 		6D752DC0C27F7694BEF11237 /* ShellModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2A4A72C6139D21E905AD227E /* ShellModel.swift */; };
@@ -43,6 +45,8 @@
 		47F27A7230DA03E6A7594F4B /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		50DEB7F130FA28E41EBC643E /* ShellTypes.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShellTypes.swift; sourceTree = "<group>"; };
 		57FA85E29ADDE2D56E589C31 /* Inter-LICENSE.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = "Inter-LICENSE.txt"; sourceTree = "<group>"; };
+		7A1C0B2E9F4D3A6B5C8E1F03 /* Pacifico.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = Pacifico.ttf; sourceTree = "<group>"; };
+		7A1C0B2E9F4D3A6B5C8E1F04 /* Pacifico-LICENSE.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = "Pacifico-LICENSE.txt"; sourceTree = "<group>"; };
 		6413F062BCDC8F91FC0CBC3D /* EngineProxy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EngineProxy.swift; sourceTree = "<group>"; };
 		656CE6D448A7190204A7F13B /* native-shell.js */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.javascript; path = "native-shell.js"; sourceTree = "<group>"; };
 		6ED1B58D57DFE1A43CECB322 /* Symbols.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Symbols.swift; sourceTree = "<group>"; };
@@ -77,6 +81,8 @@
 			children = (
 				57FA85E29ADDE2D56E589C31 /* Inter-LICENSE.txt */,
 				31F1DF520F5757709F6401FF /* Inter.ttf */,
+				7A1C0B2E9F4D3A6B5C8E1F04 /* Pacifico-LICENSE.txt */,
+				7A1C0B2E9F4D3A6B5C8E1F03 /* Pacifico.ttf */,
 			);
 			path = Fonts;
 			sourceTree = "<group>";
@@ -251,6 +257,8 @@
 				5732EE83C8E842896D5D8E3F /* Assets.xcassets in Resources */,
 				ABE48556CBB654BFC921C7F0 /* Inter-LICENSE.txt in Resources */,
 				648E8C9F3B9D80963407B266 /* Inter.ttf in Resources */,
+				7A1C0B2E9F4D3A6B5C8E1F02 /* Pacifico-LICENSE.txt in Resources */,
+				7A1C0B2E9F4D3A6B5C8E1F01 /* Pacifico.ttf in Resources */,
 				276FC0E37F054F2521B4CBC8 /* native-host.js in Resources */,
 				20E0CCD476895997163AC6D3 /* native-shell.js in Resources */,
 			);

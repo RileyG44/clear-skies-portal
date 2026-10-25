@@ -65,7 +65,12 @@ async function main(){
   assert.equal(timers.size,0,'Off cancels scene readiness and delayed mosaic timers');
   for(const key of ['overlay','overlayPending','footprint','sceneAbort','mosAbort','mosTimer','SEL'])assert.equal(scene[key],null,key+' is released');
   assert.equal(scene.NEIGH.length,0);assert.equal(scene.PENDING_NEIGH.size,0);
-  assert.equal(scene.MOSAIC_ON,false);assert.equal(scene.MOSAIC_ONCE,false);
+  assert.equal(scene.MOSAIC_ONCE,false,'Off ends a one-off fill');
+  assert.equal(controls.get('#mosaic').checked,true,'Off keeps the Auto-fill surroundings choice');
+  assert.equal(scene.MOSAIC_ON,true,'the next scene still auto-fills when the switch is on');
+  controls.get('#mosaic').checked=false;scene.clearScene(false);
+  assert.equal(scene.MOSAIC_ON,false,'a switched-off Auto-fill stays off');
+  controls.get('#mosaic').checked=true;
 
   // A metadata response that arrives after Off must never install a new layer.
   let resolveMetadata;
@@ -100,6 +105,30 @@ async function main(){
   await search.run();
   assert(cleared,'new search clears any previous scene');
   assert.equal(search.ITEMS[0],result,'scene catalog still loads in the background');
+
+  // The native imagery button is the explicit exception: it searches, then
+  // applies the Best photo pick from the filtered pool, and nothing else.
+  const photo={label:'Sentinel-2 L2A',date:'2026-10-20T19:01:00Z',gsd:10,cloud:3};
+  const radar={label:'Sentinel-1',date:'2026-10-22T02:00:00Z',gsd:10};
+  const selected=[];let pool=[radar,photo],supersede=false;
+  const best={
+    LOC:{lat:47,lng:-119},searchToken:0,ITEMS:[],
+    run(){ const token=++best.searchToken;best.ITEMS=[radar,photo];return Promise.resolve().then(()=>{ if(supersede) best.searchToken=token+1 }) },
+    resultPool:()=>pool,bestPhoto:list=>list.includes(photo)?photo:null,
+    select:async i=>{selected.push(i)},res:gsd=>gsd+' m'
+  };
+  vm.createContext(best);
+  vm.runInContext(section('async function cspSearchBestImagery(','\n$("#go").onclick=')+';this.searchBest=cspSearchBestImagery;',best);
+  let outcome=await best.searchBest();
+  assert.deepEqual(selected,[1],'the button applies the Best photo scene');
+  assert.equal(outcome.applied,true);assert.match(outcome.message,/Sentinel-2 L2A · 2026-10-20 · 10 m · 3% cloud/);
+  pool=[radar];outcome=await best.searchBest();
+  assert.equal(outcome.applied,false);assert.equal(selected.length,1,'no clear photo means nothing is applied');
+  assert.match(outcome.message,/No clear true-color scene/);
+  pool=[radar,photo];supersede=true;outcome=await best.searchBest();
+  assert.equal(outcome.applied,false);assert.equal(selected.length,1,'a newer search wins over a superseded button press');
+  supersede=false;best.LOC=null;outcome=await best.searchBest();
+  assert.equal(outcome.applied,false);assert.equal(selected.length,1,'no selected place, no search');
   // Exercise the actual status painter after a replacement fails, in 3D,
   // and when offline. Retaining old tiles must never claim the request succeeded.
   const statusControls={'#terStyle':{value:'hs'},'#terrainSourceSummary':{innerHTML:''}};
@@ -119,6 +148,6 @@ async function main(){
   status.navigator.onLine=true;is3d=false;summary={sources:[],coverage:0,refining:true,failed:true};
   status.paintTerrainStatus();assert.equal(status.terrainLoadStatus.dataset.state,'partial','failed empty terrain stops the indefinite loading status');
 
-  console.log('layer transition checks passed (staging, rollback, mosaic cleanup, scene Off, late responses, search without auto-selection)');
+  console.log('layer transition checks passed (staging, rollback, mosaic cleanup, scene Off, late responses, search without auto-selection, explicit best imagery)');
 }
 main().catch(error=>{console.error(error);process.exitCode=1;});

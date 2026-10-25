@@ -40,6 +40,7 @@
 	<key>UIAppFonts</key>
 	<array>
 		<string>Inter.ttf</string>
+		<string>Pacifico.ttf</string>
 	</array>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
