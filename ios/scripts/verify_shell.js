@@ -73,7 +73,7 @@ return (async () => {
     }
     check(document.getElementById("side")?.getAttribute("aria-hidden") === "true", "Duplicate web sidebar accessibility controls");
     // Cross the real adapter and SwiftUI state boundary, including persistence.
-    const visibleDock = () => [...document.querySelectorAll('#mapDock > .map-tool')].filter(el => !el.hidden).map(el => el.id);
+    const visibleDock = () => [...document.querySelectorAll('#mapDock > .map-tool')].filter(el => !el.hidden && el.dataset.tool !== 'scene').map(el => el.id);
     const tools = visibleDock(), moving = tools[0];
     check(shell.moveTool(moving, tools.length - 1), 'Native dock move was rejected');
     await wait(150);

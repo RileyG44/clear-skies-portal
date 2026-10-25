@@ -49,6 +49,9 @@ enum Symbols {
         case "move-up-right": "arrow.up.right"
         case "navigation": "location.north.line"
         case "download": "square.and.arrow.down"
+        case "camera": "camera"
+        case "scan": "viewfinder"
+        case "copy": "doc.on.doc"
         case "satellite": "globe.americas"
         case "settings": "gearshape"
         case "sliders-horizontal": "slider.horizontal.3"
@@ -63,7 +66,7 @@ enum Symbols {
         return Self.icon(icon) ?? "mountain.2"
     }
 
-    static func tool(_ tool: String, mode: String) -> String {
+    static func tool(_ tool: String, mode: String, theme: String) -> String {
         switch tool {
         case "mapMode":
             switch mode {
@@ -75,7 +78,7 @@ enum Symbols {
         case "snapshot": "camera"
         case "scene": "info.circle"
         case "terrain-source": "square.3.layers.3d"
-        case "theme": "circle.lefthalf.filled"
+        case "theme": theme == "dark" ? "moon" : "sun.max"
         case "bearing": "location.north.line"
         case "server": "server.rack"
         default: "circle"

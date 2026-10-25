@@ -11,12 +11,12 @@ try {
   const before = await config();
   assert(before.navigation.sheet === 'terrainSourcePanel', 'Launch this probe with --panel terrainSourcePanel');
   const panel = S.describePanel('terrainSourcePanel');
-  const row = panel.items.find(item => item.ref?.startsWith('source:') && item.items?.[0]?.kind === 'button');
-  assert(!!row && !row.title, 'Layer title must be a button, without a repeated heading');
+  const row = panel.items.find(item => item.kind === 'source' && item.edit?.ref);
+  assert(!!row && !!row.title, 'Layer card must expose its title and editor action');
   if (row) {
-    const title = row.items[0]; selectedLayer = title.title;
-    assert(title.title !== 'Edit layer', 'Layer title was replaced by a redundant edit row');
-    S.act(title.ref, 'click');
+    selectedLayer = row.title;
+    assert(!row.items.some(item => item.title === row.title), 'Layer title is repeated inside its card');
+    S.act(row.edit.ref, 'click');
     await wait(1000);
     navigation = (await config()).navigation;
     assert(navigation.sheet === 'tools', 'Tapping the toolbar layer title did not open the native editor');

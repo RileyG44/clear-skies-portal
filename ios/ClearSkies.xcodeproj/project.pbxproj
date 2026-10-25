@@ -28,6 +28,7 @@
 		C356FA2FFFE4A00326F814C4 /* ItemCards.swift in Sources */ = {isa = PBXBuildFile; fileRef = 41FA309B2DF96C4DA8E97CDA /* ItemCards.swift */; };
 		C5A8DD5A2BBBBF9EA6C339CE /* ItemList.swift in Sources */ = {isa = PBXBuildFile; fileRef = CBB682433A2F721E2FE18263 /* ItemList.swift */; };
 		C76D19F4032E83E937B308A0 /* WebHost.swift in Sources */ = {isa = PBXBuildFile; fileRef = CB9A8F34DAE20150043E9DC9 /* WebHost.swift */; };
+		DC5497B0B19D031E97179977 /* ToolbarPanelContent.swift in Sources */ = {isa = PBXBuildFile; fileRef = D40250219A657D0A53237861 /* ToolbarPanelContent.swift */; };
 		F56403A0C4B86316717B12FA /* Pacifico.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 97F225C066396F78511098F8 /* Pacifico.ttf */; };
 		F619D6162621933589AD9F56 /* ShellTypes.swift in Sources */ = {isa = PBXBuildFile; fileRef = 50DEB7F130FA28E41EBC643E /* ShellTypes.swift */; };
 		FDB30D23ECE4D164644D5CAD /* EngineProxy.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6413F062BCDC8F91FC0CBC3D /* EngineProxy.swift */; };
@@ -61,6 +62,7 @@
 		CB9A8F34DAE20150043E9DC9 /* WebHost.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WebHost.swift; sourceTree = "<group>"; };
 		CBB682433A2F721E2FE18263 /* ItemList.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ItemList.swift; sourceTree = "<group>"; };
 		CC6A76E18A5F8DC3652CC437 /* NativeBridge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NativeBridge.swift; sourceTree = "<group>"; };
+		D40250219A657D0A53237861 /* ToolbarPanelContent.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ToolbarPanelContent.swift; sourceTree = "<group>"; };
 		E233CBDAC389F8BDE93C75D6 /* ClearSkies.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = ClearSkies.app; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
@@ -99,6 +101,7 @@
 		5D5796D15FEF2C9A8254EB93 /* Sheet */ = {
 			isa = PBXGroup;
 			children = (
+				D40250219A657D0A53237861 /* ToolbarPanelContent.swift */,
 				36E8E55CF384FCC1082F9BFC /* ToolsSheet.swift */,
 			);
 			path = Sheet;
@@ -309,6 +312,7 @@
 				F619D6162621933589AD9F56 /* ShellTypes.swift in Sources */,
 				FDFBD1B44164D4C45186E6C2 /* SiteSchemeHandler.swift in Sources */,
 				91D609663C61C38F235BFFA4 /* Symbols.swift in Sources */,
+				DC5497B0B19D031E97179977 /* ToolbarPanelContent.swift in Sources */,
 				2154D725841995B822656419 /* ToolsSheet.swift in Sources */,
 				C76D19F4032E83E937B308A0 /* WebHost.swift in Sources */,
 			);

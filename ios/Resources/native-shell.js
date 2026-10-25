@@ -529,6 +529,39 @@
     ctl: { body: "#ctlBody", close: "#ctlCollapse", title: "Displayed on map" }
   };
   const openPanel = () => Object.keys(PANELS).find(id => { const el = document.getElementById(id); return el && !el.hidden; }) || null;
+
+  // Toolbar panels use task-sized native cards rather than a literal walk of
+  // desktop form layout. All controls still refer to their original elements.
+  const panelControl = (selector, context) => {
+    const el = $(selector);
+    return el ? controlItem(el, context) : null;
+  };
+  const panelGroup = (ref, title, items, detail) => ({
+    kind: "group", ref, title, detail, items: items.filter(Boolean)
+  });
+  function imageryPanelItems() {
+    const items = [];
+    const status = clean($("#mosStat")?.textContent);
+    if (status) items.push({kind: "text", style: "status", title: status});
+    const actions = [
+      panelControl("#ctlReset", {title: "Reset opacity"}),
+      panelControl("#fillNow", {title: "Fill surroundings", detail: "Load neighbouring scenes for this view once."}),
+      panelControl("#clr", {title: "Clear imagery"})
+    ].filter(item => {
+      const el = item && elementFor(item.ref);
+      return el && !el.hidden && getComputedStyle(el).display !== "none";
+    });
+    for (const item of actions) {
+      item.role = item.ref === "#clr" ? "destructive" : "utility";
+      if (item.ref === "#ctlReset") item.icon = "rotate-ccw";
+      if (item.ref === "#clr") item.icon = "trash";
+    }
+    if (actions.length) items.push({kind: "actionmenu", title: "Imagery actions", items: actions});
+    const links = $("#ctlLink");
+    if (clean(links?.textContent)) items.push({kind: "text", style: "hint", title: clean(links.textContent), markdown: tidyMarkdown(markdownOf(links))});
+    return items;
+  }
+
   function describePanel(id) {
     const spec = PANELS[id], el = document.getElementById(id);
     if (!spec || !el || el.hidden) return null;
@@ -537,7 +570,41 @@
     if (id === "ctl") {
       items.push({ kind: "text", style: "row", title: clean($("#ctlName")?.textContent), detail: clean($("#ctlDate")?.textContent) || undefined });
     }
-    if (id === "terrainSourcePanel" && body) {
+    if (id === "snapshotPanel") {
+      const resolution = panelControl("#snapshotScale", {title: "Resolution"});
+      if (resolution) resolution.options.forEach(option => { option.title = `${option.value}×`; });
+      const metadata = clean($("#snapshotMeta")?.textContent);
+      items.push(panelGroup("export:settings", "Image settings", [
+        resolution,
+        metadata ? {kind: "text", style: "status", title: metadata} : null,
+        panelControl("#snapshotReadout", {title: "Include map info", detail: "Coordinates, elevation and color keys"})
+      ]));
+      items.push({kind: "text", style: "hint", title: "Higher resolutions request finer source tiles where available. Enlarging a source adds no new detail."});
+      const capture = panelControl("#snapshotCapture", {title: "Capture view", detail: "Save the whole map view."});
+      const select = panelControl("#snapshotSelect", {title: "Select area", detail: "Draw a rectangle on the map to save."});
+      if (capture) capture.icon = "camera";
+      if (select) select.icon = "scan";
+      items.push({kind: "actions", items: [select, capture].filter(Boolean)});
+    } else if (id === "serverPanel") {
+      items.push({kind: "text", style: "hint", title: "Connect to your Mac for its terrain cache and processing. The engine is optional; public map sources work without it."});
+      const address = panelControl("#srvUrl", {title: "Engine address"});
+      if (address) address.detail = "Use the Tailscale HTTPS address from your Mac.";
+      const metadata = clean($("#srvMeta")?.textContent);
+      items.push(panelGroup("engine:connection", "Connection", [
+        address,
+        metadata ? {kind: "text", style: $("#srvMeta")?.classList.contains("warn") ? "warning" : "status", title: metadata} : null
+      ]));
+      const copy = panelControl("#srvCopyLink", {title: "Copy engine address"});
+      const forget = panelControl("#srvForget", {title: "Forget saved address", detail: "Remove the connection saved on this device."});
+      if (copy) { copy.role = "utility"; copy.icon = "copy"; }
+      if (forget) {
+        forget.role = "destructive"; forget.icon = "trash";
+        forget.confirm = "Forget the saved engine address? You can reconnect by entering it again.";
+      }
+      items.push(panelGroup("engine:saved", "Saved address", [copy, forget]));
+      const connect = panelControl("#srvConnect");
+      if (connect) { connect.role = "primary"; items.push({kind: "actions", items: [connect]}); }
+    } else if (id === "terrainSourcePanel" && body) {
       const status = $(".terrain-source-panel-status", body);
       if (status && !status.hidden) items.push({kind: "text", title: clean(status.textContent), style: "status"});
       for (const row of $$(".terrain-source-panel-row", body)) {
@@ -545,16 +612,30 @@
           {title: clean($("span", label)?.textContent), output: $("output", label)}));
         const name = $(".terrain-source-panel-name", row);
         const detail = clean($(".terrain-source-panel-meta", row)?.textContent);
-        controls.unshift(name?.matches("button") ? controlItem(name, {detail})
-          : {kind: "text", title: clean(name?.textContent), detail, style: "row"});
-        items.push({kind: "group", ref: "source:" + row.dataset.id, items: controls});
+        if (row.dataset.id === "scene") controls.push(...imageryPanelItems());
+        items.push({kind: "source", ref: "source:" + row.dataset.id, id: row.dataset.id,
+          title: clean(name?.textContent), detail, items: controls,
+          edit: name?.matches("button") ? {ref: refOf(name), title: "Edit layer"} : undefined});
+      }
+      // Zero opacity hides the web's active row, but its controls must remain
+      // reachable after removing the redundant imagery button from this dock.
+      if (!$(".terrain-source-panel-row[data-id=scene]", body) && $("#mapInfoToggle")?.hidden === false) {
+        const opacity = panelControl("#op", {title: "Opacity"});
+        if (opacity) opacity.display = `${opacity.value}%`;
+        items.unshift({kind: "source", ref: "source:scene", id: "scene", title: clean($("#ctlName")?.textContent),
+          detail: clean($("#ctlDate")?.textContent), items: [opacity, ...imageryPanelItems()].filter(Boolean)});
+      }
+      if (!items.some(item => item.kind === "source")) {
+        const empty = clean($(".tsp-rows", body)?.textContent);
+        if (empty) items.push({kind: "text", style: "hint", title: empty});
       }
       const references = $("#mapSourceReferences", body);
-      for (const note of $$(".terrain-source-panel-note", body).filter(el => el !== references))
-        items.push({kind: "text", style: "hint", title: clean(note.textContent)});
-      if (references) items.push({kind: "text", title: "Map source references", markdown: tidyMarkdown(markdownOf(references))});
+      const notes = $$(".terrain-source-panel-note", body).filter(el => el !== references)
+        .map(note => ({kind: "text", style: "hint", title: clean(note.textContent)}));
+      if (references && clean(references.textContent)) notes.push({kind: "text", title: clean(references.textContent), markdown: tidyMarkdown(markdownOf(references))});
+      if (notes.length) items.push({kind: "disclosure", ref: "sources:references", title: "Sources & attribution", items: notes});
     } else     if (body) for (const child of body.children) if (!handle(child, items)) walk(child, items);
-    return { id, title: spec.title || clean($(".tool-popover-title", el)?.textContent), state: clean($(".tool-popover-state", el)?.textContent) || undefined, items };
+    return { id, title: id === "serverPanel" ? "Terrain engine" : spec.title || clean($(".tool-popover-title", el)?.textContent), state: id === "terrainSourcePanel" ? undefined : clean($(".tool-popover-state", el)?.textContent) || undefined, items };
   }
 
   /* ------------------------------------------------------------- state */
@@ -614,7 +695,7 @@
     return $$("#mapDock > .map-tool").map(button => ({
       ref: refOf(button), id: button.id, tool: button.dataset.tool || button.id,
       title: clean(button.getAttribute("aria-label") || button.title),
-      hidden: button.hidden || undefined, disabled: button.disabled || undefined,
+      hidden: button.hidden || button.dataset.tool === "scene" || undefined, disabled: button.disabled || undefined,
       pressed: button.getAttribute("aria-pressed") === "true" || button.classList.contains("active") || undefined,
       expanded: button.getAttribute("aria-expanded") === "true" || undefined,
       dot: button.id === "serverToggle" ? ($("#srvDot")?.classList.contains("on") ? "on" : "off") : undefined
@@ -811,7 +892,13 @@
       try { return await bridge().searchBestImagery(); }
       finally { schedule(0); }
     },
-    moveTool(id, index) { const moved = bridge().moveDockTool(id, index); flush(); return moved; },
+    moveTool(id, index) {
+      const others = $$("#mapDock > .map-tool").filter(el => !el.hidden && el.id !== id);
+      const native = others.filter(el => el.dataset.tool !== "scene");
+      const target = native[Math.max(0, Math.min(native.length, index))];
+      const moved = bridge().moveDockTool(id, target ? others.indexOf(target) : others.length);
+      flush(); return moved;
+    },
     setMode(mode) {
       const item = $(`#mapModeMenu [data-mode="${CSS.escape(String(mode))}"]`);
       if (item) item.click();

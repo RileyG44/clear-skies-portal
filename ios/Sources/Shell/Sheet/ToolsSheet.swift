@@ -343,8 +343,8 @@ struct RoutePageView: View {
     }
 }
 
-/// A map tool's pop-up (Export, Layers, the engine, the displayed scene),
-/// drawn from the web pop-up that stays its source of truth.
+/// A map tool's native panel. The web controls remain its source of truth;
+/// toolbar panels get their own layout rather than desktop-shaped form rows.
 struct PanelSheet: View {
     @Environment(ShellModel.self) private var shell
     let id: String
@@ -354,7 +354,7 @@ struct PanelSheet: View {
         NavigationStack {
             Group {
                 if let panel {
-                    ItemList(items: panel.items)
+                    ToolbarPanelContent(panel: panel)
                 } else {
                     ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity)
                         .onSheetGlass()

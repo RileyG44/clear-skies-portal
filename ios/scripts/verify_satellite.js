@@ -74,14 +74,17 @@ return (async () => {
     check(initial.tileURL.includes("tilesize=512") && !initial.tileURL.includes("@2x"), "AWS scene used the obsolete retina endpoint");
     check(!document.getElementById("mosaic").checked, "Scene application required Auto Fill");
 
-    stage = "displayed-scene panel";
+    stage = "imagery controls in Layers";
     for (let repeat = 0; repeat < 2; repeat++) {
-      shell.closePanel("ctl");
-      check(document.getElementById("ctl").hidden, "Displayed-scene panel did not close");
-      shell.tool("mapInfoToggle");
-      check(!document.getElementById("ctl").hidden && !!shell.describePanel("ctl"), "Displayed-scene panel did not reopen");
+      shell.closePanel("terrainSourcePanel");
+      shell.tool("terrainSourceToggle");
+      const panel = shell.describePanel("terrainSourcePanel");
+      const imagery = panel?.items.find(item => item.kind === "source" && item.id === "scene");
+      const flatten = items => (items || []).flatMap(item => [item, ...flatten(item.items)]);
+      check(!!imagery, "Layers lost the displayed imagery card");
+      check(flatten(imagery?.items).some(item => item.ref === "#ctlReset"), "Layers lost imagery opacity reset");
     }
-    shell.closePanel("ctl");
+    shell.closePanel("terrainSourcePanel");
     shell.setView({ sheet: "closed", page: null, panel: null });
     stage = "zoom refinement";
     map.setZoom(14, { animate: false });

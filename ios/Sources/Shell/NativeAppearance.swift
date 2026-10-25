@@ -88,10 +88,16 @@ struct PortalSlider: UIViewRepresentable {
 
     func makeUIView(context: Context) -> UISlider {
         let view = TouchSlider()
+        view.setContentHuggingPriority(.required, for: .vertical)
+        view.setContentCompressionResistancePriority(.required, for: .vertical)
         view.addTarget(context.coordinator, action: #selector(Coordinator.changed(_:)), for: .valueChanged)
         view.addTarget(context.coordinator, action: #selector(Coordinator.began), for: .touchDown)
         view.addTarget(context.coordinator, action: #selector(Coordinator.ended), for: [.touchUpInside, .touchUpOutside, .touchCancel])
         return view
+    }
+
+    func sizeThatFits(_ proposal: ProposedViewSize, uiView: UISlider, context: Context) -> CGSize? {
+        CGSize(width: proposal.width ?? uiView.intrinsicContentSize.width, height: 44)
     }
 
     func updateUIView(_ view: UISlider, context: Context) {

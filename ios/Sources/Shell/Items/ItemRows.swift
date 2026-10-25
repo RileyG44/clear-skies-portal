@@ -129,7 +129,7 @@ struct SliderRow: View {
     private var slider: some View {
         PortalSlider(value: Binding(get: { local ?? value }, set: { send(snapped($0)) }),
                      range: range, title: title, onEditingChanged: editingChanged)
-            .frame(minHeight: 44)
+            .frame(height: 44)
     }
 
     private func snapped(_ next: Double) -> Double {
@@ -231,6 +231,9 @@ struct PickerRow: View {
 struct FieldRow: View {
     @Environment(ShellModel.self) private var shell
     let item: ShellItem
+    /// Toolbar connection actions read the live DOM value while the native
+    /// field can still have focus. Keep input in sync before the button fires.
+    var liveInput = false
     @State private var text = ""
     @State private var editing = false
     @FocusState private var focused: Bool
@@ -284,6 +287,9 @@ struct FieldRow: View {
                 field
             }
             .onAppear { text = item.value?.string ?? "" }
+            .onChange(of: text) {
+                if liveInput && focused { shell.act(item.ref, .input, text) }
+            }
             .onChange(of: item.value) { if !focused { text = item.value?.string ?? "" } }
         }
     }

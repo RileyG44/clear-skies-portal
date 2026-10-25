@@ -132,7 +132,7 @@ struct ToolButton: View {
             // Menu reserves a long press for drag-to-select. A button-backed
             // popover leaves that gesture available to the reorderable dock.
             Button { showingModes = true } label: {
-                glyph(Symbols.tool(tool.tool, mode: shell.map.mode))
+                glyph(Symbols.tool(tool.tool, mode: shell.map.mode, theme: shell.map.theme))
             }
             .buttonStyle(.plain)
             .accessibilityLabel(tool.title)
@@ -143,15 +143,18 @@ struct ToolButton: View {
                         .foregroundStyle(.secondary)
                         .padding(.horizontal, 12)
                         .padding(.top, 8)
-                    modeButton("2d", "2D map", "Flat map with every layer", "map")
-                    modeButton("3d", "3D terrain", "Tilt and fly over the relief", "mountain.2")
-                    modeButton("points", "Point cloud", "LiDAR returns in 3D", "circle.grid.3x3")
+                    modeButton("2d", "2D map", "Explore layers on a flat map", "map")
+                    modeButton("3d", "3D terrain", "Tilt and explore the terrain", "mountain.2")
+                    modeButton("points", "Point cloud", "View individual LiDAR returns", "circle.grid.3x3")
                 }
                 .padding(8)
+                .foregroundStyle(PortalPrimary())
+                .environment(\.colorScheme, shell.map.theme == "dark" ? .dark : .light)
+                .preferredColorScheme(shell.map.theme == "dark" ? .dark : .light)
                 .presentationCompactAdaptation(.popover)
             }
         } else {
-            Button { shell.tool(tool) } label: { glyph(Symbols.tool(tool.tool, mode: shell.map.mode)) }
+            Button { shell.tool(tool) } label: { glyph(Symbols.tool(tool.tool, mode: shell.map.mode, theme: shell.map.theme)) }
                 .buttonStyle(.plain)
                 .disabled(tool.disabled == true)
                 .accessibilityLabel(tool.title)
@@ -162,16 +165,22 @@ struct ToolButton: View {
     private func modeButton(_ mode: String, _ title: String, _ detail: String, _ symbol: String) -> some View {
         Button { showingModes = false; shell.setMode(mode) } label: {
             HStack(spacing: 12) {
-                Image(systemName: shell.map.mode == mode ? "checkmark" : symbol)
+                Image(systemName: symbol)
+                    .foregroundStyle(.secondary)
                     .frame(width: 24)
                 VStack(alignment: .leading, spacing: 2) {
                     Text(title).portalFont(.body, weight: .medium)
                     Text(detail).portalFont(.caption).foregroundStyle(.secondary)
                 }
                 Spacer(minLength: 0)
+                Image(systemName: "checkmark")
+                    .fontWeight(.semibold)
+                    .opacity(shell.map.mode == mode ? 1 : 0)
             }
             .padding(12)
-            .frame(minWidth: 240, minHeight: 44, alignment: .leading)
+            .frame(minWidth: 260, minHeight: 44, alignment: .leading)
+            .background(shell.map.mode == mode ? Color.primary.opacity(0.06) : .clear,
+                        in: .rect(cornerRadius: 14))
             .contentShape(.rect)
         }
         .buttonStyle(.plain)
@@ -181,7 +190,7 @@ struct ToolButton: View {
 
     private func glyph(_ symbol: String) -> some View {
         let panel = ShellModel.toolPanels[tool.tool]
-        let active = tool.pressed == true || tool.expanded == true || (panel != nil && shell.presentedPanel == panel)
+        let active = tool.tool != "theme" && (tool.pressed == true || tool.expanded == true || (panel != nil && shell.presentedPanel == panel))
         return Image(systemName: symbol)
             .font(.system(size: MapControlSize.icon, weight: .medium))
             .foregroundStyle(active ? AnyShapeStyle(.tint) : AnyShapeStyle(PortalPrimary()))
