@@ -4,6 +4,8 @@ import UniformTypeIdentifiers
 private enum MapControlSize {
     static let tool: CGFloat = 48
     static let search: CGFloat = 52
+    static let imagery: CGFloat = 44
+    static let status: CGFloat = 44
     static let icon: CGFloat = 17
 }
 
@@ -19,7 +21,7 @@ struct MapChrome: View {
                     HStack(alignment: .top, spacing: 10) {
                         TerrainStatusCapsule()
                         Spacer(minLength: 0)
-                        MapTools(maxHeight: geometry.size.height - MapControlSize.search - (shell.search.canCopy ? 54 : 0) - 20)
+                        MapTools(maxHeight: geometry.size.height - MapControlSize.search - (shell.hasLocation ? MapControlSize.imagery + 10 : 0) - 20)
                     }
                     .padding(.horizontal, 12)
                     .padding(.top, 6)
@@ -193,23 +195,22 @@ struct ToolButton: View {
 
 /// What the terrain is doing right now, in the web's own words: loading,
 /// refining, ready, or partly unavailable, with the sources actually drawn.
-/// Ready folds away to a small seal; tap it for the full line.
+/// It stays a small round icon (a spinner while loading, a seal in the theme
+/// color once the view is ready) and opens to the full line only when tapped.
 struct TerrainStatusCapsule: View {
     @Environment(ShellModel.self) private var shell
-    @State private var folded = false
-    @State private var foldTask: Task<Void, Never>?
+    @State private var expanded = false
 
     var body: some View {
         if let terrain = shell.status.terrain, !terrain.text.isEmpty {
             let parts = Self.parts(of: terrain.text)
             Button {
-                withAnimation(.snappy) { folded.toggle() }
-                scheduleFold(terrain.state)
+                withAnimation(.snappy) { expanded.toggle() }
             } label: {
                 HStack(spacing: 8) {
                     icon(terrain.state)
                         .portalFont(.footnote)
-                    if !folded {
+                    if expanded {
                         VStack(alignment: .leading, spacing: 1) {
                             Text(parts.title)
                                 .portalFont(.caption, weight: .medium)
@@ -224,32 +225,22 @@ struct TerrainStatusCapsule: View {
                         .transition(.opacity.combined(with: .scale(scale: 0.9, anchor: .leading)))
                     }
                 }
-                .padding(.horizontal, folded ? 10 : 12)
-                .padding(.vertical, 8)
-                .frame(maxWidth: folded ? nil : 250, alignment: .leading)
+                .padding(.horizontal, expanded ? 12 : 0)
+                .padding(.vertical, expanded ? 8 : 0)
+                .frame(minWidth: MapControlSize.status, minHeight: MapControlSize.status)
+                .frame(maxWidth: expanded ? 250 : MapControlSize.status, alignment: expanded ? .leading : .center)
                 .contentShape(.capsule)
             }
             .buttonStyle(.plain)
             .chromeGlass(in: .capsule)
             .accessibilityElement(children: .combine)
             .accessibilityLabel(terrain.text)
-            .onChange(of: terrain.state, initial: true) { _, state in
-                if state != "ready", folded { withAnimation(.snappy) { folded = false } }
-                scheduleFold(state)
-            }
+            .accessibilityHint(expanded ? "Hide terrain details" : "Show terrain details")
         }
     }
 
-    private func scheduleFold(_ state: String) {
-        foldTask?.cancel()
-        guard state == "ready", !folded else { return }
-        foldTask = Task {
-            try? await Task.sleep(for: .seconds(3))
-            guard !Task.isCancelled else { return }
-            withAnimation(.snappy) { folded = true }
-        }
-    }
-
+    /// Ready means every terrain tile in view loaded. Partial, offline and
+    /// error keep their own icons rather than claiming a ready map.
     @ViewBuilder private func icon(_ state: String) -> some View {
         switch state {
         case "loading":
@@ -257,7 +248,7 @@ struct TerrainStatusCapsule: View {
         case "partial":
             Image(systemName: "exclamationmark.triangle").foregroundStyle(.orange)
         case "ready":
-            Image(systemName: "checkmark.seal").foregroundStyle(.green)
+            Image(systemName: "checkmark.seal").foregroundStyle(.tint)
         case "offline":
             Image(systemName: "wifi.slash").foregroundStyle(.secondary)
         default:
@@ -279,14 +270,22 @@ struct TerrainStatusCapsule: View {
 }
 
 /// The collapsed sheet: a search capsule and a locate button floating over
-/// the map, as the web's phone layout and the iOS 26 Maps bar do.
+/// the map, as the web's phone layout and the iOS 26 Maps bar do. A selected
+/// place shows as text in the capsule; its coordinate shortcuts live in the
+/// open menu, under its search field.
 struct SearchCapsule: View {
     @Environment(ShellModel.self) private var shell
     @Namespace private var glass
 
     var body: some View {
         GlassEffectContainer(spacing: 10) {
-          VStack(spacing: 10) {
+          VStack(alignment: .trailing, spacing: 10) {
+            if shell.hasLocation {
+                BestImageryButton()
+                    .padding(.trailing, (MapControlSize.search - MapControlSize.imagery) / 2)
+                    .glassEffectID("imagery", in: glass)
+                    .transition(.scale.combined(with: .opacity))
+            }
             HStack(spacing: 10) {
               HStack(spacing: 0) {
                 Button { shell.openSearch() } label: {
@@ -337,17 +336,40 @@ struct SearchCapsule: View {
                 .glassEffectID("locate", in: glass)
                 .accessibilityLabel("Use my current location")
             }
-            if shell.search.canCopy {
-                CoordinateActions()
-                    .padding(4)
-                    .chromeGlass(in: .capsule, interactive: false)
-                    .glassEffectID("coordinates", in: glass)
-            }
           }
+          .animation(.spring(duration: 0.35, bounce: 0.2), value: shell.hasLocation)
         }
         .gesture(DragGesture(minimumDistance: 12).onEnded { value in
             if value.translation.height < -24 { shell.openSheet(.medium) }
         })
+    }
+}
+
+/// Beside Locate while a place is selected: search imagery there and apply
+/// the page's Best photo, the scene its Best available summary recommends.
+/// Auto-fill surroundings, when on, then fills the view around it.
+struct BestImageryButton: View {
+    @Environment(ShellModel.self) private var shell
+
+    var body: some View {
+        Button { shell.applyBestImagery() } label: {
+            ZStack {
+                if shell.imageryBusy {
+                    ProgressView().controlSize(.small)
+                } else {
+                    Image(systemName: Symbols.route("satellite"))
+                        .font(.system(size: 16, weight: .medium))
+                        .foregroundStyle(PortalPrimary())
+                }
+            }
+            .frame(width: MapControlSize.imagery, height: MapControlSize.imagery)
+            .contentShape(.circle)
+        }
+        .buttonStyle(.plain)
+        .disabled(shell.imageryBusy)
+        .chromeGlass(in: .circle)
+        .accessibilityLabel(shell.imageryBusy ? "Finding the best satellite image" : "Apply the best satellite image here")
+        .accessibilityHint("Searches imagery at the selected place and shows the best clear photo")
     }
 }
 
@@ -356,6 +378,8 @@ struct Toasts: View {
     @Environment(ShellModel.self) private var shell
     @State private var shownError: String?
     @State private var hideTask: Task<Void, Never>?
+    @State private var shownNotice: ShellNotice?
+    @State private var noticeTask: Task<Void, Never>?
 
     var body: some View {
         VStack {
@@ -364,15 +388,30 @@ struct Toasts: View {
                 if let snapshot = shell.status.snapshot {
                     toast(snapshot, symbol: "camera", tint: .secondary)
                 }
+                if let notice = shownNotice {
+                    toast(notice.text, symbol: notice.applied ? Symbols.route("satellite") : "info.circle", tint: .secondary)
+                }
                 if let error = shownError {
                     toast(error, symbol: "exclamationmark.triangle", tint: .orange)
                 }
             }
             .padding(.horizontal, 24)
-            .padding(.bottom, shell.activeSheet == nil ? 70 : 12)
+            .padding(.bottom, shell.activeSheet == nil ? 70 + (shell.hasLocation ? MapControlSize.imagery + 10 : 0) : 12)
         }
         .animation(.spring(duration: 0.35), value: shell.status.snapshot)
         .animation(.spring(duration: 0.35), value: shownError)
+        .animation(.spring(duration: 0.35), value: shownNotice)
+        .onChange(of: shell.notice) { _, notice in
+            guard let notice else { return }
+            AccessibilityNotification.Announcement(notice.text).post()
+            shownNotice = notice
+            noticeTask?.cancel()
+            noticeTask = Task {
+                try? await Task.sleep(for: .seconds(4))
+                guard !Task.isCancelled else { return }
+                shownNotice = nil
+            }
+        }
         .onChange(of: shell.status.message) { _, message in
             guard let message, message.error == true, !message.text.isEmpty else { return }
             AccessibilityNotification.Announcement(message.text).post()

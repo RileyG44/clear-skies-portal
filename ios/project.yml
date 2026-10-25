@@ -29,6 +29,7 @@ targets:
         ITSAppUsesNonExemptEncryption: false
         UIAppFonts:
           - Inter.ttf
+          - Pacifico.ttf
         UILaunchScreen:
           UIColorName: CanvasBackground
         UIApplicationSceneManifest:

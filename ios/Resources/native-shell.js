@@ -790,6 +790,10 @@
     clear() { $("#qClear")?.click(); schedule(0); },
     locate() { $("#loc")?.click(); schedule(0); },
     copyCoordinates() { $("#coordCopy")?.click(); schedule(0); },
+    async bestImagery() {
+      try { return await bridge().searchBestImagery(); }
+      finally { schedule(0); }
+    },
     moveTool(id, index) { const moved = bridge().moveDockTool(id, index); flush(); return moved; },
     setMode(mode) {
       const item = $(`#mapModeMenu [data-mode="${CSS.escape(String(mode))}"]`);
