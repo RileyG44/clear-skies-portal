@@ -975,7 +975,7 @@ function renderSettingsView(){
       <div class="csp-setting-text"><strong>Panel layout</strong><span>Restore the default order, sizes and collapsed panels.</span></div>
       <button type="button" class="linkbtn" data-reset-layout>Reset layout</button>
     </div>`;
-  $("[data-device-build]",device).textContent=window.CSP_BUILD||"development";
+  $("[data-device-build]",device).textContent="build "+(window.CSP_BUILD||"development");
   const buildDetails=$("[data-build-details]",device);
   const existingDiagnostics=$("#buildDiag");
   if(existingDiagnostics){device.append(existingDiagnostics);buildDetails.setAttribute("aria-expanded","true")}

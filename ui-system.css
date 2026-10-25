@@ -3274,13 +3274,22 @@ body.csp-redesign #panes .elev-settings{border-top:1px solid var(--ui-line);marg
 .csp-glass body.csp-redesign.csp-redesign #cspWorkspace #panes .elev-module-head label.csp-switch-row{padding:0;min-height:44px;flex:1;min-width:0;width:auto;gap:8px;font-size:13px}
 
 /* Electron keeps a clear grab strip at the top edge. The traffic lights float
-   over the map and the sidebar, the way Maps does, instead of sitting in a bar. */
-:root.csp-electron{--safe-top:env(safe-area-inset-top,0px)}
+   over the map. The sidebar and the right tool dock start just below them,
+   on the same line. */
+:root.csp-electron{--safe-top:env(safe-area-inset-top,0px);--csp-electron-top:32px}
 #cspElectronTitlebar{position:fixed;top:0;left:0;right:0;height:8px;z-index:20000;pointer-events:auto;
   background:transparent;border:0;box-shadow:none;
   backdrop-filter:none;-webkit-backdrop-filter:none;-webkit-app-region:drag;app-region:drag}
-:root.csp-electron .csp-glass body.csp-redesign #cspNav .searchbox{padding-top:36px}
-:root.csp-electron body.csp-redesign.collapsed #sideToggleDock{left:86px;top:8px}
+:root.csp-electron #mapDock,
+:root.csp-electron #sideToggleDock{top:var(--csp-electron-top)}
+/* #side carries its own inset from the glass panel. Both csp-electron and
+   csp-glass sit on the root, so this has to name them together or the panel
+   stays at the 10px glass inset while the docks drop. Phone sheets keep
+   their own top. */
+@media (min-width:761px){
+  :root.csp-electron.csp-glass body.csp-redesign #side{top:var(--csp-electron-top)}
+}
+#cspChromeHooks{display:none!important}
 
 /* The selected-location dot takes its color from Settings > Appearance (white
    by default); a soft dark halo keeps a light dot readable on snow, light

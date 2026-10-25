@@ -1052,7 +1052,7 @@ html.csp-boot #app{visibility:hidden}
 })();
 </script>
 <link rel="stylesheet" href="ui-theme.css?build=2026-10-24j">
-<link rel="stylesheet" href="ui-system.css?build=2026-10-24j">
+<link rel="stylesheet" href="ui-system.css?build=2026-10-24n">
 </head>
 <body>
 <!-- The modern shell is the only interface, at every viewport size. -->
@@ -1060,7 +1060,7 @@ html.csp-boot #app{visibility:hidden}
 <section id="cspStartup" role="status" aria-live="polite">
   <h1>Clear Skies</h1>
   <p id="cspStartupMessage">Loading your map and tools…</p>
-  <a id="cspStartupRetry" href="?reload=2026-10-24j">Reload portal</a>
+  <a id="cspStartupRetry" href="?reload=2026-10-24n">Reload portal</a>
 </section>
 <div id="app">
   <div id="side">
@@ -1101,10 +1101,6 @@ html.csp-boot #app{visibility:hidden}
 
       <div id="cspNavScroll"></div>
     <div class="foot">
-      <div class="foot-meta">
-        <div id="buildStamp" title="Which build this device is running"></div>
-        <button class="linkbtn" id="resetPanes" title="Restore default order, sizes and collapse state">Reset layout</button>
-      </div>
       <details class="about-disclosure">
         <summary>Sources &amp; credits</summary>
         <div class="about-copy">Copernicus Data Space &middot; Microsoft Planetary Computer &middot; AWS Earth Search / Terrain Tiles &middot; NASA GIBS &middot; NISAR.
@@ -1112,6 +1108,12 @@ html.csp-boot #app{visibility:hidden}
       </details>
     </div>
     </nav>
+    <!-- Build details and Reset layout stay wired for the Settings page.
+         They are not part of the main menu. -->
+    <div id="cspChromeHooks" hidden>
+      <div id="buildStamp" title="Which build this device is running"></div>
+      <button class="linkbtn" id="resetPanes" type="button" title="Restore default order, sizes and collapse state">Reset layout</button>
+    </div>
     <main id="cspWorkspace">
       <header id="cspWorkspaceHeader">
         <button id="cspBack" type="button"><img src="vendor/icons/arrow-left.svg" alt=""> All tools</button>
@@ -1852,7 +1854,7 @@ html.csp-boot #app{visibility:hidden}
   L.Renderer.prototype.onAdd=function(map){return onAdd.call(this,map||this._map)};
 })();
 </script>
-<script src="version.js?build=2026-10-24j"></script>
+<script src="version.js?build=2026-10-24n"></script>
 <script src="mosaic-core.js?build=2026-10-24j"></script>
 <script src="png-stream.js?build=2026-10-24j"></script>
 <script src="terrain-core.js?build=2026-10-24j"></script>
@@ -11951,6 +11953,6 @@ document.addEventListener("click",e=>{ if(!e.target.closest("#iw")) acHide() });
 </script>
 <script src="markup-3d.js?build=2026-10-24j"></script>
 <script src="markup.js?build=2026-10-24j"></script>
-<script src="ui-system.js?build=2026-10-24j"></script>
+<script src="ui-system.js?build=2026-10-24n"></script>
 </body>
 </html>
