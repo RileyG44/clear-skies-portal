@@ -1,5 +1,5 @@
-/* Reserve a separate macOS drag strip. The map may show faintly through it,
-   while every panel uses the same safe-top offset below the window buttons. */
+/* A clear drag strip along the top edge. The traffic lights float over the
+   map; panels are not pushed down under an opaque bar. */
 if(process.platform==="darwin"){
   const addChrome=()=>{
     document.documentElement.classList.add("csp-electron");

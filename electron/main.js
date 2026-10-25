@@ -132,8 +132,9 @@ function createWindow(){
     width: 1400, height: 900, minWidth: 900, minHeight: 600,
     backgroundColor: "#0b0f14",
     title: "Clear Skies Portal",
-    // macOS keeps native window buttons; preload reserves their own drag strip.
-    titleBarStyle: process.platform==="darwin"?"hiddenInset":"default",
+    // macOS draws the traffic lights over the page. The page keeps a clear
+    // drag strip; it does not paint a title bar.
+    titleBarStyle: process.platform==="darwin"?"hidden":"default",
     ...(process.platform==="darwin"?{trafficLightPosition:{x:12,y:9}}:{}),
     webPreferences: {contextIsolation: true, nodeIntegration: false, preload:path.join(__dirname,"preload.js")},
   });
