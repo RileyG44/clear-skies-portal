@@ -436,10 +436,7 @@ final class ShellModel {
 }
 
 extension PresentationDetent {
-    /// The sheet's tallest height. Near full height iOS lays an opaque base
-    /// under a sheet, whatever its background; at nine tenths it stays a
-    /// floating Liquid Glass sheet over the live map, with the map in view
-    /// above it.
+    /// Keep the sheet floating over the map, including while editing.
     static let expanded = Self.custom(ExpandedDetent.self)
 }
 

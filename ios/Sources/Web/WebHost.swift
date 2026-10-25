@@ -24,6 +24,7 @@ final class WebHost: NSObject {
     private var downloads: [ObjectIdentifier: URL] = [:]
     #if DEBUG
     var debugNavigation: (() -> [String: Any])?
+    var debugSheetVisible = false
     private var debugScriptStarted = false
     private var debugReadyGeneration = 0
     private var debugRecoveryRun: String?
@@ -179,7 +180,7 @@ final class WebHost: NSObject {
                 "root": name(webView.window?.rootViewController?.traitCollection.userInterfaceStyle),
                 "presented": name(presenter?.traitCollection.userInterfaceStyle),
                 "hasWindow": webView.window != nil,
-                "hasSheet": webView.window?.rootViewController?.presentedViewController != nil,
+                "hasSheet": debugSheetVisible,
                 "expectsSheet": UserDefaults.standard.string(forKey: "cspDebugPage") != nil
                     || UserDefaults.standard.string(forKey: "cspDebugPanel") != nil]
     }

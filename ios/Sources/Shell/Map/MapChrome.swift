@@ -13,6 +13,8 @@ private enum MapControlSize {
 /// search capsule the sheet collapses into.
 struct MapChrome: View {
     @Environment(ShellModel.self) private var shell
+    @Environment(\.accessibilityReduceMotion) private var reducedMotion
+    var toolbarHideProgress: CGFloat = 0
 
     var body: some View {
         GeometryReader { geometry in
@@ -22,6 +24,11 @@ struct MapChrome: View {
                         TerrainStatusCapsule()
                         Spacer(minLength: 0)
                         MapTools(maxHeight: geometry.size.height - MapControlSize.search - (shell.hasLocation ? MapControlSize.imagery + 10 : 0) - 20)
+                            .opacity(1 - toolbarHideProgress)
+                            .scaleEffect(reducedMotion ? 1 : 1 - 0.04 * toolbarHideProgress, anchor: .topTrailing)
+                            .offset(x: reducedMotion ? 0 : 12 * toolbarHideProgress)
+                            .allowsHitTesting(toolbarHideProgress < 0.99)
+                            .accessibilityHidden(toolbarHideProgress >= 0.99)
                     }
                     .padding(.horizontal, 12)
                     .padding(.top, 6)
@@ -469,52 +476,34 @@ struct LaunchCover: View {
     }
 }
 
-/// Liquid Glass for status, notices and the launch cover. In dark mode it
-/// carries a dark tint. The map toolbar, search field and Locate button use
-/// MenuGlass instead, so they match the menu cards rather than this tint.
+/// One system Liquid Glass treatment for the dock and floating menus.
 struct ChromeGlass<S: Shape>: ViewModifier {
     @Environment(\.colorScheme) private var scheme
     let shape: S
     var interactive = true
 
     func body(content: Content) -> some View {
-        let glass: Glass = scheme == .dark ? .regular.tint(ChromeTint.dark) : .regular
+        let glass: Glass = scheme == .dark ? .regular.tint(Color(white: 0.16).opacity(0.45)) : .regular
         content.glassEffect(interactive ? glass.interactive() : glass, in: shape)
     }
 }
 
-/// Glass for the toolbar, the search field and Locate. Regular glass in
-/// dark mode is still a near-black scrim; a light tint lifts it to the
-/// menu cards' gray. Light mode stays untinted regular glass.
 struct MenuGlass<S: Shape>: ViewModifier {
-    @Environment(\.colorScheme) private var scheme
     let shape: S
 
     func body(content: Content) -> some View {
-        // 0.22 washed the controls out lighter than the cards. This amount
-        // lands on the cards' gray in dark mode.
-        let glass: Glass = scheme == .dark ? .regular.tint(Color.white.opacity(0.08)) : .regular
-        content.glassEffect(glass, in: shape)
+        content.modifier(ChromeGlass(shape: shape))
     }
 }
 
-/// The sheet's background. Dark-tinted in dark mode, at every height. The
-/// menu cards sit on this; the toolbar and search use MenuGlass so they
-/// match those cards.
+/// Use the controls' glass for the sheet as well, at every detent.
 struct SheetGlass: View {
-    @Environment(\.colorScheme) private var scheme
-
     var body: some View {
         Rectangle()
             .fill(.clear)
-            .glassEffect(scheme == .dark ? .regular.tint(ChromeTint.dark) : .regular, in: .rect)
-            .ignoresSafeArea()
+            .chromeGlass(in: .rect, interactive: false)
+            .ignoresSafeArea(.container)
     }
-}
-
-/// Dark tint for the sheet, status, notices and the launch cover.
-enum ChromeTint {
-    static let dark = Color.black.opacity(0.4)
 }
 
 extension View {

@@ -34,6 +34,7 @@ struct HomeView: View {
                             Image(systemName: message.error == true ? "exclamationmark.triangle" : "info.circle")
                                 .foregroundStyle(message.error == true ? AnyShapeStyle(.orange) : AnyShapeStyle(.secondary))
                         }
+                        .listRowBackground(SheetRowBackground())
                     }
                 }
                 ForEach(Array(shell.groups.enumerated()), id: \.offset) { _, group in
@@ -42,6 +43,7 @@ struct HomeView: View {
                             NavigationLink(value: route.key) {
                                 RouteRow(route: route, count: shell.counts[route.key])
                             }
+                            .listRowBackground(SheetRowBackground())
                         }
                     } header: {
                         if !group.label.isEmpty { SectionTitle(text: group.label) }
@@ -55,13 +57,10 @@ struct HomeView: View {
         .listSectionSpacing(.compact)
         .scrollContentBackground(.hidden)
         .onSheetGlass()
+        .modifier(SheetScrollTracking())
         .scrollDismissesKeyboard(.immediately)
-        // The wordmark's scroll-edge frost stops at the navigation bar, so a
-        // plain inset let row text draw over the field while the card went
-        // behind it. A bar here extends that same frost down across the
-        // search and keeps the field the top layer, in the same place.
         .scrollEdgeEffectStyle(.soft, for: .top)
-        .safeAreaBar(edge: .top, spacing: 0) {
+        .safeAreaInset(edge: .top, spacing: 0) {
             VStack(spacing: 10) {
                 SearchBar(focused: $searchFocused)
                 if shell.query.isEmpty, shell.search.canCopy { CoordinateActions() }
@@ -69,9 +68,17 @@ struct HomeView: View {
             .padding(.horizontal, 16)
             .padding(.top, 12)
             .padding(.bottom, 12)
+            // A scroll edge alone does not protect glass controls from the
+            // text behind them. Give the entire fixed header a native frost.
+            .background {
+                Rectangle().fill(.ultraThinMaterial)
+                    .ignoresSafeArea(.container, edges: .top)
+            }
+            .zIndex(1)
         }
         .navigationTitle("ClearSkies")
         .navigationBarTitleDisplayMode(.inline)
+        .toolbarBackgroundVisibility(.hidden, for: .navigationBar)
         .toolbar {
             ToolbarItem(placement: .principal) { Wordmark() }
             ToolbarItem(placement: .topBarTrailing) { CloseSheetButton() }
@@ -102,7 +109,7 @@ struct Wordmark: View {
 
 struct SearchBar: View {
     @Environment(ShellModel.self) private var shell
-    var focused: FocusState<Bool>.Binding
+    @FocusState.Binding var focused: Bool
 
     var body: some View {
         @Bindable var shell = shell
@@ -114,12 +121,12 @@ struct SearchBar: View {
                     .foregroundStyle(.secondary)
                 TextField("Search places or layers", text: $shell.query,
                           prompt: Text(shell.search.label.isEmpty ? "Search places, layers…" : shell.search.label)
-                            .foregroundStyle(.secondary))
-                    .focused(focused)
+                            .foregroundStyle(.primary.opacity(0.65)))
+                    .focused($focused)
                     .submitLabel(.search)
                     .textInputAutocapitalization(.never)
                     .autocorrectionDisabled()
-                    .onSubmit { shell.submit(); focused.wrappedValue = false }
+                    .onSubmit { shell.submit(); focused = false }
                 if !shell.query.isEmpty || shell.search.canClear {
                     Button { shell.clearLocation() } label: {
                         Image(systemName: "xmark.circle.fill").foregroundStyle(.tertiary).frame(width: 44, height: 44)
@@ -131,9 +138,9 @@ struct SearchBar: View {
             .padding(.horizontal, 12)
             .frame(minHeight: 44)
             .menuGlass(in: .capsule)
-            if focused.wrappedValue {
+            if focused {
                 Button {
-                    focused.wrappedValue = false
+                    focused = false
                 } label: {
                     Image(systemName: "keyboard.chevron.compact.down").frame(width: 44, height: 44)
                 }
@@ -153,7 +160,7 @@ struct SearchBar: View {
             }
         }
         }
-        .animation(.snappy, value: focused.wrappedValue)
+        .animation(.snappy, value: focused)
     }
 }
 
@@ -267,6 +274,7 @@ struct SuggestionSections: View {
                             }
                         }
                     }
+                    .listRowBackground(SheetRowBackground())
                 }
             } header: {
                 SectionTitle(text: "Tools")
@@ -307,6 +315,7 @@ struct SuggestionSections: View {
         } header: {
             SectionTitle(text: "Places")
         }
+        .listRowBackground(SheetRowBackground())
     }
 }
 

@@ -35,6 +35,7 @@ struct ItemList: View {
         .listSectionSpacing(.compact)
         .scrollContentBackground(.hidden)
         .onSheetGlass()
+        .modifier(SheetScrollTracking())
         // Keep the soft frost used under the title. The hard edge promotes
         // the rows to a darker, more opaque fill as they move.
         .scrollEdgeEffectStyle(.soft, for: .top)
@@ -200,7 +201,12 @@ struct ItemRows: View {
 
     var body: some View {
         ForEach(Self.keyed(items, prefix: prefix), id: \.0) { key, item in
-            ItemView(item: item, key: key)
+            if item.kind == "button" {
+                ItemView(item: item, key: key)
+            } else {
+                ItemView(item: item, key: key)
+                    .listRowBackground(SheetRowBackground())
+            }
         }
     }
 
@@ -483,6 +489,37 @@ struct SheetStyle: ViewModifier {
         content
             .portalFont(.subheadline)
             .environment(\.defaultMinListRowHeight, 40)
+    }
+}
+
+/// A quiet card over the sheet's glass, rather than List's opaque grouped
+/// background. The same fill is used by Search and Locate inside the menu.
+struct SheetRowBackground: View {
+    @Environment(\.colorScheme) private var scheme
+
+    var body: some View {
+        Rectangle().fill(scheme == .dark ? Color.black.opacity(0.18) : Color.white.opacity(0.35))
+    }
+}
+
+struct SheetScrollTopKey: PreferenceKey {
+    nonisolated static let defaultValue = true
+    nonisolated static func reduce(value: inout Bool, nextValue: () -> Bool) {
+        value = value && nextValue()
+    }
+}
+
+struct SheetScrollTracking: ViewModifier {
+    @State private var atTop = true
+
+    func body(content: Content) -> some View {
+        content
+            .onScrollGeometryChange(for: Bool.self) { geometry in
+                geometry.contentOffset.y + geometry.contentInsets.top <= 1
+            } action: { _, value in
+                atTop = value
+            }
+            .preference(key: SheetScrollTopKey.self, value: atTop)
     }
 }
 

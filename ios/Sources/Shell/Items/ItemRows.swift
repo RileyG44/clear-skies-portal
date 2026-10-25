@@ -401,18 +401,30 @@ struct ButtonRow: View {
     }
 
     @ViewBuilder private func actionCapsule(_ style: some PrimitiveButtonStyle) -> some View {
-        Button(role: item.role == "destructive" ? .destructive : nil) { shell.act(item.ref) } label: {
-            Text(item.text)
-                .fontWeight(.semibold)
-                .frame(maxWidth: .infinity)
+        VStack(alignment: .leading, spacing: 8) {
+            Button(role: item.role == "destructive" ? .destructive : nil) { shell.act(item.ref) } label: {
+                HStack {
+                    if item.pressed == true { Image(systemName: "checkmark") }
+                    Text(item.text)
+                }
+                    .fontWeight(.semibold)
+                    .frame(maxWidth: .infinity)
+            }
+            .buttonStyle(style)
+            .controlSize(.large)
+            .buttonBorderShape(.capsule)
+            .disabled(item.isDisabled)
+            .accessibilityLabel(item.accessibility ?? item.text)
+            .accessibilityValue(item.pressed.map { $0 ? "On" : "Off" } ?? "")
+            .accessibilityAddTraits(item.pressed == true ? .isSelected : [])
+            if let detail = item.detail, !detail.isEmpty {
+                Text(detail).portalFont(.caption).foregroundStyle(.secondary)
+                    .padding(.horizontal, 8)
+            }
         }
-        .buttonStyle(style)
-        .buttonBorderShape(.capsule)
-        .disabled(item.isDisabled)
         .listRowBackground(Color.clear)
         .listRowSeparator(.hidden)
         .listRowInsets(EdgeInsets(top: 6, leading: 0, bottom: 6, trailing: 0))
-        .accessibilityLabel(item.accessibility ?? item.text)
     }
 
     private func disclosureRow(chevron: String?, showsState: Bool = false) -> some View {
@@ -442,6 +454,7 @@ struct ButtonRow: View {
         .buttonStyle(.plain)
         .disabled(item.isDisabled)
         .accessibilityLabel(item.accessibility ?? item.text)
+        .listRowBackground(SheetRowBackground())
     }
 }
 
