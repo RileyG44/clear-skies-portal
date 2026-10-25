@@ -36,6 +36,7 @@
   let state,frames=0,lastView=null;const engine={
    invalidate(){},setState(value){state=value;},render(view){lastView=structuredClone(view);frames++;store.want(needed(view));paint(canvas,view,state);return {coverage:1,missing:0};},
    neededTiles(view){const tiles=needed(view);store.want(tiles);return tiles;},
+   createSnapshot(){return {release(){}};},
    async renderToCanvas(view,w,h){const out=document.createElement('canvas');out.width=w;out.height=h;paint(out,view,state);return out;},
    async readProvenance(){return store.provenance();},stats(){return {textures:0,textureBytes:0,drawCalls:1,lastFrameMs:0,frames,lastView,state};},destroy(){}};
   return engine;

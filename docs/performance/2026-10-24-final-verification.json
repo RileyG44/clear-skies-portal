@@ -1,0 +1,369 @@
+{
+  "webBuild": "2026-10-24i",
+  "internalTestFlightArchiveBuild": "29881573",
+  "authority": {
+    "baseline": "SPEC.md 0.1.0-draft (unapproved)",
+    "acceptedSupplement": "CR-001 r1",
+    "digest": "35ffe7088f8f71a654fbdcfb892d1857b21135b72f7069a5b087dbbecb7d94f9"
+  },
+  "sharedRepositoryVerify": {
+    "passed": true,
+    "includes": [
+      "syntax and static assets",
+      "full automated suite",
+      "dependency audit"
+    ],
+    "vulnerabilities": 0
+  },
+  "nativeProbe": {
+    "ok": true,
+    "result": {
+      "failures": [],
+      "pages": [
+        {
+          "controls": 18,
+          "route": "layers",
+          "rows": 12
+        },
+        {
+          "controls": 10,
+          "route": "satellite",
+          "rows": 10
+        },
+        {
+          "controls": 75,
+          "route": "terrain",
+          "rows": 45
+        },
+        {
+          "controls": 49,
+          "route": "elevation",
+          "rows": 29
+        },
+        {
+          "controls": 5,
+          "route": "analyze",
+          "rows": 6
+        },
+        {
+          "controls": 2,
+          "route": "export",
+          "rows": 4
+        },
+        {
+          "controls": 22,
+          "route": "conditions",
+          "rows": 22
+        },
+        {
+          "controls": 12,
+          "route": "geology",
+          "rows": 12
+        },
+        {
+          "controls": 6,
+          "route": "past",
+          "rows": 6
+        },
+        {
+          "controls": 8,
+          "route": "labels",
+          "rows": 8
+        },
+        {
+          "controls": 1,
+          "route": "markup",
+          "rows": 2
+        },
+        {
+          "controls": 74,
+          "route": "appearance",
+          "rows": 23
+        },
+        {
+          "controls": 8,
+          "route": "settings",
+          "rows": 15
+        }
+      ],
+      "panels": [
+        {
+          "controls": 5,
+          "id": "serverPanel",
+          "rows": 6
+        },
+        {
+          "controls": 5,
+          "id": "snapshotPanel",
+          "rows": 7
+        },
+        {
+          "controls": 2,
+          "id": "terrainSourcePanel",
+          "rows": 8
+        }
+      ],
+      "passed": true
+    },
+    "runID": "f9aff58d-5f46-414d-b5e9-b5b68648fd7e"
+  },
+  "simulatorInteraction": {
+    "passed": true,
+    "coordinateSearch": true,
+    "mutedSelectedLocationAndThreeActions": true,
+    "separateMenuCloseControl": true,
+    "mapModeDraggedFromFirstToThird": true,
+    "dragRetained2DMode": true,
+    "tapOffers2D3DAndPointCloud": true
+  },
+  "desktopPackage": {
+    "health": true,
+    "features": [
+      "wadnr-dpi",
+      "wadnr-elevation",
+      "wadnr-job-cancel",
+      "markup",
+      "overview-elevation"
+    ],
+    "assets": {
+      "version.js": true,
+      "index.html": true,
+      "gpu-terrain-engine.js": true,
+      "gpu-terrain-layer.js": true,
+      "gpu-terrain-store.js": true,
+      "gpu-terrain-shaders.js": true,
+      "terrain-drape-worker.js": true
+    },
+    "passed": true
+  },
+  "mobileBundleIdentity": {
+    "iphone": {
+      "passed": true,
+      "mismatches": []
+    },
+    "simulator": {
+      "passed": true,
+      "mismatches": []
+    }
+  },
+  "sourceSHA256": {
+    "version.js": "e2d7d44d320383e7903c8c124360ffb56875bf3eaaabe0b820ff3eec5e9196fa",
+    "index.html": "8373f31d571433af605b09fe739e2b97a9c0dd24ee4b4fb4e086ec69d4ac32fd",
+    "server.js": "98f643b3c6aa28967ef037583b90ba95cf81b1e0d9971829926cd8851231a09c",
+    "gpu-terrain-engine.js": "6e18150a0a3e29cffd13af1face8bdddb2b547a147b52e1f851bf618e0b5cbe1",
+    "gpu-terrain-layer.js": "553a97c3a7ed83d0f0320b4fd70be1774320f2edb16bae094022a9776c892f6f",
+    "gpu-terrain-shaders.js": "ddbfe252e3bc0e0892d79d47b655763d18e9f1154ab28cfabc4cf0fea641c11a",
+    "gpu-terrain-store.js": "36e6cbe542769ba52a2aba8487f3d2937ff2310de4c5cfb839377e2ef1a60919",
+    "terrain-drape-pool.js": "ad4b0b647151f6dd0d772a8cca7268e4304b1c00f2ddbff399603343bc17f02c",
+    "terrain-drape-worker.js": "17dad38b83109522a7d2091a5586fc51e35b44f2556df7f5f5a28602700a3d8b",
+    "ios/Resources/native-shell.js": "21031da0366bcb87306cb4e77ef7676782f2d5185ed9a795123e9a00524d7544",
+    "ios/Sources/Shell/Map/MapChrome.swift": "f67f27c69c673008cad40210f729b3a1448af7240a7280b96e9e10645bd32873",
+    "ios/Sources/Shell/Sheet/ToolsSheet.swift": "b5e79d33dac1a87c2329719493ceef25596366dc02bc76a64e819d376c5ab96a",
+    "ios/Sources/Shell/ShellModel.swift": "95329b3c382b43d1793fc627ac720ee275bfaa8854535b15340c9928d8b7637c"
+  },
+  "limitations": [
+    "Short live-data Debug measurements on one iPhone; sustained 60 fps and formal release gates are not established.",
+    "Ad-hoc desktop signature is for local use; this is not a notarized distribution."
+  ],
+  "browserStartup": {
+    "chrome": {
+      "browser": "chrome",
+      "viewports": 3,
+      "styles": 33,
+      "cameraLimits": 60,
+      "errors": []
+    },
+    "webkit": {
+      "browser": "webkit",
+      "viewports": 3,
+      "styles": 33,
+      "cameraLimits": 60,
+      "errors": []
+    }
+  },
+  "browserLayer": {
+    "chrome": {
+      "browser": "chrome",
+      "maxAlignmentPx": 0.4919545691690341,
+      "gestureFrames": 47,
+      "exports": 9,
+      "lifecycle": {
+        "same": true,
+        "before": 78,
+        "after": 78,
+        "canvases": 1,
+        "sample": {
+          "value": 207.3384891910097,
+          "rank": 2,
+          "label": "Mock native elevation",
+          "z": 15,
+          "source": "Mock native elevation"
+        },
+        "grid": 64,
+        "bounds": {
+          "preservesBounds": true,
+          "south": 47,
+          "west": -119,
+          "north": 48,
+          "east": -118
+        }
+      },
+      "fallback": [
+        {
+          "setup": {
+            "flag": "0",
+            "mocked": true
+          },
+          "dom": {
+            "gpu": 0,
+            "elevation": [
+              {
+                "canvases": 63,
+                "loaded": 63
+              },
+              {
+                "canvases": 63,
+                "loaded": 63
+              }
+            ]
+          }
+        },
+        {
+          "setup": {
+            "flag": "1",
+            "mocked": false
+          },
+          "dom": {
+            "gpu": 0,
+            "elevation": [
+              {
+                "canvases": 63,
+                "loaded": 63
+              },
+              {
+                "canvases": 63,
+                "loaded": 63
+              }
+            ]
+          }
+        },
+        {
+          "setup": {
+            "flag": "0",
+            "mocked": false,
+            "baseline": true
+          },
+          "dom": {
+            "gpu": 0,
+            "elevation": [
+              {
+                "canvases": 63,
+                "loaded": 63
+              },
+              {
+                "canvases": 63,
+                "loaded": 63
+              }
+            ]
+          }
+        }
+      ],
+      "errors": []
+    },
+    "webkit": {
+      "browser": "webkit",
+      "maxAlignmentPx": 0.571892816453424,
+      "gestureFrames": 37,
+      "exports": 9,
+      "lifecycle": {
+        "same": true,
+        "before": 68,
+        "after": 68,
+        "canvases": 1,
+        "sample": {
+          "value": 210.19617855892585,
+          "rank": 2,
+          "label": "Mock native elevation",
+          "z": 15,
+          "source": "Mock native elevation"
+        },
+        "grid": 64,
+        "bounds": {
+          "preservesBounds": true,
+          "south": 47,
+          "west": -119,
+          "north": 48,
+          "east": -118
+        }
+      },
+      "fallback": [
+        {
+          "setup": {
+            "flag": "0",
+            "mocked": true
+          },
+          "dom": {
+            "gpu": 0,
+            "elevation": [
+              {
+                "canvases": 63,
+                "loaded": 63
+              },
+              {
+                "canvases": 63,
+                "loaded": 63
+              }
+            ]
+          }
+        },
+        {
+          "setup": {
+            "flag": "1",
+            "mocked": false
+          },
+          "dom": {
+            "gpu": 0,
+            "elevation": [
+              {
+                "canvases": 63,
+                "loaded": 63
+              },
+              {
+                "canvases": 63,
+                "loaded": 63
+              }
+            ]
+          }
+        },
+        {
+          "setup": {
+            "flag": "0",
+            "mocked": false,
+            "baseline": true
+          },
+          "dom": {
+            "gpu": 0,
+            "elevation": [
+              {
+                "canvases": 63,
+                "loaded": 63
+              },
+              {
+                "canvases": 63,
+                "loaded": 63
+              }
+            ]
+          }
+        }
+      ],
+      "errors": []
+    }
+  },
+  "internalTestFlight": {
+    "build": "29881573",
+    "uploaded": true,
+    "internalTestingOnly": true,
+    "processingAtUploadAcceptance": true,
+    "readyForTestersIndependentlyVerified": false
+  }
+}

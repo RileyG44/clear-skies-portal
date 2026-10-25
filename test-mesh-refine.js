@@ -41,7 +41,7 @@ async function main(){
   };
   const context={
     ...clock,AbortController,DOMException,CSPTilePipeline:require('./tile-pipeline'),waitElevationRetry:async()=>{},performance:{now:()=>now},console,
-    $:()=>({value:'auto'}),PROXY:true,API:'engine',api:path=>'engine'+path,dnrStatus:{revision:1},dnrElevationAvailable:()=>false,
+    $:()=>({value:'auto'}),PROXY:true,API:'engine',api:path=>'engine'+path,serverHealth:null,dnrStatus:{revision:1},dnrElevationAvailable:()=>false,
     fetch:fetchStub,public3dSources:new Map(),public3dDrapeSources:new Map(),scheduleTerrainStatus:()=>{},elevCacheClear:()=>{},
     map3dBuiltKey:'x',elevSpectrumRevision:0,map3d,maplibreProtocolReady:false
   };

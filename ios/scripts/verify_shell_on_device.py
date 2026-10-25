@@ -17,6 +17,7 @@ def main():
     parser.add_argument("--probe", type=Path, default=Path(__file__).with_name("verify_shell.js"),
                         help="Async JavaScript verification body (default: verify_shell.js)")
     parser.add_argument("--timeout", type=float, default=90, help="Seconds to wait for this run's result")
+    parser.add_argument("--activate", action="store_true", help="Bring Clear Skies to the foreground for visible frame measurements")
     parser.add_argument("--page", help="Open a native tool sheet using the existing Debug page hook")
     parser.add_argument("--panel", help="Open a native popover using the existing Debug panel hook")
     parser.add_argument("--section", help="Scroll to a native section using the Debug section hook")
@@ -40,7 +41,8 @@ def main():
         launch_arguments += ["-cspDebugSection", args.section]
     if args.detent:
         launch_arguments += ["-cspDebugDetent", args.detent]
-    launch = device_command("process", "launch", "--device", args.device, "--no-activate",
+    visibility_arguments = [] if args.activate else ["--no-activate"]
+    launch = device_command("process", "launch", "--device", args.device, *visibility_arguments,
                             "--terminate-existing", "dev.riley.ClearSkies", "--",
                             *launch_arguments)
     if launch.returncode:

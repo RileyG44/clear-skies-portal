@@ -178,6 +178,17 @@ cap; the WA DNR store is separate and excluded. `CSP_CACHE_MIN_FREE_GB` (default
 8 GiB) still stops cache writes near the disk's free-space reserve. Cache usage,
 pinned bytes and the last sweep appear in `/api/health` under `cacheBudget`.
 
+Fresh map sessions open over North America. Zoom-out and latitude limits keep the map filling the viewport, including when rotated. To prewarm the existing global terrain
+source on an engine that advertises `overview-elevation`, run
+`node scripts/prewarm-overview.js --url http://127.0.0.1:8765 --max-zoom 6`.
+Zooms 0–6 contain 5,461 PNGs: 303 MB of source data and about 336 MB allocated
+on this Mac, measured 2026-10-24. All terrain styles and the 3D overview share
+those bytes. The CLI checks the engine's existing disk reserve; `--dry-run`
+checks without downloading. Tiles use the ordinary disposable LRU and 90-day
+server lifetime; prewarming does not pin an offline area or download to phones.
+Older engines retain direct AWS access. Imagery and labels retain their own
+provider paths and are not included in this terrain preload.
+
 Raw 1 m DEM discovery defaults to Washington so a fresh launch indexes tens of
 projects instead of the entire national archive. National rendered 3DEP still works
 everywhere. Set `CSP_USGS_STATES=ALL` before starting the engine for nationwide raw

@@ -119,7 +119,7 @@ async function main(scenario="normal"){
     constructor(options){super({...options,concurrency:9});}
   }};
   const app={...clock,AbortController,DOMException,CSPTilePipeline:borderPipeline,waitElevationRetry:async()=>{},performance:{now:()=>now},console:{...console,warn:(...args)=>warnings.push(args.join(" "))},
-    $:()=>({value:'auto'}),PROXY:true,API:'engine',api:p=>'engine'+p,dnrStatus:{revision:1},dnrElevationAvailable:()=>false,
+    $:()=>({value:'auto'}),PROXY:true,API:'engine',api:p=>'engine'+p,serverHealth:null,dnrStatus:{revision:1},dnrElevationAvailable:()=>false,
     fetch:fetchStub,public3dSources:new Map(),public3dDrapeSources:new Map(),scheduleTerrainStatus:()=>{},elevCacheClear:()=>{},
     map3dBuiltKey:'',elevSpectrumRevision:0,maplibreProtocolReady:false};
   vm.runInNewContext(between('function terrainDemTiles(','function terrainTheme(')+'\n'+

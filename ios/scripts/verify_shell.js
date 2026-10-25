@@ -8,6 +8,9 @@ return (async () => {
   if (!shell) throw new Error("The native shell adapter did not initialize");
 
   const originalRoute = window.CSPShell.current();
+  const originalSession = ClearSkiesPortalBridge.sessionState();
+  const originalDock = [...document.querySelectorAll('#mapDock > .map-tool')].map(el => el.id);
+  const dockKey = 'clearskies.mapToolOrder.v2', originalDockPreference = localStorage.getItem(dockKey);
   const failures = [], pages = [], panels = [];
   const check = (condition, message) => { if (!condition) failures.push(message); };
   const flatten = items => items.flatMap(item => [item, ...flatten(item.items || [])]);
@@ -69,7 +72,30 @@ return (async () => {
       shell.closePanel(id);
     }
     check(document.getElementById("side")?.getAttribute("aria-hidden") === "true", "Duplicate web sidebar accessibility controls");
+    // Cross the real adapter and SwiftUI state boundary, including persistence.
+    const visibleDock = () => [...document.querySelectorAll('#mapDock > .map-tool')].filter(el => !el.hidden).map(el => el.id);
+    const tools = visibleDock(), moving = tools[0];
+    check(shell.moveTool(moving, tools.length - 1), 'Native dock move was rejected');
+    await wait(150);
+    const moved = visibleDock(), saved = JSON.parse(localStorage.getItem(dockKey));
+    let native = (await window.webkit.messageHandlers.cspNative.postMessage({type: 'debug.configuration'})).navigation;
+    check(moved.at(-1) === moving && saved.indexOf(moving) > saved.indexOf(tools.at(-1)), 'Dock order was not saved by the web');
+    check(native.dock.join('|') === saved.join('|'), 'Native dock did not follow the saved web order');
+    await ClearSkiesPortalBridge.restoreSession({center: [47.858, -118.33], zoom: 16, mode: '2d',
+      location: {lat: 47.858, lng: -118.33, label: 'Verification location'}});
+    shell.refresh(); await wait(150);
+    native = (await window.webkit.messageHandlers.cspNative.postMessage({type: 'debug.configuration'})).navigation;
+    check(native.search.label === 'Verification location' && native.search.canClear && native.search.canCopy, 'Selected location did not reach native search');
+    check(native.search.mapsURL.includes('47.858') && native.search.earthURL.includes('47.858'), 'Coordinate actions lost the selected point');
+    shell.clear(); await wait(150);
+    native = (await window.webkit.messageHandlers.cspNative.postMessage({type: 'debug.configuration'})).navigation;
+    check(!native.search.label && !native.search.canClear && !native.search.canCopy, 'Clear search did not clear the native selected location/actions');
   } finally {
+    const dock = document.getElementById('mapDock');
+    for (const id of originalDock) dock.appendChild(document.getElementById(id));
+    if (originalDockPreference === null) localStorage.removeItem(dockKey); else localStorage.setItem(dockKey, originalDockPreference);
+    await ClearSkiesPortalBridge.restoreSession(originalSession);
+    shell.refresh();
     shell.open(originalRoute);
     shell.setView({ sheet: "large", page: originalRoute, panel: null });
   }

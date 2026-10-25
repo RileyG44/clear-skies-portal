@@ -13,6 +13,16 @@ self.onmessage=async({data:job})=>{
         const grid=ElevationTileCore.decodeTerrarium(context.getImageData(0,0,256,256).data,256,256);
         self.postMessage({id:job.id,grid},[grid.buffer]);
       }finally{canvas.width=canvas.height=0;bitmap.close();bitmap=null}
+    }else if(job.op==="elevation"){
+      /* The 2D map's elevation tiles, decoded at their own size exactly as the
+         page did, so the main thread never waits on a canvas readback. */
+      bitmap=await createImageBitmap(job.blob,{premultiplyAlpha:"none",colorSpaceConversion:"none"});
+      const width=bitmap.width,height=bitmap.height,canvas=new OffscreenCanvas(width,height);
+      try{
+        const context=canvas.getContext("2d",{willReadFrequently:true});context.drawImage(bitmap,0,0);
+        const grid=ElevationTileCore.decodeTerrarium(context.getImageData(0,0,width,height).data,width,height);
+        self.postMessage({id:job.id,tile:{grid,width,height}},[grid.buffer]);
+      }finally{canvas.width=canvas.height=0;bitmap.close();bitmap=null}
     }else{
       const size=job.size||256,rgba=CSPTerrainDrape.render(job);
       bitmap=await createImageBitmap(new ImageData(rgba,size,size),CSPTerrainDrape.BITMAP_OPTIONS);

@@ -41,7 +41,7 @@ function harness({bounds=null,inView={},source='auto',ignoreAbort=false}={}){
   };
   const context={...clock,AbortController,DOMException,AggregateError,CSPTilePipeline:require(path.join(ROOT,'tile-pipeline.js')),
     performance:{now:()=>now},console,
-    $:()=>({value:source}),PROXY:true,API:'engine',api:p=>'engine'+p,dnrStatus:{revision:1},dnrElevationAvailable:()=>false,
+    $:()=>({value:source}),PROXY:true,API:'engine',api:p=>'engine'+p,serverHealth:null,dnrStatus:{revision:1},dnrElevationAvailable:()=>false,
     fetch:fetchStub,public3dSources:new Map(),public3dDrapeSources:new Map(),scheduleTerrainStatus:()=>{},elevCacheClear:()=>{},
     map3dBuiltKey:'x',elevSpectrumRevision:0,map3d,maplibreProtocolReady:false};
   vm.runInNewContext(between('function terrainDemTiles(','function terrainTheme(')+'\n'+

@@ -22,6 +22,15 @@ function waExport(options,callback){
   return req;
 }
 https.request=(options,callback)=>{
+  if(options.host==='s3.amazonaws.com'&&options.path.startsWith('/elevation-tiles-prod/terrarium/')){
+    if(process.env.CSP_TEST_UPSTREAM_LOG)require('node:fs').appendFileSync(process.env.CSP_TEST_UPSTREAM_LOG,options.path+'\n');
+    const response=Readable.from([require('./usgs.js').encodePNG(Buffer.alloc(256*256*4,128),256,256)]);
+    response.statusCode=options.path.includes('/2/3/3.png')?503:200;response.headers={'content-type':'image/png'};
+    const req=new EventEmitter();req.setTimeout=()=>req;req.write=()=>true;
+    req.destroy=error=>{req.destroyed=true;if(error)queueMicrotask(()=>req.emit('error',error));};
+    req.end=()=>setTimeout(()=>{if(!req.destroyed)callback(response);},20);
+    return req;
+  }
   if(options.host==='lidarportal.dnr.wa.gov'&&options.path.includes('/MapServer/export?')) return waExport(options,callback);
   if(options.host!=='elevation.nationalmap.gov'||!options.path.startsWith('/arcgis/rest/services/3DEPElevation/ImageServer/exportImage?'))
     throw new Error('Unexpected external request in offline integration test');

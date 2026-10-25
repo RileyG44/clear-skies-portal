@@ -1374,6 +1374,28 @@ const server = http.createServer(async (req,res)=>{
          "Cache-Control":"public, max-age=604800, immutable"});
     }
 
+    /* Cache the existing global Terrarium source verbatim, once for every
+       elevation style and both renderers. Fixed host/path, bounded upstream,
+       shared cancellation and the ordinary disk/RAM budgets still apply. */
+    if(p.startsWith("/api/elev/overview/")){
+      if(req.method!=="GET")return send(res,405,"text/plain",Buffer.from("method not allowed"),{"Allow":"GET"});
+      const m=p.match(/^\/api\/elev\/overview\/(\d+)\/(\d+)\/(\d+)\.png$/);
+      if(!m)return send(res,400,"text/plain",Buffer.from("bad overview elevation tile path"));
+      const z=+m[1],x=+m[2],y=+m[3],limit=2**z;
+      if(z>15||!Number.isSafeInteger(x)||!Number.isSafeInteger(y)||x>=limit||y>=limit)
+        return send(res,400,"text/plain",Buffer.from("bad tile coordinates"));
+      const ck=cacheBudgetCore.overviewWarmKey({z,x,y}),hit=cacheGet(ck,TTL_TILE);
+      const headers={"X-Elevation-Source":"overview","Cache-Control":"public, max-age=604800"};
+      if(hit)return send(res,hit.status,hit.type,hit.body,{...headers,"X-Cache":"hit"});
+      const result=await limitedUpstream(ck,{host:"s3.amazonaws.com",
+        path:`/elevation-tiles-prod/terrarium/${z}/${x}/${y}.png`,method:"GET",__timeout:8000,__maxBody:1024*1024},null,client.signal);
+      if(result.status!==200||!isPng(result.body)||result.body.length<24||
+         result.body.readUInt32BE(16)!==256||result.body.readUInt32BE(20)!==256)
+        return send(res,502,"text/plain",Buffer.from("overview elevation unavailable"),{"Cache-Control":"no-store"});
+      cachePut(ck,200,"image/png",result.body);
+      return send(res,200,"image/png",result.body,{...headers,"X-Cache":"miss"});
+    }
+
     /* Fast baseline for the elevation spectrum. National Float32 elevation
        renders first; the raw 1 m layer below this handler refines it without
        leaving the viewport empty while a large COG is opening. */
@@ -1754,7 +1776,7 @@ const server = http.createServer(async (req,res)=>{
         channel:CHANNEL, previewRef:CHANNEL==="preview"?PREVIEW_REF:undefined,
         /* What the page may ask of this engine. Without "wadnr-dpi" the page
            keeps to the 256 px WA DNR export every engine has handled. */
-        features:["wadnr-dpi","wadnr-elevation","wadnr-job-cancel","markup"],dnr:dnr.status()
+        features:["wadnr-dpi","wadnr-elevation","wadnr-job-cancel","markup","overview-elevation"],dnr:dnr.status()
       })),{"Cache-Control":"no-store"});
     }
 

@@ -91,7 +91,7 @@
     "u_spectrumOpacity",
     "u_centerMerc", "u_zoom", "u_bearingRad", "u_cssSize", "u_dpr",
     "u_groundResOverride",
-    "u_stackOn", "u_layerCount", "u_layerA", "u_layerB", "u_layerC", "u_layerPos", "u_layerColors",
+    "u_stackOn", "u_stackGradient", "u_layerCount", "u_layerA", "u_layerB", "u_layerC", "u_layerPos", "u_layerColors",
     "u_detail", "u_reliefExag", "u_remFlatBase"
   ]);
   /* Array uniforms and their component count; every other uniform is a
@@ -259,7 +259,7 @@
       u_cssSize: [Math.max(0, finiteOr(css[0], 0)), Math.max(0, finiteOr(css[1], 0))],
       u_dpr: Math.max(1e-6, finiteOr(v.dpr, 1)),
       u_groundResOverride: finiteOr(s.groundResOverride, 0),
-      u_stackOn: stack.on, u_layerCount: stack.count,
+      u_stackOn: stack.on, u_stackGradient: stack.gradient, u_layerCount: stack.count,
       u_layerA: stack.a, u_layerB: stack.b, u_layerC: stack.c, u_layerPos: stack.pos, u_layerColors: stack.colors,
       u_detail: stack.detail, u_reliefExag: stack.reliefExag, u_remFlatBase: stack.remFlatBase
     };
@@ -272,7 +272,7 @@
     var layers = stack && Array.isArray(stack.layers) ? stack.layers : [];
     var a = new Array(MAX_LAYERS * 4).fill(0), b = new Array(MAX_LAYERS * 4).fill(0), c = new Array(MAX_LAYERS * 4).fill(0);
     var pos = new Array(MAX_LAYERS * STOP_VECS * 4).fill(1), colors = new Array(MAX_LAYERS * MAX_STOPS * 4).fill(0);
-    var count = 0;
+    var count = 0, gradient = 0;
     for (var i = 0; i < layers.length && count < MAX_LAYERS; i++) {
       var layer = layers[i] || {}, id = styleId(String(layer.style));
       if (id === null || id < 0) continue;
@@ -289,6 +289,9 @@
       a.splice(count * 4, 4, id, clamp(finiteOr(layer.opacity, 1), 0, 1), blend, stops.length);
       b.splice(count * 4, 4, min, max, clamp(finiteOr(layer.gamma, 1), 0.1, 10), Math.max(0, Math.round(finiteOr(layer.steps, 0))));
       c.splice(count * 4, 4, finiteOr(layer.param, 0), 0, 0, 0);
+      // Unshaded elevation/relative-elevation ramps use only height/base.
+      // Other built-ins and registered analysis styles need the gradient.
+      if ((id !== 5 && id !== 10) || finiteOr(layer.param, 0) > 0) gradient = 1;
       for (var k = 0; k < stops.length; k++) {
         pos[count * STOP_VECS * 4 + k] = stops[k][0];
         colors.splice((count * MAX_STOPS + k) * 4, 4, stops[k][1], stops[k][2], stops[k][3], stops[k][4]);
@@ -296,7 +299,7 @@
       count++;
     }
     var on = stack && Array.isArray(stack.layers) ? 1 : 0;
-    return {on: on, count: count, a: a, b: b, c: c, pos: pos, colors: colors,
+    return {on: on, count: count, gradient: gradient, a: a, b: b, c: c, pos: pos, colors: colors,
       detail: on ? clamp(finiteOr(stack.detail, 0), -1, 4) : 0,
       reliefExag: on ? clamp(finiteOr(stack.reliefExag, 1), 0.1, 20) : 1,
       remFlatBase: finiteOr(stack && stack.remFlatBase, 0)};
@@ -346,6 +349,7 @@
       "uniform float u_dpr;",
       "uniform float u_groundResOverride;",
       "uniform float u_stackOn;",
+      "uniform float u_stackGradient;",
       "uniform float u_layerCount;",
       "uniform vec4 u_layerA[" + MAX_LAYERS + "];",
       "uniform vec4 u_layerB[" + MAX_LAYERS + "];",
@@ -719,13 +723,17 @@
       "  ivec2 px = ivec2(1, 0), py = ivec2(0, 1);",
       "  if(!(csp_valid(p - px - py) && csp_valid(p - py) && csp_valid(p + px - py) && csp_valid(p - px) && csp_valid(p + px)",
       "    && csp_valid(p - px + py) && csp_valid(p + py) && csp_valid(p + px + py))) return vec4(0.0);",
+      "  CspCtx c;",
+      "  c.p = p; c.height = value; c.res = groundRes;",
+      "  c.dx = 0.0; c.dy = 0.0; c.sdx = 0.0; c.sdy = 0.0; c.slope = 0.0; c.aspect = -1.0;",
+      // Keep the identical nodata neighbourhood above even for ramps. Skip
+      // only calculations whose values no selected layer consumes.
+      "  if(u_stackGradient > 0.5){",
       "  float a = cspH(p - px - py), b = cspH(p - py), cc = cspH(p + px - py);",
       "  float d = cspH(p - px), f = cspH(p + px);",
       "  float g = cspH(p - px + py), q = cspH(p + py), k = cspH(p + px + py);",
       "  float dxS = ((cc + 2.0 * f + k) - (a + 2.0 * d + g)) / (8.0 * groundRes);",
       "  float dyS = ((g + 2.0 * q + k) - (a + 2.0 * b + cc)) / (8.0 * groundRes);",
-      "  CspCtx c;",
-      "  c.p = p; c.height = value; c.res = groundRes;",
       "  c.dx = dxS * cosB + dyS * sinB;",
       "  c.dy = -(dxS * sinB - dyS * cosB);",
       /* Lighting keeps the relief-scaled resolution of the legacy styles,
@@ -734,6 +742,7 @@
       "  c.sdx = c.dx * zFactor * u_reliefExag; c.sdy = c.dy * zFactor * u_reliefExag;",
       "  c.slope = degrees(atan(length(vec2(c.dx, c.dy))));",
       "  c.aspect = length(vec2(c.dx, c.dy)) <= tan(radians(0.5)) ? -1.0 : cspAspectOf(c.dx, c.dy);",
+      "  }",
       "  float baseValue;",
       "  c.base = csp_base(p, baseValue) ? baseValue : u_remFlatBase;",
       "  vec4 acc = vec4(0.0);",

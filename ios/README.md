@@ -80,6 +80,15 @@ The probe does not run analyses, export an image or change engine settings.
 Background execution can be suspended by iOS; if no result arrives, unlock
 the phone and open the Debug app before retrying.
 
+For frame measurements, pass `--activate` to bring Clear Skies to the foreground:
+
+```
+python3 ios/scripts/verify_shell_on_device.py <device-id> --activate --probe scripts/performance/device-pan.js --output /tmp/clear-skies-pan.json
+```
+
+The Debug probe temporarily disables auto-lock while its script runs and restores
+the previous setting afterward. Release builds do not include this hook.
+
 For a live satellite scene search, application, disclosure/panel reopening and
 zoom-refinement check, use the satellite probe:
 

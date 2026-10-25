@@ -116,6 +116,32 @@ const data=values=>({width:2,height:2,grid:new Float32Array(values)});
   await revised.want([{z:0,x:0,y:0}]);revision=2;revisionSpecs=[source('s',1,0,{url:()=>`revision-${revision}`})];
   await revised.want([{z:0,x:0,y:0}]);assert.equal(revisionCalls,2);assert.equal(revised.sampleAt(0,0).value,2,'source revision replaces stale native record');revised.destroy();
 
+  // A survey/mask refresh must keep compatible national/overview grids while
+  // rejecting obsolete high-rank data, including a response already in flight.
+  let maskKey='a',nextSurvey,refreshJobs=[];
+  const baseSpec=source('base',1,0),surveySpec=()=>source('survey',5,0,{cacheKey:maskKey});
+  let refreshSpecs=[baseSpec,surveySpec()];
+  const refresh=new ElevationTileStore({sources:()=>refreshSpecs,mask:(grid,w,h,c,s)=>s.id==='survey'&&s.cacheKey==='c'?grid.fill(NaN):grid,
+    request:(url,o)=>url.startsWith('base')?Promise.resolve(data([2,2,2,2])):
+      new Promise(resolve=>{nextSurvey=resolve;refreshJobs.push({resolve,signal:o.signal});})});
+  const initialRefresh=refresh.want([{z:0,x:0,y:0}]);await tick();nextSurvey(data([10,10,10,10]));await initialRefresh;
+  const heldBase=refresh.get('base/0/0/0'),oldSurvey=refresh.get('survey/0/0/0');
+  maskKey='b';refreshSpecs=[{...baseSpec},surveySpec()];
+  const secondRefresh=refresh.want([{z:0,x:0,y:0}]);await tick();
+  assert.equal(refresh.get('base/0/0/0'),heldBase,'compatible base is retained by identity');
+  assert.equal(refresh.accepts(heldBase),true);assert.equal(refresh.accepts(oldSurvey),false,'changed validity masks invalidate GPU metadata too');
+  assert.equal(refresh.get('survey/0/0/0'),undefined);
+  assert.equal(refresh.sampleAt(0,0).value,2,'useful fallback remains while replacement waits');
+  maskKey='c';refreshSpecs=[baseSpec,surveySpec()];
+  const thirdRefresh=refresh.want([{z:0,x:0,y:0}]);await tick();
+  assert.equal(refreshJobs[1].signal.aborted,true);
+  refreshJobs[1].resolve(data([999,999,999,999]));await secondRefresh;await tick();
+  assert.equal(refresh.sampleAt(0,0).value,2,'late obsolete high-rank response cannot replace the fallback');
+  refreshJobs[2].resolve(data([30,30,30,30]));await thirdRefresh;
+  assert.equal(refresh.sampleAt(0,0).value,2,'confirmed nodata also retains fallback');
+  assert.equal(refresh.get('base/0/0/0'),heldBase);
+  refresh.destroy();
+
   let cancelCalls=[];
   const preflight=new ElevationTileStore({sources:[source('s',1,4)],request:async url=>{cancelCalls.push(url);return data([1,1,1,1]);}});
   const cancelledBeforeStart=preflight.want([{z:2,x:0,y:0}]);const currentBeforeStart=preflight.want([{z:2,x:1,y:0}]);

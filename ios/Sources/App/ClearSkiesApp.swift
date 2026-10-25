@@ -33,7 +33,11 @@ final class PortalModel {
         host.debugNavigation = { [weak self] in
             guard let shell = self?.shell else { return [:] }
             return ["route": shell.visibleRoute ?? "", "path": shell.path,
-                    "sheet": shell.sheetPresented ? "tools" : shell.presentedPanel ?? "closed"]
+                    "sheet": shell.sheetPresented ? "tools" : shell.presentedPanel ?? "closed",
+                    "dock": shell.dock.map(\.id),
+                    "search": ["label": shell.search.label, "canCopy": shell.search.canCopy,
+                               "canClear": shell.search.canClear, "mapsURL": shell.search.mapsURL,
+                               "earthURL": shell.search.earthURL]]
         }
         #endif
         host.onTerminate = { [weak self] in

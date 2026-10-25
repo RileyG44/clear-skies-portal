@@ -373,10 +373,18 @@ assert(index.includes('const HIDPI=')&&index.includes('this._cspDz=HIDPI')&&inde
 assert(index.includes('module.addProtocol("cspmesh"')&&index.includes('Promise.any([')&&index.includes('const overview=meshOverviewTile(')&&index.includes('module.prewarm?.()'),
        "the 3D mesh must answer from the CDN overview when 3DEP is slow, and MapLibre must be prewarmed");
 assert(index.includes('if(data&&data.pinch&&!map3d){ pinchFrame(center,zoom);return this }')&&
-       index.includes('pinchLive=false;commitView(center,zoom);\n      map.eachLayer(layer=>layer._cspEndDeferral?.());')&&
-       index.includes('map._cspDeferExpensive=true;\n      try{ commitView(center,zoom) }finally{ map._cspDeferExpensive=false }')&&
+       index.includes('pinchLive=false;commitView(center,zoom,"end");\n      map.eachLayer(layer=>layer._cspEndDeferral?.());')&&
+       index.includes('map._cspDeferExpensive=true;\n      try{ commitView(center,zoom,"during") }finally{ map._cspDeferExpensive=false }')&&
        index.includes('CompositeTerrainLayer.prototype._cspExpensive=true;')&&index.includes('ElevLayer.prototype._cspExpensive=true;'),
        "touch pinch must paint through the pane painter and commit the exact frame at lift-off, not replay Leaflet's CSS zoom");
+{
+  /* Gesture commits must keep the tiles on screen: the jump API (setView /
+     setZoom) fires viewprereset, which wipes every tile level. */
+  const at=index.indexOf("const keepView=(center,zoom,phase)=>{"),end=index.indexOf("const syncIfMoved=",at);
+  const commits=index.slice(at,end);
+  assert(at>0&&end>at&&commits.includes('leafletMove.call(map,center,zoom,{pinch:true,round:false})')&&
+         !/\bmap\.set(View|Zoom)\(/.test(commits),"wheel and pinch zoom commits must not wipe tile levels through setView/setZoom");
+}
 assert(index.includes('function releaseCanvas(canvas)')&&/tileunload[\s\S]{0,400}releaseCanvas\(event\.tile\)/.test(index)&&
        !index.includes('const canvas=document.createElement("canvas");canvas.width=bitmap.width'),
        "canvases must be released when tiles unload and elevation decoding must share a scratch canvas (iOS caps total canvas memory)");
@@ -409,7 +417,7 @@ assert(snapshotRangeSandbox.regional.x1>=snapshotRangeSandbox.regional.x0&&snaps
        "high-resolution export must cover every tile in an ordinary current viewport");
 assert(snapshotRangeSandbox.dateline.x1>=snapshotRangeSandbox.dateline.x0,
        "high-resolution export must preserve an extent crossing the antimeridian");
-assert(index.includes('setView([47.1301,-119.2781], 9)'),"Moses Lake must remain the default terrain test view");
+assert(index.includes('preventPageGestures:true}).setView([45,-100],3,{animate:false})'),"a fresh session must open over North America");
 assert(index.includes('placeholder="Search a place, or 47.1301, -119.2781"'),"Moses Lake coordinates must be the visible search default");
 assert(index.includes('id="srvConnect"'),"terrain engine needs an explicit connect control");
 assert(index.includes('id="srvCopyLink"'),"terrain engine needs a private setup-link control");

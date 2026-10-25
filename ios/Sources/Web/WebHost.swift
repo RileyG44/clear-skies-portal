@@ -197,6 +197,11 @@ final class WebHost: NSObject {
         let runID = UserDefaults.standard.string(forKey: "cspDebugRunID") ?? ""
         let log = Logger(subsystem: Bundle.main.bundleIdentifier ?? "ClearSkies", category: "debug")
         Task {
+            // Programmatic map gestures do not reset iOS's idle timer. Keep
+            // this Debug-only verification run visible, then restore it.
+            let previousIdleTimer = UIApplication.shared.isIdleTimerDisabled
+            UIApplication.shared.isIdleTimerDisabled = true
+            defer { UIApplication.shared.isIdleTimerDisabled = previousIdleTimer }
             let output = URL.cachesDirectory.appending(path: "csp-debug-result.json")
             do {
                 let result = try await webView.callAsyncJavaScript(script, arguments: ["__cspDebugRunID": runID], contentWorld: .page)

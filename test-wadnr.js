@@ -134,11 +134,16 @@ function sourceChoiceChecks(){
     assert.equal(context.chooseTerrain(style).src,"wadnr-elevation",`${style} can derive from fetched DNR elevation`);
   assert.equal(context.chooseTerrain("hs").cachedOnly,true,"browsing alone never fetches DNR");
   const options=html.slice(html.indexOf("function elevationSourceOptions(){"),html.indexOf("function dnrAcquisitionText(){"));
-  context.API="";context.dnrStatus={revision:2};context.dnrAreasKey=()=>"";
-  vm.runInContext(options,context);
+  const overview=html.slice(html.indexOf('function overviewElevationUrl('),html.indexOf('async function fetchOverviewResponse('));
+  context.API="";context.dnrStatus={revision:2};context.dnrAreasKey=()=>"";context.serverHealth=null;context.api=p=>p;
+  vm.runInContext(options+overview,context);
   const auto=context.elevationSourceOptions();
   assert.equal(auto.dnrAcquire,false,"automatic browsing must not trigger large DNR archives");
   assert(auto.rawEndpoint&&auto.nationalEndpoint,"USGS remains the active default outside fetched areas");
+  assert(auto.fallback.startsWith('https://s3.amazonaws.com/'),'older engines retain direct overview access');
+  context.serverHealth={features:['overview-elevation']};
+  assert.equal(context.elevationSourceOptions().fallback,'/api/elev/overview/{z}/{x}/{y}.png');
+  assert.notEqual(context.elevationSourceOptions().sourceKey,auto.sourceKey,'overview capability refreshes the source intent');
   context.$=()=>({value:"3dep"});assert.equal(context.elevationSourceOptions().rawEndpoint,null);
   assert.equal(context.elevationSourceOptions().dnrAcquire,false);
   // Exercise the real gating/masking helpers, not stubs: a fetched box that

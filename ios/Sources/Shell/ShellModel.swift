@@ -43,6 +43,7 @@ final class ShellModel {
     var detent: PresentationDetent = .medium { didSet { syncView() } }
     var path: [String] = []
     var query = ""
+    var searchRequested = false
     var suggestions: [PlaceSuggestion] = []
     var routeMatches: [RouteMatch] = []
     var searching = false
@@ -261,7 +262,28 @@ final class ShellModel {
         call("CSPNativeShell.setMode(mode)", ["mode": mode])
     }
 
+    /// Reuse the web dock's order and persistence, including hidden tools.
+    func moveTool(_ id: String, to index: Int) {
+        let visible = dock.filter { $0.hidden != true }
+        guard let old = visible.firstIndex(where: { $0.id == id }),
+              visible.indices.contains(index), old != index,
+              let source = dock.firstIndex(where: { $0.id == id }) else { return }
+        let target = visible[index].id
+        let tool = dock.remove(at: source)
+        if let destination = dock.firstIndex(where: { $0.id == target }) {
+            dock.insert(tool, at: destination + (index > old ? 1 : 0))
+        }
+        call("CSPNativeShell.moveTool(id, index)", ["id": id, "index": index])
+        feedback += 1
+    }
+
     // MARK: - Search
+
+    func openSearch() {
+        path = []
+        searchRequested = true
+        openSheet(.expanded)
+    }
 
     func queryChanged() {
         let text = query.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -355,6 +377,8 @@ final class ShellModel {
     }
 
     func clearLocation() {
+        query = ""
+        clearSuggestions()
         call("CSPNativeShell.clear()")
         feedback += 1
     }

@@ -1,0 +1,95 @@
+{
+  "measuredAt": "2026-10-25T00:15:18.954132+00:00",
+  "source": "https://elevation-tiles-prod.s3.amazonaws.com/",
+  "method": "S3 ListObjectsV2 exact Content-Length sum for PNG keys; excludes sidecars, metadata and filesystem allocation; no terrain imagery downloaded",
+  "levels": [
+    {
+      "z": 0,
+      "tiles": 1,
+      "expectedTiles": 1,
+      "bytes": 106274,
+      "minTileBytes": 106274,
+      "maxTileBytes": 106274,
+      "pages": 1,
+      "cumulativeBytes": 106274,
+      "cumulativeTiles": 1
+    },
+    {
+      "z": 1,
+      "tiles": 4,
+      "expectedTiles": 4,
+      "bytes": 385992,
+      "minTileBytes": 93363,
+      "maxTileBytes": 100773,
+      "pages": 1,
+      "cumulativeBytes": 492266,
+      "cumulativeTiles": 5
+    },
+    {
+      "z": 2,
+      "tiles": 16,
+      "expectedTiles": 16,
+      "bytes": 1417309,
+      "minTileBytes": 67621,
+      "maxTileBytes": 107585,
+      "pages": 1,
+      "cumulativeBytes": 1909575,
+      "cumulativeTiles": 21
+    },
+    {
+      "z": 3,
+      "tiles": 64,
+      "expectedTiles": 64,
+      "bytes": 5155505,
+      "minTileBytes": 33552,
+      "maxTileBytes": 105488,
+      "pages": 1,
+      "cumulativeBytes": 7065080,
+      "cumulativeTiles": 85
+    },
+    {
+      "z": 4,
+      "tiles": 256,
+      "expectedTiles": 256,
+      "bytes": 18345644,
+      "minTileBytes": 15916,
+      "maxTileBytes": 106520,
+      "pages": 1,
+      "cumulativeBytes": 25410724,
+      "cumulativeTiles": 341
+    },
+    {
+      "z": 5,
+      "tiles": 1024,
+      "expectedTiles": 1024,
+      "bytes": 64568131,
+      "minTileBytes": 10252,
+      "maxTileBytes": 103475,
+      "pages": 3,
+      "cumulativeBytes": 89978855,
+      "cumulativeTiles": 1365
+    },
+    {
+      "z": 6,
+      "tiles": 4096,
+      "expectedTiles": 4096,
+      "bytes": 212971372,
+      "minTileBytes": 1423,
+      "maxTileBytes": 107171,
+      "pages": 9,
+      "cumulativeBytes": 302950227,
+      "cumulativeTiles": 5461
+    },
+    {
+      "z": 7,
+      "tiles": 16384,
+      "expectedTiles": 16384,
+      "bytes": 696329742,
+      "minTileBytes": 760,
+      "maxTileBytes": 147034,
+      "pages": 33,
+      "cumulativeBytes": 999279969,
+      "cumulativeTiles": 21845
+    }
+  ]
+}

@@ -17,10 +17,11 @@ const BASE=process.env.CSP_GPU2D_URL||'http://127.0.0.1:8812';
 const image=png(),mock=fs.readFileSync(path.join(__dirname,'layer-mock-engine.js'),'utf8');
 const expose='\nwindow.__layerApp={snapshotDomMatrix,snapshotSpec,composeSnapshot,composeSnapshotStream,snapshotDomItems,enterTerrain3d,exitTerrain3d,researchElevationSource,researchElevationGrid,cursorLoadedElevation,gpuTerrainState,syncGpuTerrain};\n';
 const baselineExpose='\nwindow.__layerApp={snapshotDomMatrix};\n';
-async function prepare(browser,{mocked=true,flag='1',baseline=false,ui='',dpr=2}={}){
- const context=await browser.newContext({viewport:{width:1100,height:760},deviceScaleFactor:dpr,reducedMotion:'reduce',serviceWorkers:'block'});
+async function prepare(browser,{mocked=true,flag='1',baseline=false,ui='',dpr=2,startup=false,features=[],viewport={width:1100,height:760}}={}){
+ const context=await browser.newContext({viewport,deviceScaleFactor:dpr,reducedMotion:'reduce',serviceWorkers:'block'});
  const page=await context.newPage(),errors=[];page.on('pageerror',e=>errors.push(String(e)));
- const html=baseline?cp.execFileSync('timeout',['60','git','show','58ba07d:index.html'],{cwd:ROOT,encoding:'utf8'}):fs.readFileSync(path.join(ROOT,'index.html'),'utf8');
+ // Compare this repair with its current parent, not an obsolete UI snapshot.
+ const html=baseline?cp.execFileSync('git',['show',`${process.env.CSP_GPU2D_BASELINE_REF||'HEAD'}:index.html`],{cwd:ROOT,encoding:'utf8',timeout:60000}):fs.readFileSync(path.join(ROOT,'index.html'),'utf8');
  await page.route('**/*',async route=>{
   const u=new URL(route.request().url());
   if(u.origin!==BASE){
@@ -29,13 +30,14 @@ async function prepare(browser,{mocked=true,flag='1',baseline=false,ui='',dpr=2}
   }
   if(u.pathname==='/')return route.fulfill({contentType:'text/html',body:html.replace('})();\n</script>\n<script src="markup-3d',(baseline?baselineExpose:expose)+'})();\n</script>\n<script src="markup-3d')});
   if(u.pathname==='/gpu-terrain-engine.js'&&!baseline&&mocked!=='real')return route.fulfill({contentType:'text/javascript',body:mocked?mock:'window.CSPGpuTerrainEngine={create:()=>null};'});
-  if(u.pathname==='/api/health')return route.fulfill({json:{ok:true,features:[]}});
+  if(u.pathname==='/api/health')return route.fulfill({json:{ok:true,features}});
   if(/\/api\/(elev|usgs\/elev|wadnr\/elev|terrain)/.test(u.pathname))return route.fulfill({contentType:'image/png',body:image});
   if(u.pathname.startsWith('/api/'))return route.fulfill({json:{ok:true,layers:[],areas:[],features:[]}});
   return route.continue();
  });
  await page.goto(`${BASE}/?gpu2d=${flag}${ui?`&ui=${ui}`:''}`);
  await page.waitForFunction(()=>!!window.ClearSkiesPortalBridge);
+ if(startup)return {context,page,errors};
  await page.evaluate(()=>{
   const m=ClearSkiesPortalBridge.map;m.setView([47.858,-118.33],15,{animate:false});
   for(const [id,value] of [['terSrc','3dep'],['terStyle','hs']]){const el=document.getElementById(id);el.value=value;el.dispatchEvent(new Event('change',{bubbles:true}));}
@@ -93,13 +95,16 @@ async function run(){
    await page.screenshot({path:path.join(OUT,`${which}-bearing-${bearing}.png`)});
    const r=await alignment(page);report.alignment.push({phase:'rest',...r});assert(r.count>0);assert(r.max<1.1,JSON.stringify(r));
   }
-  // Sample directly after each painted zoomanim. No additional frame can
-  // hide a canvas that lags the pane paint.
+  // Sample in the same task's microtask checkpoint, after the camera's atomic
+  // preview/commit batch. No additional animation frame may hide a canvas that
+  // lags the pane paint; a next-rAF render still fails this comparison.
   await page.evaluate(()=>{
    window.__gestureSamples=[];
    ClearSkiesPortalBridge.map.on('zoomanim',e=>{if(!e.noUpdate)return;
-    const g=ClearSkiesPortalBridge.gpuTerrain(),v=g.getEngine().stats().lastView;
-    __gestureSamples.push({painted:e.zoom,rendered:v.zoom,center:[...v.centerMerc]});
+    queueMicrotask(()=>{
+      const g=ClearSkiesPortalBridge.gpuTerrain(),v=g.getEngine().stats().lastView;
+      __gestureSamples.push({painted:e.zoom,rendered:v.zoom,center:[...v.centerMerc]});
+    });
    });
   });
   const box=await page.locator('#map').boundingBox();await page.mouse.move(box.x+box.width*.65,box.y+box.height*.5);
@@ -140,7 +145,7 @@ async function run(){
     const measure=(0,eval)('('+code+')');window.__nativeSamples=[];
     const derive=__alignmentLayer._deriveView;
     __alignmentLayer._deriveView=function(){
-      this.__heldAnimations=div.getAnimations({subtree:true}).filter(a=>a.playState==='running');
+      this.__heldAnimations=div.getAnimations({subtree:true}).filter(a=>a.playState==='running'&&/transform$/.test(a.transitionProperty||''));
       for(const animation of this.__heldAnimations){const time=animation.currentTime;animation.pause();animation.currentTime=time;}
       if(this.__heldAnimations.length)this._nativeZoom=true;
       return derive.call(this);
@@ -158,8 +163,29 @@ async function run(){
       }
     };
    m.setZoom(16,{animate:true});
+   // The geometry oracle is not an FPS benchmark. Exercise known positions
+   // in the same real CSS transition even when a busy WebKit compositor skips
+   // most of its 250 ms wall-clock interval. Natural animation/idle checks
+   // below remain in place; the app gesture checks use no held clock.
+   const started=performance.now();
+   await new Promise((resolve,reject)=>{
+    const sample=()=>{
+      const animations=div.getAnimations({subtree:true}).filter(a=>a.playState==='running'&&/transform$/.test(a.transitionProperty||''));
+      if(!animations.length){if(performance.now()-started>1500)return reject(new Error('Native CSS transition did not start'));requestAnimationFrame(sample);return;}
+      const times=animations.map(a=>a.currentTime);
+      try{
+        for(const animation of animations)animation.pause();
+        for(const time of [25,75,125,175,225]){
+          for(const animation of animations)animation.currentTime=time;
+          __alignmentLayer._nativeZoom=true;__alignmentLayer._dirty=true;__alignmentLayer._draw();
+        }
+      }finally{animations.forEach((a,i)=>{a.currentTime=times[i];a.play();});}
+      __alignmentLayer._nativeZoom=true;__alignmentLayer.redraw();resolve();
+    };requestAnimationFrame(sample);
+   });
   },measureAlignment.toString());
-  await page.waitForFunction(()=>__nativeSamples.length>=3&&!__alignmentMap._animatingZoom&&!__alignmentLayer._nativeZoom,null,{timeout:2000});
+  await page.waitForFunction(()=>__nativeSamples.length>=3&&!__alignmentMap._animatingZoom&&!__alignmentLayer._nativeZoom&&
+    !__alignmentLayer._dirty&&!__alignmentLayer._frame,null,{timeout:2000});
   const nativeSamples=await page.evaluate(()=>__nativeSamples);report.alignment.push(...nativeSamples);
   assert(nativeSamples.filter(s=>s.zoom>15.001&&s.zoom<15.999).length>=3,'native transition must produce interpolated frames');
   report.nativeZoom=await page.evaluate(async()=>{
@@ -238,7 +264,8 @@ async function run(){
   assert.equal(report.stream.alphaDifferent,0,'stream and regular export alpha must match exactly');
   assert(report.stream.max<=1,'mock Canvas2D stream color quantization exceeded one code value: '+JSON.stringify(report.stream));
   // The real MapLibre module runs with fixture raster responses.
-  await page.evaluate(()=>__layerApp.enterTerrain3d().catch(e=>window.__3dError=String(e)));await page.waitForTimeout(600);
+  await page.evaluate(()=>__layerApp.enterTerrain3d().catch(e=>window.__3dError=String(e)));
+  await page.waitForFunction(()=>window.__3dError||ClearSkiesPortalBridge.map3d()&&getComputedStyle(ClearSkiesPortalBridge.gpuTerrain()._canvas).visibility==='hidden');
   report.mode3d=await page.evaluate(()=>({error:window.__3dError||null,map:!!ClearSkiesPortalBridge.map3d(),hidden:getComputedStyle(ClearSkiesPortalBridge.gpuTerrain()._canvas).visibility}));
   assert(report.mode3d.map,JSON.stringify(report.mode3d));assert.equal(report.mode3d.hidden,'hidden');
   await page.evaluate(()=>__layerApp.exitTerrain3d());await page.waitForTimeout(200);

@@ -13,7 +13,7 @@ try { playwright = require('playwright'); } catch (e) { playwright = require(pat
 const SCRIPTS = ['elevation-tile-core.js', 'terrain-core.js', 'terrain-raster.js', 'elevation-bands.js', 'terrain-drape-core.js',
   'gpu-terrain-shaders.js', 'gpu-terrain-engine.js', 'gpu-terrain-layer.js', 'scripts/gpu2d/export-seams-page.js'];
 (async () => {
-  const browser = await playwright.chromium.launch({args: ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist']});
+  const browser = await playwright.chromium.launch({channel:process.env.PW_CHANNEL||undefined,args: ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist']});
   const failures = [];
   try {
     const page = await browser.newPage(); page.on('pageerror', e => failures.push(e.message));

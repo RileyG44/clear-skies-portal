@@ -43,14 +43,17 @@ const pw=require(which==='webkit'?'/Users/riley/.npm/_npx/e41f203b7505f1fb/node_
    for(const bearing of [0,37,90,180]){
     m.setBearing(bearing);await new Promise(r=>requestAnimationFrame(r));
     for(const scale of [1,2,4]){
-     const cv=await g.snapshotEntry({sel:{x:100,y:80,w:120,h:80},scale,width:120*scale,height:80*scale}).canvas();
+     const entry=g.snapshotEntry({sel:{x:100,y:80,w:120,h:80},scale,width:120*scale,height:80*scale});
+     let cv;try{cv=await entry.canvas();}finally{entry.dispose();}
      const p=cv.getContext('2d').getImageData(0,0,cv.width,cv.height).data;
      let valid=0;for(let i=3;i<p.length;i+=4)if(p[i])valid++;
      out.push({bearing,scale,width:cv.width,height:cv.height,coverage:valid/(cv.width*cv.height)});
     }
    }return out;
   });
-  assert(report.exports.every(e=>e.coverage>.98));report.checks.push('12 production exports: bearings 0/37/90/180, 1x/2x/4x');
+  assert(report.exports.every(e=>e.coverage>.98));
+  assert.equal(await page.evaluate(()=>ClearSkiesPortalBridge.gpuTerrain().getEngine().stats().exportTextures),0,'export entries must release their snapshot');
+  report.checks.push('12 production exports: bearings 0/37/90/180, 1x/2x/4x');
   report.stream=await page.evaluate(async()=>{
    const spec={...__layerApp.snapshotSpec({x:170,y:90,w:180,h:110},2),plans:[],tiles:0},chunks=[];
    const normal=await __layerApp.composeSnapshot(spec);

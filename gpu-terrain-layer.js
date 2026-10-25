@@ -85,7 +85,14 @@
         this._painted=null;this.redraw();
         // Drag/rotate handlers already run in Leaflet's painted frame. Keep
         // the screen-sized canvas fixed to the viewport before presentation.
-        if(event&&(event.type==="move"||event.type==="rotate"||event.type==="resize")&&!this._map._animatingZoom){
+        // A two-finger frame rotates and then paints its pinch/pan. Let that
+        // paint consume the pending rotation, instead of shading it twice.
+        if(event?.type==="rotate"&&!this._rotationQueued){
+          this._rotationQueued=true;
+          root.queueMicrotask(()=>{this._rotationQueued=false;if(!this._dirty||!this._container)return;
+            if(this._frame)root.cancelAnimationFrame(this._frame);this._frame=0;this._draw();});
+        }
+        if(event&&(event.type==="move"||event.type==="resize")&&!this._map._animatingZoom){
           if(this._frame)root.cancelAnimationFrame(this._frame);this._frame=0;this._draw();
         }
       },
@@ -154,7 +161,7 @@
         return view;
       },
       _draw:function(){
-        if(!this._container||!this._engine||!this._dirty)return;
+        if(!this._container||!this._engine||!this._dirty||this._map?._cspCameraFrame)return;
         this._dirty=false;
         if(root.document.body.classList.contains("terrain-3d"))return;
         const view=this._deriveView();this._view=view;
@@ -168,6 +175,10 @@
         this._dirty=true;
         if(this._container&&!this._frame)this._frame=root.requestAnimationFrame(()=>{this._frame=0;this._draw();});
         return this;
+      },
+      _cspFlushViewFrame:function(){
+        if(!this._dirty||!this._container)return;
+        if(this._frame)root.cancelAnimationFrame(this._frame);this._frame=0;this._draw();
       },
       setState:function(state){
         const key=JSON.stringify(state);if(key===this._stateKey)return this;

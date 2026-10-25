@@ -67,8 +67,10 @@
     if (Math.floor(x / scale) !== mod(record.x, Math.pow(2, record.z)) || Math.floor(tile.y / scale) !== record.y) return null;
     return {x: mod(x, scale) / scale, y: mod(tile.y, scale) / scale, width: 1 / scale, height: 1 / scale};
   }
-  function TextureLRU(maxBytes, onEvict) {
-    this.maxBytes = Math.max(0, maxBytes); this.bytes = 0; this.entries = new Map(); this.onEvict = onEvict || function () {};
+  /* keep(entry, key) -> 0..2 ranks eviction: the oldest entry of the lowest
+     rank goes first (default: plain least-recently-used). */
+  function TextureLRU(maxBytes, onEvict, keep) {
+    this.maxBytes = Math.max(0, maxBytes); this.bytes = 0; this.entries = new Map(); this.onEvict = onEvict || function () {}; this.keep = keep || null;
   }
   Object.defineProperty(TextureLRU.prototype, "size", {get: function () { return this.entries.size; }});
   TextureLRU.prototype.peek = function (key) { return this.entries.get(key); };
@@ -77,10 +79,19 @@
     var e = this.entries.get(key); if (!e) return false;
     this.entries.delete(key); this.bytes -= e.bytes; this.onEvict(e, key); return true;
   };
+  TextureLRU.prototype.victim = function () {
+    if (!this.keep) return this.entries.keys().next().value;
+    var best, bestRank = Infinity, it = this.entries.entries(), step;
+    while (!(step = it.next()).done) {
+      var rank = this.keep(step.value[1], step.value[0]);
+      if (rank < bestRank) { best = step.value[0]; bestRank = rank; if (!rank) break; }
+    }
+    return best;
+  };
   TextureLRU.prototype.set = function (key, entry) {
     if (!(entry.bytes >= 0) || entry.bytes > this.maxBytes) return false;
     this.delete(key);
-    while (this.bytes + entry.bytes > this.maxBytes && this.entries.size) this.delete(this.entries.keys().next().value);
+    while (this.bytes + entry.bytes > this.maxBytes && this.entries.size) this.delete(this.victim());
     this.entries.set(key, entry); this.bytes += entry.bytes; return true;
   };
   TextureLRU.prototype.clear = function () { while (this.entries.size) this.delete(this.entries.keys().next().value); };
@@ -131,14 +142,24 @@
    * downsample by u_factor (mean, minimum); 2 and 3 filter along u_dir
    * (Gaussian, minimum). Output is (value, valid). */
   var FILTER = '#version 300 es\nprecision highp float; precision highp int;\n' +
-    'uniform highp sampler2D u_src; uniform int u_mode,u_factor,u_radius; uniform ivec2 u_dir; uniform float u_sigma; layout(location=0) out vec2 result;\n' +
+    'uniform highp sampler2D u_src; uniform int u_mode,u_factor,u_radius; uniform ivec2 u_dir; uniform float u_weights[33]; layout(location=0) out vec2 result;\n' +
     'bool ok(vec2 v){return v.g>0.&&!isnan(v.r)&&!isinf(v.r)&&v.r>-1e20;}\n' +
     'void main(){ivec2 o=ivec2(gl_FragCoord.xy),s=textureSize(u_src,0);float acc=(u_mode==1||u_mode==3)?3.0e38:0.,w=0.;\n' +
     'if(u_mode<2){for(int y=0;y<u_factor;y++)for(int x=0;x<u_factor;x++){ivec2 q=o*u_factor+ivec2(x,y);if(q.x>=s.x||q.y>=s.y)continue;' +
     'vec2 v=texelFetch(u_src,q,0).rg;if(!ok(v))continue;if(u_mode==1)acc=min(acc,v.r);else acc+=v.r;w+=1.;}if(w<=0.){result=vec2(0.);return;}result=vec2(u_mode==1?acc:acc/w,1.);return;}\n' +
     'for(int k=-u_radius;k<=u_radius;k++){ivec2 q=o+u_dir*k;if(q.x<0||q.y<0||q.x>=s.x||q.y>=s.y)continue;vec2 v=texelFetch(u_src,q,0).rg;if(!ok(v))continue;' +
-    'if(u_mode==3){acc=min(acc,v.r);w=1.;}else{float g=exp(-float(k*k)/(2.*u_sigma*u_sigma));acc+=v.r*g;w+=g;}}\n' +
+    'if(u_mode==3){acc=min(acc,v.r);w=1.;}else{float g=u_weights[abs(k)];acc+=v.r*g;w+=g;}}\n' +
     'if(w<=0.){result=vec2(0.);return;}result=vec2(u_mode==3?acc:acc/w,1.);}\n';
+  /* Block minimum along u_dir: output texel o covers source texels o*factor ..
+   * o*factor+factor-1 on that axis. A horizontal then a vertical pass equals
+   * the 2D block minimum of FILTER mode 1 exactly (same skipped edges and
+   * no-data), with factor reads per texel instead of factor squared. */
+  var BLOCK_MIN = '#version 300 es\nprecision highp float; precision highp int;\n' +
+    'uniform highp sampler2D u_src; uniform int u_factor; uniform ivec2 u_dir; layout(location=0) out vec2 result;\n' +
+    'bool ok(vec2 v){return v.g>0.&&!isnan(v.r)&&!isinf(v.r)&&v.r>-1e20;}\n' +
+    'void main(){ivec2 o=ivec2(gl_FragCoord.xy),s=textureSize(u_src,0),q0=o+o*u_dir*(u_factor-1);float acc=3.0e38;bool any=false;\n' +
+    'for(int k=0;k<u_factor;k++){ivec2 q=q0+u_dir*k;if(q.x>=s.x||q.y>=s.y)break;vec2 v=texelFetch(u_src,q,0).rg;if(!ok(v))continue;acc=min(acc,v.r);any=true;}\n' +
+    'result=any?vec2(acc,1.):vec2(0.);}\n';
   /* Samples the visible height (and relative-elevation base) on a coarse
    * grid for range fitting: (height, valid, base, baseValid). */
   var STATS = '#version 300 es\nprecision highp float; precision highp int;\n' + PRELUDE +
@@ -184,14 +205,28 @@
     var queue = new Map(), known = new Map(), sources = new Map(), sourceList = [], plan = [], planDirty = true;
     var wanted = [], coverageKey = '', viewScalars = new Float64Array(8), lastResult = {coverage: 0, missing: 0};
     viewScalars.fill(NaN);
-    var state = {}, field = null, heightProgram, shadeProgram, provenanceProgram, filterProgram, statsProgram, stats = {}, vao, shadeSetters;
-    var liveAux = {}, auxKey = '', f = {}, shadeAux = {};
-    var h = {}, maxSize = 0, forcedMaxSize = 0, pendingReads = new Set(), frameRequested = false;
+    var state = {}, field = null, heightProgram, shadeProgram, provenanceProgram, statsProgram, stats = {}, vao, shadeSetters, blockMin = {};
+    var liveAux = {}, auxKey = '', filters = {}, shadeAux = {}, filterRadius = -1, filterWeights = new Float32Array(33);
+    var h = {}, maxSize = 0, forcedMaxSize = 0, pendingReads = new Set(), frameRequested = false, phaseMs = {}, gpuTiming = false, gpuTotals = {height: 0, aux: 0, shade: 0, frames: 0}, gpuPixel = new Float32Array(4), gpuByte = new Uint8Array(4);
+    /* Diagnostic GPU timing: a one-pixel read waits for the pass that drew
+       that target (gl.finish does not in every browser). Totals accumulate
+       so a coarse clock averages out over many frames. */
+    function gpuSync(t) {
+      gl.bindFramebuffer(gl.FRAMEBUFFER, t ? t.framebuffer : null);
+      if (t) gl.readPixels(0, 0, 1, 1, gl.RGBA, gl.FLOAT, gpuPixel); else gl.readPixels(0, 0, 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, gpuByte);
+      gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+    }
+    function gpuPhase(name, t, mark) { gpuSync(t); var at = now(); phaseMs[name] = at - mark; gpuTotals[name] += at - mark; return at; }
     var snapshots = new Set(), deferredInvalidate = false;
     var resources = {textures: new Set(), framebuffers: new Set(), programs: new Set(), buffers: new Set(), syncs: new Set(), vaos: new Set()};
+    var planStamp = 0;
     var lru = new TextureLRU(options.maxTextureBytes === undefined ? DEFAULT_BYTES : options.maxTextureBytes, function (entry) {
       if (entry.texture && !lost) deleteTexture(entry.texture);
       if (!lost) known.delete(entry.key); evictions++; planDirty = heightDirty = dirty = true;
+    }, function (entry, key) {
+      // Evict what is neither drawn now nor wanted by the store (old views,
+      // finer stand-ins already replaced) before the backdrop or the frame.
+      return entry.planned === planStamp ? 2 : store.wants && store.wants(key) ? 1 : 0;
     });
     function needsFrame() { if (!destroyed && !frameRequested) { frameRequested = true; requestFrame(); } }
     function texture() { var t = gl.createTexture(); if (!t) throw new Error('Texture allocation failed'); resources.textures.add(t); return t; }
@@ -271,10 +306,25 @@
       heightProgram = program(HEIGHT_VERTEX, HEIGHT_FRAGMENT);
       shadeProgram = program(shaders.fullscreenVertexSource, shaders.shadeFragmentSource(PRELUDE));
       provenanceProgram = program(FULLSCREEN, PROVENANCE);
-      filterProgram = program(FULLSCREEN, FILTER);
+      // Separate uniform filter modes at compile time. The minimum/Gaussian
+      // kernels then avoid the nested downsample loop's register requirements
+      // on mobile GPUs. The operations and accumulation order are identical.
+      [0, 2, 3, 4].forEach(function (mode) {
+        var source = mode ? FILTER.replace('uniform int u_mode,u_factor,u_radius;', 'const int u_mode=' + (mode === 4 ? 3 : mode) + '; uniform int u_factor,u_radius;')
+          : FILTER.replace('if(u_mode<2)', 'if(true)');
+        if (mode === 4) source = source.replace('for(int k=-u_radius;k<=u_radius;k++)', 'for(int k=-1;k<=1;k++)')
+          .replace('q=o+u_dir*k;', 'q=o+u_dir*k*u_radius;')
+          // Clamping intermediate centres preserves the clipped window at
+          // edges; skipping a centre could lose its valid interior samples.
+          .replace('if(q.x<0||q.y<0||q.x>=s.x||q.y>=s.y)continue;', 'q=clamp(q,ivec2(0),s-1);');
+        var filter = filters[mode] = {program: program(FULLSCREEN, source)};
+        ['src', 'mode', 'factor', 'radius', 'dir', 'weights[0]'].forEach(function (n) { filter[n] = gl.getUniformLocation(filter.program, 'u_' + n); });
+      });
       statsProgram = program(FULLSCREEN, STATS);
+      blockMin.program = program(FULLSCREEN, BLOCK_MIN);
+      ['src', 'factor', 'dir'].forEach(function (n) { blockMin[n] = gl.getUniformLocation(blockMin.program, 'u_' + n); });
       ['cspField', 'cspBlur', 'cspBase', 'cspBlurScale', 'cspBaseScale', 'cspAuxTransform'].forEach(function (n) { stats[n] = gl.getUniformLocation(statsProgram, 'u_' + n); });
-      ['src', 'mode', 'factor', 'radius', 'dir', 'sigma'].forEach(function (n) { f[n] = gl.getUniformLocation(filterProgram, 'u_' + n); });
+      filterRadius = -1;
       vao = gl.createVertexArray(); resources.vaos.add(vao); gl.bindVertexArray(vao);
       ['origin', 'axisX', 'axisY', 'target', 'sampleOrigin', 'sampleX', 'sampleY', 'native', 'rank', 'smooth', 'fast'].forEach(function (n) { h[n] = gl.getUniformLocation(heightProgram, 'u_' + n); });
       shadeSetters = setters(shadeProgram);
@@ -292,11 +342,15 @@
       return t;
     }
     function nativeEntry(record) {
-      var allValid = true, hasData = false;
-      for (var i = 0; i < record.grid.length; i++) {
+      var allValid = true, hasData = false, count = record.validCount;
+      // ElevationTileStore records count their finite samples (> -20000) and
+      // hold NaN everywhere else, so the count settles both flags exactly.
+      if (Number.isInteger(count) && count >= 0 && count <= record.grid.length) { hasData = count > 0; allValid = count === record.grid.length; }
+      else for (var i = 0; i < record.grid.length; i++) {
         if (Number.isFinite(record.grid[i]) && record.grid[i] > -1e20) hasData = true; else allValid = false;
       }
-      var metadata = {key: record.key, sourceId: record.sourceId, rank: record.rank, z: record.z, x: record.x, y: record.y, width: record.width, height: record.height};
+      var metadata = {key: record.key, sourceId: record.sourceId, rank: record.rank, label: record.label, url: record.url, cacheKey: record.cacheKey,
+        z: record.z, x: record.x, y: record.y, width: record.width, height: record.height};
       // GPU residency must not pin CPU grids outside the store's own byte LRU.
       return {allValid: allValid, hasData: hasData, key: record.key, texture: makeNative(record), bytes: record.width * record.height * 4, record: metadata, revision: record.revision};
     }
@@ -330,14 +384,26 @@
         sourceList.length = 0; sources.forEach(function (spec, id) { if (!activeSources || activeSources.has(id)) sourceList.push(spec); });
         sourcesDirty = false;
       }
-      if (changed) { coverageKey = ''; heightDirty = dirty = planDirty = true; }
+      if (changed) {
+        // Keep compatible resident sources (especially the overview) during a
+        // configuration refresh. Only obsolete URLs/ranks/masks are removed.
+        if (store.accepts) {
+          lru.entries.forEach(function (entry, key) {
+            entry.obsolete = !store.accepts(entry.record);
+            if (entry.obsolete) { if (snapshots.size) deferredInvalidate = true; else lru.delete(key); }
+          });
+          queue.forEach(function (record, key) { if (!store.accepts(record)) { queue.delete(key); known.delete(key); } });
+        }
+        coverageKey = ''; heightDirty = dirty = planDirty = true;
+      }
       return changed;
     }
     function want(view) {
       var b = coverageBounds(view, 1, boundsScratch);
       if (!coverageKey || b.z !== requestBounds.z || b.x0 !== requestBounds.x0 || b.x1 !== requestBounds.x1 || b.y0 !== requestBounds.y0 || b.y1 !== requestBounds.y1) {
         coverageKey = true; requestBounds.z = b.z; requestBounds.x0 = b.x0; requestBounds.x1 = b.x1; requestBounds.y0 = b.y0; requestBounds.y1 = b.y1; wanted = coverageTiles(view); generation++; planDirty = heightDirty = true;
-        refreshSources(); store.want(wanted, {generation: generation});
+        // The visible extent (no margin) sizes the store's coarse backdrop.
+        refreshSources(); store.want(wanted, {generation: generation, bounds: coverageBounds(view, 0, {})});
       }
       return wanted;
     }
@@ -359,28 +425,36 @@
       }
     }
     function buildPlan(view, extra) {
-      plan.length = 0;
+      plan.length = 0; planStamp++;
       // Include fallback ancestors even when a finer tile has no-data holes.
-      // Draw every overlapping resident native record coarse→fine at each rank.
+      // Draw overlapping resident native records coarse→fine at each rank.
+      // Finer records (left from a closer view) stand in only until their own
+      // source covers the tile from its level or above; drawn afterwards they
+      // would alias, keep old detail on screen and multiply draws.
       var b = coverageBounds(view, 0, boundsScratch), n = b.n, residents = [];
       planBounds.z = b.z; planBounds.x0 = b.x0; planBounds.x1 = b.x1; planBounds.y0 = b.y0; planBounds.y1 = b.y1;
-      lru.entries.forEach(function (e) { if (e.hasData && (!activeSources || activeSources.has(e.record.sourceId))) residents.push(e); });
+      lru.entries.forEach(function (e) { if (e.hasData && !e.obsolete && (!activeSources || activeSources.has(e.record.sourceId))) residents.push(e); });
       // Export-only detail records (see exportTiles); a key already resident is drawn once.
-      if (extra) for (var xi = 0; xi < extra.length; xi++) if (extra[xi].hasData && !lru.peek(extra[xi].key)) residents.push(extra[xi]);
+      if (extra) for (var xi = 0; xi < extra.length; xi++) {
+        var resident = lru.peek(extra[xi].key);
+        if (extra[xi].hasData && (!resident || resident.obsolete)) residents.push(extra[xi]);
+      }
       residents.sort(function (a, b) { return a.record.rank - b.record.rank || a.record.z - b.record.z || a.key.localeCompare(b.key); });
       var total = 0, covered = 0;
       for (var y = b.y0; y <= b.y1; y++) for (var wx = b.x0; wx <= b.x1; wx++) {
-        var x = mod(wx, n), tile = {z: b.z, x: x, y: y}, has = false, tileStart = plan.length;
+        var x = mod(wx, n), tile = {z: b.z, x: x, y: y}, has = false, tileStart = plan.length, complete = null;
         for (var j = 0; j < residents.length; j++) {
           var e = residents[j], r = e.record, spec = sources.get(r.sourceId);
           if (spec && spec.allowed && !spec.allowed(tile)) continue;
+          // Sorted by z within a rank, a source's own coverage precedes its finer records.
+          if (r.z > b.z && complete && complete[r.sourceId]) continue;
           var factor = Math.pow(2, b.z - r.z), rx0 = mod(r.x, Math.pow(2, r.z)) * factor, ry0 = r.y * factor;
           var x0 = Math.max(x, rx0), y0 = Math.max(y, ry0), x1 = Math.min(x + 1, rx0 + factor), y1 = Math.min(y + 1, ry0 + factor);
           if (x1 <= x0 || y1 <= y0) continue;
           // A complete higher-priority record hides every earlier draw in
           // this display tile. Retain fallback draws when any native sample
           // is missing, so finer no-data still reveals the lower rank.
-          if (e.allValid && x0 === x && y0 === y && x1 === x + 1 && y1 === y + 1) plan.length = tileStart;
+          if (e.allValid && x0 === x && y0 === y && x1 === x + 1 && y1 === y + 1) { plan.length = tileStart; (complete || (complete = {}))[r.sourceId] = true; }
           var crop = {x: (x0 - rx0) / factor, y: (y0 - ry0) / factor, width: (x1 - x0) / factor, height: (y1 - y0) / factor, nativeWidth: r.width, nativeHeight: r.height};
           plan.push({entry: e, x: wx + x0 - x, y: y0, width: x1 - x0, height: y1 - y0, crop: crop, z: b.z}); has = true;
           lru.get(e.key);
@@ -402,6 +476,7 @@
           prev.height += p.height; prev.crop.height += p.crop.height;
         } else plan.push(p);
       }
+      for (k = 0; k < plan.length; k++) plan[k].entry.planned = planStamp;
       // This synchronous result measures resident geometric coverage, not NaN
       // pixel coverage. readProvenance() supplies the latter asynchronously.
       lastResult = {coverage: total ? covered / total : 0, missing: total - covered}; planDirty = false;
@@ -451,10 +526,24 @@
       gl.drawArrays(gl.TRIANGLES, 0, 3); drawCalls++;
     }
     function filterPass(src, dst, mode, factor, radius, dx, dy) {
+      var f = filters[mode >= 2 ? mode : 0];
       gl.bindFramebuffer(gl.FRAMEBUFFER, dst.framebuffer); gl.viewport(0, 0, dst.width, dst.height);
-      gl.bindVertexArray(vao); gl.useProgram(filterProgram); gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, src.texture);
+      gl.bindVertexArray(vao); gl.useProgram(f.program); gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, src.texture);
       gl.uniform1i(f.src, 0); gl.uniform1i(f.mode, mode); gl.uniform1i(f.factor, factor || 1); gl.uniform1i(f.radius, radius || 0);
-      gl.uniform2i(f.dir, dx || 0, dy || 0); gl.uniform1f(f.sigma, Math.max(.5, (radius || 1) / 2));
+      gl.uniform2i(f.dir, dx || 0, dy || 0);
+      if (mode === 2 && filterRadius !== radius) {
+        // The kernel is uniform across every pixel and both axes. Compute it
+        // once, retaining the same Gaussian and nodata normalization.
+        var sigma = Math.max(.5, (radius || 1) / 2);
+        for (var k = 0; k < filterWeights.length; k++) filterWeights[k] = Math.exp(-k * k / (2 * sigma * sigma));
+        gl.uniform1fv(f['weights[0]'], filterWeights); filterRadius = radius;
+      }
+      gl.drawArrays(gl.TRIANGLES, 0, 3); drawCalls++;
+    }
+    function blockMinPass(src, dst, factor, dx, dy) {
+      gl.bindFramebuffer(gl.FRAMEBUFFER, dst.framebuffer); gl.viewport(0, 0, dst.width, dst.height);
+      gl.bindVertexArray(vao); gl.useProgram(blockMin.program); gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, src.texture);
+      gl.uniform1i(blockMin.src, 0); gl.uniform1i(blockMin.factor, factor); gl.uniform2i(blockMin.dir, dx, dy);
       gl.drawArrays(gl.TRIANGLES, 0, 3); drawCalls++;
     }
     /* One derived field into cache[slot]: downsample (mean or minimum), an
@@ -462,21 +551,46 @@
      * reused while their size holds. */
     function derive(src, radiusPx, minimum, cache, slot) {
       var plan = auxPlan(radiusPx, src.width, src.height), entry = cache[slot];
-      if (!plan) { if (entry) { freeTarget(entry.a); freeTarget(entry.b); cache[slot] = null; } return null; }
+      if (!plan) { if (entry) { freeTarget(entry.a); freeTarget(entry.b); freeTarget(entry.rows); cache[slot] = null; } return null; }
       if (!entry || entry.a.width !== plan.width || entry.a.height !== plan.height) {
-        if (entry) { freeTarget(entry.a); freeTarget(entry.b); }
+        if (entry) { freeTarget(entry.a); freeTarget(entry.b); freeTarget(entry.rows); }
         entry = cache[slot] = {a: target(plan.width, plan.height, true), b: target(plan.width, plan.height, true)};
       }
-      filterPass(src, entry.a, minimum ? 1 : 0, plan.factor);
-      if (minimum) { filterPass(entry.a, entry.b, 3, 1, plan.radius, 1, 0); filterPass(entry.b, entry.a, 3, 1, plan.radius, 0, 1); }
-      filterPass(entry.a, entry.b, 2, 1, plan.radius, 1, 0); filterPass(entry.b, entry.a, 2, 1, plan.radius, 0, 1);
-      entry.target = entry.a; entry.factor = plan.factor; return entry;
+      // A factor of one is an identity copy. Start the first filter directly
+      // from the height field; it already applies the same validity rule.
+      var input = src;
+      if (plan.factor > 1 && minimum) {
+        // Row minima, then their column minima: the 2D block minimum exactly.
+        if (!entry.rows || entry.rows.width !== plan.width || entry.rows.height !== src.height) {
+          freeTarget(entry.rows); entry.rows = target(plan.width, src.height, true);
+        }
+        blockMinPass(src, entry.rows, plan.factor, 1, 0); blockMinPass(entry.rows, entry.a, plan.factor, 0, 1); input = entry.a;
+      } else if (plan.factor > 1) { filterPass(src, entry.a, 0, plan.factor); input = entry.a; }
+      if (minimum) {
+        if (plan.radius < 8) {
+          filterPass(input, entry.b, 3, 1, plan.radius, 1, 0); filterPass(entry.b, entry.a, 3, 1, plan.radius, 0, 1); input = entry.a;
+        } else {
+          // Exact minimum over [-r,r], composed from three-tap windows. If
+          // the preceding window covers [-e,e], offsets -s/0/s cover every
+          // integer in [-e-s,e+s] when s <= 2e+1. No sample is omitted or
+          // approximated. Repeating an edge minimum has no effect on min;
+          // invalid samples remain excluded at every stage.
+          for (var axis = 0; axis < 2; axis++) for (var extent = 0; extent < plan.radius;) {
+            var step = Math.min(2 * extent + 1, plan.radius - extent), next = input === entry.a ? entry.b : entry.a;
+            filterPass(input, next, 4, 1, step, axis === 0 ? 1 : 0, axis === 1 ? 1 : 0);
+            input = next; extent += step;
+          }
+        }
+      }
+      var temporary = input === entry.b ? entry.a : entry.b, output = temporary === entry.a ? entry.b : entry.a;
+      filterPass(input, temporary, 2, 1, plan.radius, 1, 0); filterPass(temporary, output, 2, 1, plan.radius, 0, 1);
+      entry.target = output; entry.factor = plan.factor; return entry;
     }
     function deriveAll(t, view, st, cache) {
       var radii = auxRadii(st, view, shaders);
       return {blur: derive(t, radii.blur, false, cache, 'blur'), base: derive(t, radii.base, true, cache, 'base')};
     }
-    function freeAux(cache) { ['blur', 'base'].forEach(function (k) { var e = cache[k]; if (e) { freeTarget(e.a); freeTarget(e.b); } cache[k] = null; }); }
+    function freeAux(cache) { ['blur', 'base'].forEach(function (k) { var e = cache[k]; if (e) { freeTarget(e.a); freeTarget(e.b); freeTarget(e.rows); } cache[k] = null; }); }
     function readFloat(t) {
       // RG32F is a renderable format but portable WebGL float readback uses RGBA.
       var rgba = new Float32Array(t.width * t.height * 4), out = new Float32Array(t.width * t.height * 2);
@@ -543,7 +657,9 @@
     function render(view) {
       frameRequested = false;
       if (!ready || destroyed) return lastResult;
-      var start = now(); drawCalls = 0;
+      var start = now(), mark = start, t; drawCalls = 0;
+      // JS time per phase (GPU work runs asynchronously); diagnostics only.
+      phaseMs.want = phaseMs.seed = phaseMs.upload = phaseMs.plan = phaseMs.draw = phaseMs.height = phaseMs.aux = phaseMs.shade = 0;
       try {
         refreshSources();
         var changed = !sameView(view);
@@ -553,11 +669,14 @@
           if (visible.z !== planBounds.z || visible.x0 !== planBounds.x0 || visible.x1 !== planBounds.x1 || visible.y0 !== planBounds.y0 || visible.y1 !== planBounds.y1) planDirty = true;
         }
         want(view);
+        t = now(); phaseMs.want = t - mark; mark = t;
         if (planDirty) { refreshSources(); seed(); }
+        t = now(); phaseMs.seed = t - mark; mark = t;
         // A capture owns one immutable set of resident sources. Refinement is
         // queued until it releases them, so later blocks cannot change surveys.
         if (!snapshots.size) drainUploads(queue, upload, now, UPLOAD_MS);
         if (queue.size && !snapshots.size) needsFrame();
+        t = now(); phaseMs.upload = t - mark; mark = t;
         var w = Math.max(1, Math.round(view.cssSize[0] * view.dpr)), ht = Math.max(1, Math.round(view.cssSize[1] * view.dpr));
         if (w > maxSize || ht > maxSize) throw new Error('Interactive viewport exceeds WebGL target limits');
         if (!field || field.width !== w || field.height !== ht) {
@@ -565,10 +684,13 @@
           canvas.width = w; canvas.height = ht;
         }
         if (planDirty) buildPlan(view);
+        t = now(); phaseMs.plan = t - mark; mark = t;
         var radii = auxRadii(state, view, shaders), key = [Math.round(radii.blur * 4), Math.round(radii.base), field.width, field.height].join(',');
-        if (heightDirty) { drawHeight(field, view); heightDirty = false; dirty = true; auxKey = ''; }
-        if (key !== auxKey) { liveAux = deriveAll(field, view, state, liveAux); auxKey = key; dirty = true; }
-        if (dirty) { drawShade(field, null, view, null, liveAux); dirty = false; frames++; }
+        if (gpuTiming) { gpuSync(field); mark = now(); }
+        if (heightDirty) { drawHeight(field, view); heightDirty = false; dirty = true; auxKey = ''; if (gpuTiming) mark = gpuPhase('height', field, mark); }
+        if (key !== auxKey) { liveAux = deriveAll(field, view, state, liveAux); auxKey = key; dirty = true; if (gpuTiming) mark = gpuPhase('aux', liveAux.base || liveAux.blur ? (liveAux.base || liveAux.blur).target : field, mark); }
+        if (dirty) { drawShade(field, null, view, null, liveAux); dirty = false; frames++; if (gpuTiming) { mark = gpuPhase('shade', null, mark); gpuTotals.frames++; } }
+        phaseMs.draw = now() - mark;
       } catch (e) { error = String(e && e.message || e); ready = false; }
       lastFrameMs = now() - start; return lastResult;
     }
@@ -626,7 +748,7 @@
       // Pieces share edge tiles; progress counts each display tile once per export.
       var onTile = options.onTile && function (d) { var k = d.z + '/' + d.x + '/' + d.y; if (!cache.seen.has(k)) { cache.seen.add(k); options.onTile(d); } };
       var got = await store.loadDetail(coverageTiles(sub, 0), {signal: options.signal, onTile: onTile, reuse: function (key) {
-        var e = cache.tiles.get(key) || lru.peek(key); return e ? {hasData: e.hasData, allValid: e.allValid} : null;
+        var e = cache.tiles.get(key) || lru.peek(key); return e && !e.obsolete ? {hasData: e.hasData, allValid: e.allValid} : null;
       }});
       if (cache.released || cache.invalid || !ready || destroyed || lost) throw new Error('Terrain context unavailable during export');
       if (options.signal && options.signal.aborted) throw new Error('Export cancelled');
@@ -831,7 +953,7 @@
     } catch (e) { error = String(e && e.message || e); destroy(); if (options.onError) { try { options.onError(e); } catch (_) {} } return null; }
     function invalidate() {
       if (snapshots.size) { deferredInvalidate = true; return; }
-      lru.entries.forEach(function (entry, key) { if (!store.get(key)) lru.delete(key); });
+      lru.entries.forEach(function (entry, key) { if (entry.obsolete || !store.get(key)) lru.delete(key); });
       coverageKey = ''; heightDirty = dirty = planDirty = true; needsFrame();
     }
     return {
@@ -843,11 +965,14 @@
         ready: ready, queuedUploads: queue.size,
         exportTextures: Array.from(snapshots).reduce(function (n, capture) { return n + capture.tiles.size; }, 0),
         exportTextureBytes: Array.from(snapshots).reduce(function (n, capture) { return n + capture.bytes; }, 0), uploads: uploads, evictions: evictions, generation: generation, error: error,
-        heightFieldBytes: field ? field.width * field.height * 8 : 0, trackedTiles: known.size,
+        heightFieldBytes: field ? field.width * field.height * 8 : 0, trackedTiles: known.size, phaseMs: Object.assign({}, phaseMs), planEntries: plan.length,
         coverageKind: 'resident tile overlap estimate; readProvenance returns sampled pixel coverage', fallback: 'CPU when float targets or self-test unavailable'}; },
       // Diagnostics are deliberately synchronous and are never called by render().
       debugReadHeight: function () { if (!field || !ready) throw new Error('No height field'); return readFloat(field); },
-      debugLimits: function (limits) { forcedMaxSize = limits.maxTargetSize || 0; }, destroy: destroy
+      debugLimits: function (limits) { forcedMaxSize = limits.maxTargetSize || 0; },
+      // Diagnostic: wait for the GPU after each pass so phaseMs.height/aux/shade
+      // hold pass times. Serializes the pipeline; never used by the app.
+      debugGpuTiming: function (on) { gpuTiming = !!on; if (on) gpuTotals = {height: 0, aux: 0, shade: 0, frames: 0}; return Object.assign({}, gpuTotals); }, destroy: destroy
     };
   }
   return Object.freeze({VERSION: '1', create: create, _test: Object.freeze({tileLevel: tileLevel, coverageTiles: coverageTiles,

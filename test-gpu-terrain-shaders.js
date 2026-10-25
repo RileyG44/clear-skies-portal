@@ -109,6 +109,16 @@ assert.match(SRC, /out vec4 fragColor;/);
   assert.equal(values.u_groundResOverride, 3.25);
 }
 
+/* A height-only ramp must not request unused derivatives. Lighting and
+ * analytical styles still require the original gradient path. */
+for (const style of ['rem','tint']) {
+  const ramp = param => shaders.uniformValues({terrain:{stack:{layers:[{style,param}]}}},{});
+  assert.equal(ramp(0).u_stackGradient,0);
+  assert.equal(ramp(.5).u_stackGradient,1);
+}
+for (const style of ['hs','hsmulti','slope','aspect','northness','c5','contour'])
+  assert.equal(shaders.uniformValues({terrain:{stack:{layers:[{style}]}}},{}).u_stackGradient,1);
+
 /* uniformValues: every style id, off, clamps and defaults. */
 {
   for (const [style, id] of Object.entries(shaders.STYLE_IDS))

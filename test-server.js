@@ -162,6 +162,30 @@ async function main(){
     assert.equal(health&&health.status,200,`server failed to start\n${logs}`);
     const healthBody=JSON.parse(health.body);
     assert.equal(healthBody.ok,true);
+    assert(healthBody.features.includes('overview-elevation'));
+    for(const bad of ['/api/elev/overview/16/0/0.png','/api/elev/overview/1/2/0.png','/api/elev/overview/1/0/2.png'])
+      assert.equal((await request(port,bad)).status,400,'overview coordinates must stay inside the published pyramid');
+    const overviewPath='/api/elev/overview/0/0/0.png';
+    const shared=await Promise.all([request(port,overviewPath),request(port,overviewPath)]);
+    assert(shared.every(r=>r.status===200));
+    assert(shared[0].body.equals(shared[1].body),'shared overview requests must preserve the exact source bytes');
+    const expectedOverview=require('./usgs.js').encodePNG(Buffer.alloc(256*256*4,128),256,256);
+    assert(shared[0].body.equals(expectedOverview),'overview caching must not resample or recolor terrain');
+    const again=await request(port,overviewPath);
+    assert.equal(again.headers['x-cache'],'hit');
+    assert(again.body.equals(expectedOverview));
+    assert.equal(fs.readFileSync(upstreamLog,'utf8').split('\n').filter(p=>p==='/elevation-tiles-prod/terrarium/0/0/0.png').length,1,
+      'concurrent views and subsequent cache hits must share one upstream request');
+    for(let i=0;i<2;i++)assert.equal((await request(port,'/api/elev/overview/2/3/3.png')).status,502);
+    assert.equal(fs.readFileSync(upstreamLog,'utf8').split('\n').filter(p=>p==='/elevation-tiles-prod/terrarium/2/3/3.png').length,2,
+      'failed overview responses must not poison the disk cache');
+    const prewarmOptions={url:new URL(`http://127.0.0.1:${port}`),maxZoom:1,concurrency:2};
+    const {warm:prewarmOverview}=require('./scripts/prewarm-overview.js');
+    const warmed=await prewarmOverview(prewarmOptions);
+    assert.equal(warmed.done,5);assert.equal(warmed.bytes,expectedOverview.length*5);
+    const rewarmed=await prewarmOverview(prewarmOptions);
+    assert.equal(rewarmed.levels.reduce((n,l)=>n+l.hits,0),5,'re-running prewarm must reuse every cached tile');
+    assert.equal(rewarmed.levels.reduce((n,l)=>n+l.misses,0),0);
     assert(Number.isInteger(healthBody.cached)&&healthBody.cached>=0,"health must report the cached tile count");
     assert(Number.isFinite(healthBody.uptimeSec)&&healthBody.uptimeSec>=0,"health must report process uptime");
     assert.equal(healthBody.channel,"live","an engine started without CSP_CHANNEL must report itself as live");

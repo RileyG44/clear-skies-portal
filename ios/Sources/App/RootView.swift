@@ -44,7 +44,7 @@ struct RootView: View {
             // neither dims nor shrinks it and the glass shows the map.
             .presentationBackgroundInteraction(.enabled)
             .presentationContentInteraction(.resizes)
-            .presentationDragIndicator(.visible)
+            .presentationDragIndicator(.hidden)
             // iOS fades a growing sheet from glass to opaque; this one keeps
             // the map tools' glass at every height.
             .presentationBackground { SheetGlass() }

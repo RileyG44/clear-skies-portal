@@ -16,7 +16,35 @@
   function coords(c,z){const scale=2**(c.z-z),n=2**z;return {z,x:mod(Math.floor(c.x/scale),n),y:Math.floor(c.y/scale)};}
   function native(source,z){return Math.max(0,Math.min(z,Math.floor(typeof source.nativeZoom==='function'?source.nativeZoom(z):source.nativeZoom??z)));}
   function sourceUrl(source,c){return typeof source.url==='function'?source.url(c.z,c.x,c.y):source.url.replace('{z}',c.z).replace('{x}',c.x).replace('{y}',c.y);}
+  function matchesSource(source,record){return !!source&&record.url===sourceUrl(source,record)&&record.rank===source.rank&&
+    record.label===source.label&&record.cacheKey===source.cacheKey&&native(source,record.z)>=record.z;}
   function resolution(c,w=256){return EARTH*Math.cos(latitude((c.y+.5)/2**c.z)*Math.PI/180)/(2**c.z*w);}
+  /* A coarse backdrop from sources marked `backdrop`, kept loaded far beyond
+     the view: zooming out or flinging then shows blurred terrain at once while
+     the proper level loads, instead of empty map. Each level is relative to
+     the on-screen zoom and covers 2^k times the view's span, which takes
+     about as many tiles as the view itself. */
+  const BACKDROP_LEVELS=[3,6],FALLBACK_LEVELS=4;
+  function backdropTiles(bounds,dz){
+    const out=[];
+    for(const k of BACKDROP_LEVELS){
+      const z=bounds.z-dz-k;if(z<0)continue;
+      const scale=2**(dz+k),n=2**z,cx=(bounds.x0+bounds.x1+1)/2,cy=(bounds.y0+bounds.y1+1)/2;
+      const hx=(bounds.x1-bounds.x0+1)*2**k/2,hy=(bounds.y1-bounds.y0+1)*2**k/2;
+      const x0=Math.floor((cx-hx)/scale),x1=Math.floor((cx+hx)/scale);
+      const y0=Math.max(0,Math.floor((cy-hy)/scale)),y1=Math.min(n-1,Math.floor((cy+hy)/scale));
+      for(let y=y0;y<=y1;y++)for(let x=x0;x<=Math.min(x1,x0+n-1);x++)out.push({z,x:mod(x,n),y});
+    }
+    return out;
+  }
+  /* Unwrapped bounds of same-level display tiles; null across the antimeridian
+     (callers that know the view pass its bounds instead). */
+  function boundsOf(tiles){
+    if(!tiles.length)return null;
+    const z=tiles[0].z,xs=new Set();let x0=Infinity,x1=-Infinity,y0=Infinity,y1=-Infinity;
+    for(const d of tiles){if(d.z!==z)return null;xs.add(d.x);x0=Math.min(x0,d.x);x1=Math.max(x1,d.x);y0=Math.min(y0,d.y);y1=Math.max(y1,d.y);}
+    return xs.size===x1-x0+1?{z,x0,x1,y0,y1}:null;
+  }
   function sample(record,mx,my){
     const n=2**record.z,px=Math.max(0,Math.min(record.width-1,(mod(mx,1)*n-record.x)*record.width-.5));
     const py=Math.max(0,Math.min(record.height-1,(my*n-record.y)*record.height-.5));
@@ -64,6 +92,12 @@
   ElevationTileStore.prototype.get=function(key){
     const r=this._tiles.get(key);if(r){this._tiles.delete(key);this._tiles.set(key,r);}return r;
   };
+  // Whether the current view, its refinement or its backdrop needs this key.
+  ElevationTileStore.prototype.wants=function(key){return this._wanted.has(key);};
+  ElevationTileStore.prototype.accepts=function(record){
+    const sources=typeof this.options.sources==='function'?this.options.sources():this.options.sources||[];
+    return matchesSource(sources.find(s=>s.id===record.sourceId),record);
+  };
   ElevationTileStore.prototype.finestFor=function(id,c){
     const levels=[...(this._levels.get(id)?.keys()||[])].filter(z=>z<=c.z).sort((a,b)=>b-a);
     for(const z of levels){const t=coords(c,z),r=this.get(tileKey(id,z,t.x,t.y));if(r)return r;}
@@ -76,7 +110,7 @@
     if(!Number.isFinite(next))return;
     this._retryTimer=setTimeout(()=>{
       this._retryTimer=0;
-      if(!this._destroyed)this.want(this._displays,{generation:this._generation});
+      if(!this._destroyed)this.want(this._displays,{generation:this._generation,bounds:this._bounds});
     },Math.max(0,next-Date.now()));
     this._retryTimer?.unref?.();
   };
@@ -90,15 +124,16 @@
     // normalization must never alter a different consumer's native data.
     let grid=data.grid instanceof Float32Array?data.grid:new Float32Array(data.grid);
     if(this.options.mask)grid=this.options.mask(grid.slice(),width,height,c,source);
-    let normalized=false;
-    for(const value of grid)if(!valid(value)&&!Number.isNaN(value)){normalized=true;break;}
-    if(normalized){grid=grid.slice();for(let i=0;i<grid.length;i++)if(!valid(grid[i]))grid[i]=NaN;}
     if(!(grid instanceof Float32Array)||grid.length!==width*height)throw new Error('Invalid masked elevation grid');
-    const r={key,url:job.url,sourceId:source.id,rank:source.rank,label:source.label,z:c.z,x:c.x,y:c.y,width,height,grid,
+    // One pass counts valid samples and finds non-NaN sentinels. Tiles arrive
+    // in bursts while the map moves, so repeated full scans cost frames.
+    let validCount=0,normalized=false;
+    for(let i=0;i<grid.length;i++){const v=grid[i];if(v>-20000&&v<Infinity)validCount++;else if(v===v)normalized=true;}
+    if(normalized){grid=grid.slice();for(let i=0;i<grid.length;i++)if(!valid(grid[i]))grid[i]=NaN;}
+    // validCount: finite samples above -20000; every other sample is NaN.
+    return {key,url:job.url,cacheKey:source.cacheKey,sourceId:source.id,rank:source.rank,label:source.label,z:c.z,x:c.x,y:c.y,width,height,grid,
       sampleMeters:typeof source.sampleMeters==='function'?source.sampleMeters(c):source.sampleMeters??resolution(c,width),
-      surveys:data.surveys||[],revision:++this._revision,validCount:0};
-    for(const value of grid)if(valid(value))r.validCount++;
-    return r;
+      surveys:data.surveys||[],revision:++this._revision,validCount};
   };
   /* Native records for an export finer than the view: for each display tile,
    * the best-ranked source at its own finest level, and lower ranks only
@@ -142,15 +177,15 @@
     })).then(()=>[...out.values()]);
   };
   ElevationTileStore.prototype._load=function(job){
-    const {key,source,c,sharp}=job;
+    const {key,source,c,sharp,backdrop}=job;
     if(this._tiles.has(key))return Promise.resolve(this._tiles.get(key));
     if(this._pending.has(key))return this._pending.get(key).promise;
     if((this._failed.get(key)||0)>Date.now())return Promise.resolve(null);
     const controller=new AbortController(),epoch=this._epoch;
     const pending={controller,promise:null,job};this._pending.set(key,pending);
     pending.promise=Promise.resolve().then(()=>{if(controller.signal.aborted)return null;return this.options.request(job.url,{
-      signal:controller.signal,priority:sharp?0:source.rank===5?2:source.rank,
-      group:sharp?'sharp':source.group||'overview',kind:source.kind
+      signal:controller.signal,priority:backdrop?.5:sharp?0:source.rank===5?2:source.rank,
+      group:backdrop?'backdrop':sharp?'sharp':source.group||'overview',kind:source.kind
     });}).then(data=>{
       if(controller.signal.aborted||epoch!==this._epoch||this._destroyed)return null;
       const r=this._record(job,data);
@@ -173,16 +208,16 @@
     if(this._destroyed)return;
     const sources=(typeof this.options.sources==='function'?this.options.sources():this.options.sources||[]).slice();
     const changed=sources.length!==this._sources.length||sources.some((s,i)=>s!==this._sources[i]);
-    this._sources=sources;this._displays=displayTiles.slice();this._generation=options?.generation;
+    this._sources=sources;this._displays=displayTiles.slice();this._generation=options?.generation;this._bounds=options?.bounds||null;
     const demand=++this._demand;
     // Source identities are stable in the app, but URL revisions must also
     // invalidate cached/offscreen native tiles for other store consumers.
     if(changed){
       this._summaries.clear();const byId=new Map(sources.map(s=>[s.id,s]));
       for(const [key,r] of this._tiles){const s=byId.get(r.sourceId);
-        if(!s||r.url!==sourceUrl(s,r)||r.rank!==s.rank||r.label!==s.label||native(s,r.z)<r.z)this._remove(key);}
+        if(!matchesSource(s,r))this._remove(key);}
       for(const [key,p] of this._pending){const s=byId.get(p.job.source.id);
-        if(!s||p.job.url!==sourceUrl(s,p.job.c)||p.job.source.rank!==s.rank||p.job.source.label!==s.label||native(s,p.job.c.z)<p.job.c.z){p.controller.abort();this._pending.delete(key);}}
+        if(!matchesSource(s,{...p.job.c,url:p.job.url,rank:p.job.source.rank,label:p.job.source.label,cacheKey:p.job.source.cacheKey})){p.controller.abort();this._pending.delete(key);}}
       this._failed.clear();
     }
     const displayKeys=new Set(displayTiles.map(d=>tileKey('',d.z,mod(d.x,2**d.z),d.y)));
@@ -205,9 +240,28 @@
       }
       groups.push(jobs);
     }
+    const backdrop=[],bounds=this._bounds||boundsOf(displayTiles);
+    if(bounds)for(const source of this._sources){
+      if(!source.backdrop)continue;
+      for(const t of backdropTiles(bounds,source.dz??this.options.dz??0)){
+        if(source.allowed&&!source.allowed(t))continue;
+        const c=coords(t,native(source,t.z)),key=tileKey(source.id,c.z,c.x,c.y);
+        if(wanted.has(key))continue;
+        const job={key,source,c,url:sourceUrl(source,c),sharp:false,backdrop:true};
+        wanted.set(key,job);backdrop.push(job);
+      }
+    }
+    /* Coarser native tiles still on their way are fallback for this view: a
+       fast zoom in must not cancel them just because it passed their level. */
+    const fallback=new Set();
+    for(const d of displayTiles)for(const source of this._sources){
+      if(source.allowed&&!source.allowed(d))continue;
+      const z=native(source,Math.max(0,d.z-(source.dz??this.options.dz??0)));
+      for(let k=1;k<=FALLBACK_LEVELS&&z-k>=0;k++){const c=coords(d,z-k);fallback.add(tileKey(source.id,c.z,c.x,c.y));}
+    }
     this._wanted=wanted;
     for(const [key,until] of this._failed)if(!wanted.has(key)||until<=Date.now())this._failed.delete(key);
-    for(const [key,p] of this._pending)if(!wanted.has(key)){p.controller.abort();this._pending.delete(key);}
+    for(const [key,p] of this._pending)if(!wanted.has(key)&&!fallback.has(key)){p.controller.abort();this._pending.delete(key);}
     // Every primary source is dispatched together; refinement cannot starve it.
     const primary=new Map(),dependents=new Map();
     for(const jobs of groups)for(const j of jobs)if(!j.sharp){
@@ -235,6 +289,8 @@
       this._evict();
     };
     const first=Promise.all([...primary.values()].map(j=>this._load(j).then(record=>{refine(j.key);return record;})));
+    // The backdrop queues behind the view's own tiles (see _load priority).
+    for(const job of backdrop)this._load(job);
     this._scheduleRetry();
     return first;
   };
@@ -313,8 +369,12 @@
   ElevationTileStore.prototype.settled=function(displayTiles){
     const tiles=displayTiles||this._displays;let complete=0,coveredPixels=0,totalPixels=0;
     for(const d of tiles){const s=this._summary(d);if(s.covered===s.total)complete++;coveredPixels+=s.covered;totalPixels+=s.total;}
+    // The backdrop is transitional cover, not the view's data: it never holds
+    // readiness, refinement or failure status.
+    const own=key=>this._wanted.has(key)&&!this._wanted.get(key).backdrop;
     return {complete,total:tiles.length,ratio:totalPixels?coveredPixels/totalPixels:0,coveredPixels,totalPixels,
-      refining:this._pending.size>0||!!this._retryTimer,failed:[...this._failed.keys()].some(key=>this._wanted.has(key))};
+      refining:[...this._pending.keys()].some(own)||[...this._failed.keys()].some(own)&&!!this._retryTimer,
+      failed:[...this._failed.keys()].some(own)};
   };
   ElevationTileStore.prototype.provenance=function(displayTiles){
     const ranks={},labels=new Set(),surveys=new Map(),sampleMeters={};
@@ -381,11 +441,12 @@
   function buildSources(o,e){
     const out=[],dz=e.dz||0,add=(id,rank,label,max,url,allowed,kind)=>out.push({id,rank,label,dz,
       nativeZoom:z=>Math.min(z,max),url,allowed,kind,sharper:true,group:rank===5?'dnr':rank===3?'detail':rank===2?'national':'overview',sampleMeters:e.sourceSampleMeters});
-    if(e.proxy&&o.dnrEndpoint)add('dnr',5,'WA DNR elevation',18,(z,x,y)=>e.api(`${o.dnrEndpoint}/${z}/${x}/${y}.png?acquire=0&revision=${e.dnrRevision||0}`),e.dnrTileAllowed);
+    if(e.proxy&&o.dnrEndpoint){add('dnr',5,'WA DNR elevation',18,(z,x,y)=>e.api(`${o.dnrEndpoint}/${z}/${x}/${y}.png?acquire=0&revision=${e.dnrRevision||0}`),e.dnrTileAllowed);out[out.length-1].cacheKey=o.dnrMaskKey;}
     if(e.proxy&&o.rawEndpoint)add('raw',3,'USGS 3.3 ft',o.rawNativeZoom??28,(z,x,y)=>e.api(`${o.rawEndpoint}/${z}/${x}/${y}.png?${e.rawCoverageQuery||''}`),c=>c.z-dz>=13);
     if(e.proxy&&o.nationalEndpoint)add('national',2,'National elevation',o.nationalNativeZoom??28,(z,x,y)=>e.api(`${o.nationalEndpoint}/${z}/${x}/${y}.png`),c=>c.z-dz>=13||o.refineOverview);
     if(!e.proxy&&o.fallback)add('national',2,'USGS 3DEP elevation',18,(z,x,y)=>e.nationalUrl({z,x,y}),()=>true,'lerc');
-    if(o.fallback)add('overview',1,'Overview elevation',o.fallbackNativeZoom??28,(z,x,y)=>typeof o.fallback==='function'?o.fallback({z,x,y}):o.fallback.replace('{z}',z).replace('{x}',x).replace('{y}',y),()=>true,typeof o.fallback==='function'?'lerc':undefined);
+    if(o.fallback){add('overview',1,'Overview elevation',o.fallbackNativeZoom??28,(z,x,y)=>typeof o.fallback==='function'?o.fallback({z,x,y}):o.fallback.replace('{z}',z).replace('{x}',x).replace('{y}',y),()=>true,typeof o.fallback==='function'?'lerc':undefined);
+      out[out.length-1].backdrop=true;}
     return out;
   }
   return Object.freeze({VERSION:'1',tileKey,ElevationTileStore,buildSources});

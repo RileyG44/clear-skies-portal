@@ -1,4 +1,5 @@
 import SwiftUI
+import UniformTypeIdentifiers
 
 private enum MapControlSize {
     static let tool: CGFloat = 48
@@ -18,7 +19,7 @@ struct MapChrome: View {
                     HStack(alignment: .top, spacing: 10) {
                         TerrainStatusCapsule()
                         Spacer(minLength: 0)
-                        MapTools(maxHeight: geometry.size.height - MapControlSize.search - 20)
+                        MapTools(maxHeight: geometry.size.height - MapControlSize.search - (shell.search.canCopy ? 54 : 0) - 20)
                     }
                     .padding(.horizontal, 12)
                     .padding(.top, 6)
@@ -45,6 +46,7 @@ struct MapChrome: View {
 struct MapTools: View {
     @Environment(ShellModel.self) private var shell
     @Namespace private var glass
+    @State private var draggedID: String?
     let maxHeight: CGFloat
 
     var body: some View {
@@ -60,6 +62,19 @@ struct MapTools: View {
                         ForEach(column) { tool in
                             ToolButton(tool: tool)
                                 .glassEffectID(tool.id, in: glass)
+                                .onDrag {
+                                    draggedID = tool.id
+                                    let provider = NSItemProvider()
+                                    provider.registerDataRepresentation(forTypeIdentifier: DockDrop.type.identifier, visibility: .ownProcess) { complete in
+                                        complete(Data(tool.id.utf8), nil)
+                                        return nil
+                                    }
+                                    return provider
+                                }
+                                .onDrop(of: [DockDrop.type], delegate: DockDrop(shell: shell, target: tool.id, draggedID: $draggedID))
+                                .accessibilityHint("Touch and hold, then drag to reorder")
+                                .accessibilityAction(named: "Move earlier") { move(tool.id, by: -1) }
+                                .accessibilityAction(named: "Move later") { move(tool.id, by: 1) }
                             if tool.id != column.last?.id {
                                 Divider().frame(width: 24).opacity(0.5)
                             }
@@ -71,27 +86,61 @@ struct MapTools: View {
         }
         .animation(.spring(duration: 0.35, bounce: 0.2), value: tools.map(\.id))
     }
+
+    private func move(_ id: String, by delta: Int) {
+        let tools = shell.dock.filter { $0.hidden != true }
+        if let index = tools.firstIndex(where: { $0.id == id }) { shell.moveTool(id, to: index + delta) }
+    }
+}
+
+/// Native drag previews follow the finger; neighbouring tools settle into the
+/// new order immediately, using the same saved order as the web dock.
+private struct DockDrop: DropDelegate {
+    static let type = UTType(exportedAs: "dev.riley.ClearSkies.map-tool")
+    let shell: ShellModel
+    let target: String
+    @Binding var draggedID: String?
+
+    func validateDrop(info: DropInfo) -> Bool {
+        draggedID != nil && info.hasItemsConforming(to: [Self.type])
+    }
+    func dropEntered(info: DropInfo) {
+        guard validateDrop(info: info), let id = draggedID, id != target,
+              let index = shell.dock.filter({ $0.hidden != true }).firstIndex(where: { $0.id == target }) else { return }
+        shell.moveTool(id, to: index)
+    }
+    func dropUpdated(info: DropInfo) -> DropProposal? { DropProposal(operation: .move) }
+    func performDrop(info: DropInfo) -> Bool { draggedID = nil; return true }
 }
 
 struct ToolButton: View {
     @Environment(ShellModel.self) private var shell
+    @State private var showingModes = false
     let tool: DockTool
 
     var body: some View {
         if tool.tool == "mapMode" {
-            Menu {
-                Section("Map view") {
+            // Menu reserves a long press for drag-to-select. A button-backed
+            // popover leaves that gesture available to the reorderable dock.
+            Button { showingModes = true } label: {
+                glyph(Symbols.tool(tool.tool, mode: shell.map.mode))
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(tool.title)
+            .popover(isPresented: $showingModes, arrowEdge: .trailing) {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Map view")
+                        .portalFont(.caption, weight: .semibold)
+                        .foregroundStyle(.secondary)
+                        .padding(.horizontal, 12)
+                        .padding(.top, 8)
                     modeButton("2d", "2D map", "Flat map with every layer", "map")
                     modeButton("3d", "3D terrain", "Tilt and fly over the relief", "mountain.2")
                     modeButton("points", "Point cloud", "LiDAR returns in 3D", "circle.grid.3x3")
                 }
-            } label: {
-                glyph(Symbols.tool(tool.tool, mode: shell.map.mode))
+                .padding(8)
+                .presentationCompactAdaptation(.popover)
             }
-            .menuOrder(.fixed)
-            .menuStyle(.button)
-            .buttonStyle(.plain)
-            .accessibilityLabel(tool.title)
         } else {
             Button { shell.tool(tool) } label: { glyph(Symbols.tool(tool.tool, mode: shell.map.mode)) }
                 .buttonStyle(.plain)
@@ -102,14 +151,23 @@ struct ToolButton: View {
     }
 
     private func modeButton(_ mode: String, _ title: String, _ detail: String, _ symbol: String) -> some View {
-        Button { shell.setMode(mode) } label: {
-            Label {
-                Text(title)
-                Text(detail)
-            } icon: {
+        Button { showingModes = false; shell.setMode(mode) } label: {
+            HStack(spacing: 12) {
                 Image(systemName: shell.map.mode == mode ? "checkmark" : symbol)
+                    .frame(width: 24)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(title).portalFont(.body, weight: .medium)
+                    Text(detail).portalFont(.caption).foregroundStyle(.secondary)
+                }
+                Spacer(minLength: 0)
             }
+            .padding(12)
+            .frame(minWidth: 240, minHeight: 44, alignment: .leading)
+            .contentShape(.rect)
         }
+        .buttonStyle(.plain)
+        .accessibilityElement(children: .combine)
+        .accessibilityAddTraits(shell.map.mode == mode ? .isSelected : [])
     }
 
     private func glyph(_ symbol: String) -> some View {
@@ -228,8 +286,10 @@ struct SearchCapsule: View {
 
     var body: some View {
         GlassEffectContainer(spacing: 10) {
+          VStack(spacing: 10) {
             HStack(spacing: 10) {
-                Button { shell.openSheet(.medium) } label: {
+              HStack(spacing: 0) {
+                Button { shell.openSearch() } label: {
                     HStack(spacing: 8) {
                         Image(systemName: "magnifyingglass")
                             .font(.system(size: MapControlSize.icon, weight: .medium))
@@ -237,7 +297,7 @@ struct SearchCapsule: View {
                         if shell.search.label.isEmpty {
                             Text("Search places, layers…").foregroundStyle(.secondary)
                         } else {
-                            Text(shell.search.label).foregroundStyle(PortalPrimary()).lineLimit(1)
+                            Text(shell.search.label).foregroundStyle(.secondary).lineLimit(1)
                         }
                         Spacer(minLength: 0)
                         if let route = shell.path.last { RouteGlyph(key: route) }
@@ -248,10 +308,22 @@ struct SearchCapsule: View {
                     .contentShape(.capsule)
                 }
                 .buttonStyle(.plain)
-                .chromeGlass(in: .capsule)
-                .glassEffectID("search", in: glass)
                 .accessibilityLabel(shell.search.label.isEmpty ? "Search places and layers" : "Search, \(shell.search.label)")
-                .accessibilityHint(shell.path.last.map { "Returns to \(shell.title(for: $0))" } ?? "")
+                .accessibilityHint("Search places and layers")
+                if shell.search.canClear {
+                    Button { shell.clearLocation() } label: {
+                        Image(systemName: "xmark")
+                            .font(.system(size: 13, weight: .semibold))
+                            .foregroundStyle(.secondary)
+                            .frame(width: 44, height: MapControlSize.search)
+                            .contentShape(.rect)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Clear the search and selected location")
+                }
+              }
+              .chromeGlass(in: .capsule)
+              .glassEffectID("search", in: glass)
 
                 Button { shell.locate() } label: {
                     Image(systemName: "location")
@@ -265,6 +337,13 @@ struct SearchCapsule: View {
                 .glassEffectID("locate", in: glass)
                 .accessibilityLabel("Use my current location")
             }
+            if shell.search.canCopy {
+                CoordinateActions()
+                    .padding(4)
+                    .chromeGlass(in: .capsule, interactive: false)
+                    .glassEffectID("coordinates", in: glass)
+            }
+          }
         }
         .gesture(DragGesture(minimumDistance: 12).onEnded { value in
             if value.translation.height < -24 { shell.openSheet(.medium) }

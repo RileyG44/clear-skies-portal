@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// The bottom sheet: search at the top, then the selected place and every
+/// The bottom sheet: search and coordinate shortcuts above every
 /// tool page, as the web panel lists them. Pages push in a navigation stack.
 struct ToolsSheet: View {
     @Environment(ShellModel.self) private var shell
@@ -26,7 +26,6 @@ struct HomeView: View {
         @Bindable var shell = shell
         List {
             if shell.query.trimmingCharacters(in: .whitespaces).isEmpty {
-                if !shell.search.label.isEmpty { LocationSection() }
                 if let message = shell.status.message, message.kind == "general", !message.text.isEmpty {
                     Section {
                         Label {
@@ -58,14 +57,24 @@ struct HomeView: View {
         .onSheetGlass()
         .scrollDismissesKeyboard(.immediately)
         .safeAreaInset(edge: .top, spacing: 0) {
-            SearchBar(focused: $searchFocused)
+            VStack(spacing: 10) {
+                SearchBar(focused: $searchFocused)
+                if shell.query.isEmpty, shell.search.canCopy { CoordinateActions() }
+            }
                 .padding(.horizontal, 16)
                 .padding(.top, 12)
-                .padding(.bottom, 6)
+                .padding(.bottom, 12)
         }
-        .toolbar(.hidden, for: .navigationBar)
+        .navigationTitle("Explore")
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) { CloseSheetButton() }
+        }
         .onChange(of: searchFocused) {
             if searchFocused, shell.detent != .expanded { shell.detent = .expanded }
+        }
+        .onAppear {
+            if shell.searchRequested { searchFocused = true; shell.searchRequested = false }
         }
         .onChange(of: shell.query) { shell.queryChanged() }
     }
@@ -82,29 +91,31 @@ struct SearchBar: View {
                 Image(systemName: "magnifyingglass")
                     .portalFont(.footnote, weight: .medium)
                     .foregroundStyle(.secondary)
-                TextField("Search places, layers…", text: $shell.query)
+                TextField("Search places or layers", text: $shell.query,
+                          prompt: Text(shell.search.label.isEmpty ? "Search places, layers…" : shell.search.label)
+                            .foregroundStyle(.secondary))
                     .focused(focused)
                     .submitLabel(.search)
                     .textInputAutocapitalization(.never)
                     .autocorrectionDisabled()
-                    .onSubmit { shell.submit() }
-                if !shell.query.isEmpty {
-                    Button { shell.query = "" } label: {
+                    .onSubmit { shell.submit(); focused.wrappedValue = false }
+                if !shell.query.isEmpty || shell.search.canClear {
+                    Button { shell.clearLocation() } label: {
                         Image(systemName: "xmark.circle.fill").foregroundStyle(.tertiary).frame(width: 44, height: 44)
                     }
                     .buttonStyle(.plain)
-                    .accessibilityLabel("Clear search text")
+                    .accessibilityLabel("Clear the search and selected location")
                 }
             }
             .padding(.horizontal, 12)
             .frame(minHeight: 44)
             .background(.fill.tertiary, in: .capsule)
             if focused.wrappedValue {
-                Button(role: .close) {
-                    shell.query = ""
+                Button {
                     focused.wrappedValue = false
-                }
+                } label: { Image(systemName: "keyboard.chevron.compact.down").frame(width: 28, height: 28) }
                 .buttonStyle(.glass)
+                .accessibilityLabel("Dismiss keyboard")
                 .transition(.scale.combined(with: .opacity))
             } else {
                 Button { shell.locate() } label: {
@@ -157,67 +168,50 @@ struct RouteGlyph: View {
     }
 }
 
-/// The selected place: its label and coordinates, copy, and the same links
-/// out that the web offers.
-struct LocationSection: View {
+/// The web's three compact shortcuts, immediately under the search field.
+/// Selected-location text belongs in the field, rather than a separate card.
+struct CoordinateActions: View {
     @Environment(ShellModel.self) private var shell
     @Environment(\.openURL) private var openURL
 
     var body: some View {
         let search = shell.search
-        Section {
-            VStack(alignment: .leading, spacing: 10) {
-                HStack(alignment: .firstTextBaseline, spacing: 10) {
-                    Image(systemName: "mappin.and.ellipse").foregroundStyle(.secondary)
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(search.label).fontWeight(.semibold).lineLimit(2)
-                        if let lat = search.lat, let lng = search.lng {
-                            Text(Self.coordinates(lat: lat, lng: lng))
-                                .portalFont(.caption, digits: true)
-                                .foregroundStyle(.secondary)
-                                .textSelection(.enabled)
-                        }
-                    }
-                    Spacer(minLength: 0)
-                    if search.canClear {
-                        Button { shell.clearLocation() } label: {
-                            Image(systemName: "xmark.circle.fill")
-                                .symbolRenderingMode(.hierarchical)
-                                .portalFont(.body)
-                        }
-                        .buttonStyle(.borderless)
-                        .foregroundStyle(.secondary)
-                        .accessibilityLabel("Clear the selected location")
-                    }
-                }
-                HStack(spacing: 6) {
-                    if search.canCopy {
-                        Button { shell.copyCoordinates() } label: { Label("Copy", systemImage: "doc.on.doc") }
-                    }
-                    if let url = URL(string: search.mapsURL), !search.mapsURL.isEmpty {
-                        Button { openURL(url) } label: { Label("Maps", systemImage: "map") }
-                    }
-                    if let url = URL(string: search.earthURL), !search.earthURL.isEmpty {
-                        Button { openURL(url) } label: { Label("Earth", systemImage: "globe") }
-                    }
-                }
-                .buttonStyle(.bordered)
-                .buttonBorderShape(.capsule)
-                .controlSize(.small)
-                .tint(.primary)
-                .portalFont(.footnote)
-                .lineLimit(1)
-                .fixedSize()
+        HStack(spacing: 8) {
+            Button { shell.copyCoordinates() } label: { action("Copy coordinates", "doc.on.doc") }
+                .disabled(!search.canCopy)
+            Button { if let url = URL(string: search.mapsURL) { openURL(url) } } label: {
+                action("Open coordinates in Google Maps", "map")
             }
-            .padding(.vertical, 2)
+            .disabled(search.mapsURL.isEmpty)
+            Button { if let url = URL(string: search.earthURL) { openURL(url) } } label: {
+                action("Open coordinates in Google Earth", "globe")
+            }
+            .disabled(search.earthURL.isEmpty)
         }
+        .buttonStyle(.plain)
     }
 
-    /// Five decimals, about a metre: the precision the web shows and copies.
-    static func coordinates(lat: Double, lng: Double) -> String {
-        let latText = String(format: "%.5f° %@", abs(lat), lat < 0 ? "S" : "N")
-        let lngText = String(format: "%.5f° %@", abs(lng), lng < 0 ? "W" : "E")
-        return "\(latText) · \(lngText)"
+    private func action(_ title: String, _ symbol: String) -> some View {
+        Image(systemName: symbol)
+            .portalFont(.callout, weight: .medium)
+            .frame(maxWidth: .infinity, minHeight: 44)
+            .background(.fill.tertiary, in: .capsule)
+            .contentShape(.capsule)
+            .accessibilityLabel(title)
+    }
+}
+
+/// One visible way back to the map at every sheet height and navigation depth.
+/// Interactive swipe-to-dismiss remains available without a crowded grabber.
+struct CloseSheetButton: View {
+    @Environment(ShellModel.self) private var shell
+    var body: some View {
+        Button { shell.activeSheet = nil } label: {
+            Image(systemName: "chevron.down").fontWeight(.semibold)
+                .frame(minWidth: 28, minHeight: 28)
+        }
+        .accessibilityLabel("Close menu")
+        .accessibilityHint("Return to the map")
     }
 }
 
@@ -308,6 +302,7 @@ struct RoutePageView: View {
             ToolbarItem(placement: .principal) {
                 Text(shell.title(for: route)).portalFont(.subheadline, weight: .semibold)
             }
+            ToolbarItem(placement: .topBarTrailing) { CloseSheetButton() }
         }
     }
 }
@@ -344,7 +339,7 @@ struct PanelSheet: View {
                     }
                 }
                 ToolbarItem(placement: .topBarTrailing) {
-                    Button(role: .close) { shell.activeSheet = nil }
+                    CloseSheetButton()
                 }
             }
         }

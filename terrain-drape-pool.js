@@ -47,7 +47,7 @@
               const job=slot.job;
               if(!job||data.id!==job.id){data.bitmap?.close?.();return}
               slot.job=null;
-              if(data.error)this._fallback(job);else this._finish(job,null,data.bitmap||data.grid);
+              if(data.error)this._fallback(job);else this._finish(job,null,data.bitmap||data.tile||data.grid);
               this._drain();
             };
           }

@@ -44,6 +44,7 @@ function exportWarmPaths(job,{z,x,y}){
   return {qp,dp,wadnr:layers?sha1("wadnr:export:"+qp):null,dep:sha1("3dep:"+dp)};
 }
 const elevationWarmKeys=({z,x,y})=>({national:sha1(`elevation-national-v1:${z}/${x}/${y}`),raw:sha1(`usgselev:${z}/${x}/${y}`)});
+const overviewWarmKey=({z,x,y})=>sha1(`elevation-overview-v1:${z}/${x}/${y}`);
 const renderedWarmKey=(style,z,x,y,version="terrain-v3")=>sha1(`${version}:${style}:${z}/${x}/${y}`);
 function* manifestKeys(job,kind){
   const b=job&&job.bbox;
@@ -225,7 +226,7 @@ class CacheBudget {
   stats(){return {...this.state,bytesWrittenSinceSweep:this.written,sweeping:!!this.running}}
   async close(){this.closed=true;this.invalidatePins();clearTimeout(this.startup);clearTimeout(this.scheduled);clearInterval(this.periodic);await this.running}
 }
-module.exports={writeGate,guardedWrite,CacheBudget,GIB,HOUR,YOUNG_MS,maxGiB,sha1,tileRange,mercBbox,exportWarmPaths,elevationWarmKeys,renderedWarmKey,manifestKeys,readPins,touchAccess,scan,planEviction,sweep};
+module.exports={writeGate,guardedWrite,CacheBudget,GIB,HOUR,YOUNG_MS,maxGiB,sha1,tileRange,mercBbox,exportWarmPaths,elevationWarmKeys,overviewWarmKey,renderedWarmKey,manifestKeys,readPins,touchAccess,scan,planEviction,sweep};
 
 /* The same shipped file supplies the worker entry point; terrain workers also
    import its key/touch helpers, so only this explicit flag starts a sweep. */
