@@ -5,7 +5,15 @@ private struct PortalAppearanceKey: EnvironmentKey {
     nonisolated static let defaultValue = NativeAppearance()
 }
 
+private struct PortalSheetSurfaceKey: EnvironmentKey {
+    nonisolated static let defaultValue = false
+}
+
 extension EnvironmentValues {
+    nonisolated var portalSheetSurface: Bool {
+        get { self[PortalSheetSurfaceKey.self] }
+        set { self[PortalSheetSurfaceKey.self] = newValue }
+    }
     nonisolated var portalAppearance: NativeAppearance {
         get { self[PortalAppearanceKey.self] }
         set { self[PortalAppearanceKey.self] = newValue }

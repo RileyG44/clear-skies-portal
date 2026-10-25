@@ -138,6 +138,7 @@ private struct FloatingToolsSheet: View {
         .frame(height: contentHeight)
         .background { SheetGlass() }
         .clipShape(.rect(cornerRadius: 32))
+        .environment(\.portalSheetSurface, true)
         .scrollDisabled(resizing == true)
         .onPreferenceChange(SheetScrollTopKey.self) { listAtTop = $0 }
         .contentShape(.rect)

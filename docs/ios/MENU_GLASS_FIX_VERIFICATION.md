@@ -53,7 +53,8 @@ chrome scope, not changes to architecture, parity, science or release gates.
 The native sheet now shares the map's SwiftUI composition surface and keeps
 system Liquid Glass at both heights and above the keyboard. It no longer enters
 UIKit's opaque full-height modal presentation. Search, Locate and the map dock
-use the same `ChromeGlass` modifier; no flat-fill substitute remains for those
+use system Liquid Glass; controls inside the glass sheet use its clear variant
+to avoid stacking a second dark scrim. No flat-fill substitute remains for those
 controls. The fixed Search header has native material frost behind its whole
 area. Grouped rows retain their translucent card treatment while scrolling.
 
@@ -97,3 +98,23 @@ review agents were stopped; they are not Spec Owners and approved no exception.
 This remains an internal field build under CR-001, not G3 or a public-release
 acceptance claim. Physical-device, VoiceOver and full device-matrix testing are
 not claimed by these simulator checks.
+
+## Final release
+
+Final native Debug build and signed Release archive passed. Internal TestFlight
+build **1.0 (29882545)** uploaded successfully; the final nested-glass correction
+is included in **1.0 (29882550)**. The final upload log is
+`/tmp/csp-menu-glass-upload-final.log`; shipping archive:
+`ClearSkies-nested-glass.xcarchive` in the evidence directory.
+
+GitHub `main` implementation commit: `68b2f8152d369470f70a665af3ef6a6fc792d3ae`.
+Its CI run `40219566712` passed Linux checks/tests/audit, Windows checks/tests,
+and GitHub Pages deployment. The live site's uncached `version.js` reports
+`2026-10-25a`. The native-only nested-glass follow-up and this final record ship
+in the subsequent commit; shared shipped bytes remain identical.
+
+The final simulator installation includes all review corrections. A list-origin
+drag expanded the menu while hiding the toolbar; the fixed search frost kept
+scrolled row text below the field. Search suggestions, keyboard dismissal and
+both header drag directions were exercised. T3's embedded Device panel is open
+on the existing simulator for Riley; no additional simulator was created.

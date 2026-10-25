@@ -489,10 +489,17 @@ struct ChromeGlass<S: Shape>: ViewModifier {
 }
 
 struct MenuGlass<S: Shape>: ViewModifier {
+    @Environment(\.portalSheetSurface) private var onSheet
     let shape: S
 
     func body(content: Content) -> some View {
-        content.modifier(ChromeGlass(shape: shape))
+        if onSheet {
+            // The parent already supplies regular glass. Clear system glass
+            // preserves its color instead of adding a second dark scrim.
+            content.glassEffect(.clear.interactive(), in: shape)
+        } else {
+            content.modifier(ChromeGlass(shape: shape))
+        }
     }
 }
 
