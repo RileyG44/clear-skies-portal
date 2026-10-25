@@ -46,7 +46,10 @@ struct RootView: View {
             .presentationContentInteraction(.resizes)
             .presentationDragIndicator(.hidden)
             // iOS fades a growing sheet from glass to opaque; this one keeps
-            // the map tools' glass at every height.
+            // the map tools' glass at every height. The keyboard would
+            // otherwise lift the sheet into that full-bleed opaque size.
+            // The list still scrolls the focused field above the keyboard.
+            .ignoresSafeArea(.keyboard, edges: .bottom)
             .presentationBackground { SheetGlass() }
         }
         .sensoryFeedback(.selection, trigger: shell.feedback)

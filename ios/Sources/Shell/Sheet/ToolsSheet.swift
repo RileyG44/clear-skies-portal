@@ -56,14 +56,19 @@ struct HomeView: View {
         .scrollContentBackground(.hidden)
         .onSheetGlass()
         .scrollDismissesKeyboard(.immediately)
-        .safeAreaInset(edge: .top, spacing: 0) {
+        // The wordmark's scroll-edge frost stops at the navigation bar, so a
+        // plain inset let row text draw over the field while the card went
+        // behind it. A bar here extends that same frost down across the
+        // search and keeps the field the top layer, in the same place.
+        .scrollEdgeEffectStyle(.soft, for: .top)
+        .safeAreaBar(edge: .top, spacing: 0) {
             VStack(spacing: 10) {
                 SearchBar(focused: $searchFocused)
                 if shell.query.isEmpty, shell.search.canCopy { CoordinateActions() }
             }
-                .padding(.horizontal, 16)
-                .padding(.top, 12)
-                .padding(.bottom, 12)
+            .padding(.horizontal, 16)
+            .padding(.top, 12)
+            .padding(.bottom, 12)
         }
         .navigationTitle("ClearSkies")
         .navigationBarTitleDisplayMode(.inline)
@@ -101,6 +106,7 @@ struct SearchBar: View {
 
     var body: some View {
         @Bindable var shell = shell
+        GlassEffectContainer(spacing: 8) {
         HStack(spacing: 8) {
             HStack(spacing: 6) {
                 Image(systemName: "magnifyingglass")
@@ -124,24 +130,28 @@ struct SearchBar: View {
             }
             .padding(.horizontal, 12)
             .frame(minHeight: 44)
-            .background(.fill.tertiary, in: .capsule)
+            .menuGlass(in: .capsule)
             if focused.wrappedValue {
                 Button {
                     focused.wrappedValue = false
-                } label: { Image(systemName: "keyboard.chevron.compact.down").frame(width: 28, height: 28) }
-                .buttonStyle(.glass)
+                } label: {
+                    Image(systemName: "keyboard.chevron.compact.down").frame(width: 44, height: 44)
+                }
+                .buttonStyle(.plain)
+                .menuGlass(in: .circle)
                 .accessibilityLabel("Dismiss keyboard")
                 .transition(.scale.combined(with: .opacity))
             } else {
                 Button { shell.locate() } label: {
                     Image(systemName: "location")
                         .portalFont(.footnote, weight: .semibold)
-                        .frame(width: 22, height: 22)
+                        .frame(width: 44, height: 44)
                 }
-                .buttonStyle(.glass)
-                .tint(.primary)
+                .buttonStyle(.plain)
+                .menuGlass(in: .circle)
                 .accessibilityLabel("Use my current location")
             }
+        }
         }
         .animation(.snappy, value: focused.wrappedValue)
     }
@@ -191,6 +201,7 @@ struct CoordinateActions: View {
 
     var body: some View {
         let search = shell.search
+        GlassEffectContainer(spacing: 8) {
         HStack(spacing: 8) {
             Button { shell.copyCoordinates() } label: { action("Copy coordinates", "doc.on.doc") }
                 .disabled(!search.canCopy)
@@ -204,13 +215,14 @@ struct CoordinateActions: View {
             .disabled(search.earthURL.isEmpty)
         }
         .buttonStyle(.plain)
+        }
     }
 
     private func action(_ title: String, _ symbol: String) -> some View {
         Image(systemName: symbol)
             .portalFont(.callout, weight: .medium)
             .frame(maxWidth: .infinity, minHeight: 44)
-            .background(.fill.tertiary, in: .capsule)
+            .menuGlass(in: .capsule)
             .contentShape(.capsule)
             .accessibilityLabel(title)
     }

@@ -186,9 +186,14 @@
     const aria = clean(el.getAttribute("aria-label"));
     const label = context.title || own || aria || clean(el.title);
     const classes = el.classList;
+    // Pills, export actions and text buttons are buttons. A menu item is a
+    // row. Anything else stays unset so a disclosure (aria-expanded) can
+    // still draw as a row.
     const role = classes.contains("linkbtn") ? "link"
       : classes.contains("snapshot-action-primary") || classes.contains("primary") || classes.contains("ls-pill-primary") || classes.contains("snap-sel-save") ? "primary"
-      : classes.contains("danger") || classes.contains("mk-btn-danger") || classes.contains("mk-btn-danger-text") ? "destructive" : undefined;
+      : classes.contains("danger") || classes.contains("mk-btn-danger") || classes.contains("mk-btn-danger-text") ? "destructive"
+      : el.getAttribute("role") === "menuitem" ? "option"
+      : classes.contains("ls-pill") || classes.contains("snapshot-action") || classes.contains("ghost") ? "action" : undefined;
     return { kind: tag === "a" ? "link" : "button", ...base, title: label, accessibility: aria && aria !== label ? aria : undefined, icon: iconOf(el),
       pressed: el.hasAttribute("aria-pressed") ? el.getAttribute("aria-pressed") === "true" : undefined,
       expanded: el.hasAttribute("aria-expanded") ? el.getAttribute("aria-expanded") === "true" : undefined,
@@ -383,6 +388,18 @@
     if (el.matches(".mk-layer")) { out.push(markupCard(el)); return true; }
     if (el.matches("label") && $("input[type=checkbox],input[type=radio]", el)) {
       const input = $("input[type=checkbox],input[type=radio]", el);
+      // A caption in its own element ("Map info" / "Coordinates, elevation…")
+      // is a title and a detail. Reading the label as one string joins them
+      // with no space, because the markup puts none between the two.
+      const readout = $(".snapshot-readout-text", el);
+      const caption = $("small", el);
+      if (readout || caption) {
+        const titleEl = readout ? readout.querySelector(":scope > span") : null;
+        const title = clean(titleEl?.textContent) || textWithout(el, CONTROLS + ",.csp-switch,small") || labelFor(input);
+        const detail = clean((readout ? $("small", readout) : caption)?.textContent) || undefined;
+        out.push(controlItem(input, { title, detail: detail && detail !== title ? detail : undefined }));
+        return true;
+      }
       out.push(controlItem(input, { title: textWithout(el, CONTROLS + ",.csp-switch") || labelFor(input) }));
       return true;
     }

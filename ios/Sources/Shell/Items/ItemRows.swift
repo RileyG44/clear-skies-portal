@@ -369,68 +369,79 @@ struct ColorRow: View {
     }
 }
 
-/// A web button. Its role decides how it reads: a primary action, a link-like
-/// action, a destructive one, or a row that opens another page.
+/// A web button. A primary action is the filled capsule. Other actions
+/// (Cancel, Save current, Select Area) are glass capsules: the list's own
+/// button style draws them as a full-width plate. A disclosure, a menu item
+/// and a navigation row stay rows.
 struct ButtonRow: View {
     @Environment(ShellModel.self) private var shell
     let item: ShellItem
 
     var body: some View {
-        switch item.role {
-        case "primary":
-            Button { shell.act(item.ref) } label: {
-                Label(item.text, systemImage: Symbols.icon(item.icon) ?? "checkmark")
-                    .labelStyle(.titleOnly)
-                    .frame(maxWidth: .infinity)
-                    .fontWeight(.semibold)
-            }
-            .buttonStyle(.glassProminent)
-            .disabled(item.isDisabled)
-            .listRowBackground(Color.clear)
-            .listRowInsets(EdgeInsets(top: 6, leading: 0, bottom: 6, trailing: 0))
-        case "navigate", "group", "option":
-            Button { shell.act(item.ref) } label: {
-                HStack {
-                    RowLabel(title: item.text, detail: item.detail)
-                        .foregroundStyle(PortalPrimary())
-                    Spacer()
-                    if item.role != "option" {
-                        Image(systemName: item.role == "group" ? "chevron.up.chevron.down" : "chevron.right")
-                            .portalFont(.caption, weight: .semibold)
-                            .foregroundStyle(.tertiary)
-                    }
-                }
-                .contentShape(.rect)
-            }
-            .buttonStyle(.plain)
-            .disabled(item.isDisabled)
-        default:
-            Button(role: item.role == "destructive" ? .destructive : nil) { shell.act(item.ref) } label: {
-                HStack(spacing: 10) {
-                    if let symbol = Symbols.icon(item.icon) {
-                        Image(systemName: symbol).frame(width: 20)
-                    }
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(item.text)
-                        if let detail = item.detail, !detail.isEmpty {
-                            Text(detail).portalFont(.caption).foregroundStyle(.secondary)
-                        }
-                    }
-                    Spacer(minLength: 0)
-                    if item.pressed == true {
-                        Image(systemName: "checkmark").portalFont(.caption, weight: .bold)
-                    } else if item.expanded != nil {
-                        Image(systemName: "chevron.down")
-                            .portalFont(.caption, weight: .semibold)
-                            .rotationEffect(.degrees(item.expanded == true ? 180 : 0))
-                            .foregroundStyle(.tertiary)
-                    }
-                }
-                .contentShape(.rect)
-            }
-            .disabled(item.isDisabled)
-            .accessibilityLabel(item.accessibility ?? item.text)
+        if item.role == "primary" {
+            actionCapsule(.glassProminent)
+        } else if isCapsule {
+            actionCapsule(.glass)
+        } else if item.role == "navigate" || item.role == "group" || item.role == "option" {
+            disclosureRow(chevron: item.role == "option" ? nil : (item.role == "group" ? "chevron.up.chevron.down" : "chevron.right"))
+        } else {
+            disclosureRow(chevron: nil, showsState: true)
         }
+    }
+
+    /// Pills and text buttons. A control that opens or closes (aria-expanded)
+    /// stays a row even when its class is otherwise an action.
+    private var isCapsule: Bool {
+        if item.expanded != nil { return false }
+        switch item.role {
+        case "link", "action", "destructive": return true
+        case "navigate", "group", "option": return false
+        default: return item.pressed == nil
+        }
+    }
+
+    @ViewBuilder private func actionCapsule(_ style: some PrimitiveButtonStyle) -> some View {
+        Button(role: item.role == "destructive" ? .destructive : nil) { shell.act(item.ref) } label: {
+            Text(item.text)
+                .fontWeight(.semibold)
+                .frame(maxWidth: .infinity)
+        }
+        .buttonStyle(style)
+        .buttonBorderShape(.capsule)
+        .disabled(item.isDisabled)
+        .listRowBackground(Color.clear)
+        .listRowSeparator(.hidden)
+        .listRowInsets(EdgeInsets(top: 6, leading: 0, bottom: 6, trailing: 0))
+        .accessibilityLabel(item.accessibility ?? item.text)
+    }
+
+    private func disclosureRow(chevron: String?, showsState: Bool = false) -> some View {
+        Button(role: item.role == "destructive" ? .destructive : nil) { shell.act(item.ref) } label: {
+            HStack(spacing: 10) {
+                if let symbol = Symbols.icon(item.icon) {
+                    Image(systemName: symbol).frame(width: 20)
+                }
+                RowLabel(title: item.text, detail: item.detail)
+                    .foregroundStyle(PortalPrimary())
+                Spacer(minLength: 0)
+                if showsState, item.pressed == true {
+                    Image(systemName: "checkmark").portalFont(.caption, weight: .bold)
+                } else if showsState, item.expanded != nil {
+                    Image(systemName: "chevron.down")
+                        .portalFont(.caption, weight: .semibold)
+                        .rotationEffect(.degrees(item.expanded == true ? 180 : 0))
+                        .foregroundStyle(.tertiary)
+                } else if let chevron {
+                    Image(systemName: chevron)
+                        .portalFont(.caption, weight: .semibold)
+                        .foregroundStyle(.tertiary)
+                }
+            }
+            .contentShape(.rect)
+        }
+        .buttonStyle(.plain)
+        .disabled(item.isDisabled)
+        .accessibilityLabel(item.accessibility ?? item.text)
     }
 }
 

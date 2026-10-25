@@ -82,7 +82,7 @@ struct MapTools: View {
                             }
                         }
                     }
-                    .chromeGlass(in: .capsule)
+                    .menuGlass(in: .capsule)
                 }
             }
         }
@@ -321,7 +321,7 @@ struct SearchCapsule: View {
                     .accessibilityLabel("Clear the search and selected location")
                 }
               }
-              .chromeGlass(in: .capsule)
+              .menuGlass(in: .capsule)
               .glassEffectID("search", in: glass)
 
                 Button { shell.locate() } label: {
@@ -332,7 +332,7 @@ struct SearchCapsule: View {
                         .contentShape(.circle)
                 }
                 .buttonStyle(.plain)
-                .chromeGlass(in: .circle)
+                .menuGlass(in: .circle)
                 .glassEffectID("locate", in: glass)
                 .accessibilityLabel("Use my current location")
             }
@@ -367,7 +367,7 @@ struct BestImageryButton: View {
         }
         .buttonStyle(.plain)
         .disabled(shell.imageryBusy)
-        .chromeGlass(in: .circle)
+        .menuGlass(in: .circle)
         .accessibilityLabel(shell.imageryBusy ? "Finding the best satellite image" : "Apply the best satellite image here")
         .accessibilityHint("Searches imagery at the selected place and shows the best clear photo")
     }
@@ -469,8 +469,9 @@ struct LaunchCover: View {
     }
 }
 
-/// Liquid Glass for the app's own chrome. In dark mode it carries a dark
-/// tint, so the tools and sheet stay calm and legible over a bright map.
+/// Liquid Glass for status, notices and the launch cover. In dark mode it
+/// carries a dark tint. The map toolbar, search field and Locate button use
+/// MenuGlass instead, so they match the menu cards rather than this tint.
 struct ChromeGlass<S: Shape>: ViewModifier {
     @Environment(\.colorScheme) private var scheme
     let shape: S
@@ -482,8 +483,24 @@ struct ChromeGlass<S: Shape>: ViewModifier {
     }
 }
 
-/// The sheet's background: the map tools' glass, dark-tinted in dark mode,
-/// at every height.
+/// Glass for the toolbar, the search field and Locate. Regular glass in
+/// dark mode is still a near-black scrim; a light tint lifts it to the
+/// menu cards' gray. Light mode stays untinted regular glass.
+struct MenuGlass<S: Shape>: ViewModifier {
+    @Environment(\.colorScheme) private var scheme
+    let shape: S
+
+    func body(content: Content) -> some View {
+        // 0.22 washed the controls out lighter than the cards. This amount
+        // lands on the cards' gray in dark mode.
+        let glass: Glass = scheme == .dark ? .regular.tint(Color.white.opacity(0.08)) : .regular
+        content.glassEffect(glass, in: shape)
+    }
+}
+
+/// The sheet's background. Dark-tinted in dark mode, at every height. The
+/// menu cards sit on this; the toolbar and search use MenuGlass so they
+/// match those cards.
 struct SheetGlass: View {
     @Environment(\.colorScheme) private var scheme
 
@@ -495,8 +512,7 @@ struct SheetGlass: View {
     }
 }
 
-/// One dark tint for every glass surface the app draws in dark mode, the
-/// sheet included.
+/// Dark tint for the sheet, status, notices and the launch cover.
 enum ChromeTint {
     static let dark = Color.black.opacity(0.4)
 }
@@ -504,5 +520,9 @@ enum ChromeTint {
 extension View {
     func chromeGlass<S: Shape>(in shape: S, interactive: Bool = true) -> some View {
         modifier(ChromeGlass(shape: shape, interactive: interactive))
+    }
+
+    func menuGlass<S: Shape>(in shape: S) -> some View {
+        modifier(MenuGlass(shape: shape))
     }
 }

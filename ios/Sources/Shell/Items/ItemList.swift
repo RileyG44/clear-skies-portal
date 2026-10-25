@@ -35,6 +35,9 @@ struct ItemList: View {
         .listSectionSpacing(.compact)
         .scrollContentBackground(.hidden)
         .onSheetGlass()
+        // Keep the soft frost used under the title. The hard edge promotes
+        // the rows to a darker, more opaque fill as they move.
+        .scrollEdgeEffectStyle(.soft, for: .top)
         .scrollDismissesKeyboard(.interactively)
         #if DEBUG
         .task {
