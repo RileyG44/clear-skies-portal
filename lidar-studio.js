@@ -690,6 +690,15 @@
       stack,legend,fitFromView,needsFit,
       refresh(){render()},
       state:()=>JSON.parse(JSON.stringify(state)),
+      displayState(){
+        const copy=JSON.parse(JSON.stringify(state));
+        copy.userLooks=copy.userLooks.filter(look=>look.id===copy.look);
+        return {state:copy,fitted:JSON.parse(JSON.stringify(fitted)),flatFitted:JSON.parse(JSON.stringify(flatFitted)),remFloor};
+      },
+      restoreDisplay(snapshot){
+        state=R.normalizeState(snapshot.state);fitted=snapshot.fitted||{};flatFitted=snapshot.flatFitted||{};
+        remFloor=snapshot.remFloor??null;expanded=null;render();host.onChange&&host.onChange();
+      },
       applyLook,
       destroy(){destroyed=true;clearTimeout(saveTimer);container.innerHTML=""}
     };

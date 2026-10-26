@@ -98,6 +98,20 @@ async function main(){
   assert.equal(calls.geocodes[0],'Moses Lake, WA');assert.equal(calls.runs,3);
   assert.equal(field.value,'Moses Lake, WA','a searched place name stays in the field instead of becoming coordinates');
   assert(calls.cancels>=1,'a search cancels pending suggestions so they cannot reopen the list');
+  for(const nativeHost of [false,true]){
+    let clears=0,focuses=0;
+    const clearButton={},searchField={focus:()=>focuses++};
+    vm.runInNewContext(section('$("#qClear").onclick=','\n/* Escape clears'),{
+      NATIVE_HOST:nativeHost,
+      $:selector=>selector==='#qClear'?clearButton:searchField,
+      clearLoc:()=>clears++,
+    });
+    clearButton.onclick();
+    assert.equal(clears,1,'Clear must still clear the selected location in either host');
+    assert.equal(focuses,nativeHost?0:1,nativeHost
+      ?'Native Clear must not steal focus into the off-screen web field'
+      :'Web Clear must retain its existing search focus behavior');
+  }
   console.log('coordinate search: '+checked+' parser cases + autocomplete, search, errors and Maps/Earth action checks passed');
 }
 main().catch(error=>{console.error(error);process.exitCode=1;});

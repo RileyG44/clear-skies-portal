@@ -275,6 +275,24 @@ final class WebHost: NSObject {
         UIApplication.shared.open(url)
     }
 
+    /// CR-003: the shared item is the canonical public web link, including
+    /// the engine-generated display state. Engine configuration stays local.
+    func shareLocation(_ url: URL) throws {
+        // URL.path removes a trailing slash; URLComponents preserves the
+        // canonical site's directory path when validating this generated URL.
+        guard let components = URLComponents(url: url, resolvingAgainstBaseURL: false),
+              components.scheme == "https", components.host == "rileyg44.github.io",
+              components.path == "/clear-skies-portal/", components.fragment?.hasPrefix("csp=1.") == true else {
+            throw NSError(domain: "ClearSkiesShare", code: 2,
+                userInfo: [NSLocalizedDescriptionKey: "The map link has an unsupported format."])
+        }
+        guard presenter != nil else {
+            throw NSError(domain: "ClearSkiesShare", code: 3,
+                userInfo: [NSLocalizedDescriptionKey: "The share sheet is not available yet. Try again."])
+        }
+        share([url])
+    }
+
     private func share(_ urls: [URL]) {
         guard let presenter else { return }
         let sheet = UIActivityViewController(activityItems: urls, applicationActivities: nil)

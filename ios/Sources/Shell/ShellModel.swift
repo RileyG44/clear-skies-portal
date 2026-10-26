@@ -52,6 +52,7 @@ final class ShellModel {
     var feedback = 0
     /// True while the map's imagery button waits for its search and pick.
     var imageryBusy = false
+    var shareBusy = false
     /// A short confirmation shown over the map, such as the scene applied.
     var notice: ShellNotice?
 
@@ -75,6 +76,11 @@ final class ShellModel {
     var mapBusy: Bool { map.pointCloud || map.selecting || map.drawing }
     /// A place is committed on the map (a tapped point or a found place).
     var hasLocation: Bool { search.lat != nil && search.lng != nil }
+    /// The search field's Go button can act: text to look up, or a place
+    /// already selected on the map whose imagery has not been loaded yet.
+    var canLoadImagery: Bool {
+        !query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || hasLocation
+    }
 
     // MARK: - Updates from the page
 
@@ -374,6 +380,24 @@ final class ShellModel {
         finishSearch()
     }
 
+    /// The search field's Go button: manually load satellite imagery,
+    /// instead of double-tapping the map. Typed text is looked up first
+    /// (the web geocodes it and searches); a place already selected on
+    /// the map is searched where it is. Either way the Satellite page
+    /// opens so its scenes can be picked.
+    func loadImagery() {
+        let text = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !text.isEmpty {
+            searchText(text)
+            show(route: "satellite")
+        } else if hasLocation {
+            call("CSPNativeShell.searchSelected()")
+            clearSuggestions()
+            feedback += 1
+            show(route: "satellite")
+        }
+    }
+
     /// A committed search shows its place on the map with the sheet out of the way.
     private func finishSearch() {
         query = ""
@@ -391,6 +415,41 @@ final class ShellModel {
 
     func locate() {
         call("CSPNativeShell.locate()")
+        feedback += 1
+    }
+
+    func shareLocation() {
+        guard hasLocation, !shareBusy else { return }
+        log.info("Preparing shared map view")
+        shareBusy = true
+        feedback += 1
+        Task {
+            defer { shareBusy = false }
+            do {
+                let result = try await evaluateThrowing("try { return {url: await ClearSkiesPortalBridge.shareURL()} } catch (error) { return {error: error.message} }") as? [String: Any]
+                if let message = result?["error"] as? String {
+                    throw NSError(domain: "ClearSkiesShare", code: 1, userInfo: [NSLocalizedDescriptionKey: message])
+                }
+                guard let value = result?["url"] as? String,
+                      let url = URL(string: value) else {
+                    throw NSError(domain: "Share link could not be created", code: 1)
+                }
+                guard let host else {
+                    throw NSError(domain: "ClearSkiesShare", code: 4,
+                        userInfo: [NSLocalizedDescriptionKey: "The map is not ready yet. Try again."])
+                }
+                try host.shareLocation(url)
+                log.info("Presented map share sheet")
+            } catch {
+                log.error("Map sharing failed: \(error.localizedDescription, privacy: .public)")
+                notice = ShellNotice(id: (notice?.id ?? 0) + 1,
+                    text: "Unable to share this view. " + error.localizedDescription, applied: false)
+            }
+        }
+    }
+
+    func centerSelectedLocation() {
+        call("CSPNativeShell.centerSelected()")
         feedback += 1
     }
 

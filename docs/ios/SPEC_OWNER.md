@@ -3,14 +3,15 @@
 Project: Clear Skies Native iOS
 Appointed by: Riley Grant, current 2026-09-06 user request
 Initial agent: /root/spec_owner (session handle, not a permanent service)
-Current owner session: one dedicated Spec Owner review sub-agent (Codex),
-re-established 2026-10-24 under Riley's exact CR-002 r1 approval, to review and
-record that request only. It ends at this handoff and is not a running service.
+Current owner session: none after this handoff. The one dedicated Spec Owner
+review sub-agent (Codex) restored under Riley's exact CR-003 r1 approval reviewed
+and recorded that request only on 2026-10-25. Its session ends at this handoff;
+it is not a running service.
 Current baseline: SPEC.md 0.1.0-draft (commit 142fdf47) — not approved by
 Riley; BASE-001 pending
 Accepted change requests: CR-001 r1, accepted 2026-10-21; CR-002 r1, accepted
-2026-10-24 (see DECISIONS.md)
-Current task: CR-002 owner recording complete; implementation and verification
+2026-10-24; CR-003 r1, accepted 2026-10-25 (see DECISIONS.md)
+Current task: CR-003 owner recording complete; implementation and verification
 handed back to the coordinating implementer. No other owner request is authorized.
 
 ## Start here
@@ -121,3 +122,50 @@ request does not establish approval for this one.
 - Continuity: this one-request owner session ends at this handoff. A future
   request or owner restoration needs Riley's authorization under GOVERNANCE.md;
   the coordinating implementer does not inherit owner approval authority.
+
+## Handoff — 2026-10-25 (CR-003 r1 only)
+
+- Authority: the owner directly inspected the
+  [parent T3 Code thread](t3-thread://v1/8fd7298a-b4d3-4648-b7e1-e9cb407df1ea)
+  through t3_thread_read, view: activity, afterPosition: 780, limit: 3. Actual
+  user_message position 781 contains the full digest-bound question and Riley's
+  exact response, "Approve CR-003 r1 and its Spec Owner review" (createdBy: user;
+  updatedAt: 2026-10-26T05:33:40.320Z, 2026-10-25 in America/Los_Angeles). The
+  request records the exact evidence. This one approval covers exact r1 and this
+  one owner review; no second approval is required within that scope.
+- Binding: independently reproduced SHA-256
+  709c7650e3f6b23ec7025f8d54239f4c216cea63854052af6300ccbdb74c9ecd over the
+  original 3,400 bytes before CR-003's "## Riley approval" heading. Only the
+  workflow status changes above it; normalize to "Status: DRAFT" to reproduce.
+- Disposition: exact r1 ACCEPTED, with no substantive proposal adjustment. Add
+  opt-in versioned, validated full map display-state fragment links and native
+  Apple sharing from the selected-location stack. The approved proposal governs
+  all included state, private-field exclusions, failure reporting and unchanged
+  no-payload behavior; no silent omission or new cap is accepted.
+- Spec: SPEC.md 0.1.0-draft and pending BASE-001 are unchanged and unapproved.
+  Read them with CR-001, CR-002 and CR-003. CR-003 expressly supplements only
+  the opt-in sharing behavior under CR-001's web behavior constraint. Remaining
+  CR-001 conditions, internal TestFlight scope and exception expiry remain:
+  BASE-001 approval/rejection or 2027-01-31, whichever comes first. No public
+  deployment, new service/account/source, purchase or release is approved.
+- Review evidence: inspected actual shared bridge/session/layer and control
+  state, native adapter/bridge and WebHost.swift's export share sheet, plus
+  markup, LiDAR Studio/render model and point-cloud state support. Current
+  session recovery is camera/location only; full state sharing still needs
+  implementation. No substantive consistency issue requires Riley to amend r1.
+- Implementation evidence: none from this owner session. No app code changes,
+  runtime/device/scientific or shared-code regression tests, commits or deployment.
+  Acceptance authorizes implementation, not a claim of completed restoration or
+  validation. The current public site's support for the new format is unverified.
+- Next authorized action: the parent may implement exact r1 and run its stated
+  verification plan, including full-state fresh-session roundtrips, invalid and
+  unavailable-state reporting, private-field exclusion, native share UI,
+  no-payload startup, shared checks/tests and matching iOS assets. Preserve the
+  approved existing rendering/source-selection/scientific functions. A
+  substantive departure returns through Riley and the owner workflow.
+- Record handling: CR-003, DECISIONS.md and SPEC_OWNER.md are left uncommitted
+  for the parent. All prior dirty work is preserved. BASE-001, other open
+  decisions and proposed PERF gates remain unresolved; branch protection and
+  required Riley review of spec paths were not verified in this session.
+- Continuity: this CR-003-only owner session ends at this handoff. No other
+  request is reviewed, and the parent does not inherit owner approval authority.

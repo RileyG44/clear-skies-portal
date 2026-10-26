@@ -1,0 +1,148 @@
+{
+  "alerts": {
+    "fires": false,
+    "nws": true,
+    "nwsSeverity": "all",
+    "quakeAge": "week",
+    "quakeMag": -1,
+    "quakes": true,
+    "types": {
+      "coast": true,
+      "fire": true,
+      "other": true,
+      "storm": true,
+      "temperature": true,
+      "winter": true
+    },
+    "viewport": true,
+    "volcanoes": true
+  },
+  "controls": {
+    "cloud": "101",
+    "days": "365",
+    "dFrom": "",
+    "dTo": "",
+    "elevAboveColor": "#46a0ff",
+    "elevAboveOn": false,
+    "elevAboveVal": "1500",
+    "elevAlpha": "48",
+    "elevBandAlpha": "52",
+    "elevBandFeather": "40",
+    "elevBandOutline": false,
+    "elevBelowColor": "#f85c6c",
+    "elevBelowOn": false,
+    "elevBelowVal": "1000",
+    "elevHighColor": "#46a0ff",
+    "elevLowColor": "#f85c6c",
+    "elevMidColor": "#fffffa",
+    "elevPalette": "classic",
+    "elevSh": false,
+    "elevSlide": "335",
+    "elevSpan": "300",
+    "elevSpanSlide": "447",
+    "elevUnit": "ft",
+    "elevVal": "1099",
+    "fabBand": "50,300",
+    "fire": false,
+    "mosaic": true,
+    "op": "100",
+    "pcBudget": "3",
+    "pcCanopy": "100",
+    "pcColour": "elevation",
+    "pcEdl": true,
+    "pcEdlRadius": "1.4",
+    "pcEdlStrength": "1",
+    "pcLinked": true,
+    "pcSize": "1",
+    "pcSizeMode": "adaptive",
+    "sort": "date",
+    "terAmbient": "12",
+    "terBrightness": "100",
+    "terContrast": "100",
+    "terDepth": "native",
+    "terExaggeration": "125",
+    "terExtent": "view",
+    "terOp": "70",
+    "terSaturation": "100",
+    "terSrc": "auto",
+    "terStyle": "hs",
+    "terSunAlt": "45",
+    "terSunAz": "315",
+    "viewable": false,
+    "vis": "all"
+  },
+  "imagery": null,
+  "markup": [],
+  "order": [
+    "terrain",
+    "overlay:weatheralerts",
+    "overlay:earthquakes",
+    "overlay:volcanostatus",
+    "basemap"
+  ],
+  "overlays": [
+    {
+      "id": "weatheralerts",
+      "lineWidth": null,
+      "opacity": 90,
+      "timeSlice": null
+    },
+    {
+      "id": "earthquakes",
+      "lineWidth": null,
+      "opacity": 90,
+      "timeSlice": null
+    },
+    {
+      "id": "volcanostatus",
+      "lineWidth": null,
+      "opacity": 90,
+      "timeSlice": null
+    }
+  ],
+  "pointCloud": null,
+  "research": {
+    "layers": [],
+    "live": true
+  },
+  "studio": {
+    "fitted": {},
+    "flatFitted": {},
+    "remFloor": null,
+    "state": {
+      "base": {},
+      "effects": {
+        "detail": 0,
+        "detailRadius": 6,
+        "reliefExag": 1,
+        "remRadius": 1500
+      },
+      "look": "classic",
+      "overlays": [],
+      "userLooks": [],
+      "version": 1
+    }
+  },
+  "terrainLook": {
+    "brightness": 100,
+    "contrast": 100,
+    "saturation": 100
+  },
+  "theme": "dark",
+  "version": 1,
+  "view": {
+    "bearing": 0,
+    "center": [
+      47.66,
+      -117.4
+    ],
+    "location": {
+      "label": "Spokane \u26f0\ufe0f",
+      "lat": 47.66,
+      "lng": -117.4
+    },
+    "mode": "2d",
+    "pitch": 0,
+    "zoom": 12
+  }
+}

@@ -15,15 +15,19 @@ struct MapChrome: View {
     @Environment(ShellModel.self) private var shell
     @Environment(\.accessibilityReduceMotion) private var reducedMotion
     var toolbarHideProgress: CGFloat = 0
+    @State private var locationActionsExpanded = false
 
     var body: some View {
         GeometryReader { geometry in
             ZStack {
                 VStack(alignment: .trailing, spacing: 0) {
                     HStack(alignment: .top, spacing: 10) {
-                        TerrainStatusCapsule()
+                        VStack(alignment: .leading, spacing: 10) {
+                            TerrainStatusCapsule()
+                            if shell.map.pointCloud && shell.hasLocation { LocationShareButton() }
+                        }
                         Spacer(minLength: 0)
-                        MapTools(maxHeight: geometry.size.height - MapControlSize.search - (shell.hasLocation ? MapControlSize.imagery + 10 : 0) - 20)
+                        MapTools(maxHeight: geometry.size.height - MapControlSize.search - (locationActionsExpanded ? 324 : 0) - 20)
                             .opacity(1 - toolbarHideProgress)
                             .scaleEffect(reducedMotion ? 1 : 1 - 0.04 * toolbarHideProgress, anchor: .topTrailing)
                             .offset(x: reducedMotion ? 0 : 12 * toolbarHideProgress)
@@ -37,7 +41,7 @@ struct MapChrome: View {
                 VStack {
                     Spacer()
                     if shell.activeSheet == nil, !shell.mapBusy {
-                        SearchCapsule()
+                        SearchCapsule(actionsExpanded: $locationActionsExpanded, maxActionHeight: max(44, geometry.size.height - MapControlSize.search - 22))
                             .padding(.horizontal, 14)
                             .padding(.bottom, 6)
                             .transition(.move(edge: .bottom).combined(with: .opacity))
@@ -211,10 +215,11 @@ struct ToolButton: View {
 
 /// What the terrain is doing right now, in the web's own words: loading,
 /// refining, ready, or partly unavailable, with the sources actually drawn.
-/// It stays a small round icon (a spinner while loading, a seal in the theme
-/// color once the view is ready) and opens to the full line only when tapped.
+/// It stays a small round icon (a spinner while loading, a seal matching the
+/// menu text once ready) and opens to the full line only when tapped.
 struct TerrainStatusCapsule: View {
     @Environment(ShellModel.self) private var shell
+    @Environment(\.portalAppearance) private var appearance
     @State private var expanded = false
 
     var body: some View {
@@ -261,10 +266,11 @@ struct TerrainStatusCapsule: View {
         switch state {
         case "loading":
             ProgressView().controlSize(.mini)
+                .tint(Color(hex: appearance.fontColor) ?? .primary)
         case "partial":
             Image(systemName: "exclamationmark.triangle").foregroundStyle(.orange)
         case "ready":
-            Image(systemName: "checkmark.seal").foregroundStyle(.tint)
+            Image(systemName: "checkmark.seal").foregroundStyle(PortalPrimary())
         case "offline":
             Image(systemName: "wifi.slash").foregroundStyle(.secondary)
         default:
@@ -285,22 +291,23 @@ struct TerrainStatusCapsule: View {
     }
 }
 
-/// The collapsed sheet: a search capsule and a locate button floating over
-/// the map, as the web's phone layout and the iOS 26 Maps bar do. A selected
-/// place shows as text in the capsule; its coordinate shortcuts live in the
-/// open menu, under its search field.
+/// A selected location exposes a collapsible stack of map actions. With no
+/// selection, the single trailing control locates the user.
 struct SearchCapsule: View {
     @Environment(ShellModel.self) private var shell
+    @Environment(\.openURL) private var openURL
+    @Environment(\.accessibilityReduceMotion) private var reducedMotion
+    @Binding var actionsExpanded: Bool
+    let maxActionHeight: CGFloat
     @Namespace private var glass
 
     var body: some View {
         GlassEffectContainer(spacing: 10) {
           VStack(alignment: .trailing, spacing: 10) {
-            if shell.hasLocation {
-                BestImageryButton()
+            if shell.hasLocation && actionsExpanded {
+                locationActions
                     .padding(.trailing, (MapControlSize.search - MapControlSize.imagery) / 2)
-                    .glassEffectID("imagery", in: glass)
-                    .transition(.scale.combined(with: .opacity))
+                    .transition(reducedMotion ? .opacity : .move(edge: .bottom).combined(with: .opacity))
             }
             HStack(spacing: 10) {
               HStack(spacing: 0) {
@@ -340,8 +347,12 @@ struct SearchCapsule: View {
               .menuGlass(in: .capsule)
               .glassEffectID("search", in: glass)
 
-                Button { shell.locate() } label: {
-                    Image(systemName: "location")
+                Button {
+                    if shell.hasLocation { actionsExpanded.toggle() }
+                    else { shell.locate() }
+                } label: {
+                    Image(systemName: shell.hasLocation ? (actionsExpanded ? "chevron.down" : "chevron.up") : "location")
+                        .contentTransition(reducedMotion ? .identity : .symbolEffect(.replace))
                         .font(.system(size: MapControlSize.icon, weight: .medium))
                         .foregroundStyle(PortalPrimary())
                         .frame(width: MapControlSize.search, height: MapControlSize.search)
@@ -349,19 +360,92 @@ struct SearchCapsule: View {
                 }
                 .buttonStyle(.plain)
                 .menuGlass(in: .circle)
-                .glassEffectID("locate", in: glass)
-                .accessibilityLabel("Use my current location")
+                .glassEffectID("location-toggle", in: glass)
+                .accessibilityLabel(shell.hasLocation ? (actionsExpanded ? "Hide location actions" : "Show location actions") : "Use my current location")
+                .accessibilityValue(shell.hasLocation ? (actionsExpanded ? "Expanded" : "Collapsed") : "")
             }
+            .gesture(DragGesture(minimumDistance: 12).onEnded { value in
+                if value.translation.height < -24 { shell.openSheet(.medium) }
+            })
           }
-          .animation(.spring(duration: 0.35, bounce: 0.2), value: shell.hasLocation)
+          .animation(reducedMotion ? nil : .spring(duration: 0.35, bounce: 0.2), value: shell.hasLocation)
+          .animation(reducedMotion ? nil : .spring(duration: 0.35, bounce: 0.2), value: actionsExpanded)
         }
-        .gesture(DragGesture(minimumDistance: 12).onEnded { value in
-            if value.translation.height < -24 { shell.openSheet(.medium) }
-        })
+        .onChange(of: shell.hasLocation) { _, selected in if !selected { actionsExpanded = false } }
+        .onDisappear { actionsExpanded = false }
+    }
+
+    @ViewBuilder private var locationActions: some View {
+        if maxActionHeight < 314 {
+            ScrollView { actionButtons.padding(.vertical, 2) }
+                .frame(width: MapControlSize.imagery + 4, height: maxActionHeight)
+        } else {
+            actionButtons
+        }
+    }
+
+    private var actionButtons: some View {
+        VStack(spacing: 10) {
+            LocationShareButton().glassEffectID("share", in: glass)
+            locationAction("Open coordinates in Google Maps", "map", id: "maps") {
+                if let url = URL(string: shell.search.mapsURL) { openURL(url) }
+            }
+            .disabled(shell.search.mapsURL.isEmpty)
+            locationAction("Open coordinates in Google Earth", "globe", id: "earth") {
+                if let url = URL(string: shell.search.earthURL) { openURL(url) }
+            }
+            .disabled(shell.search.earthURL.isEmpty)
+            locationAction("Copy coordinates", "doc.on.doc", id: "copy") { shell.copyCoordinates() }
+            BestImageryButton().glassEffectID("imagery", in: glass)
+            locationAction("Go to selected location", "arrow.right", id: "go") { shell.centerSelectedLocation() }
+                .accessibilityHint("Centers the selected location without searching satellite imagery")
+        }
+    }
+
+    private func locationAction(_ title: String, _ symbol: String, id: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Image(systemName: symbol)
+                .font(.system(size: 16, weight: .medium))
+                .foregroundStyle(PortalPrimary())
+                .frame(width: MapControlSize.imagery, height: MapControlSize.imagery)
+                .contentShape(.circle)
+        }
+        .buttonStyle(.plain)
+        .menuGlass(in: .circle)
+        .glassEffectID(id, in: glass)
+        .accessibilityLabel(title)
     }
 }
 
-/// Beside Locate while a place is selected: search imagery there and apply
+/// The same full-state share action is available while a point-cloud view
+/// owns the canvas and its normal map search controls are hidden.
+struct LocationShareButton: View {
+    @Environment(ShellModel.self) private var shell
+    @Environment(\.portalAppearance) private var appearance
+
+    var body: some View {
+        Button { shell.shareLocation() } label: {
+            ZStack {
+                if shell.shareBusy {
+                    ProgressView().controlSize(.small)
+                        .tint(Color(hex: appearance.fontColor) ?? .primary)
+                } else {
+                    Image(systemName: "square.and.arrow.up")
+                        .font(.system(size: 16, weight: .medium))
+                        .foregroundStyle(PortalPrimary())
+                }
+            }
+            .frame(width: MapControlSize.imagery, height: MapControlSize.imagery)
+            .contentShape(.circle)
+        }
+        .buttonStyle(.plain)
+        .disabled(shell.shareBusy)
+        .menuGlass(in: .circle)
+        .accessibilityLabel(shell.shareBusy ? "Preparing shared map view" : "Share location and map layers")
+    }
+}
+
+/// For a selected place: center it, search imagery there and apply
 /// the page's Best photo, the scene its Best available summary recommends.
 /// Auto-fill surroundings, when on, then fills the view around it.
 struct BestImageryButton: View {

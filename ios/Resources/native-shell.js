@@ -885,10 +885,21 @@
     },
     searchText(text) { bridge().searchText(String(text || "")); schedule(0); },
     searchMapCenter() { bridge().searchMapCenter(); schedule(0); },
+    searchSelected() { const searched = bridge().searchSelected(); schedule(0); return searched; },
     clear() { $("#qClear")?.click(); schedule(0); },
     locate() { $("#loc")?.click(); schedule(0); },
     copyCoordinates() { $("#coordCopy")?.click(); schedule(0); },
+    centerSelected() {
+      const point = bridge().searchState()?.coordinates;
+      if (!point || !Number.isFinite(point.lat) || !Number.isFinite(point.lng)) return false;
+      const globe = bridge().map3d?.();
+      if (globe) globe.jumpTo({ center: [point.lng, point.lat] });
+      else bridge().map.setView([point.lat, point.lng], bridge().map.getZoom(), { animate: false });
+      schedule(0);
+      return true;
+    },
     async bestImagery() {
+      this.centerSelected();
       try { return await bridge().searchBestImagery(); }
       finally { schedule(0); }
     },

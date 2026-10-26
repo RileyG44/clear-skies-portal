@@ -61,7 +61,7 @@
     for(const child of [...$("#pcCanvas").children])if(!child.classList.contains("pc-head"))child.remove();
   }
   function install({map,onBearingChange,beforeOpen,onLayoutChange}={}){
-    const panel=$("#pointCloudPanel"),canvas=$("#pcCanvas"),state={viewer:null,cloud:null,project:null,loadingProject:null,catalog:null,wanted:false,loadToken:0,suppress2d:0,suppress3d:0,cameraTimer:0,plan:true,user3dActive:false,user3dUntil:0,syncGuard:CORE().createSyncGuard()};
+    const panel=$("#pointCloudPanel"),canvas=$("#pcCanvas"),state={viewer:null,cloud:null,project:null,loadingProject:null,preferredProject:null,catalog:null,wanted:false,loadToken:0,suppress2d:0,suppress3d:0,cameraTimer:0,plan:true,user3dActive:false,user3dUntil:0,syncGuard:CORE().createSyncGuard()};
     window.L?.DomEvent?.disableClickPropagation(panel);window.L?.DomEvent?.disableScrollPropagation(panel);
     const linked=()=>$("#pcLinked").checked;
     function removeCloud(){if(state.cloud){try{state.viewer?.scene?.removePointCloud(state.cloud)}catch(e){}for(const node of state.cloud.visibleNodes||[])try{node.sceneNode?.geometry?.dispose()}catch(e){}}state.cloud=null;state.project=null}
@@ -130,14 +130,14 @@
       state.suppress2d=performance.now()+300;state.syncGuard.run("3d",()=>{map.setView([next.lat,next.lon],Math.max(map.getMinZoom(),Math.min(map.getMaxZoom(),next.zoom)),{animate:false});map.setBearing?.(next.bearing);onBearingChange?.()});
     }
     async function loadCurrent(){
-      if(!state.wanted)return;const center=map.getCenter(),item=CORE().chooseCoverage(state.catalog?.projects,center.lng,center.lat);
+      if(!state.wanted)return;const center=map.getCenter(),item=state.preferredProject?state.catalog?.projects.find(item=>item.project===state.preferredProject):CORE().chooseCoverage(state.catalog?.projects,center.lng,center.lat);
       if(!item){state.loadToken++;state.loadingProject=null;removeCloud();setStatus("No USGS point-cloud coverage at this map centre.","empty");return}
       if(state.project===item.project&&state.cloud){syncFromMap();return}
       if(state.loadingProject===item.project)return;
       const viewer=await ensureViewer();if(!viewer||!state.wanted)return;const token=++state.loadToken;setStatus(`Loading ${item.project}…`,"loading");
       state.loadingProject=item.project;removeCloud();
       window.Potree.loadPointCloud(item.url,item.project,event=>{
-        if(token!==state.loadToken||!state.wanted)return;state.loadingProject=null;state.plan=true;const cloud=state.cloud=event.pointcloud;state.project=item.project;cloud.material.size=1;cloud.material.pointSizeType=window.Potree.PointSizeType.ADAPTIVE;cloud.material.activeAttributeName="elevation";viewer.scene.addPointCloud(cloud);applyControls();syncFromMap();setTimeout(rampToView,1200);setTimeout(rampToView,4000);setStatus(`${item.project} · ${(item.points/1e9).toFixed(1)} billion points available`,"ready");
+        if(token!==state.loadToken||!state.wanted)return;state.loadingProject=null;state.plan=true;const cloud=state.cloud=event.pointcloud;state.project=item.project;state.preferredProject=null;cloud.material.size=1;cloud.material.pointSizeType=window.Potree.PointSizeType.ADAPTIVE;cloud.material.activeAttributeName="elevation";viewer.scene.addPointCloud(cloud);applyControls();syncFromMap();setTimeout(rampToView,1200);setTimeout(rampToView,4000);setStatus(`${item.project} · ${(item.points/1e9).toFixed(1)} billion points available`,"ready");
       });
     }
     async function open(){
@@ -355,7 +355,29 @@
        re-run once the layout has actually changed. */
     addEventListener("orientationchange",()=>setTimeout(()=>{applyPanelWidth();onLayoutChange?.("right")},250));
     matchMedia("(max-width:760px)").addEventListener?.("change",applyPanelWidth);
-    return {open,close,fitAgainstLeft,get active(){return state.wanted}};
+    function displayState(){
+      if(!state.wanted)return null;
+      const view=state.viewer?.scene?.view;
+      return {project:state.project||state.loadingProject,plan:state.plan,classes:Object.fromEntries([...document.querySelectorAll("[data-pc-class]")].map(el=>[el.dataset.pcClass,el.checked])),
+        camera:view?{position:[view.position.x,view.position.y,view.position.z],yaw:view.yaw,pitch:view.pitch,radius:view.radius}:null};
+    }
+    async function restoreDisplay(snapshot){
+      state.preferredProject=snapshot.project;
+      document.querySelectorAll("[data-pc-class]").forEach(el=>{el.checked=snapshot.classes[el.dataset.pcClass]});
+      await open();
+      // loadPointCloud finishes in its callback, after open() resolves.
+      const started=performance.now();
+      while(state.wanted&&!state.cloud&&performance.now()-started<20000)await new Promise(resolve=>setTimeout(resolve,100));
+      if(!state.cloud||snapshot.project&&state.project!==snapshot.project)throw Error("The shared point-cloud project is unavailable at this location.");
+      applyControls();
+      if(snapshot.camera){
+        const view=holdCamera(state.viewer),camera=snapshot.camera;
+        state.suppress3d=performance.now()+300;
+        view.position.set(...camera.position);view.yaw=camera.yaw;view.pitch=camera.pitch;view.radius=camera.radius;
+        state.plan=!!snapshot.plan;dropPendingInput(state.viewer);
+      }
+    }
+    return {open,close,fitAgainstLeft,displayState,restoreDisplay,get active(){return state.wanted}};
   }
   window.CSPPointCloud={install};
 })();

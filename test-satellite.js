@@ -28,6 +28,46 @@ async function main(){
   panes.togglePaneAnimated(pane);assert.equal(panes.paneState.min.results,true);
   panes.togglePaneAnimated(pane);assert.equal(panes.paneState.min.results,false,"an immediate reopen cannot be lost behind an offscreen close animation");
 
+  const selected={LOC:null,runs:0,run(){selected.runs++;}};
+  vm.createContext(selected);
+  vm.runInContext(section(html,"function cspSearchSelected(","\n/* The iPhone map's imagery button:"),selected);
+  assert.equal(selected.cspSearchSelected(),false,"a Go search without a selected place does nothing");
+  assert.equal(selected.runs,0);
+  selected.LOC={lat:47.81,lng:-117.37};
+  assert.equal(selected.cspSearchSelected(),true,"a Go search at a selected place loads its imagery");
+  assert.equal(selected.runs,1,"a Go search runs the existing scene search exactly once");
+  assert(adapter.includes("searchSelected()"),"the native adapter must expose the selected-place search");
+
+  for (const saved of [null,{prefs:1,mosaic:false},{prefs:2,mosaic:false},{prefs:2,mosaic:true}]) {
+    const ids=Object.fromEntries(["days","cloud","vis","sort","dFrom","dTo","op","viewable","fire","mosaic"]
+      .map(id=>["#"+id,{value:"7",checked:id==="mosaic",options:[{value:"7"}]}]));
+    const preferences={$:id=>ids[id],localStorage:{getItem:()=>JSON.stringify(saved)},PREV_DAYS:7};
+    vm.createContext(preferences);
+    vm.runInContext(section(html,'const SEARCH_PREF_KEY=',"function saveSearchPrefs()"),preferences);
+    preferences.loadSearchPrefs();
+    assert.equal(ids["#mosaic"].checked,saved?.prefs>=2?saved.mosaic:true,
+      "Auto-fill defaults on and preserves an explicit current-version opt-out");
+  }
+
+  const actions={centers:[],searches:0,schedules:0,point:{lat:47.81,lng:-117.37},globe:null};
+  const native={bridge:()=>({searchState:()=>({coordinates:actions.point}),map3d:()=>actions.globe,
+    map:{getZoom:()=>9,setView:(...args)=>actions.centers.push(args)},
+    searchBestImagery:async()=>{actions.searches++;assert(actions.centers.length>0,"center before searching");return {applied:true};}}),
+    schedule:()=>actions.schedules++};
+  vm.createContext(native);
+  vm.runInContext("globalThis.commands={"+section(adapter,"    centerSelected() {","    moveTool(id, index)")+"};",native);
+  assert.equal(native.commands.centerSelected(),true);
+  assert.deepEqual(JSON.parse(JSON.stringify(actions.centers[0])),[[47.81,-117.37],9,{animate:false}]);
+  assert.equal(actions.searches,0,"map Go must never start a scene search");
+  actions.centers=[];
+  assert.equal((await native.commands.bestImagery()).applied,true);
+  assert.equal(actions.centers.length,1);assert.equal(actions.searches,1);
+  actions.globe={jumpTo:camera=>actions.centers.push(camera)};actions.centers=[];
+  native.commands.centerSelected();
+  assert.deepEqual(JSON.parse(JSON.stringify(actions.centers)),[{center:[-117.37,47.81]}],"3D uses longitude/latitude and preserves camera settings");
+  actions.point=null;actions.centers=[];
+  assert.equal(native.commands.centerSelected(),false);assert.equal(actions.centers.length,0);
+
   const root={hidden:false},view={panel:"ctl"};let closed=0;
   const panel={view,document:{getElementById:()=>root},$:selector=>({click(){assert.equal(selector,"#ctlCollapse");closed++;root.hidden=true;}}),schedule(){}};
   vm.createContext(panel);

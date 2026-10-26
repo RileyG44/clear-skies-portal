@@ -481,15 +481,17 @@ async function syncAll(){
     const remote=new Map((list.layers||[]).filter(l=>!pendingDeletes.has(l.id)).map(l=>[l.id,l]));
     for(const [id,at] of Object.entries(list.deleted||{})){
       const local=layers.get(id);
-      if(local&&local.doc.markup.updated<=at) removeLocal(id);
+      if(local&&!local.shared&&local.doc.markup.updated<=at) removeLocal(id);
     }
     for(const info of remote.values()){
       const local=layers.get(info.id);
+      if(local?.shared)continue;
       if(local&&local.doc.markup.updated>=info.updated){ if(local.doc.markup.updated===info.updated) local.syncedAt=info.updated;continue }
       const r=await fetch(B.api(`/api/markup/${info.id}`),{cache:"no-store"});
       if(r.ok) adopt(await r.json());
     }
     for(const layer of [...layers.values()]){
+      if(layer.shared)continue;
       const info=remote.get(layer.doc.markup.id);
       /* A layer this engine has never had is pushed only if it was made here
          and not saved yet; one that came from an engine and is gone from this
@@ -625,6 +627,7 @@ function setToolsOpen(open,restoreFocus=false){
   if(restoreFocus) document.getElementById("quickDraw")?.focus({preventScroll:true});
 }
 function startEditing(layer){
+  if(layer.shared){B.announceToolPopover?.("Shared annotations are view-only.");return}
   if(editing&&editing!==layer) stopEditing();
   B.ensureMap?.();
   const newLayer=lastLayerId!==layer.doc.markup.id;
@@ -1828,7 +1831,23 @@ function quickDraw(){
   startEditing(layer);return true;
 }
 
-window.CSPMarkup={prepare3d,attach3d,snapshotEntries,drawSnapshotLayer,renderPanel,activeEntries,setVisible,setOpacity,setOrder,quickDraw,
+function displayState(){
+  return [...layers.values()].filter(layer=>layer.visible).map(layer=>({doc:JSON.parse(JSON.stringify(layer.doc)),opacity:layer.opacity,rank:layer.rank}));
+}
+function restoreDisplay(entries){
+  for(const layer of [...layers.values()]){
+    if(layer.shared)removeLocal(layer.doc.markup.id);else{layer.visible=false;applyView(layer)}
+  }
+  const ids={};
+  for(const entry of entries){
+    const doc=JSON.parse(JSON.stringify(entry.doc)),original=doc.markup.id;
+    while(layers.has(doc.markup.id))doc.markup.id="shared-"+rid();
+    const layer=makeLayer(doc,{on:true,op:entry.opacity,rank:entry.rank});layer.shared=true;
+    ids["markup:"+original]="markup:"+doc.markup.id;
+  }
+  applyOrder();changed();return ids;
+}
+window.CSPMarkup={displayState,restoreDisplay,prepare3d,attach3d,snapshotEntries,drawSnapshotLayer,renderPanel,activeEntries,setVisible,setOpacity,setOrder,quickDraw,
   isEditing:()=>!!editing,
   resetLayer:id=>setOpacity(id,100),count:()=>[...layers.values()].filter(l=>l.visible).length,
   sync:syncAll,_layers:layers,_select:fid=>{ if(editing){ setTool("select");select(fid) } }};

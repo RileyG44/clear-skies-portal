@@ -56,33 +56,49 @@ struct HomeView: View {
         .listStyle(.insetGrouped)
         .listSectionSpacing(.compact)
         .scrollContentBackground(.hidden)
+        .contentMargins(.bottom, 8, for: .scrollContent)
         .onSheetGlass()
         .modifier(SheetScrollTracking())
         .scrollDismissesKeyboard(.immediately)
-        .scrollEdgeEffectStyle(.soft, for: .top)
+        .scrollEdgeEffectHidden(for: .top)
         .safeAreaInset(edge: .top, spacing: 0) {
-            VStack(spacing: 10) {
-                SearchBar(focused: $searchFocused)
-                if shell.query.isEmpty, shell.search.canCopy { CoordinateActions() }
+            VStack(spacing: 0) {
+                Wordmark()
+                    .frame(maxWidth: .infinity, minHeight: 48)
+                    .padding(.horizontal, 16)
+
+                VStack(spacing: 10) {
+                    SearchBar(focused: $searchFocused)
+                    if shell.query.isEmpty, shell.search.canCopy { CoordinateActions() }
+                }
+                .padding(.horizontal, 16)
+                .padding(.bottom, 12)
             }
-            .padding(.horizontal, 16)
-            .padding(.top, 12)
-            .padding(.bottom, 12)
-            // A scroll edge alone does not protect glass controls from the
-            // text behind them. Give the entire fixed header a native frost.
+            // Title, search and coordinate actions share one material surface.
+            // A separate navigation-bar material creates a visible seam on
+            // device, even when it uses the same material as the search area.
             .background {
-                Rectangle().fill(.ultraThinMaterial)
-                    .ignoresSafeArea(.container, edges: .top)
+                GeometryReader { geometry in
+                    // Extend only the material, keeping the list in place.
+                    // Center the fade in the gap before the first section.
+                    Rectangle().fill(.ultraThinMaterial)
+                        .frame(height: geometry.size.height + 8)
+                        .mask {
+                            VStack(spacing: 0) {
+                                Color.black
+                                LinearGradient(colors: [.black, .clear], startPoint: .top, endPoint: .bottom)
+                                    .frame(height: 12)
+                            }
+                        }
+                        .preference(key: SheetHeaderHeightKey.self, value: geometry.size.height + 8)
+                }
+                .allowsHitTesting(false)
             }
             .zIndex(1)
         }
         .navigationTitle("ClearSkies")
         .navigationBarTitleDisplayMode(.inline)
-        .toolbarBackgroundVisibility(.hidden, for: .navigationBar)
-        .toolbar {
-            ToolbarItem(placement: .principal) { Wordmark() }
-            ToolbarItem(placement: .topBarTrailing) { CloseSheetButton() }
-        }
+        .toolbarVisibility(.hidden, for: .navigationBar)
         .onChange(of: searchFocused) {
             if searchFocused, shell.detent != .expanded { shell.detent = .expanded }
         }
@@ -109,10 +125,15 @@ struct Wordmark: View {
 
 struct SearchBar: View {
     @Environment(ShellModel.self) private var shell
+    @Environment(\.portalAppearance) private var appearance
+    @Environment(\.accessibilityReduceMotion) private var reducedMotion
     @FocusState.Binding var focused: Bool
 
     var body: some View {
         @Bindable var shell = shell
+        // A selected map location is displayed in the field even when query
+        // is empty, and keeps Go available after the keyboard is dismissed.
+        let showsGo = focused || shell.canLoadImagery
         GlassEffectContainer(spacing: 8) {
         HStack(spacing: 8) {
             HStack(spacing: 6) {
@@ -123,6 +144,7 @@ struct SearchBar: View {
                           prompt: Text(shell.search.label.isEmpty ? "Search places, layers…" : shell.search.label)
                             .foregroundStyle(.primary.opacity(0.65)))
                     .focused($focused)
+                    .tint(Color(hex: appearance.fontColor) ?? .primary)
                     .submitLabel(.search)
                     .textInputAutocapitalization(.never)
                     .autocorrectionDisabled()
@@ -138,29 +160,49 @@ struct SearchBar: View {
             .padding(.horizontal, 12)
             .frame(minHeight: 44)
             .menuGlass(in: .capsule)
-            if focused {
-                Button {
+            Button {
+                if showsGo {
                     focused = false
-                } label: {
-                    Image(systemName: "keyboard.chevron.compact.down").frame(width: 44, height: 44)
+                    shell.loadImagery()
+                } else {
+                    shell.locate()
                 }
-                .buttonStyle(.plain)
-                .menuGlass(in: .circle)
-                .accessibilityLabel("Dismiss keyboard")
-                .transition(.scale.combined(with: .opacity))
-            } else {
-                Button { shell.locate() } label: {
-                    Image(systemName: "location")
-                        .portalFont(.footnote, weight: .semibold)
-                        .frame(width: 44, height: 44)
-                }
-                .buttonStyle(.plain)
-                .menuGlass(in: .circle)
-                .accessibilityLabel("Use my current location")
+            } label: {
+                Image(systemName: showsGo ? "arrow.right" : "location")
+                    .contentTransition(reducedMotion ? .identity : .symbolEffect(.replace))
+                    .portalFont(.footnote, weight: showsGo ? .bold : .semibold)
+                    .frame(width: 44, height: 44)
+                    .contentShape(.circle)
             }
+            .buttonStyle(.plain)
+            .menuGlass(in: .circle)
+            .disabled(showsGo && !shell.canLoadImagery)
+            .opacity(showsGo && !shell.canLoadImagery ? 0.4 : 1)
+            .accessibilityLabel(showsGo ? "Search for satellite imagery" : "Use my current location")
+            .accessibilityHint(showsGo
+                ? "Loads satellite imagery for the place in the search field, or for the place selected on the map"
+                : "Move the map to your current location")
+            Button {
+                if focused {
+                    focused = false
+                } else {
+                    shell.activeSheet = nil
+                }
+            } label: {
+                Image(systemName: focused ? "keyboard.chevron.compact.down" : "chevron.down")
+                    .contentTransition(reducedMotion ? .identity : .symbolEffect(.replace))
+                    .portalFont(.footnote, weight: .semibold)
+                    .frame(width: 44, height: 44)
+                    .contentShape(.circle)
+            }
+            .buttonStyle(.plain)
+            .menuGlass(in: .circle)
+            .accessibilityLabel(focused ? "Dismiss keyboard" : "Close menu")
+            .accessibilityHint(focused ? "Hide the keyboard and keep your search text" : "Return to the map")
         }
         }
-        .animation(.snappy, value: focused)
+        .animation(reducedMotion ? nil : .snappy, value: focused)
+        .animation(reducedMotion ? nil : .snappy, value: showsGo)
     }
 }
 
@@ -334,6 +376,7 @@ struct RoutePageView: View {
         }
         .navigationTitle(shell.title(for: route))
         .navigationBarTitleDisplayMode(.inline)
+        .toolbarVisibility(.visible, for: .navigationBar)
         .toolbar {
             ToolbarItem(placement: .principal) {
                 Text(shell.title(for: route)).portalFont(.subheadline, weight: .semibold)

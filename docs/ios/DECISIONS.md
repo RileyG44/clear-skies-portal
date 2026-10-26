@@ -28,8 +28,9 @@ Owner review: see OWNER_REVIEW.md; technical review is not product approval.
 Approved architecture: NONE for the baseline. Native client: CR-001 (D-02).
 Approved release deferrals: NONE
 Approved trial replacement: NONE
-Accepted change requests/exceptions: CR-001 (accepted 2026-10-21) and CR-002
-(accepted 2026-10-24), supplements to this draft; SPEC.md text unchanged.
+Accepted change requests/exceptions: CR-001 (accepted 2026-10-21), CR-002
+(accepted 2026-10-24) and CR-003 (accepted 2026-10-25), supplements to this draft;
+SPEC.md text unchanged.
 Note: on 2026-10-21, before CR-001, Riley told the earlier agent in T3 thread
 56d5529a-7bb5-43e5-ac76-eebcb30229ca (item 43): "a September spec would have
 been based on a now extremely outdated version of this app, so don't refer to
@@ -164,6 +165,62 @@ and ran no runtime/numerical regression checks. F11 remains open until the
 implementer supplies implementation and verification evidence. These decision,
 request and handoff edits are left uncommitted for the parent.
 
+## CR-003 — location and full map display-state share links
+
+Status: ACCEPTED 2026-10-25 (America/Los_Angeles)
+Type: bounded feature addition to native sharing and the existing web client
+Request: change-requests/CR-003-location-state-share-links.md, revision r1
+Digest: SHA-256 709c7650e3f6b23ec7025f8d54239f4c216cea63854052af6300ccbdb74c9ecd
+over the exact 3,400 UTF-8/LF bytes before the request's "## Riley approval"
+heading as presented with "Status: DRAFT". Independently reproduced before edits;
+only the workflow status above that heading changes. Normalize it to DRAFT to
+reproduce the binding. The request remains uncommitted; its digest is the binding.
+Approval evidence: [parent T3 Code thread](t3-thread://v1/8fd7298a-b4d3-4648-b7e1-e9cb407df1ea),
+activity position 781, actual user_message (createdBy: user; creationSource:
+server; status: completed). The owner independently called t3_thread_read,
+view: activity, afterPosition: 780, limit: 3. The untruncated message includes the
+full digest-bound question and Riley's exact response, "Approve CR-003 r1 and its
+Spec Owner review". Its updatedAt is 2026-10-26T05:33:40.320Z. The request records
+the exact question and response. Approval covers exact r1 and one dedicated owner
+review; no second approval is required for that scope.
+Owner: dedicated Spec Owner review sub-agent (Codex), restored for CR-003 r1 only.
+This owner session ends at handoff and grants no ongoing owner authority.
+Accepted change: the selected-location action stack gains native Apple sharing of
+a link to the existing Clear Skies web app. A versioned, validated fragment shares
+the selected location and full included map display state, including layer
+visibility/opacity/order, scene identity, Auto-fill and filters, terrain/elevation/
+analysis/overlay settings, annotations and active 3D/point-cloud settings. Existing
+renderers, source selection and scientific calculations are reused. Engine
+addresses, credentials, device identifiers and unrelated preferences are excluded.
+Invalid/unsupported links and unavailable layers are reported, with no silent
+state dropping. The digest-bound proposal governs this summary.
+Affected IDs: U-01, U-04, UX-02, CAP-01 through CAP-12, CR-001 Stage 2.
+Consistency evidence: inspected actual index.html bridge/session, selected-location,
+scene/filter/Auto-fill, layer, terrain/elevation/research and overlay state;
+ui-system.js layer order; native-shell.js adapter; NativeBridge.swift and
+WebHost.swift share/export; markup.js, lidar-studio.js/lidar-render.js and
+point-cloud-viewer.js state support. Existing session recovery is camera/location
+only and existing native sharing handles file exports; full state sharing is new
+implementation work. No substantive consistency issue requires a changed r1.
+Spec treatment: exact r1 supplements SPEC.md 0.1.0-draft without approving
+BASE-001 or changing SPEC.md. It expressly supplements CR-001's unchanged-web
+constraint only for opt-in share payloads; no-payload behavior is preserved.
+CR-001's remaining conditions, shared checks/matching iOS assets, internal
+TestFlight scope and exception expiry are unchanged. Native distribution remains
+bounded by BASE-001 approval/rejection or 2027-01-31, whichever comes first.
+CR-002 remains unchanged. No public deployment, new service/account/source,
+purchase, release gate, scientific policy or numerical device budget is approved.
+Next authorized action: the parent may implement exact r1 and run its verification
+plan within these existing limits. Any substantive departure requires a new
+Riley-approved request and owner record.
+Implementation status: acceptance recorded only. This owner changed no app code,
+ran no runtime/device/scientific or shared-code regression tests, and made no
+commit or deployment. Full-state roundtrips, failure handling, private-field
+exclusion, native share UI, no-payload startup and matching-bundle checks remain
+with the implementer. Public-site restoration is not established by this review;
+public deployment is outside the approval. Records are left uncommitted for the
+parent; prior dirty work is preserved.
+
 ## Open decisions
 
 D-01 and D-03 through D-08 in SPEC.md remain unresolved. D-02 is resolved for
@@ -188,3 +245,8 @@ DATA-06; all broader D-06 decisions remain open.
   shared/native Analyze curvature name and description are authorized to change;
   calculations and units are unchanged. SPEC.md is unchanged, BASE-001 remains
   pending and no other D-06 decision is resolved.
+- 2026-10-25: Exact CR-003 r1 accepted after independent proposal-digest and actual
+  user-message verification. Authorizes implementation of opt-in full display-state
+  fragment links and native Apple sharing. SPEC.md and pending BASE-001 are
+  unchanged; CR-001's internal distribution limits and expiry remain, with no
+  public deployment or completed runtime verification inferred.
