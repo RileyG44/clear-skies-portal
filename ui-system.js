@@ -320,6 +320,15 @@ for(const grid of $$(".terrain-look-grid")){
   }
   grid.remove();
 }
+/* Sun direction and height share one dial, as on the iPhone. It drives the
+   same two inputs, which it keeps for keyboard and screen reader use. */
+{
+  const azimuth=$("#terSunAz"),altitude=$("#terSunAlt");
+  const fields=[azimuth,altitude].map(input=>input?.closest(".elev-field"));
+  const dial=fields.every(Boolean)&&window.CSPLidarStudio?.sunDial?.({azimuth,altitude,
+    azimuthOutput:$("#terSunAzOut"),altitudeOutput:$("#terSunAltOut")});
+  if(dial){fields[0].before(dial);for(const field of fields) field.remove()}
+}
 const terrainHints={off:"Choose a layer to show the shape of the ground.",hs:"Shaded relief makes landforms easier to read.",hsmulti:"Light from several directions reveals landforms with fewer deep shadows.",tint:"Color the ground by height, with shaded relief.",rem:"Color the ground by height above the nearby valley floor.",slope:"Show how steep the ground is.",aspect:"Color each slope by the direction it faces.",northness:"Show how strongly slopes face north or south."};
 function syncMenuHints(){
   const style=$("#terStyle")?.value,source=$("#terSrc")?.value;

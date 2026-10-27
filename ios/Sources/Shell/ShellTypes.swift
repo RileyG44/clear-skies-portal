@@ -149,6 +149,9 @@ struct ShellItem: Decodable, Hashable {
     var accessibility: String? = nil
     var open: Bool? = nil
     var pane: Bool? = nil
+    /// A web section the app shows as a row that opens and closes it,
+    /// rather than as a section of the list (the LiDAR page's disclosures).
+    var disclosure: Bool? = nil
     var items: [ShellItem]? = nil
     var stops: [GradientStop]? = nil
     var id: String? = nil

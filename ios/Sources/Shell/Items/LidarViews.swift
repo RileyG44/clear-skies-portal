@@ -60,8 +60,8 @@ struct ChoicesRow: View {
     }
 }
 
-/// Complete looks, each previewed with the web's own rendering of a sample
-/// terrain.
+/// Complete presets, each previewed with the web's own rendering of a sample
+/// terrain. Saved presets can be deleted from their context menu.
 struct LooksRow: View {
     @Environment(ShellModel.self) private var shell
     let item: ShellItem
@@ -89,11 +89,16 @@ struct LooksRow: View {
                     .buttonStyle(.plain)
                     .contextMenu {
                         if let remove = look.remove {
-                            Button(role: .destructive) { shell.act(remove) } label: { Label("Delete Look", systemImage: "trash") }
+                            Button(role: .destructive) { shell.act(remove) } label: { Label("Delete Preset", systemImage: "trash") }
                         }
                     }
                     .accessibilityLabel(look.label)
                     .accessibilityAddTraits(on ? .isSelected : [])
+                    .accessibilityActions {
+                        if let remove = look.remove {
+                            Button("Delete Preset") { shell.act(remove) }
+                        }
+                    }
                 }
             }
             .padding(.vertical, 4)
@@ -339,7 +344,9 @@ struct SunDial: View {
                         .position(sun)
                 }
                 .contentShape(.rect)
-                .gesture(
+                // Ahead of the sheet's scrolling, so a drag that starts on
+                // the dial always moves the sun.
+                .highPriorityGesture(
                     DragGesture(minimumDistance: 0)
                         .onChanged { value in
                             let dx = value.location.x - center.x, dy = value.location.y - center.y

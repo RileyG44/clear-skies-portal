@@ -95,7 +95,7 @@
       container.innerHTML="";
       container.toggleAttribute("data-disabled",!gpu());
       if(!gpu()){
-        container.append(el("p","control-hint ls-note","Presets and color layers need GPU rendering, which this browser doesn’t provide. Choose a terrain mode above instead."));
+        container.append(el("p","control-hint ls-note","Presets and color layers need GPU rendering, which this browser doesn’t provide. Choose a terrain mode below instead."));
         return;
       }
       const settings=disclosure("customize","Customize preset","ls-customize ls-section");
@@ -748,5 +748,129 @@
     };
   }
 
-  return Object.freeze({mount,STORAGE_KEY});
+  /* ---------------------------------------------------------- sun dial
+     The iPhone's azimuth/altitude dial for the web: the sun seen from
+     above, north up, azimuth clockwise, the horizon at the rim and the
+     zenith at the center. It only moves the host's own two range inputs and
+     sends the input and change events a person would, so lighting, saving,
+     resets and shared links keep a single owner. The inputs stay in the
+     dial, visually hidden, for keyboard and assistive technology. */
+  const SUN_RADIUS=80,COMPASS=["N","NNE","NE","ENE","E","ESE","SE","SSE","S","SSW","SW","WSW","W","WNW","NW","NNW"];
+  const compassName=degrees=>COMPASS[((Math.round(degrees/22.5)%16)+16)%16];
+  const sunHeightName=altitude=>altitude>=60?"High sun":altitude<=20?"Low, raking light":"Mid sun";
+  /* A point relative to the dial's center, in the units of radius. */
+  function sunFromPoint(dx,dy,radius,minAltitude=5,maxAltitude=90){
+    let azimuth=(Math.atan2(dy,dx)*180/Math.PI+90)%360;
+    if(azimuth<0) azimuth+=360;
+    const distance=Math.min(radius,Math.hypot(dx,dy));
+    return {azimuth:Math.min(359,Math.round(azimuth)),
+      altitude:clamp(Math.round(90-distance/radius*90),minAltitude,maxAltitude)};
+  }
+  function sunPoint(azimuth,altitude,radius){
+    const reach=(90-clamp(altitude,0,90))/90*radius,angle=(azimuth-90)*Math.PI/180;
+    return {x:+(Math.cos(angle)*reach).toFixed(3),y:+(Math.sin(angle)*reach).toFixed(3)};
+  }
+  function sunDial({azimuth,altitude,azimuthOutput,altitudeOutput,document:doc=globalThis.document,schedule}){
+    if(!azimuth||!altitude||!doc) return null;
+    const frame=schedule||(callback=>(globalThis.requestAnimationFrame||setTimeout)(callback));
+    const svg="http://www.w3.org/2000/svg";
+    const node=(tag,attributes,parent)=>{const n=doc.createElementNS(svg,tag);for(const [k,v] of Object.entries(attributes))n.setAttribute(k,v);parent?.appendChild(n);return n};
+    const root=doc.createElement("div");root.className="sun-dial";
+    root.setAttribute("role","group");root.setAttribute("aria-label","Sun direction and height");
+    const face=node("svg",{viewBox:"-100 -100 200 200",class:"sun-dial-face","aria-hidden":"true",focusable:"false"});
+    node("circle",{class:"sun-dial-disc",r:SUN_RADIUS},face);
+    for(const ring of [30,60]) node("circle",{class:"sun-dial-ring",r:(90-ring)/90*SUN_RADIUS},face);
+    for(let tick=0;tick<24;tick++){
+      const major=tick%6===0,angle=tick*15*Math.PI/180,outer=SUN_RADIUS-2,inner=outer-(major?9:5);
+      node("line",{class:major?"sun-dial-tick is-major":"sun-dial-tick",x1:Math.sin(angle)*inner,y1:-Math.cos(angle)*inner,
+        x2:Math.sin(angle)*outer,y2:-Math.cos(angle)*outer},face);
+    }
+    ["N","E","S","W"].forEach((letter,index)=>{
+      const angle=index*Math.PI/2,label=node("text",{class:letter==="N"?"sun-dial-letter is-north":"sun-dial-letter",
+        x:Math.sin(angle)*(SUN_RADIUS+11),y:-Math.cos(angle)*(SUN_RADIUS+11),"text-anchor":"middle","dominant-baseline":"central"},face);
+      label.textContent=letter;
+    });
+    const beam=node("line",{class:"sun-dial-beam",x1:0,y1:0,x2:0,y2:0},face);
+    node("circle",{class:"sun-dial-center",r:2},face);
+    const sun=node("g",{class:"sun-dial-sun"},face);
+    node("circle",{class:"sun-dial-sun-back",r:13},sun);
+    for(let ray=0;ray<8;ray++){
+      const angle=ray*Math.PI/4;
+      node("line",{class:"sun-dial-ray",x1:Math.cos(angle)*7.5,y1:Math.sin(angle)*7.5,x2:Math.cos(angle)*10.5,y2:Math.sin(angle)*10.5},sun);
+    }
+    node("circle",{class:"sun-dial-sun-core",r:5.5},sun);
+    const readouts=doc.createElement("div");readouts.className="sun-dial-readouts";
+    const readout=(input,output,title,name)=>{
+      const box=doc.createElement("div");box.className="sun-dial-readout";
+      const label=input.labels?.[0]||doc.createElement("label");
+      label.htmlFor=input.id;label.className="sun-dial-title";label.textContent=title;
+      const detail=doc.createElement("span");detail.className="sun-dial-detail";
+      input.classList.add("sun-dial-input");input.setAttribute("aria-label",name);
+      box.append(label,output||doc.createElement("output"),detail,input);readouts.append(box);
+      return detail;
+    };
+    const azimuthDetail=readout(azimuth,azimuthOutput,"Azimuth","Sun azimuth");
+    const altitudeDetail=readout(altitude,altitudeOutput,"Altitude","Sun altitude");
+    root.append(face,readouts);
+    const limits=()=>({min:Number(altitude.min)||5,max:Number(altitude.max)||90});
+    const values=()=>({azimuth:clamp(+azimuth.value||0,0,359),altitude:clamp(+altitude.value||0,limits().min,limits().max)});
+    function paint(){
+      const value=values(),point=sunPoint(value.azimuth,value.altitude,SUN_RADIUS);
+      sun.setAttribute("transform",`translate(${point.x} ${point.y})`);
+      beam.setAttribute("x2",point.x);beam.setAttribute("y2",point.y);
+      azimuthDetail.textContent=compassName(value.azimuth);altitudeDetail.textContent=sunHeightName(value.altitude);
+      azimuth.setAttribute("aria-valuetext",`${Math.round(value.azimuth)} degrees ${compassName(value.azimuth)}`);
+      altitude.setAttribute("aria-valuetext",`${Math.round(value.altitude)} degrees, ${sunHeightName(value.altitude).toLowerCase()}`);
+    }
+    const fire=(input,type)=>input.dispatchEvent(new Event(type,{bubbles:true}));
+    /* One update per frame while dragging, then a committed change. */
+    let drag=null,pending=null,queued=false;
+    function set(next,commit){
+      for(const [input,value] of [[azimuth,next.azimuth],[altitude,next.altitude]]){
+        if(+input.value===value&&!commit) continue;
+        input.value=String(value);fire(input,"input");
+        if(commit) fire(input,"change");
+      }
+      paint();
+    }
+    function flush(){queued=false;if(pending&&drag){set(pending,false);pending=null}}
+    function pointAt(event){
+      const box=face.getBoundingClientRect(),scale=200/Math.max(1,box.width);
+      return sunFromPoint((event.clientX-box.left-box.width/2)*scale,(event.clientY-box.top-box.height/2)*scale,SUN_RADIUS,limits().min,limits().max);
+    }
+    function move(event){
+      if(!drag||event.pointerId!==drag.id) return;
+      event.preventDefault();pending=pointAt(event);
+      if(!queued){queued=true;frame(flush)}
+    }
+    function finish(event,cancelled){
+      if(!drag||(event&&event.pointerId!==undefined&&event.pointerId!==drag.id)) return;
+      const start=drag.start,last=pending||values();drag=null;pending=null;root.classList.remove("is-dragging");
+      if(cancelled) set(start,true);
+      else set(last,true);
+    }
+    face.addEventListener("pointerdown",event=>{
+      if(event.button!==undefined&&event.button!==0||azimuth.disabled) return;
+      event.preventDefault();
+      drag={id:event.pointerId,start:values()};root.classList.add("is-dragging");
+      try{face.setPointerCapture(event.pointerId)}catch(_){}
+      pending=pointAt(event);flush();
+    });
+    face.addEventListener("pointermove",move);
+    face.addEventListener("pointerup",event=>finish(event,false));
+    face.addEventListener("pointercancel",event=>finish(event,true));
+    face.addEventListener("lostpointercapture",event=>{if(drag&&event.pointerId===drag.id) finish(event,false)});
+    doc.addEventListener("keydown",event=>{if(drag&&event.key==="Escape"){event.preventDefault();finish(null,true)}});
+    for(const input of [azimuth,altitude]){
+      input.addEventListener("input",paint);input.addEventListener("change",paint);
+    }
+    /* Resets, saved preferences and shared links set the inputs directly and
+       then rewrite the outputs. */
+    if(globalThis.MutationObserver) for(const output of [azimuthOutput,altitudeOutput].filter(Boolean))
+      new MutationObserver(paint).observe(output,{childList:true,characterData:true,subtree:true});
+    paint();
+    return Object.assign(root,{cspSunDial:{paint,values,set:value=>set(value,true)}});
+  }
+
+  return Object.freeze({mount,STORAGE_KEY,sunDial,sunFromPoint,sunPoint,compassName});
 });

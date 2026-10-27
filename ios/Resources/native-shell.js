@@ -284,10 +284,12 @@
   }
 
   /* ------------------------------------------------------ LiDAR studio */
+  /* Each preset is an option holding its button and, for a saved preset
+     only, the delete button beside it. */
   function looksItem(el) {
-    return { kind: "looks", ref: refOf(el), title: clean(el.getAttribute("aria-label")) || "Looks",
+    return { kind: "looks", ref: refOf(el), title: clean(el.getAttribute("aria-label")) || "Presets",
       options: $$(".ls-look", el).map(look => {
-        const remove = $("[data-remove-look]", look);
+        const remove = $("[data-remove-look]", look.closest(".ls-preset-option") || look);
         return { ref: refOf(look), title: clean($(".ls-look-name", look)?.textContent), selected: look.getAttribute("aria-checked") === "true",
           src: $("canvas", look) ? pictureOf($("canvas", look)) : undefined, remove: remove ? refOf(remove) : undefined };
       }) };
@@ -354,14 +356,16 @@
     if (tag === "details") {
       const summary = $(":scope > summary", el);
       const items = [];
+      const disclosure = el.matches(DISCLOSURES) || undefined;
+      const description = summary && $(".terrain-disclosure-description", summary);
       if (el.open) for (const child of el.children) if (child !== summary && shown(child) && !handle(child, items)) walk(child, items);
       /* A button in the summary (Elevation highlights' Reset) acts on the
          whole section, so it ends the section's rows. */
       if (summary) for (const button of $$("button", summary).filter(shown)) items.push(controlItem(button));
       const swatch = summary && $(".ls-swatch", summary);
-      out.push({ kind: "group", ref: refOf(el), title: summary ? textWithout(summary, ".pane-n,button,.ls-disclosure-value,.ls-swatch") : "",
-        detail: summary ? clean($(".pane-n,.ls-disclosure-value", summary)?.textContent) || undefined : undefined,
-        stops: swatch ? gradientOf(swatch) : undefined, open: el.open, items });
+      out.push({ kind: "group", ref: refOf(el), title: summary ? textWithout(summary, ".pane-n,button,.ls-disclosure-value,.ls-preset-status,.ls-swatch,.terrain-disclosure-description") : "",
+        detail: summary ? clean((description || $(".pane-n,.ls-disclosure-value,.ls-preset-status", summary))?.textContent) || undefined : undefined,
+        stops: swatch ? gradientOf(swatch) : undefined, open: el.open, disclosure, items });
       return true;
     }
     if (el.matches(".csp-section-label,.menu-section-title,.ovgrp,h1,h2,h3,h4")) {
@@ -383,6 +387,24 @@
       return true;
     }
     if (el.matches(".ls-looks")) { out.push(looksItem(el)); return true; }
+    /* The web puts Save current in the card's heading. In the app's list it
+       follows the presets it would add to. */
+    if (el.matches(".ls-preset-card")) {
+      const items = [];
+      for (const child of el.children) if (shown(child) && !handle(child, items)) walk(child, items);
+      const save = $(".ls-save-look", el), at = save ? items.findIndex(item => item.ref === refOf(save)) : -1;
+      if (at >= 0) {
+        const [action] = items.splice(at, 1), looks = items.findIndex(item => item.kind === "looks");
+        items.splice(looks + 1, 0, action);
+      }
+      out.push(...items);
+      return true;
+    }
+    // The preset strip scrolls natively; its previous/next buttons are web-only.
+    if (el.matches(".ls-preset-navigation")) return true;
+    // The picker below carries the terrain card's field label as its title.
+    if (el.matches("#terLidar .terrain-fields > label[for]")) return true;
+    if (el.matches(".sun-dial")) { const sun = sunItem(); if (sun) out.push(sun); return true; }
     if (el.matches(".ls-palettes")) { out.push(palettesItem(el)); return true; }
     if (el.matches(".ls-layer")) { lidarLayer(el, out); return true; }
     if (el.matches(".ls-ramp-wrap")) { out.push(rampItem(el)); return true; }
@@ -497,7 +519,7 @@
     if (/\b(err|warn)\b/.test(classes) || el.querySelector(".err,.warn") || el.dataset.state === "partial") return "warning";
     if (/\bok\b/.test(classes) || el.querySelector(".ok")) return "success";
     if (el.getAttribute("role") === "status" || el.id === "status" || /\b(status|warmmsg)\b/.test(classes)) return "status";
-    if (/hint|note|meta|via|empty|foot|blurb/.test(classes) || el.tagName === "SMALL") return "hint";
+    if (/hint|note|meta|via|empty|foot|blurb|sr-only/.test(classes) || el.tagName === "SMALL") return "hint";
     return "body";
   }
 
@@ -511,8 +533,12 @@
   /* The app groups a page's sections into its own list, so the web sections
      behind it are kept open: every row is described and none waits on a tap.
      Opening one only syncs its label and remembers it is open
-     (ui-system.js, lidar-studio.js); nothing loads. */
-  const openSections = root => { if (root) for (const details of $$("details:not([open])", root)) details.open = true; };
+     (ui-system.js, lidar-studio.js); nothing loads. The LiDAR page's own
+     disclosures stay disclosures in the app, open or closed as on the web. */
+  const DISCLOSURES = "#terLayerSettings,#terDataOffline,.ls-customize";
+  const openSections = root => {
+    if (root) for (const details of $$("details:not([open])", root)) if (!details.matches(DISCLOSURES)) details.open = true;
+  };
 
   function describePage() {
     const shell = window.CSPShell;
