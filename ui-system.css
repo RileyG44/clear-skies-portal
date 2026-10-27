@@ -2752,6 +2752,12 @@ body.csp-redesign .csp-setting-foot[hidden]{display:none}
 .csp-glass body.csp-redesign.csp-redesign #cspWorkspace :is(.csp-setting-row,.csp-available-row){padding:12px var(--t3-row-x)}
 .csp-glass body.csp-redesign.csp-redesign #cspWorkspace .csp-settings-card{gap:0;padding:0}
 .csp-glass body.csp-redesign.csp-redesign #cspWorkspace .csp-settings-card > .csp-setting-row + :not(.csp-setting-row){margin-top:-2px}
+/* A selected swatch paints a 4.5px ring outside its box. The tuck above
+   pulled that ring across the next row's divider. */
+.csp-glass body.csp-redesign.csp-redesign #cspWorkspace .csp-settings-card > .csp-setting-row + .csp-accent-picker{
+  margin-top:8px;
+  margin-bottom:12px;
+}
 .csp-glass body.csp-redesign.csp-redesign #cspWorkspace .csp-settings-card > :not(.csp-setting-row){margin-left:var(--t3-row-x);margin-right:var(--t3-row-x)}
 .csp-glass body.csp-redesign.csp-redesign #cspWorkspace .csp-settings-card > :not(.csp-setting-row):last-child{margin-bottom:14px}
 .csp-glass body.csp-redesign.csp-redesign #cspWorkspace .csp-settings-card > :not(.csp-setting-row) + :not(.csp-setting-row){margin-top:12px}
