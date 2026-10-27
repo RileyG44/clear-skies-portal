@@ -450,6 +450,71 @@ scientific or shared-code regression checks, commit or deployment. Acceptance
 does not mark r1 implemented/verified. Only CR-006 and the decision/handoff
 records changed, uncommitted for the parent; unrelated work is preserved.
 
+## CR-007 — presets-first LiDAR menu and shared sun dial
+
+Status: ACCEPTED 2026-10-27 (America/Los_Angeles), exact r1 only
+Request: change-requests/CR-007-lidar-presets-sun-dial.md
+Binding: independently reproduced before edits, SHA-256
+879f1a4c97fc22a5f050ecc2d42138f161c6723b371b3a445e4ce36fa5367b01 over
+5,835 UTF-8/LF bytes before its Riley approval heading. Normalize only workflow
+Status to DRAFT to reproduce; proposal otherwise unchanged. This is a later
+traceability binding, not a digest represented as presented to Riley.
+Authority: independently read actual user_messages in the
+[parent thread](t3-thread://v1/99217d26-4dda-4fb1-b5fe-52331155738c), messages
+view, full page (hasMore false). Position 0: createdBy user, creationSource
+mobile, completed, untruncated; messageId e0a50908-f62f-422e-bb41-e97fdba26494,
+updatedAt 2026-10-27T14:00:40.875Z. Position 100: createdBy user, creationSource
+web, completed, untruncated; messageId 0d8f9871-cd64-4184-b44a-d61081f8fd49,
+updatedAt 2026-10-27T17:19:22.881Z. Riley asks for the iOS LiDAR menu to match
+the web organization with looks renamed Presets and placed at the top, to keep
+the iOS azimuth/altitude dial and add it to web and desktop in place of their
+corresponding controls, then to complete, fix found problems and ship. Other user
+messages do not narrow scope; position 129 reaffirms the first prompt. Exact
+quotes are in CR-007. GOV-002 governs; no further Riley approval question needed.
+Owner: dedicated Spec Owner review sub-agent (Claude), CR-007 r1 only; session
+ends at handoff. No ongoing owner appointment or other request acceptance.
+
+Accepted scope: Presets card first then Terrain mode & data on all clients, by
+moving the existing `#terStudio` element ahead of `#terLidar`; native mirrors that
+hierarchy with genuine LiDAR disclosures bound to web `<details>` state, Presets
+naming and working saved-preset deletion via the web control. Web/Electron
+replace the two visible sun range rows with one dial matching native SunDial
+semantics while `#terSunAz`/`#terSunAlt` remain the state owner. Placing Presets
+first on web/desktop is within Riley's explicit "placed at the top" and matching
+instruction; the implementer must disclose that order change in its report.
+
+Consistency evidence: index.html shows `#terLidar` (line 1308) before
+`#terStudio` (line 1442) with no CSS/JS reorder, unchanged since 12dbc9e;
+lidar-studio.js renders the delete control as a sibling of `.ls-look`, while
+native-shell.js looksItem searches inside `.ls-look` (deletion unreachable);
+openSections forces all workspace `<details>` open; ItemList.swift PageLayout
+retains CR-006's old LiDAR order; LidarViews.swift says "Delete Look" and SunDial
+drives the web inputs with input/commit. Sun inputs own repaint/save/reset/
+preset/share-link paths. Static evidence only, not completion review.
+Conditions/checks: preserve every LiDAR control/state/handler; keep the original
+sun inputs operable and described natively (not `hidden`/`display:none`);
+accessible keyboard dial with cancel restore; fix text made wrong by the reorder
+(e.g. "Choose a terrain mode above"); built-ins non-deletable; no elevation fetch
+on lighting change (contract 1, observed); matching static/service-worker/
+Electron/iOS assets (contract 9); r1's full browser/native/test/build plan.
+
+Affected references: U-01, U-04, UX-02/03, CAP-01 through CAP-14 (chiefly
+CAP-05/06), CR-001 parity, CR-006 item 1 (LiDAR order only) and engineering
+contracts 1 and 9. SPEC.md 0.1.0-draft and BASE-001 remain unchanged and
+unapproved. Permanent bounded UI supplement: revises CR-006 item 1 for the LiDAR
+route only and supplements CR-001's unchanged-web condition for r1 items 1 and 4.
+Other CRs, architecture, internal distribution and expiry remain (BASE-001
+approval or rejection, or 2027-01-31, whichever first); open decisions and
+release gates are unchanged. No scientific/source policy, numerical budget,
+deployment or distribution is accepted or verified here.
+Next authorized action: parent may implement exact r1, complete its verification
+plan and ship per Riley's position-100 instruction. Necessary within-task
+revisions use GOV-002 and owner records; the implementer does not inherit custody.
+Implementation evidence: none from this owner. No app edits, runtime/device/
+scientific or shared-code regression checks, commit or deployment. Acceptance
+does not mark r1 implemented/verified. Only CR-007 and the decision/handoff
+records changed, uncommitted for the parent; unrelated work is preserved.
+
 ## Open decisions
 
 D-01 and D-03 through D-08 in SPEC.md remain unresolved. D-02 is resolved for
@@ -498,3 +563,9 @@ DATA-06; all broader D-06 decisions remain open.
   supplement CR-001's unchanged-web condition only for that task. CR-004/005 work,
   map info/key ownership, pending BASE-001 and other scope/gates are preserved;
   implementation and runtime verification remain with the parent.
+- 2026-10-27: CR-007 r1 accepted after independent direct-instruction/digest and
+  static consistency checks. Presets-first LiDAR menu on all clients, native
+  disclosures/preset deletion and a shared sun dial over the existing inputs
+  revise CR-006 item 1 (LiDAR only) and supplement CR-001's unchanged-web
+  condition. Pending BASE-001 and other scope/gates are preserved; implementation
+  and runtime verification remain with the parent.
