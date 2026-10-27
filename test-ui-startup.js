@@ -92,4 +92,38 @@ async function workerCache(){
     assert(result?.fromCache,`${url} must load offline from its exact document URL`);
   }
 }
-Promise.all([retryBeforeLoad(),workerCache()]).then(()=>console.log('UI startup checks passed (static shell, pre-load retry, bounded cache recovery, missing bridge, exact offline asset URLs)')).catch(e=>{console.error(e);process.exitCode=1});
+// The shared sidebar redesign must never style the independently organized
+// LiDAR cards. Exercise first load, all routes, and returning to LiDAR.
+function lidarRouteIsolation(){
+  const begin=ui.indexOf('function activateRoute('),end=ui.indexOf('\nnavScroll.addEventListener(',begin);
+  assert(begin>=0&&end>begin,'the real route handler must be exercised');
+  const routesBegin=ui.indexOf('const ROUTES='),routesEnd=ui.indexOf('\nconst nav=$(',routesBegin);
+  assert(routesBegin>=0&&routesEnd>routesBegin);
+  const routes=vm.runInNewContext(ui.slice(routesBegin,routesEnd)+';ROUTES'),keys=Object.keys(routes);
+  for(const compact of [false,true]){
+    const classes=new Set(['csp-redesign','csp-grouped-menus']);
+    const classList={add:name=>classes.add(name),remove:name=>classes.delete(name),
+      toggle(name,on){if(on)classes.add(name);else classes.delete(name)}};
+    const nodes=new Map(),node=selector=>{
+      if(!nodes.has(selector))nodes.set(selector,{textContent:'',hidden:false});
+      return nodes.get(selector);
+    };
+    let rendered;
+    const context={ROUTES:routes,routesShown:0,currentRoute:null,overlayGroup:null,
+      document:{body:{classList,dataset:{}}},workspace:{classList,offsetWidth:660},compactShell:{matches:compact},
+      $:node,$$:()=>[],panes:{},filterResearch(){},annotateOverlayGroups(){},bridge:{},
+      renderCustom:route=>rendered=route,openDefaultPanes(){},workspaceScroll:{scrollTop:80},updateCounts(){}};
+    vm.createContext(context);vm.runInContext(ui.slice(begin,end),context);
+    for(const key of ['terrain',...keys,'terrain','appearance','terrain']){
+      context.activateRoute(key);
+      assert.equal(classes.has('csp-grouped-menus'),key!=='terrain',`${compact?'compact':'desktop'} ${key} uses its own menu styling`);
+      assert.equal(context.document.body.dataset.cspRoute,key);
+      assert.equal(rendered,routes[key],'routing still renders the requested page');
+      assert.equal(context.workspaceScroll.scrollTop,0);
+    }
+    context.activateRoute('missing');
+    assert.equal(context.document.body.dataset.cspRoute,'terrain','unknown routes leave LiDAR unchanged');
+  }
+}
+lidarRouteIsolation();
+Promise.all([retryBeforeLoad(),workerCache()]).then(()=>console.log('UI startup checks passed (static shell, pre-load retry, bounded cache recovery, missing bridge, exact offline asset URLs, LiDAR menu isolation)')).catch(e=>{console.error(e);process.exitCode=1});

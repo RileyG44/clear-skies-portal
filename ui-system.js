@@ -944,47 +944,8 @@ function organizeAppearance(card){
   split("Preview & reset",rows.slice(preview));
 }
 function organizeSidebarMenus(){
-  document.body.classList.add("csp-grouped-menus");
-  const terrain=$(".pane[data-pane=terrain] > .pane-b",panes);
-  const lidar=$("#terLidar"),studio=$("#terStudio"),appearance=$("#terAppearance");
-  const lighting=$("#terLighting"),source=$(".terrain-data-settings"),dnr=$(".terrain-download-settings");
-  const offline=$("#terrainDownloadBox"),sourceDetails=$("#terrainSourceDetails"),reset=$("#terReset");
-  // The newer terrain card owns its Layer settings and preset carousel.
-  // Only the legacy disclosure layout needs these nodes regrouped.
-  if(terrain&&lidar?.matches("details")){
-    terrain.classList.add("csp-menu-page");
-    // Lift settings out of the layer selector: downloading and source choice
-    // must remain available when no terrain style is enabled.
-    for(const node of [studio,appearance,lighting,source,dnr]) if(node) terrain.append(node);
-    openMenuSection(lidar);
-    terrain.prepend(menuSection("Terrain mode",[lidar],"cspTerrainModeSection"));
-    if(studio){
-      $("#cspTerrainModeSection").after(studio);
-      studio.classList.add("csp-menu-collection");
-      const organizeStudio=()=>{
-        const layer=$(':scope > .ls-section:not(details)',studio);
-        const looks=$(':scope > .ls-looks-section',studio);
-        const effects=$(':scope > details.ls-section:not(.ls-looks-section)',studio);
-        if(layer) studio.append(menuSection("Layers",[layer]));
-        if(looks){openMenuSection(looks);studio.append(menuSection("Looks",[looks]))}
-        openMenuSection(appearance);openMenuSection(effects);
-        studio.append(menuSection("Appearance & effects",[appearance,effects]));
-      };
-      // The studio rebuilds when a layer changes. Rescue the existing host
-      // appearance controls before that rebuild, then group the new controls.
-      studio.addEventListener("csp:lidar-menu-reset",()=>{if(appearance) terrain.append(appearance)});
-      studio.addEventListener("csp:lidar-menu",organizeStudio);
-      organizeStudio();
-    }else if(appearance){openMenuSection(appearance);terrain.append(menuSection("Appearance",[appearance]))}
-    openMenuSection(lighting);terrain.append(menuSection("Lighting & 3D relief",[lighting]));
-    openMenuSection(source);
-    terrain.append(menuSection("Data source & opacity",[source,$("#terrainLoadStatus"),sourceDetails]));
-    openMenuSection(dnr);openMenuSection(offline);
-    terrain.append(menuSection("Downloads",[dnr,offline]));
-    terrain.append(menuSection("Reset",[reset]));
-    // Status and legends stay in this route, after the settings they describe.
-    for(const node of [$("#terLegend"),$("#terInfo")]) if(node) terrain.append(node);
-  }
+  // LiDAR owns its two-card workflow in index.html and lidar-studio.js.
+  // Never lift its live controls into the shared menu organizer.
   const elevation=$(".pane[data-pane=elevation] > .pane-b",panes),spectrum=$("#elevSpectrumBox");
   if(elevation&&spectrum){
     elevation.classList.add("csp-menu-page");
@@ -1133,6 +1094,8 @@ function activateRoute(key,options={}){
   }
   currentRoute=key;overlayGroup=route.overlayGroup||null;
   document.body.dataset.cspRoute=key;
+  // Other menu redesigns must not override LiDAR's cards, headings or controls.
+  document.body.classList.toggle("csp-grouped-menus",key!=="terrain");
   if(compactShell.matches&&!options.stayOnNav) document.body.dataset.cspView="detail";
   $$(".csp-nav-button[data-route]").forEach(button=>button.setAttribute("aria-current",button.dataset.route===key?"page":"false"));
   $("#cspWorkspaceTitle").textContent=route.title;const descriptionEl=$("#cspWorkspaceDescription");descriptionEl.textContent=route.description;descriptionEl.hidden=!route.description;
