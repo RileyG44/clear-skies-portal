@@ -1,6 +1,6 @@
 /* Clear Skies Portal — LiDAR Studio panel.
  *
- * The color and layer controls for LiDAR terrain: a gallery of looks, a
+ * The color and layer controls for LiDAR terrain: a carousel of presets, a
  * layer stack (the base layer chosen in the style grid plus up to three
  * blended overlays), a palette and gradient editor per layer, and terrain
  * effects. All state lives in CSPLidarRender's model; this file is only the
@@ -43,7 +43,8 @@
     host=host||{};
     const storage=host.storage!==undefined?host.storage:(()=>{try{return globalThis.localStorage}catch(_){return null}})();
     let state=load(),fitted={},flatFitted={},remFloor=null,expanded=null,selectedStop=0,saveTimer=0,commitFrame=0,destroyed=false,previousMix=null;
-    const disclosures=new Set();
+    let presetOrigin=state.look,presetScroll=0;
+    const disclosures=new Set(["customize"]);
     const previews=new Map();let previewQueue=[],previewTimer=0;
     const dem=R.previewTerrain(168,112);
 
@@ -88,32 +89,53 @@
 
     function render(){
       const s=style(),scroll=container.closest(".pane-b")?.scrollTop;
+      presetScroll=container.querySelector(".ls-looks")?.scrollLeft??presetScroll;
       state.look=s?R.matchLook(state,s):null;
-      container.dispatchEvent(new Event("csp:lidar-menu-reset"));
+      if(state.look) presetOrigin=state.look;
       container.innerHTML="";
       container.toggleAttribute("data-disabled",!gpu());
       if(!gpu()){
-        container.append(el("p","control-hint ls-note","Color layers, looks and effects need GPU rendering, which this browser doesn’t provide. The terrain modes above still work."));
-        container.dispatchEvent(new Event("csp:lidar-menu"));
+        container.append(el("p","control-hint ls-note","Presets and color layers need GPU rendering, which this browser doesn’t provide. Choose a terrain mode above instead."));
         return;
       }
-      container.append(renderLayers(s),renderLooks(),renderEffects(s));
-      container.dispatchEvent(new Event("csp:lidar-menu"));
+      const settings=disclosure("customize","Customize preset","ls-customize ls-section");
+      settings.querySelector("summary").append(el("span","ls-preset-status"));
+      const body=el("div","ls-customize-body");
+      body.append(renderLayers(s),renderEffects(s));settings.append(body);
+      const presets=renderPresets();
+      body.prepend(presets.querySelector(".ls-look-blurb"));
+      presets.append(settings);container.append(presets);
+      const strip=container.querySelector(".ls-looks");
+      strip.scrollLeft=presetScroll;
+      refreshSummaries();
       if(scroll!==undefined) container.closest(".pane-b").scrollTop=scroll;
     }
 
     /* ------------------------------------------------------------- looks */
-    function allLooks(){ return R.LOOKS.map(l=>Object.assign({user:false},l)).concat(state.userLooks.map(l=>Object.assign({user:true,blurb:"Your saved look."},l))) }
-    function renderLooks(){
-      const wrap=disclosure("looks","Looks","ls-section ls-looks-section");
-      const head=el("div","ls-head",`<span class="control-hint">Apply or save a complete mix</span>`);
+    function allLooks(){ return R.LOOKS.map(l=>Object.assign({user:false},l)).concat(state.userLooks.map(l=>Object.assign({user:true,blurb:"Your saved preset."},l))) }
+    function renderPresets(){
+      const wrap=el("section","ls-section ls-preset-card");wrap.setAttribute("aria-label","Presets");
+      const head=el("div","ls-head",'<h3 class="menu-section-title">Presets</h3>');
       const saveButton=el("button","linkbtn ls-save-look","Save current");saveButton.type="button";
-      saveButton.disabled=!style();saveButton.title=style()?"Save these colors, layers and effects as a look":"Choose a layer first";
+      saveButton.disabled=!style();saveButton.title=style()?"Save these layers and settings as a preset":"Choose a preset or layer first";
       head.append(saveButton);wrap.append(head);
-      wrap.append(el("p","control-hint","Presets replace the whole layer mix. Customize individual layers above."));
-      const strip=el("div","ls-looks");strip.setAttribute("role","radiogroup");strip.setAttribute("aria-label","Looks");
+      const carousel=el("div","ls-preset-carousel");
+      const previous=pill("",()=>browse(-1),"chevron-down","Previous presets");
+      const next=pill("",()=>browse(1),"chevron-down","Next presets");
+      previous.classList.add("ls-preset-previous");next.classList.add("ls-preset-next");
+      const navigation=el("div","ls-preset-navigation");navigation.append(previous,next);head.append(navigation);
+      const strip=el("div","ls-looks");strip.setAttribute("role","radiogroup");strip.setAttribute("aria-label","Terrain presets");
+      strip.setAttribute("aria-describedby","ls-preset-hint");
+      const syncNavigation=()=>{previous.disabled=strip.scrollLeft<=1;next.disabled=strip.scrollLeft+strip.clientWidth>=strip.scrollWidth-1};
+      function browse(direction){
+        const reduced=globalThis.matchMedia?.("(prefers-reduced-motion: reduce)").matches||document.documentElement.classList.contains("csp-reduce-motion");
+        strip.scrollBy({left:direction*Math.max(96,strip.clientWidth-24),behavior:reduced?"instant":"smooth"});
+      }
+      strip.addEventListener("scroll",()=>{presetScroll=strip.scrollLeft;syncNavigation()},{passive:true});
+      requestAnimationFrame(()=>{if(strip.isConnected){if(!presetScroll)revealPreset(state.look);syncNavigation()}});
       const current=style()?state.look:null,looks=allLooks();
       looks.forEach(look=>{
+        const option=el("div","ls-preset-option");
         const button=el("button","ls-look");button.type="button";button.setAttribute("role","radio");
         button.dataset.look=look.id;button.setAttribute("aria-checked",String(current===look.id));
         button.tabIndex=(current===look.id||(!looks.some(l=>l.id===current)&&look===looks[0]))?0:-1;
@@ -122,30 +144,33 @@
         canvas.setAttribute("aria-hidden","true");
         const name=el("span","ls-look-name",esc(look.name));
         button.append(canvas,name);
+        option.append(button);
         if(look.user){
-          const remove=el("span","ls-look-remove",`<img src="${icon("x")}" alt="">`);
-          remove.setAttribute("role","button");remove.setAttribute("aria-label",`Delete look ${look.name}`);remove.dataset.removeLook=look.id;
-          button.append(remove);
+          const remove=el("button","ls-look-remove",`<img src="${icon("x")}" alt="">`);remove.type="button";
+          remove.setAttribute("aria-label",`Delete preset ${look.name}`);remove.dataset.removeLook=look.id;
+          option.append(remove);
         }
-        strip.append(button);paintPreview(canvas,look);
+        strip.append(option);paintPreview(canvas,look);
       });
-      wrap.append(strip);
+      carousel.append(strip);wrap.append(carousel);
       const blurb=el("p","control-hint ls-look-blurb");blurb.setAttribute("aria-live","polite");
-      const active=looks.find(l=>l.id===current);
-      blurb.textContent=!style()?"Pick a look to start, or choose a layer above.":active?active.blurb:"Custom · your own mix of colors and layers.";
       wrap.append(blurb);
+      const hint=el("p","ls-sr-only","Choosing a preset replaces the current layer mix. Customize its layers and effects below.");
+      hint.id="ls-preset-hint";wrap.append(hint);
       if(previousMix){
         const undo=el("button","linkbtn ls-undo-look","Undo preset");undo.type="button";
         undo.onclick=()=>{
-          const previous=previousMix,looks=state.userLooks;previousMix=null;state=previous.state;state.userLooks=looks;fitted={};flatFitted={};remFloor=null;expanded=null;
+          const previous=previousMix,looks=state.userLooks;previousMix=null;state=previous.state;state.userLooks=looks;presetOrigin=previous.origin;fitted={};flatFitted={};remFloor=null;expanded=null;
           host.setStyle&&host.setStyle(previous.style);
           if(Number.isFinite(previous.opacity)&&host.setOpacity)host.setOpacity(previous.opacity);
-          save();render();host.onChange&&host.onChange();
+          save();render();
+          container.querySelector('.ls-look[aria-checked="true"]')?.focus({preventScroll:true});revealPreset(state.look);
+          host.onChange&&host.onChange();
         };
         wrap.append(undo);
       }
       const saveRow=el("form","ls-save-row");saveRow.hidden=true;
-      saveRow.innerHTML=`<input type="text" maxlength="40" placeholder="Name this look" aria-label="Look name" required><button type="submit" class="ls-pill ls-pill-primary">Save</button><button type="button" class="ls-pill" data-cancel>Cancel</button>`;
+      saveRow.innerHTML=`<input type="text" maxlength="40" placeholder="Name this preset" aria-label="Preset name" required><button type="submit" class="ls-pill ls-pill-primary">Save</button><button type="button" class="ls-pill" data-cancel>Cancel</button>`;
       wrap.append(saveRow);
       saveButton.onclick=()=>{saveRow.hidden=false;saveRow.querySelector("input").focus()};
       saveRow.querySelector("[data-cancel]").onclick=()=>{saveRow.hidden=true;saveButton.focus()};
@@ -155,39 +180,52 @@
         const id="user-"+Date.now().toString(36);
         const opacity=host.getOpacity?host.getOpacity():undefined;
         state.userLooks.push({id,name:nameValue.slice(0,40),scene:R.captureScene(state,s),...(Number.isFinite(opacity)?{opacity}:{})});
-        state.userLooks=state.userLooks.slice(-24);state.look=id;save();render();
+        state.userLooks=state.userLooks.slice(-24);state.look=id;presetOrigin=id;save();render();
         container.querySelector(`[data-look="${id}"]`)?.focus();
+        revealPreset(id);
       };
       strip.addEventListener("click",event=>{
         const remove=event.target.closest("[data-remove-look]");
-        if(remove){event.stopPropagation();state.userLooks=state.userLooks.filter(l=>l.id!==remove.dataset.removeLook);commit({rerender:true});return}
+        if(remove){
+          event.stopPropagation();state.userLooks=state.userLooks.filter(l=>l.id!==remove.dataset.removeLook);
+          if(presetOrigin===remove.dataset.removeLook)presetOrigin=null;
+          commit({rerender:true});container.querySelector('.ls-look[tabindex="0"]')?.focus({preventScroll:true});return;
+        }
         const button=event.target.closest(".ls-look");if(button) applyLook(button.dataset.look);
       });
       strip.addEventListener("keydown",event=>{
         const buttons=[...strip.querySelectorAll(".ls-look")],index=buttons.indexOf(event.target.closest(".ls-look"));
         if(index<0) return;
-        const columns=Math.max(1,getComputedStyle(strip).gridTemplateColumns.trim().split(/\s+/).length);
-        const step={ArrowRight:1,ArrowDown:columns,ArrowLeft:-1,ArrowUp:-columns}[event.key];
-        if(event.key==="Delete"||event.key==="Backspace"){const r=buttons[index].querySelector("[data-remove-look]");if(r){event.preventDefault();r.click()}return}
+        const step={ArrowRight:1,ArrowLeft:-1}[event.key];
+        if(event.key==="Delete"||event.key==="Backspace"){const r=buttons[index].parentElement.querySelector("[data-remove-look]");if(r){event.preventDefault();r.click()}return}
         if(!step&&event.key!=="Home"&&event.key!=="End") return;
         const target=event.key==="Home"?0:event.key==="End"?buttons.length-1:
-          event.key==="ArrowDown"||event.key==="ArrowUp"?clamp(index+step,0,buttons.length-1):(index+step+buttons.length)%buttons.length;
+          (index+step+buttons.length)%buttons.length;
         event.preventDefault();const next=buttons[target];
         next.focus();applyLook(next.dataset.look);
       });
       return wrap;
     }
+    function revealPreset(id){
+      const strip=container.querySelector(".ls-looks"),button=container.querySelector(`[data-look="${id}"]`);
+      if(!strip||!button)return;
+      const outer=strip.getBoundingClientRect(),inner=button.getBoundingClientRect();
+      if(inner.left<outer.left+6)strip.scrollLeft+=inner.left-outer.left-6;
+      else if(inner.right>outer.right-6)strip.scrollLeft+=inner.right-outer.right+6;
+      presetScroll=strip.scrollLeft;
+    }
     function applyLook(id){
       const look=allLooks().find(l=>l.id===id);if(!look) return;
-      previousMix={state:JSON.parse(JSON.stringify(state)),style:host.getStyle?host.getStyle():style(),opacity:host.getOpacity?host.getOpacity():undefined};
+      previousMix={state:JSON.parse(JSON.stringify(state)),style:host.getStyle?host.getStyle():style(),opacity:host.getOpacity?host.getOpacity():undefined,origin:presetOrigin};
       const result=R.applyScene(state,look.scene,look.id);
-      state=result.state;fitted={};flatFitted={};remFloor=null;expanded=null;save();
+      state=result.state;presetOrigin=id;fitted={};flatFitted={};remFloor=null;expanded=null;save();
       if(host.getStyle&&host.getStyle()!==result.style&&host.setStyle) host.setStyle(result.style);
       /* Looks are designed at their own strength; the classic look keeps the
          usual see-through terrain. */
       if(Number.isFinite(look.opacity)&&host.setOpacity) host.setOpacity(look.opacity);
       render();
       container.querySelector(`[data-look="${id}"]`)?.focus({preventScroll:true});
+      revealPreset(id);
       host.onChange&&host.onChange();
     }
     function paintPreview(canvas,look){
@@ -232,11 +270,7 @@
       const head=el("div","ls-head ls-layers-head",`<div class="ls-layer-label"><h3 class="menu-section-title">Layers</h3><span class="pane-n">${layerKeys().length} of ${R.MAX_LAYERS}</span></div>`);
       wrap.append(head);
       wrap.append(el("p","control-hint","Open a layer to edit colors, opacity and blending. Layers at the top draw over those below."));
-      /* The host's own layers (surface analysis) draw above the terrain, so
-         they list first. */
-      const addon=host.layersAddon&&host.layersAddon();
-      if(addon) wrap.append(addon);
-      if(!s)wrap.append(el("p","control-hint","Add your first layer, or choose a look below."));
+      if(!s)wrap.append(el("p","control-hint","Choose a preset above, or add your first layer."));
       const list=el("ol","ls-layers");list.setAttribute("aria-label","Terrain layers, top first");
       const keys=layerKeys().reverse();
       keys.forEach(key=>list.append(renderLayer(key)));
@@ -631,7 +665,14 @@
       const active=looks.find(button=>button.dataset.look===current)||looks[0];
       looks.forEach(button=>{button.setAttribute("aria-checked",String(button.dataset.look===current));button.tabIndex=button===active?0:-1});
       const blurb=container.querySelector(".ls-look-blurb");
-      if(blurb){const active=allLooks().find(l=>l.id===current);blurb.textContent=!style()?"Pick a look to start, or choose a layer above.":active?active.blurb:"Custom · your own mix of colors and layers."}
+      const presets=allLooks(),preset=presets.find(l=>l.id===current),origin=presets.find(l=>l.id===presetOrigin);
+      if(blurb){
+        const text=!style()?"Choose a preset to start.":preset?`${preset.name} · ${preset.blurb}`:
+          origin?`${origin.name} · modified. Save current to keep your changes.`:"Custom mix · save it as your own preset.";
+        if(blurb.textContent!==text)blurb.textContent=text;
+      }
+      const status=container.querySelector(".ls-preset-status");
+      if(status)status.textContent=!style()?"No terrain":preset?preset.name:origin?`${origin.name} · modified`:"Custom mix";
     }
 
     /* ------------------------------------------------------- range fitting */

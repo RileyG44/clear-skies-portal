@@ -3086,37 +3086,6 @@ body.csp-redesign .csp-layer-source{display:grid;gap:2px;min-width:0}
 body.csp-redesign .csp-layer-source-name{color:var(--ink-2);font-size:11px;font-weight:600}
 body.csp-redesign .csp-layer-source-meta{color:var(--ink-3);font-size:11px;line-height:1.45;overflow-wrap:anywhere}
 
-/* LiDAR's native select remains the terrain engine's source of truth. The
-   enhanced palette uses the same dimensions and material as #mkBar .mk-tool. */
-body.csp-redesign #panes .csp-terrain-native[hidden]{display:none!important}
-body.csp-redesign #panes .csp-terrain-styles{
-  display:grid;grid-template-columns:repeat(3,minmax(44px,1fr));gap:4px;
-  grid-column:1/-1;min-width:0;
-}
-body.csp-redesign #panes .csp-terrain-style{
-  position:relative;display:grid;place-items:center;align-content:center;gap:5px;
-  box-sizing:border-box;width:100%;min-width:44px;min-height:54px;height:auto;padding:6px 4px;
-  border:0;border-radius:12px;background:transparent;color:var(--ui-text);box-shadow:none;
-  font:inherit;text-align:center;white-space:normal;cursor:pointer;
-  transition:background-color .14s ease,color .14s ease,scale .16s cubic-bezier(.2,.8,.2,1);
-}
-body.csp-redesign #panes .csp-terrain-style-label{
-  min-width:0;font-size:10.5px;line-height:1.15;font-weight:500;white-space:normal;overflow-wrap:anywhere;
-}
-body.csp-redesign #panes .csp-terrain-style img{
-  width:19px;height:19px;filter:var(--ui-icon-filter);pointer-events:none;
-}
-body.csp-redesign #panes .csp-terrain-style:hover:not(:disabled){background:var(--ui-fill)}
-body.csp-redesign #panes .csp-terrain-style[aria-checked="true"]{background:var(--ui-accent);color:var(--ui-on-accent)}
-body.csp-redesign #panes .csp-terrain-style[aria-checked="true"] img{filter:brightness(0) invert(1)}
-body.csp-redesign #panes .csp-terrain-style:focus-visible{outline:2px solid var(--ui-accent);outline-offset:2px}
-body.csp-redesign #panes .csp-terrain-style:active:not(:disabled){scale:.96}
-body.csp-redesign #panes .csp-terrain-style:disabled{opacity:.35;cursor:default}
-@media(prefers-reduced-motion:reduce){
-  body.csp-redesign #panes .csp-terrain-style{transition:none;scale:1}
-}
-.csp-reduce-motion body.csp-redesign #panes .csp-terrain-style{transition:none;scale:1}
-
 /* LiDAR Studio: looks, layer stack, palette editor and effects
    (lidar-studio.js). Sized to the terrain pane's 44 px touch targets and the
    same quiet material as the style grid above it. */
@@ -3127,10 +3096,20 @@ body.csp-redesign #panes .csp-terrain-style:disabled{opacity:.35;cursor:default}
 .ls-head .menu-section-title{margin:0}
 .ls-head .pane-n,.ls-head .linkbtn{margin-left:auto;font-size:12px}
 .ls .control-hint{margin:0}
-.ls-looks{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(74px,100%),1fr));gap:12px 10px;
-  padding:4px;min-width:0}
+.ls-preset-card{padding:12px 16px;border:1px solid var(--ui-line);border-radius:13px;background:var(--ui-surface)}
+.ls-preset-card .ls-head{align-items:center;gap:6px}
+.ls-preset-card .ls-save-look{padding:0;white-space:nowrap}
+.ls-preset-navigation{display:flex;flex:none}
+.ls-preset-navigation > .ls-pill{width:28px;min-width:0;min-height:36px;padding:0;border:0;background:transparent}
+.ls-preset-carousel{min-width:0}
+.ls-preset-previous img{transform:rotate(90deg)}
+.ls-preset-next img{transform:rotate(-90deg)}
+.ls-looks{display:flex;gap:12px;padding:6px 6px 10px;min-width:0;overflow-x:auto;
+  overscroll-behavior-x:contain;scroll-snap-type:x proximity;scroll-padding-inline:6px;scrollbar-width:none}
+.ls-looks::-webkit-scrollbar{display:none}
+.ls-preset-option{position:relative;flex:0 0 88px;min-width:0;scroll-snap-align:start}
 .ls-look{position:relative;display:grid;gap:6px;justify-items:stretch;padding:0;border:0;background:transparent;color:inherit;
-  font:inherit;font-size:11.5px;font-weight:500;text-align:center;cursor:pointer;min-width:0;min-height:44px;align-content:start}
+  font:inherit;font-size:11.5px;font-weight:500;text-align:center;cursor:pointer;width:100%;min-width:0;min-height:44px;align-content:start}
 .ls-look-preview{display:block;width:100%;height:auto;aspect-ratio:3/2;border-radius:var(--ls-radius);background:var(--ui-sunken);
   box-shadow:inset 0 0 0 1px var(--ui-shadow-3);transition:box-shadow .16s ease,transform .16s cubic-bezier(.2,.8,.2,1)}
 .ls-look:hover .ls-look-preview{transform:translateY(-1px)}
@@ -3138,13 +3117,19 @@ body.csp-redesign #panes .csp-terrain-style:disabled{opacity:.35;cursor:default}
 .ls-look[aria-checked="true"] .ls-look-name{color:var(--ui-accent);font-weight:650}
 .ls-look:focus-visible{outline:none}
 .ls-look:focus-visible .ls-look-preview{box-shadow:0 0 0 2px var(--ui-surface),0 0 0 4px var(--ui-accent)}
-.ls-look-name{line-height:1.35;white-space:normal;overflow-wrap:anywhere}
-.ls-look-remove{position:absolute;top:4px;right:4px;display:grid;place-items:center;width:22px;height:22px;border-radius:50%;
-  background:var(--ui-tooltip);opacity:0;transition:opacity .14s ease}
+.ls-look-name{line-height:1.35;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ls-look-remove{position:absolute;top:0;right:0;display:grid;place-items:center;width:32px;height:32px;padding:0;border:0;border-radius:50%;
+  background:var(--ui-tooltip);opacity:0;cursor:pointer;transition:opacity .14s ease}
 .ls-look-remove img{width:13px;height:13px;filter:brightness(0) invert(1)}
-.ls-look:hover .ls-look-remove,.ls-look:focus-visible .ls-look-remove{opacity:1}
+.ls-preset-option:hover .ls-look-remove,.ls-preset-option:focus-within .ls-look-remove{opacity:1}
 @media (hover:none){.ls-look-remove{opacity:.85}}
 .ls-look-blurb{min-height:1.4em}
+.ls-sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap;border:0}
+.ls-customize{padding:4px 0 0;border:0;border-top:1px solid var(--ui-line);border-radius:0;min-width:0}
+.ls-preset-status{margin-left:auto;max-width:45%;color:var(--ui-text-muted);font-size:11.5px;font-weight:400;text-align:right}
+.ls-customize-body{display:grid;gap:18px;min-width:0;padding:8px 0 12px}
+.ls-customize .ls-layers-head{flex-wrap:wrap}
+.ls-customize .ls-layer-label{flex:1;min-width:0}
 .ls-save-row{display:flex;gap:6px;align-items:center}
 .ls-save-row[hidden]{display:none}
 .ls-save-row input{flex:1;min-width:0;min-height:36px}
@@ -3233,7 +3218,41 @@ body.csp-redesign #panes .csp-terrain-style:disabled{opacity:.35;cursor:default}
 .ls-reset{justify-self:start;padding:0;font-size:12.5px}
 @media(prefers-reduced-motion:reduce){.ls-look-preview,.ls-chevron,.ls-layer{transition:none}}
 .csp-reduce-motion .ls-look-preview,.csp-reduce-motion .ls-chevron{transition:none}
-body.csp-redesign #panes #terLidar > .lidar-studio{padding-top:16px}
+/* Two peer cards replace the former single background card. Every section
+   scrolls with the workspace, including the preset carousel. */
+body.csp-redesign #panes .lidar-studio{display:block;margin:0;padding:0;border:0}
+.csp-glass body.csp-redesign.csp-redesign[data-csp-route="terrain"] #cspWorkspace{background:var(--ui-sunken)}
+.csp-glass body.csp-redesign.csp-redesign #cspWorkspace #panes .pane[data-pane="terrain"] > .pane-b{
+  display:grid;gap:14px;padding:0!important;border:0;border-radius:0;background:transparent;box-shadow:none;min-width:0;
+}
+.csp-glass body.csp-redesign.csp-redesign #cspWorkspace #panes :is(.ls-preset-card,.terrain-card){
+  margin:0;padding:12px var(--t3-row-x);border:1px solid var(--t3-group-border);border-radius:var(--r-card);
+  background:var(--ui-surface);box-shadow:0 1px 2px var(--t3-group-shadow);min-width:0;
+}
+.terrain-card-heading{display:flex;align-items:baseline;gap:8px;margin:0 0 16px;font-size:15px;font-weight:650;color:var(--ui-text)}
+.terrain-card-heading .pane-n{margin-left:auto;font-size:11.5px;font-weight:400;color:var(--ui-text-muted)}
+.terrain-settings-body{display:grid;gap:20px;padding:12px 0 16px;min-width:0}
+.terrain-settings-section{min-width:0}
+.terrain-settings-section + .terrain-settings-section{padding-top:18px;border-top:1px solid var(--ui-line)}
+.terrain-settings-section .menu-section-title{display:flex;flex-wrap:wrap;align-items:baseline;gap:8px;margin:0 0 12px;font-size:13px;font-weight:650;color:var(--ui-text)}
+.terrain-settings-section .menu-section-title .pane-n{margin-left:auto;font-size:11px;font-weight:400}
+body.csp-redesign #panes .terrain-settings-section > .terrain-subsection{margin:0;padding:0;border:0}
+body.csp-redesign #panes #terLidar > .terrain-appearance{margin:12px 0 0;padding-top:4px;border-top:1px solid var(--ui-line)}
+body.csp-redesign #panes #terLidar #terReset{margin:8px 0 0;padding:0;border:0}
+body.csp-redesign #panes #terLidar .terrain-settings-section .dnr-module{margin:0;padding:0;border:0}
+.terrain-disclosure-label{display:grid;gap:3px;min-width:0}
+.terrain-disclosure-description{font-size:11.5px;font-weight:400;line-height:1.4;color:var(--ui-text-muted)}
+.terrain-group-hint{margin:-5px 0 14px;font-size:11.5px;line-height:1.5;color:var(--ui-text-muted)}
+.terrain-card-footer{margin-top:12px;padding-top:12px;border-top:1px solid var(--ui-line)}
+.csp-glass body.csp-redesign.csp-redesign #cspWorkspace #panes #terLidar .terrain-fields > label{font-size:12.5px;font-weight:550}
+.csp-glass body.csp-redesign.csp-redesign #cspWorkspace #panes #terLidar .terrain-settings-section .elev-label-row label{font-size:12.5px;font-weight:450;color:var(--ui-text-2)}
+.csp-glass body.csp-redesign.csp-redesign #cspWorkspace #panes #terLidar select{min-height:40px;width:100%}
+.csp-glass body.csp-redesign.csp-redesign #cspWorkspace #panes #terLidar .terrain-look-reset{
+  width:auto;min-height:32px;margin:10px 0 0;padding:0;border:0;background:transparent;box-shadow:none;color:var(--ui-text-muted);font-size:12px;text-align:left;
+}
+.csp-glass body.csp-redesign.csp-redesign #cspWorkspace #panes #terLidar .terrain-settings-section .elev-field{margin-top:12px}
+.csp-glass body.csp-redesign.csp-redesign #cspWorkspace #panes #terLidar > .terrain-fields{margin-bottom:16px}
+.csp-glass body.csp-redesign.csp-redesign #cspWorkspace #panes #terLidar #terLegend{margin:0 0 16px}
 
 /* Surface analysis layers (analysis-layers.js) reuse the studio's layer look. */
 .al-section{margin:4px 0 10px}
@@ -3247,9 +3266,6 @@ body.csp-redesign #panes #terLidar > .lidar-studio{padding-top:16px}
 .al-layer.is-error .ls-layer-meta{color:var(--ui-danger)}
 @keyframes al-pulse{from{opacity:.25}to{opacity:1}}
 @media(prefers-reduced-motion:reduce){.al-layer.is-busy .ls-layer-meta::before{animation:none}}
-.ls-analysis-slot{padding-bottom:10px;margin-bottom:4px;border-bottom:1px solid var(--ui-line)}
-.ls-analysis-slot .al-section{margin:0}
-.ls-analysis-slot .menu-section-title{font-size:12px}
 body.csp-redesign #panes #surfaceResearchBox .research-live-toggle{margin-top:4px}
 body.csp-redesign #panes .research-live{margin-top:8px;color:var(--ui-text-muted);font-size:12.5px}
 body.csp-redesign #panes .research-live .spin{margin-right:6px}
@@ -3273,7 +3289,7 @@ body.csp-redesign .ls-layer-label .menu-section-title{margin:0}
 .ls-disclosure > summary .ls-swatch{width:28px;height:14px;margin-left:auto}
 .ls-disclosure-value{font-size:11px;font-weight:400;color:var(--ui-text-muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:80px}
 .ls-disclosure-body{display:grid;gap:14px;padding:8px 0}
-.ls-looks-section[open],.ls-disclosure.ls-section[open]{display:grid;gap:8px}
+.ls-disclosure.ls-section[open]{display:grid;gap:8px}
 
 /* Elevation: switches stay visible; settings fold into task-specific groups. */
 .elev-module-head{display:flex;align-items:center;justify-content:space-between;gap:8px}

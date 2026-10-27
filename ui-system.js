@@ -284,79 +284,13 @@ function filterResearch(mode){
 /* Elevation colouring has its own page; its cards share one sectioned body. */
 const elevationColour=$(".pane[data-pane='elevation'] .pane-b",panes);
 elevationColour?.classList.add("elevation-colour");
-$("#terrainDownloadBox")?.after(...[$("#terrainSourceDetails"),$("#terReset")].filter(Boolean));
 
-/* This palette is a view of the native field, which remains the terrain
-   engine's source of truth. Build it before the first section sync: the same
-   sync also catches resets, restored preferences and automatic 3D changes. */
-const terrainStyleControl=createTerrainStyleButtons();
-function createTerrainStyleButtons(){
-  const select=$("#terStyle");if(!select) return null;
-  const styles={
-    off:"circle",hs:"mountain-snow",hsmulti:"cloud-sun",tint:"image",rem:"waves",
-    slope:"move-up-right",aspect:"navigation",northness:"chevron-up",
-    c2:"layers",c5:"layers",c10:"layers",c25:"layers"
-  };
-  const group=document.createElement("div");
-  group.id="cspTerrainStyles";group.className="csp-terrain-styles";
-  group.setAttribute("role","radiogroup");group.setAttribute("aria-label","LiDAR terrain layer");
-  const description=select.getAttribute("aria-describedby");
-  if(description) group.setAttribute("aria-describedby",description);
-  const entries=[...select.options].map(option=>{
-    const fullLabel=option.textContent.trim(),button=document.createElement("button");
-    button.type="button";button.className="csp-terrain-style";button.dataset.terrainStyle=option.value;
-    button.setAttribute("role","radio");button.setAttribute("aria-label",fullLabel);button.title=fullLabel;
-    const image=document.createElement("img"),label=document.createElement("span");
-    image.src=icon(styles[option.value]||"layers");image.alt="";image.setAttribute("aria-hidden","true");
-    label.className="csp-terrain-style-label";label.textContent=fullLabel;
-    button.append(image,label);group.append(button);
-    return {option,button};
-  });
-  const sync=()=>{
-    const selected=entries.find(entry=>entry.option.value===select.value);
-    const tabbable=selected&&!selected.option.disabled?selected:entries.find(entry=>!entry.option.disabled);
-    group.setAttribute("aria-disabled",String(select.disabled));
-    for(const {option,button} of entries){
-      const checked=option.value===select.value;
-      button.setAttribute("aria-checked",String(checked));
-      button.disabled=select.disabled||option.disabled;
-      button.tabIndex=!button.disabled&&button===tabbable?.button?0:-1;
-    }
-  };
-  const choose=button=>{
-    if(!button||button.disabled) return;
-    if(select.value!==button.dataset.terrainStyle){
-      select.value=button.dataset.terrainStyle;
-      select.dispatchEvent(new Event("change",{bubbles:true}));
-    }
-    sync();
-  };
-  group.addEventListener("click",event=>choose(event.target.closest(".csp-terrain-style")));
-  group.addEventListener("keydown",event=>{
-    if(event.altKey||event.ctrlKey||event.metaKey) return;
-    const buttons=entries.map(entry=>entry.button).filter(button=>!button.disabled);
-    const index=buttons.indexOf(event.target.closest(".csp-terrain-style"));
-    if(index<0) return;
-    let next;
-    if(event.key==="ArrowRight"||event.key==="ArrowDown") next=buttons[(index+1)%buttons.length];
-    else if(event.key==="ArrowLeft"||event.key==="ArrowUp") next=buttons[(index+buttons.length-1)%buttons.length];
-    else if(event.key==="Home") next=buttons[0];
-    else if(event.key==="End") next=buttons[buttons.length-1];
-    else return;
-    event.preventDefault();event.stopPropagation();choose(next);next.focus();
-  });
-  select.after(group);
-  for(const native of [select,$('label[for="terStyle"]')].filter(Boolean)){
-    native.classList.add("csp-terrain-native");native.hidden=true;native.setAttribute("aria-hidden","true");
-  }
-  sync();
-  return {sync};
-}
-
+/* The grouped native mode chooser is the terrain engine's single source of
+   truth. Keeping it visible also keeps resets and shared links in sync. */
 /* Terrain tools fold away when unused. Each closed row names what is active,
    and the panel remembers which rows were left open. */
 const TERRAIN_SECTIONS_KEY="clearskies.terrain-sections.v1";
-const terrainSections=["terLidar","terrainDownloadBox","terrainSourceDetails"];
+const terrainSections=["terLayerSettings","terDataOffline"];
 let openTerrainSections=null;
 try{openTerrainSections=JSON.parse(localStorage.getItem(TERRAIN_SECTIONS_KEY))}catch(error){}
 for(const id of terrainSections){
@@ -368,7 +302,6 @@ for(const id of terrainSections){
   });
 }
 function syncTerrainSections(){
-  terrainStyleControl?.sync();
   const lidar=$("#terLidarState"),style=$("#terStyle");
   if(lidar&&style){
     const text=style.value==="off"?"off":style.selectedOptions[0]?.textContent||style.value;
@@ -1016,7 +949,9 @@ function organizeSidebarMenus(){
   const lidar=$("#terLidar"),studio=$("#terStudio"),appearance=$("#terAppearance");
   const lighting=$("#terLighting"),source=$(".terrain-data-settings"),dnr=$(".terrain-download-settings");
   const offline=$("#terrainDownloadBox"),sourceDetails=$("#terrainSourceDetails"),reset=$("#terReset");
-  if(terrain&&lidar){
+  // The newer terrain card owns its Layer settings and preset carousel.
+  // Only the legacy disclosure layout needs these nodes regrouped.
+  if(terrain&&lidar?.matches("details")){
     terrain.classList.add("csp-menu-page");
     // Lift settings out of the layer selector: downloading and source choice
     // must remain available when no terrain style is enabled.
