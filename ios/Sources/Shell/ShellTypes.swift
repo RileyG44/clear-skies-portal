@@ -247,6 +247,28 @@ struct TerrainStatus: Decodable, Hashable {
     let text: String
 }
 
+struct MapInfoSwatch: Decodable, Hashable {
+    let label: String
+    let src: String
+}
+
+struct MapInfoKey: Decodable, Hashable {
+    let name: String
+    let stops: [GradientStop]?
+    let labels: [String]
+    let swatches: [MapInfoSwatch]
+}
+
+struct MapInfoState: Decodable, Hashable {
+    let basis: String
+    let coordinates: String
+    let elevation: String
+    let source: String
+    let analysis: String
+    let terrain: TerrainStatus
+    let keys: [MapInfoKey]
+}
+
 struct MessageStatus: Decodable, Hashable {
     let kind: String
     let text: String
@@ -259,6 +281,7 @@ struct EngineStatus: Decodable, Hashable {
 }
 
 struct StatusState: Decodable, Hashable {
+    var mapInfo: MapInfoState?
     var terrain: TerrainStatus?
     var message: MessageStatus?
     var snapshot: String?
@@ -372,11 +395,12 @@ extension MapState {
 
 extension StatusState {
     enum Key: String, CodingKey {
-        case terrain, message, snapshot, engine
+        case mapInfo, terrain, message, snapshot, engine
     }
 
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: Key.self)
+        mapInfo = try container.decodeIfPresent(MapInfoState.self, forKey: .mapInfo)
         terrain = try container.decodeIfPresent(TerrainStatus.self, forKey: .terrain)
         message = try container.decodeIfPresent(MessageStatus.self, forKey: .message)
         snapshot = try container.decodeIfPresent(String.self, forKey: .snapshot)

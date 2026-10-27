@@ -14,7 +14,10 @@ struct SegmentedRow: View {
             if !item.text.isEmpty { RowLabel(title: item.text, detail: item.detail) }
             if options.count <= 4, options.allSatisfy({ $0.label.count <= 12 }) {
                 Picker(item.text, selection: Binding(get: { selected ?? "" }, set: { choose($0, in: options) })) {
-                    ForEach(options) { Text($0.label).tag($0.id) }
+                    ForEach(options) { option in
+                        Text(option.label).tag(option.id)
+                            .selectionDisabled(option.disabled ?? false)
+                    }
                 }
                 .pickerStyle(.segmented)
                 .labelsHidden()
@@ -44,7 +47,7 @@ struct SegmentedRow: View {
     }
 
     private func choose(_ id: String, in options: [ItemOption]) {
-        guard let option = options.first(where: { $0.id == id }) else { return }
+        guard !item.isDisabled, let option = options.first(where: { $0.id == id }), option.disabled != true else { return }
         pending = id
         shell.act(option.ref)
     }

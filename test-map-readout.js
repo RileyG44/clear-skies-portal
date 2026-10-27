@@ -2,6 +2,43 @@
 const assert=require('node:assert/strict'),fs=require('node:fs'),vm=require('node:vm');
 const source=fs.readFileSync('index.html','utf8');
 const take=(name,next)=>source.slice(source.indexOf('function '+name+'('),source.indexOf('function '+next+'('));
+/* A native touch reading must track its labelled basis, discard stale data
+   during a pan, and use the shared sampler for the newly selected position. */
+{
+  const elements=Object.fromEntries(['cursorBasis','cursorCoordinates','cursorElevation','cursorSource','cursorAnalysis'].map(id=>['#'+id,{textContent:'old',title:'old',hidden:false}]));
+  let sampled=[];
+  const native={NATIVE_HOST:true,committedLocation:null,cursorLocation:{lat:0,lng:0},cursorElevation:{value:500},
+    map:{getCenter:()=>({lat:47,lng:239})},map3d:null,$:id=>elements[id],
+    cursorCoordinates:ll=>`${ll.lat},${ll.lng}`,refreshCursorElevation(){sampled.push({...native.cursorLocation})},paintCursorAnalysis(){}};
+  vm.createContext(native);
+  vm.runInContext(source.slice(source.indexOf('let nativeReadoutMoving=false;'),source.indexOf('function mapInfoTerrainState(')),native);
+  native.updateNativeMapReadout();
+  assert.equal(elements['#cursorBasis'].textContent,'Map center');
+  assert.equal(elements['#cursorCoordinates'].textContent,'47,-121');
+  assert.equal(elements['#cursorSource'].textContent,'','new positions discard old provenance');
+  native.invalidateNativeMapReadout();native.updateNativeMapReadout();
+  assert.equal(native.cursorLocation,null);assert.equal(native.cursorElevation,null);
+  assert.equal(elements['#cursorCoordinates'].textContent,'Map moving…');
+  assert.equal(sampled.length,1,'moving map-center readings do not start elevation requests');
+  native.committedLocation={coordinates:{lat:46,lng:-122}};
+  native.updateNativeMapReadout();
+  assert.equal(elements['#cursorBasis'].textContent,'Selected location');
+  assert.equal(elements['#cursorCoordinates'].textContent,'46,-122');
+  assert.deepEqual(sampled.at(-1),{lat:46,lng:-122},'selected location uses the same shared sampling function');
+  native.committedLocation=null;native.updateNativeMapReadout();
+  assert.equal(native.cursorLocation,null,'clearing a selection mid-pan cannot expose the old center sample');
+  vm.runInContext('nativeReadoutMoving=false',native);native.updateNativeMapReadout();
+  assert.equal(elements['#cursorCoordinates'].textContent,'47,-121','settling restores a reading at the actual center');
+  native.NATIVE_HOST=false;native.innerWidth=390;native.updateNativeMapReadout();
+  assert.equal(elements['#cursorBasis'].textContent,'Map center','mobile web shares the native touch basis');
+  native.committedLocation={coordinates:{lat:48,lng:-123}};native.updateNativeMapReadout();
+  assert.equal(elements['#cursorCoordinates'].textContent,'48,-123','mobile web shares selected-location sampling');
+  const status={terrainLoadStatus:{hidden:true,dataset:{state:'ready'},textContent:'old ready'}};
+  vm.runInNewContext(take('mapInfoTerrainState','paintMapInfoTerrain'),status);
+  assert.equal(status.mapInfoTerrainState().state,'off','terrain off must not inherit the last ready status');
+  status.terrainLoadStatus.hidden=false;status.terrainLoadStatus.dataset.state='partial';status.terrainLoadStatus.textContent='Detail unavailable · overview retained';
+  assert.equal(status.mapInfoTerrainState().text,status.terrainLoadStatus.textContent,'failure and provenance text come from actual terrain status');
+}
 const env={map:{project:ll=>({x:ll.x,y:ll.y})},ElevationTileCore:require('./elevation-tile-core.js')};
 vm.runInNewContext(take('cursorTileSample','cursorLoadedElevation'),env);
 const tile={coords:{z:1,x:1,y:0},width:2,height:2,elev:new Float32Array([0,-100,NaN,1000])};

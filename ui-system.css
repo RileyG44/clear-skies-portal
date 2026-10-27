@@ -1308,7 +1308,7 @@ body.csp-redesign .csp-preview-badge{
    top edge and a bright rim over a hairline. Buttons inside a glass group
    are bare glyphs on that one piece of glass, as in Maps. */
 
-.csp-glass body.csp-redesign :is(#mapDock,.leaflet-control-zoom,#sideToggleDock .map-tool){
+.csp-glass body.csp-redesign :is(#mapDock,.leaflet-control-zoom,#sideToggleDock .map-tool,#mapReadout){
   border:0!important;
   background-color:var(--lg-control)!important;
   background-image:var(--lg-sheen)!important;
@@ -1403,7 +1403,7 @@ body.csp-redesign .csp-preview-badge{
 body.csp-redesign .csp-mode-menu [data-mode]{display:flex;gap:8px;align-items:center;width:100%;text-align:left}
 
 /* Frosted surfaces: popovers, menus, callouts, toasts, the cursor readout. */
-.csp-glass body.csp-redesign :is(.tool-popover,#menu,.leaflet-popup-content-wrapper,#snapshotStatus,#pointCloudPanel,#blk,#cspNav #ac,#mapReadout){
+.csp-glass body.csp-redesign :is(.tool-popover,#menu,.leaflet-popup-content-wrapper,#snapshotStatus,#pointCloudPanel,#blk,#cspNav #ac){
   border:0!important;
   background-color:var(--lg-popover)!important;
   background-image:var(--lg-sheen-tall)!important;
@@ -1413,7 +1413,7 @@ body.csp-redesign .csp-mode-menu [data-mode]{display:flex;gap:8px;align-items:ce
   color:var(--ui-text);
 }
 .csp-glass body.csp-redesign #mapReadout{
-  border-radius:16px;
+  border-radius:var(--map-info-radius,22px);
   --map-readout-edge:color-mix(in srgb,var(--ui-text) 35%,transparent);
   font-family:var(--csp-font-family,-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI",sans-serif);
 }
@@ -1543,6 +1543,17 @@ body.csp-redesign #cspGrabber{display:none}
   .csp-glass body.csp-redesign #cspWorkspace{background:transparent}
   .csp-glass body.csp-redesign:not(.collapsed) #sideToggleDock{left:calc(min(420px,100vw - 76px) + var(--glass-inset) + 10px + var(--safe-left))}
   .csp-glass body.csp-redesign .map-tool{width:44px;height:44px;min-height:44px}
+}
+
+/* Narrow sidebars give navigation less space than a page of controls.
+   Share the width with the toggle so it always stays beside the panel. */
+@media (min-width:761px) and (max-width:1050px){
+  body.csp-redesign{--compact-side-w:min(clamp(304px,36vw,360px),calc(100vw - 76px - var(--safe-left) - var(--safe-right)))}
+  body.csp-redesign[data-csp-view="detail"]{--compact-side-w:min(clamp(360px,42vw,420px),calc(100vw - 76px - var(--safe-left) - var(--safe-right)))}
+  body.csp-redesign #side,
+  .csp-glass body.csp-redesign #side{width:var(--compact-side-w)!important}
+  body.csp-redesign:not(.collapsed) #sideToggleDock{left:calc(var(--compact-side-w) + 12px + var(--safe-left))}
+  .csp-glass body.csp-redesign:not(.collapsed) #sideToggleDock{left:calc(var(--compact-side-w) + var(--glass-inset) + 10px + var(--safe-left))}
 }
 
 /* ---- phone: a bottom sheet with two detents ------------------------------
@@ -2184,19 +2195,41 @@ body.terrain-3d .mk-selbar{z-index:970}
   @starting-style{.mk-selbar:not([hidden]){opacity:0}}
 }
 @media (prefers-reduced-motion:reduce){.mk-selbar,.mk-sel-btn{transition:none}.mk-sel-btn:active{scale:1}}
-/* Desktop map readout stays in the corner underneath the sidebar. */
+/* A single piece of toolbar glass: a bubble at rest, a small info tile open. */
+.csp-water-overlay .leaflet-tile{filter:none}
+:root[data-ui-theme="dark"] .ovrow[data-id="water"] .sw{background:var(--water-dark-swatch)!important}
 #mapReadout{
-  position:absolute;z-index:1100;left:12px;bottom:14px;width:260px;
-  display:grid;gap:7px;pointer-events:none;color:var(--map-readout-ink);
-  padding:10px 12px;border:1px solid var(--map-readout-line);border-radius:10px;
+  position:absolute;z-index:1100;left:12px;bottom:14px;width:44px;
+  display:grid;pointer-events:auto;color:var(--map-readout-ink);overflow:hidden;
+  transition:none!important; /* Size morphing is owned by the cancellable info animation. */
+  padding:0;border:1px solid var(--map-readout-line);border-radius:var(--map-info-radius,22px);
   background:var(--map-readout-surface);box-shadow:0 2px 10px var(--map-readout-shadow);
-  font:11px/1.35 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+  font:12px/1.4 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
   font-variant-numeric:tabular-nums;
 }
+#mapReadout.expanded{--map-info-radius:18px;width:var(--map-info-width,260px)}
+#mapReadout .map-info-toggle{display:flex;align-items:center;justify-content:center;gap:8px;width:100%;min-height:44px;padding:0;border:0;border-radius:inherit;background:transparent;color:inherit;cursor:pointer;font:inherit}
+#mapReadout .map-info-toggle:focus-visible{outline:2px solid var(--ui-accent);outline-offset:3px}
+#mapReadout .map-info-toggle:hover{background:var(--ui-fill)}
+#mapReadout .map-info-icon,#mapReadout .map-info-close{width:18px;height:18px;flex:none}
+#mapReadout .map-info-title,#mapReadout .map-info-close{display:none}
+#mapReadout.expanded .map-info-toggle{justify-content:flex-start;padding:0 12px;border-radius:18px 18px 0 0}
+#mapReadout.expanded .map-info-title{display:block;font-size:12px;font-weight:600;flex:1;text-align:left}
+#mapReadout.expanded .map-info-close{display:block;width:14px;height:14px}
+#mapInfoContent{display:grid;gap:12px;max-height:min(420px,calc(100dvh - 150px));overflow:auto;overscroll-behavior:contain;padding:0 12px 12px;scrollbar-width:thin}
+#mapInfoContent[hidden]{display:none}
+#mapReadout #cursorBasis{font-size:11px;color:var(--ui-text-muted);margin-bottom:2px}
+#mapReadout #cursorCoordinates{font-weight:500}
+#mapReadout #cursorAnalysis{margin-top:4px}
+#mapReadout #cursorSource{font-size:11px;color:var(--ui-text-muted)}
+#mapReadout #cursorSource:empty{display:none}
+#mapReadout .map-info-terrain{display:grid;gap:2px}
+#mapReadout #mapInfoTerrain{font-size:11px;color:var(--ui-text-muted)}
+#mapReadout .map-colour-keys:empty{display:none}
 #mapReadout[hidden]{display:none}
 /* The translucent menu must fully cover the readout without moving it. */
 body:not(.collapsed) #mapReadout{visibility:hidden}
-#mapReadout .cursor-location{white-space:nowrap}
+#mapReadout .cursor-location{overflow-wrap:anywhere}
 /* The 3D camera is moving; the reading resolves once it stops. */
 #mapReadout .cursor-location.pending{opacity:.45}
 #mapReadout .map-colour-keys{display:grid;gap:7px}
@@ -2208,7 +2241,7 @@ body:not(.collapsed) #mapReadout{visibility:hidden}
 #mapReadout .key-swatch{display:flex;align-items:center;gap:3px}
 #mapReadout .key-swatch img{width:12px;height:9px;object-fit:fill}
 body.point-cloud-open #mapReadout{display:none}
-@media(max-width:760px){#mapReadout{display:none}}
+@media(max-width:760px){#mapReadout{top:max(12px,env(safe-area-inset-top));bottom:auto;left:max(12px,env(safe-area-inset-left))}}
 /* Camera panel: map info as a switch row, then Capture (the whole view) and
    Select Area side by side, the primary action first. */
 .snapshot-readout-option{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:2px 0;cursor:pointer}
@@ -3320,3 +3353,71 @@ body.csp-redesign #panes .elev-settings{border-top:1px solid var(--ui-line);marg
 .csp-glass body.csp-redesign #cspNav .search-row:has(#q:placeholder-shown) #qClear{margin-right:5px}
 .csp-glass body.csp-redesign #cspNav .search-row:has(#qClear:not([hidden])) #q{padding-right:calc(var(--go)*2 + 14px)}
 .csp-glass body.csp-redesign #cspNav .search-row:has(#q:placeholder-shown):has(#qClear:not([hidden])) #q{padding-right:calc(var(--go) + 10px)}
+
+/* CR-006: native-style sections, with actions inset into one continuous card.
+   Scope these rules to the sidebar; the map information panel has its own UI. */
+@media (min-width:1051px){
+  .csp-glass body.csp-redesign.csp-grouped-menus #side{grid-template-columns:212px minmax(0,1fr)}
+}
+.csp-glass body.csp-redesign.csp-grouped-menus #cspWorkspace #panes .pane-b.csp-menu-page{
+  padding:0!important;border:0;background:transparent;box-shadow:none;border-radius:0;
+}
+.csp-glass body.csp-redesign.csp-grouped-menus #cspWorkspace .csp-menu-collection{display:contents}
+.csp-glass body.csp-redesign.csp-grouped-menus #cspWorkspace .csp-menu-section{min-width:0;margin:0 0 22px}
+.csp-glass body.csp-redesign.csp-grouped-menus #cspWorkspace .csp-menu-section > .csp-section-label{
+  margin:0 16px 8px;color:var(--t3-head);font-size:13px;font-weight:500;line-height:1.4;
+}
+.csp-glass body.csp-redesign.csp-grouped-menus #cspWorkspace .csp-menu-section > .csp-menu-card{
+  min-width:0;margin:0;padding:16px;border-radius:16px;overflow:visible;
+}
+.csp-glass body.csp-redesign.csp-grouped-menus #cspWorkspace #panes .csp-menu-root{
+  margin:0;padding:0;border:0;background:transparent;box-shadow:none;
+}
+.csp-glass body.csp-redesign.csp-grouped-menus #cspWorkspace #panes .csp-menu-root > summary{display:none}
+.csp-glass body.csp-redesign.csp-grouped-menus #cspWorkspace #panes .csp-menu-root::details-content{transition:none}
+.csp-glass body.csp-redesign.csp-grouped-menus #cspWorkspace #panes .csp-menu-card > .ls-section{
+  margin:0;padding:0;border:0;
+}
+.csp-glass body.csp-redesign.csp-grouped-menus #cspWorkspace #panes .csp-menu-card > .csp-menu-root + .csp-menu-root{
+  margin-top:16px;padding-top:16px;border-top:1px solid var(--t3-divider);
+}
+.csp-glass body.csp-redesign.csp-grouped-menus #cspWorkspace #panes #terStudio{padding:0;margin:0;border:0}
+.csp-glass body.csp-redesign.csp-grouped-menus #cspWorkspace #panes .ls-layers-head .menu-section-title{display:none}
+.csp-glass body.csp-redesign.csp-grouped-menus #cspWorkspace #panes .csp-menu-card > .fabbox{
+  margin:0;padding:0;border:0;background:transparent;box-shadow:none;
+}
+.csp-glass body.csp-redesign.csp-grouped-menus #cspWorkspace #panes #dnrAreaPanel{margin:0;padding:0 0 16px;border:0}
+.csp-glass body.csp-redesign.csp-grouped-menus #cspWorkspace #panes #terrainDownloadBox{margin-top:12px;padding-top:12px;border-top:1px solid var(--t3-divider)}
+.csp-glass body.csp-redesign.csp-grouped-menus #cspWorkspace #panes .csp-menu-page > :is(.control-hint,.terinfo,.terlegend){margin:0 16px 16px}
+.csp-glass body.csp-redesign.csp-grouped-menus #cspWorkspace #panes :is(.ghost,.linkbtn,.ls-pill){
+  min-height:44px;max-width:100%;white-space:normal;overflow-wrap:anywhere;
+}
+.csp-glass body.csp-redesign.csp-grouped-menus #cspWorkspace #panes :is(.terrain-look-reset,#terReset,#researchReset,#elevSpectrumReset,#elevBandsReset){
+  width:auto;max-width:100%;min-height:44px;margin:12px 0 0!important;padding:10px 14px;
+  border:0;border-radius:10px;background:var(--ui-fill-2);color:var(--ui-text);text-align:center;
+}
+.csp-glass body.csp-redesign.csp-grouped-menus #cspWorkspace #panes #terReset{width:100%;margin:0!important}
+.csp-glass body.csp-redesign.csp-grouped-menus #cspWorkspace #panes .elev-module-head :is(#elevSpectrumReset,#elevBandsReset){
+  flex:none;width:auto;margin:0!important;padding:6px 10px;
+}
+.csp-glass body.csp-redesign.csp-grouped-menus #cspWorkspace :is(.csp-setting-row,.csp-setting-foot){
+  flex-wrap:wrap;gap:10px 16px;min-width:0;
+}
+.csp-glass body.csp-redesign.csp-grouped-menus #cspWorkspace .csp-setting-text{flex:1 1 150px;min-width:0}
+.csp-glass body.csp-redesign.csp-grouped-menus #cspWorkspace .csp-setting-row > select{flex:0 1 auto;width:auto;max-width:100%;min-height:44px}
+.csp-glass body.csp-redesign.csp-grouped-menus #cspWorkspace .csp-setting-row > :is(.linkbtn,.snapshot-action,.csp-segmented){
+  max-width:100%;min-height:44px;white-space:normal;
+}
+.csp-glass body.csp-redesign.csp-grouped-menus #cspWorkspace #cspAppearanceCard .csp-menu-section{margin-inline:var(--t3-gutter)}
+.csp-glass body.csp-redesign.csp-grouped-menus #cspWorkspace #cspAppearanceCard .csp-menu-section > .csp-settings-card{padding:0}
+.csp-glass body.csp-redesign.csp-grouped-menus #cspWorkspace .csp-theme-presets{grid-template-columns:repeat(auto-fit,minmax(60px,1fr))}
+.csp-glass body.csp-redesign.csp-grouped-menus #cspWorkspace .csp-accent-presets{flex-wrap:wrap}
+.csp-glass body.csp-redesign.csp-grouped-menus #cspWorkspace .csp-layer-card{min-height:0;align-items:start;row-gap:8px}
+.csp-glass body.csp-redesign.csp-grouped-menus #cspWorkspace .csp-layer-card .csp-layer-main{min-width:0}
+.csp-glass body.csp-redesign.csp-grouped-menus #cspWorkspace .csp-card{overflow:visible}
+.csp-glass body.csp-redesign.csp-grouped-menus #cspWorkspace .csp-available-row{min-height:64px;white-space:normal}
+.csp-glass body.csp-redesign.csp-grouped-menus #cspWorkspace .csp-available-row:first-child{border-radius:inherit}
+.csp-glass body.csp-redesign.csp-grouped-menus #cspWorkspace .csp-available-row:last-child{border-radius:inherit}
+@media (max-width:420px){
+  .csp-glass body.csp-redesign.csp-grouped-menus #cspWorkspace .csp-setting-row > .csp-segmented{flex:1 1 100%}
+}

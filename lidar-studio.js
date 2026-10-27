@@ -89,13 +89,16 @@
     function render(){
       const s=style(),scroll=container.closest(".pane-b")?.scrollTop;
       state.look=s?R.matchLook(state,s):null;
+      container.dispatchEvent(new Event("csp:lidar-menu-reset"));
       container.innerHTML="";
       container.toggleAttribute("data-disabled",!gpu());
       if(!gpu()){
         container.append(el("p","control-hint ls-note","Color layers, looks and effects need GPU rendering, which this browser doesn’t provide. The terrain modes above still work."));
+        container.dispatchEvent(new Event("csp:lidar-menu"));
         return;
       }
       container.append(renderLayers(s),renderLooks(),renderEffects(s));
+      container.dispatchEvent(new Event("csp:lidar-menu"));
       if(scroll!==undefined) container.closest(".pane-b").scrollTop=scroll;
     }
 

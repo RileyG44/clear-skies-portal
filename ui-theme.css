@@ -15,6 +15,7 @@
  */
 
 :root {
+  --water-dark-swatch: #c7c7cc;
   /* The cursor card. Ink follows the theme text; the pale fill is the classic
      shell. Liquid Glass replaces the fill with the same frosted material as
      the other map panels. */

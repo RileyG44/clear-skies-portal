@@ -268,12 +268,13 @@ assert(index.includes('id="buildDiag"'),"the geometry readout must be reachable 
   assert(!read("ui-system.js").includes('"cspMapMode"')&&!ui.includes("#cspMapMode"),
     "the floating view-mode bar is gone; the mode menu replaces it");
   /* One Liquid Glass material for everything floating on the map: controls
-     take the clear strength, anything read takes the frosted one. A new
+     take the clear strength; map info matches those controls under CR-004.
+     Other reading surfaces take the frosted strength. A new
      floating surface belongs in one of these two lists. */
-  for(const selector of ["#mapDock",".leaflet-control-zoom","#sideToggleDock .map-tool"])
+  for(const selector of ["#mapDock",".leaflet-control-zoom","#sideToggleDock .map-tool","#mapReadout"])
     assert(new RegExp(`:is\\([^)]*${selector.replace(/[.#]/g,m=>"\\"+m)}[^)]*\\)\\{[^}]*background-color:var\\(--lg-control\\)`).test(ui),
       `${selector} must use the clear Liquid Glass material`);
-  for(const selector of [".tool-popover","#menu",".leaflet-popup-content-wrapper","#snapshotStatus","#pointCloudPanel","#mapReadout"])
+  for(const selector of [".tool-popover","#menu",".leaflet-popup-content-wrapper","#snapshotStatus","#pointCloudPanel"])
     assert(new RegExp(`:is\\([^)]*${selector.replace(/[.#]/g,m=>"\\"+m)}[^)]*\\)\\{[^}]*background-color:var\\(--lg-popover\\)`).test(ui),
       `${selector} must use the frosted Liquid Glass material`);
   assert(read("ui-system.js").includes('"Search":long'),"the placeholder must shorten in a narrow field instead of clipping");

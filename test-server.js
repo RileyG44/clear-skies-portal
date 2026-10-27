@@ -32,6 +32,7 @@ async function snapshotUrlValidationChecks(){
       "prd-tnm.s3.amazonaws.com",
       "services.arcgisonline.com",
       "basemap.nationalmap.gov",
+      "hydro.nationalmap.gov",
       "carto.nationalmap.gov",
       "mrdata.usgs.gov",
       "gis.dnr.wa.gov",

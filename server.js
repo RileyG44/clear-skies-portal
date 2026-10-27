@@ -92,6 +92,7 @@ const SNAPSHOT_IMAGE_HOSTS = new Set([
   "services.arcgisonline.com",
   "tiles.maps.eox.at",
   "basemap.nationalmap.gov",
+  "hydro.nationalmap.gov",
   "carto.nationalmap.gov",
   "mrdata.usgs.gov",
   "gis.dnr.wa.gov",

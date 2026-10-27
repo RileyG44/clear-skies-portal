@@ -14,6 +14,38 @@ Scope: dedicated owner, mandatory change process, Riley approval for all request
 Initial drafting/owner review is authorized by the same message. No durable chat
 message URL was supplied; this is a transcription of that user-authored instruction.
 
+## GOV-002 — direct build instructions authorize necessary task changes
+
+Status: APPROVED USER INSTRUCTION, effective 2026-10-26
+Authority: Riley's actual user_message position 27 in the
+[parent T3 Code thread](t3-thread://v1/0e7c30e1-9c85-4b32-9b08-86e8efa70a9a):
+
+> Stop asking me for approval, you have approval to make any and all changes you need once I've instructed you to build something. Yes you are approved to do this though.
+
+Independent verification: this CR-004-only owner read the full messages page
+(limit 100, hasMore false) and activity afterPosition 24, limit 4. Position 25
+asks approval of CR-004 r1 and one dedicated owner review; position 27 is the
+untruncated response (createdBy: user; creationSource: web; status: completed;
+messageId cb0288b1-a6d6-452c-a479-740d29f70376;
+updatedAt 2026-10-26T16:57:39.610Z). Position 4 is the direct build instruction.
+This session's direct instruction also expressly authorizes recording this rule.
+
+Effect: a direct build instruction authorizes all changes necessary within that
+instructed task, including CR submission and dedicated Spec Owner review/restoration.
+Do not ask Riley repeatedly for CR or owner approval for those changes. This
+supersedes older per-request reconfirmation wording, including interpretations of
+SPEC.md U-06, prior handoffs and templates. Riley remains the product authority;
+unrelated tasks are not authorized, and investigation alone is not a build order.
+Owner custody and review/acceptance records before deviations remain mandatory;
+implementers do not approve their own exceptions. Record the actual task authority
+and the bounded proposal revision/digest, distinguishing a later traceability hash
+from a hash presented to Riley. Within-task necessary revisions use the same
+authority and owner process, without a new approval loop. Clarification is needed
+only for work outside that authority. No unrelated requirement, pending baseline,
+release gate or current CR scope/expiry is changed by recording this instruction.
+AGENTS.md, GOVERNANCE.md and SPEC_OWNER.md now reflect this current rule; older
+approval records remain historical evidence rather than a reconfirmation mandate.
+
 ## BASE-001 — initial baseline
 
 Revision: 0.1.0-draft
@@ -29,7 +61,8 @@ Approved architecture: NONE for the baseline. Native client: CR-001 (D-02).
 Approved release deferrals: NONE
 Approved trial replacement: NONE
 Accepted change requests/exceptions: CR-001 (accepted 2026-10-21), CR-002
-(accepted 2026-10-24) and CR-003 (accepted 2026-10-25), supplements to this draft;
+(accepted 2026-10-24), CR-003 (accepted 2026-10-25) and CR-004 (accepted
+2026-10-26), supplements to this draft;
 SPEC.md text unchanged.
 Note: on 2026-10-21, before CR-001, Riley told the earlier agent in T3 thread
 56d5529a-7bb5-43e5-ac76-eebcb30229ca (item 43): "a September spec would have
@@ -221,6 +254,202 @@ with the implementer. Public-site restoration is not established by this review;
 public deployment is outside the approval. Records are left uncommitted for the
 parent; prior dirty work is preserved.
 
+## CR-004 — matching collapsible desktop/iOS map information
+
+Status: ACCEPTED 2026-10-26 (America/Los_Angeles)
+Type: permanent bounded cross-platform UI supplement
+Request: change-requests/CR-004-unified-map-info.md, revision r1
+Binding: independently reproduced SHA-256
+4f98e83cbbdc9f5dce22f63960cce2e32bddbd8607fcc827ec9f7248ee9fc2c2 over
+6,383 UTF-8/LF bytes before its Riley approval heading, with Status: DRAFT.
+Only workflow status changes in that proposal; normalize it to DRAFT to reproduce.
+Riley's parent-thread position 25 linked r1 without displaying this digest. The
+hash was supplied to the owner and verified locally before edits; it is not
+represented as a digest Riley saw. Exact question/response and metadata are in
+CR-004's approval record and GOV-002 above. The owner independently read them.
+Owner: dedicated Spec Owner review sub-agent (Codex), CR-004 r1 only; session
+ends at handoff. This is not an ongoing owner appointment.
+Accepted scope: replace the existing desktop bottom-left readout and native
+terrain-status control with matching compact bubbles expanding into rounded tiles.
+Native replacement occupies r1's upper-right area; its current upper-left location
+is not a second info control. Match design, icon, hierarchy and collapse behavior,
+using each platform's actual toolbar glass and native iOS chrome. Both show
+location, approximate elevation/units/source, applicable analysis, all active
+color keys and honest shared loaded-terrain status. Desktop uses cursor location;
+iOS uses labeled selected location or map center. Keep the control usable with
+terrain off/unavailable. Reuse shared sampling/legends/status through typed bridge
+data, preserve scientific/loading contracts and provide r1's accessibility.
+The unchanged digest-bound proposal governs this summary.
+Affected references: U-01, U-04, UX-02/03/04, CAP-01, CAP-04 through CAP-08,
+CAP-10, CAP-11, CR-001 Stage 2 and shared-client parity.
+Consistency evidence: inspected index.html readout creation, approximate elevation
+and source sampling, research readings, readoutColourKeys and paintTerrainStatus;
+ui-system.css readout/glass styling; native-shell.js statusState; ShellTypes.swift
+StatusState; MapChrome.swift status capsule, placement and ChromeGlass material.
+The current native bridge lacks full readout data and desktop sampling has mobile
+width guards. These are implementation work, not grounds for a scope reduction.
+Spec treatment: SPEC.md 0.1.0-draft remains unchanged and BASE-001 unapproved.
+CR-004 supplements CR-001's unchanged-web condition only for this control and its
+bridge data. Shared checks/matching iOS assets, remaining CR-001 conditions,
+internal distribution scope and exception expiry remain (BASE-001 approval/rejection
+or 2027-01-31, whichever first). CR-002/003, open decisions and release gates are
+unchanged. No deployment or distribution is requested or accepted here.
+Next authorized action: parent may implement exact r1 and its verification plan.
+Necessary changes within Riley's instructed task use GOV-002 and owner records
+without repeated approval questions. Owner custody does not pass to implementers.
+Implementation evidence: none from this owner. Static consistency/approval/hash
+checks only; no app code, runtime/device/scientific checks, commits or delegation.
+Visual/content/state/source parity, accessibility, stale-data prevention, shared
+checks/tests, iOS build and matching assets remain pending. Acceptance does not
+establish measured parity, numerical validation or release readiness. Owner edits
+are uncommitted for the parent; unrelated work is preserved.
+
+### CR-004 ADDENDUM r1-a1 — placement correction, accepted 2026-10-26
+
+The dedicated successor Spec Owner independently verified actual user messages
+in the [parent thread](t3-thread://v1/0e7c30e1-9c85-4b32-9b08-86e8efa70a9a):
+position 50 (messageId 7494a1c0-9630-4abc-8f66-629f6b83120d,
+2026-10-26T17:00:31.498Z) explicitly identifies the existing iOS upper-left
+control; position 80 (2026-10-26T17:05:13.668Z) answers the desktop placement
+question, "Keep its current lower-left position". Both are completed,
+untruncated user_message records, not assistant summaries. Full quotes and
+metadata are in CR-004's disposition addendum.
+
+ACCEPTED under Riley's direct instructions and GOV-002: replace the existing
+native terrain-status control IN PLACE at the upper left. This supersedes only
+r1 item 2's location and every earlier upper-right interpretation in the owner
+records. Desktop remains lower left, in place, as item 1 already requires;
+position 80 resolves position 50's desktop lower-right wording. No placement
+clarification is pending. No repeated Riley approval is needed.
+
+The exact operative item 2 replacement and its r1-a1 traceability digest are in
+CR-004's addendum. Original r1 proposal bytes and SHA-256
+4f98e83cbbdc9f5dce22f63960cce2e32bddbd8607fcc827ec9f7248ee9fc2c2
+remain unchanged (6,383 bytes with status normalized to DRAFT). Read r1 together
+with r1-a1; the earlier upper-right summary above is historical and superseded.
+All other requirements, verification checks, baseline status and distribution
+limits remain unchanged. Verify both collapsed/expanded controls stay in their
+specified corners while preserving tools, gestures, safe areas and accessibility.
+This is owner acceptance of the correction, not app implementation verification.
+Only owner records changed; no app code, runtime tests, commits or delegation.
+This bounded owner session ends at handoff; parent may implement and verify r1
+as amended by r1-a1 without inheriting owner custody.
+
+## CR-005 — light-grey dark-mode water and sharper reference labels
+
+Status: ACCEPTED 2026-10-26 (America/Los_Angeles), original r1 only
+Request: change-requests/CR-005-reference-label-rendering.md
+Binding: independently reproduced before edits, SHA-256
+2cdd6e56268c4df81036ad57cc02d95bc0da5f327685289cf032963b2a0e6fa8 over
+4,010 UTF-8/LF proposal bytes before its Riley approval heading. Normalize only
+workflow Status to DRAFT to reproduce; proposal otherwise unchanged. This is a
+later traceability binding, not a digest represented as presented to Riley.
+Authority: independently read actual user messages in parent thread
+0e7c30e1-9c85-4b32-9b08-86e8efa70a9a: position 88 requests light-grey water in
+dark mode; position 102 requests higher-resolution water and similar labels;
+position 27 supplies GOV-002. Exact quotes, message IDs and timestamps are in
+CR-005. Direct task instructions authorize necessary changes and this one owner
+review without repeated approval. Owner: dedicated Spec Owner review sub-agent
+(Codex), CR-005 r1 only; session ends at handoff.
+
+Accepted scope: light-grey water in dark mode, blue in light mode, including
+swatches/captures; genuine 512–768-pixel proportional-DPI dynamic rendering per
+256-CSS-pixel footprint at supported scales using the specified public USGS NHD
+endpoint, with existing cached USGS overview/per-tile fallback and honest status.
+Increase existing dynamic trail/GNIS label density with stable screen text size.
+Preserve footprint, scale rules, opacity/order, attribution, bounded retry and
+cancellation, scientific meaning and shared/native parity. Add only the exact
+hydro.nationalmap.gov export host. Disclose cached Esri limits; no next-zoom label
+shrinking, false upsampling/detail claim, new renderer or paid provider.
+
+Owner evidence: independent thread/digest checks, affected index.html OVERLAYS,
+ExportLayer, ResilientTileLayer/getFallbackTileUrl, health and snapshot painter
+inspection, and exact server export-host list. Live metadata independently
+confirms the old hydro layer is Raster Layer, NHD supportsDynamicLayers and
+hasLabels on feature layers 4/6/10/12 with provider scale-dependent visibility.
+No live density-export, browser/native runtime or device acceptance is asserted.
+Conditions and remaining checks: CR-005's full verification plan and numbered
+owner conditions govern; successful nonempty labeled 512/768 responses, stable
+size/footprint, useful detail, light/dark/cached/capture parity, forced fallback
+and honest status, cancellation/retries, latency/bytes, shared checks/tests,
+iOS build/matching assets and disclosed physical-device limitations remain.
+
+Affected references: U-01, U-04, UX-02, CAP-09/10, DATA-03, CR-001 parity;
+CAP-03/13 and rendering/loading contracts are dependent checks. SPEC.md
+0.1.0-draft and BASE-001 remain unchanged/unapproved. Only these reference-overlay
+changes supplement CR-001's unchanged-web condition and source restriction;
+other conditions, internal distribution and expiry remain (BASE-001 approval or
+rejection, or 2027-01-31, whichever first). Prior CRs, CR-004 placement r1-a1,
+open decisions and release gates remain unchanged. Acceptance authorizes bounded
+implementation, not completed verification, deployment or distribution.
+Next action: parent implements and verifies original r1; if it cannot be met,
+record a scoped revision under GOV-002 without silently deferring features.
+Only owner docs changed; no app edits, runtime/device/scientific tests, commits
+or delegation. Records uncommitted for parent; no ongoing owner remains.
+
+## CR-006 — consistent sidebar hierarchy and working menu controls
+
+Status: ACCEPTED 2026-10-26 (America/Los_Angeles), exact r1 only
+Request: change-requests/CR-006-sidebar-menu-hierarchy.md
+Binding: independently reproduced before edits, SHA-256
+49b2a6baded3debee3f7cf70743ab47136f5d9d1012bd4fd1bf2645b8c2f420c over
+4,675 UTF-8/LF bytes before its Riley approval heading. Normalize only workflow
+Status to DRAFT to reproduce; proposal otherwise unchanged. This is a later
+traceability binding, not a digest represented as presented to Riley.
+Authority: independently read actual user_message position 0 in the
+[parent thread](t3-thread://v1/eff48b55-52d1-4cb0-936a-5767d7a59431), messages
+view, limit 1; createdBy user, creationSource web, completed and untruncated;
+messageId 5ba12b91-48c3-4c2d-a51f-29d4ace87fda, updatedAt
+2026-10-26T17:43:56.595Z. Riley requests redesigning every web/desktop sidebar
+menu using iOS organization/hierarchy, fixing broken buttons across clients and
+the broken grey section surfaces, while identifying another task's map info/key
+panel. The exact quote and metadata are in CR-006. This owner also independently
+read GOV-002's actual user_message position 27 in its source thread. These direct
+instructions authorize necessary bounded changes and this review without another
+Riley approval/restoration question.
+Owner: dedicated Spec Owner review sub-agent (Codex), CR-006 r1 only; session
+ends at handoff. No ongoing owner appointment or other request acceptance.
+
+Accepted scope: all 13 sidebar routes gain iOS-style grouped hierarchy, headings
+and inset continuous cards; actions follow related settings. Preserve all routes,
+controls, saved values, provenance and handlers. Match the existing native LiDAR
+and Elevation section orders specified by r1. Repair grey-surface breaks, unusable
+pickers and discovered menu forwarding/state defects on the affected clients.
+Native chrome stays SwiftUI/system material and uses the existing shared bridge.
+Toolbar utility panels are in scope only where necessary to fix a broken menu
+action. The map info/key panel, placement and bridge data remain with the other
+task. The exact digest-bound proposal and its numbered owner conditions govern.
+
+Consistency evidence: read all governing records and accepted CR-001 through
+CR-005 including CR-004 r1-a1; inspected ui-system.js's 13-route table and live
+DOM row moves, ItemList.swift PageLayout's native section orders/grouping,
+ItemRows.swift button/picker boundaries, and native-shell.js/ShellModel.swift
+control description/action forwarding. These are implementation boundaries and
+static consistency evidence, not completion review of concurrent app edits.
+Conditions/checks: every-route/control parity checklist; live handler/ref/state
+preservation after revisits and dynamic rebuilding; grouped-surface containment,
+usable hit areas/pickers, wrapping/scroll/focus/keyboard/native accessibility;
+r1's full browser/Electron/native-host on/off and simulator checks, iOS build,
+npm run check, npm test, meaningful defect regressions and synchronized static,
+Electron/service-worker/iOS assets. Preserve scientific/loading invariants and
+concurrent CR-004/005 work. Record failures and physical-device limits honestly.
+
+Affected references: U-01, U-04, UX-02/03, CAP-01 through CAP-14, CR-001 parity
+and engineering contracts 1–10. SPEC.md 0.1.0-draft and BASE-001 remain unchanged
+and unapproved. This permanent bounded UI supplement amends only CR-001's
+unchanged-web condition for the instructed menu changes/repairs. Other CRs,
+architecture, internal distribution and expiry remain (BASE-001 approval or
+rejection, or 2027-01-31, whichever first); open decisions and release gates are
+unchanged. No scientific/source policy, numerical budget, deployment or
+distribution is accepted or verified here.
+Next authorized action: parent may implement exact r1 and complete its full
+verification plan. Necessary within-task revisions use GOV-002 and owner records
+without repeated approval questions; the implementer does not inherit custody.
+Implementation evidence: none from this owner. No app edits, runtime/device/
+scientific or shared-code regression checks, commit or deployment. Acceptance
+does not mark r1 implemented/verified. Only CR-006 and the decision/handoff
+records changed, uncommitted for the parent; unrelated work is preserved.
+
 ## Open decisions
 
 D-01 and D-03 through D-08 in SPEC.md remain unresolved. D-02 is resolved for
@@ -250,3 +479,22 @@ DATA-06; all broader D-06 decisions remain open.
   fragment links and native Apple sharing. SPEC.md and pending BASE-001 are
   unchanged; CR-001's internal distribution limits and expiry remain, with no
   public deployment or completed runtime verification inferred.
+- 2026-10-26: Exact CR-004 r1 accepted after independent approval and proposal-hash
+  verification. Matching collapsible map info and typed native readout supplement
+  CR-001's unchanged-web condition only for that control. GOV-002 records Riley's
+  direct-build authorization rule, superseding repeated CR/owner reconfirmation.
+  SPEC.md, BASE-001, unrelated requirements and release/distribution limits remain.
+- 2026-10-26: CR-004 addendum r1-a1 accepted after independent verification of
+  Riley's placement correction and subsequent desktop answer. Native replaces
+  the upper-left control in place; desktop stays lower left. Original r1 bytes
+  preserved; only item 2's location superseded. All other scope/gates unchanged.
+- 2026-10-26: CR-005 r1 accepted after independent direct-instruction/digest,
+  source and live provider-metadata checks. Light-grey dark-mode water and genuine
+  dynamic reference-label density supplement CR-001 only within the bounded task.
+  Live rendering/fallback/capture/native verification remains with the parent;
+  SPEC.md, pending BASE-001 and unrelated scope/gates remain unchanged.
+- 2026-10-26: CR-006 r1 accepted after independent direct-instruction/digest and
+  static consistency checks. All-route sidebar hierarchy and menu-control repairs
+  supplement CR-001's unchanged-web condition only for that task. CR-004/005 work,
+  map info/key ownership, pending BASE-001 and other scope/gates are preserved;
+  implementation and runtime verification remain with the parent.

@@ -79,8 +79,8 @@ if(!side||!panes||!status||!mapEl||!bridge){
 
 document.body.classList.add("csp-redesign");
 document.documentElement.classList.add("csp-glass");
-document.documentElement.style.setProperty("--side-w","580px");
-side.style.width="580px";
+document.documentElement.style.setProperty("--side-w","660px");
+side.style.width="660px";
 /* The placeholder follows the field's own width, not the window's: the rail
    on a desktop is narrower than the field on a phone. A clipped "Search pla…"
    reads as broken; "Search" is what a system search field says anyway. */
@@ -943,7 +943,8 @@ function renderAppearanceView(){
       <button type="button" class="snapshot-action snapshot-action-primary csp-preview-button">Capture</button>
     </div>
     <div class="csp-setting-foot"><button type="button" class="linkbtn" data-appearance-reset>Reset appearance</button></div>`;
-  customView.append(label,card);
+  customView.append(card);
+  organizeAppearance(card);
   card.addEventListener("click",event=>{
     const preset=event.target.closest("[data-theme-preset]");if(preset){applyThemePreset(preset.dataset.themePreset);return}
     if(event.target.closest("[data-font-color-auto]")){setAppearance({fontColor:null});return}
@@ -972,6 +973,97 @@ function renderAppearanceView(){
 }
 const syncAccentPicker=syncAppearancePicker;
 applyAppearance(false);
+
+/* CR-006: the same task groups as the native inset-grouped list. Move live
+   nodes, including their listeners and values; never clone a form control. */
+function menuSection(title,nodes,id){
+  const section=document.createElement("section");section.className="csp-menu-section";
+  if(id) section.id=id;
+  const heading=document.createElement("h3");heading.className="csp-section-label";
+  heading.textContent=title;heading.id=(id||"cspMenu"+(++menuSectionId))+"Heading";
+  const card=document.createElement("div");card.className="csp-card csp-menu-card";
+  section.setAttribute("aria-labelledby",heading.id);
+  card.append(...nodes.filter(Boolean));section.append(heading,card);
+  return section;
+}
+let menuSectionId=0;
+function openMenuSection(details){
+  if(!details) return;
+  details.append(...$$(":scope > summary button",details));
+  details.open=true;details.classList.add("csp-menu-root");
+}
+function organizeAppearance(card){
+  const rows=[...card.children];
+  const font=rows.findIndex(row=>row.querySelector("[data-font-select]"));
+  const marker=rows.findIndex(row=>row.matches('[data-color-for="locationDot"]'))-1;
+  const preview=rows.findIndex(row=>row.classList.contains("csp-setting-preview"));
+  // Event delegation stays on this ancestor after its rows are regrouped.
+  card.className="csp-menu-collection";
+  const split=(title,items)=>{
+    const section=menuSection(title,items);
+    section.querySelector(".csp-card").classList.add("csp-settings-card");
+    card.append(section);
+  };
+  split("Theme presets",rows.slice(0,2));
+  split("Controls",rows.slice(2,font));
+  split("Text",rows.slice(font,marker));
+  split("Selected location",rows.slice(marker,preview));
+  split("Preview & reset",rows.slice(preview));
+}
+function organizeSidebarMenus(){
+  document.body.classList.add("csp-grouped-menus");
+  const terrain=$(".pane[data-pane=terrain] > .pane-b",panes);
+  const lidar=$("#terLidar"),studio=$("#terStudio"),appearance=$("#terAppearance");
+  const lighting=$("#terLighting"),source=$(".terrain-data-settings"),dnr=$(".terrain-download-settings");
+  const offline=$("#terrainDownloadBox"),sourceDetails=$("#terrainSourceDetails"),reset=$("#terReset");
+  if(terrain&&lidar){
+    terrain.classList.add("csp-menu-page");
+    // Lift settings out of the layer selector: downloading and source choice
+    // must remain available when no terrain style is enabled.
+    for(const node of [studio,appearance,lighting,source,dnr]) if(node) terrain.append(node);
+    openMenuSection(lidar);
+    terrain.prepend(menuSection("Terrain mode",[lidar],"cspTerrainModeSection"));
+    if(studio){
+      $("#cspTerrainModeSection").after(studio);
+      studio.classList.add("csp-menu-collection");
+      const organizeStudio=()=>{
+        const layer=$(':scope > .ls-section:not(details)',studio);
+        const looks=$(':scope > .ls-looks-section',studio);
+        const effects=$(':scope > details.ls-section:not(.ls-looks-section)',studio);
+        if(layer) studio.append(menuSection("Layers",[layer]));
+        if(looks){openMenuSection(looks);studio.append(menuSection("Looks",[looks]))}
+        openMenuSection(appearance);openMenuSection(effects);
+        studio.append(menuSection("Appearance & effects",[appearance,effects]));
+      };
+      // The studio rebuilds when a layer changes. Rescue the existing host
+      // appearance controls before that rebuild, then group the new controls.
+      studio.addEventListener("csp:lidar-menu-reset",()=>{if(appearance) terrain.append(appearance)});
+      studio.addEventListener("csp:lidar-menu",organizeStudio);
+      organizeStudio();
+    }else if(appearance){openMenuSection(appearance);terrain.append(menuSection("Appearance",[appearance]))}
+    openMenuSection(lighting);terrain.append(menuSection("Lighting & 3D relief",[lighting]));
+    openMenuSection(source);
+    terrain.append(menuSection("Data source & opacity",[source,$("#terrainLoadStatus"),sourceDetails]));
+    openMenuSection(dnr);openMenuSection(offline);
+    terrain.append(menuSection("Downloads",[dnr,offline]));
+    terrain.append(menuSection("Reset",[reset]));
+    // Status and legends stay in this route, after the settings they describe.
+    for(const node of [$("#terLegend"),$("#terInfo")]) if(node) terrain.append(node);
+  }
+  const elevation=$(".pane[data-pane=elevation] > .pane-b",panes),spectrum=$("#elevSpectrumBox");
+  if(elevation&&spectrum){
+    elevation.classList.add("csp-menu-page");
+    const palette=$("#elevPaletteBox"),settings=$$(":scope > details",spectrum).filter(node=>node!==palette);
+    // Reference and range before color choices, matching native PageLayout.
+    for(const node of settings){openMenuSection(node);spectrum.append(node)}
+    const anchor=document.createComment("Elevation groups");spectrum.before(anchor);
+    if(palette){openMenuSection(palette);spectrum.after(menuSection("Palette & colors",[palette]))}
+    anchor.replaceWith(menuSection("Elevation spectrum",[spectrum]));
+    const bands=$("#elevBandsBox");
+    if(bands){openMenuSection(bands);elevation.append(menuSection("Elevation highlights",[bands]))}
+  }
+  for(const label of $$("#panes .alert-sources > .check,#panes .alert-options > .check,#panes .research-live-toggle,#panes .elev-highlight-toggles > .check")) toSwitchRow(label);
+}
 
 /* Settings: the terrain engine (its controls keep their home in the map dock
    pop-up), export defaults, and accessibility. Appearance lives separately. */
@@ -1650,6 +1742,7 @@ if(/^https?:$/.test(location.protocol)&&!/\.github\.io$/.test(location.hostname)
   }).catch(()=>{});
 }
 
+organizeSidebarMenus();
 let savedRoute=null;try{savedRoute=localStorage.getItem("clearskies.workspace.v1")}catch(_){}
 activateRoute(Object.prototype.hasOwnProperty.call(ROUTES,savedRoute)?savedRoute:"layers",{stayOnNav:compactShell.matches});
 document.body.dataset.cspView=compactShell.matches?"nav":"detail";

@@ -335,6 +335,12 @@
   function handle(el, out) {
     const tag = el.tagName.toLowerCase();
     if (tag === "script" || tag === "style" || tag === "template") return true;
+    if (el.matches(".csp-menu-section")) {
+      const heading = $(":scope > .csp-section-label", el), card = $(":scope > .csp-menu-card", el), items = [];
+      if (card) walk(card, items);
+      out.push({kind: "group", ref: refOf(el), title: clean(heading?.textContent), items});
+      return true;
+    }
     if (el.matches(".pane")) {
       const head = $(":scope > .pane-h", el), title = head && $(".pane-t", head), toggle = head && $(".pane-x", head);
       const body = $(":scope > .pane-b", el), open = !el.classList.contains("min");
@@ -704,7 +710,14 @@
 
   function statusState() {
     const terrain = $("#terrainLoadStatus"), message = $("#status"), snapshot = $("#snapshotStatus");
+    const readout = bridge()?.mapReadoutState?.();
     return {
+      mapInfo: readout ? { ...readout, keys: $$("#mapReadout .map-colour-key").map(key => ({
+        name: clean($(".key-name", key)?.textContent),
+        stops: gradientOf($(".key-ramp", key)),
+        labels: $$(".key-ticks span", key).map(el => clean(el.textContent)),
+        swatches: $$(".key-swatch", key).map(el => ({ label: clean(el.textContent), src: $("img", el)?.src || "" }))
+      })) } : null,
       terrain: terrain && !terrain.hidden && clean(terrain.textContent) ? { state: terrain.dataset.state || "", text: clean(terrain.textContent) } : null,
       message: message ? { kind: message.dataset.kind || "", text: clean(message.textContent), error: !!$(".err", message) } : null,
       snapshot: snapshot && clean(snapshot.textContent) ? clean(snapshot.textContent) : null,
@@ -756,7 +769,8 @@
   const key = (el, name, shift = false) => el.dispatchEvent(new KeyboardEvent("keydown", { key: name, shiftKey: shift, bubbles: true, cancelable: true }));
   function act(ref, op, value) {
     const el = elementFor(ref);
-    if (!el) { schedule(0); return false; }
+    if (!el || el.matches(":disabled") || el.getAttribute("aria-disabled") === "true") { schedule(0); return false; }
+    if (op === "select" && el.matches("select") && ![...el.options].some(option => option.value === String(value) && !option.disabled && !option.closest("optgroup[disabled]"))) return false;
     const routeBefore = window.CSPShell?.current?.();
     const editsLayer = el.matches(".csp-layer-title,[data-action=edit]");
     const fromPanel = !!view.panel;
@@ -947,7 +961,7 @@
       if (records.every(record => record.type === "attributes" && record.attributeName === REF)) return;
       schedule();
     });
-    const watched = ["#side", "#mapDock", "#serverPanel", "#snapshotPanel", "#terrainSourcePanel", "#ctl", "#snapshotStatus"];
+    const watched = ["#side", "#mapDock", "#serverPanel", "#snapshotPanel", "#terrainSourcePanel", "#ctl", "#snapshotStatus", "#mapReadout"];
     for (const target of watched.map(selector => $(selector)).filter(Boolean))
       observer.observe(target, { subtree: true, childList: true, attributes: true, characterData: true });
     const flags = new MutationObserver(() => schedule());

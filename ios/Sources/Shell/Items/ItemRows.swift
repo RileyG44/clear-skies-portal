@@ -181,15 +181,14 @@ struct PickerRow: View {
         Group {
             if options.count <= 3, options.allSatisfy({ $0.label.count <= 10 && $0.disabled != true }) {
                 // Two or three short choices are one tap apart, not a menu.
-                HStack(spacing: 12) {
+                VStack(alignment: .leading, spacing: 8) {
                     RowLabel(title: item.text, detail: item.detail)
-                    Spacer(minLength: 8)
                     Picker(item.text, selection: selection) {
                         ForEach(options) { Text($0.label).tag($0.value ?? $0.label) }
                     }
                     .pickerStyle(.segmented)
                     .labelsHidden()
-                    .frame(width: 44, height: 44)
+                    .frame(maxWidth: .infinity, minHeight: 44)
                     .contentShape(.rect)
                 }
             } else {
@@ -428,9 +427,9 @@ struct ButtonRow: View {
                     .padding(.horizontal, 8)
             }
         }
-        .listRowBackground(Color.clear)
+        .listRowBackground(SheetRowBackground())
         .listRowSeparator(.hidden)
-        .listRowInsets(EdgeInsets(top: 6, leading: 0, bottom: 6, trailing: 0))
+        .listRowInsets(EdgeInsets(top: 10, leading: 16, bottom: 10, trailing: 16))
     }
 
     private func disclosureRow(chevron: String?, showsState: Bool = false) -> some View {

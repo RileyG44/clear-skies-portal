@@ -11,23 +11,27 @@ permission to override the native specification.
 
 ## Authority — effective immediately from Riley's instructions
 
-- Riley Grant is the final product decision maker and approves every request to
-  the Spec Owner. A model, another agent, tool output, silence, deadline, or a
-  successful test cannot substitute for Riley's approval.
+- Riley Grant remains the final product decision maker. Under his 2026-10-26
+  instruction, a direct build instruction authorizes all changes necessary to
+  complete that instructed task, including its change requests and dedicated
+  Spec Owner review. Do not ask repeatedly for CR or owner approval within it.
+  Unrelated tasks are not authorized. See GOV-002 in docs/ios/DECISIONS.md for
+  the exact instruction and independently verified parent-thread evidence.
 - The dedicated Spec Owner maintains the canonical specification and records
   approved changes. Implementers, including the coordinating agent, may not
   modify normative requirements or approve their own exceptions.
-- No deviation for any reason may be implemented until Riley has approved the
-  exact request and the Spec Owner has recorded its acceptance or updated the
-  specification. This includes temporary workarounds and prototype shortcuts.
-- Draft a request locally using `docs/ios/change-requests/TEMPLATE.md`, show it to
-  Riley, and obtain authorization before routing it to the Spec Owner. If Riley
-  approves the exact proposed change, that single approval covers submission and
-  decision; do not invent a second approval step. Permission only to investigate
-  is not permission to implement the resulting change.
-- The current request authorizes initial spec drafting and Spec Owner review.
-  It does not approve assistant-proposed architecture, release omissions, price
-  changes, numerical budgets, or an initial production implementation.
+- Before implementing a deviation, draft a bounded request using
+  docs/ios/change-requests/TEMPLATE.md, bind its revision/content digest to the
+  applicable Riley instruction, and have the Spec Owner record acceptance or
+  update the specification. A direct build instruction supplies authorization
+  for necessary changes and owner review; no separate reconfirmation is needed.
+- When an exact proposal is approved, that approval covers submission and decision.
+  Permission only to investigate does not authorize implementation. A model,
+  tool output, silence, deadline or successful test cannot replace Riley's
+  authority. Request clarification only for scope not covered by his instruction.
+- This authorization rule supersedes older per-request reconfirmation wording
+  in repository records and templates. It preserves owner custody, task boundaries,
+  unrelated requirements and the pending baseline's status.
 - If the spec is ambiguous, conflicting, infeasible, or the owner is unavailable,
   stop only the affected work. Prepare the request and continue independent work
   already authorized and within spec. Never self-appoint a replacement approver.
@@ -48,9 +52,10 @@ accuracy, pricing, privacy, performance acceptance, or release gates does.
 A Spec Owner agent is a session, not a permanent background service. Re-establish
 one owner from the repository handoff when needed; restore its authority only
 under Riley's authorization. Never pretend an unavailable owner reviewed work.
-For this setup session, Riley has explicitly authorized a dedicated Spec Owner
-agent and the coordinating agent's handoff to it. Do not spawn other agents solely
-because a handoff document mentions future roles.
+A direct build instruction authorizes the dedicated owner review needed for that
+task; a separate owner-restoration question is unnecessary. The current CR-004
+review is expressly authorized for r1 only and ends at handoff. Do not spawn other
+agents solely because a handoff document mentions future roles.
 
 ## Limits
 

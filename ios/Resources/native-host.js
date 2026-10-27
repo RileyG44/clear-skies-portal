@@ -82,7 +82,7 @@
     /* The map tools, the view menu and these pop-ups are drawn natively from
        the same elements (native-shell.js). The markup tools, point-cloud
        viewer and map selections stay web for now and remain visible. */
-    + "html.csp-native-chrome :is(#mapDock,#mapModeMenu){display:none!important}"
+    + "html.csp-native-chrome :is(#mapDock,#mapModeMenu,#mapReadout){display:none!important}"
     /* Pop-up controls need their layout boxes too: the adapter uses layout
        to distinguish visible controls from conditional ones. display:none
        on a pop-up would also erase its native fields, sliders and buttons. */

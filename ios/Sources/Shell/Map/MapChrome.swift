@@ -23,7 +23,7 @@ struct MapChrome: View {
                 VStack(alignment: .trailing, spacing: 0) {
                     HStack(alignment: .top, spacing: 10) {
                         VStack(alignment: .leading, spacing: 10) {
-                            TerrainStatusCapsule()
+                            TerrainStatusCapsule(maxHeight: min(420, max(100, geometry.size.height - MapControlSize.search - 30)), tileWidth: min(260, max(130, geometry.size.width - MapControlSize.tool - 34)))
                             if shell.map.pointCloud && shell.hasLocation { LocationShareButton() }
                         }
                         Spacer(minLength: 0)
@@ -213,81 +213,126 @@ struct ToolButton: View {
     }
 }
 
-/// What the terrain is doing right now, in the web's own words: loading,
-/// refining, ready, or partly unavailable, with the sources actually drawn.
-/// It stays a small round icon (a spinner while loading, a seal matching the
-/// menu text once ready) and opens to the full line only when tapped.
+/// One native tile for the shared engine's location, elevation, terrain status
+/// and rendered color keys. Its material is the map toolbar's own glass.
 struct TerrainStatusCapsule: View {
     @Environment(ShellModel.self) private var shell
-    @Environment(\.portalAppearance) private var appearance
+    @Environment(\.accessibilityReduceMotion) private var reducedMotion
     @State private var expanded = false
+    @State private var contentHeight: CGFloat = 180
+    var maxHeight: CGFloat = 420
+    var tileWidth: CGFloat = 260
 
     var body: some View {
-        if let terrain = shell.status.terrain, !terrain.text.isEmpty {
-            let parts = Self.parts(of: terrain.text)
-            Button {
-                withAnimation(.snappy) { expanded.toggle() }
-            } label: {
-                HStack(spacing: 8) {
-                    icon(terrain.state)
-                        .portalFont(.footnote)
-                    if expanded {
-                        VStack(alignment: .leading, spacing: 1) {
-                            Text(parts.title)
-                                .portalFont(.caption, weight: .medium)
-                                .contentTransition(.interpolate)
-                            if !parts.detail.isEmpty {
-                                Text(parts.detail)
-                                    .portalFont(.caption2)
-                                    .foregroundStyle(.secondary)
-                                    .lineLimit(2)
+        if let info = shell.status.mapInfo {
+            // Keep the map anchor fixed while the overlay changes size. This
+            // prevents the dock's layout and system glass from recentering it.
+            Color.clear
+                .frame(width: MapControlSize.status, height: MapControlSize.status)
+                .overlay(alignment: .topLeading) {
+                    VStack(alignment: .leading, spacing: 0) {
+                        Button {
+                            withAnimation(reducedMotion ? nil : .snappy(duration: 0.26)) { expanded.toggle() }
+                        } label: {
+                            HStack(spacing: 8) {
+                                Image(systemName: "info.circle").font(.system(size: 18))
+                                if expanded {
+                                    Text("Map info").portalFont(.caption, weight: .semibold)
+                                    Spacer(minLength: 0)
+                                    Image(systemName: "xmark").font(.system(size: 12))
+                                }
                             }
+                            .foregroundStyle(PortalPrimary())
+                            .padding(.horizontal, expanded ? 12 : 0)
+                            .frame(width: expanded ? tileWidth : MapControlSize.status, height: MapControlSize.status)
+                            .contentShape(.rect)
                         }
-                        .transition(.opacity.combined(with: .scale(scale: 0.9, anchor: .leading)))
+                        .buttonStyle(.plain)
+                        .accessibilityLabel(expanded ? "Hide map info" : "Show map info")
+                        .accessibilityValue(expanded ? "Expanded" : "Collapsed")
+                        if expanded {
+                            ScrollView {
+                                information(info)
+                                    .padding(.horizontal, 12)
+                                    .padding(.bottom, 12)
+                                    .frame(width: tileWidth, alignment: .leading)
+                                    .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { contentHeight = $0 }
+                            }
+                            .frame(width: tileWidth, height: min(contentHeight, max(44, maxHeight - MapControlSize.status)), alignment: .top)
+                            .scrollBounceBehavior(.basedOnSize)
+                        }
+                    }
+                    .frame(width: expanded ? tileWidth : MapControlSize.status, alignment: .topLeading)
+                    .clipped()
+                    .chromeGlass(in: .rect(cornerRadius: expanded ? 18 : 22), interactive: false)
+                    .id(expanded)
+                    .transition(reducedMotion ? .identity : .opacity.combined(with: .scale(scale: 0.94, anchor: .topLeading)))
+                    .onKeyPress(.escape) {
+                        withAnimation(reducedMotion ? nil : .snappy(duration: 0.26)) { expanded = false }
+                        return .handled
                     }
                 }
-                .padding(.horizontal, expanded ? 12 : 0)
-                .padding(.vertical, expanded ? 8 : 0)
-                .frame(minWidth: MapControlSize.status, minHeight: MapControlSize.status)
-                .frame(maxWidth: expanded ? 250 : MapControlSize.status, alignment: expanded ? .leading : .center)
-                .contentShape(.capsule)
+        }
+    }
+
+    private func information(_ info: MapInfoState) -> some View {
+        VStack(alignment: .leading, spacing: 12) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(info.basis).portalFont(.caption2).foregroundStyle(.secondary)
+                Text(info.coordinates).portalFont(.caption, weight: .medium, digits: true)
+                Text(info.elevation).portalFont(.caption, digits: true)
+                if !info.source.isEmpty {
+                    Text(info.source).portalFont(.caption2).foregroundStyle(.secondary)
+                }
+                if !info.analysis.isEmpty {
+                    Text(info.analysis).portalFont(.caption)
+                }
             }
-            .buttonStyle(.plain)
-            .chromeGlass(in: .capsule)
             .accessibilityElement(children: .combine)
-            .accessibilityLabel(terrain.text)
-            .accessibilityHint(expanded ? "Hide terrain details" : "Show terrain details")
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Terrain").portalFont(.caption2, weight: .semibold)
+                Text(info.terrain.text).portalFont(.caption2).foregroundStyle(.secondary)
+            }
+            .accessibilityElement(children: .combine)
+            ForEach(Array(info.keys.enumerated()), id: \.offset) { _, key in
+                MapInfoKeyView(key: key)
+            }
         }
+        .foregroundStyle(PortalPrimary())
+        .fixedSize(horizontal: false, vertical: true)
     }
+}
 
-    /// Ready means every terrain tile in view loaded. Partial, offline and
-    /// error keep their own icons rather than claiming a ready map.
-    @ViewBuilder private func icon(_ state: String) -> some View {
-        switch state {
-        case "loading":
-            ProgressView().controlSize(.mini)
-                .tint(Color(hex: appearance.fontColor) ?? .primary)
-        case "partial":
-            Image(systemName: "exclamationmark.triangle").foregroundStyle(.orange)
-        case "ready":
-            Image(systemName: "checkmark.seal").foregroundStyle(PortalPrimary())
-        case "offline":
-            Image(systemName: "wifi.slash").foregroundStyle(.secondary)
-        default:
-            Image(systemName: "exclamationmark.triangle").foregroundStyle(.orange)
-        }
-    }
+private struct MapInfoKeyView: View {
+    let key: MapInfoKey
 
-    /// "Refining terrain · 87% of loaded tile positions · USGS 3DEP + WA DNR"
-    /// reads as a title with its coverage, and the sources beneath.
-    static func parts(of text: String) -> (title: String, detail: String) {
-        let pieces = text.components(separatedBy: " · ")
-        guard let index = pieces.firstIndex(where: { $0.contains("% of loaded tile positions") }) else {
-            return (pieces.first ?? text, pieces.dropFirst().joined(separator: " · "))
+    var body: some View {
+        VStack(alignment: .leading, spacing: 3) {
+            Text(key.name).portalFont(.caption2, weight: .semibold)
+            if let stops = key.stops {
+                RoundedRectangle(cornerRadius: 2)
+                    .fill(LinearGradient(gradient: Gradient(stops: stops), startPoint: .leading, endPoint: .trailing))
+                    .overlay(RoundedRectangle(cornerRadius: 2).strokeBorder(.primary.opacity(0.25), lineWidth: 0.5))
+                    .frame(height: 6)
+                HStack(alignment: .top, spacing: 4) {
+                    ForEach(Array(key.labels.enumerated()), id: \.offset) { index, label in
+                        Text(label).frame(maxWidth: .infinity, alignment: index == 0 ? .leading : index == key.labels.count - 1 ? .trailing : .center)
+                    }
+                }
+                .portalFont(.caption2)
+            }
+            if !key.swatches.isEmpty {
+                LazyVGrid(columns: Array(repeating: GridItem(.flexible(), alignment: .leading), count: 3), alignment: .leading, spacing: 4) {
+                    ForEach(Array(key.swatches.enumerated()), id: \.offset) { _, swatch in
+                        HStack(spacing: 3) {
+                            ShellImage(src: swatch.src).frame(width: 12, height: 9).accessibilityHidden(true)
+                            Text(swatch.label).portalFont(.caption2)
+                        }
+                    }
+                }
+            }
         }
-        let coverage = pieces[index].components(separatedBy: " ").first ?? ""
-        let title = (pieces[..<index] + [coverage]).joined(separator: " · ")
-        return (title, pieces[(index + 1)...].joined(separator: " · "))
+        .accessibilityElement(children: .combine)
     }
 }
 

@@ -3,16 +3,25 @@
 Project: Clear Skies Native iOS
 Appointed by: Riley Grant, current 2026-09-06 user request
 Initial agent: /root/spec_owner (session handle, not a permanent service)
-Current owner session: none after this handoff. The one dedicated Spec Owner
-review sub-agent (Codex) restored under Riley's exact CR-003 r1 approval reviewed
-and recorded that request only on 2026-10-25. Its session ends at this handoff;
-it is not a running service.
+Current owner session: none after this handoff. The dedicated Spec Owner review
+sub-agent (Codex) recorded CR-006 r1 acceptance on 2026-10-26 under Riley's direct
+sidebar/menu-repair instruction and GOV-002. This bounded session ends at handoff;
+it is not a running service and the implementer does not inherit owner custody.
 Current baseline: SPEC.md 0.1.0-draft (commit 142fdf47) — not approved by
 Riley; BASE-001 pending
-Accepted change requests: CR-001 r1, accepted 2026-10-21; CR-002 r1, accepted
-2026-10-24; CR-003 r1, accepted 2026-10-25 (see DECISIONS.md)
-Current task: CR-003 owner recording complete; implementation and verification
-handed back to the coordinating implementer. No other owner request is authorized.
+Accepted requests: CR-001 r1 (2026-10-21), CR-002 r1 (2026-10-24), CR-003 r1
+(2026-10-25), CR-004 r1 with r1-a1, CR-005 r1 and CR-006 r1 (2026-10-26);
+see DECISIONS.md.
+Current authority: GOV-002, Riley's direct build instruction authorizes necessary
+task changes and dedicated owner review without repeated CR/restoration questions.
+Current task: CR-006 r1 accepted for bounded implementation/verification by its
+parent: all-route sidebar organization and menu-control repairs across clients.
+Only CR-006 r1 was reviewed for acceptance by this session. CR-004 r1+r1-a1 and
+CR-005 r1 remain the other task's work: map info/key panel ownership and bridge
+data are preserved; accepted placement stays iOS upper left and desktop lower
+left. CR-005 retains light-grey dark-mode water, genuine dynamic reference-label
+density with stable screen text size and cached fallback. Runtime verification
+is not supplied by this handoff.
 
 ## Start here
 
@@ -26,11 +35,13 @@ Read OWNER_REVIEW.md for the initial independent review and known limitations.
 - Maintain stable requirement IDs, parity matrix, open decisions, acceptance gates,
   version log, approved exceptions and traceable Riley approval evidence.
 - Review only owner requests authorized by Riley. Initial draft review is expressly
-  authorized by the appointment; future requests need their own authorization.
+  authorized by the appointment; necessary requests/review sessions within a direct
+  build instruction use its existing authorization under GOV-002.
 - Advise Riley candidly on tradeoffs; never approve a deviation on Riley's behalf.
 - After Riley approves the exact change, accept/reject for consistency and apply
-  the corresponding spec change or scoped exception. If the requested wording
-  needs substantive adjustment, return it to Riley before proceeding.
+  the corresponding spec change or scoped exception. Necessary changes within a
+  direct build instruction use its authority and a traceable revised owner record;
+  ask Riley only for work outside that authority, not repeated within-task approval.
 - For approved implementation-review requests, distinguish code completion, measured
   acceptance, live provider verification, scientific validation and release readiness.
 - At handoff, record current spec/revision, approved request IDs, outstanding blockers,
@@ -39,7 +50,8 @@ Read OWNER_REVIEW.md for the initial independent review and known limitations.
 
 ## Review checklist
 
-1. Is there explicit Riley approval for this request and its exact revision?
+1. Is this bounded revision/digest covered by Riley's direct build instruction or
+   exact-proposal approval, with independently checked evidence under GOV-002?
 2. Does the proposed change preserve or explicitly amend feature parity?
 3. Are source validity, units, datum, acquisition dates and scientific meaning honest?
 4. Are loading, cache, offline, lifecycle and failure contracts maintained?
@@ -169,3 +181,192 @@ request does not establish approval for this one.
   required Riley review of spec paths were not verified in this session.
 - Continuity: this CR-003-only owner session ends at this handoff. No other
   request is reviewed, and the parent does not inherit owner approval authority.
+
+## Handoff — 2026-10-26 (CR-004 r1 only)
+
+- Authority: independently inspected parent thread
+  0e7c30e1-9c85-4b32-9b08-86e8efa70a9a, messages (one full page, limit 100,
+  hasMore false) and activity (afterPosition 24, limit 4). Position 25 asks
+  approval of CR-004 r1 and one dedicated owner review; actual user_message
+  position 27 grants it and directs no repeated approval requests. Exact text,
+  metadata and reference are recorded in CR-004 and DECISIONS.md GOV-002.
+- Binding: independently verified 6,383 bytes before the approval heading as
+  Status: DRAFT, SHA-256
+  4f98e83cbbdc9f5dce22f63960cce2e32bddbd8607fcc827ec9f7248ee9fc2c2.
+  Only workflow status changes above the heading; normalize it to DRAFT to
+  reproduce. The approval linked r1 but did not present this hash; the local
+  matching digest was supplied in the owner brief and checked before editing.
+- Disposition: exact r1 ACCEPTED. Matching bubble/rounded-tile information controls
+  combine all existing desktop readout content with shared terrain status, reuse
+  shared sampling/legends/calculations through typed native data and use each
+  toolbar's actual glass. Desktop remains bottom-left; the existing iOS status
+  control is replaced in r1's upper-right area. Its current upper-left placement
+  was independently confirmed. Preserve toolbar access and native chrome.
+- Spec: SPEC.md 0.1.0-draft unchanged, BASE-001 pending. Read CR-004 with accepted
+  CR-001/002/003. Only the information-control/bridge behavior supplements
+  CR-001's unchanged-web condition. Existing scientific/loading contracts,
+  shared checks/matching iOS assets and internal distribution limits/expiry
+  remain. No deployment/distribution, numerical policy or release gate is passed.
+- Governance: GOV-002 records Riley's exact latest instruction. Direct builds
+  authorize all necessary within-task changes, CRs and dedicated owner review;
+  do not ask repeated approval/restoration questions. AGENTS.md and GOVERNANCE.md
+  reflect it. This supersedes older reconfirmation wording in this handoff and
+  other records/templates. Owner review/custody still applies; unrelated work
+  remains unauthorized. This session accepts no other request.
+- Evidence: static source review of index.html shared readout/sampling/analysis/
+  legend/status, ui-system.css surfaces, native-shell.js, ShellTypes.swift and
+  MapChrome.swift. No app code, runtime/device/scientific checks, commits or
+  delegation. Acceptance authorizes implementation and does not verify it.
+- Next authorized action: parent may implement r1, preserving all existing desktop
+  information and actual source/no-data/refinement/offline meanings, and complete
+  r1's full browser/native, state/legend parity, stale-sample, accessibility,
+  shared check/test, matching-bundle and iOS build verification. Report physical
+  device limits honestly. Necessary within-task revisions follow GOV-002 and
+  the owner record process without another Riley approval loop.
+- Record handling: CR-004, DECISIONS.md, SPEC_OWNER.md, GOVERNANCE.md and AGENTS.md
+  left uncommitted for the parent. Unrelated work preserved. BASE-001, unresolved
+  decisions and proposed PERF gates remain; branch protection/required reviews
+  were not verified. This dedicated CR-004-only owner session ends at handoff.
+
+## Handoff — 2026-10-26 (CR-004 placement addendum r1-a1 only)
+
+- Authority: Riley's existing direct build instruction and GOV-002 authorize this
+  bounded successor owner review without reconfirmation. Independently read the
+  parent thread's newest messages through position 82 (afterPosition 49,
+  limit 100, hasMore false). Actual user_message position 50 explicitly identifies
+  the iOS upper-left status control. Actual user_message position 80 answers the
+  desktop placement question: "Keep its current lower-left position". Exact
+  quotes/metadata are in CR-004's addendum; these are direct user records, not
+  the parent's summary. No desktop placement question remains pending.
+- Disposition: r1-a1 ACCEPTED. Replace the existing iOS upper-left terrain-status
+  control IN PLACE; do not move it to the upper right. Only r1 item 2's location
+  is superseded. Desktop stays lower left, in place, confirming item 1 and
+  superseding position 50's lower-right wording. Prior owner upper-right
+  statements, including the earlier handoff above, are historical and superseded.
+- Binding: original r1 proposal bytes preserved and independently rechecked:
+  6,383 UTF-8/LF bytes with status normalized to DRAFT, SHA-256
+  4f98e83cbbdc9f5dce22f63960cce2e32bddbd8607fcc827ec9f7248ee9fc2c2.
+  CR-004 records the exact operative replacement and its r1-a1 traceability hash;
+  that later hash was not presented to Riley. Read r1 with this addendum.
+- Consistency: inspected the native leading status control/Spacer/MapTools order
+  and desktop mapReadout left/bottom CSS. The correction preserves the existing
+  allocated areas, native chrome and shared scientific/loading logic. All other
+  r1 requirements, accepted CRs, SPEC.md 0.1.0-draft, pending BASE-001, CR-001
+  distribution limits/expiry and release gates are unchanged.
+- Next authorized action: parent may implement r1 as amended by r1-a1 and run its
+  full verification plan. Check both collapsed and expanded controls remain in
+  the specified corners, with tools, gestures, safe areas, text scaling,
+  accessibility and landscape/short-height access preserved.
+- Evidence/limits: direct message verification, proposal-hash reproduction and
+  static placement inspection only. No app code, app acceptance/runtime/device/
+  scientific tests, commits or delegation by this follow-up owner. Parent's
+  concurrent app changes were not reviewed for acceptance. Only CR-004,
+  DECISIONS.md and SPEC_OWNER.md changed here, left uncommitted for the parent;
+  all unrelated dirty work preserved.
+- Continuity: this bounded successor session ends at handoff. No ongoing owner
+  remains and the parent does not inherit owner custody. Existing unresolved
+  decisions/PERF gates and unverified branch-protection enforcement remain as
+  recorded in prior handoffs.
+
+## Handoff — 2026-10-26 (CR-005 r1 only)
+
+- Authority: independently inspected actual parent-thread user messages 88 and
+  102 requesting light-grey water in dark mode and sharper river/lake/similar
+  labels, plus position 27's GOV-002. Exact quotes, IDs and timestamps are in
+  CR-005. Direct instructions authorize this bounded owner session and necessary
+  task changes without repeated Riley approval/restoration questions.
+- Binding: independently computed before editing, SHA-256
+  2cdd6e56268c4df81036ad57cc02d95bc0da5f327685289cf032963b2a0e6fa8 over
+  4,010 UTF-8/LF proposal bytes before the approval heading. Normalize only Status
+  to DRAFT to reproduce. Proposal otherwise byte-identical; the later digest is
+  traceability evidence and was not represented as presented to Riley.
+- Disposition: original CR-005 r1 ACCEPTED. Light-grey dark-mode water/blue light
+  mode, matching swatches/captures, genuine 512–768-pixel proportional-DPI dynamic
+  NHD rendering at supported scales, cached overview/per-tile fallback with
+  honest health, increased existing trail/GNIS density, exact hydro.nationalmap.gov
+  export-host addition and shared/native parity. Cached Esri limits disclosed;
+  no next-zoom text shrinking, upsampling claim, new renderer or paid provider.
+  The original proposal and its numbered owner conditions govern.
+- Evidence: independent thread/digest checks; static OVERLAYS, ExportLayer,
+  ResilientTileLayer/getFallbackTileUrl/health and snapshot painter inspection;
+  existing exact server host list. Independently fetched live metadata confirms
+  cached water is Raster Layer and NHD dynamic capability/scale-dependent labeled
+  layers 4/6/10/12. Metadata establishes a viable integration boundary, not
+  successful labeled images or measured sharpness/performance.
+- Next action: parent may implement original r1 and complete its full plan:
+  successful labeled 512/768 responses with stable screen size/footprint and
+  useful detail; representative WA/scales; light/dark map/swatches/capture parity;
+  cached overview/forced fallback and honest status; cancellation/retries,
+  latency/bytes, native comparison, shared checks/tests/build and matching assets.
+  Real density samples are being obtained by the parent; this owner did not
+  verify them. Disclose physical-device and cached-Esri limits. If r1 cannot be
+  met, stop only the affected work and record a scoped revision under GOV-002;
+  do not silently defer the requested improvement or ask repeated approval.
+- Scope: SPEC.md 0.1.0-draft and pending BASE-001 unchanged/unapproved; accepted
+  CR-001/002/003 and CR-004 r1+r1-a1 retained. Only these reference-overlay changes
+  supplement CR-001's web/source constraints. Its remaining conditions, internal
+  distribution and expiry (BASE-001 approval/rejection or 2027-01-31, whichever
+  first), open decisions, proposed PERF gates and release gates remain unchanged.
+  No deployment/distribution or scientific accuracy claim is accepted.
+- Record handling: only CR-005, DECISIONS.md and SPEC_OWNER.md changed here,
+  uncommitted for the parent. No app code, runtime/device/scientific tests,
+  commits, deployment or delegation. Preserve all unrelated work. Acceptance
+  does not mark r1 implemented/verified. Branch protection/required spec reviews
+  remain unverified. This CR-005-only session ends here with no ongoing owner;
+  custody does not pass to the parent implementer.
+
+## Handoff — 2026-10-26 (CR-006 r1 only)
+
+- Authority: independently read the actual user_message at position 0 in the
+  [parent thread](t3-thread://v1/eff48b55-52d1-4cb0-936a-5767d7a59431), messages
+  view, limit 1; completed, untruncated, createdBy user, creationSource web,
+  messageId 5ba12b91-48c3-4c2d-a51f-29d4ace87fda, updatedAt
+  2026-10-26T17:43:56.595Z. Riley directly requests every web/desktop sidebar
+  menu be reorganized like iOS, broken buttons fixed across clients and grey
+  section-tile breaks repaired, while leaving another task's map info/key panel
+  alone. Exact quote/metadata are in CR-006. Also independently read GOV-002's
+  actual user_message position 27 in its source thread. No repeated Riley
+  approval/restoration question is needed for exact r1 and this bounded review.
+- Binding: independently reproduced before edits, SHA-256
+  49b2a6baded3debee3f7cf70743ab47136f5d9d1012bd4fd1bf2645b8c2f420c over
+  4,675 UTF-8/LF bytes before CR-006's Riley approval heading. Normalize only
+  workflow Status to DRAFT to reproduce. Proposal otherwise unchanged; this
+  later traceability hash was not represented as presented to Riley.
+- Disposition: exact CR-006 r1 ACCEPTED without substantive proposal changes.
+  All 13 routes retain every control, saved value, provenance and handler while
+  gaining iOS-style grouped hierarchy and inset continuous surfaces. Native
+  LiDAR/Elevation order follows r1. Repair full-width actions, constrained
+  pickers and discovered menu forwarding/state defects through the shared
+  bridge, preserving native SwiftUI/system materials. R1 and its numbered owner
+  conditions govern. Utility-panel work is limited to necessary menu repairs.
+- Evidence: governing/accepted-request reads and static inspection of the
+  ui-system.js route table/live-control moves, ItemList.swift PageLayout,
+  ItemRows.swift button/picker rows and native-shell.js/ShellModel.swift action
+  boundaries. No runtime acceptance or completion review of concurrent app edits.
+- Next action: parent may implement exact r1 and run its complete plan. Maintain
+  an every-route/control checklist, verify handler/ref/live-state persistence
+  across revisits and dynamic rebuilding, continuous cards/actions, usable
+  pickers/hit areas, wrapping/scrolling, keyboard/focus/native accessibility and
+  light/dark/wide/narrow layouts. Exercise web/Electron/native-host on/off and
+  native simulator, build iOS, run npm run check/npm test and meaningful defect
+  regressions, and synchronize static/Electron/service-worker/iOS assets.
+  Disclose failures and unavailable physical-device checks. Representative
+  interactions alone cannot establish every-control parity.
+- Scope: SPEC.md 0.1.0-draft and pending BASE-001 unchanged/unapproved. CR-006
+  supplements only CR-001's unchanged-web condition for this task. All other
+  accepted CRs, scientific/loading contracts, open decisions, proposed PERF and
+  release gates remain. CR-001's internal distribution/expiry still applies:
+  BASE-001 approval/rejection or 2027-01-31, whichever first. No deployment,
+  distribution, numerical budget or scientific/source-policy change accepted.
+- Concurrent work: preserve CR-004 r1+r1-a1 and CR-005 r1 records and app changes.
+  The map info/key panel, placement and bridge data remain the other task's
+  responsibility; iOS upper-left/desktop lower-left placement is unchanged.
+  CR-002 exact wording/math and CR-003 sharing also remain intact.
+- Record handling and limits: only CR-006, DECISIONS.md and SPEC_OWNER.md owner
+  records changed here, uncommitted for the parent. No app edits, runtime/device/
+  scientific or shared-code regression checks, commit or deployment by this
+  owner. Acceptance does not mark r1 IMPLEMENTED or VERIFIED. Branch protection
+  and required spec reviews remain unverified. Necessary within-task revisions
+  use GOV-002 and traceable owner records without repeated approval questions.
+- Continuity: this dedicated CR-006-r1-only session ends at this handoff. No
+  ongoing owner remains; the parent implementer does not inherit owner custody.
