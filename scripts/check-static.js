@@ -647,8 +647,11 @@ assert(!index.includes('--standalone-gap')&&!/screen\.height\s*-\s*innerHeight|s
        "the shell must never be offset by screen height minus innerHeight; iOS 26 misreports innerHeight");
 assert(!index.includes('statusScrim')&&!uiStyles.includes('statusScrim'),
        "no shade or banner behind the status bar");
-assert(index.includes('doubleClickZoom:false')&&index.includes('map.on("dblclick",e=>{ if(document.body.classList.contains("dnr-selecting"))return;stageMapLocation(e);run(); });'),
+assert(index.includes('doubleClickZoom:false')&&index.includes('map.on("dblclick",e=>{ if(document.body.classList.contains("dnr-selecting"))return;if(fingerTapHandled)return;const at=mapEventLocation(e);if(!at)return;stageMapLocation(at);run(); });'),
        "a map point must be selected on one click and load imagery only on double click or double tap");
+assert(index.includes("const FINGER_TAP=24")&&index.includes("if(!start.blocked&&!pairsWithFallback) return")&&
+       !index.includes("drag.options.clickTolerance"),
+       "a finger tap must select a place even when the drag slop would have cancelled the click");
 assert(index.includes('PANE_REORDER_HOLD_MS=260')&&index.includes('Press and hold to reorder.'),
        "sidebar reordering must require a short press-and-hold instead of an immediate drag");
 assert(index.includes('id="sideToggleDock"')&&index.includes('right:calc(12px + var(--safe-right))')&&
