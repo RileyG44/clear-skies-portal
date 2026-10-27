@@ -42,3 +42,24 @@ Acceptance: npm run check and npm test; simulator build of actual bundled/minifi
 site; cold launches with first stationary tap before any search/locate action,
 visible dot and populated native search; then CI, merge and matching distributed
 assets. Shipping results are recorded below when observed.
+
+## Observed verification
+
+- Node 24.19.0: full `npm run check` and `npm test` passed from
+  `/Users/riley/Developer/csp-first-tap`; logs `/tmp/csp-tap-check-outside.log`
+  and `/tmp/csp-tap-tests-outside.log`. The initial run inside Documents timed
+  out starting a fixture server; repeating outside Documents passed unchanged.
+- Xcode Debug simulator build succeeded; the app bundles the minified site.
+- Installed build 2026-10-27b on iPhone 17 Pro / iOS 26.0. Repeated cold launches
+  start with no dot, empty search and location version 0. The first stationary
+  tap at (180,300), without locate/search interaction, produces the dot and
+  `59.53432, -103.71094` in both the web field and native search; version becomes
+  1. Touch traces contain touchstart/touchend and no click, directly exercising
+  the reported failure path. Native accessibility confirms the populated search,
+  Clear and location-actions buttons. Screenshot visually confirms dot/search.
+- Raw per-run JSON, before/after native snapshots and screenshot are saved under
+  `/Users/riley/Developer/ClearSkies-verification/first-load-tap-2026-10-27/`.
+  Runs are named `fixed-first-tap-0`, `-1` and `-2`. The first automation attempt
+  lost touchend and produced no fresh result; it was rejected, not counted.
+- Physical iPhone 15 Pro Max (00008130-001658413C60001C) is reported unavailable
+  by CoreDevice. No physical-device success or installed version is claimed.
