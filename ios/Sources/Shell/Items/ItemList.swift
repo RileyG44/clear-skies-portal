@@ -3,7 +3,8 @@ import SwiftUI
 /// A described web page or pop-up as a native inset-grouped list. The web's
 /// sections (<details>) are kept open behind the app and drawn as the list's
 /// own sections, grouped by task where the page has a layout (PageLayout).
-/// Panes and LiDAR layers stay rows that open and close the web's element.
+/// Panes, LiDAR layers and the LiDAR page's disclosures stay rows that open
+/// and close the web's element.
 struct ItemList: View {
     let items: [ShellItem]
     var description: String?
@@ -74,14 +75,8 @@ enum PageLayout {
 
     static func parts(for route: String?) -> [Part] {
         switch route {
-        case "terrain": [
-            Part(names: ["#terLidar"]),
-            Part(names: ["Looks"]),
-            Part(names: ["#terAppearance", "Terrain effects"]),
-            Part(names: ["#terLighting"]),
-            Part(names: ["Data source & overall opacity", "#terrainSourceDetails"]),
-            Part(title: "Downloads", names: ["WA DNR downloads", "#terrainDownloadBox"])
-        ]
+        // LiDAR needs no layout: its two cards arrive in the web's order,
+        // Presets then Terrain mode & data, each with its own disclosures.
         case "elevation": [
             Part(names: ["Reference & color range", "Spectrum opacity"]),
             Part(names: ["#elevPaletteBox"]),
@@ -116,6 +111,9 @@ enum PageLayout {
             case "header":
                 flush()
                 loose = Block(id: "h:\(item.text)", title: item.text, detail: item.detail)
+            case "group" where item.disclosure == true:
+                // A disclosure is a row of its section, like a control.
+                loose.items.append(item)
             case "group" where item.pane != true:
                 flush()
                 blocks += self.blocks(of: item, named: named)
@@ -259,7 +257,7 @@ struct ItemView: View {
             SubheaderRow(title: item.text, detail: item.detail)
         case "gradient":
             GradientRow(item: item)
-        case "group" where item.pane != true:
+        case "group" where item.pane != true && item.disclosure != true:
             InlineGroup(item: item, key: key)
         case "group", "lidarLayer":
             GroupRow(item: item, key: key)
@@ -326,8 +324,8 @@ struct GradientRow: View {
     }
 }
 
-/// A web pane or LiDAR layer: its label always, its rows when open. Opening
-/// shows at once; the web's own element follows.
+/// A web pane, LiDAR layer or LiDAR disclosure: its label always, its rows
+/// when open. Opening shows at once; the web's own element follows.
 struct GroupRow: View {
     @Environment(ShellModel.self) private var shell
     let item: ShellItem
@@ -342,7 +340,7 @@ struct GroupRow: View {
         })) {
             if open {
                 if let items = item.items, !items.isEmpty {
-                    AnyView(ItemRows(items: items, prefix: key))
+                    AnyView(ItemRows(items: item.disclosure == true ? items.map(Self.subheading) : items, prefix: key))
                 } else if pending == true {
                     ProgressView().frame(maxWidth: .infinity)
                 }
@@ -353,15 +351,30 @@ struct GroupRow: View {
             } else {
                 HStack(spacing: 10) {
                     if let stops = item.stops { GradientBar(stops: stops).frame(width: 30, height: 12) }
-                    Text(item.text).fontWeight(.medium)
-                    Spacer(minLength: 8)
-                    if let detail = item.detail, !detail.isEmpty {
-                        Text(detail).portalFont(.footnote).foregroundStyle(.secondary).lineLimit(1)
+                    if item.disclosure == true {
+                        // A disclosure says what it holds under its name.
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(item.text).fontWeight(.medium)
+                            if let detail = item.detail, !detail.isEmpty {
+                                Text(detail).portalFont(.caption).foregroundStyle(.secondary)
+                            }
+                        }
+                    } else {
+                        Text(item.text).fontWeight(.medium)
+                        Spacer(minLength: 8)
+                        if let detail = item.detail, !detail.isEmpty {
+                            Text(detail).portalFont(.footnote).foregroundStyle(.secondary).lineLimit(1)
+                        }
                     }
                 }
             }
         }
         .onChange(of: item.open) { pending = nil }
+    }
+
+    /// Headings inside a disclosure are its subsections, not list sections.
+    static func subheading(_ item: ShellItem) -> ShellItem {
+        item.kind == "header" ? ShellItem(kind: "subheader", title: item.title, detail: item.detail) : item
     }
 }
 

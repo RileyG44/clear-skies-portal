@@ -4,24 +4,23 @@ Project: Clear Skies Native iOS
 Appointed by: Riley Grant, current 2026-09-06 user request
 Initial agent: /root/spec_owner (session handle, not a permanent service)
 Current owner session: none after this handoff. The dedicated Spec Owner review
-sub-agent (Codex) recorded CR-006 r1 acceptance on 2026-10-26 under Riley's direct
-sidebar/menu-repair instruction and GOV-002. This bounded session ends at handoff;
+sub-agent (Claude) recorded CR-007 r1 acceptance on 2026-10-27 under Riley's direct
+LiDAR menu/sun dial instruction and GOV-002. This bounded session ended at handoff;
 it is not a running service and the implementer does not inherit owner custody.
 Current baseline: SPEC.md 0.1.0-draft (commit 142fdf47) — not approved by
 Riley; BASE-001 pending
 Accepted requests: CR-001 r1 (2026-10-21), CR-002 r1 (2026-10-24), CR-003 r1
-(2026-10-25), CR-004 r1 with r1-a1, CR-005 r1 and CR-006 r1 (2026-10-26);
-see DECISIONS.md.
+(2026-10-25), CR-004 r1 with r1-a1, CR-005 r1 and CR-006 r1 (2026-10-26),
+CR-007 r1 (2026-10-27); see DECISIONS.md.
 Current authority: GOV-002, Riley's direct build instruction authorizes necessary
 task changes and dedicated owner review without repeated CR/restoration questions.
-Current task: CR-006 r1 accepted for bounded implementation/verification by its
-parent: all-route sidebar organization and menu-control repairs across clients.
-Only CR-006 r1 was reviewed for acceptance by this session. CR-004 r1+r1-a1 and
-CR-005 r1 remain the other task's work: map info/key panel ownership and bridge
-data are preserved; accepted placement stays iOS upper left and desktop lower
-left. CR-005 retains light-grey dark-mode water, genuine dynamic reference-label
-density with stable screen text size and cached fallback. Runtime verification
-is not supplied by this handoff.
+Current task: CR-007 r1 accepted for bounded implementation/verification by its
+parent: Presets-first LiDAR menu on all clients, native LiDAR disclosures and
+saved-preset deletion, and the native sun dial brought to web/desktop over the
+existing `#terSunAz`/`#terSunAlt` inputs. Only CR-007 r1 was reviewed for
+acceptance by this session. CR-007 revises CR-006 item 1 for the LiDAR route only;
+CR-006's other routes, CR-004 r1+r1-a1 and CR-005 r1 remain as recorded. Runtime
+verification is not supplied by this handoff.
 
 ## Start here
 
@@ -369,4 +368,38 @@ request does not establish approval for this one.
   and required spec reviews remain unverified. Necessary within-task revisions
   use GOV-002 and traceable owner records without repeated approval questions.
 - Continuity: this dedicated CR-006-r1-only session ends at this handoff. No
+  ongoing owner remains; the parent implementer does not inherit owner custody.
+
+## Handoff — 2026-10-27 (CR-007 r1 only)
+
+- Authority: independently read actual user_messages in the
+  [parent thread](t3-thread://v1/99217d26-4dda-4fb1-b5fe-52331155738c), messages
+  view, full page (hasMore false). Position 0: createdBy user, creationSource
+  mobile, completed, untruncated, messageId e0a50908-f62f-422e-bb41-e97fdba26494,
+  updatedAt 2026-10-27T14:00:40.875Z. Position 100: createdBy user,
+  creationSource web, completed, untruncated, messageId
+  0d8f9871-cd64-4184-b44a-d61081f8fd49, updatedAt 2026-10-27T17:19:22.881Z.
+  Exact quotes in CR-007. Other user messages do not narrow scope. GOV-002 governs.
+- Binding: independently reproduced before and after the owner edits, SHA-256
+  879f1a4c97fc22a5f050ecc2d42138f161c6723b371b3a445e4ce36fa5367b01 over 5,835
+  UTF-8/LF bytes before CR-007's Riley approval heading (Status normalized to
+  DRAFT). Later traceability hash, not represented as presented to Riley.
+- Disposition: exact CR-007 r1 ACCEPTED without substantive proposal changes.
+  Presets-first on all clients is within Riley's "placed at the top" and matching
+  instruction; the implementer must disclose the web/desktop order change.
+  CR-007's numbered owner conditions govern.
+- Evidence: static inspection of index.html terrain pane order and sun inputs,
+  lidar-studio.js render/renderPresets, native-shell.js looksItem/openSections/
+  sunItem, ItemList.swift PageLayout and LidarViews.swift LooksRow/SunDial at
+  HEAD 3dd560a. No runtime acceptance or completion review of concurrent edits.
+- Scope: SPEC.md 0.1.0-draft and pending BASE-001 unchanged/unapproved. CR-007
+  revises CR-006 item 1 for LiDAR only and supplements CR-001's unchanged-web
+  condition for r1 items 1 and 4. Other CRs, contracts, open decisions, PERF and
+  release gates, internal distribution and expiry remain.
+- Record handling and limits: only CR-007, DECISIONS.md and SPEC_OWNER.md owner
+  records changed here, uncommitted for the parent. No app edits, runtime/device/
+  scientific checks, commit or deployment by this owner. Acceptance does not mark
+  r1 IMPLEMENTED or VERIFIED. Branch protection and required spec reviews remain
+  unverified.
+- Continuity: this dedicated CR-007-r1-only session ended at this handoff. No
   ongoing owner remains; the parent implementer does not inherit owner custody.
