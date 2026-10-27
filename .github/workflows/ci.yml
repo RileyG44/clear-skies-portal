@@ -38,6 +38,21 @@ jobs:
       - name: Syntax-check Python scripts
         run: python -m compileall -q trailcheck.py snowline.py probe.py
 
+      - name: Test physical iPhone selection
+        run: python -m unittest discover -s ios/scripts -p 'test_*.py' -v
+
+  iphone-runner:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.14'
+      - name: Check iPhone runner without building or contacting devices
+        run: |
+          zsh -n ios/scripts/run-on-iphone.sh
+          python3 -m unittest discover -s ios/scripts -p 'test_*.py' -v
+
   # The engine often runs on a Windows desktop, not the Mac: run the whole
   # suite there too, including the real server, worker pool and disk cache.
   windows:

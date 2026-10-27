@@ -51,6 +51,12 @@ scripts/testflight.sh             # archive and upload for internal TestFlight
 scripts/testflight.sh --export    # archive and export the .ipa without uploading
 ```
 
+The iPhone runner excludes simulators and iPads, requires a paired physical
+iPhone, and confirms live contact before building. If no phone is reachable it
+exits without building or installing. `--no-activate` also applies to launch.
+Run its device-selection regressions with
+`python3 -m unittest discover -s ios/scripts -p 'test_*.py' -v`.
+
 Uploads are internal-only (`testFlightInternalTestingOnly`): App Store Connect
 will not send them to external testers or App Review. Each upload numbers its
 build from the clock, so build numbers always increase.
