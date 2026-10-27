@@ -54,8 +54,8 @@ assets. Shipping results are recorded below when observed.
   start with no dot, empty search and location version 0. The first stationary
   tap at (180,300), without locate/search interaction, produces the dot and
   `59.53432, -103.71094` in both the web field and native search; version becomes
-  1. Touch traces contain touchstart/touchend and no click, directly exercising
-  the reported failure path. Native accessibility confirms the populated search,
+  1. Two touch traces contain touchstart/touchend and no click, directly exercising
+  the reported failure path; the third includes a click and still commits once. Native accessibility confirms the populated search,
   Clear and location-actions buttons. Screenshot visually confirms dot/search.
 - Raw per-run JSON, before/after native snapshots and screenshot are saved under
   `/Users/riley/Developer/ClearSkies-verification/first-load-tap-2026-10-27/`.
