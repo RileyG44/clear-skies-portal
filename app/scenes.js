@@ -505,7 +505,28 @@ async function fillMosaic(primary, force){
     return;
   }
 
-  const vb=map.getBounds(), b=vb.pad(0.65);
+  const vb=map.getBounds();
+  const found=await findMosaicCandidates(primary,vb,controller.signal);
+  if(!found||token!==mosToken) return;
+  groupMosaicCandidates(found,primary);
+  const {use,cov}=chooseMosaicPatches(primary,vb,budget);
+  let backdropPromise=coveredFrac(cov)<0.995
+    ? ensureMosaicBackdrop(primary,token) : Promise.resolve(false);
+  if(!await publishNeighbours(use,token)) return;
+  mosAbort=null;
+  const {filled,renderPct,tilesPending}=mosaicCoverage(primary,vb);
+  if((filled<99||renderPct<98||tilesPending)&&!MOSAIC_BACKDROP)
+    backdropPromise=ensureMosaicBackdrop(primary,token);
+  let backdrop=(await backdropPromise)||!!MOSAIC_BACKDROP;
+  if(token!==mosToken) return;
+  if(!MOSAIC_ON) MOSAIC_ONCE=false;
+  if(stat) stat.textContent=mosaicStatus(NEIGH.length,filled,renderPct,backdrop);
+}
+/* Scenes of the primary's collection that could fill the view: those the
+   search already found, then each catalogue in turn until the view could be
+   covered. Null when the fill was cancelled. */
+async function findMosaicCandidates(primary,vb,signal){
+  const b=vb.pad(0.65);
   const bbox=[b.getWest(),b.getSouth(),b.getEast(),b.getNorth()];
   const searchBoxes=CSPMosaic.splitBbox(bbox);
   const srcs=SOURCES.filter(s=>s.key!=="cdse" && s.colls.includes(primary.coll));
@@ -521,23 +542,23 @@ async function fillMosaic(primary, force){
     for(const src of possibleCoverage(primary,found,vb)>=0.995 ? [] : srcs){
       let got=[];
       try{ got=(await Promise.all(searchBoxes.map(box=>
-        stacBbox(src,primary.coll,box,bw,cloudMax,controller.signal)))).flat() }
+        stacBbox(src,primary.coll,box,bw,cloudMax,signal)))).flat() }
       catch(e){ if(e.name==="AbortError") throw e }
       found.push(...got);
       if(possibleCoverage(primary,found,vb)>=0.995) break; // stop after the fastest sufficient catalog
     }
-  }catch(e){ if(e.name==="AbortError") return }
-  if(token!==mosToken) return;
-
-  groupMosaicCandidates(found,primary);
+  }catch(e){ if(e.name==="AbortError") return null }
+  return found;
+}
+/* Fill the view, rather than collecting whatever overlaps it. Ranking by
+   overlap and taking the top N says nothing about whether the result covers
+   anything: two scenes can both score highly and sit on top of each other,
+   leaving the same hole. Mark off what the primary already covers, then
+   repeatedly take whichever candidate closes the most of what is still open,
+   and stop once the view is full or the next one would barely help. */
+function chooseMosaicPatches(primary,vb,budget){
   const pk=patchKey(primary);
   const keys=Object.keys(CAND).filter(k=>k!==pk);
-  /* Fill the view, rather than collecting whatever overlaps it. Ranking by
-     overlap and taking the top N says nothing about whether the result covers
-     anything: two scenes can both score highly and sit on top of each other,
-     leaving the same hole. Mark off what the primary already covers, then
-     repeatedly take whichever candidate closes the most of what is still open,
-     and stop once the view is full or the next one would barely help. */
   const cov=coverGrid(vb,32);
   cellsGained(cov,primary,true);
   const pool=keys.filter(k=>CAND[k][0]);
@@ -553,10 +574,12 @@ async function fillMosaic(primary, force){
     cellsGained(cov,CAND[best][0],true);
     use.push(best);
   }
-  let backdropPromise=coveredFrac(cov)<0.995
-    ? ensureMosaicBackdrop(primary,token) : Promise.resolve(false);
-  /* Stage replacements before removing good layers, so a failed candidate
-     cannot punch a hole in a previously useful mosaic. */
+  return {use,cov};
+}
+/* Stage replacements before removing good layers, so a failed candidate
+   cannot punch a hole in a previously useful mosaic. False when a newer fill
+   has taken over. */
+async function publishNeighbours(use,token){
   const want=new Map(use.map(k=>[k, CAND[k][0]]));
   const existing=new Map(NEIGH.map(n=>[n.key,n])), additions=[];
   for(const [k,it] of want){
@@ -564,7 +587,7 @@ async function fillMosaic(primary, force){
     if(!old||productKey(old.item)!==productKey(it)||old.item.srcKey!==it.srcKey) additions.push([k,it]);
   }
   const staged=await pooled(additions,3,([k,it])=>loadNeighbour(k,it,token));
-  if(token!==mosToken){for(const nb of staged.filter(Boolean))if(map.hasLayer(nb.layer))map.removeLayer(nb.layer);return;}
+  if(token!==mosToken){for(const nb of staged.filter(Boolean))if(map.hasLayer(nb.layer))map.removeLayer(nb.layer);return false;}
   for(const nb of staged.filter(Boolean)){
     const old=NEIGH.find(x=>x.key===nb.key);
     if(old&&map.hasLayer(old.layer)) map.removeLayer(old.layer);
@@ -574,22 +597,20 @@ async function fillMosaic(primary, force){
   for(const old of NEIGH.slice()) if(staged.every(Boolean)&&!want.has(old.key)){
     map.removeLayer(old.layer); NEIGH=NEIGH.filter(x=>x!==old);
   }
-  mosAbort=null;
+  return true;
+}
+/* How much of the view the published scenes cover, and how much of it has drawn. */
+function mosaicCoverage(primary,vb){
   const actual=coverGrid(vb,32); cellsGained(actual,primary,true);
   NEIGH.forEach(n=>cellsGained(actual,n.item,true));
   const filled=Math.round(coveredFrac(actual)*100);
   const stats=[layerHealth(overlay),...NEIGH.map(n=>layerHealth(n.layer))].filter(Boolean);
   const rendered=stats.reduce((n,s)=>n+(s.loaded||0),0);
   const expected=stats.reduce((n,s)=>n+(s.expected||s.total||0),0);
-  const renderPct=expected?Math.round(rendered/expected*100):100;
-  const tilesPending=stats.some(s=>s.pending);
-  if((filled<99||renderPct<98||tilesPending)&&!MOSAIC_BACKDROP)
-    backdropPromise=ensureMosaicBackdrop(primary,token);
-  let backdrop=(await backdropPromise)||!!MOSAIC_BACKDROP;
-  if(token!==mosToken) return;
-  if(!MOSAIC_ON) MOSAIC_ONCE=false;
-  const n=NEIGH.length;
-  if(stat) stat.textContent = n
+  return {filled,renderPct:expected?Math.round(rendered/expected*100):100,tilesPending:stats.some(s=>s.pending)};
+}
+function mosaicStatus(n,filled,renderPct,backdrop){
+  return n
     ? `${n} high-res scene${n>1?"s":""} · ${filled}% footprint${renderPct<100?` · ${renderPct}% visible tiles rendered`:""}${backdrop?" · MODIS context protects gaps":""} — right-click to swap.`
     : (filled>=99 ? "Primary scene already covers the view."
                   : backdrop ? "Global context fills the view; no compatible high-res neighbours were needed."
