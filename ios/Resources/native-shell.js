@@ -34,12 +34,9 @@
     if (!ref) { ref = "n" + nextRef++; el.setAttribute(REF, ref); }
     return "@" + ref;
   };
-  const elementFor = ref => {
-    if (typeof ref !== "string") return null;
-    if (ref.startsWith("#")) return document.getElementById(ref.slice(1));
-    if (ref.startsWith("@")) return document.querySelector(`[${REF}="${CSS.escape(ref.slice(1))}"]`);
-    return null;
-  };
+  const elementFor = ref => typeof ref !== "string" ? null
+    : ref.startsWith("#") ? document.getElementById(ref.slice(1))
+    : ref.startsWith("@") ? document.querySelector(`[${REF}="${CSS.escape(ref.slice(1))}"]`) : null;
 
   /* --------------------------------------------------------- visibility
      The web panel is moved off screen in the app, never hidden, so layout
@@ -108,11 +105,9 @@
     const text = firstGradient(el.style.background || el.style.backgroundImage || "") || firstGradient(getComputedStyle(el).backgroundImage || "");
     const stops = [];
     for (const match of text.matchAll(/(rgba?\([^)]*\)|#[0-9a-f]{3,8}\b)\s*(-?[\d.]+%)?/gi)) {
-      const color = match[1];
-      let opacity = 1;
-      const rgba = color.match(/rgba?\(([^)]+)\)/);
-      if (rgba) { const parts = rgba[1].split(/[ ,/]+/).filter(Boolean).map(Number); if (parts.length > 3) opacity = parts[3]; }
-      const hex = rgba ? "#" + rgba[1].split(/[ ,/]+/).filter(Boolean).slice(0, 3).map(n => Math.round(Number(n)).toString(16).padStart(2, "0")).join("") : toHex(color);
+      const rgba = match[1].match(/rgba?\(([^)]+)\)/), parts = rgba && rgba[1].split(/[ ,/]+/).filter(Boolean).map(Number);
+      const opacity = parts && parts.length > 3 ? parts[3] : 1;
+      const hex = parts ? "#" + parts.slice(0, 3).map(n => Math.round(n).toString(16).padStart(2, "0")).join("") : toHex(match[1]);
       stops.push({ color: hex || "#000000", opacity, at: match[2] === undefined ? undefined : parseFloat(match[2]) / 100 });
     }
     if (stops.length < 2) return undefined;
@@ -185,15 +180,14 @@
     const own = textWithout(el, "svg,img");
     const aria = clean(el.getAttribute("aria-label"));
     const label = context.title || own || aria || clean(el.title);
-    const classes = el.classList;
     // Pills, export actions and text buttons are buttons. A menu item is a
     // row. Anything else stays unset so a disclosure (aria-expanded) can
     // still draw as a row.
-    const role = classes.contains("linkbtn") ? "link"
-      : classes.contains("snapshot-action-primary") || classes.contains("primary") || classes.contains("ls-pill-primary") || classes.contains("snap-sel-save") ? "primary"
-      : classes.contains("danger") || classes.contains("mk-btn-danger") || classes.contains("mk-btn-danger-text") ? "destructive"
+    const role = el.matches(".linkbtn") ? "link"
+      : el.matches(".snapshot-action-primary,.primary,.ls-pill-primary,.snap-sel-save") ? "primary"
+      : el.matches(".danger,.mk-btn-danger,.mk-btn-danger-text") ? "destructive"
       : el.getAttribute("role") === "menuitem" ? "option"
-      : classes.contains("ls-pill") || classes.contains("snapshot-action") || classes.contains("ghost") ? "action" : undefined;
+      : el.matches(".ls-pill,.snapshot-action,.ghost") ? "action" : undefined;
     return { kind: tag === "a" ? "link" : "button", ...base, title: label, accessibility: aria && aria !== label ? aria : undefined, icon: iconOf(el),
       pressed: el.hasAttribute("aria-pressed") ? el.getAttribute("aria-pressed") === "true" : undefined,
       expanded: el.hasAttribute("aria-expanded") ? el.getAttribute("aria-expanded") === "true" : undefined,
@@ -334,184 +328,196 @@
     }
   }
 
-  function handle(el, out) {
-    const tag = el.tagName.toLowerCase();
-    if (tag === "script" || tag === "style" || tag === "template") return true;
-    if (el.matches(".csp-menu-section")) {
-      const heading = $(":scope > .csp-section-label", el), card = $(":scope > .csp-menu-card", el), items = [];
-      if (card) walk(card, items);
-      out.push({kind: "group", ref: refOf(el), title: clean(heading?.textContent), items});
-      return true;
+  /* How each kind of web element is described, in order of precedence. A
+     describer that returns false lets the element fall to the next match;
+     anything matching none is read as text or walked into. */
+  const skip = () => true;
+  function menuSection(el, out) {
+    const heading = $(":scope > .csp-section-label", el), card = $(":scope > .csp-menu-card", el), items = [];
+    if (card) walk(card, items);
+    out.push({kind: "group", ref: refOf(el), title: clean(heading?.textContent), items});
+  }
+  function pane(el, out) {
+    const head = $(":scope > .pane-h", el), title = head && $(".pane-t", head), toggle = head && $(".pane-x", head);
+    const body = $(":scope > .pane-b", el), open = !el.classList.contains("min");
+    const items = [];
+    if (open && body && shown(body)) walk(body, items);
+    if (title && shown(head)) out.push({ kind: "group", ref: refOf(toggle || head), pane: true, title: clean(title.textContent),
+      detail: clean($(".pane-n", head)?.textContent) || undefined, open, items });
+    else out.push(...items);
+  }
+  function detailsGroup(el, out) {
+    const summary = $(":scope > summary", el);
+    const items = [];
+    const disclosure = el.matches(DISCLOSURES) || undefined;
+    const description = summary && $(".terrain-disclosure-description", summary);
+    if (el.open) for (const child of el.children) if (child !== summary && shown(child) && !handle(child, items)) walk(child, items);
+    /* A button in the summary (Elevation highlights' Reset) acts on the
+       whole section, so it ends the section's rows. */
+    if (summary) for (const button of $$("button", summary).filter(shown)) items.push(controlItem(button));
+    const swatch = summary && $(".ls-swatch", summary);
+    out.push({ kind: "group", ref: refOf(el), title: summary ? textWithout(summary, ".pane-n,button,.ls-disclosure-value,.ls-preset-status,.ls-swatch,.terrain-disclosure-description") : "",
+      detail: summary ? clean((description || $(".pane-n,.ls-disclosure-value,.ls-preset-status", summary))?.textContent) || undefined : undefined,
+      stops: swatch ? gradientOf(swatch) : undefined, open: el.open, disclosure, items });
+  }
+  function header(el, out) {
+    const count = $(".pane-n", el);
+    out.push({ kind: "header", title: count ? textWithout(el, ".pane-n") : clean(el.textContent), detail: count ? clean(count.textContent) || undefined : undefined });
+  }
+  function sceneSearch(el, out) {
+    const input = $("#cspSatQuery", el);
+    out.push({ kind: "scenesearch", ref: input ? refOf(input) : refOf(el), placeholder: input?.placeholder, value: input?.value || undefined });
+    const note = $("#cspSatNote", el);
+    if (note && shown(note)) out.push({ kind: "text", style: "status", title: clean(note.textContent) });
+    for (const child of $(".csp-sat-card", el)?.children || []) {
+      if (child.matches("form,.csp-sat-filters,#cspSatNote") || !shown(child)) continue;
+      if (!handle(child, out)) walk(child, out);
     }
-    if (el.matches(".pane")) {
-      const head = $(":scope > .pane-h", el), title = head && $(".pane-t", head), toggle = head && $(".pane-x", head);
-      const body = $(":scope > .pane-b", el), open = !el.classList.contains("min");
-      const items = [];
-      if (open && body && shown(body)) walk(body, items);
-      if (title && shown(head)) out.push({ kind: "group", ref: refOf(toggle || head), pane: true, title: clean(title.textContent),
-        detail: clean($(".pane-n", head)?.textContent) || undefined, open, items });
-      else out.push(...items);
-      return true;
+    const filters = $(".csp-sat-filters", el);
+    if (filters && shown(filters)) walk(filters, out);
+  }
+  /* The web puts Save current in the card's heading. In the app's list it
+     follows the presets it would add to. */
+  function presetCard(el, out) {
+    const items = [];
+    for (const child of el.children) if (shown(child) && !handle(child, items)) walk(child, items);
+    const save = $(".ls-save-look", el), at = save ? items.findIndex(item => item.ref === refOf(save)) : -1;
+    if (at >= 0) {
+      const [action] = items.splice(at, 1), looks = items.findIndex(item => item.kind === "looks");
+      items.splice(looks + 1, 0, action);
     }
-    if (tag === "details") {
-      const summary = $(":scope > summary", el);
-      const items = [];
-      const disclosure = el.matches(DISCLOSURES) || undefined;
-      const description = summary && $(".terrain-disclosure-description", summary);
-      if (el.open) for (const child of el.children) if (child !== summary && shown(child) && !handle(child, items)) walk(child, items);
-      /* A button in the summary (Elevation highlights' Reset) acts on the
-         whole section, so it ends the section's rows. */
-      if (summary) for (const button of $$("button", summary).filter(shown)) items.push(controlItem(button));
-      const swatch = summary && $(".ls-swatch", summary);
-      out.push({ kind: "group", ref: refOf(el), title: summary ? textWithout(summary, ".pane-n,button,.ls-disclosure-value,.ls-preset-status,.ls-swatch,.terrain-disclosure-description") : "",
-        detail: summary ? clean((description || $(".pane-n,.ls-disclosure-value,.ls-preset-status", summary))?.textContent) || undefined : undefined,
-        stops: swatch ? gradientOf(swatch) : undefined, open: el.open, disclosure, items });
-      return true;
+    out.push(...items);
+  }
+  function lidarField(el, out) {
+    const label = $(".ls-field-label", el), control = $$(CONTROLS, el).find(shown);
+    if (!label || !control || control.matches("input[type=number]")) return false;
+    out.push(controlItem(control, { title: clean(label.textContent) }));
+  }
+  function choiceLabel(el, out) {
+    const input = $("input[type=checkbox],input[type=radio]", el);
+    if (!input) return false;
+    // A caption in its own element ("Map info" / "Coordinates, elevation…")
+    // is a title and a detail. Reading the label as one string joins them
+    // with no space, because the markup puts none between the two.
+    const readout = $(".snapshot-readout-text", el);
+    const caption = $("small", el);
+    if (readout || caption) {
+      const titleEl = readout ? readout.querySelector(":scope > span") : null;
+      const title = clean(titleEl?.textContent) || textWithout(el, CONTROLS + ",.csp-switch,small") || labelFor(input);
+      const detail = clean((readout ? $("small", readout) : caption)?.textContent) || undefined;
+      out.push(controlItem(input, { title, detail: detail && detail !== title ? detail : undefined }));
+      return;
     }
-    if (el.matches(".csp-section-label,.menu-section-title,.ovgrp,h1,h2,h3,h4")) {
-      const count = $(".pane-n", el);
-      out.push({ kind: "header", title: count ? textWithout(el, ".pane-n") : clean(el.textContent), detail: count ? clean(count.textContent) || undefined : undefined });
-      return true;
+    out.push(controlItem(input, { title: textWithout(el, CONTROLS + ",.csp-switch") || labelFor(input) }));
+  }
+  function sliderField(el, out) {
+    const range = $("input[type=range]", el);
+    if (range) {
+      if (range.id === "terSunAlt") return;
+      if (range.id === "terSunAz") { const item = sunItem(); if (item) { out.push(item); return; } }
+      /* A slider and the number field beside it set one value; the app
+         shows them as one row, each still driving its own web input. */
+      const head = $(".elev-label-row", el), entry = $$("input[type=number]", el).find(shown);
+      const slider = controlItem(range, { title: head ? textWithout(head, "output,.elev-value," + CONTROLS) : entry ? labelFor(entry) : labelFor(range),
+        output: $("output", el) || $(".elev-value", el) });
+      if (entry) slider.entry = { ref: refOf(entry), value: entry.value, unit: unitOf(entry) || $("select", el)?.value || undefined,
+        disabled: entry.disabled || undefined };
+      out.push(slider);
+      for (const extra of $$(CONTROLS, el).filter(c => c !== range && c !== entry && shown(c))) out.push(controlItem(extra));
+      const hint = $$(".control-hint", el).find(h => !h.matches("label") && shown(h));
+      if (hint) out.push({ kind: "text", style: "hint", title: clean(hint.textContent) });
+      return;
     }
-    if (el.matches(".csp-sat-search")) {
-      const input = $("#cspSatQuery", el);
-      out.push({ kind: "scenesearch", ref: input ? refOf(input) : refOf(el), placeholder: input?.placeholder, value: input?.value || undefined });
-      const note = $("#cspSatNote", el);
-      if (note && shown(note)) out.push({ kind: "text", style: "status", title: clean(note.textContent) });
-      for (const child of $(".csp-sat-card", el)?.children || []) {
-        if (child.matches("form,.csp-sat-filters,#cspSatNote") || !shown(child)) continue;
-        if (!handle(child, out)) walk(child, out);
-      }
-      const filters = $(".csp-sat-filters", el);
-      if (filters && shown(filters)) walk(filters, out);
-      return true;
-    }
-    if (el.matches(".ls-looks")) { out.push(looksItem(el)); return true; }
-    /* The web puts Save current in the card's heading. In the app's list it
-       follows the presets it would add to. */
-    if (el.matches(".ls-preset-card")) {
-      const items = [];
-      for (const child of el.children) if (shown(child) && !handle(child, items)) walk(child, items);
-      const save = $(".ls-save-look", el), at = save ? items.findIndex(item => item.ref === refOf(save)) : -1;
-      if (at >= 0) {
-        const [action] = items.splice(at, 1), looks = items.findIndex(item => item.kind === "looks");
-        items.splice(looks + 1, 0, action);
-      }
-      out.push(...items);
-      return true;
-    }
+    const threshold = $(".elev-threshold-row", el);
+    const number = threshold && $("input[type=number]", threshold), color = threshold && $("input[type=color]", threshold);
+    if (!number || !color) return false;
+    out.push({ ...controlItem(number), title: labelFor(number), well: { ref: refOf(color), value: color.value, title: labelFor(color) } });
+  }
+  function spectrum(el, out) {
+    const bar = el.matches(".elevRamp") ? el : $(".elevRamp", el), stops = gradientOf(bar);
+    if (stops) out.push({ kind: "gradient", ref: bar.id ? "#" + bar.id : undefined, stops,
+      labels: $$(".elevKey span", el).map(span => clean(span.textContent)).filter(Boolean) });
+  }
+  function lineOpacity(el, out) {
+    const range = $("input[type=range]", el);
+    if (range) out.push(controlItem(range, { title: textWithout($(".ov-line-label", el) || el, "output," + CONTROLS) || "Opacity", output: $("output", el) }));
+  }
+  function choices(el, out) {
+    if (!$$("[role=radio],button[aria-pressed]", el).some(shown)) return false;
+    out.push(choiceGroup(el));
+  }
+  function listbox(el, out) {
+    for (const option of $$("[role=option]", el).filter(shown)) out.push({ kind: "button", ref: refOf(option), role: "option", title: clean(option.textContent) });
+  }
+  function formControl(el, out) {
+    if (!el.matches("input[type=hidden]")) out.push(controlItem(el));
+  }
+  function image(el, out) {
+    if (!/icons\//.test(el.getAttribute("src") || "") && el.naturalWidth > 32) out.push({ kind: "image", src: el.src, title: el.alt || undefined, aspect: el.naturalWidth / Math.max(1, el.naturalHeight) });
+  }
+  function canvas(el, out) {
+    const src = pictureOf(el);
+    if (src) out.push({ kind: "image", src, aspect: el.width / el.height, ref: refOf(el) });
+  }
+  function pair(el, out) {
+    if (!$(".fk", el) || !$(".fv", el)) return false;
+    out.push({ kind: "text", style: "pair", title: clean($(".fk", el).textContent), value: clean($(".fv", el).textContent) });
+  }
+  const DESCRIBERS = [
+    ["script,style,template", skip],
+    [".csp-menu-section", menuSection],
+    [".pane", pane],
+    ["details", detailsGroup],
+    [".csp-section-label,.menu-section-title,.ovgrp,h1,h2,h3,h4", header],
+    [".csp-sat-search", sceneSearch],
+    [".ls-looks", (el, out) => { out.push(looksItem(el)); }],
+    [".ls-preset-card", presetCard],
     // The preset strip scrolls natively; its previous/next buttons are web-only.
-    if (el.matches(".ls-preset-navigation")) return true;
+    [".ls-preset-navigation", skip],
     // The picker below carries the terrain card's field label as its title.
-    if (el.matches("#terLidar .terrain-fields > label[for]")) return true;
-    if (el.matches(".sun-dial")) { const sun = sunItem(); if (sun) out.push(sun); return true; }
-    if (el.matches(".ls-palettes")) { out.push(palettesItem(el)); return true; }
-    if (el.matches(".ls-layer")) { lidarLayer(el, out); return true; }
-    if (el.matches(".ls-ramp-wrap")) { out.push(rampItem(el)); return true; }
-    if (el.matches(".ls-field") && !el.matches(".ls-field-wide")) {
-      const label = $(".ls-field-label", el), control = $$(CONTROLS, el).find(shown);
-      if (label && control && !control.matches("input[type=number]")) { out.push(controlItem(control, { title: clean(label.textContent) })); return true; }
-    }
-    if (el.matches(".csp-setting-row,.csp-field-row")) { row(el, out); return true; }
-    if (el.matches(".mk-layer")) { out.push(markupCard(el)); return true; }
-    if (el.matches("label") && $("input[type=checkbox],input[type=radio]", el)) {
-      const input = $("input[type=checkbox],input[type=radio]", el);
-      // A caption in its own element ("Map info" / "Coordinates, elevation…")
-      // is a title and a detail. Reading the label as one string joins them
-      // with no space, because the markup puts none between the two.
-      const readout = $(".snapshot-readout-text", el);
-      const caption = $("small", el);
-      if (readout || caption) {
-        const titleEl = readout ? readout.querySelector(":scope > span") : null;
-        const title = clean(titleEl?.textContent) || textWithout(el, CONTROLS + ",.csp-switch,small") || labelFor(input);
-        const detail = clean((readout ? $("small", readout) : caption)?.textContent) || undefined;
-        out.push(controlItem(input, { title, detail: detail && detail !== title ? detail : undefined }));
-        return true;
-      }
-      out.push(controlItem(input, { title: textWithout(el, CONTROLS + ",.csp-switch") || labelFor(input) }));
-      return true;
-    }
-    if (el.matches(".elev-field,.ls-slider")) {
-      const range = $("input[type=range]", el);
-      if (range) {
-        if (range.id === "terSunAlt") return true;
-        if (range.id === "terSunAz") { const sun = sunItem(); if (sun) { out.push(sun); return true; } }
-        /* A slider and the number field beside it set one value; the app
-           shows them as one row, each still driving its own web input. */
-        const head = $(".elev-label-row", el), entry = $$("input[type=number]", el).find(shown);
-        const slider = controlItem(range, { title: head ? textWithout(head, "output,.elev-value," + CONTROLS) : entry ? labelFor(entry) : labelFor(range),
-          output: $("output", el) || $(".elev-value", el) });
-        if (entry) slider.entry = { ref: refOf(entry), value: entry.value, unit: unitOf(entry) || $("select", el)?.value || undefined,
-          disabled: entry.disabled || undefined };
-        out.push(slider);
-        for (const extra of $$(CONTROLS, el).filter(c => c !== range && c !== entry && shown(c))) out.push(controlItem(extra));
-        const hint = $$(".control-hint", el).find(h => !h.matches("label") && shown(h));
-        if (hint) out.push({ kind: "text", style: "hint", title: clean(hint.textContent) });
-        return true;
-      }
-      const threshold = $(".elev-threshold-row", el);
-      if (threshold) {
-        const number = $("input[type=number]", threshold), color = $("input[type=color]", threshold);
-        if (number && color) {
-          out.push({ ...controlItem(number), title: labelFor(number), well: { ref: refOf(color), value: color.value, title: labelFor(color) } });
-          return true;
-        }
-      }
-    }
-    if (el.matches(".unit-suffix")) return true;
-    if (el.matches(".elev-spectrum-scale,.elevRamp")) {
-      const bar = el.matches(".elevRamp") ? el : $(".elevRamp", el), stops = gradientOf(bar);
-      if (stops) out.push({ kind: "gradient", ref: bar.id ? "#" + bar.id : undefined, stops,
-        labels: $$(".elevKey span", el).map(span => clean(span.textContent)).filter(Boolean) });
-      return true;
-    }
-    if (el.matches(".ovrow")) { out.push(overlayRow(el)); return true; }
-    if (el.matches(".ov-line-control")) {
-      const range = $("input[type=range]", el);
-      if (range) out.push(controlItem(range, { title: textWithout($(".ov-line-label", el) || el, "output," + CONTROLS) || "Opacity", output: $("output", el) }));
-      return true;
-    }
-    if (el.matches(".csp-layer-card")) { out.push(layerCard(el)); return true; }
-    if (el.matches(".item[data-i]")) { out.push(sceneItem(el)); return true; }
-    if (el.matches(".grp[data-g]")) { out.push({ kind: "button", ref: refOf(el), role: "group", title: textWithout(el, ".car"), detail: clean($(".car", el)?.textContent) || undefined }); return true; }
-    if (el.matches(".csp-available-row")) {
+    ["#terLidar .terrain-fields > label[for]", skip],
+    [".sun-dial", (el, out) => { const item = sunItem(); if (item) out.push(item); }],
+    [".ls-palettes", (el, out) => { out.push(palettesItem(el)); }],
+    [".ls-layer", lidarLayer],
+    [".ls-ramp-wrap", (el, out) => { out.push(rampItem(el)); }],
+    [".ls-field:not(.ls-field-wide)", lidarField],
+    [".csp-setting-row,.csp-field-row", row],
+    [".mk-layer", (el, out) => { out.push(markupCard(el)); }],
+    ["label", choiceLabel],
+    [".elev-field,.ls-slider", sliderField],
+    [".unit-suffix", skip],
+    [".elev-spectrum-scale,.elevRamp", spectrum],
+    [".ovrow", (el, out) => { out.push(overlayRow(el)); }],
+    [".ov-line-control", lineOpacity],
+    [".csp-layer-card", (el, out) => { out.push(layerCard(el)); }],
+    [".item[data-i]", (el, out) => { out.push(sceneItem(el)); }],
+    [".grp[data-g]", (el, out) => { out.push({ kind: "button", ref: refOf(el), role: "group", title: textWithout(el, ".car"), detail: clean($(".car", el)?.textContent) || undefined }); }],
+    [".csp-available-row", (el, out) => {
       out.push({ kind: "button", ref: refOf(el), role: "navigate", title: clean($("strong", el)?.textContent), detail: clean($("span", el)?.textContent) || undefined,
         icon: undefined, disabled: el.disabled || undefined });
+    }],
+    ["[role=radiogroup],[role=group]", choices],
+    ["[role=listbox]", listbox],
+    ["input,select,textarea,button,a[href],[role=button],[role=slider]", formControl],
+    ["img", image],
+    ["canvas", canvas],
+    ["svg", skip],
+    [".fr", pair],
+    ["progress", (el, out) => { out.push({ kind: "progress", value: el.max ? Number(el.value) / Number(el.max) : undefined }); }]
+  ];
+
+  function handle(el, out) {
+    for (const [selector, describe] of DESCRIBERS)
+      if (el.matches(selector) && describe(el, out) !== false) return true;
+    if (el.querySelector(FORM + ",details,canvas,progress,img:not([src*='icons/'])")) return false;
+    if (el.querySelector("a[href]")) {
+      const markdown = tidyMarkdown(markdownOf(el));
+      if (markdown) out.push({ kind: "text", ref: el.id ? "#" + el.id : undefined, title: clean(el.textContent), markdown, style: textStyle(el) });
       return true;
     }
-    if (el.matches("[role=radiogroup],[role=group]") && $$("[role=radio],button[aria-pressed]", el).some(shown)) { out.push(choiceGroup(el)); return true; }
-    if (el.matches("[role=listbox]")) {
-      for (const option of $$("[role=option]", el).filter(shown)) out.push({ kind: "button", ref: refOf(option), role: "option", title: clean(option.textContent) });
-      return true;
-    }
-    if (el.matches("input,select,textarea,button,a[href],[role=button],[role=slider]")) {
-      if (el.matches("input[type=hidden]")) return true;
-      out.push(controlItem(el));
-      return true;
-    }
-    if (tag === "img") {
-      if (!/icons\//.test(el.getAttribute("src") || "") && el.naturalWidth > 32) out.push({ kind: "image", src: el.src, title: el.alt || undefined, aspect: el.naturalWidth / Math.max(1, el.naturalHeight) });
-      return true;
-    }
-    if (tag === "canvas") {
-      const src = pictureOf(el);
-      if (src) out.push({ kind: "image", src, aspect: el.width / el.height, ref: refOf(el) });
-      return true;
-    }
-    if (tag === "svg") return true;
-    if (el.matches(".fr") && $(".fk", el) && $(".fv", el)) { out.push({ kind: "text", style: "pair", title: clean($(".fk", el).textContent), value: clean($(".fv", el).textContent) }); return true; }
-    if (el.matches("progress")) { out.push({ kind: "progress", value: el.max ? Number(el.value) / Number(el.max) : undefined }); return true; }
-    if (!el.querySelector(FORM + ",details,canvas,progress,img:not([src*='icons/'])")) {
-      if (el.querySelector("a[href]")) {
-        const markdown = tidyMarkdown(markdownOf(el));
-        if (markdown) out.push({ kind: "text", ref: el.id ? "#" + el.id : undefined, title: clean(el.textContent), markdown, style: textStyle(el) });
-        return true;
-      }
-      const text = clean(el.innerText);
-      if (text) out.push({ kind: "text", ref: el.id ? "#" + el.id : undefined, title: text, style: textStyle(el) });
-      return true;
-    }
-    return false;
+    const text = clean(el.innerText);
+    if (text) out.push({ kind: "text", ref: el.id ? "#" + el.id : undefined, title: text, style: textStyle(el) });
+    return true;
   }
 
   function textStyle(el) {
