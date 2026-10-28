@@ -1,7 +1,7 @@
 # GPU terrain integration validation
 
 Measured 2026-10-17 on Apple M2, real Chrome/Metal and Playwright WebKit.
-Raw measurements: [gpu2d-validation.json](gpu2d-validation.json).
+Raw measurements: [gpu2d-validation.json](https://github.com/RileyG44/clear-skies-portal/blob/73d117a/docs/gpu2d-validation.json) (repository history).
 
 ## Result
 

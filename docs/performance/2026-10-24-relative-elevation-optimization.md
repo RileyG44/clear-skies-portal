@@ -193,7 +193,7 @@ Internal-only TestFlight build **29881573** uploaded successfully. Xcode reporte
 after Apple's processing has not been independently verified. The release archive
 is retained under `~/Library/Developer/Xcode/Archives/2026-10-24/`.
 
-The committed `2026-10-24-final-verification.json` records the final source hashes,
+[`2026-10-24-final-verification.json`](https://github.com/RileyG44/clear-skies-portal/blob/73d117a/docs/performance/2026-10-24-final-verification.json), in the repository history, records the final source hashes,
 native probe, browser summaries, desktop package checks and bundle identity.
 Builds and publication use the recovery checkout outside iCloud Documents because
 the original workspace still contains dataless files with stalled reads.

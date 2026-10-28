@@ -28,7 +28,7 @@ recovery marked as refining.
 
 ## Reproduction and measured verification
 
-[Raw browser and baseline proof](gpu2d-refinement-validation.json).
+[Raw browser and baseline proof](https://github.com/RileyG44/clear-skies-portal/blob/73d117a/docs/gpu2d-refinement-validation.json) (repository history).
 `scripts/gpu2d/refinement.js` uses the complete app, real hardware GPU and the
 actual configured shared pool on an isolated server. It holds one native parent
 request and fails half the fine tile URLs once. It then stops all interaction.
@@ -85,4 +85,4 @@ was forced to fail all three transport attempts. With the camera unchanged,
 it retried after **10,107 ms** and loaded all **65,536** valid native samples;
 its failure flag cleared, renderer frames advanced and no page errors occurred.
 The production 10-second retry interval was retained for this live check.
-[Deployment evidence](gpu2d-refinement-deployment.json).
+[Deployment evidence](https://github.com/RileyG44/clear-skies-portal/blob/73d117a/docs/gpu2d-refinement-deployment.json) (repository history).
