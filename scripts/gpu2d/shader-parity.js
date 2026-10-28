@@ -211,8 +211,7 @@ function resampleBytes(bytes, bearingDeg) {
  * discrete pipeline reproduces the same ~19% of aspect pixels over
  * 3/255), so rotation plumbing is validated exactly here instead:
  * same rotated field, same Sobel, shaders.rotateGradient, CPU colours. */
-const ASPECT_STOPS = [[0, "#4d78c8"], [45, "#3ba5b0"], [90, "#57a765"], [135, "#c9ad4f"],
-  [180, "#d96b52"], [225, "#c45b82"], [270, "#8d65bb"], [315, "#5e77c5"], [360, "#4d78c8"]]
+const ASPECT_STOPS = raster.ASPECT_STOPS
   .map(([v, hex]) => [v, [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16))]);
 
 function simulateRotated(style, gridRot, bearing) {

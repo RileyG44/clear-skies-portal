@@ -14,10 +14,11 @@
  * the terrain. */
 (function(root,factory){
   "use strict";
-  if(typeof module==="object"&&module.exports) module.exports=factory();
-  else root.CSPLidarRender=factory();
-})(typeof globalThis!=="undefined"?globalThis:this,function(){
+  if(typeof module==="object"&&module.exports) module.exports=factory(require("./terrain-raster.js"));
+  else root.CSPLidarRender=factory(root.CSPTerrainRaster);
+})(typeof globalThis!=="undefined"?globalThis:this,function(raster){
   "use strict";
+  if(!raster) throw new Error("terrain-raster.js must load before lidar-render.js");
 
   const VERSION=1,MAX_LAYERS=4,MAX_STOPS=10,FT=3.28084;
   const hasOwn=(object,key)=>Object.prototype.hasOwnProperty.call(object,key);
@@ -66,9 +67,9 @@
   const PALETTES={
     "default-hs":{name:"Classic",kinds:["shade"],stops:[[0,"#000000"],[1,"#ffffff"]],domain:[0,1]},
     "default-slope":{name:"Classic",kinds:["sequential"],domain:[0,90],
-      stops:[[0,"#f2f4ee"],[5/90,"#b1d28b"],[15/90,"#f6da6f"],[30/90,"#f09649"],[45/90,"#d54650"],[60/90,"#762c69"],[1,"#321948"]]},
+      stops:raster.SLOPE_STOPS.map(([degrees,color])=>[degrees/90,color])},
     "default-aspect":{name:"Compass",kinds:["cyclic"],domain:[0,360],
-      stops:evenStops(["#4d78c8","#3ba5b0","#57a765","#c9ad4f","#d96b52","#c45b82","#8d65bb","#5e77c5","#4d78c8"])},
+      stops:evenStops(raster.ASPECT_STOPS.map(([,color])=>color))},
     "default-northness":{name:"Classic",kinds:["diverging"],domain:[-1,1],stops:[[0,"#d6524e"],[.5,"#f7f3e0"],[1,"#37895c"]]},
     "default-tint":{name:"Classic relief",kinds:["sequential"],domain:[-500,6000],shade:1,
       stops:RELIEF_TINT.map(([m,c])=>[(m+500)/6500,c])},

@@ -17,17 +17,20 @@
   const D2R=Math.PI/180;
   const NODATA_LIMIT=-1e20;
   const TINT_OF=rampWriter("relief");
-  const SLOPE_OF=rampWriter([
+  /* Slope in degrees. LiDAR Studio's default palettes and the map legend
+     read these stops too. */
+  const SLOPE_STOPS=Object.freeze([
     [0,"#f2f4ee"],[5,"#b1d28b"],[15,"#f6da6f"],[30,"#f09649"],
     [45,"#d54650"],[60,"#762c69"],[90,"#321948"]
   ]);
   /* A cyclic, cardinally meaningful aspect palette: cool north, green east,
      warm south, violet west. Below half a degree of slope aspect is shown as
      undefined rather than amplifying sub-accuracy DEM noise into speckle. */
-  const ASPECT_OF=rampWriter([
+  const ASPECT_STOPS=Object.freeze([
     [0,"#4d78c8"],[45,"#3ba5b0"],[90,"#57a765"],[135,"#c9ad4f"],
     [180,"#d96b52"],[225,"#c45b82"],[270,"#8d65bb"],[315,"#5e77c5"],[360,"#4d78c8"]
   ]);
+  const SLOPE_OF=rampWriter(SLOPE_STOPS),ASPECT_OF=rampWriter(ASPECT_STOPS);
   const ASPECT_FLAT_GRADE=Math.tan(0.5*D2R);
   const CONTOUR_FT={c2:2,c5:5,c10:10,c25:25};
   const MIN_CONTOUR_PX=3;
@@ -162,5 +165,5 @@
     return out;
   }
 
-  return Object.freeze({VERSION:2,STYLES,ASPECT_FLAT_GRADE,CONTOUR_FT,hasData,renderRgba});
+  return Object.freeze({VERSION:2,STYLES,ASPECT_FLAT_GRADE,CONTOUR_FT,SLOPE_STOPS,ASPECT_STOPS,hasData,renderRgba});
 });

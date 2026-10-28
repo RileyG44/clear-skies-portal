@@ -547,11 +547,11 @@ function paintTerrainLegend(style){
   let bar="",ticks="",caption="";
   if(style==="slope"){
     caption="Slope · Horn 3 × 3 · degrees";
-    bar="linear-gradient(90deg,#f2f4ee 0%,#b1d28b 5.556%,#f6da6f 16.667%,#f09649 33.333%,#d54650 50%,#762c69 66.667%,#321948 100%)";
+    bar=`linear-gradient(90deg,${CSPTerrainRaster.SLOPE_STOPS.map(([degrees,color])=>`${color} ${+(degrees/90*100).toFixed(3)}%`).join(",")})`;
     ticks="<span>0°</span><span>30°</span><span>60°</span><span>90°</span>";
   }else if(style==="aspect"){
     caption="Downslope aspect · compass azimuth · flats transparent";
-    bar="linear-gradient(90deg,#4d78c8,#3ba5b0,#57a765,#c9ad4f,#d96b52,#c45b82,#8d65bb,#5e77c5,#4d78c8)";
+    bar=`linear-gradient(90deg,${CSPTerrainRaster.ASPECT_STOPS.map(([,color])=>color).join(",")})`;
     ticks="<span>N 0°</span><span>E 90°</span><span>S 180°</span><span>W 270°</span><span>N</span>";
   }else if(style==="northness"){
     caption="North–south exposure · cooler/moister to warmer/drier · flats transparent";
