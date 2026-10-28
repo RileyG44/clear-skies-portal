@@ -4,7 +4,7 @@ Release: **2026-10-17i**. Measured October 17, 2026 Pacific on Apple M2.
 Implementation: `99cb954`; latest UI changes through `12a13d3` retained.
 [Recorded measurements](https://github.com/RileyG44/clear-skies-portal/blob/73d117a/docs/gpu3d-validation.json) (repository history) contain the complete final runs,
 renderer parity, screenshot hashes/differences and lifecycle assertions.
-[Architecture and compatibility contract](GPU_3D_TERRAIN_SPEC.md).
+[Architecture and compatibility contract](../GPU_3D_TERRAIN_SPEC.md).
 
 ## Measured result
 

@@ -79,7 +79,7 @@ must not be treated as fresh held-out proof in a future iteration.
 Muse Wonder stopped on a subscription quota error. Existing implementation
 and review artifacts were recovered and preserved; the remaining work was
 completed with root integration and a GPT-6.1 Sol high-reasoning review.
-See `docs/GLACIAL_BELT_V3_REVIEW.md` for the final review.
+See `docs/records/GLACIAL_BELT_V3_REVIEW.md` for the final review.
 
 The first 138 belt-on and 144 belt-off training rows were preserved from the
 sequential evaluator. Remaining rows ran through the exact exported

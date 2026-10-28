@@ -156,6 +156,6 @@ synthetic no-likely landslide acceptance criterion therefore remains
 unmet for a landslide containing closed pits.
 
 Evaluation results and final verification are recorded in
-`docs/GLACIAL_BELT_V3_RESULTS.md`. New held-out regions are still required
+`docs/records/GLACIAL_BELT_V3_RESULTS.md`. New held-out regions are still required
 before a default-on ship decision; the previously spent test split is
 not scored.

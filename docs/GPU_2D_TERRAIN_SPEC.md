@@ -265,7 +265,7 @@ change elsewhere is unavoidable, make it minimal and list it in the report).
 | D | `gpu2d/store` | `gpu-terrain-store.js`, `test-gpu-terrain-store.js` | Claude Opus 5.5 |
 | E | `gpu2d/engine` | `gpu-terrain-engine.js`, `test-gpu-terrain-engine.js`, `scripts/gpu2d/engine-*.js` | GPT-6.1 Sol Ultra (Codex) |
 | L | `gpu2d/layer` | `gpu-terrain-layer.js`, `index.html` integration, `ui-system.js` if needed | GPT-6.1 Sol Ultra (ChatGPT Work) |
-| V | `gpu2d/verify` | `scripts/gpu2d/*.js` harness (not probes), `docs/gpu2d-baseline.md` | Grok 4.7 |
+| V | `gpu2d/verify` | `scripts/gpu2d/*.js` harness (not probes), `docs/records/gpu2d-baseline.md` | Grok 4.7 |
 | M | (assigned by integrator) | exactly-specified mechanical edits | DeepSeek V4.1 Flash |
 
 Parallel work against contracts: S, D, E, L, V start together. E and L code
