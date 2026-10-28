@@ -1,6 +1,6 @@
 'use strict';
 const assert=require('node:assert/strict'),fs=require('node:fs'),vm=require('node:vm');
-const source=fs.readFileSync('index.html','utf8');
+const source=require("./test-fixtures/page-source.js");
 const take=(name,next)=>source.slice(source.indexOf('function '+name+'('),source.indexOf('function '+next+'('));
 /* A native touch reading must track its labelled basis, discard stale data
    during a pan, and use the shared sampler for the newly selected position. */

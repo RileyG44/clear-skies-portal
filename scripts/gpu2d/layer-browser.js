@@ -17,18 +17,21 @@ const BASE=process.env.CSP_GPU2D_URL||'http://127.0.0.1:8812';
 const image=png(),mock=fs.readFileSync(path.join(__dirname,'layer-mock-engine.js'),'utf8');
 const expose='\nwindow.__layerApp={snapshotDomMatrix,snapshotSpec,composeSnapshot,composeSnapshotStream,snapshotDomItems,enterTerrain3d,exitTerrain3d,researchElevationSource,researchElevationGrid,cursorLoadedElevation,gpuTerrainState,syncGpuTerrain};\n';
 const baselineExpose='\nwindow.__layerApp={snapshotDomMatrix};\n';
+/* app.js as it was at a git ref: the app files site.json listed then, joined. */
+const appAt=ref=>{const show=f=>cp.execFileSync('git',['show',`${ref}:${f}`],{cwd:ROOT,encoding:'utf8',timeout:60000});
+ return '(()=>{\n'+JSON.parse(show('site.json')).app.map(show).join('')+'})();\n';};
 async function prepare(browser,{mocked=true,flag='1',baseline=false,ui='',dpr=2,startup=false,features=[],viewport={width:1100,height:760}}={}){
  const context=await browser.newContext({viewport,deviceScaleFactor:dpr,reducedMotion:'reduce',serviceWorkers:'block'});
  const page=await context.newPage(),errors=[];page.on('pageerror',e=>errors.push(String(e)));
  // Compare this repair with its current parent, not an obsolete UI snapshot.
- const html=baseline?cp.execFileSync('git',['show',`${process.env.CSP_GPU2D_BASELINE_REF||'HEAD'}:index.html`],{cwd:ROOT,encoding:'utf8',timeout:60000}):fs.readFileSync(path.join(ROOT,'index.html'),'utf8');
+ const app=baseline?appAt(process.env.CSP_GPU2D_BASELINE_REF||'HEAD'):require('../../site.js').appSource(ROOT);
  await page.route('**/*',async route=>{
   const u=new URL(route.request().url());
   if(u.origin!==BASE){
    if(/\.(png|jpg)|tile|exportImage|MapServer/.test(u.href))return route.fulfill({contentType:'image/png',body:image});
    return route.abort();
   }
-  if(u.pathname==='/')return route.fulfill({contentType:'text/html',body:html.replace('})();\n</script>\n<script src="markup-3d',(baseline?baselineExpose:expose)+'})();\n</script>\n<script src="markup-3d')});
+  if(u.pathname==='/app.js')return route.fulfill({contentType:'text/javascript',body:app.replace(/\}\)\(\);\n$/,(baseline?baselineExpose:expose)+'})();\n')});
   if(u.pathname==='/gpu-terrain-engine.js'&&!baseline&&mocked!=='real')return route.fulfill({contentType:'text/javascript',body:mocked?mock:'window.CSPGpuTerrainEngine={create:()=>null};'});
   if(u.pathname==='/api/health')return route.fulfill({json:{ok:true,features}});
   if(/\/api\/(elev|usgs\/elev|wadnr\/elev|terrain)/.test(u.pathname))return route.fulfill({contentType:'image/png',body:image});

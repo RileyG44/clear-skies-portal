@@ -1,7 +1,7 @@
 'use strict';
 const fs=require('node:fs'),vm=require('node:vm'),assert=require('node:assert/strict');
 const path=require('node:path'),root=__dirname;
-const ui=fs.readFileSync(path.join(root,'ui-system.js'),'utf8'),html=fs.readFileSync(path.join(root,'index.html'),'utf8');
+const ui=fs.readFileSync(path.join(root,'ui-system.js'),'utf8'),html=require("./test-fixtures/page-source.js");
 const window={};new Function('window',ui.slice(0,ui.indexOf('/* End full-state link codec. */')))(window);
 const C=window.CSPShareCodec;
 const fixture=JSON.parse(fs.readFileSync(path.join(root,'test-fixtures/share-state-v1.json'),'utf8'));

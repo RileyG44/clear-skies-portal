@@ -1,7 +1,7 @@
 {
-  "about": "The one list of files that make up the app. server.js serves web and vendor, sw.js precaches them, scripts/assemble-site.py ships web plus vendor/ (less engine files) to Pages and the iOS app, and the Mac app and service also install engine. vendor/potree/ is optional and loaded on first use.",
+  "about": "The one list of files that make up the app. app lists the browser application in load order; site.js joins it into app.js. server.js serves web, app.js and vendor, sw.js precaches them, scripts/assemble-site.py ships web plus vendor/ (less engine files) to Pages and the iOS app, and the Mac app and service also install engine. vendor/potree/ is optional and loaded on first use.",
   "web": [
-    "index.html", "ui-theme.css", "ui-system.css", "ui-system.js", "mosaic-core.js",
+    "index.html", "ui-base.css", "ui-theme.css", "ui-system.css", "ui-system.js", "mosaic-core.js",
     "png-stream.js", "markup.js", "markup-3d.js", "terrain-core.js", "terrain-raster.js",
     "terrain-drape-core.js", "terrain-drape-pool.js", "terrain-drape-worker.js",
     "elevation-bands.js", "elevation-tile-core.js", "tile-pipeline.js", "gpu-terrain-shaders.js",
@@ -16,8 +16,14 @@
     "sw.js", "manifest.json", "icon-180.png", "icon-192.png", "icon-512.png", "public-terrain.js",
     "public-terrain-worker.js", "site.json"
   ],
+  "app": [
+    "app/config.js", "app/map.js", "app/search.js", "app/results.js", "app/snapshot.js",
+    "app/scenes.js", "app/map-menu.js", "app/panes.js", "app/terrain-sources.js",
+    "app/terrain-3d.js", "app/terrain.js", "app/overlays.js", "app/areas.js", "app/controls.js",
+    "app/elevation.js", "app/research.js", "app/spectrum.js", "app/bridge.js", "app/readout.js"
+  ],
   "vendor": [
-    "vendor/maplibre-gl.mjs", "vendor/maplibre-gl-shared.mjs", "vendor/maplibre-gl-worker.mjs",
+    "vendor/leaflet.js", "vendor/leaflet.css", "vendor/maplibre-gl.mjs", "vendor/maplibre-gl-shared.mjs", "vendor/maplibre-gl-worker.mjs",
     "vendor/maplibre-gl.css", "vendor/leaflet-rotate.umd.min.js", "vendor/lerc/LercDecode.js",
     "vendor/lerc/LercDecode.es.js", "vendor/lerc/lerc-wasm.wasm",
     "vendor/fonts/inter-latin-wght-normal.woff2", "vendor/icons/arrow-down.svg",
@@ -41,7 +47,7 @@
     "vendor/icons/x.svg"
   ],
   "engine": [
-    "server.js", "cache-budget.js", "cog.js", "usgs.js", "terrain-pool.js", "terrain-worker.js",
+    "server.js", "site.js", "cache-budget.js", "cog.js", "usgs.js", "terrain-pool.js", "terrain-worker.js",
     "wadnr.js", "wadnr-ingest-worker.js", "dnr-archive.js", "LICENSE",
     "vendor/dnr-runtime.cjs", "vendor/dnr-runtime-licenses.txt", "vendor/dnr-lerc-LICENSE.txt"
   ]

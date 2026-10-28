@@ -110,7 +110,7 @@ async function poolTests(){
   const brokenPool=new Pool({workerFactory:()=>{throw new Error("CSP blocked")},fallback:async()=>"cpu"});assert.equal(await brokenPool.run({}),"cpu");
 }
 async function integrationTests(){
-  const index=fs.readFileSync("index.html","utf8"),start=index.indexOf("const ELEV_CACHE_BYTES="),end=index.indexOf("\nasync function encodeTileRgba",start);
+  const index=require("./test-fixtures/page-source.js"),start=index.indexOf("const ELEV_CACHE_BYTES="),end=index.indexOf("\nasync function encodeTileRgba",start);
   let loads=0,rendered=0,gpuClears=0,mode="auto";const statuses=new Map();
   const sandbox={CSPTilePipeline:{RequestPool},CSPTerrainDrapePool:{Pool},navigator:{hardwareConcurrency:8},AbortController,DOMException,gpu3d:{clear(){gpuClears++;}},
     meshKey:(z,x,y)=>`${mode}:${z}/${x}/${y}`,PROXY:false,public3dDrapeSources:statuses,scheduleTerrainStatus(){},

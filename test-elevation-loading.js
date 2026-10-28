@@ -4,7 +4,7 @@ const {RequestPool}=require('./tile-pipeline');
 const pipeline=require('./tile-pipeline');
 const core=require('./elevation-tile-core');
 const tick=()=>new Promise(resolve=>setImmediate(resolve));
-const html=fs.readFileSync(require.resolve('./index.html'),'utf8');
+const html=require("./test-fixtures/page-source.js");
 const source=html.slice(html.indexOf('const ElevLayer ='),html.indexOf('function tileGroundResolution('));
 class Grid {
   constructor(options){this.events={};this.initialize(options);}

@@ -454,7 +454,9 @@ Where they live:
 
 | File | What it is |
 |---|---|
-| `index.html` | The whole app — one self-contained file, Leaflet inlined |
+| `index.html` | The page: markup and startup recovery. Loads the scripts below |
+| `app/` | The browser application, one file per feature (map, search, terrain, overlays, …). `site.json` lists them in order; the engine and `scripts/assemble-site.py` join them into `app.js` |
+| `site.json` / `site.js` | The one list of shipped files, read by the server, service worker, Pages/iOS assembler, Mac app and installer |
 | `ui-system.js` / `ui-system.css` | Task-oriented navigation shell, active-layer stack, category isolation, and responsive visual system |
 | `vendor/` | Pinned browser bundles for MapLibre GL JS and Leaflet rotation |
 | `terrain-raster.js` | Shared deterministic CPU terrain styling used by 2D, 3D protocol tiles, and tests |

@@ -1,6 +1,6 @@
 "use strict";
 const assert=require("node:assert/strict"),fs=require("node:fs"),vm=require("node:vm");
-const html=fs.readFileSync(require.resolve("./index.html"),"utf8");
+const html=require("./test-fixtures/page-source.js");
 const adapter=fs.readFileSync(require.resolve("./ios/Resources/native-shell.js"),"utf8");
 const section=(source,start,end)=>source.slice(source.indexOf(start),source.indexOf(end,source.indexOf(start)));
 

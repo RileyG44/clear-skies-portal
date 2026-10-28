@@ -15,7 +15,7 @@
    own clamped edge; the app must redo those borders. */
 const assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path'),vm=require('node:vm');
 const baseline=!!process.env.MESH_BORDER_BASELINE;
-const html=fs.readFileSync(process.env.MESH_BORDER_BASELINE||require.resolve('./index.html'),'utf8');
+const html=(process.env.MESH_BORDER_BASELINE?fs.readFileSync(process.env.MESH_BORDER_BASELINE,'utf8'):require("./test-fixtures/page-source.js"));
 const between=(start,end)=>{const i=html.indexOf(start);assert(i>=0,start);const j=html.indexOf(end,i);assert(j>i,end);return html.slice(i,j);};
 const tick=()=>new Promise(resolve=>setImmediate(resolve));
 const flush=async()=>{for(let i=0;i<12;i++) await tick();};

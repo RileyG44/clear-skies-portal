@@ -22,7 +22,7 @@ const png=terrarium(1200,40);
   await page.route(/\/api\/elev\/\d+\//,route=>{drapeElev++;route.fulfill({status:200,contentType:'image/png',body:png})});
   await page.route('https://s3.amazonaws.com/elevation-tiles-prod/**',route=>route.fulfill({status:200,contentType:'image/png',body:png,headers:{'access-control-allow-origin':'*'}}));
   await page.route(/https:\/\/(?:[^/]*arcgisonline\.com|[^/]*cartocdn\.com|[^/]*tile\.openstreetmap\.org)\//,route=>route.fulfill({status:200,contentType:'image/png',body:png,headers:{'access-control-allow-origin':'*'}}));
-  await page.route(u=>{const p=new URL(u).pathname;return p==='/'||p==='/index.html'},async route=>{const res=await route.fetch();let html=await res.text();
+  await page.route(u=>new URL(u).pathname==='/app.js',async route=>{const res=await route.fetch();let html=await res.text();
     const hook='window.CSPMarkup?.attach3d(module,map3d);';assert(html.includes(hook),'3D test hook');
     html=html.replace(hook,hook+'window.__map3d=map3d;');
     const renderHook='async function renderDrapeTile(style,z,x,y,signal){';assert(html.includes(renderHook),'drape test hook');

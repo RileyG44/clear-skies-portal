@@ -464,13 +464,13 @@ async function installRoute(context, port) {
   const origin = 'http://127.0.0.1:' + port + '/';
   await context.route(origin + '**', async (route) => {
     const url = new URL(route.request().url());
-    if (url.pathname !== '/' && url.pathname !== '/index.html') return route.continue();
+    if (url.pathname !== '/app.js') return route.continue();
     const res = await route.fetch();
     let body = await res.text();
     const marker = 'window.ClearSkiesPortalBridge={';
     if (!body.includes(marker)) {
       await route.fulfill({ response: res, body });
-      throw new Error('index.html is missing the ClearSkiesPortalBridge assignment');
+      throw new Error('app.js is missing the ClearSkiesPortalBridge assignment');
     }
     body = body.replace(marker, HOOK + '\n' + marker);
     body = body.replace(

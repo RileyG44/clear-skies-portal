@@ -1,6 +1,6 @@
 'use strict';
 const fs=require('node:fs'),vm=require('node:vm'),assert=require('node:assert/strict');
-const html=fs.readFileSync(require.resolve('./index.html'),'utf8');
+const html=require("./test-fixtures/page-source.js");
 const section=(start,end)=>{
   const from=html.indexOf(start),to=html.indexOf(end,from);
   assert(from>=0&&to>from,'missing coordinate section: '+start);

@@ -1,6 +1,6 @@
 'use strict';
 const assert=require('node:assert/strict'),fs=require('node:fs'),vm=require('node:vm');
-const html=fs.readFileSync(require.resolve('./index.html'),'utf8');
+const html=require("./test-fixtures/page-source.js");
 const code=html.slice(html.indexOf('function terrainDemTiles('),html.indexOf('function terrainTheme('));
 const flush=async()=>{for(let i=0;i<12;i++)await new Promise(resolve=>setImmediate(resolve));};
 function fixture(){

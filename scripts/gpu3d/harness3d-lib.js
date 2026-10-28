@@ -154,7 +154,7 @@ async function installFixture(context, args, png) {
   await context.route(args.origin + '**', async (route) => {
     const url = new URL(route.request().url());
     counts.total++;
-    if (url.pathname !== '/' && url.pathname !== '/index.html') return route.fallback();
+    if (url.pathname !== '/app.js') return route.fallback();
     const res = await route.fetch();
     let html = await res.text();
     const hook = 'window.CSPMarkup?.attach3d(module,map3d);';

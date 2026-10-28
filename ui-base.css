@@ -1,0 +1,970 @@
+/* ---------------------------------------------------------------------------
+   Design tokens adapted from Beautiful UI (beautifului.dev) by Turbo, MIT.
+   Dark-theme values taken verbatim; the component CSS here is hand-written
+   because that library ships React/Tailwind and this page is dependency-free.
+   --------------------------------------------------------------------------- */
+:root{
+  --page:oklch(20.9% .004 264.477);
+  --canvas:oklch(23.1% .004 264.487);
+  --surface:oklch(26% .006 271.191);
+  --inset:oklch(24.3% .004 264.492);
+  --hover:oklch(28.9% .006 271.22);
+  --hover-2:oklch(31.8% .007 274.747);
+  --ink:oklch(96.4% .002 247.839);
+  --ink-2:oklch(73.1% .008 260.731);
+  --ink-3:oklch(54.1% .01 264.484);
+  --line:oklch(30.8% .006 258.354);
+  --line-strong:oklch(35.6% .007 264.474);
+  --field:oklch(29.3% .006 271.223);
+  --accent:oklch(68% .173 253.301);
+  --accent-ink:oklch(78.8% .113 248.33);
+  --accent-tint:oklch(68% .173 253.301/.16);
+  --green:oklch(70.5% .154 153.814);
+  --green-tint:oklch(70.5% .154 153.814/.14);
+  --orange:oklch(74.6% .156 55.642);
+  --orange-tint:oklch(74.6% .156 55.642/.14);
+  --red:oklch(66.6% .18 21.433);
+  --red-tint:oklch(66.6% .18 21.433/.14);
+  --tooltip-bg:oklch(18.2% .004 264.459);
+  --glass-side:oklch(23.1% .004 264.487/.72);
+  --glass-pane:oklch(23.1% .004 264.487/.66);
+  --glass-head:oklch(20.9% .004 264.477/.56);
+  --glass-control:oklch(26% .006 271.191/.78);
+  --glass-card:oklch(23.1% .004 264.487/.74);
+  --glass-line:oklch(100% 0 0/.12);
+  --side-w:430px;
+  --safe-top:env(safe-area-inset-top,0px);
+  --safe-right:env(safe-area-inset-right,0px);
+  --safe-bottom:env(safe-area-inset-bottom,0px);
+  --safe-left:env(safe-area-inset-left,0px);
+  --app-height:100dvh;
+  --search-control-h:36px;
+
+  --radius-card:10px; --radius-control:8px; --radius-chip:6px;
+  --shadow-btn:0 0 0 1px oklch(100% 0 0/.1),0 1px 2px oklch(0% 0 0/.3);
+  --shadow-card:0 0 0 1px oklch(100% 0 0/.11),0 1px 2px oklch(0% 0 0/.2),0 2px 6px oklch(0% 0 0/.2);
+  --shadow-raised:0 0 0 1px oklch(100% 0 0/.13),0 2px 10px oklch(0% 0 0/.22);
+  --shadow-overlay:0 0 0 1px oklch(100% 0 0/.15),0 8px 28px oklch(0% 0 0/.34);
+  --shadow-inset-field:inset 0 1px 2px oklch(0% 0 0/.4);
+  --ring:#ffffff2e;
+  --ease-out:cubic-bezier(0,0,.2,1);
+  --ease-out-strong:cubic-bezier(.23,1,.32,1);
+  --dur:.15s;
+  --sp:4px;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+/* dvh, not vh. In mobile Safari 100vh is the viewport with the toolbars
+   hidden, so the shell is taller than what you can see and its lower part —
+   including the bottom of the scrolling panel — sits behind the address bar
+   with no way to reach it. viewport-fit=cover makes the safe-area strips part
+   of the map canvas; controls choose their own safe-area inset. */
+html,body{height:100%;height:100dvh}
+body{
+  font:400 13px/1.5 -apple-system,BlinkMacSystemFont,"SF Pro Text","Helvetica Neue",Arial,sans-serif;
+  background:var(--page); color:var(--ink);
+  -webkit-font-smoothing:antialiased; overflow:hidden;
+  font-feature-settings:"cv05" 1,"ss01" 1;
+}
+/* The shell is sized by inset:0, not by a viewport unit.
+   #app is position:fixed, so inset:0 resolves against the initial containing
+   block - which with viewport-fit=cover is the whole screen, safe-area strips
+   included. Giving it height:100dvh instead over-constrained it: an explicit
+   height wins over the bottom offset, and in an installed standalone PWA that
+   measurement comes back short of the screen by the bottom inset. The map then
+   ended above the home indicator and the manifest's #0b0f14 background showed
+   through as a black bar across the bottom of the display.
+
+   --app-height stays for the popover that genuinely wants a dvh ceiling. */
+#app{position:fixed;inset:0;width:100%;background:var(--page)}
+/* Belt and braces: if anything else ever comes up short, the strip reads as the
+   app rather than as the shell's own background. */
+html{background:var(--page)}
+#side{width:430px;min-width:280px;max-width:860px;background:var(--glass-side);
+      border:1px solid var(--glass-line);border-radius:14px;display:flex;flex-direction:column;
+      position:absolute;inset:calc(8px + var(--safe-top)) auto calc(8px + var(--safe-bottom)) calc(8px + var(--safe-left));z-index:1200;flex-shrink:0;overflow:hidden;
+      backdrop-filter:blur(28px) saturate(1.32);-webkit-backdrop-filter:blur(28px) saturate(1.32);
+      box-shadow:0 18px 48px oklch(0% 0 0/.26),inset 0 1px 0 oklch(100% 0 0/.08);
+      transform:translateX(0) scale(1);opacity:1;will-change:transform,opacity;
+      transition:transform .36s var(--ease-out-strong),opacity .24s var(--ease-out),visibility 0s linear 0s;
+      container-type:inline-size;--sidebar-control-font:12px;--sidebar-caption-font:10px}
+@supports (width:1cqi){#side{--sidebar-control-font:clamp(10.5px,3.2cqi,12.5px);--sidebar-caption-font:clamp(9px,2.75cqi,10.5px)}}
+body.collapsed #side{transform:translateX(calc(-100% - 20px)) scale(.985);opacity:0;pointer-events:none;visibility:hidden;
+  transition:transform .34s var(--ease-out-strong),opacity .2s var(--ease-out),visibility 0s linear .34s}
+#map{position:absolute;inset:0;width:100%;height:100%;background:#dbe6eb}
+#map[data-basemap-theme="dark"]{background:#111416}
+#map3d{position:absolute;inset:0;z-index:900;background:#dbe6eb;visibility:hidden;opacity:0;pointer-events:none;
+  transition:opacity .22s var(--ease-out);touch-action:none}
+body.terrain-3d #map3d{visibility:visible;opacity:1;pointer-events:auto}
+body.terrain-3d #map>.leaflet-pane,body.terrain-3d #map>.leaflet-control-container{visibility:hidden}
+#map3d .maplibregl-canvas{outline:none}
+/* The Leaflet dot lives in a pane 3D hides. This one is the same place, drawn
+   in the 3D camera's pixels so a tap still shows up on the terrain. */
+#cspLocationPin{position:absolute;left:0;top:0;z-index:910;width:14px;height:14px;margin:-7px 0 0 -7px;border-radius:50%;
+  border:2px solid var(--csp-location-dot,#fff);background:color-mix(in srgb,var(--csp-location-dot,#fff) 55%,transparent);
+  pointer-events:none;filter:var(--csp-location-dot-halo);display:none}
+body.terrain-3d #cspLocationPin:not([hidden]){display:block}
+#map3d .maplibregl-ctrl-bottom-right{right:calc(4px + var(--safe-right));bottom:var(--safe-bottom)}
+#map3d .maplibregl-ctrl-attrib{background:oklch(23.1% .004 264.487/.76);color:var(--ink-3)}
+#map3d .maplibregl-ctrl-attrib a{color:var(--ink-2)}
+.map-tool.active{color:var(--accent-ink);background:oklch(34% .035 253/.9)}
+#bearingReset svg{transition:transform .14s linear}
+.leaflet-container img.leaflet-tile{mix-blend-mode:normal}
+/* Tiles used to fade in here whenever the map was not panning or animating a
+   zoom, and a fade is the wrong shape for this map: a newly created tile is
+   transparent until its image decodes, so fading it in from zero means fading it
+   in from the background - black on the dark theme - rather than from the imagery
+   that was already on screen. Measured: on the deployed site, 128 of 233 frames
+   of a small zoom had every loaded tile under 0.05 opacity. Tiles now appear the
+   moment they decode; ui-system.css keeps the one fade that is safe, which only
+   applies while the previous tile level is being held underneath (see the level
+   hold further down this file). */
+/* Apple uses the arrow to select ordinary content and the closed hand only
+   while a map is actively moving. Leaflet adds .leaflet-grab for every
+   enabled map, so override that permanent hand state here. */
+.leaflet-container,.leaflet-container .leaflet-interactive,.leaflet-container.leaflet-grab,.leaflet-container.leaflet-grab .leaflet-interactive{cursor:default}
+.leaflet-container.leaflet-dragging,.leaflet-container.leaflet-dragging .leaflet-grab,.leaflet-container.leaflet-dragging .leaflet-interactive{cursor:grabbing}
+.leaflet-tooltip.csp-point-tip{padding:6px 8px;border:1px solid var(--glass-line);border-radius:8px;
+  background:oklch(23.1% .004 264.487/.9);color:var(--ink);font:560 11px/1.35 -apple-system,BlinkMacSystemFont,"SF Pro Text","Helvetica Neue",Arial,sans-serif;
+  box-shadow:var(--shadow-raised);backdrop-filter:blur(16px) saturate(1.25);-webkit-backdrop-filter:blur(16px) saturate(1.25)}
+.leaflet-tooltip-top.csp-point-tip::before{border-top-color:oklch(23.1% .004 264.487/.9)}
+
+/* ---- phones ------------------------------------------------------------
+   The desktop panel already overlays the full-bleed map. On a phone it narrows
+   to a sheet so a large, reachable slice of the map remains beside the panel. */
+@media (max-width:760px){
+  :root{--sheet-w:min(82vw,380px);--search-control-h:44px} /* leaves room for the toggle beside it */
+  /* Search is the one row worth the full 44: it is aimed at deliberately, and
+     it is a single row rather than a list, so the cost in density is nil. */
+  .search-row #go,.search-row #q,.search-row #loc,.search-row #coordCopy,.search-row #coordOpen{min-height:44px}
+  /* A floating sheet, not a slab wedged into the corner. It used to inherit its
+     breathing room from the top safe-area inset, which is a coincidence rather
+     than a layout: the moment the status bar stopped overlaying the page that
+     inset went to zero and the panel ended up flush against the very top edge,
+     one hairline under the system clock. The gap is stated here instead, so it
+     holds whether or not the device contributes an inset. */
+  #side{position:absolute;
+        top:calc(var(--safe-top) + 8px);bottom:calc(var(--safe-bottom) + 8px);
+        left:calc(var(--safe-left) + 8px);z-index:1200;
+        width:var(--sheet-w);min-width:0;max-width:none;
+        padding-top:2px;padding-bottom:0;
+        border-radius:14px;
+        box-shadow:0 10px 40px rgba(0,0,0,.5)}
+  #drag{display:none}                        /* drag-to-resize is a mouse idea */
+  .leaflet-control-zoom{margin-bottom:calc(18px + env(safe-area-inset-bottom))}
+}
+
+/* ---- lidar server box ---- */
+#buildStamp{font-size:10px;color:var(--ink-3);font-variant-numeric:tabular-nums;cursor:pointer;
+  min-height:32px;display:flex;align-items:center}
+#buildStamp:hover{color:var(--ink-2)}
+#buildDiag{margin:4px 0 8px;padding:8px 10px;border:1px solid var(--glass-line);border-radius:8px;
+  background:var(--glass-control);color:var(--ink-2);font:400 10px/1.55 ui-monospace,monospace;
+  white-space:pre;overflow-x:auto;-webkit-user-select:all;user-select:all}
+#srvBox{padding:11px 12px 12px}
+#srvDot{width:7px;height:7px;border-radius:50%;background:var(--ink-3);position:absolute;right:4px;bottom:4px;
+  border:1.5px solid oklch(22% .004 264);box-shadow:0 1px 3px oklch(0% 0 0/.34)}
+#srvDot.on{background:oklch(72% .17 145)}
+#srvDot.off{background:oklch(64% .18 25)}
+#srvState{text-transform:none;letter-spacing:0}
+#srvRow{display:flex;gap:6px;align-items:stretch}
+#srvUrl{width:100%;padding:7px 9px;border-radius:7px;border:1px solid var(--line);
+        background:var(--glass-control);color:var(--ink);font:inherit;font-size:12px;min-width:0;flex:1}
+#srvUrl:focus{outline:none;border-color:var(--accent)}
+#srvConnect{flex:none;padding:7px 10px;font-size:11px;white-space:nowrap}
+#srvActions{display:flex;align-items:center;gap:10px;margin-top:6px}
+#srvActions .linkbtn{font-size:10.5px}
+#srvMeta{min-height:15px;margin-top:6px;color:var(--ink-3);font-size:10.5px;line-height:1.45}
+#srvMeta.ok{color:var(--green)}
+#srvMeta.warn{color:var(--orange)}
+#srvBox .hint{margin-top:7px;font-size:10.5px;line-height:1.45;color:var(--ink-3)}
+.about-disclosure summary{list-style:none;display:flex;align-items:center;gap:7px;min-height:28px;
+  color:var(--ink-2);font-size:11.5px;font-weight:600;cursor:pointer;border-radius:7px;padding:3px 6px}
+.about-disclosure summary::-webkit-details-marker{display:none}
+.about-disclosure summary:hover{background:var(--hover)}
+.about-disclosure summary::before{content:"";width:6px;height:6px;flex:none;
+  border-right:1.5px solid var(--ink-3);border-bottom:1.5px solid var(--ink-3);transform:rotate(-45deg);transition:transform var(--dur)}
+.about-disclosure[open] summary::before{transform:rotate(45deg) translate(-1px,-1px)}
+
+/* ---- elevation spectrum ------------------------------------------------ */
+.elev-spectrum-scale{display:grid;gap:4px;margin-top:1px}
+.elevRamp{height:9px;border-radius:999px;border:1px solid oklch(100% 0 0/.16);
+  background:linear-gradient(90deg,#d8525a 0%,#f6a6a8 28%,#f7f7f2 50%,#9ec3f8 72%,#3278df 100%);
+  box-shadow:inset 0 1px 1px oklch(0% 0 0/.28);margin:0}
+.elevKey{display:flex;justify-content:space-between;gap:8px;margin:0;color:var(--ink-3);font-size:9.5px}
+.elevKey b{color:var(--ink-2);font-weight:600}
+.elev-opacity-control{margin-top:3px;padding-top:10px;border-top:1px solid var(--line)}
+.elev-section-head{display:flex;align-items:baseline;justify-content:space-between;gap:10px;margin-bottom:9px}
+.elev-section-title{font-size:11.5px;font-weight:650;color:var(--ink-2);letter-spacing:-.005em}
+.elev-band-list{display:grid;gap:7px}
+.elev-band-row{display:grid;grid-template-columns:82px 30px minmax(0,1fr);gap:7px;align-items:center}
+.elev-band-row .check{margin:0;padding:3px 5px;min-width:0}
+input[type=color]{appearance:none;-webkit-appearance:none;width:30px;height:30px;padding:2px;border-radius:8px;
+  border:1px solid var(--line-strong);background:var(--glass-control);box-shadow:var(--shadow-inset-field);cursor:pointer}
+input[type=color]::-webkit-color-swatch-wrapper{padding:0}
+input[type=color]::-webkit-color-swatch{border:0;border-radius:5px}
+input[type=color]::-moz-color-swatch{border:0;border-radius:5px}
+.elev-band-options{display:grid;gap:9px;margin-top:10px;padding-top:10px;border-top:1px solid var(--line)}
+.elev-band-note{margin-top:7px;color:var(--ink-3);font-size:10.5px;line-height:1.5}
+
+/* ---- resize handle ---- */
+#drag{position:absolute;right:-4px;top:0;width:9px;height:100%;cursor:col-resize;z-index:1400}
+#drag::after{content:"";position:absolute;left:4px;top:0;width:1px;height:100%;
+             background:transparent;transition:background var(--dur) var(--ease-out),width var(--dur)}
+#drag:hover::after,#drag.act::after{background:var(--accent);left:3px;width:3px}
+body.dragging{cursor:col-resize;user-select:none}
+body.dragging #map{pointer-events:none}
+
+/* ---- header ---- */
+header{padding:16px 18px 13px 16px;border-bottom:1px solid var(--glass-line);background:var(--glass-head)}
+h1{font-size:15px;font-weight:650;letter-spacing:-.018em}
+h1 .portal{
+  color:var(--accent-ink);
+  background:linear-gradient(108deg,#67dcff 0%,#9b8cff 20%,#f0a7df 39%,#ffe39b 58%,#87e6c2 78%,#67dcff 100%);
+  background-size:230% 100%;background-position:0 50%;
+  -webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;
+  filter:drop-shadow(0 0 5px rgb(127 199 255/.18));
+  animation:portalHologram 8s ease-in-out infinite alternate
+}
+@keyframes portalHologram{to{background-position:100% 50%}}
+@media (forced-colors:active){h1 .portal{-webkit-text-fill-color:currentColor;background:none;filter:none}}
+.sub{color:var(--ink-3);font-size:11.5px;margin-top:3px;letter-spacing:-.005em}
+
+/* ---- controls ---- */
+.searchbox{padding:12px 18px 13px 16px;border-bottom:1px solid var(--glass-line);position:relative;background:oklch(23.1% .004 264.487/.34)}
+.row{display:flex;align-items:stretch;gap:6px}
+.search-row{position:relative}
+#iw{position:relative;flex:1;min-width:0;height:var(--search-control-h)}
+input[type=text],input[type=number],input[type=date]{
+  appearance:none;-webkit-appearance:none;
+  font:inherit;background:var(--glass-control);color:var(--ink);
+  border:1px solid var(--line-strong);border-radius:var(--radius-control);
+  min-height:30px;padding:5px 10px;outline:none;box-shadow:var(--shadow-inset-field);
+  transition:border-color var(--dur) var(--ease-out),box-shadow var(--dur) var(--ease-out);
+}
+/* Keep real selects real: iOS supplies its familiar picker, and macOS gets
+   the standard menu affordance instead of a hand-drawn generic chevron. */
+select{appearance:auto;-webkit-appearance:menulist;color-scheme:dark;font:inherit;background:var(--glass-control);color:var(--ink);
+  border:1px solid var(--line-strong);border-radius:var(--radius-control);min-height:30px;padding:5px 8px;outline:none;box-shadow:var(--shadow-inset-field);
+  transition:border-color var(--dur) var(--ease-out),box-shadow var(--dur) var(--ease-out)}
+input[type=number]{font-variant-numeric:tabular-nums;-moz-appearance:textfield}
+input[type=number]::-webkit-inner-spin-button,input[type=number]::-webkit-outer-spin-button{-webkit-appearance:none;margin:0}
+#iw input{width:100%;height:100%;min-height:var(--search-control-h)}
+input[type=text]::placeholder{color:var(--ink-3)}
+input[type=text]:focus,input[type=number]:focus,input[type=date]:focus,select:focus{border-color:var(--accent);
+  box-shadow:var(--shadow-inset-field),0 0 0 3px var(--accent-tint)}
+button{font:inherit;cursor:pointer;border-radius:var(--radius-control);
+  min-height:30px;
+  transition:background var(--dur) var(--ease-out),border-color var(--dur),color var(--dur),transform .08s}
+button:active{transform:translateY(.5px)}
+button:focus-visible,.pane-h:focus-visible,summary:focus-visible{outline:none;box-shadow:0 0 0 3px var(--accent-tint);border-color:var(--accent)}
+#go{background:var(--accent);border:none;color:oklch(17% .02 254);font-weight:600;
+    height:var(--search-control-h);min-height:var(--search-control-h);padding:0 15px;box-shadow:var(--shadow-btn);white-space:nowrap;letter-spacing:-.005em}
+#go:hover{background:var(--accent-ink)}
+.iconbtn{background:var(--glass-control);border:1px solid var(--line-strong);color:var(--ink-2);
+  width:var(--search-control-h);height:var(--search-control-h);min-width:var(--search-control-h);min-height:var(--search-control-h);padding:0;display:flex;align-items:center;justify-content:center;
+  box-shadow:var(--shadow-btn)}
+.iconbtn:hover{color:var(--accent-ink);border-color:var(--accent);background:var(--hover)}
+.iconbtn:disabled{opacity:.5;cursor:default}
+.iconbtn svg{width:15px;height:15px;display:block}
+.iconbtn.busy svg{animation:pulse 1s ease-in-out infinite}
+.search-action{height:var(--search-control-h);min-height:var(--search-control-h);padding:0 9px;white-space:nowrap;
+  background:var(--glass-control);border:1px solid var(--line-strong);color:var(--ink-2);font-size:11.5px;font-weight:560;
+  box-shadow:var(--shadow-btn)}
+.search-action:hover{color:var(--accent-ink);border-color:var(--accent);background:var(--hover)}
+.search-action:disabled{opacity:.43;cursor:not-allowed;transform:none}
+.coord-launch{position:relative;flex:none}
+.coord-menu{position:absolute;right:0;top:calc(100% + 6px);z-index:1500;min-width:156px;padding:5px;
+  border:1px solid var(--glass-line);border-radius:10px;background:oklch(23.1% .004 264.487/.94);
+  box-shadow:var(--shadow-overlay);backdrop-filter:blur(24px) saturate(1.3);-webkit-backdrop-filter:blur(24px) saturate(1.3);
+  animation:pop .12s var(--ease-out-strong)}
+.coord-menu[hidden]{display:none}
+.coord-menu a{display:block;padding:8px 9px;border-radius:7px;color:var(--ink-2);font-size:11.5px;font-weight:560;
+  white-space:nowrap;text-decoration:none}
+.coord-menu a:hover,.coord-menu a:focus-visible{background:var(--accent-tint);color:var(--ink);outline:none;text-decoration:none}
+@keyframes pulse{50%{opacity:.35}}
+.ghost{background:var(--glass-control);border:1px solid var(--line-strong);color:var(--ink);
+       padding:7px 12px;font-weight:500;box-shadow:var(--shadow-btn)}
+.ghost:hover{background:var(--hover)}
+/* The panel can be intentionally narrow. Use its own inline size—not the
+   browser width—to keep control labels compact and every action one line high. */
+#side .ghost,#side .search-action,#side #go,#side select,#side input[type=text],#side input[type=number],
+#side input[type=date],#side input[type=url],#side .check,#side .ovrow{font-size:var(--sidebar-control-font)}
+#side .linkbtn,#side .ovrow .via{font-size:var(--sidebar-caption-font)}
+#side .ghost,#side .search-action,#side #go,#side .terrain-action-row button{min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+
+.check{display:flex;align-items:center;gap:7px;cursor:pointer;color:var(--ink-2);
+  font-size:11.5px;font-weight:500;min-height:28px;padding:4px 8px;border-radius:7px;
+  border:1px solid transparent;transition:background var(--dur),border-color var(--dur)}
+.check:hover{background:var(--hover);border-color:var(--line)}
+.check input{flex:none}
+.check.on{background:var(--accent-tint);border-color:var(--accent);color:var(--ink)}
+.check.fire.on{background:var(--red-tint);border-color:var(--red)}
+.check.fire input[type=checkbox]:checked{border-color:var(--red);background-color:var(--red)}
+
+/* Web equivalent of SwiftUI's macOS checkbox Toggle: checkbox first, label
+   trailing, and either one can toggle the state. */
+input[type=checkbox]{appearance:none;-webkit-appearance:none;width:16px;height:16px;margin:0;padding:0;
+  border:1px solid oklch(62% .01 264/.7);border-radius:5px;background:linear-gradient(180deg,oklch(100% 0 0/.12),oklch(100% 0 0/.04));
+  box-shadow:inset 0 1px 0 oklch(100% 0 0/.12),0 1px 2px oklch(0% 0 0/.25);cursor:pointer;
+  transition:background-color var(--dur),border-color var(--dur),box-shadow var(--dur),transform .08s}
+input[type=checkbox]:hover{border-color:oklch(74% .02 255/.88);background-color:oklch(100% 0 0/.08)}
+input[type=checkbox]:active{transform:scale(.94)}
+input[type=checkbox]:checked{border-color:oklch(63% .18 253);background-color:var(--accent);
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='m3.5 8.2 2.7 2.7 6-6' fill='none' stroke='%23fff' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  box-shadow:inset 0 1px 0 oklch(100% 0 0/.25),0 1px 3px oklch(0% 0 0/.28)}
+input[type=checkbox]:focus-visible{outline:none;box-shadow:0 0 0 3px var(--accent-tint),inset 0 1px 0 oklch(100% 0 0/.2)}
+input[type=checkbox]:disabled{opacity:.42;cursor:not-allowed}
+
+/* ---- status chips ---- */
+#status{padding:9px 18px 9px 16px;font-size:11px;color:var(--ink-3);border-bottom:1px solid var(--glass-line);
+        min-height:36px;display:flex;align-items:center;gap:6px;flex-wrap:wrap;background:oklch(23.1% .004 264.487/.28)}
+.chip{background:var(--glass-control);border:1px solid var(--line);border-radius:var(--radius-chip);
+      padding:2px 8px;font-size:10.5px;font-weight:500;color:var(--ink-2);letter-spacing:-.005em}
+.chip.on{background:var(--green-tint);border-color:transparent;color:var(--green)}
+.chip.err{background:var(--red-tint);border-color:transparent;color:var(--red)}
+
+/* ---- summary + passes ---- */
+#summary{font-size:11.5px;line-height:1.65}
+#summary b{color:var(--green);font-weight:600}
+#summary .k{color:var(--ink-3);display:inline-block;width:98px;font-weight:500}
+#summary .srow{cursor:pointer;border-radius:var(--radius-chip);padding:1px 5px;margin-left:-5px;
+  transition:background var(--dur) var(--ease-out)}
+#summary .srow:hover{background:var(--hover)}
+#summary .srow:hover b{color:var(--accent-ink)}
+#passes{font-size:11.5px}
+#passes .pr{display:flex;justify-content:space-between;gap:8px;padding:2.5px 0}
+#passes .pr b{color:var(--ink);font-weight:600}
+#passes .pr .w{color:var(--green);font-variant-numeric:tabular-nums;font-weight:500}
+#passes .fine{color:var(--ink-3);font-size:10px;margin-top:7px;line-height:1.55}
+
+/* ---- results ---- */
+#results{}
+/* one scrollbar treatment for every scrolling surface in the app */
+.pane-b,#ac,#menu,#results,#panes{scrollbar-width:thin;scrollbar-color:var(--line-strong) transparent}
+.pane-b::-webkit-scrollbar,#ac::-webkit-scrollbar,#menu::-webkit-scrollbar,
+#results::-webkit-scrollbar,#panes::-webkit-scrollbar{width:10px;height:10px}
+.pane-b::-webkit-scrollbar-track,#ac::-webkit-scrollbar-track,#menu::-webkit-scrollbar-track,
+#results::-webkit-scrollbar-track,#panes::-webkit-scrollbar-track{background:transparent}
+.pane-b::-webkit-scrollbar-thumb,#ac::-webkit-scrollbar-thumb,#menu::-webkit-scrollbar-thumb,
+#results::-webkit-scrollbar-thumb,#panes::-webkit-scrollbar-thumb{
+  background:var(--line-strong);border-radius:6px;border:3px solid transparent;background-clip:content-box}
+.pane-b::-webkit-scrollbar-thumb:hover,#ac::-webkit-scrollbar-thumb:hover,#menu::-webkit-scrollbar-thumb:hover,
+#results::-webkit-scrollbar-thumb:hover,#panes::-webkit-scrollbar-thumb:hover{
+  background:var(--ink-3);background-clip:content-box}
+.pane-b::-webkit-scrollbar-corner,#panes::-webkit-scrollbar-corner{background:transparent}
+.grp{padding:10px 18px 6px 16px;font-size:10px;font-weight:600;letter-spacing:.08em;
+  text-transform:uppercase;color:var(--ink-3);background:var(--page);position:sticky;top:0;
+  border-bottom:1px solid var(--line);z-index:2;cursor:pointer;user-select:none;
+  transition:color var(--dur)}
+.grp:hover{color:var(--ink-2)}
+.grp .car{float:right;font-weight:500;letter-spacing:.02em}
+.item{display:flex;gap:11px;padding:11px 18px 11px 16px;border-bottom:1px solid var(--line);
+  cursor:pointer;position:relative;transition:background var(--dur) var(--ease-out)}
+.item:hover{background:var(--hover)}
+.item.sel{background:var(--accent-tint)}
+.item.sel::before{content:"";position:absolute;left:0;top:0;bottom:0;width:2.5px;background:var(--accent)}
+.more-items{display:block;width:calc(100% - 32px);margin:8px 16px 12px;padding:8px 10px;
+  border:1px solid var(--line);border-radius:var(--radius-control);background:var(--inset);
+  color:var(--ink-2);font:inherit;cursor:pointer}
+.more-items:hover{background:var(--hover);color:var(--ink)}
+.thumb{width:60px;height:60px;min-width:60px;border-radius:var(--radius-chip);object-fit:cover;
+  background:var(--surface);box-shadow:0 0 0 1px var(--line)}
+.meta{flex:1;min-width:0}
+.ttl{font-weight:600;font-size:12.5px;letter-spacing:-.01em;white-space:nowrap;
+  overflow:hidden;text-overflow:ellipsis}
+.dt{color:var(--accent-ink);font-size:11.5px;margin-top:2px;font-variant-numeric:tabular-nums;font-weight:500}
+.tags{margin-top:5px;display:flex;gap:4px;flex-wrap:wrap}
+.tag{font-size:10px;font-weight:500;background:var(--glass-control);border-radius:var(--radius-chip);
+  padding:1.5px 6px;color:var(--ink-3);box-shadow:0 0 0 1px var(--line)}
+.tag.fresh{background:var(--green-tint);color:var(--green);box-shadow:none}
+.tag.cloud{background:var(--orange-tint);color:var(--orange);box-shadow:none}
+.tag.res{color:var(--ink)}
+.empty{padding:40px 22px;text-align:center;color:var(--ink-3);font-size:12px;line-height:1.8}
+
+/* ---- autocomplete ---- */
+#ac{position:absolute;left:0;right:0;top:calc(100% + 5px);background:var(--glass-card);
+  border-radius:var(--radius-card);box-shadow:var(--shadow-overlay);z-index:1200;
+  overflow:hidden;max-height:300px;overflow-y:auto;
+  animation:pop .12s var(--ease-out-strong);backdrop-filter:blur(18px) saturate(1.2);-webkit-backdrop-filter:blur(18px) saturate(1.2)}
+@keyframes pop{from{opacity:0;transform:translateY(-4px)}}
+#ac .r{padding:8px 12px;cursor:pointer;border-bottom:1px solid var(--line)}
+#ac .r:last-child{border-bottom:none}
+#ac .r:hover,#ac .r.k{background:var(--accent-tint)}
+#ac .r .p{font-size:12.5px;font-weight:600;letter-spacing:-.01em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#ac .r .s{font-size:10.5px;color:var(--ink-3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:1px}
+#ac .r .t{font-size:9.5px;color:var(--accent-ink);text-transform:uppercase;letter-spacing:.07em;font-weight:600;margin-top:2px}
+#ac .note{padding:10px 12px;color:var(--ink-3);font-size:11px}
+
+/* ---- floating map tool dock -------------------------------------------- */
+#sideToggleDock{position:absolute;left:calc(12px + var(--safe-left));top:calc(12px + var(--safe-top));z-index:1300;
+  transition:left .34s var(--ease-out-strong);touch-action:manipulation;user-select:none;-webkit-user-select:none}
+body:not(.collapsed) #sideToggleDock{left:calc(var(--side-w) + 12px + var(--safe-left))}
+#mapDock{position:absolute;right:calc(12px + var(--safe-right));top:calc(12px + var(--safe-top));z-index:1300;display:flex;flex-direction:column;gap:8px;
+  transition:right .34s var(--ease-out-strong),top .34s var(--ease-out-strong);touch-action:none;user-select:none;-webkit-user-select:none}
+.map-tool{position:relative;width:32px;height:32px;min-height:32px;padding:0;flex:none;
+  border-radius:var(--radius-control);background:oklch(26% .006 271.191/.76);
+  border:1px solid var(--glass-line);color:var(--ink-2);display:flex;align-items:center;justify-content:center;
+  backdrop-filter:blur(16px) saturate(1.25);-webkit-backdrop-filter:blur(16px) saturate(1.25);box-shadow:var(--shadow-raised);
+  cursor:pointer;will-change:transform;transition:color var(--dur),background var(--dur),box-shadow .22s var(--ease-out-strong),transform .22s var(--ease-out-strong)}
+.map-tool[hidden]{display:none!important}
+.map-tool:hover{color:var(--accent-ink);background:oklch(31.8% .007 274.747/.88);transform:scale(1.035)}
+.map-tool:active{cursor:grabbing}
+.map-tool:disabled{opacity:.62;cursor:progress}
+.map-tool svg{width:16px;height:16px;pointer-events:none}
+.map-tool.dock-dragging{z-index:2;cursor:grabbing;color:var(--accent-ink);background:oklch(34% .018 256/.94);
+  box-shadow:0 12px 28px oklch(0% 0 0/.42),0 0 0 1px oklch(100% 0 0/.2);transition:none}
+#mapDock.dock-reordering .map-tool:not(.dock-dragging){animation:dockWiggle .16s ease-in-out infinite alternate}
+#mapDock.dock-reordering .map-tool:nth-child(even):not(.dock-dragging){animation-direction:alternate-reverse}
+@keyframes dockWiggle{from{rotate:-.65deg}to{rotate:.65deg}}
+.tool-popover{position:absolute;z-index:1310;width:min(340px,calc(100vw - 20px));max-height:calc(100dvh - 20px);overflow:auto;
+  background:oklch(23.1% .004 264.487/.88);border:1px solid var(--glass-line);border-radius:14px;
+  box-shadow:var(--shadow-overlay);backdrop-filter:blur(28px) saturate(1.32);-webkit-backdrop-filter:blur(28px) saturate(1.32);
+  animation:toolPopoverIn .2s var(--ease-out-strong);transform-origin:top left}
+.tool-popover[hidden]{display:none}
+@keyframes toolPopoverIn{from{opacity:0;transform:translateY(-5px) scale(.975)}to{opacity:1;transform:none}}
+.tool-popover-head{display:flex;align-items:center;gap:8px;padding:10px 10px 9px 12px;border-bottom:1px solid var(--glass-line)}
+.tool-popover-title{font-size:12px;font-weight:650;color:var(--ink);flex:1}
+.tool-popover-state{font-size:10.5px;color:var(--ink-3)}
+.tool-close{width:28px;height:28px;min-height:28px;padding:0;border:0;border-radius:7px;background:transparent;color:var(--ink-3);font-size:17px;line-height:1}
+.tool-close:hover{background:var(--hover);color:var(--ink)}
+#snapshotPanel{width:min(340px,calc(100vw - 20px))}
+.snapshot-export-body{display:grid;gap:10px;padding:12px}
+.snapshot-export-choice{display:grid;gap:5px}
+.snapshot-export-choice label{font-size:12px;font-weight:600;color:var(--ink-3)}
+#snapshotScale{width:100%;min-height:34px}
+#snapshotMeta{min-height:32px;color:var(--ink-2);font-size:12px;line-height:1.42}
+.snapshot-export-note{color:var(--ink-3);font-size:12px;line-height:1.42}
+#snapshotStatus{position:absolute;right:52px;top:52px;z-index:1320;max-width:min(330px,calc(100vw - 20px));
+  padding:7px 9px;border:1px solid var(--glass-line);border-radius:var(--radius-chip);background:var(--glass-card);color:var(--ink-2);
+  font-size:11px;line-height:1.35;box-shadow:var(--shadow-raised);backdrop-filter:blur(16px) saturate(1.2);-webkit-backdrop-filter:blur(16px) saturate(1.2)}
+#snapshotStatus:empty{display:none}
+/* Map capture selection: a Mac screenshot-style rectangle over the map. The
+   dimming is the box's own spread shadow, so the selected area stays a clear
+   window onto the live map beneath it. */
+.snap-sel{position:fixed;z-index:5000;overflow:hidden;touch-action:none;cursor:crosshair;user-select:none;-webkit-user-select:none}
+.snap-sel[hidden]{display:none}
+.snap-sel-box{position:absolute;left:0;top:0;cursor:move;outline:none;
+  box-shadow:0 0 0 1px rgba(255,255,255,.95),0 0 0 2px rgba(0,0,0,.28),0 0 0 100vmax rgba(0,0,0,.42)}
+.snap-sel-box:focus-visible{box-shadow:0 0 0 2px var(--ui-accent,#0a84ff),0 0 0 3px rgba(0,0,0,.28),0 0 0 100vmax rgba(0,0,0,.42)}
+.snap-sel-box i{position:absolute;width:44px;height:44px;margin:-22px 0 0 -22px;touch-action:none}
+.snap-sel-box i::after{content:"";position:absolute;left:17px;top:17px;width:10px;height:10px;border-radius:50%;
+  background:#fff;box-shadow:0 0 0 .5px rgba(0,0,0,.35),0 1px 4px rgba(0,0,0,.35)}
+.snap-sel-box [data-h="nw"]{left:0;top:0;cursor:nwse-resize}.snap-sel-box [data-h="n"]{left:50%;top:0;cursor:ns-resize}
+.snap-sel-box [data-h="ne"]{left:100%;top:0;cursor:nesw-resize}.snap-sel-box [data-h="e"]{left:100%;top:50%;cursor:ew-resize}
+.snap-sel-box [data-h="se"]{left:100%;top:100%;cursor:nwse-resize}.snap-sel-box [data-h="s"]{left:50%;top:100%;cursor:ns-resize}
+.snap-sel-box [data-h="sw"]{left:0;top:100%;cursor:nesw-resize}.snap-sel-box [data-h="w"]{left:0;top:50%;cursor:ew-resize}
+.snap-sel-box.snap-small [data-h="n"],.snap-sel-box.snap-small [data-h="s"],.snap-sel-box.snap-small [data-h="e"],.snap-sel-box.snap-small [data-h="w"]{display:none}
+.snap-sel-size{position:absolute;left:0;bottom:calc(100% + 8px);padding:3px 8px;border-radius:999px;white-space:nowrap;
+  font:600 11px/1.3 var(--ui-font,system-ui),system-ui;font-variant-numeric:tabular-nums;color:#fff;background:rgba(0,0,0,.55);
+  backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);pointer-events:none}
+.snap-sel-box.snap-size-inside .snap-sel-size{bottom:auto;top:8px;left:8px}
+.snap-sel-bar{position:absolute;left:0;top:0;display:flex;align-items:center;gap:6px;padding:5px;border-radius:999px;cursor:default;
+  background:var(--lg-popover,rgba(30,30,32,.8));color:var(--ui-text,#f5f5f7);box-shadow:var(--lg-rim-lifted,0 18px 50px rgba(0,0,0,.4));
+  backdrop-filter:var(--lg-filter,blur(30px) saturate(1.6));-webkit-backdrop-filter:var(--lg-filter,blur(30px) saturate(1.6));
+  font:500 12px/1.2 var(--ui-font,system-ui),system-ui;max-width:calc(100% - 16px);flex-wrap:wrap;justify-content:center}
+.snap-sel-bar button{min-height:32px;border:0;border-radius:999px;background:transparent;color:inherit;font:inherit;cursor:pointer;padding:0 12px}
+.snap-sel-bar button:disabled{opacity:.38;cursor:default}
+.snap-sel-icon{width:32px;padding:0!important;font-size:19px!important;line-height:1}
+.snap-sel-icon:hover,.snap-sel-text:hover{background:var(--ui-fill,rgba(127,127,127,.18))}
+.snap-sel-res{display:flex;padding:2px;border-radius:999px;background:var(--ui-fill,rgba(127,127,127,.18))}
+.snap-sel-res button{min-height:28px;padding:0 10px;font-weight:600;font-variant-numeric:tabular-nums}
+.snap-sel-res button[aria-checked="true"]{background:var(--lg-lens,rgba(255,255,255,.2));box-shadow:var(--lg-lens-rim,0 2px 8px rgba(0,0,0,.3))}
+.snap-sel-meta{padding:0 4px;color:var(--ui-text-muted,#aeaeb2);font-variant-numeric:tabular-nums;white-space:nowrap}
+.snap-sel-save{background:var(--ui-accent,#0a84ff)!important;color:#fff!important;font-weight:650!important;padding:0 16px!important}
+.snap-sel-save:hover{filter:brightness(1.08)}
+body.snap-selecting #snapshotStatus{z-index:5001}
+.dnr-handle{width:18px;height:18px;margin:-9px 0 0 -9px;border-radius:50%;background:#fff;border:2px solid #111;box-shadow:0 1px 5px rgba(0,0,0,.4);cursor:nwse-resize}
+body.dnr-selecting #map{cursor:crosshair}
+@media (max-width:480px){.snap-sel-meta:not(.snap-warn){display:none}.snap-sel-bar{border-radius:22px}}
+#ctl{position:absolute;right:calc(54px + var(--safe-right));top:calc(12px + var(--safe-top));z-index:1310;
+  background:var(--glass-card);backdrop-filter:blur(22px) saturate(1.3);-webkit-backdrop-filter:blur(22px) saturate(1.3);
+  border:1px solid var(--glass-line);border-radius:var(--radius-card);box-shadow:var(--shadow-overlay);padding:11px 13px;width:276px;
+  transition:box-shadow .22s var(--ease-out-strong),transform .22s var(--ease-out-strong);will-change:transform;touch-action:none}
+#ctl[hidden]{display:none}
+#ctl.dragging{box-shadow:0 18px 42px oklch(0% 0 0/.42),0 0 0 1px oklch(100% 0 0/.18);transform:scale(1.018);transition:none}
+#ctlHead{display:flex;align-items:flex-start;gap:9px;cursor:default;user-select:none;-webkit-user-select:none}
+#ctl.dragging #ctlHead{cursor:grabbing}
+#ctlHead .grow{flex:1;min-width:0}
+#ctlCollapse{width:28px;height:28px;min-height:28px;padding:0;border:0;border-radius:7px;background:transparent;color:var(--ink-3);display:grid;place-items:center}
+#ctlCollapse:hover{background:var(--hover);color:var(--ink)}
+#ctlCollapse svg{width:14px;height:14px;pointer-events:none}
+.cap{font-size:9.5px;text-transform:uppercase;letter-spacing:.09em;color:var(--ink-3);
+  font-weight:600;margin-bottom:5px}
+.nm{font-size:12.5px;font-weight:600;letter-spacing:-.01em;margin-bottom:2px;word-break:break-word}
+.dd{font-size:11.5px;color:var(--accent-ink);font-weight:500;margin-bottom:9px}
+input[type=range]{appearance:none;-webkit-appearance:none;width:100%;height:20px;padding:0;border:none;background:transparent;cursor:pointer}
+input[type=range]::-webkit-slider-runnable-track{height:4px;border-radius:999px;background:var(--line-strong);box-shadow:inset 0 1px 1px oklch(0% 0 0/.32)}
+input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:16px;height:16px;margin-top:-6px;border-radius:50%;
+  border:1px solid oklch(0% 0 0/.28);background:oklch(96% .006 250);box-shadow:0 1px 4px oklch(0% 0 0/.38),inset 0 1px 0 #fff}
+input[type=range]::-moz-range-track{height:4px;border:0;border-radius:999px;background:var(--line-strong)}
+input[type=range]::-moz-range-thumb{width:16px;height:16px;border-radius:50%;border:1px solid oklch(0% 0 0/.28);background:oklch(96% .006 250);box-shadow:0 1px 4px oklch(0% 0 0/.38)}
+input[type=range]:focus-visible{outline:none;filter:drop-shadow(0 0 4px var(--accent))}
+#mosStat{font-size:10px;color:var(--ink-3);margin-top:7px;line-height:1.5}
+#ctlLink{margin-top:9px;font-size:10.5px}
+a{color:var(--accent-ink);text-decoration:none}
+a:hover{text-decoration:underline}
+
+/* ---- context menu ---- */
+#menu{position:absolute;z-index:1600;background:var(--glass-card);border:1px solid var(--glass-line);border-radius:var(--radius-card);
+  box-shadow:var(--shadow-overlay);min-width:274px;max-width:340px;max-height:346px;
+  overflow-y:auto;font-size:12px;animation:pop .12s var(--ease-out-strong);backdrop-filter:blur(20px) saturate(1.2);-webkit-backdrop-filter:blur(20px) saturate(1.2)}
+#menu .h{padding:8px 12px;border-bottom:1px solid var(--line);color:var(--ink-3);font-size:9.5px;
+  text-transform:uppercase;letter-spacing:.08em;font-weight:600;position:sticky;top:0;background:var(--surface)}
+#menu .m{padding:7px 12px;cursor:pointer;border-bottom:1px solid var(--line);position:relative}
+#menu .m[role="menuitem"]{outline:none}
+#menu .m[role="menuitem"]:focus-visible{background:var(--hover);box-shadow:inset 0 0 0 2px var(--accent)}
+#menu .m.disabled{cursor:default;opacity:.48}
+#menu .m:last-child{border-bottom:none}
+#menu .m:hover{background:var(--hover)}
+#menu .m.cur{background:var(--accent-tint)}
+#menu .m.cur::before{content:"";position:absolute;left:0;top:0;bottom:0;width:2.5px;background:var(--accent)}
+#menu .m .a{font-weight:600;letter-spacing:-.01em}
+#menu .m .b{color:var(--ink-3);font-size:10.5px;margin-top:1.5px}
+
+/* ---- misc ---- */
+.foot{padding:7px 12px 8px;border-top:1px solid var(--glass-line);font-size:10px;color:var(--ink-3);line-height:1.5;background:oklch(23.1% .004 264.487/.34)}
+.foot-meta{display:flex;align-items:center;justify-content:space-between;gap:12px;min-height:24px;padding:0 5px}
+.about-disclosure summary{min-height:24px;padding:2px 5px;font-size:10.5px;font-weight:500;color:var(--ink-3)}
+.about-copy{padding:5px 20px 3px;font-size:10px;line-height:1.5;color:var(--ink-3)}
+.hide{display:none}
+.spin{display:inline-block;width:10px;height:10px;border:2px solid var(--line-strong);
+  border-top-color:var(--accent);border-radius:50%;animation:s .7s linear infinite}
+@keyframes s{to{transform:rotate(360deg)}}
+#blk{position:absolute;left:50%;top:calc(56px + var(--safe-top));transform:translateX(-50%);z-index:900;max-width:520px;
+  background:var(--glass-card);backdrop-filter:blur(18px) saturate(1.2);-webkit-backdrop-filter:blur(18px) saturate(1.2);border-radius:var(--radius-card);
+  box-shadow:var(--shadow-overlay),inset 3px 0 0 var(--red);padding:13px 16px;font-size:12px;line-height:1.65}
+#blk b{color:var(--red)}
+#blk code{background:var(--page);padding:1.5px 5px;border-radius:4px;font-size:11px;
+  font-family:"JetBrains Mono",ui-monospace,"SF Mono",monospace}
+
+/* ---- filter grid ---- */
+.fgrid{display:grid;grid-template-columns:92px minmax(0,1fr);gap:8px 10px;align-items:center}
+.fgrid label{color:var(--ink-3);font-size:11.5px;font-weight:500;white-space:nowrap;justify-self:start}
+.fgrid select{width:100%;font-size:12px;
+  background:var(--glass-control);box-shadow:none}
+/* ---- explicit date range ---- */
+.drow{display:flex;align-items:center;gap:6px;width:100%;min-width:0}
+.drow input[type=date]{flex:1 1 0;min-width:0;font-size:12px;
+  background:var(--glass-control);color:var(--ink);color-scheme:dark;font-variant-numeric:tabular-nums}
+.drow input[type=date]:focus{outline:none;border-color:var(--accent)}
+.drow .sep{color:var(--ink-3);font-size:11px;flex:none}
+.drow.bad input[type=date]{border-color:var(--orange)}
+.dnote{grid-column:1/-1;font-size:10.5px;color:var(--ink-3);line-height:1.5;margin-top:-3px}
+.dnote.warn{color:var(--orange)}
+.dpre{grid-column:1/-1;display:flex;flex-wrap:wrap;gap:5px;margin-top:-1px}
+.dpre button{font-size:10.5px;padding:3px 8px;border-radius:var(--radius-chip);
+  background:var(--field);color:var(--ink-3);border:1px solid var(--line);cursor:pointer}
+.dpre button:hover{background:var(--hover-2);color:var(--ink)}
+.hide-row{display:none!important}
+.toggles{display:flex;flex-wrap:wrap;gap:6px;margin-top:11px;padding-top:11px;
+  border-top:1px solid var(--line)}
+.terdl{margin-top:11px;padding-top:11px;border-top:1px solid var(--line)}
+.warmmsg{font-size:10.5px;color:var(--ink-3);margin-top:7px;line-height:1.55;min-height:14px}
+.warmmsg .bar{height:4px;border-radius:2px;background:var(--field);overflow:hidden;margin:5px 0 4px}
+.warmmsg .bar i{display:block;height:100%;background:var(--accent);transition:width .25s var(--ease-out)}
+.warmmsg .ok{color:var(--green);font-weight:600}
+.terinfo{margin-top:11px;padding-top:10px;border-top:1px solid var(--line);
+  font-size:11px;color:var(--ink-3);line-height:1.6}
+.terinfo b{color:var(--ink-2);font-weight:600}
+.terinfo .src{color:var(--green);font-weight:600}
+.terinfo .warn{color:var(--orange)}
+.terinfo .row2{display:flex;justify-content:space-between;gap:8px;padding:1.5px 0}
+.terinfo .yr{color:var(--accent-ink);font-variant-numeric:tabular-nums}
+.terlegend{display:none;margin-top:11px;padding:9px 10px;border:1px solid var(--line);border-radius:9px;
+  background:var(--glass-control);font-size:9.5px;color:var(--ink-3)}
+.terlegend.on{display:block}
+.terlegend .bar{height:8px;border-radius:999px;border:1px solid oklch(100% 0 0/.12);margin:5px 0 4px}
+.terlegend .ticks{display:flex;justify-content:space-between;gap:3px;font-variant-numeric:tabular-nums}
+.terlegend .caption{font-size:10.5px;color:var(--ink-2);font-weight:600}
+.terrain-appearance{margin-top:11px;padding-top:10px;border-top:1px solid var(--line)}
+.terrain-appearance > summary{list-style:none;display:flex;align-items:center;gap:7px;min-height:28px;color:var(--ink-2);font-size:11.5px;font-weight:600;cursor:pointer;border-radius:7px;padding:3px 5px}
+.terrain-appearance > summary::-webkit-details-marker{display:none}
+.terrain-appearance > summary::before{content:"";width:6px;height:6px;border-right:1.5px solid var(--ink-3);border-bottom:1.5px solid var(--ink-3);transform:rotate(-45deg);transition:transform var(--dur)}
+.terrain-appearance[open] > summary::before{transform:rotate(45deg) translate(-1px,-1px)}
+.terrain-appearance > summary:hover{background:var(--hover)}
+.terrain-look-grid{display:grid;grid-template-columns:82px minmax(0,1fr) 38px;gap:7px 8px;align-items:center;padding:8px 5px 2px}
+.terrain-look-grid label{font-size:11px;color:var(--ink-3)}
+.terrain-look-grid output{font-size:10.5px;color:var(--ink-3);text-align:right;font-variant-numeric:tabular-nums}
+.terrain-look-reset{margin:7px 5px 1px;width:calc(100% - 10px)}
+.terrain-mode{display:grid;grid-template-columns:repeat(3,1fr);gap:5px;margin-bottom:11px;padding:3px;border:1px solid var(--line);border-radius:9px;background:var(--inset)}
+.terrain-mode button{min-height:31px;border:0;border-radius:7px;background:transparent;color:var(--ink-3);font:600 11.5px/1.2 inherit;cursor:pointer}
+.terrain-mode button[aria-pressed="true"]{background:var(--hover-2);color:var(--ink);box-shadow:var(--shadow-btn)}
+.terrain-mode-note{margin:-3px 2px 10px;color:var(--ink-3);font-size:10.5px;line-height:1.45}
+#pointCloudPanel{--pc-split:60%;position:absolute;inset:calc(8px + var(--safe-top)) calc(8px + var(--safe-right)) calc(8px + var(--safe-bottom)) auto;
+  z-index:1320;width:min(560px,calc(100vw - 320px));min-width:380px;display:grid;grid-template-rows:var(--pc-split) 8px minmax(0,1fr);
+  overflow:hidden;border:1px solid var(--glass-line);border-radius:14px;background:var(--glass-side);box-shadow:0 18px 48px oklch(0% 0 0/.34);
+  backdrop-filter:blur(28px) saturate(1.32);-webkit-backdrop-filter:blur(28px) saturate(1.32)}
+#pointCloudPanel[hidden]{display:none!important}
+#pcCanvas{position:relative;min-height:0;overflow:hidden;background:#101214}
+#pcCanvas canvas{display:block;width:100%!important;height:100%!important;outline:none}
+#pcWidthHandle{position:absolute;left:0;top:36px;bottom:36px;width:8px;cursor:ew-resize;z-index:3}
+#pcSplitHandle{cursor:ns-resize;background:linear-gradient(90deg,transparent 35%,var(--glass-line) 35% 65%,transparent 65%)}
+.pc-head{position:absolute;inset:8px 8px auto 8px;z-index:4;display:flex;gap:8px;align-items:center;padding:7px 8px;border:1px solid var(--glass-line);border-radius:9px;background:oklch(20.9% .004 264.477/.76);backdrop-filter:blur(16px)}
+.pc-title{font-weight:650;flex:1}.pc-link{display:flex;gap:5px;align-items:center;color:var(--ink-2);font-size:11px}.pc-close{width:28px;height:28px;border:0;border-radius:7px;background:var(--glass-control);color:var(--ink);font-size:19px;cursor:pointer}
+.pc-controls{min-height:0;overflow:auto;padding:12px 13px 16px;color:var(--ink);overscroll-behavior:contain}
+#pcStatus{margin-bottom:10px;color:var(--ink-2);font-size:10.5px;line-height:1.4}#pcStatus[data-state="error"]{color:#ffb0aa}#pcStatus[data-state="empty"]{color:#ffd18a}
+.pc-grid{display:grid;grid-template-columns:minmax(105px,.8fr) minmax(120px,1.2fr) auto;gap:8px 9px;align-items:center}.pc-grid label{font-size:11px;color:var(--ink-2)}.pc-grid input[type="range"],.pc-grid select{width:100%}.pc-grid output{min-width:38px;text-align:right;font:600 10.5px/1.2 ui-monospace,monospace;color:var(--ink-3)}
+.pc-section{margin-top:12px;padding-top:10px;border-top:1px solid var(--glass-line)}.pc-section-title{font-size:10px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-3);margin-bottom:7px}.pc-presets{display:flex;gap:6px;margin-bottom:8px}.pc-presets button{flex:1}.pc-classes{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:5px 10px}.pc-classes label{display:flex;gap:6px;align-items:center;font-size:10.5px;color:var(--ink-2)}
+.pc-canopy{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;align-items:center;margin-bottom:9px}
+.pc-canopy input[type="range"]{width:100%}
+.pc-canopy output{font:600 10.5px/1.2 ui-monospace,monospace;color:var(--ink-3);white-space:nowrap}
+/* Progressive disclosure: the slider is the control, the eight ASPRS classes
+   are the escape hatch for someone who already knows which number they want. */
+.pc-advanced{margin-top:10px}
+.pc-advanced summary{cursor:pointer;font-size:10.5px;color:var(--ink-3);padding:4px 0;list-style:none}
+.pc-advanced summary::-webkit-details-marker{display:none}
+.pc-advanced summary::before{content:"\25B8 ";display:inline-block;transition:transform .16s ease}
+.pc-advanced[open] summary::before{content:"\25BE "}
+.pc-advanced .pc-classes{margin-top:6px}
+.pc-reset{width:100%;margin-top:12px}
+/* The grabber is desktop-hidden; on a phone it is the sheet's drag target and
+   its resize affordance. */
+#pcGrabber{display:none}
+
+/* ---- mobile: a detented bottom sheet, not a fixed-height slab ----
+   Apple's guidance for secondary content on a phone is a sheet the person can
+   resize between detents, with a grabber to say so, and left non-modal so the
+   content behind stays live. The panel previously pinned itself to a fixed
+   top:40dvh with no way to move it: the 3D view got about a third of the
+   screen, the map was permanently half-covered, and every control sat well
+   under the 44px touch minimum.
+
+   Three detents. Peek leaves the map fully usable with the status line still
+   readable; half is the working view; full is for the controls. Height is
+   driven in pixels from JS so the drag maths and the snap animation agree. */
+@media(max-width:760px){
+  #pointCloudPanel{
+    inset:auto var(--safe-right) 0 var(--safe-left);
+    width:auto;min-width:0;height:var(--pc-sheet,58dvh);
+    display:flex;flex-direction:column;
+    border-radius:16px 16px 0 0;border-bottom:0;
+    padding-bottom:var(--safe-bottom);
+    box-shadow:0 -10px 44px oklch(0% 0 0/.44);
+    transition:height .34s cubic-bezier(.32,.72,0,1);
+  }
+  /* touch-action belongs on the drag targets alone. Setting it on the panel
+     inherits into the control list and stops the browser scrolling it at all,
+     which is invisible to a mouse-driven test and total on a phone. */
+  #pcGrabber,#pointCloudPanel .pc-head{touch-action:none}
+  .pc-controls{touch-action:pan-y}
+  #pointCloudPanel.pc-dragging{transition:none}
+  #pcWidthHandle,#pcSplitHandle{display:none}
+
+  #pcGrabber{display:flex;align-items:center;justify-content:center;flex:none;
+    height:44px;width:100%;padding:0;border:0;background:transparent;cursor:grab;
+    -webkit-tap-highlight-color:transparent}
+  #pcGrabber span{display:block;width:36px;height:5px;border-radius:3px;background:var(--ink-3);opacity:.5}
+  #pcGrabber:active{cursor:grabbing}
+  #pcGrabber:active span{opacity:.8}
+  #pcGrabber:focus-visible{outline:2px solid var(--ink-2);outline-offset:-4px;border-radius:8px}
+
+  /* In flow on a phone, so it is the one thing always on screen. */
+  .pc-head{position:static;inset:auto;flex:none;margin:0 10px 8px;padding:6px 10px;min-height:44px}
+  .pc-title{font-size:13px}
+  .pc-link{min-height:44px;padding:0 4px;font-size:12px}
+  .pc-link input{width:20px;height:20px}
+  .pc-close{width:44px;height:44px;font-size:24px}
+
+  /* The 3D view is the feature; the controls yield to it and scroll. Without a
+     floor the canvas was squeezed to a 125px strip at the half detent. */
+  #pcCanvas{flex:1 1 auto;min-height:180px;border-radius:0}
+  .pc-controls{flex:0 1 auto;max-height:52%;padding:12px 14px 18px}
+
+  /* Peek shows the header alone: the map behind is the point of that detent. */
+  #pointCloudPanel[data-detent="peek"] #pcCanvas,
+  #pointCloudPanel[data-detent="peek"] .pc-controls{display:none}
+
+  /* Touch targets. Everything here was 10-11px text with a 4px slider thumb. */
+  #pcStatus{font-size:12px;margin-bottom:12px}
+  .pc-grid{grid-template-columns:minmax(96px,1fr) minmax(110px,1.3fr) auto;gap:2px 10px}
+  .pc-grid label{font-size:12.5px;min-height:44px;display:flex;align-items:center}
+  .pc-grid select{min-height:44px;font-size:13px}
+  .pc-grid output{font-size:12px;min-width:44px}
+  .pc-grid input[type="range"]{height:44px}
+  .pc-grid input[type="checkbox"]{width:22px;height:22px}
+  .pc-controls input[type="range"]::-webkit-slider-thumb{width:26px;height:26px}
+  .pc-controls input[type="range"]::-moz-range-thumb{width:26px;height:26px}
+  .pc-section-title{font-size:11px}
+  .pc-presets{gap:8px}
+  .pc-presets button{min-height:44px;font-size:13px}
+  .pc-classes{gap:0 12px}
+  .pc-classes label{min-height:44px;font-size:12.5px}
+  .pc-classes input{width:22px;height:22px}
+  .pc-reset{min-height:44px;font-size:13px}
+  .pc-canopy input[type="range"]{height:44px}
+  .pc-canopy output{font-size:12px}
+  .pc-advanced summary{min-height:44px;display:flex;align-items:center;font-size:12.5px}
+}
+@media(max-width:760px) and (prefers-reduced-motion:reduce){
+  #pointCloudPanel{transition:none}
+}
+.terrain-lighting{margin-top:10px;padding-top:10px;border-top:1px solid var(--line)}
+.terrain-lighting .terrain-look-grid{grid-template-columns:82px minmax(0,1fr) 44px}
+.terrain-lighting .note{padding:5px;color:var(--ink-3);font-size:10px;line-height:1.45}
+/* When the sun cannot move the picture, the note says so in the warning color
+   rather than sitting there as evergreen prose that the reader has to match
+   against the source they happen to be on. */
+.terrain-lighting .note[data-live="false"]{color:#ffd18a}
+
+/* ---- pane system ---- */
+#panes{position:relative;flex:1;display:flex;flex-direction:column;overflow-y:auto;min-height:0}
+/* flex-shrink stays 0. With it at 1 the panes were allowed to compress to
+   nothing to make the column fit, so opening NEXT OVERPASS and OVERVIEW
+   together squeezed every pane into a sliver with its own scrollbar instead
+   of pushing the ones below it down. Panes now keep their natural height and
+   #panes scrolls, which is what a stack of collapsible sections should do. */
+.pane{display:flex;flex-direction:column;flex:0 0 auto;position:relative;
+  border-bottom:1px solid var(--glass-line);background:var(--glass-pane);
+  transition:opacity .12s var(--ease-out)}
+/* The one exception: the scene list is unbounded (250+ results), so it keeps
+   flex-shrink and absorbs whatever space is left, scrolling inside itself.
+   Every other pane is a collapsible section and keeps its natural height. */
+.pane.grow{flex:1 1 0;min-height:240px}
+.pane.sized{flex:0 0 auto}
+.pane-h,.pane-rz{flex:none}
+.pane-h{display:flex;align-items:center;gap:8px;min-height:34px;padding:3px 10px 3px 12px;cursor:pointer;touch-action:manipulation;user-select:none;
+  background:var(--glass-head);border-bottom:1px solid var(--glass-line);position:relative;
+  transition:background var(--dur) var(--ease-out)}
+.pane-h:hover{background:var(--inset)}
+.pane-h:active{cursor:default}
+.pane-t{font-size:12px;font-weight:600;letter-spacing:-.005em;color:var(--ink-2)}
+.pane-n{font-size:10px;font-weight:500;color:var(--ink-3);font-variant-numeric:tabular-nums}
+.pane-x{margin-left:auto;width:28px;height:28px;display:grid;place-items:center;color:transparent;font-size:0;line-height:1;
+  border-radius:7px;transition:transform var(--dur) var(--ease-out),background var(--dur)}
+.pane-x::after{content:"";width:7px;height:7px;border-right:1.5px solid var(--ink-3);border-bottom:1.5px solid var(--ink-3);transform:rotate(45deg) translate(-1px,-1px)}
+.pane-h:hover .pane-x{background:var(--hover)}
+.pane.min .pane-x{transform:rotate(-90deg)}
+.pane.min .pane-b,.pane.min .pane-rz{display:none}
+.pane.min{flex:0 0 auto!important}
+.grip{width:9px;height:12px;flex:none;opacity:.28;
+  background-image:radial-gradient(currentColor 1px,transparent 1px);
+  background-size:4px 4px;background-position:0 1px;color:var(--ink-3)}
+.pane-h:hover .grip{opacity:.85}
+.pane-b{flex:1;min-height:0;overflow-y:auto;overscroll-behavior:contain}
+/* an un-sized, non-growing pane must never crowd out the growing one */
+/* No max-height here any more. Capping each section at 28vh gave it its own
+   scrollbar, which is the sliver problem in a second guise: on a phone in the
+   browser, where the visible viewport is short, 28dvh is ~174px and FILTERS
+   needs 277px, so a third of it was simply unreachable. Every pane this
+   applied to has bounded content — the longest is overlays at ~500px — and
+   the unbounded scene list is .grow, which this selector already excluded.
+   Sections now show in full and #panes scrolls, which is the whole point. */
+.pane[data-pane="filters"] .pane-b,
+.pane[data-pane="summary"] .pane-b,
+.pane[data-pane="terrain"] .pane-b,
+.pane[data-pane="elevation"] .pane-b,
+.pane[data-pane="research"] .pane-b{padding:12px 18px 13px 16px}
+.pane[data-pane="passes"] .pane-b{padding:10px 18px 12px 16px}
+.pane[data-pane="alerts"] .pane-b,
+.pane[data-pane="overlays"] .pane-b{padding:12px 18px 13px 16px}
+/* ---- landform fabric readout ---- */
+.fabbox{margin-top:10px;padding-top:10px;border-top:1px solid var(--line)}
+.fabout{margin-top:8px;font-size:11.5px;line-height:1.5;color:var(--ink-2)}
+.fabout .fr{display:flex;justify-content:space-between;gap:10px;padding:1px 0}
+.fabout .fk{color:var(--ink-3)}
+.fabout .fv{font-variant-numeric:tabular-nums;color:var(--ink)}
+.fabout .note{margin-top:6px;padding-top:6px;border-top:1px solid var(--line);color:var(--ink-3);font-size:11px}
+.fabout .warn{color:oklch(72% .16 55)}
+.geo-result-head{display:flex;align-items:baseline;justify-content:space-between;gap:10px;margin:1px 0 7px}
+.geo-result-head strong{font-size:11.5px;color:var(--ink);font-weight:600}
+.geo-result-head span{font-size:10px;color:var(--ink-3);font-variant-numeric:tabular-nums}
+.geo-units{display:flex;flex-direction:column;gap:6px}
+.geo-unit{display:grid;grid-template-columns:10px minmax(0,1fr);gap:8px;padding:7px 8px;border:1px solid var(--line);
+  border-radius:9px;background:var(--glass-control)}
+.geo-swatch{width:10px;height:10px;margin-top:3px;border-radius:3px;border:1px solid oklch(100% 0 0/.26);box-shadow:0 0 0 1px oklch(0% 0 0/.12)}
+.geo-name{font-size:11.5px;line-height:1.35;color:var(--ink);font-weight:600}
+.geo-meta{margin-top:2px;font-size:10.5px;line-height:1.4;color:var(--ink-2)}
+.geo-source{margin-top:4px;font-size:9.5px;line-height:1.4;color:var(--ink-3)}
+#geologyIdentify{width:100%;margin-top:8px}
+
+/* ---- live alert centre ------------------------------------------------ */
+.alert-sources{display:grid;grid-template-columns:1fr 1fr;gap:3px 6px}
+.alert-sources .check{min-width:0}
+.alert-source-name{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.alert-options{display:grid;gap:9px;margin-top:10px;padding-top:10px;border-top:1px solid var(--line)}
+.alert-field{display:grid;grid-template-columns:106px minmax(0,1fr);gap:8px;align-items:center}
+.alert-field>label{font-size:11px;font-weight:500;color:var(--ink-3);white-space:nowrap}
+.alert-field select{width:100%;font-size:11.5px}
+.alert-types{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:2px 5px}
+.alert-types .check{min-width:0;padding-left:4px;padding-right:4px;font-size:10.5px}
+.alert-types[aria-disabled="true"]{opacity:.42;pointer-events:none}
+.alert-status{margin-top:9px;padding-top:8px;border-top:1px solid var(--line);font-size:10.5px;line-height:1.5;color:var(--ink-3)}
+.alert-status .ok{color:var(--green)}
+.alert-status .warn{color:var(--orange)}
+
+/* ---- overlay toggles ---- */
+.ovlist{display:flex;flex-direction:column;gap:2px}
+.ovrow{display:flex;align-items:center;gap:8px;min-height:28px;padding:4px 7px;border-radius:7px;cursor:pointer}
+.ovrow:hover{background:var(--hover-2)}
+.ovrow input{margin:0;flex:none}
+.ovrow .nm{font-size:11.5px;color:var(--ink-2);flex:1;min-width:0}
+.ovrow.on .nm{color:var(--ink);font-weight:600}
+.ovrow .sw{width:9px;height:9px;border-radius:2px;flex:none;opacity:.85}
+.ovrow .via{font-size:9.5px;color:var(--ink-3);flex:none}
+/* A licence that restricts what the pixels may be used for has to be visible at
+   the point of switching the layer on, not buried in a popup. */
+.ovrow .nc{font-size:8.5px;font-weight:700;letter-spacing:.04em;flex:none;padding:1px 4px;border-radius:4px;
+  color:#f0c674;background:oklch(from #f0c674 l c h/.14);border:1px solid oklch(from #f0c674 l c h/.35)}
+.ov-line-control{display:grid;gap:5px;margin:0 0 8px 28px;padding:8px 9px;border:1px solid var(--line);border-radius:8px;
+  background:color-mix(in oklch,var(--glass-control) 76%,transparent)}
+.ov-line-label{display:flex;align-items:baseline;justify-content:space-between;gap:10px;color:var(--ink-3);font-size:10px;font-weight:500}
+.ov-line-label output{font-variant-numeric:tabular-nums;color:var(--ink-2)}
+.ovfoot{margin-top:10px;padding-top:10px;border-top:1px solid var(--line);
+  display:grid;grid-template-columns:auto 1fr;gap:7px 10px;align-items:center}
+.ovfoot label{color:var(--ink-3);font-size:11.5px;font-weight:500}
+.ovgrp{font-size:9.5px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;
+  color:var(--ink-3);margin:9px 0 2px;padding-top:8px;border-top:1px solid var(--line)}
+.ovrow.dead{opacity:.45;cursor:not-allowed}
+.ovnote{font-size:10.5px;color:var(--ink-3);line-height:1.55;margin-top:8px}
+.pane-rz{height:9px;margin-top:-2px;cursor:row-resize;flex:none;position:relative;z-index:3;touch-action:none}
+.pane-rz::after{content:"";position:absolute;left:50%;transform:translateX(-50%);top:3px;
+  width:26px;height:2px;border-radius:1px;background:transparent;transition:background var(--dur)}
+.pane-rz:hover::after,.pane-rz.act::after{background:var(--accent)}
+body.rowdrag{cursor:row-resize;user-select:none;-webkit-user-select:none}
+body.pane-reordering,body.pane-reordering *{cursor:grabbing!important;user-select:none!important;-webkit-user-select:none!important}
+.pane.pane-drag-source{position:absolute!important;left:0;right:0;opacity:0!important;pointer-events:none!important}
+.pane-placeholder{flex:0 0 auto;border:1px solid var(--accent);border-radius:9px;background:var(--accent-tint);box-shadow:inset 0 0 0 1px color-mix(in oklch,var(--accent) 26%,transparent);pointer-events:none}
+.pane-drag-ghost{position:fixed!important;z-index:2100!important;margin:0!important;pointer-events:none!important;opacity:.96;overflow:hidden!important;border-radius:10px!important;box-shadow:0 18px 44px oklch(0% 0 0/.44),0 0 0 1px oklch(100% 0 0/.16)!important;transform:scale(1.012);transform-origin:center;backdrop-filter:blur(28px) saturate(1.28);-webkit-backdrop-filter:blur(28px) saturate(1.28)}
+#paneLive{position:fixed;width:1px;height:1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap}
+.linkbtn{background:none;border:none;color:var(--ink-3);font-size:10px;padding:0;
+  text-decoration:underline;cursor:pointer;font-weight:500}
+.linkbtn:hover{color:var(--accent-ink)}
+#results{height:100%}
+
+/* LabeledContent/Form equivalent for the terrain inspector. A single label
+   rhythm keeps every value aligned and lets compact widths adapt cleanly. */
+.terrain-action-row{display:flex;gap:7px;align-items:center}
+.terrain-action-row + .terrain-action-row{margin-top:7px}
+.terrain-action-row .ghost{flex:1}
+.terrain-action-row select{font-size:11.5px}
+#terDepth,#fabBand{width:116px}
+#terExtent{width:100%}
+.elev-toggle{margin:0 0 10px -8px;width:max-content}
+.elev-form{display:grid;gap:11px}
+.elev-field{display:grid;gap:5px;min-width:0}
+.elev-label-row{display:flex;align-items:baseline;justify-content:space-between;gap:12px}
+.elev-label{font-size:11.5px;font-weight:500;color:var(--ink-2)}
+.elev-value{font-size:10.5px;color:var(--ink-3);font-variant-numeric:tabular-nums}
+.elev-control-row{display:grid;grid-template-columns:minmax(0,1fr) 92px;gap:7px}
+.elev-control-row input,.elev-control-row select{width:100%;font-size:12px}
+.unit-field{position:relative}
+.unit-field input{width:100%;padding-right:34px;font-size:12px}
+.unit-field .unit-suffix{position:absolute;right:10px;top:50%;transform:translateY(-50%);pointer-events:none;
+  color:var(--ink-3);font-size:11px;font-weight:500}
+/* Phone touch targets, second attempt. The first applied 44px to every row in
+   the sidebar, which is the wrong reading of the guideline: 44pt is the minimum
+   for a control you aim at, not a floor for every line of a dense scrolling
+   list. Applied wholesale it inflated pane headers 38->48 and list rows 32->44,
+   pushed the panes to twice the visible height, and left 10.5px labels stranded
+   in oversized boxes - a panel showing six controls where it used to show a
+   dozen. Density is a usability property too; a list you cannot see is not more
+   usable for being easier to hit.
+
+   A modest lift over the original numbers instead of a uniform 44. The search
+   row, which is aimed at deliberately, keeps the full target above. */
+@media (max-width:760px){
+  input[type=text],input[type=number],input[type=date],select,button{min-height:36px}
+  .pane-h{min-height:40px}
+  .check,.ovrow{min-height:34px}
+  .check input[type=checkbox],.ovrow input[type=checkbox]{width:16px;height:16px}
+  .linkbtn{min-height:36px}
+  .fgrid{grid-template-columns:82px minmax(0,1fr)}
+  /* The strapline explains the product to someone seeing it for the first time.
+     On a phone it costs two rows of a panel that only has a handful, every
+     single launch, to say something the person opening the app already knows. */
+  #side header .sub{display:none}
+  #side header{padding-bottom:10px}
+  h1{font-size:16px}
+  /* Collapsed sections sit on the sheet itself, separated by a hairline, the
+     way a grouped list does. They used to be opaque bars in a slightly
+     different grey from the panel behind them, so a closed sidebar read as a
+     stack of tiles floating on a slab, with a hard edge where the last one
+     ended and a large empty rectangle below it. */
+  .pane{background:transparent}
+  .pane.min .pane-h{background:transparent;border-bottom:0}
+  .pane.min+.pane.min{border-top:1px solid var(--glass-line)}
+  .pane+.pane{border-top:0}
+  .pane-h{padding-left:14px;padding-right:12px}
+  .pane:not(.min){background:var(--glass-pane)}
+  /* A grouped list is much easier to hold onto when the heading stays put
+     while its section scrolls, which is how iOS renders grouped tables. */
+  .ovgrp{position:sticky;top:0;z-index:2;background:var(--glass-side);
+    backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px)}
+  /* The sheet owns horizontal swipes (dismiss); the browser keeps vertical
+     scrolling. Claiming both would stop the panel scrolling at all. */
+  #side{touch-action:pan-y}
+}
+@media (max-width:760px) and (prefers-reduced-motion:reduce){
+  #side{transition:none}
+  body.collapsed #side{transition:visibility 0s linear 0s}
+}
+
+/* Update prompt. Sits above the bottom safe area so it clears the home
+   indicator on an installed PWA, which is where this matters most. */
+#newBuild{position:absolute;left:50%;transform:translateX(-50%);z-index:1400;
+  bottom:calc(16px + var(--safe-bottom));display:flex;align-items:center;gap:10px;
+  padding:8px 8px 8px 14px;border:1px solid var(--glass-line);border-radius:12px;
+  background:var(--glass-side);backdrop-filter:blur(28px) saturate(1.32);
+  -webkit-backdrop-filter:blur(28px) saturate(1.32);
+  box-shadow:0 12px 34px oklch(0% 0 0/.4);font-size:12.5px;color:var(--ink);
+  max-width:calc(100vw - 24px)}
+#newBuild button{min-height:36px;padding:0 12px;border-radius:9px;border:1px solid var(--glass-line);
+  background:var(--glass-control);color:var(--ink);font:inherit;font-weight:600;cursor:pointer}
+#newBuild #newBuildReload{background:#2f7ef7;border-color:#2f7ef7;color:#fff}
+#newBuild #newBuildLater{min-width:36px;padding:0;font-weight:400;font-size:17px;color:var(--ink-2)}
+@media (max-width:760px){
+  #newBuild{left:calc(12px + var(--safe-left));right:calc(12px + var(--safe-right));transform:none;
+    max-width:none;justify-content:space-between}
+  #newBuild button{min-height:44px}
+}
+.leaflet-container{background:var(--page)}
+.leaflet-control-zoom a{background:oklch(26% .006 271.191/.76)!important;color:var(--ink-2)!important;
+  border-color:var(--glass-line)!important;backdrop-filter:blur(16px) saturate(1.25);-webkit-backdrop-filter:blur(16px) saturate(1.25)}
+.leaflet-control-zoom a:hover{background:var(--hover-2)!important;color:var(--ink)!important}
+.leaflet-popup-content-wrapper,.leaflet-popup-tip{background:var(--surface);color:var(--ink);
+  box-shadow:var(--shadow-overlay);border-radius:var(--radius-control)}
+.leaflet-popup-content{font-size:12px;line-height:1.55;margin:10px 13px}
+.leaflet-control-attribution{background:oklch(20.9% .004 264.477/.62)!important;color:var(--ink-3)!important;
+  font-size:9.5px!important;backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px)}
+.leaflet-control-attribution a{color:var(--ink-2)!important}
+.leaflet-bottom{bottom:0}
+.leaflet-control-attribution{margin-bottom:calc(4px + var(--safe-bottom))!important}
+.leaflet-left{left:var(--safe-left)}
+.leaflet-right{right:var(--safe-right)}
+.leaflet-tooltip{background:var(--tooltip-bg);border:1px solid var(--line);color:var(--ink);
+  box-shadow:var(--shadow-raised);font-size:11px;border-radius:var(--radius-chip)}
+.leaflet-tooltip-top:before{border-top-color:var(--line)}
+
+/* ---- phone: floating dock --------------------------------------------- */
+@media (max-width:760px){
+  .search-row{display:grid;grid-template-columns:repeat(3,minmax(0,1fr)) auto}
+  .search-row #iw{grid-column:1/4;grid-row:1}
+  .search-row #go{grid-column:4;grid-row:1}
+  .search-row #loc{grid-column:1;grid-row:2;width:100%}
+  .search-row #coordCopy{grid-column:2;grid-row:2;width:100%}
+  .search-row .coord-launch{grid-column:3/5;grid-row:2}
+  .search-row #coordOpen{width:100%}
+  .coord-menu{left:0;right:0;min-width:0}
+  #sideToggleDock{left:calc(12px + var(--safe-left));top:calc(14px + var(--safe-top))}
+  body:not(.collapsed) #sideToggleDock{left:calc(var(--sheet-w) + 16px + var(--safe-left))}
+  #mapDock{left:auto;right:calc(12px + var(--safe-right));top:calc(14px + var(--safe-top));gap:8px}
+  body:not(.collapsed) #mapDock{top:calc(66px + var(--safe-top))}
+  .map-tool{width:44px;height:44px;min-height:44px;border-radius:11px}
+  .map-tool svg{width:20px;height:20px}
+  .tool-popover{max-height:calc(var(--app-height) - 20px - var(--safe-top) - var(--safe-bottom))}
+
+  /* The footer was taking 246px of a 620px panel — 40% of it — leaving the
+     panes 185px to scroll in. The server box explains itself through its
+     placeholder and status dot, and the map keeps its own attribution
+     control, so the prose goes and the panes get the room back. */
+  #srvBox .hint{display:none}
+  .foot > div:last-child{display:none}          /* sources prose; map still credits them */
+  #srvBox{padding-bottom:10px}
+  .about-disclosure{display:none}
+  .foot{padding-bottom:8px}
+}
+
+@media (prefers-reduced-motion:reduce){
+  *,*::before,*::after{scroll-behavior:auto!important;animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important}
+}
+

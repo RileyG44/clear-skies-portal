@@ -9,14 +9,15 @@
 const CSP_BUILD = "2026-10-27b";
 const SHELL = `clear-skies-shell-${CSP_BUILD}`;
 const POTREE = `clear-skies-potree-${CSP_BUILD}`;
-/* site.json is the one list of shell files (web and vendor). Scripts and
-   styles are cached under the same versioned URLs the page requests. */
+/* site.json is the one list of shell files: web, app.js (built from its app
+   list) and vendor. Scripts and styles are cached under the same versioned
+   URLs the page requests. */
 const versioned = asset => /\.(?:js|css)$/.test(asset) ? `./${asset}?build=${CSP_BUILD}` : `./${asset}`;
 
 self.addEventListener("install", e => {
   e.waitUntil(fetch("./site.json", {cache:"reload"})
     .then(r => { if(!r.ok) throw new Error(`site.json HTTP ${r.status}`); return r.json() })
-    .then(site => caches.open(SHELL).then(c => c.addAll(["./", ...[...site.web, ...site.vendor].filter(a => a !== "sw.js").map(versioned)])))
+    .then(site => caches.open(SHELL).then(c => c.addAll(["./", ...[...site.web, "app.js", ...site.vendor].filter(a => a !== "sw.js").map(versioned)])))
     .then(() => self.skipWaiting()));
 });
 

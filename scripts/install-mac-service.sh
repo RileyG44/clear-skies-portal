@@ -32,7 +32,8 @@ fi
 
 install -d -m 700 "$AGENT_DIR" "$DATA_DIR" "$RUNTIME_DIR" "$LOG_DIR" "$CACHE_DIR"
 # site.json lists the app; the engine also needs its own Node modules.
-for asset in $("$NODE_BIN" -e 'const s=require(process.argv[1]);console.log([...s.web,...s.engine].filter(f=>!f.startsWith("vendor/")).join("\n"))' "$REPO_ROOT/site.json"); do
+for asset in $("$NODE_BIN" -e 'const s=require(process.argv[1]);console.log([...s.web,...s.app,...s.engine].filter(f=>!f.startsWith("vendor/")).join("\n"))' "$REPO_ROOT/site.json"); do
+  install -d -m 755 "$RUNTIME_DIR/${asset:h}"
   install -m 644 "$REPO_ROOT/$asset" "$RUNTIME_DIR/$asset"
 done
 rm -rf "$RUNTIME_DIR/vendor"

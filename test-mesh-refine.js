@@ -4,7 +4,7 @@
    changing the whole source's tile URL (which made MapLibre reload every DEM
    tile in view about once a second). */
 const assert=require('node:assert/strict'),fs=require('node:fs'),vm=require('node:vm');
-const html=fs.readFileSync(require.resolve('./index.html'),'utf8');
+const html=require("./test-fixtures/page-source.js");
 const between=(start,end)=>{const i=html.indexOf(start);assert(i>=0,start);const j=html.indexOf(end,i);assert(j>i,end);return html.slice(i,j);};
 const tick=()=>new Promise(resolve=>setImmediate(resolve));
 const flush=async()=>{for(let i=0;i<8;i++) await tick();};

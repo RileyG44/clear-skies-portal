@@ -18,7 +18,8 @@ const SOURCES=[
   ["vendor/icons/","node_modules/lucide-static/icons/"],
   ["vendor/fonts/","node_modules/@fontsource-variable/inter/files/"]
 ];
-const synced=require("../site.json").vendor;
+// Leaflet 1.9.4 itself is pinned as committed, like Potree below.
+const synced=require("../site.json").vendor.filter(file=>!/^vendor\/leaflet\.(js|css)$/.test(file));
 for(const target of [...synced,"vendor/lerc/README.md"]){
   const [prefix,source]=SOURCES.find(([prefix])=>target.startsWith(prefix));
   fs.mkdirSync(path.dirname(path.join(root,target)),{recursive:true});

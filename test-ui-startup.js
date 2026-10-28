@@ -1,6 +1,6 @@
 'use strict';
 const assert=require('node:assert/strict'),fs=require('node:fs'),vm=require('node:vm');
-const html=fs.readFileSync('index.html','utf8'),ui=fs.readFileSync('ui-system.js','utf8');
+const html=require("./test-fixtures/page-source.js"),ui=fs.readFileSync('ui-system.js','utf8');
 const bootSource=[...html.matchAll(/<script(?:\s[^>]*)?>([\s\S]*?)<\/script>/g)].map(m=>m[1]).find(s=>s.includes('window.CSPBoot'));
 assert(bootSource,'the startup recovery controller must ship inline');
 function fixture({loaded=true,cache}={}){

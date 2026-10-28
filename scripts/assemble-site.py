@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """Assemble the static web client: the GitHub Pages artifact and the site
-bundled into the iOS app. Copies site.json's web files and the vendor
-directory, leaving out the files only the Node engine uses.
+bundled into the iOS app. Copies site.json's web files, builds app.js from its
+app files exactly as site.js does, and copies the vendor directory, leaving
+out the files only the Node engine uses.
 
     assemble-site.py <repository root> <destination directory>
 """
@@ -25,6 +26,8 @@ def main():
     destination.mkdir(parents=True)
     for name in site["web"]:
         shutil.copy2(root / name, destination / name)
+    app = "".join((root / name).read_text(encoding="utf-8") for name in site["app"])
+    (destination / "app.js").write_text("(()=>{\n" + app + "})();\n", encoding="utf-8")
     shutil.copytree(root / "vendor", destination / "vendor",
                     ignore=lambda folder, names: [n for n in names if pathlib.Path(folder, n) in engine_only])
     (destination / ".nojekyll").touch()

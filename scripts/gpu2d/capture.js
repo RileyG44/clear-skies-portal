@@ -3,7 +3,7 @@
 // Existing GPU_2D_TERRAIN_SPEC §9 real-browser workflow, with no live requests.
 const fs = require('node:fs'), path = require('node:path');
 const root = path.resolve(__dirname, '../..'), fixture = require('./capture-fixture.js');
-const html = fs.readFileSync(path.join(root, 'index.html'), 'utf8');
+const html = require('../../test-fixtures/page-source.js');
 const section = (start, end) => {
   const from = html.indexOf(start), to = html.indexOf(end, from);
   if (from < 0 || to < 0) throw Error(`Missing production compositor: ${start}`);

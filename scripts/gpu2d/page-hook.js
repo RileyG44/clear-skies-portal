@@ -1,4 +1,4 @@
-/* Injected into index.html's main script, immediately before
+/* Injected into app.js, immediately before
    window.ClearSkiesPortalBridge is assigned, so the closures below see
    elevLayer, terLayer, terBase, terrainSwap, terrainGpu and elevGpu.
    Loaded by harness-lib.js; not a standalone page script. */

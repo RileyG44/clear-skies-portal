@@ -41,9 +41,10 @@ fs.mkdirSync(AREAS, {recursive:true});
 const MIME = {".html":"text/html; charset=utf-8",".js":"text/javascript",".mjs":"text/javascript",".css":"text/css",
   ".json":"application/json",".png":"image/png",".jpg":"image/jpeg",".jpeg":"image/jpeg",
   ".svg":"image/svg+xml",".wasm":"application/wasm",".md":"text/markdown; charset=utf-8",".txt":"text/plain; charset=utf-8",".woff2":"font/woff2"};
-/* Everything the browser may load; see site.json. */
-const SITE = require("./site.json");
-const PUBLIC_FILES = new Set([...SITE.web,...SITE.vendor]);
+/* Everything the browser may load; see site.json. app.js is built from app/. */
+const SITE = require("./site.js");
+const APP_SCRIPT = path.join(ROOT,"app.js");
+const PUBLIC_FILES = new Set([...SITE.web,"app.js",...SITE.vendor]);
 
 const WADNR_HOST = "lidarportal.dnr.wa.gov";
 const WADNR_MAP  = "/arcgis/rest/services/lidar/wadnr_hillshade/MapServer";
@@ -737,11 +738,17 @@ function send(res, status, type, body, extra={}){
    picked up immediately - it just costs a round trip, not the whole body. */
 const staticCompressed=new Map();          // path|etag|encoding -> Buffer
 async function sendStatic(req,res,f){
-  let st; try{ st=await fs.promises.stat(f) }catch(e){ return send(res,404,"text/plain",Buffer.from("not found")) }
-  if(!st.isFile()) return send(res,404,"text/plain",Buffer.from("not found"));
+  let size, etag, built=null;
+  if(f===APP_SCRIPT){
+    built=Buffer.from(SITE.appSource(ROOT));
+    size=built.length; etag=`"${crypto.createHash("sha1").update(built).digest("base64url").slice(0,20)}"`;
+  }else{
+    let st; try{ st=await fs.promises.stat(f) }catch(e){ return send(res,404,"text/plain",Buffer.from("not found")) }
+    if(!st.isFile()) return send(res,404,"text/plain",Buffer.from("not found"));
+    size=st.size; etag=`"${st.size.toString(36)}-${Math.floor(st.mtimeMs).toString(36)}"`;
+  }
   const type=MIME[path.extname(f).toLowerCase()]||"application/octet-stream";
-  const etag=`"${st.size.toString(36)}-${Math.floor(st.mtimeMs).toString(36)}"`;
-  const encoding=COMPRESSIBLE.test(type)&&st.size>=COMPRESS_MIN ? pickEncoding(req) : null;
+  const encoding=COMPRESSIBLE.test(type)&&size>=COMPRESS_MIN ? pickEncoding(req) : null;
   const tag=encoding ? etag.slice(0,-1)+"-"+encoding+'"' : etag;
   const extra={"Cache-Control":"no-cache","ETag":tag};
   const inm=String(req.headers["if-none-match"]||"");
@@ -750,7 +757,7 @@ async function sendStatic(req,res,f){
     if(origin){ headers["Access-Control-Allow-Origin"]=origin; headers.Vary+=", Origin" }
     return res.writeHead(304,headers).end();
   }
-  let buf; try{ buf=await fs.promises.readFile(f) }catch(e){ return send(res,404,"text/plain",Buffer.from("not found")) }
+  let buf=built; if(!buf) try{ buf=await fs.promises.readFile(f) }catch(e){ return send(res,404,"text/plain",Buffer.from("not found")) }
   if(!encoding) return send(res,200,type,buf,extra);
   const key=`${f}|${etag}|${encoding}`;
   let out=staticCompressed.get(key);

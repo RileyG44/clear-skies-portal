@@ -198,7 +198,7 @@ const data=values=>({width:2,height:2,grid:new Float32Array(values)});
   await new Promise(resolve=>setTimeout(resolve,25));assert.equal(obsoleteRetries,1,'leaving a tile cancels its retry');
   cancelledRetry.destroy();assert.equal(cancelledRetry._retryTimer,0);
 
-  const fs=require('node:fs'),vm=require('node:vm'),html=fs.readFileSync(require.resolve('./index.html'),'utf8');
+  const fs=require('node:fs'),vm=require('node:vm'),html=require("./test-fixtures/page-source.js");
   const adapter=html.slice(html.indexOf('function gpuElevationRequest('),html.indexOf('function gpuElevationSources('));
   let noCoverageRequests=0;
   const context={elevationRequests:{request:async()=>{noCoverageRequests++;return null;}}};

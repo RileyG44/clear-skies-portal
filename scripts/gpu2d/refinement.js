@@ -31,7 +31,7 @@ async function capture(page,label){
   await context.route(origin+'/**',async route=>{
    const name=new URL(route.request().url()).pathname;
    if(baseline&&name==='/gpu-terrain-store.js')return route.fulfill({contentType:'application/javascript',body:baselineText('gpu-terrain-store.js')});
-   if(name!=='/'&&name!=='/index.html')return route.fallback();
+   if(name!=='/app.js')return route.fallback();
    const response=await route.fetch();let html=await response.text();
    const re=/const elevationRequests=new CSPTilePipeline\.RequestPool\([^\n]*\);/;
    if(baseline)html=html.replace(re,baselineText('index.html').match(re)[0]);

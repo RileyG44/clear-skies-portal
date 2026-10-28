@@ -1,6 +1,6 @@
 'use strict';
 const assert=require('node:assert/strict'),fs=require('node:fs'),vm=require('node:vm');
-const html=fs.readFileSync('index.html','utf8');
+const html=require("./test-fixtures/page-source.js");
 const between=(start,end)=>{
   const at=html.indexOf(start);assert(at>=0,`missing ${start}`);
   const stop=html.indexOf(end,at+start.length);assert(stop>at,`missing ${end}`);

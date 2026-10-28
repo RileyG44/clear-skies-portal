@@ -92,7 +92,7 @@ function interaction(){
 }
 
 function markup(){
-  const html=fs.readFileSync('index.html','utf8');
+  const html=require("./test-fixtures/page-source.js");
   const studio=html.indexOf('id="terStudio"'),lidar=html.indexOf('id="terLidar"');
   assert(studio>0&&lidar>studio,'Presets come before Terrain mode & data');
   for(const id of ['terSunAz','terSunAlt','terSunAzOut','terSunAltOut','terAmbient','terExaggeration','terLightReset'])

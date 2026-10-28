@@ -8,10 +8,14 @@ const vm = require("vm");
 const root = path.resolve(__dirname,"..");
 const read = name => fs.readFileSync(path.join(root,name),"utf8");
 
-const index = read("index.html");
-const inline = [...index.matchAll(/<script(?![^>]*\bsrc=)[^>]*>([\s\S]*?)<\/script>/gi)];
-assert(inline.length>=2,"expected Leaflet and application inline scripts");
+const page = read("index.html");
+const appScript = require("../site.js").appSource(root);
+/* Most checks below read the page as it once was: markup, base styles and app. */
+const index = [page,read("ui-base.css"),appScript].join("\n");
+const inline = [...page.matchAll(/<script(?![^>]*\bsrc=)[^>]*>([\s\S]*?)<\/script>/gi)];
+assert(inline.length>=2,"expected the startup and Leaflet-patch inline scripts");
 inline.forEach((match,i)=>new vm.Script(match[1],{filename:`index.html#inline-${i+1}`}));
+new vm.Script(appScript,{filename:"app.js"});
 
 /* site.json is the one list of shipped files; every consumer reads it, so the
    checks are that it is complete, exists and parses. */
@@ -20,8 +24,9 @@ inline.forEach((match,i)=>new vm.Script(match[1],{filename:`index.html#inline-${
   const all=[...site.web,...site.vendor,...site.engine];
   assert.equal(new Set(all).size,all.length,"site.json lists a file twice");
   for(const file of all) assert(fs.existsSync(path.join(root,file)),`site.json lists a missing file: ${file}`);
-  const served=new Set([...site.web,...site.vendor]);
-  for(const [,url] of index.matchAll(/<(?:script|link)\b[^>]*\b(?:src|href)="(?![a-z]+:|\/\/|[?#])([^"?#]+)/g))
+  const served=new Set([...site.web,"app.js",...site.vendor]);
+  for(const file of site.app) assert(fs.existsSync(path.join(root,file)),`site.json lists a missing app file: ${file}`);
+  for(const [,url] of page.matchAll(/<(?:script|link)\b[^>]*\b(?:src|href)="(?![a-z]+:|\/\/|[?#])([^"?#]+)/g))
     assert(served.has(url),`index.html loads ${url}, which site.json does not ship`);
   const icons=fs.readdirSync(path.join(root,"vendor","icons")).map(f=>`vendor/icons/${f}`);
   assert.deepEqual(icons.filter(f=>!served.has(f)),[],"every vendored icon must be served and precached");

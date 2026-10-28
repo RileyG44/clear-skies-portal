@@ -2,6 +2,7 @@
 
 Clear Skies Portal vendors browser-ready distribution files during `npm run vendor` so the installed app and GitHub Pages build work without a CDN at runtime.
 
+- Leaflet 1.9.4 — BSD-2-Clause — https://github.com/Leaflet/Leaflet. Pinned as `vendor/leaflet.js` and `vendor/leaflet.css`.
 - MapLibre GL JS 6.6.0 — BSD-3-Clause — https://github.com/maplibre/maplibre-gl-js
 - @tomickigrzegorz/leaflet-rotate 0.2.4 — MIT — https://github.com/tomickigrzegorz/leaflet-rotate
 - Potree 1.8.2 — BSD-2-Clause — https://github.com/potree/potree
