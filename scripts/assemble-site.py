@@ -29,7 +29,7 @@ def main():
     # newline="": keep source bytes, including a CR if one is really there.
     # newline="\n": Windows text mode would otherwise rewrite every LF as
     # CRLF, so this file would not match the bytes site.js builds.
-    app = "".join((root / name).read_text(encoding="utf-8", newline="") for name in site["app"])
+    app = "".join((root / name).read_bytes().decode("utf-8") for name in site["app"])
     (destination / "app.js").write_text("(()=>{\n" + app + "})();\n", encoding="utf-8", newline="\n")
     shutil.copytree(root / "vendor", destination / "vendor",
                     ignore=lambda folder, names: [n for n in names if pathlib.Path(folder, n) in engine_only])
