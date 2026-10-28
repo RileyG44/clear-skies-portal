@@ -232,6 +232,60 @@ async function cspShareURL(){
   const state=cspCaptureShareState(),payload=await window.CSPShareState.encode(state);
   return CSP_SHARE_WEB_URL+"#csp="+payload;
 }
+/* The steps of restoring a shared view. Each adds to warnings what it could
+   not restore, rather than failing the whole view. */
+function cspRestoreOverlays(state,warnings){
+  const wanted=new Map(state.overlays.map(item=>[item.id,item]));
+  for(const o of OVERLAYS){const item=wanted.get(o.id);ovOn[o.id]=!!item;
+    const input=$("#ov_"+o.id);if(input)input.checked=!!item;
+    if(item){ovOpacities[o.id]=item.opacity;if(item.lineWidth!=null)ovLineWidths[o.id]=item.lineWidth;if(item.timeSlice!=null)ovTimeSlices[o.id]=item.timeSlice}}
+  alertPrefs=JSON.parse(JSON.stringify(state.alerts));syncAlertUI();ovApply();
+  for(const item of state.overlays){
+    const source=OVERLAYS.find(o=>o.id===item.id);
+    if(source.needsProxy&&!PROXY)warnings.push(source.name+": a locally configured terrain engine is required.");
+  }
+}
+function cspRestoreResearch(state,warnings){
+  clearResearchLayers("");
+  for(const snapshot of state.research.layers){
+    const entry={...snapshot,overlay:null,url:"",legend:null,status:"ready",message:"",last:null};
+    entry.style=CSPAnalysisLayers.normalizeStyle(snapshot.style,researchStyleDefaults(entry.product));
+    researchStack.push(entry);researchSeq=Math.max(researchSeq,+entry.id.slice(1));
+    if(snapshot.last){const last=snapshot.last;entry.last={...last,bounds:cspShareLatLngBounds(last.bounds),capture:{...last.capture,raster:{...last.capture.raster,bounds:cspShareLatLngBounds(last.capture.raster.bounds)}}};repaintResearch(entry)}
+    else{entry.status="error";entry.message="The shared analysis had no completed raster.";warnings.push(researchLabel(entry)+": no completed analysis was available.")}
+  }
+  researchFocus=researchStack.at(-1)?.id||null;researchChanged();
+}
+async function cspRestoreImagery(state,warnings){
+  if(state.imagery){
+    // select() retains useful previous imagery until new rendered coverage is
+    // ready. Replaying scene identity must never become a new best-photo search.
+    MOSAIC_ON=false;$("#mosaic").checked=false;
+    ITEMS=[state.imagery.primary,...state.imagery.neighbours];SEL=null;
+    const previous=overlay;await select(0);
+    $("#op").value=state.controls.op;
+    const deadline=performance.now()+13500;
+    while(overlayPending&&performance.now()<deadline)await new Promise(resolve=>setTimeout(resolve,100));
+    if(!overlay||overlay===previous)warnings.push("The shared satellite scene is unavailable; previous useful imagery was kept.");
+    else{
+      for(const it of state.imagery.neighbours){
+        const nb=await loadNeighbour(footprintKey(it),it,mosToken,true);
+        if(nb)NEIGH.push(nb);else warnings.push("Shared surrounding scene unavailable: "+it.label+" · "+it.date.slice(0,10));
+      }
+      if(state.imagery.backdrop){const it=state.imagery.backdrop,nb=await loadNeighbour("shared-backdrop",it,mosToken,true);if(nb){nb.layer.setZIndex(150);MOSAIC_BACKDROP={...nb}}else warnings.push("The shared imagery backdrop is unavailable.")}
+    }
+    syncChecks();render();
+  }else clearScene();
+}
+async function cspAwaitSharedOverlays(state,warnings){
+  for(const item of state.overlays){
+    const layer=ovLayers[item.id];if(!layer)continue;
+    const deadline=performance.now()+16000;
+    while(layer._cspLoading&&performance.now()<deadline)await new Promise(resolve=>setTimeout(resolve,100));
+    if(layer._cspError)warnings.push(OVERLAYS.find(o=>o.id===item.id).name+": "+layer._cspError);
+    else if(layer._cspLoading)warnings.push(OVERLAYS.find(o=>o.id===item.id).name+": loading has not completed.");
+  }
+}
 async function cspRestoreShareState(state){
   cspValidateShareState(state); // Complete validation precedes any map mutation.
   const warnings=[],B=window.ClearSkiesPortalBridge;
@@ -255,56 +309,16 @@ async function cspRestoreShareState(state){
     if(source.forced)warnings.push(source.reason);
     if(state.studio&&!gpuTerrainEnabled&&!CSPLidarRender.isLegacy(state.studio.state,state.controls.terStyle))warnings.push("The shared terrain mix needs the GPU terrain renderer, which is unavailable here.");
   }
-  const wanted=new Map(state.overlays.map(item=>[item.id,item]));
-  for(const o of OVERLAYS){const item=wanted.get(o.id);ovOn[o.id]=!!item;
-    const input=$("#ov_"+o.id);if(input)input.checked=!!item;
-    if(item){ovOpacities[o.id]=item.opacity;if(item.lineWidth!=null)ovLineWidths[o.id]=item.lineWidth;if(item.timeSlice!=null)ovTimeSlices[o.id]=item.timeSlice}}
-  alertPrefs=JSON.parse(JSON.stringify(state.alerts));syncAlertUI();ovApply();
-  for(const item of state.overlays){
-    const source=OVERLAYS.find(o=>o.id===item.id);
-    if(source.needsProxy&&!PROXY)warnings.push(source.name+": a locally configured terrain engine is required.");
-  }
+  cspRestoreOverlays(state,warnings);
   if($("#fire").checked)loadFires(true);else clearFires();
-  clearResearchLayers("");
-  for(const snapshot of state.research.layers){
-    const entry={...snapshot,overlay:null,url:"",legend:null,status:"ready",message:"",last:null};
-    entry.style=CSPAnalysisLayers.normalizeStyle(snapshot.style,researchStyleDefaults(entry.product));
-    researchStack.push(entry);researchSeq=Math.max(researchSeq,+entry.id.slice(1));
-    if(snapshot.last){const last=snapshot.last;entry.last={...last,bounds:cspShareLatLngBounds(last.bounds),capture:{...last.capture,raster:{...last.capture.raster,bounds:cspShareLatLngBounds(last.capture.raster.bounds)}}};repaintResearch(entry)}
-    else{entry.status="error";entry.message="The shared analysis had no completed raster.";warnings.push(researchLabel(entry)+": no completed analysis was available.")}
-  }
-  researchFocus=researchStack.at(-1)?.id||null;researchChanged();
+  cspRestoreResearch(state,warnings);
   const markupIds=window.CSPMarkup?.restoreDisplay(state.markup)||{};
   if(state.markup.length&&!window.CSPMarkup)warnings.push("Shared annotations could not be loaded.");
-  if(state.imagery){
-    // select() retains useful previous imagery until new rendered coverage is
-    // ready. Replaying scene identity must never become a new best-photo search.
-    MOSAIC_ON=false;$("#mosaic").checked=false;
-    ITEMS=[state.imagery.primary,...state.imagery.neighbours];SEL=null;
-    const previous=overlay;await select(0);
-    $("#op").value=state.controls.op;
-    const deadline=performance.now()+13500;
-    while(overlayPending&&performance.now()<deadline)await new Promise(resolve=>setTimeout(resolve,100));
-    if(!overlay||overlay===previous)warnings.push("The shared satellite scene is unavailable; previous useful imagery was kept.");
-    else{
-      for(const it of state.imagery.neighbours){
-        const nb=await loadNeighbour(footprintKey(it),it,mosToken,true);
-        if(nb)NEIGH.push(nb);else warnings.push("Shared surrounding scene unavailable: "+it.label+" · "+it.date.slice(0,10));
-      }
-      if(state.imagery.backdrop){const it=state.imagery.backdrop,nb=await loadNeighbour("shared-backdrop",it,mosToken,true);if(nb){nb.layer.setZIndex(150);MOSAIC_BACKDROP={...nb}}else warnings.push("The shared imagery backdrop is unavailable.")}
-    }
-    syncChecks();render();
-  }else clearScene();
+  await cspRestoreImagery(state,warnings);
   if(state.view.mode==="3d")try{await B.restoreSession(state.view)}catch(error){warnings.push("3D view unavailable: "+error.message)}
   else{map.setView(state.view.center,state.view.zoom,{animate:false});map.setBearing?.(state.view.bearing)}
   if(state.pointCloud)try{await pointCloudPanel.restoreDisplay(state.pointCloud)}catch(error){warnings.push(error.message)}
-  for(const item of state.overlays){
-    const layer=ovLayers[item.id];if(!layer)continue;
-    const deadline=performance.now()+16000;
-    while(layer._cspLoading&&performance.now()<deadline)await new Promise(resolve=>setTimeout(resolve,100));
-    if(layer._cspError)warnings.push(OVERLAYS.find(o=>o.id===item.id).name+": "+layer._cspError);
-    else if(layer._cspLoading)warnings.push(OVERLAYS.find(o=>o.id===item.id).name+": loading has not completed.");
-  }
+  await cspAwaitSharedOverlays(state,warnings);
   const order=state.order.map(id=>markupIds[id]||id);
   localStorage.setItem("clearskies.active-layer-order.v1",JSON.stringify(order));cspSetLayerOrder(order);
   clearTimeout(researchLiveTimer);$("#researchLive").checked=state.research.live;
