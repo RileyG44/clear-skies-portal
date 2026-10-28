@@ -5235,12 +5235,6 @@ async function loadNeighbour(key,it,token,exact=false){
   return null;
 }
 
-async function addNeighbour(key,it,token){
-  const nb=await loadNeighbour(key,it,token==null?mosToken:token);
-  if(nb){nb.layer.setOpacity(+$("#op").value/100);NEIGH.push(nb);}
-  return !!nb;
-}
-
 async function swapNeighbour(key, it){
   const n=NEIGH.find(x=>x.key===key);
   const next=await loadNeighbour(key,it,mosToken);
@@ -6187,7 +6181,7 @@ const api = p => (NATIVE_HOST ? "" : API) + p;
    are immutable in the browser cache, so this query lets corrected ones in. */
 const RAW_COVERAGE_QUERY="ix=2";
 
-let terLayer=null, terBase=null, PROXY=false, WA_LAYERS=null, waCover=null, terTimer=null;
+let terLayer=null, terBase=null, PROXY=false, waCover=null, terTimer=null;
 // One engine/store for both analytical terrain and elevation. The published
 // DNR image layer retains its own path. No tile-pane layer uses z441..449:
 // imagery is 410, terrain 440, spectrum 450 and research 455.
@@ -6290,7 +6284,7 @@ function terrainLayerSummary(layer){
       surveys:provenance.surveys||[],sampleMeters:provenance.sampleMeters?.[rank]}));
   return {sources,coverage:Math.round(status.ratio*100),total:status.total,ready:status.complete,refining:status.refining,failed:!!status.failed};
 }
-let probeToken=0, waLayersPromise=null, terrainQueryToken=0, serverHealth=null, serverProbeTimer=null;
+let probeToken=0, terrainQueryToken=0, serverHealth=null, serverProbeTimer=null;
 let waCoverageState="unknown",waCoverageError="",dnrStatus=null,dnrStatusTimer=null,dnrLastError="",dnrRenderedRevision=-1;
 const dnrElevationAvailable=()=>PROXY&&serverHealth?.features?.includes("wadnr-elevation");
 /* WA DNR applies only inside areas the user explicitly fetched. Selecting a
@@ -7313,28 +7307,7 @@ function probeServer(){
 }
 probeServer();
 
-/* MapServer layer tree, fetched once: raster layers are named "<datasetId>h" */
 let WA_EXTENT={};                     // layerId -> [xmin,ymin,xmax,ymax] in EPSG:3857
-async function waLayerIndex(){
-  if(WA_LAYERS) return WA_LAYERS;
-  if(waLayersPromise) return waLayersPromise;
-  waLayersPromise=(async()=>{
-    const r=await fetch(api("/api/wadnr/layers"));
-    if(!r.ok) throw new Error(`WA layer index HTTP ${r.status}`);
-    const j=await r.json(), layers={}, extents={};
-    for(const l of (j.layers||[])){
-      const m=/^(\d+)h$/.exec(l.name||"");
-      if(!m) continue;
-      layers[m[1]]=l.id;
-      const e=l.extent;
-      if(e && isFinite(e.xmin)) extents[l.id]=[e.xmin,e.ymin,e.xmax,e.ymax];
-    }
-    WA_LAYERS=layers; WA_EXTENT=extents;
-    return WA_LAYERS;
-  })();
-  try{ return await waLayersPromise }finally{ waLayersPromise=null }
-}
-
 /* which WA lidar projects cover the current view? */
 async function waCoverage(bounds=map.getBounds(),signal){
   if(!PROXY) return null;
@@ -9840,7 +9813,7 @@ function setServerBase(value){
   API=normaliseBase(value);
   if(NATIVE_HOST) nativeEngineSync=NATIVE_HOST.setEngineBase(API).catch(()=>{});
   const wasOnline=PROXY;
-  PROXY=false; serverHealth=null; WA_LAYERS=null; WA_EXTENT={}; waSeen.clear(); coverBounds=null; terrainQueryToken++;
+  PROXY=false; serverHealth=null; WA_EXTENT={}; waSeen.clear(); coverBounds=null; terrainQueryToken++;
   if(!API) localStorage.removeItem("cspServer");
   const field=$("#srvUrl"); if(field) field.value=API;
   paintServerBox();

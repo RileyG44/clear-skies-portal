@@ -32,9 +32,8 @@ web controls at this stage. See [the implementation checklist](../docs/ios/STAGE
 for verification and remaining work; this is an internal build, not a parity
 or release-gate acceptance claim.
 
-The bundled site is the GitHub Pages artifact. `scripts/assemble_site.py` reads
-the file list from the "Assemble the static site" step in
-`.github/workflows/ci.yml` at build time, so the app ships whatever Pages ships.
+The bundled site is the GitHub Pages artifact: `scripts/assemble-site.py` copies
+the files listed in `site.json`, the same step CI uses for Pages.
 
 ## Build and run
 

@@ -186,4 +186,3 @@ Avoid gradients, saturated chrome, decorative blur, excessive pills, and oversiz
 - Console contains no new errors or warnings.
 - `npm run verify` passes.
 
-See `design-qa.md` for the latest visual comparison and test record.

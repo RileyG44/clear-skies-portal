@@ -41,12 +41,9 @@ fs.mkdirSync(AREAS, {recursive:true});
 const MIME = {".html":"text/html; charset=utf-8",".js":"text/javascript",".mjs":"text/javascript",".css":"text/css",
   ".json":"application/json",".png":"image/png",".jpg":"image/jpeg",".jpeg":"image/jpeg",
   ".svg":"image/svg+xml",".wasm":"application/wasm",".md":"text/markdown; charset=utf-8",".txt":"text/plain; charset=utf-8",".woff2":"font/woff2"};
-const PUBLIC_FILES = new Set(["index.html","version.js","ui-theme.css","ui-system.css","ui-system.js","mosaic-core.js","terrain-core.js","terrain-raster.js", "terrain-drape-core.js", "terrain-drape-pool.js", "terrain-drape-worker.js",
-  "public-terrain.js","public-terrain-worker.js","vendor/lerc/LercDecode.js","vendor/lerc/LercDecode.es.js","vendor/lerc/lerc-wasm.wasm",
-  "elevation-bands.js","elevation-tile-core.js","tile-pipeline.js","gpu-terrain-shaders.js","lidar-render.js","lidar-studio.js","analysis-layers.js","gpu-terrain-store.js","gpu-terrain-engine.js","gpu-terrain-layer.js", "gpu-terrain-3d-cache.js", "gpu-terrain-3d-renderer.js", "gpu-terrain-3d-layer.js","png-stream.js","markup.js", "markup-3d.js","wa-archaeology.js","glacial-research-core.js","glacial-segment-core.js","glacial-segment-features.js","glacial-moraine-classifier.js","glacial-zone-core.js","glacial-zone-features.js","glacial-belt-classifier.js","glacial-moraine-analysis.js","terrain-analysis-core.js","research-analysis.js","research-worker.js","sw.js","manifest.json",
-  "point-cloud-core.js","point-cloud-viewer.js","point-cloud-catalog.json","maxar-catalog.json","nadi1-cordilleran.json",
-  "icon-180.png","icon-192.png","icon-512.png","vendor/maplibre-gl.mjs","vendor/maplibre-gl-shared.mjs",
-  "vendor/maplibre-gl-worker.mjs","vendor/maplibre-gl.css","vendor/leaflet-rotate.umd.min.js"]);
+/* Everything the browser may load; see site.json. */
+const SITE = require("./site.json");
+const PUBLIC_FILES = new Set([...SITE.web,...SITE.vendor]);
 
 const WADNR_HOST = "lidarportal.dnr.wa.gov";
 const WADNR_MAP  = "/arcgis/rest/services/lidar/wadnr_hillshade/MapServer";
@@ -1161,23 +1158,6 @@ const server = http.createServer(async (req,res)=>{
                   {"X-Cache":"ERROR","Cache-Control":"no-store","Retry-After":"30"});
     }
 
-    /* ---- WA DNR: layer tree (project name -> raster layer ids) ---- */
-    if(p === "/api/wadnr/layers"){
-      const k=key("wadnr:layers"),hit=cacheGet(k,TTL_META);
-      if(hit) return send(res,200,hit.type,hit.body,{"X-Cache":"HIT"});
-      let r=null;
-      try{
-        r=await limitedUpstream(k,{host:WADNR_HOST,path:WADNR_MAP+"/layers?f=json",method:"GET",__timeout:10000,
-          headers:{"User-Agent":"clear-skies-portal","Accept-Encoding":"gzip"}},null,client.signal);
-      }catch(error){ if(terrainAborted(error)) return }
-      if(r&&r.status===200&&r.body.length){
-        cachePut(k,200,r.type,r.body);
-        return send(res,200,r.type,r.body,{"X-Cache":"MISS"});
-      }
-      return send(res,503,"application/json",Buffer.from('{"state":"error","error":"DNR layer catalogue unavailable"}'),
-                  {"X-Cache":"ERROR","Cache-Control":"no-store","Retry-After":"30"});
-    }
-
     /* ---- WA DNR: hillshade image for a bbox, restricted to given layers ---- */
     if(p === "/api/wadnr/export"){
       const bbox   = u.searchParams.get("bbox")   || "";
@@ -1794,7 +1774,7 @@ const server = http.createServer(async (req,res)=>{
     if(inside.startsWith(".."+path.sep)||path.isAbsolute(inside))
       return send(res,403,"text/plain",Buffer.from("forbidden"));
     const publicRel=rel.split(path.sep).join("/");
-    if(!PUBLIC_FILES.has(publicRel)&&!publicRel.startsWith("vendor/potree/")&&!publicRel.startsWith("vendor/icons/")&&publicRel!=="vendor/fonts/inter-latin-wght-normal.woff2")
+    if(!PUBLIC_FILES.has(publicRel)&&!publicRel.startsWith("vendor/potree/"))
       return send(res,404,"text/plain",Buffer.from("not found"));
     return sendStatic(req,res,f);
   }catch(err){

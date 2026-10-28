@@ -8,50 +8,30 @@ require("./build-dnr-runtime.js");
 const vendor=path.join(root,"vendor");
 fs.mkdirSync(vendor,{recursive:true});
 
-const files=[
-  ["node_modules/maplibre-gl/dist/maplibre-gl.mjs","maplibre-gl.mjs"],
-  ["node_modules/maplibre-gl/dist/maplibre-gl-shared.mjs","maplibre-gl-shared.mjs"],
-  ["node_modules/maplibre-gl/dist/maplibre-gl-worker.mjs","maplibre-gl-worker.mjs"],
-  ["node_modules/maplibre-gl/dist/maplibre-gl.css","maplibre-gl.css"],
-  ["node_modules/@tomickigrzegorz/leaflet-rotate/dist/leaflet-rotate.umd.min.js","leaflet-rotate.umd.min.js"]
+/* site.json lists the vendored browser files; each comes from a package.
+   Icons are copied one by one from Lucide, so the shell ships only the
+   symbols it uses rather than the library's all-icons runtime. */
+const SOURCES=[
+  ["vendor/maplibre-gl","node_modules/maplibre-gl/dist/maplibre-gl"],
+  ["vendor/leaflet-rotate","node_modules/@tomickigrzegorz/leaflet-rotate/dist/leaflet-rotate"],
+  ["vendor/lerc/","node_modules/lerc/"],
+  ["vendor/icons/","node_modules/lucide-static/icons/"],
+  ["vendor/fonts/","node_modules/@fontsource-variable/inter/files/"]
 ];
-
-for(const [source,target] of files)
-  fs.copyFileSync(path.join(root,source),path.join(vendor,target));
-
-fs.mkdirSync(path.join(vendor,'lerc'),{recursive:true});
-for(const name of ['LercDecode.js','LercDecode.es.js','lerc-wasm.wasm','README.md'])
-  fs.copyFileSync(path.join(root,'node_modules','lerc',name),path.join(vendor,'lerc',name));
-
-/* Keep the interface icon set local and tiny. Lucide is the source library,
-   but shipping its all-icons runtime for a small navigation set
-   would slow the very first paint for no benefit. The build copies only the
-   audited symbols used by the portal shell. */
-const iconNames=[
-  "arrow-left","arrow-right","chevron-down","chevron-right","chevron-up","cloud-sun","download","history","image",
-  "layers","map-pinned","mountain-snow","navigation","radar","radio","rotate-ccw","satellite","scan-search",
-  "search","settings","settings-2","sliders-horizontal","tags","triangle-alert",
-  /* markup tools */
-  "pen-line","hand","mouse-pointer-2","pencil","minus","move-up-right","pentagon","square","circle","type","map-pin",
-  "undo-2","trash-2","check","plus",
-  /* LiDAR Studio */
-  "waves","eye","eye-off","palette","sparkles","blend","x","arrow-up","arrow-down"
-];
-const iconDir=path.join(vendor,"icons");
-fs.mkdirSync(iconDir,{recursive:true});
-for(const name of iconNames)
-  fs.copyFileSync(path.join(root,"node_modules/lucide-static/icons",`${name}.svg`),path.join(iconDir,`${name}.svg`));
+const synced=require("../site.json").vendor;
+for(const target of [...synced,"vendor/lerc/README.md"]){
+  const [prefix,source]=SOURCES.find(([prefix])=>target.startsWith(prefix));
+  fs.mkdirSync(path.dirname(path.join(root,target)),{recursive:true});
+  fs.copyFileSync(path.join(root,source+target.slice(prefix.length)),path.join(root,target));
+}
 
 /* Inter stands in for SF Pro where the system does not provide it. SF Pro's
    licence limits it to Apple platforms, so it cannot be shipped; Apple devices
    resolve -apple-system first and never download this file. One variable
    Latin face covers every weight the interface uses. */
 const fontDir=path.join(vendor,"fonts");
-fs.mkdirSync(fontDir,{recursive:true});
-const interPackage=path.join(root,"node_modules/@fontsource-variable/inter");
-fs.copyFileSync(path.join(interPackage,"files/inter-latin-wght-normal.woff2"),path.join(fontDir,"inter-latin-wght-normal.woff2"));
-fs.copyFileSync(path.join(interPackage,"LICENSE"),path.join(fontDir,"Inter-LICENSE.txt"));
+fs.copyFileSync(path.join(root,"node_modules/@fontsource-variable/inter/LICENSE"),path.join(fontDir,"Inter-LICENSE.txt"));
 
 const potreeRequired=["build/potree/potree.js","build/potree/potree.css","build/potree/workers/EptLaszipDecoderWorker.js","build/potree/workers/laz-perf.wasm","libs/copc/index.js","SOURCE.json"];
 for(const asset of potreeRequired){if(!fs.existsSync(path.join(vendor,"potree",asset)))throw new Error(`missing pinned Potree asset: ${asset}`)}
-console.log(`synced ${files.length} package assets, ${iconNames.length} interface icons and the Inter fallback face; verified ${potreeRequired.length} pinned Potree assets`);
+console.log(`synced ${synced.length} vendored browser files; verified ${potreeRequired.length} pinned Potree assets`);

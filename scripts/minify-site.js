@@ -6,7 +6,7 @@
    specific strings and `function name(` shapes in the sources, and the tests
    run against the sources too. So nothing here may touch the repo - it runs on
    the `_site` directory CI has already assembled, and only shrinks what is
-   actually shipped (see the "Assemble the static site" step in ci.yml).
+   actually shipped (see scripts/assemble-site.py).
 
    Identifiers are deliberately NOT renamed. The application is a set of classic
    scripts sharing globals, so renaming top-level names per file would break
@@ -65,26 +65,25 @@ function shrinkHtml(rel) {
   return before.length - after.length;
 }
 
+function shrinkJson(rel) {
+  const file = path.join(dir, rel);
+  const before = fs.readFileSync(file, "utf8");
+  const after = JSON.stringify(JSON.parse(before));
+  if (after.length >= before.length) return 0;
+  fs.writeFileSync(file, after);
+  return before.length - after.length;
+}
+
+// Every first-party file sits at the top level; vendor bundles arrive minified,
+// except MapLibre's stylesheet. Catalogs are fetched and parsed on load.
 const steps = () => [
-  ["index.html", () => shrinkHtml("index.html")],
-  ["ui-theme.css", () => shrink("ui-theme.css", { loader: "css", opts: { minify: true } })],
-  ["ui-system.css", () => shrink("ui-system.css", { loader: "css", opts: { minify: true } })],
+  ...fs.readdirSync(dir).map((f) => [f, path.extname(f)]).filter(([f]) => fs.statSync(path.join(dir, f)).isFile()).map(([f, ext]) =>
+    [f, ext === ".html" ? () => shrinkHtml(f)
+      : ext === ".css" ? () => shrink(f, { loader: "css", opts: { minify: true } })
+      : ext === ".js" ? () => shrink(f, { loader: "js", opts: JS_OPTS })
+      : ext === ".json" ? () => shrinkJson(f)
+      : () => 0]),
   ["vendor/maplibre-gl.css", () => shrink("vendor/maplibre-gl.css", { loader: "css", opts: { minify: true } })],
-  ...["ui-system.js", "mosaic-core.js", "png-stream.js", "markup.js", "markup-3d.js", "terrain-core.js", "terrain-raster.js", "terrain-drape-core.js", "terrain-drape-pool.js", "terrain-drape-worker.js", "elevation-bands.js",
-    "elevation-tile-core.js", "public-terrain.js", "public-terrain-worker.js", "tile-pipeline.js", "gpu-terrain-shaders.js", "lidar-render.js", "lidar-studio.js", "analysis-layers.js", "gpu-terrain-store.js", "gpu-terrain-engine.js", "gpu-terrain-layer.js", "gpu-terrain-3d-cache.js", "gpu-terrain-3d-renderer.js", "gpu-terrain-3d-layer.js",
-    "wa-archaeology.js", "glacial-research-core.js", "glacial-segment-core.js", "glacial-segment-features.js", "glacial-moraine-classifier.js", "glacial-zone-core.js", "glacial-zone-features.js", "glacial-belt-classifier.js", "glacial-moraine-analysis.js", "terrain-analysis-core.js", "research-analysis.js", "research-worker.js",
-    "point-cloud-core.js", "point-cloud-viewer.js", "version.js"]
-    .map((f) => [f, () => shrink(f, { loader: "js", opts: JS_OPTS })]),
-  // Catalogs are fetched and parsed on load; they are the least dense bytes here.
-  ...["maxar-catalog.json", "point-cloud-catalog.json", "nadi1-cordilleran.json"].map((f) => [f, () => {
-    const file = path.join(dir, f);
-    if (!fs.existsSync(file)) return 0;
-    const before = fs.readFileSync(file, "utf8");
-    const after = JSON.stringify(JSON.parse(before));
-    if (after.length >= before.length) return 0;
-    fs.writeFileSync(file, after);
-    return before.length - after.length;
-  }]),
 ];
 
 let total = 0;

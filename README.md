@@ -464,27 +464,23 @@ Where they live:
 | `mosaic-core.js` | Tested footprint geometry, antimeridian, identity, coverage and imagery LOD helpers |
 | `server.js` | Local terrain engine: static files, validated proxying, request coalescing, retries and disk cache |
 | `scripts/install-mac-service.sh` | Installs a loopback-only, self-healing macOS terrain-engine service |
-| `SOL_HIGH_IMPLEMENTATION_HANDOFF.md` | Detailed implementation plan for the remaining lidar, landscape, geology, sidebar, persistence and imagery work |
 | `test-server.js` | Offline black-box checks for CORS, request limits, traversal protection and server health |
 | `version.js` | One build identifier shared by the page and service worker cache |
-| `TODO.md` | Work queue. Say "check the TODO" to a fresh Claude session and it picks up from there |
 | `THREE_D_TERRAIN.md` | 2D rotation, 3D terrain, lighting architecture, limitations, and QA handoff |
 | `POINT_CLOUD_3D.md` | Linked point-cloud architecture, verified data facts, as-built notes, and QA handoff |
-| `UI_REDESIGN.md` | Interface information architecture, visual authority, integration boundaries, and maintenance checklist |
-| `source-catalog.md` | ~50 free imagery sources with endpoints, licences, resolutions |
+| `docs/UI_REDESIGN.md` | Interface information architecture, visual authority, integration boundaries, and maintenance checklist |
+| `docs/research/source-catalog.md` | ~50 free imagery sources with endpoints, licences, resolutions |
 | `sources.json` | Machine-readable version of the catalog |
-| `hiking-stack.md` | The Western-US subset: snow, fire, route-finding |
-| `lidar-research.md` | Lidar sources, verified endpoints, coverage gaps |
+| `docs/research/hiking-stack.md` | The Western-US subset: snow, fire, route-finding |
+| `docs/research/lidar-research.md` | Lidar sources, verified endpoints, coverage gaps |
 | `trailcheck.py` | Standalone: snow line from Sentinel-2 NDSI + fire + SNOTEL |
-| `snowline.py` | Earlier snow-line-only version |
-| `probe.py` | Tiny script that reports scene freshness at a few test points |
 | `cog.js` | COG/GeoTIFF reader — TIFF LZW + floating-point predictor, geodesy. No dependencies |
 | `usgs.js` | USGS 3DEP 1 m DEM source: S3 index, range reads, terrain rendering, PNG encoder |
 | `nadi1-cordilleran.json` | NADI-1 Cordilleran ice margins, 25–10.5 ka, clipped to the Pacific Northwest (Dalton et al. 2023, CC BY 4.0). Rebuild with `scripts/build-nadi1-cordilleran.py` |
 | `test-cog.js` | Offline checks: LZW, predictor, geodesy, cell maths, PNG. `node test-cog.js` |
 | `.devcontainer/` | Codespaces / Dev Containers setup — Node 24, Python 3.14, port 8765 |
 | `.github/workflows/ci.yml` | Syntax checks, `sources.json` validation, server smoke test |
-| `requirements.txt` | Python deps for the three scripts |
+| `requirements.txt` | Python deps for `trailcheck.py` |
 
 `.cache/` appears next to `server.js` once you run it. Safe to delete; it just rebuilds.
 

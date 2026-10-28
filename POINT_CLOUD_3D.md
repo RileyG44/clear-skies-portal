@@ -75,7 +75,7 @@ Bounding-box test against all 30 `ept.json` files:
 | Snoqualmie Pass | 3 overlapping projects | up to 248.3 B |
 | Seattle | `WA_KingCo_1_2021` | 31.0 B |
 
-**Rainier has point-cloud coverage.** This contradicts `lidar-research.md`
+**Rainier has point-cloud coverage.** This contradicts `docs/research/lidar-research.md`
 Addendum 3, which correctly reports Mount Rainier National Park as a gap in the
 **1 m raster DEM** (`prd-tnm`, `StagedProducts/Elevation/1m`). Both are true:
 different products, different footprints. Confirmed by walking the octree —

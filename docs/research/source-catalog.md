@@ -321,7 +321,7 @@ Four findings that should shape the design:
 3. **High latitudes are dramatically fresher** (5.5 h at Svalbard) because of converging polar orbits. Freshness is a strong function of latitude; the UI should reflect that rather than quoting one global number.
 4. **⚠️ Open ocean is effectively uncovered by Sentinel-1** — the newest mid-Pacific GRD was from 2022, because S-1 doesn't routinely acquire over open water. For ~70% of Earth's surface, the SAR fallback silently isn't there, and optical over ocean is often just cloud. **Decide early how the portal handles maritime queries** — geostationary + Sentinel-3 are the honest answer there, at kilometre scale.
 
-Reproduce with `probe.py` in this workspace.
+The original probe script is in the repository history.
 
 ---
 

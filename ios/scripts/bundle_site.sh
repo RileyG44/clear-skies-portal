@@ -1,7 +1,7 @@
 #!/bin/zsh
-# Bundle the web client into the app exactly as GitHub Pages ships it: the
-# files from ci.yml's "Assemble the static site" step, then its "Minify the
-# shipped bytes" step. Smaller scripts parse sooner on every launch.
+# Bundle the web client into the app exactly as GitHub Pages ships it:
+# scripts/assemble-site.py, then scripts/minify-site.js. Smaller scripts parse
+# sooner on every launch.
 #
 #   bundle_site.sh <repository root> <destination> <configuration>
 #
@@ -11,7 +11,7 @@
 set -euo pipefail
 root=$1 destination=$2 configuration=${3:-Debug}
 
-/usr/bin/python3 -I "$root/ios/scripts/assemble_site.py" "$root" "$destination"
+/usr/bin/python3 -I "$root/scripts/assemble-site.py" "$root" "$destination"
 
 # Xcode's build environment does not load a shell profile, so look where Node
 # is usually installed.

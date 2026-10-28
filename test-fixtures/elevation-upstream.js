@@ -14,7 +14,7 @@ function tiff(value){
    test can check the scale (dpi) the engine asks for. */
 function waExport(options,callback){
   if(process.env.CSP_TEST_UPSTREAM_LOG) require('node:fs').appendFileSync(process.env.CSP_TEST_UPSTREAM_LOG,options.path+'\n');
-  const response=Readable.from([require('./usgs.js').encodePNG(Buffer.alloc(4*4*4,200),4,4)]);
+  const response=Readable.from([require('../usgs.js').encodePNG(Buffer.alloc(4*4*4,200),4,4)]);
   response.statusCode=200;response.headers={'content-type':'image/png'};
   const req=new EventEmitter();req.setTimeout=()=>req;req.write=()=>true;
   req.destroy=error=>{req.destroyed=true;if(error)queueMicrotask(()=>req.emit('error',error));};
@@ -24,7 +24,7 @@ function waExport(options,callback){
 https.request=(options,callback)=>{
   if(options.host==='s3.amazonaws.com'&&options.path.startsWith('/elevation-tiles-prod/terrarium/')){
     if(process.env.CSP_TEST_UPSTREAM_LOG)require('node:fs').appendFileSync(process.env.CSP_TEST_UPSTREAM_LOG,options.path+'\n');
-    const response=Readable.from([require('./usgs.js').encodePNG(Buffer.alloc(256*256*4,128),256,256)]);
+    const response=Readable.from([require('../usgs.js').encodePNG(Buffer.alloc(256*256*4,128),256,256)]);
     response.statusCode=options.path.includes('/2/3/3.png')?503:200;response.headers={'content-type':'image/png'};
     const req=new EventEmitter();req.setTimeout=()=>req;req.write=()=>true;
     req.destroy=error=>{req.destroyed=true;if(error)queueMicrotask(()=>req.emit('error',error));};
