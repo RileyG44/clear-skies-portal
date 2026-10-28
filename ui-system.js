@@ -1395,8 +1395,16 @@ if(sheetMode()&&!isCollapsed()){
     }
     return null;
   };
-  let gesture=null,suppressClick=false;
-  const suppressNextClick=()=>{suppressClick=true;setTimeout(()=>{suppressClick=false},0)};
+  let gesture=null,suppressClick=false,suppressTimer=0;
+  /* A touch tap is followed by a compatibility click. On Chrome that click can
+     arrive after a 0ms timer, and it would step the detent straight back.
+     Hold the swallow long enough for the late click, and release it once the
+     click has been seen so the next press still counts. */
+  const suppressNextClick=()=>{
+    suppressClick=true;
+    clearTimeout(suppressTimer);
+    suppressTimer=setTimeout(()=>{suppressClick=false},400);
+  };
   const begin=(x,y,target,source)=>{
     gesture={x,y,startH:side.getBoundingClientRect().height,from:currentDetent(),target,source,
              onGrabber:target===grabber,scroller:scrollerFor(target),mode:null,samples:[{y,t:performance.now()}]};
@@ -1502,7 +1510,7 @@ if(sheetMode()&&!isCollapsed()){
   side.addEventListener("pointerup",()=>{if(gesture?.source==="mouse") end()});
   side.addEventListener("pointercancel",()=>{if(gesture?.source==="mouse") end()});
   side.addEventListener("click",event=>{
-    if(suppressClick) return;
+    if(suppressClick){suppressClick=false;clearTimeout(suppressTimer);return}
     if(event.target===grabber){
       // keyboard activation, or a tap the gesture code did not see
       goToDetent(currentDetent()==="peek"?"medium":currentDetent()==="medium"?"large":"medium");
