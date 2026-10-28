@@ -69,7 +69,8 @@ async function main(){
   assert.equal(native.commands.centerSelected(),false);assert.equal(actions.centers.length,0);
 
   const root={hidden:false},view={panel:"ctl"};let closed=0;
-  const panel={view,document:{getElementById:()=>root},$:selector=>({click(){assert.equal(selector,"#ctlCollapse");closed++;root.hidden=true;}}),schedule(){}};
+  const panel={view,document:{getElementById:()=>root},$:selector=>({click(){assert.equal(selector,"#ctlCollapse");closed++;root.hidden=true;}}),schedule(){},
+    snapshotItems(){},serverItems(){},terrainSourceItems(){}};
   vm.createContext(panel);
   vm.runInContext(section(adapter,"const PANELS =", "  const openPanel =")+
     "\nconst commands={"+section(adapter,"closePanel(id) {", "    statusText:").trim().replace(/,$/,"")+"}; globalThis.close=commands.closePanel;",panel);

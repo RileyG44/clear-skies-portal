@@ -156,10 +156,8 @@
   const tidyMarkdown = text => text.replace(/[ \t]+\n/g, "\n").replace(/\n{3,}/g, "\n\n").trim();
 
   /* ---------------------------------------------------------- describe */
-  function controlItem(el, context = {}) {
-    const tag = el.tagName.toLowerCase(), type = (el.getAttribute("type") || "").toLowerCase();
-    const title = context.title ?? labelFor(el);
-    const base = { ref: refOf(el), title, detail: context.detail || undefined, disabled: !!el.disabled || el.getAttribute("aria-disabled") === "true" };
+  /* Form fields: switches, sliders, colors, pickers and text. */
+  function fieldItem(el, tag, type, base, context) {
     if (tag === "input" && (type === "checkbox" || type === "radio")) return { kind: "toggle", ...base, value: el.checked, radio: type === "radio" || undefined };
     if (tag === "input" && type === "range") {
       const output = context.output || (el.id && $(`output[for~="${CSS.escape(el.id)}"]`)) || (el.nextElementSibling?.matches("output") ? el.nextElementSibling : null);
@@ -172,6 +170,18 @@
     if (tag === "input" || tag === "textarea") return { kind: "field", ...base, value: el.value, placeholder: el.placeholder || undefined,
       input: tag === "textarea" ? "multiline" : (type || "text"), min: el.min || undefined, max: el.max || undefined, step: el.step || undefined,
       unit: unitOf(el) };
+  }
+  /* Pills, export actions and text buttons are buttons. A menu item is a row.
+     Anything else stays unset so a disclosure (aria-expanded) can still draw
+     as a row. */
+  const BUTTON_ROLES = [[".linkbtn", "link"], [".snapshot-action-primary,.primary,.ls-pill-primary,.snap-sel-save", "primary"],
+    [".danger,.mk-btn-danger,.mk-btn-danger-text", "destructive"], ["[role=menuitem]", "option"], [".ls-pill,.snapshot-action,.ghost", "action"]];
+  function controlItem(el, context = {}) {
+    const tag = el.tagName.toLowerCase(), type = (el.getAttribute("type") || "").toLowerCase();
+    const title = context.title ?? labelFor(el);
+    const base = { ref: refOf(el), title, detail: context.detail || undefined, disabled: !!el.disabled || el.getAttribute("aria-disabled") === "true" };
+    const field = fieldItem(el, tag, type, base, context);
+    if (field) return field;
     if (el.getAttribute("role") === "slider") return { kind: "text", style: "hint", title: clean(el.getAttribute("aria-valuetext") || el.getAttribute("aria-label")) };
     // Analysis choices have a short name and a separate scientific description.
     if (el.matches(".al-menu-item")) return {kind:"button",...base,role:"option",
@@ -180,14 +190,7 @@
     const own = textWithout(el, "svg,img");
     const aria = clean(el.getAttribute("aria-label"));
     const label = context.title || own || aria || clean(el.title);
-    // Pills, export actions and text buttons are buttons. A menu item is a
-    // row. Anything else stays unset so a disclosure (aria-expanded) can
-    // still draw as a row.
-    const role = el.matches(".linkbtn") ? "link"
-      : el.matches(".snapshot-action-primary,.primary,.ls-pill-primary,.snap-sel-save") ? "primary"
-      : el.matches(".danger,.mk-btn-danger,.mk-btn-danger-text") ? "destructive"
-      : el.getAttribute("role") === "menuitem" ? "option"
-      : el.matches(".ls-pill,.snapshot-action,.ghost") ? "action" : undefined;
+    const role = BUTTON_ROLES.find(([selector]) => el.matches(selector))?.[1];
     return { kind: tag === "a" ? "link" : "button", ...base, title: label, accessibility: aria && aria !== label ? aria : undefined, icon: iconOf(el),
       pressed: el.hasAttribute("aria-pressed") ? el.getAttribute("aria-pressed") === "true" : undefined,
       expanded: el.hasAttribute("aria-expanded") ? el.getAttribute("aria-expanded") === "true" : undefined,
@@ -321,11 +324,7 @@
   }
 
   function walk(root, out) {
-    for (const el of root.children) {
-      if (!shown(el)) continue;
-      if (handle(el, out)) continue;
-      walk(el, out);
-    }
+    for (const el of root.children) if (shown(el) && !handle(el, out)) walk(el, out);
   }
 
   /* How each kind of web element is described, in order of precedence. A
@@ -561,10 +560,13 @@
   /* Pop-ups the app presents natively. Each keeps its web element as the
      source of truth; closing the native sheet closes the web pop-up. */
   const PANELS = {
-    snapshotPanel: { body: ".snapshot-export-body", close: "#snapshotClose" },
-    serverPanel: { body: "#srvBox", close: "#srvClose" },
-    terrainSourcePanel: { body: "#terrainSourcePanelBody", close: "#terrainSourceClose" },
-    ctl: { body: "#ctlBody", close: "#ctlCollapse", title: "Displayed on map" }
+    snapshotPanel: { body: ".snapshot-export-body", close: "#snapshotClose", items: snapshotItems },
+    serverPanel: { body: "#srvBox", close: "#srvClose", title: "Terrain engine", items: serverItems },
+    terrainSourcePanel: { body: "#terrainSourcePanelBody", close: "#terrainSourceClose", stateless: true, items: terrainSourceItems },
+    ctl: { body: "#ctlBody", close: "#ctlCollapse", title: "Displayed on map", items: (items, body) => {
+      items.push({ kind: "text", style: "row", title: clean($("#ctlName")?.textContent), detail: clean($("#ctlDate")?.textContent) || undefined });
+      walkBody(items, body);
+    } }
   };
   const openPanel = () => Object.keys(PANELS).find(id => { const el = document.getElementById(id); return el && !el.hidden; }) || null;
 
@@ -600,80 +602,82 @@
     return items;
   }
 
+  function snapshotItems(items) {
+    const resolution = panelControl("#snapshotScale", {title: "Resolution"});
+    if (resolution) resolution.options.forEach(option => { option.title = `${option.value}×`; });
+    const metadata = clean($("#snapshotMeta")?.textContent);
+    items.push(panelGroup("export:settings", "Image settings", [
+      resolution,
+      metadata ? {kind: "text", style: "status", title: metadata} : null,
+      panelControl("#snapshotReadout", {title: "Include map info", detail: "Coordinates, elevation and color keys"})
+    ]));
+    items.push({kind: "text", style: "hint", title: "Higher resolutions request finer source tiles where available. Enlarging a source adds no new detail."});
+    const capture = panelControl("#snapshotCapture", {title: "Capture view", detail: "Save the whole map view."});
+    const select = panelControl("#snapshotSelect", {title: "Select area", detail: "Draw a rectangle on the map to save."});
+    if (capture) capture.icon = "camera";
+    if (select) select.icon = "scan";
+    items.push({kind: "actions", items: [select, capture].filter(Boolean)});
+  }
+  function serverItems(items) {
+    items.push({kind: "text", style: "hint", title: "Connect to your Mac for its terrain cache and processing. The engine is optional; public map sources work without it."});
+    const address = panelControl("#srvUrl", {title: "Engine address"});
+    if (address) address.detail = "Use the Tailscale HTTPS address from your Mac.";
+    const metadata = clean($("#srvMeta")?.textContent);
+    items.push(panelGroup("engine:connection", "Connection", [
+      address,
+      metadata ? {kind: "text", style: $("#srvMeta")?.classList.contains("warn") ? "warning" : "status", title: metadata} : null
+    ]));
+    const copy = panelControl("#srvCopyLink", {title: "Copy engine address"});
+    const forget = panelControl("#srvForget", {title: "Forget saved address", detail: "Remove the connection saved on this device."});
+    if (copy) { copy.role = "utility"; copy.icon = "copy"; }
+    if (forget) {
+      forget.role = "destructive"; forget.icon = "trash";
+      forget.confirm = "Forget the saved engine address? You can reconnect by entering it again.";
+    }
+    items.push(panelGroup("engine:saved", "Saved address", [copy, forget]));
+    const connect = panelControl("#srvConnect");
+    if (connect) { connect.role = "primary"; items.push({kind: "actions", items: [connect]}); }
+  }
+  function terrainSourceItems(items, body) {
+    if (!body) return;
+    const status = $(".terrain-source-panel-status", body);
+    if (status && !status.hidden) items.push({kind: "text", title: clean(status.textContent), style: "status"});
+    for (const row of $$(".terrain-source-panel-row", body)) {
+      const controls = $$("label.tsp-control", row).map(label => controlItem($("input", label),
+        {title: clean($("span", label)?.textContent), output: $("output", label)}));
+      const name = $(".terrain-source-panel-name", row);
+      const detail = clean($(".terrain-source-panel-meta", row)?.textContent);
+      if (row.dataset.id === "scene") controls.push(...imageryPanelItems());
+      items.push({kind: "source", ref: "source:" + row.dataset.id, id: row.dataset.id,
+        title: clean(name?.textContent), detail, items: controls,
+        edit: name?.matches("button") ? {ref: refOf(name), title: "Edit layer"} : undefined});
+    }
+    // Zero opacity hides the web's active row, but its controls must remain
+    // reachable after removing the redundant imagery button from this dock.
+    if (!$(".terrain-source-panel-row[data-id=scene]", body) && $("#mapInfoToggle")?.hidden === false) {
+      const opacity = panelControl("#op", {title: "Opacity"});
+      if (opacity) opacity.display = `${opacity.value}%`;
+      items.unshift({kind: "source", ref: "source:scene", id: "scene", title: clean($("#ctlName")?.textContent),
+        detail: clean($("#ctlDate")?.textContent), items: [opacity, ...imageryPanelItems()].filter(Boolean)});
+    }
+    if (!items.some(item => item.kind === "source")) {
+      const empty = clean($(".tsp-rows", body)?.textContent);
+      if (empty) items.push({kind: "text", style: "hint", title: empty});
+    }
+    const references = $("#mapSourceReferences", body);
+    const notes = $$(".terrain-source-panel-note", body).filter(el => el !== references)
+      .map(note => ({kind: "text", style: "hint", title: clean(note.textContent)}));
+    if (references && clean(references.textContent)) notes.push({kind: "text", title: clean(references.textContent), markdown: tidyMarkdown(markdownOf(references))});
+    if (notes.length) items.push({kind: "disclosure", ref: "sources:references", title: "Sources & attribution", items: notes});
+  }
+  const walkBody = (items, body) => { if (body) for (const child of body.children) if (!handle(child, items)) walk(child, items); };
   function describePanel(id) {
     const spec = PANELS[id], el = document.getElementById(id);
     if (!spec || !el || el.hidden) return null;
-    const body = $(spec.body, el);
     const items = [];
-    if (id === "ctl") {
-      items.push({ kind: "text", style: "row", title: clean($("#ctlName")?.textContent), detail: clean($("#ctlDate")?.textContent) || undefined });
-    }
-    if (id === "snapshotPanel") {
-      const resolution = panelControl("#snapshotScale", {title: "Resolution"});
-      if (resolution) resolution.options.forEach(option => { option.title = `${option.value}×`; });
-      const metadata = clean($("#snapshotMeta")?.textContent);
-      items.push(panelGroup("export:settings", "Image settings", [
-        resolution,
-        metadata ? {kind: "text", style: "status", title: metadata} : null,
-        panelControl("#snapshotReadout", {title: "Include map info", detail: "Coordinates, elevation and color keys"})
-      ]));
-      items.push({kind: "text", style: "hint", title: "Higher resolutions request finer source tiles where available. Enlarging a source adds no new detail."});
-      const capture = panelControl("#snapshotCapture", {title: "Capture view", detail: "Save the whole map view."});
-      const select = panelControl("#snapshotSelect", {title: "Select area", detail: "Draw a rectangle on the map to save."});
-      if (capture) capture.icon = "camera";
-      if (select) select.icon = "scan";
-      items.push({kind: "actions", items: [select, capture].filter(Boolean)});
-    } else if (id === "serverPanel") {
-      items.push({kind: "text", style: "hint", title: "Connect to your Mac for its terrain cache and processing. The engine is optional; public map sources work without it."});
-      const address = panelControl("#srvUrl", {title: "Engine address"});
-      if (address) address.detail = "Use the Tailscale HTTPS address from your Mac.";
-      const metadata = clean($("#srvMeta")?.textContent);
-      items.push(panelGroup("engine:connection", "Connection", [
-        address,
-        metadata ? {kind: "text", style: $("#srvMeta")?.classList.contains("warn") ? "warning" : "status", title: metadata} : null
-      ]));
-      const copy = panelControl("#srvCopyLink", {title: "Copy engine address"});
-      const forget = panelControl("#srvForget", {title: "Forget saved address", detail: "Remove the connection saved on this device."});
-      if (copy) { copy.role = "utility"; copy.icon = "copy"; }
-      if (forget) {
-        forget.role = "destructive"; forget.icon = "trash";
-        forget.confirm = "Forget the saved engine address? You can reconnect by entering it again.";
-      }
-      items.push(panelGroup("engine:saved", "Saved address", [copy, forget]));
-      const connect = panelControl("#srvConnect");
-      if (connect) { connect.role = "primary"; items.push({kind: "actions", items: [connect]}); }
-    } else if (id === "terrainSourcePanel" && body) {
-      const status = $(".terrain-source-panel-status", body);
-      if (status && !status.hidden) items.push({kind: "text", title: clean(status.textContent), style: "status"});
-      for (const row of $$(".terrain-source-panel-row", body)) {
-        const controls = $$("label.tsp-control", row).map(label => controlItem($("input", label),
-          {title: clean($("span", label)?.textContent), output: $("output", label)}));
-        const name = $(".terrain-source-panel-name", row);
-        const detail = clean($(".terrain-source-panel-meta", row)?.textContent);
-        if (row.dataset.id === "scene") controls.push(...imageryPanelItems());
-        items.push({kind: "source", ref: "source:" + row.dataset.id, id: row.dataset.id,
-          title: clean(name?.textContent), detail, items: controls,
-          edit: name?.matches("button") ? {ref: refOf(name), title: "Edit layer"} : undefined});
-      }
-      // Zero opacity hides the web's active row, but its controls must remain
-      // reachable after removing the redundant imagery button from this dock.
-      if (!$(".terrain-source-panel-row[data-id=scene]", body) && $("#mapInfoToggle")?.hidden === false) {
-        const opacity = panelControl("#op", {title: "Opacity"});
-        if (opacity) opacity.display = `${opacity.value}%`;
-        items.unshift({kind: "source", ref: "source:scene", id: "scene", title: clean($("#ctlName")?.textContent),
-          detail: clean($("#ctlDate")?.textContent), items: [opacity, ...imageryPanelItems()].filter(Boolean)});
-      }
-      if (!items.some(item => item.kind === "source")) {
-        const empty = clean($(".tsp-rows", body)?.textContent);
-        if (empty) items.push({kind: "text", style: "hint", title: empty});
-      }
-      const references = $("#mapSourceReferences", body);
-      const notes = $$(".terrain-source-panel-note", body).filter(el => el !== references)
-        .map(note => ({kind: "text", style: "hint", title: clean(note.textContent)}));
-      if (references && clean(references.textContent)) notes.push({kind: "text", title: clean(references.textContent), markdown: tidyMarkdown(markdownOf(references))});
-      if (notes.length) items.push({kind: "disclosure", ref: "sources:references", title: "Sources & attribution", items: notes});
-    } else     if (body) for (const child of body.children) if (!handle(child, items)) walk(child, items);
-    return { id, title: id === "serverPanel" ? "Terrain engine" : spec.title || clean($(".tool-popover-title", el)?.textContent), state: id === "terrainSourcePanel" ? undefined : clean($(".tool-popover-state", el)?.textContent) || undefined, items };
+    (spec.items || walkBody)(items, $(spec.body, el));
+    return { id, title: spec.title || clean($(".tool-popover-title", el)?.textContent),
+      state: spec.stateless ? undefined : clean($(".tool-popover-state", el)?.textContent) || undefined, items };
   }
 
   /* ------------------------------------------------------------- state */
