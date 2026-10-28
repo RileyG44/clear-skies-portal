@@ -463,9 +463,6 @@ body.csp-redesign .csp-card{
   border-radius:13px;
   background:var(--ui-surface);
 }
-body.csp-redesign .csp-card-head{padding:14px 15px 11px;border-bottom:1px solid var(--line)}
-body.csp-redesign .csp-card-title{color:var(--ink);font-size:13px;font-weight:600}
-body.csp-redesign .csp-card-copy{margin-top:3px;color:var(--ink-3);font-size:11px;line-height:1.45}
 
 body.csp-redesign #cspActiveLayerStack{display:flex;flex-direction:column}
 body.csp-redesign .csp-layer-card{
@@ -677,7 +674,6 @@ body.csp-redesign .terrain-source-panel-note{padding-top:4px;color:var(--ink-3);
   body.csp-redesign #cspNav #go{grid-column:2;grid-row:2}
 }
 body.csp-redesign .csp-nav-button > span:not(.csp-nav-count):not(.csp-nav-dot){min-width:0;white-space:normal;line-height:1.35}
-body.csp-redesign .terrain-action-row{flex-wrap:wrap}
 
 body.csp-redesign #terLightNote{color:var(--ui-text-muted)}
 body.csp-redesign #terrainLoadStatus[data-state="partial"]{color:var(--ui-warn)}
@@ -748,8 +744,6 @@ body.csp-redesign .csp-locate-label{display:none}
   body.csp-redesign .fgrid > label:not(:first-child){margin-top:8px}
   body.csp-redesign #side input:is([type=text],[type=number],[type=date],[type=url]),
   body.csp-redesign #side select{font-size:16px;min-height:44px;min-width:0;max-width:100%}
-  body.csp-redesign .terrain-action-row{display:grid;grid-template-columns:minmax(0,1fr);gap:8px}
-  body.csp-redesign .terrain-action-row > *{width:100%;min-width:0;min-height:44px;white-space:normal}
   body.csp-redesign .terrain-look-reset,
   body.csp-redesign .linkbtn,
   body.csp-redesign .terrain-appearance > summary,
@@ -759,10 +753,6 @@ body.csp-redesign .csp-locate-label{display:none}
   body.csp-redesign .terrain-look-grid label{grid-column:1/-1}
   body.csp-redesign .terrain-look-grid output{grid-column:2}
   body.csp-redesign .terrain-look-grid input[type=range]{grid-column:1;min-height:36px}
-  body.csp-redesign .elev-band-row{grid-template-columns:minmax(0,1fr) 44px;gap:8px}
-  body.csp-redesign .elev-band-row .unit-field{grid-column:1/-1}
-  body.csp-redesign .elev-band-row input[type=color]{width:44px;height:44px}
-  body.csp-redesign .elev-band-row .check{min-height:44px}
   body.csp-redesign .csp-layer-tool{width:28px;height:28px}
   body.csp-redesign .csp-layer-handle{width:28px;height:28px}
 }
@@ -1147,9 +1137,6 @@ body.csp-redesign .csp-preview-badge{
 .csp-glass body.csp-redesign #panes .pane-h:hover{background:var(--ui-fill)}
 .csp-glass body.csp-redesign #panes .pane-t{font-size:15px;font-weight:600;letter-spacing:-.01em}
 .csp-glass body.csp-redesign #panes .pane-b{color:var(--ui-text-2)}
-.csp-glass body.csp-redesign .csp-card-head{padding:14px 16px 11px;border-bottom:.5px solid var(--ui-line)}
-.csp-glass body.csp-redesign .csp-card-title{font-size:15px;font-weight:600;letter-spacing:-.01em}
-.csp-glass body.csp-redesign .csp-card-copy{color:var(--ui-text-muted);font-size:12px}
 .csp-glass body.csp-redesign #panes .item{background:transparent;border-color:var(--ui-line)}
 .csp-glass body.csp-redesign #panes .item.sel{background:var(--ui-accent-tint)}
 .csp-glass body.csp-redesign #panes .item.sel::before{background:var(--ui-accent)}
