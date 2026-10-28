@@ -6,6 +6,8 @@
    Deliberately NOT OpenStreetMap's own tiles: their tile-usage policy forbids
    it and the server answers 418. Esri's free reference layers are the
    keyless substitute.                                                        */
+/* Overlay groups, in menu order, each with the sidebar route that shows it. */
+const OVERLAY_GROUP_ROUTES={"Imagery":"satellite","Labels & reference":"labels","Conditions":"conditions","Geology & hazards":"geology","Past landscapes":"past"};
 const OVERLAYS = [
   /* Drawn low so the analytical terrain shaders still composite above imagery,
      which is the ordering check-static already pins. */
@@ -753,7 +755,7 @@ function ovBuild(o){
 }
 
 function visibleOverlayGroup(){
-  return ({satellite:"Imagery",conditions:"Conditions",geology:"Geology & hazards",past:"Past landscapes",labels:"Labels & reference"})[document.body.dataset.cspRoute]||null;
+  return Object.keys(OVERLAY_GROUP_ROUTES).find(group=>OVERLAY_GROUP_ROUTES[group]===document.body.dataset.cspRoute)||null;
 }
 
 function paintOverlayNote(){
@@ -918,7 +920,7 @@ function initAlerts(){
    was a submenu holding a single layer, an overlay group repeated the name of a
    whole pane, and ten layers had no group at all and simply floated above the
    first heading. */
-const OVERLAY_GROUPS=["Imagery","Labels & reference","Conditions","Geology & hazards","Past landscapes"];
+const OVERLAY_GROUPS=Object.keys(OVERLAY_GROUP_ROUTES);
 function ovRender(){
   let last=null;
   const ordered=OVERLAY_GROUPS.flatMap(group=>OVERLAYS.filter(o=>o.group===group))

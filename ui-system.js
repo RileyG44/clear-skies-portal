@@ -357,8 +357,7 @@ function routeForLayer(layer){
   if(layer.id.startsWith("elevation-")) return "elevation";
   if(layer.id.startsWith("analysis:")) return "analyze";
   if(layer.id.startsWith("overlay:")){
-    const group=(bridge.overlayCatalog().find(o=>`overlay:${o.id}`===layer.id)||{}).group;
-    return group==="Imagery"?"satellite":group==="Conditions"?"conditions":group==="Geology & hazards"?"geology":group==="Past landscapes"?"past":"labels";
+    return (bridge.overlayCatalog().find(o=>`overlay:${o.id}`===layer.id)||{}).route||"labels";
   }
   return "layers";
 }
@@ -942,7 +941,7 @@ function renderSettingsView(){
     <div class="csp-setting-row">
       <div class="csp-setting-text"><strong>Default resolution</strong><span>Used the next time the camera pop-up opens.</span></div>
       <select data-export-scale aria-label="Default export resolution">
-        ${[1,2,4,8,16,32].map(v=>`<option value="${v}">${v}×</option>`).join("")}
+        ${[...$("#snapshotScale").options].map(option=>`<option value="${option.value}">${option.value}×</option>`).join("")}
       </select>
     </div>
     <label class="csp-setting-row">
@@ -1237,8 +1236,9 @@ function updateCounts(){
   set("elevation",elevationCount?String(elevationCount):"");
   const analysisCount=active.filter(layer=>layer.id.startsWith("analysis:")).length;set("analyze",analysisCount?String(analysisCount):"");
   const markupCount=active.filter(layer=>layer.id.startsWith("markup:")).length;set("markup",markupCount?String(markupCount):"");
-  for(const [key,group] of [["conditions","Conditions"],["geology","Geology & hazards"],["past","Past landscapes"],["labels","Labels & reference"]]){
-    const ids=new Set(catalog.filter(item=>item.group===group).map(item=>`overlay:${item.id}`));
+  // The Satellite count is its search results; the overlay groups count active layers.
+  for(const key of new Set(catalog.map(item=>item.route).filter(route=>route&&route!=="satellite"))){
+    const ids=new Set(catalog.filter(item=>item.route===key).map(item=>`overlay:${item.id}`));
     const count=active.filter(layer=>ids.has(layer.id)).length;set(key,count?String(count):"");
   }
   const copy=coordinateActions.querySelector('[data-coordinate="copy"]'),maps=coordinateActions.querySelector('[data-coordinate="maps"]'),earth=coordinateActions.querySelector('[data-coordinate="earth"]');

@@ -132,7 +132,7 @@ window.ClearSkiesPortalBridge={
   /* Annotation tools stay on whichever map is visible. */
   ensureMap:()=>{if(document.body.classList.contains("point-cloud-open"))pointCloudPanel?.close?.()},
   ensure2d:()=>{ if(document.body.classList.contains("point-cloud-open")) pointCloudPanel?.close?.(); if(document.body.classList.contains("terrain-3d")) exitTerrain3d() },
-  overlayCatalog:()=>OVERLAYS.map(o=>({id:o.id,name:o.id==="imagery"?"Global satellite basemap":o.name,group:o.group,via:o.via})),
+  overlayCatalog:()=>OVERLAYS.map(o=>({id:o.id,name:o.id==="imagery"?"Global satellite basemap":o.name,group:o.group,route:OVERLAY_GROUP_ROUTES[o.group],via:o.via})),
   /* For the Satellite panel's scene search. */
   placeSuggestions:cspPlaceSuggestions,
   searchPlace:cspSearchPlace,

@@ -880,9 +880,9 @@ assert(index.includes('id="pointCloudPanel"')&&index.includes('id="terModePoints
   assert(entries.length>20,"overlay registry did not parse");
   const groups=entries.map(entry=>entry.match(/group:"([^"]+)"/)?.[1]);
   assert(groups.every(Boolean),"every overlay must sit in a group; none may float above the first heading");
-  const declared=index.match(/const OVERLAY_GROUPS=\[([^\]]+)\]/);
+  const declared=index.match(/const OVERLAY_GROUP_ROUTES=\{([^}]+)\}/);
   assert(declared,"the overlay group order must be declared, not left to registry order");
-  const names=[...declared[1].matchAll(/"([^"]+)"/g)].map(m=>m[1]);
+  const names=[...declared[1].matchAll(/"([^"]+)":/g)].map(m=>m[1]);
   for(const group of new Set(groups))
     assert(names.includes(group),`overlay group ${group} is not in the declared order`);
   const counts={};
