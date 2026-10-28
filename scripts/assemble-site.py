@@ -29,8 +29,11 @@ def main():
     # newline="": keep source bytes, including a CR if one is really there.
     # newline="\n": Windows text mode would otherwise rewrite every LF as
     # CRLF, so this file would not match the bytes site.js builds.
+    # open() accepts newline on the system Python 3.9 that bundles the iOS
+    # app. Path.write_text(newline=) needs Python 3.10.
     app = "".join((root / name).read_bytes().decode("utf-8") for name in site["app"])
-    (destination / "app.js").write_text("(()=>{\n" + app + "})();\n", encoding="utf-8", newline="\n")
+    with (destination / "app.js").open("w", encoding="utf-8", newline="\n") as handle:
+        handle.write("(()=>{\n" + app + "})();\n")
     shutil.copytree(root / "vendor", destination / "vendor",
                     ignore=lambda folder, names: [n for n in names if pathlib.Path(folder, n) in engine_only])
     (destination / ".nojekyll").touch()
