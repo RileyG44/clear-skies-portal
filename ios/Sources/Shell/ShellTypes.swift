@@ -262,6 +262,12 @@ struct MapInfoKey: Decodable, Hashable {
     let swatches: [MapInfoSwatch]
 }
 
+struct MapDistanceKey: Decodable, Hashable {
+    let label: String
+    /// Length of the scale bar in CSS pixels, which match points on the map.
+    let width: Double
+}
+
 struct MapInfoState: Decodable, Hashable {
     let basis: String
     let coordinates: String
@@ -269,6 +275,7 @@ struct MapInfoState: Decodable, Hashable {
     let source: String
     let analysis: String
     let terrain: TerrainStatus
+    let distance: MapDistanceKey?
     let keys: [MapInfoKey]
 }
 

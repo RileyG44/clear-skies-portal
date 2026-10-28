@@ -744,11 +744,19 @@
     }));
   }
 
+  // The bar's CSS width is its length on the map. One iPhone point is one CSS pixel.
+  const distanceOf = el => {
+    if (!el || el.hidden) return null;
+    const label = clean($(".distance-label", el)?.textContent);
+    const width = Number.parseFloat($(".distance-bar", el)?.style.width);
+    return label && width > 0 ? { label, width } : null;
+  };
+
   function statusState() {
     const terrain = $("#terrainLoadStatus"), message = $("#status"), snapshot = $("#snapshotStatus");
     const readout = bridge()?.mapReadoutState?.();
     return {
-      mapInfo: readout ? { ...readout, keys: $$("#mapReadout .map-colour-key").map(key => ({
+      mapInfo: readout ? { ...readout, distance: distanceOf($("#mapReadout .map-distance-key")), keys: $$("#mapReadout .map-colour-key").map(key => ({
         name: clean($(".key-name", key)?.textContent),
         stops: gradientOf($(".key-ramp", key)),
         labels: $$(".key-ticks span", key).map(el => clean(el.textContent)),

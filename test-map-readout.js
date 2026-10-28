@@ -196,6 +196,57 @@ assert(take('endSnapshotSelect','snapPoint').includes('cursorSelectionClosed()')
     assert.equal(flat.snapshotCursorLocation,null,`2D ${type} during selection drops the stale export point`);
   }
 }
+/* Distance key: round feet or miles from zoom and latitude, drawn above the
+   colour keys, and copied to the native map-info tile from that element. */
+{
+  const start=source.indexOf('const DISTANCE_EARTH_M'),end=source.indexOf('const readoutRoot=');
+  assert(start>0&&end>start,'distance key helpers are in the readout');
+  const scale={};
+  vm.runInNewContext(source.slice(start,end),scale);
+  assert.equal(scale.niceDistance(0),null);
+  assert.equal(scale.distanceKey(0,100),null);
+  assert.equal(scale.distanceKey(10,0),null);
+  assert.equal(scale.mercatorMetresPerPixel(0,0,0),null);
+  assert.equal(scale.mercatorMetresPerPixel(91,3,256),null,'past the pole is not a scale');
+  const earth=40075016.68557849;
+  assert.equal(scale.mercatorMetresPerPixel(0,0,256),earth/256);
+  const lat60=Math.cos(60*Math.PI/180),world=256*2**8;
+  assert(Math.abs(scale.mercatorMetresPerPixel(60,8,world)-earth*lat60/world)<1e-6,'latitude cosine shrinks the scale');
+  const z10=scale.mercatorMetresPerPixel(45,10,256*2**10),z11=scale.mercatorMetresPerPixel(45,11,256*2**11);
+  assert(Math.abs(z11*2-z10)<1e-6,'one zoom level halves the ground distance');
+  for(let n=0.02;n<30000;n*=1.13){
+    const nice=scale.niceDistance(n);
+    assert(nice>0&&nice<=n+1e-9&&nice*2>n-1e-9,`round distance ${nice} for ${n}`);
+  }
+  const mile=scale.distanceKey(1.5*1609.344/100,100);
+  assert.equal(mile.label,'1 mi');
+  assert(Math.abs(mile.widthPx-100/1.5)<1e-6,'the bar is the length of the labelled distance');
+  const five=scale.distanceKey(7*1609.344/80,80);
+  assert.equal(five.label,'5 mi');
+  const feet=scale.distanceKey(700*0.3048/100,100);
+  assert.equal(feet.label,'500 ft');
+  assert(Math.abs(feet.widthPx-500/700*100)<1e-6);
+  const thousand=scale.distanceKey(1500*0.3048/120,120);
+  assert.equal(thousand.label,(1000).toLocaleString()+' ft');
+  assert(scale.distanceKey((1609.344-0.01)/50,50).label.endsWith(' ft'),'just under a mile stays in feet');
+  assert(scale.distanceKey(1609.344/50,50).label.endsWith(' mi'),'a mile is labelled in miles');
+  const readout=fs.readFileSync('app/readout.js','utf8');
+  const distanceAt=readout.indexOf('class="map-distance-key"'),colourAt=readout.indexOf('class="map-colour-keys"');
+  assert(distanceAt>0&&distanceAt<colourAt,'the distance key is directly above the colour keys');
+  assert(readout.includes('map.on("zoomanim"')&&readout.includes('map.on("move"')&&readout.includes('map3d.on("move",scheduleDistanceKey)'),
+    'the bar follows 2D zoom preview, pans, and the 3D camera');
+  const reader=readout.slice(readout.indexOf('function readoutMetresPerPixel'),readout.indexOf('function paintMapDistanceKey'));
+  assert(reader.includes('pixelsPerMeter')&&!reader.includes('unproject'),'3D scale uses the transform, not a terrain unproject');
+  assert(fs.readFileSync('ui-system.css','utf8').includes('#mapReadout .distance-bar{')&&
+    fs.readFileSync('ui-system.css','utf8').includes('var(--map-readout-ink)'),'the bar uses the readout ink in both themes');
+  const shell=fs.readFileSync('ios/Resources/native-shell.js','utf8');
+  assert(shell.includes('distance: distanceOf($("#mapReadout .map-distance-key"))')&&shell.includes('style.width'),
+    'the native shell reads the bar length in CSS pixels');
+  const chrome=fs.readFileSync('ios/Sources/Shell/Map/MapChrome.swift','utf8');
+  assert(chrome.indexOf('if let distance = info.distance')>0&&chrome.indexOf('if let distance = info.distance')<chrome.indexOf('ForEach(Array(info.keys'),
+    'the iPhone tile draws the distance key above the colour keys');
+  assert(chrome.includes('distance.width')&&!chrome.includes('distance.fraction'),'the iPhone bar uses that pixel length');
+}
 /* The export decides cursor-or-centre once, before it awaits elevation and
    keys: a camera move during those awaits drops snapshotCursorLocation. */
 (async()=>{

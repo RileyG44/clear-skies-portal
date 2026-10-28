@@ -294,12 +294,54 @@ struct TerrainStatusCapsule: View {
                 Text(info.terrain.text).portalFont(.caption2).foregroundStyle(.secondary)
             }
             .accessibilityElement(children: .combine)
+            if let distance = info.distance {
+                MapDistanceKeyView(distance: distance)
+            }
             ForEach(Array(info.keys.enumerated()), id: \.offset) { _, key in
                 MapInfoKeyView(key: key)
             }
         }
         .foregroundStyle(PortalPrimary())
         .fixedSize(horizontal: false, vertical: true)
+    }
+}
+
+private struct MapDistanceKeyView: View {
+    let distance: MapDistanceKey
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 3) {
+            Text("Distance").portalFont(.caption2, weight: .semibold)
+            HStack(alignment: .center, spacing: 8) {
+                DistanceScaleBar()
+                    .frame(width: CGFloat(max(0, distance.width)), height: 8)
+                Text(distance.label)
+                    .portalFont(.caption2, weight: .semibold)
+                    .lineLimit(1)
+                    .fixedSize(horizontal: true, vertical: false)
+            }
+        }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("Distance, \(distance.label)")
+    }
+}
+
+private struct DistanceScaleBar: View {
+    var body: some View {
+        Canvas { context, size in
+            var path = Path()
+            let inset = 0.75
+            let bottom = size.height - inset
+            let right = max(inset, size.width - inset)
+            path.move(to: CGPoint(x: inset, y: bottom))
+            path.addLine(to: CGPoint(x: right, y: bottom))
+            path.move(to: CGPoint(x: inset, y: 0))
+            path.addLine(to: CGPoint(x: inset, y: bottom))
+            path.move(to: CGPoint(x: right, y: 0))
+            path.addLine(to: CGPoint(x: right, y: bottom))
+            context.stroke(path, with: .foreground, lineWidth: 1.5)
+        }
+        .accessibilityHidden(true)
     }
 }
 
