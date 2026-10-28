@@ -111,24 +111,7 @@ scene filters below the search field. Filter values survive navigation
 between panels. The sidebar and panels use grouped rows, with a pointer halo
 and glass hover effect on desktop; Reduce Motion disables those pointer effects.
 
-Browser regressions: `node scripts/ui-map-popovers.js` covers light/dark desktop,
-mobile, narrow phones, landscape, editing, layer switching, drawing, keyboard
-focus, panel transitions, Reduced Motion, the camera's two actions and the
-Appearance colours and presets (including after a reload), the typed width field
-and the selected mark's Delete/Undo bar. `test-markup-controls.js` exercises
-metadata drafts, slider math, typed feet, exact units and one-step width undo in `npm test`.
-`node scripts/ui-snapshot.js` checks whole-view Capture, area selection and exported pixels.
-`node scripts/ui-satellite-search.js` covers scene filters, custom dates, search
-keys, dismissed lookups, mobile focus, source credits, header alignment, pinned
-navigation controls and both dropdown styles, plus the classic fallback.
-`node scripts/ui-sheet-chrome.js` checks the compact phone footer, toolbar
-fade/slide and direct swipe tracking, Reduced Motion, and Settings utilities.
-`node scripts/ui-review-regressions.js` covers touch scrolling and completed
-taps, committed locations and retained drafts, result-selection animations,
-reduced-motion and scaled-pointer geometry, short-screen navigation, readable
-date shortcuts, phone picker targets and unsupported-picker motion safeguards.
-All accept a local server URL and the optional `PLAYWRIGHT_MODULE` environment
-variable; browser tooling is not an application dependency.
+The interface's browser regression scripts are listed in [docs/TESTING.md](docs/TESTING.md).
 
 ## Run it in a Codespace
 
@@ -313,6 +296,9 @@ npm run verify     # all checks, tests, and dependency audit
 pip install -r requirements.txt
 ```
 
+[docs/TESTING.md](docs/TESTING.md) lists the tests and the optional browser,
+GPU, performance and iPhone verification suites.
+
 `npm run vendor` refreshes the checked-in browser bundles from the installed
 packages. CI (`.github/workflows/ci.yml`) syntax-checks the JavaScript and Python,
 validates the static bundle and source catalog, exercises the renderer and server,
@@ -464,8 +450,12 @@ Where they live:
 | `point-cloud-core.js` | Tested Web Mercator camera, coverage selection, and synchronization helpers |
 | `point-cloud-catalog.json` | Generated index of the 30 Washington USGS EPT projects |
 | `mosaic-core.js` | Tested footprint geometry, antimeridian, identity, coverage and imagery LOD helpers |
-| `server.js` | Local terrain engine: static files, validated proxying, request coalescing, retries and disk cache |
+| `server.js` | Local terrain engine: wires the `engine/` route modules together and serves the static app |
+| `engine/` | One module per engine concern: HTTP helpers, tile cache, upstream scheduling, terrain, WA DNR, downloads, proxies, snapshots and markup storage |
+| `share-state.js`, `coordinates.js` | Share-link codec and validation; coordinate parsing. Loaded by the page and tested directly |
 | `scripts/install-mac-service.sh` | Installs a loopback-only, self-healing macOS terrain-engine service |
+| `run.command` | Double-click launcher for macOS: checks Node, starts the engine and opens the browser |
+| `electron-builder.js` | Mac app packaging (`npm run dist`) |
 | `test-server.js` | Offline black-box checks for CORS, request limits, traversal protection and server health |
 | `version.js` | One build identifier shared by the page and service worker cache |
 | `THREE_D_TERRAIN.md` | 2D rotation, 3D terrain, lighting architecture, limitations, and QA handoff |

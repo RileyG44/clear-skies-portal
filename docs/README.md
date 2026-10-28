@@ -7,6 +7,7 @@ How the system works now, and the rules changes must keep.
 | Document | What it covers |
 |---|---|
 | [ENGINEERING_REVIEW.md](ENGINEERING_REVIEW.md) | Scientific and loading invariants for the web app |
+| [TESTING.md](TESTING.md) | The test gates and every optional verification suite |
 | [UI_REDESIGN.md](UI_REDESIGN.md) | Interface information architecture and integration boundaries |
 | [GPU_2D_TERRAIN_SPEC.md](GPU_2D_TERRAIN_SPEC.md), [GPU_3D_TERRAIN_SPEC.md](GPU_3D_TERRAIN_SPEC.md) | GPU terrain architecture and compatibility contracts |
 | [GLACIAL_CALIBRATION.md](GLACIAL_CALIBRATION.md), [GLACIAL_MORAINE_V2_DESIGN.md](GLACIAL_MORAINE_V2_DESIGN.md), [GLACIAL_BELT_V3_DESIGN.md](GLACIAL_BELT_V3_DESIGN.md) | How the experimental moraine screen works and is calibrated |
