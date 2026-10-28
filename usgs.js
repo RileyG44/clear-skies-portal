@@ -746,16 +746,10 @@ async function checkFresh(entries){
   return out;
 }
 
-/* ------------------------------------------------------ area download
-   Rendered tiles and the byte ranges behind them both land in the cache, so a
-   download that is stopped and restarted skips whatever already arrived —
-   resume falls out of the range cache rather than needing its own bookkeeping.
-   The manifest records each source COG's ETag, which is what makes the
-   catalogue-diff staleness check unnecessary for this source. */
-const warm = {running:false, stop:false, total:0, done:0, ok:0, skipped:0, bytes:0, label:"", error:""};
-const warmState = () => ({running:warm.running, total:warm.total, done:warm.done, ok:warm.ok,
-                          skipped:warm.skipped, bytes:warm.bytes, label:warm.label, error:warm.error});
-function stopWarm(){ warm.stop=true; return warmState() }
+/* ------------------------------------------------------ area manifests
+   engine/downloads.js fetches a 1 m area; its manifest, kept here, records
+   each source COG's ETag, which is what makes the catalogue-diff staleness
+   check unnecessary for this source. */
 
 function areasDir(){ const d=path.join(CACHE_DIR,"usgs","areas");
   try{ fs.mkdirSync(d,{recursive:true}) }catch(e){} return d }
@@ -768,16 +762,6 @@ function areaList(){
 }
 function areaSave(a){
   try{ fs.writeFileSync(path.join(areasDir(), a.id+".json"), JSON.stringify(a,null,1)) }catch(e){}
-}
-
-const tileRange=cacheBudget.tileRange;
-function planTiles(bbox,z0,z1){
-  const out=[];
-  for(let z=z0; z<=z1; z++){
-    const r=tileRange(bbox,z);
-    for(let x=r.x0;x<=r.x1;x++) for(let y=r.y0;y<=r.y1;y++) out.push({z,x,y});
-  }
-  return out;
 }
 
 /* Which COGs underlie an area. Derived from the bbox rather than from whatever
@@ -824,38 +808,6 @@ async function finalizeWarm(job,usedKeys,stats){
   });
 }
 
-async function startWarm(job, tileCache){
-  const bbox=job.bbox, z0=Math.max(1,job.z0|0), z1=Math.min(20,job.z1|0);
-  const style=String(job.style||"hs");
-  const tiles=planTiles(bbox,z0,z1);
-  Object.assign(warm,{running:true, stop:false, total:tiles.length, done:0, ok:0,
-                      skipped:0, bytes:0, label:`z${z0}-${z1} ${style}`, error:""});
-  const usedKeys=new Set();
-  const worker=async()=>{
-    while(tiles.length && !warm.stop){
-      const t=tiles.pop(); if(!t) break;
-      try{
-        const pre = tileCache && tileCache.get(style,t.z,t.x,t.y,cacheBudget.renderedWarmKey(style,t.z,t.x,t.y));
-        if(pre){ warm.skipped++; warm.bytes+=pre.length; }
-        else{
-          const r=await renderTile(style,t.z,t.x,t.y,256);
-          if(r){
-            warm.ok++; warm.bytes+=r.png.length;
-            r.meta.sources.forEach(sc=>usedKeys.add(sc.key));
-            if(tileCache) tileCache.put(style,t.z,t.x,t.y,r.png,cacheBudget.renderedWarmKey(style,t.z,t.x,t.y));
-          }
-        }
-      }catch(e){ warm.error=String(e.message||e) }
-      warm.done++;
-    }
-  };
-  await Promise.all(Array.from({length:4}, worker));
-  if(!warm.stop && (warm.ok||warm.skipped)){
-    await finalizeWarm(job,usedKeys,warm);
-  }
-  warm.running=false;warm.stop=false;
-}
-
 /* Re-HEAD each recorded COG and compare. A changed ETag means the tile was
    re-issued; unlike the WA DNR path this needs no catalogue diff. */
 async function areaCheck(a){
@@ -867,13 +819,9 @@ async function areaCheck(a){
   return out;
 }
 
-module.exports.warmState=warmState;
-module.exports.startWarm=startWarm;
-module.exports.stopWarm=stopWarm;
 module.exports.finalizeWarm=finalizeWarm;
 module.exports.areaList=areaList;
 module.exports.areaCheck=areaCheck;
-module.exports.planTiles=planTiles;
 module.exports.sourcesForArea=sourcesForArea;
 
 

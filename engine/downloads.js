@@ -17,7 +17,7 @@ const {TERRAIN_DOWNLOAD_STYLES,nationalElevationTiff} = require("./terrain.js");
 const MAX_WARM_TILES = 40000;
 let AREAS = null, terrainPool = null, cacheBudget = null;
 function init({areasDir,pool,budget}){ AREAS=areasDir; terrainPool=pool; cacheBudget=budget }
-const running=()=>warm.running||usgsWarm.running||usgs.warmState().running;
+const running=()=>warm.running||usgsWarm.running;
 
 function atomicWriteJson(target,value){
   const tmp=`${target}.tmp-${process.pid}-${crypto.randomBytes(4).toString("hex")}`;
