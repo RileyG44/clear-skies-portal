@@ -750,7 +750,7 @@ function loadMaplibreStyles(){
 }
 async function enterTerrain3d(){
   if(map3d||map3dLoading) return map3dLoading;
-  if($("#terStyle").value==="off"&&!elevationActive()){ $("#terStyle").value="hs";syncTerrainLookControls();saveTerrainPrefs();applyTerrain(true) }
+  if($("#terStyle").value==="off"&&!elevationActive()){ $("#terStyle").value="hs";syncTerrainLookControls();saveTerrainPrefs();applyTerrain(true);announceLayers() }
   setTerrainModeUi(true,"Starting the GPU terrain viewer…");
   map3dWanted=true;
   map3dLoading=(async()=>{

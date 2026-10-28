@@ -54,7 +54,7 @@ function cspSetLayerVisible(id,visible){
   else if(id==="active-fires") cspInput("#fire",visible,"change");
   else if(id.startsWith("overlay:")) cspInput("#ov_"+id.slice(8),visible,"change");
   else if(id.startsWith("markup:")) window.CSPMarkup?.setVisible(id.slice(7),visible);
-  document.dispatchEvent(new CustomEvent("csp:layers-changed"));
+  announceLayers();
 }
 function cspSetLayerOpacity(id,value){
   value=Math.max(0,Math.min(100,+value||0));
@@ -65,7 +65,7 @@ function cspSetLayerOpacity(id,value){
   else if(id.startsWith("analysis:")) updateResearchLayer(id.slice(9),{opacity:value/100,visible:value>0});
   else if(id.startsWith("overlay:")) setOverlayOpacity(id.slice(8),value);
   else if(id.startsWith("markup:")) window.CSPMarkup?.setOpacity(id.slice(7),value);
-  document.dispatchEvent(new CustomEvent("csp:layers-changed"));
+  announceLayers();
 }
 function cspResetLayer(id){
   if(id==="scene") $("#ctlReset").click();
@@ -80,7 +80,7 @@ function cspResetLayer(id){
     if(o&&ovLayers[overlayId]?.setOpacity) ovLayers[overlayId].setOpacity(ovOpacity(o));ovSave();
   }
   else if(id.startsWith("markup:")) window.CSPMarkup?.resetLayer(id.slice(7));
-  document.dispatchEvent(new CustomEvent("csp:layers-changed"));
+  announceLayers();
 }
 function cspSetLayerOrder(order){
   const top=620;
@@ -309,7 +309,7 @@ async function cspRestoreShareState(state){
   localStorage.setItem("clearskies.active-layer-order.v1",JSON.stringify(order));cspSetLayerOrder(order);
   clearTimeout(researchLiveTimer);$("#researchLive").checked=state.research.live;
   clearTimeout(mosTimer);mosTimer=null;MOSAIC_ON=mosaicChoice;$("#mosaic").checked=mosaicChoice;syncChecks();
-  document.dispatchEvent(new CustomEvent("csp:layers-changed"));
+  announceLayers();
   const message=warnings.length?"Shared view is incomplete. "+warnings.join(" "):"Shared location and map layers restored.";
   statusEl.dataset.kind=warnings.length?"error":"general";statusEl.textContent=message;
   if(warnings.length)window.alert(message);

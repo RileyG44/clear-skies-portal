@@ -280,14 +280,14 @@ $("#elevSpectrumReset").onclick=()=>{
   $("#elevSh").checked=false;
   $("#elevUnit").value="ft";$("#elevVal").value=1100;$("#elevSlide").value=335;
   $("#elevSpan").value=300;syncElevSpanSlider();$("#elevAlpha").value=48;$("#elevAlphaOut").textContent="48%";
-  saveTerrainPrefs();applyElev();
+  saveTerrainPrefs();applyElev();announceLayers();
 };
 $("#elevBandsReset").onclick=()=>{
   $("#elevBelowOn").checked=false;$("#elevBelowColor").value="#f85c6c";$("#elevBelowVal").value=1000;
   $("#elevAboveOn").checked=false;$("#elevAboveColor").value="#46a0ff";$("#elevAboveVal").value=1500;
   $("#elevBandFeather").value=40;$("#elevBandAlpha").value=52;$("#elevBandAlphaOut").textContent="52%";
   $("#elevBandOutline").checked=false;
-  saveTerrainPrefs();applyElev();
+  saveTerrainPrefs();applyElev();announceLayers();
 };
 for(const id of ["#terDepth","#terExtent","#fabBand"]){ const el=$(id); if(el) el.addEventListener("change",saveTerrainPrefs) }
 let terrainLightFrame=0;

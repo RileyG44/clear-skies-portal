@@ -1263,12 +1263,12 @@ document.addEventListener("csp:open-route",event=>{
 });
 new MutationObserver(()=>scheduleLayerRefresh(80)).observe($("#ctl"),{attributes:true,childList:true,subtree:true,characterData:true});
 new MutationObserver(()=>scheduleLayerRefresh(80)).observe($("#panes"),{attributes:true,subtree:true,attributeFilter:["class","hidden","aria-pressed"]});
-setInterval(()=>{ if(document.visibilityState==="visible") scheduleLayerRefresh(0) },1800);
+if($("#n_results")) new MutationObserver(updateCounts).observe($("#n_results"),{childList:true,characterData:true,subtree:true});
 
 /* Slider groove fill. A range cannot style its own filled portion in WebKit,
-   so the value is mirrored into --csp-fill. Programmatic resets do not fire
-   input events, so a periodic sweep catches those; it only writes when the
-   value changed. */
+   so the value is mirrored into --csp-fill. Scripts that set a value (resets,
+   presets, restored links) fire no input event, so the value setter itself
+   refreshes the fill, and a changed min or max does the same. */
 function syncRangeFill(input){
   if(!input) return;
   const min=+input.min||0,max=input.max===""?100:+input.max,value=+input.value;
@@ -1279,10 +1279,14 @@ function syncRangeFill(input){
 }
 const syncAllRangeFills=()=>{for(const input of document.querySelectorAll('input[type="range"]')) syncRangeFill(input)};
 document.addEventListener("input",event=>{if(event.target.matches?.('input[type="range"]')) syncRangeFill(event.target)},true);
-document.addEventListener("click",()=>requestAnimationFrame(syncAllRangeFills),true);
-setInterval(()=>{ if(document.visibilityState==="visible") syncAllRangeFills() },1000);
+{
+  const value=Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,"value");
+  Object.defineProperty(HTMLInputElement.prototype,"value",{...value,set(next){value.set.call(this,next);if(this.type==="range") syncRangeFill(this)}});
+}
+new MutationObserver(records=>{for(const record of records) if(record.target.type==="range") syncRangeFill(record.target)})
+  .observe(document.body,{attributes:true,subtree:true,attributeFilter:["min","max","value"]});
 /* Panels that rebuild their sliders (markup tools, layer cards, popovers) are
-   filled as the new inputs arrive rather than at the next sweep. */
+   filled as the new inputs arrive. */
 const rangeArrivals=new MutationObserver(records=>{
   for(const record of records) for(const node of record.addedNodes){
     if(node.nodeType!==1) continue;
@@ -1290,7 +1294,7 @@ const rangeArrivals=new MutationObserver(records=>{
     else node.querySelectorAll('input[type="range"]').forEach(syncRangeFill);
   }
 });
-for(const root of [side,$("#mkBar"),$("#pointCloudPanel"),$("#terrainSourcePanel")].filter(Boolean))
+for(const root of [side,$("#mkBar"),$("#pointCloudPanel"),$("#terrainSourcePanel"),$("#ctl")].filter(Boolean))
   rangeArrivals.observe(root,{childList:true,subtree:true});
 syncAllRangeFills();
 

@@ -51,7 +51,7 @@ async function main(){
     MOSAIC_ON:true,MOSAIC_ONCE:true,mosToken:5,mosAbort:mosaicController,
     mosTimer:context.setTimeout(()=>{throw Error('removed mosaic timer ran');}),
     clearTimeout:context.clearTimeout,syncChecks:()=>{},hideMenu:()=>{},hideSceneControls:()=>{},
-    render:()=>{},document:{dispatchEvent:()=>{}},CustomEvent:class{},
+    render:()=>{},announceLayers:()=>{},
     cspInput:()=>{throw Error('Off must remove the scene, not change its opacity');}
   };
   vm.createContext(scene);

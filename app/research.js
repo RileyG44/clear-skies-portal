@@ -445,7 +445,7 @@ function researchChanged({layers=true}={}){
   paintResearchInfo();
   const ready=researchStack.filter(entry=>entry.overlay);
   setCount("research",ready.length?ready.length===1?researchLabel(ready[0]):`${ready.length} layers`:"");
-  if(layers){paintMapReadoutKeys();paintCursorAnalysis();document.dispatchEvent(new CustomEvent("csp:layers-changed"))}
+  if(layers){paintMapReadoutKeys();paintCursorAnalysis();announceLayers()}
 }
 function addResearchLayer(product){
   if(!RESEARCH_LABELS[product]||researchStack.length>=CSPAnalysisLayers.MAX_LAYERS) return null;

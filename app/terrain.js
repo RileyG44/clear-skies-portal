@@ -659,6 +659,7 @@ $("#terReset").onclick=()=>{
   $("#terDepth").value="native";$("#terExtent").value="view";terrainLooks={};saveTerrainLook();
   $("#terSunAz").value=315;$("#terSunAlt").value=45;$("#terAmbient").value=12;$("#terExaggeration").value=125;
   syncTerrainOpacity();syncTerrainLookControls();syncTerrainLighting();saveTerrainPrefs();applyTerrain(true);schedule3dStyle();warmPreview();lidarStudio?.refresh();
+  announceLayers();
 };
 map.on("moveend", ()=>{
   if(!PROXY || ($("#terStyle").value==="off"&&!$("#elevSh").checked)) return;

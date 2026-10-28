@@ -15,6 +15,11 @@ $("#mosaic").onchange=()=>{
 };
 $("#fillNow").onclick=()=>{ if(SEL!=null) fillMosaic(ITEMS[SEL], true) };
 
+/* The layer list, counts and the iPhone shell redraw from csp:layers-changed.
+   Code that changes several layer controls at once without the input events
+   a person would cause (resets, restores) announces it here. */
+function announceLayers(){ document.dispatchEvent(new CustomEvent("csp:layers-changed")) }
+
 /* Off releases imagery, its outline, and all pending mosaic work. Merely
    setting opacity to zero leaves tile requests and map-move handlers active. */
 function clearScene(renderResults=true){
@@ -30,7 +35,7 @@ function clearScene(renderResults=true){
   const status=$("#mosStat"); if(status) status.textContent="";
   hideMenu(); hideSceneControls(); SEL=null;
   if(renderResults) render();
-  document.dispatchEvent(new CustomEvent("csp:layers-changed"));
+  announceLayers();
 }
 $("#clr").onclick=()=>clearScene();
 $("#sort").onchange=render;
