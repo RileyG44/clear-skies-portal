@@ -471,6 +471,8 @@ $("#terWarm").onclick=async ()=>{
       const partial=s.error&&!(s.ok||s.skipped);
       msg.innerHTML=partial
         ? `<span class="warn">Download could not complete.</span> ${esc(s.error)} — try again to resume.`
+        : s.unrecorded
+        ? `<span class="warn">Downloaded, but not saved as an offline area.</span> ${esc(s.unrecorded)} — download it again to keep it offline.`
         : `<span class="ok">Downloaded.</span> ${s.done.toLocaleString()} tiles${skipped} &middot; ${fmtMB(s.bytes)} on disk${s.error?` <span class="warn">&mdash; some tiles will retry next time</span>`:""} &mdash; this area now loads instantly and works with no network.`;
       checkStaleAreas();
     }

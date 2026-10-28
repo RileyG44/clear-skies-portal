@@ -22,6 +22,13 @@ function guardedWrite(gate,write){
   try{write();return true}finally{Atomics.sub(state,0,1)}
 }
 const sha1=value=>crypto.createHash("sha1").update(value).digest("hex");
+/* A reader sees the old file or the new one, never half of one. A failed
+   write leaves no temporary file behind and throws to the caller. */
+function writeJsonAtomic(file,value,indent){
+  const tmp=`${file}.tmp-${process.pid}-${crypto.randomBytes(4).toString("hex")}`;
+  try{ fs.writeFileSync(tmp,JSON.stringify(value,null,indent)); fs.renameSync(tmp,file) }
+  catch(error){ try{ fs.unlinkSync(tmp) }catch(e){} throw error }
+}
 const yieldIO=()=>new Promise(resolve=>setImmediate(resolve));
 function maxGiB(value=process.env.CSP_CACHE_MAX_GB){
   const n=Number(value);return Number.isFinite(n)&&n>0?n:15;
@@ -226,7 +233,7 @@ class CacheBudget {
   stats(){return {...this.state,bytesWrittenSinceSweep:this.written,sweeping:!!this.running}}
   async close(){this.closed=true;this.invalidatePins();clearTimeout(this.startup);clearTimeout(this.scheduled);clearInterval(this.periodic);await this.running}
 }
-module.exports={writeGate,guardedWrite,CacheBudget,GIB,HOUR,YOUNG_MS,maxGiB,sha1,tileRange,mercBbox,exportWarmPaths,elevationWarmKeys,overviewWarmKey,renderedWarmKey,manifestKeys,readPins,touchAccess,scan,planEviction,sweep};
+module.exports={writeGate,guardedWrite,writeJsonAtomic,CacheBudget,GIB,HOUR,YOUNG_MS,maxGiB,sha1,tileRange,mercBbox,exportWarmPaths,elevationWarmKeys,overviewWarmKey,renderedWarmKey,manifestKeys,readPins,touchAccess,scan,planEviction,sweep};
 
 /* The same shipped file supplies the worker entry point; terrain workers also
    import its key/touch helpers, so only this explicit flag starts a sweep. */

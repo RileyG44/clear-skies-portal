@@ -117,12 +117,6 @@ async function s3head(pathname){
 let INDEX = null;
 let INDEX_PENDING = null;
 
-function atomicJson(file, value){
-  const tmp=`${file}.${process.pid}.${Date.now()}.tmp`;
-  try{ fs.writeFileSync(tmp,JSON.stringify(value)); fs.renameSync(tmp,file) }
-  catch(e){ try{ fs.unlinkSync(tmp) }catch(_){} }
-}
-
 function scopeList(){
   if(/^all$/i.test(SCOPE)) return [""];            // empty prefix lists the lot
   return SCOPE.split(",").map(x=>x.trim()).filter(Boolean)
@@ -224,7 +218,7 @@ async function buildIndexNow(states, force){
   });
   out.failed=failed;
   INDEX=out;
-  atomicJson(f,out);
+  try{ cacheBudget.writeJsonAtomic(f,out) }catch(e){}   // a cache: rebuilt if missing
   return out;
 }
 async function getIndex(){ return INDEX || buildIndex(null) }
@@ -265,7 +259,7 @@ function loadZones(){
        for(const k in o) ZONES.set(k, o[k]); }catch(e){}
 }
 function saveZones(){
-  atomicJson(zonesPath(),Object.fromEntries(ZONES));
+  try{ cacheBudget.writeJsonAtomic(zonesPath(),Object.fromEntries(ZONES)) }catch(e){}
 }
 
 async function resolveCellZone(proj, file, size){
@@ -760,9 +754,9 @@ function areaList(){
     }).filter(Boolean).sort((a,b)=>(b.created||0)-(a.created||0));
   }catch(e){ return [] }
 }
-function areaSave(a){
-  try{ fs.writeFileSync(path.join(areasDir(), a.id+".json"), JSON.stringify(a,null,1)) }catch(e){}
-}
+/* Throws when the manifest cannot be written: without it the area is neither
+   pinned in the cache nor listed, so the download must not report success. */
+function areaSave(a){ cacheBudget.writeJsonAtomic(path.join(areasDir(),a.id+".json"),a,1) }
 
 /* Which COGs underlie an area. Derived from the bbox rather than from whatever
    the run happened to fetch — otherwise a fully-resumed download (every tile a

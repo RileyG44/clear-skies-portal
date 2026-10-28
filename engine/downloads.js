@@ -2,7 +2,6 @@
    resumable raw USGS 1 m download, each with a manifest that records what
    was fetched and the catalogue state it matched. */
 "use strict";
-const crypto = require("crypto");
 const fs = require("fs");
 const path = require("path");
 const usgs = require("../usgs.js");
@@ -19,11 +18,6 @@ let AREAS = null, terrainPool = null, cacheBudget = null;
 function init({areasDir,pool,budget}){ AREAS=areasDir; terrainPool=pool; cacheBudget=budget }
 const running=()=>warm.running||usgsWarm.running;
 
-function atomicWriteJson(target,value){
-  const tmp=`${target}.tmp-${process.pid}-${crypto.randomBytes(4).toString("hex")}`;
-  try{ fs.writeFileSync(tmp,JSON.stringify(value,null,1)); fs.renameSync(tmp,target) }
-  catch(e){ try{ fs.unlinkSync(tmp) }catch(e2){} throw e }
-}
 
 /* -------------------------------------------------- area manifests
    A downloaded area records which WA DNR datasets covered it at the
@@ -58,7 +52,7 @@ function areaList(){
   }catch(e){ return [] }
 }
 function areaSave(a){
-  atomicWriteJson(path.join(AREAS,a.id+".json"),a);
+  cacheBudgetCore.writeJsonAtomic(path.join(AREAS,a.id+".json"),a,1);
 }
 /* Compare a stored manifest against the catalogue as it stands now. */
 async function areaCheck(a){
@@ -79,9 +73,11 @@ async function areaCheck(a){
 }
 
 /* ------------------------------------------------------------ pre-cache */
-const warm = {running:false, stop:false, total:0, done:0, ok:0, bytes:0, label:"",error:""};
+/* unrecorded: the tiles arrived but the area's manifest could not be written,
+   so it is not pinned against eviction nor listed as an offline area. */
+const warm = {running:false, stop:false, total:0, done:0, ok:0, bytes:0, label:"",error:"",unrecorded:""};
 const warmState = () => ({running:warm.running, total:warm.total, done:warm.done,
-                          ok:warm.ok, bytes:warm.bytes, label:warm.label,error:warm.error});
+                          ok:warm.ok, bytes:warm.bytes, label:warm.label,error:warm.error,unrecorded:warm.unrecorded});
 
 const tileRange=cacheBudgetCore.tileRange;
 const mercBbox=cacheBudgetCore.mercBbox;
@@ -123,7 +119,7 @@ async function startWarm(job){
     for(let x=r.x0; x<=r.x1; x++) for(let y=r.y0; y<=r.y1; y++) tiles.push({z,x,y});
   }
   Object.assign(warm,{running:true, stop:false, total:tiles.length, done:0, ok:0, bytes:0,
-                      label:`z${z0}-${z1}`,error:""});
+                      label:`z${z0}-${z1}`,error:"",unrecorded:""});
   const worker = async ()=>{
     while(tiles.length && !warm.stop){
       const t=tiles.pop(); if(!t) break;
@@ -160,7 +156,7 @@ async function startWarm(job){
         created: Date.now(), checked: Date.now(),
         datasets: dsFingerprint(rows), stale:false, added:[], changed:[]
       });
-    }catch(e){ console.error("area manifest not recorded:",e) }
+    }catch(e){ warm.unrecorded=String(e.message||e) }
   }
   warm.running=false;warm.stop=false;
 }
@@ -168,9 +164,9 @@ async function startWarm(job){
 /* Raw-COG offline downloads share the M2 worker pool with interactive tiles.
    Three low-priority lanes keep the chip busy while preserving one worker and
    priority queue headroom for a pan, shader tile, or analysis request. */
-const usgsWarm={running:false,stop:false,total:0,done:0,ok:0,skipped:0,bytes:0,label:"",error:"",controllers:new Set()};
+const usgsWarm={running:false,stop:false,total:0,done:0,ok:0,skipped:0,bytes:0,label:"",error:"",unrecorded:"",controllers:new Set()};
 const usgsWarmState=()=>({running:usgsWarm.running,total:usgsWarm.total,done:usgsWarm.done,ok:usgsWarm.ok,
-  skipped:usgsWarm.skipped,bytes:usgsWarm.bytes,label:usgsWarm.label,error:usgsWarm.error});
+  skipped:usgsWarm.skipped,bytes:usgsWarm.bytes,label:usgsWarm.label,error:usgsWarm.error,unrecorded:usgsWarm.unrecorded});
 async function startUsgsWarm(job){
   const tiles=[];
   for(let z=job.z0;z<=job.z1;z++){
@@ -178,7 +174,7 @@ async function startUsgsWarm(job){
     for(let x=r.x0;x<=r.x1;x++) for(let y=r.y0;y<=r.y1;y++) tiles.push({z,x,y});
   }
   Object.assign(usgsWarm,{running:true,stop:false,total:tiles.length,done:0,ok:0,skipped:0,bytes:0,
-    label:`z${job.z0}-${job.z1} ${job.style}`,error:""});
+    label:`z${job.z0}-${job.z1} ${job.style}`,error:"",unrecorded:""});
   const usedKeys=new Set();
   const lane=async()=>{
     while(tiles.length&&!usgsWarm.stop){
@@ -228,7 +224,7 @@ async function startUsgsWarm(job){
   };
   await Promise.all(Array.from({length:Math.max(3,terrainPool.size-2)},lane));
   if(!usgsWarm.stop&&(usgsWarm.ok||usgsWarm.skipped)){
-    try{ await usgs.finalizeWarm(job,usedKeys,usgsWarm) }catch(error){ usgsWarm.error=String(error.message||error) }
+    try{ await usgs.finalizeWarm(job,usedKeys,usgsWarm) }catch(error){ usgsWarm.unrecorded=String(error.message||error) }
   }
   usgsWarm.running=false;usgsWarm.stop=false; usgsWarm.controllers.clear();
 }
