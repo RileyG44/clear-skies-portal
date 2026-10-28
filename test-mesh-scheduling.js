@@ -4,7 +4,7 @@
    behind stalled background work. Exercises the actual cspmesh handler. */
 const assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path'),vm=require('node:vm');
 const ROOT=process.env.CSP_ROOT||__dirname;
-const html=fs.readFileSync(path.join(ROOT,'index.html'),'utf8');
+const html=require("./test-fixtures/page-source.js");
 const between=(start,end)=>{const i=html.indexOf(start);assert(i>=0,start);const j=html.indexOf(end,i);assert(j>i,end);return html.slice(i,j);};
 const tick=()=>new Promise(resolve=>setImmediate(resolve));
 const flush=async()=>{for(let i=0;i<12;i++) await tick();};

@@ -10,7 +10,7 @@
 const fs = require('node:fs'), path = require('node:path');
 const root = path.resolve(__dirname, '../..');
 let playwright;
-try { playwright = require('playwright'); } catch (e) { playwright = require(path.join(require('node:child_process').execSync('npm root -g').toString().trim(), 'playwright')); }
+playwright = require('../lib/playwright.js');
 const SCRIPTS = ['elevation-tile-core.js', 'terrain-core.js', 'terrain-raster.js', 'elevation-bands.js', 'terrain-drape-core.js',
   'gpu-terrain-shaders.js', 'gpu-terrain-store.js', 'gpu-terrain-engine.js', 'gpu-terrain-layer.js', 'scripts/gpu2d/export-detail-page.js'];
 (async () => {

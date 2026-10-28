@@ -1,6 +1,6 @@
 'use strict';
 const fs=require('node:fs'),vm=require('node:vm'),assert=require('node:assert/strict');
-const html=fs.readFileSync(process.env.CSP_TAP_SOURCE||'index.html','utf8');
+const html=(process.env.CSP_TAP_SOURCE?fs.readFileSync(process.env.CSP_TAP_SOURCE,'utf8'):require("./test-fixtures/page-source.js"));
 const source=html.slice(html.indexOf('let fingerTapHandled='),html.indexOf('/* ---------------------------------------------------------------- state */'));
 function setup(){
   let now=1000,id=0;const listeners={},handlers={},timers=new Map(),classes=new Set(),calls={locations:[],runs:0};

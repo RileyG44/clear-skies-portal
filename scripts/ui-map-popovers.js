@@ -1,11 +1,11 @@
 'use strict';
-/* Dock popover regression checks. Uses the same optional Playwright setup as
-   ui-snapshot.js; no browser tooling is added to the application's lockfile.
+/* Dock popover regression checks. Uses the shared browser selection and the
+   playwright-core development dependency.
    node scripts/ui-map-popovers.js [http://127.0.0.1:8765/] */
 const assert=require('node:assert/strict'),path=require('node:path'),fs=require('node:fs');
-const {chromium}=require(process.env.PLAYWRIGHT_MODULE||'playwright');
+const {launchUIBrowser}=require('./lib/browser.js');
 const base=process.argv[2]||'http://127.0.0.1:8765/';
-const output=path.join(__dirname,'..','.codex-audits');
+const output=process.env.CSP_UI_OUTPUT||path.join(__dirname,'..','.codex-audits');
 // A closing panel is already logically hidden and ignores input while its
 // native display transition finishes painting the last 200 ms.
 const visible=async(page,selector)=>!await page.locator(selector).evaluate(el=>el.hidden)&&await page.locator(selector).isVisible();
@@ -16,7 +16,7 @@ const inside=async(page,selector)=>{
 };
 (async()=>{
   fs.mkdirSync(output,{recursive:true});
-  const browser=await chromium.launch();
+  const browser=await launchUIBrowser();
   try{
     for(const [label,width,height,touch] of [['desktop',1320,761,false],['desktop-dark',1320,761,false],['mobile',390,844,true],['mobile-dark',390,844,true],['small-mobile',320,568,true],['landscape',844,390,true],['reduced-motion',1320,761,false]]){
       if(process.env.POPOVER_CASE&&process.env.POPOVER_CASE!==label)continue;
@@ -30,10 +30,35 @@ const inside=async(page,selector)=>{
       // person's terrain engine. Persistence itself has separate unit tests.
       // The site ships no markup layers, so the stand-in engine supplies one.
       const fixture={type:'FeatureCollection',markup:{id:'ui-test',name:'UI test',description:'',color:'#ff3b30',created:1,updated:1},features:[]};
+      // An engine-owned document must survive reload. The stand-in keeps the
+      // real markup API's rules: newer copies win, deletes leave tombstones.
+      const docs=new Map([[fixture.markup.id,fixture]]),deleted={};
       await page.route('**/api/markup**',route=>{
-        if(route.request().method()!=='GET') return route.fulfill({json:{ok:true}});
-        if(new URL(route.request().url()).pathname.endsWith('/api/markup/ui-test')) return route.fulfill({json:fixture});
-        return route.fulfill({json:{layers:[{id:'ui-test',name:'UI test',color:'#ff3b30',updated:1,count:0}],deleted:{}}});
+        const request=route.request(),url=new URL(request.url());
+        const match=/^\/api\/markup(?:\/([^/]+)(\/delete)?)?$/.exec(url.pathname);
+        if(!match) return route.fulfill({status:404,json:{error:'no such markup route'}});
+        const id=match[1]?decodeURIComponent(match[1]):'',method=request.method();
+        if(!id&&method==='GET'){
+          return route.fulfill({json:{layers:[...docs.values()].map(doc=>({id:doc.markup.id,name:doc.markup.name,color:doc.markup.color,updated:doc.markup.updated,count:(doc.features||[]).length})),deleted}});
+        }
+        if(match[2]){
+          const at=Number(request.postDataJSON()?.at)||Date.now();
+          docs.delete(id);deleted[id]=Math.max(deleted[id]||0,at);
+          return route.fulfill({json:{ok:true,deleted:deleted[id]}});
+        }
+        if(method==='GET'){
+          const doc=docs.get(id);
+          return doc?route.fulfill({json:doc}):route.fulfill({status:404,json:{error:'no such markup layer'}});
+        }
+        if(method==='POST'){
+          const doc=request.postDataJSON();
+          if(deleted[id]&&deleted[id]>=doc.markup.updated) return route.fulfill({status:410,json:{error:'markup layer was deleted',deleted:deleted[id]}});
+          const stored=docs.get(id);
+          if(stored&&stored.markup.updated>doc.markup.updated) return route.fulfill({status:409,json:stored});
+          docs.set(id,doc);
+          return route.fulfill({json:{ok:true,updated:doc.markup.updated}});
+        }
+        return route.fulfill({status:405,json:{error:'method not allowed'}});
       });
       await page.goto(base,{waitUntil:'domcontentloaded'});
       await page.waitForFunction(()=>window.CSPMarkup?._layers.size>0);
@@ -77,10 +102,18 @@ const inside=async(page,selector)=>{
       await page.locator('#mkBar [data-edit-ground="width"]').click();
       assert.equal(await page.locator('#mkPop .mk-value-input').inputValue(),'50000.125','reopening retains an exact large fractional width');
       await page.locator('#mkPop .mk-value-input').press('Enter');
-      assert.equal(await page.locator('#mkBar [data-ground-range="width"]').inputValue(),'1000');
+      const widthRange=await page.locator('#mkBar [data-ground-range="width"]').evaluate(range=>{
+        const control=range.closest('.mk-ground');
+        const feet=Number(control.dataset.feet),min=Number(control.dataset.feetMin),max=Number(range.dataset.feetMax);
+        return {value:Number(range.value),position:Math.round(1000*Math.log((Math.max(min,Math.min(max,feet))+.1)/(min+.1))/Math.log((max+.1)/(min+.1))),feet,max};
+      });
+      assert.equal(widthRange.value,widthRange.position,`slider sits at the logarithmic position of ${widthRange.feet} ft`);
+      assert(widthRange.max>=50000,'typing past the previous maximum extends the slider range');
+      const widthPosition=widthRange.value;
+      assert.equal(Number(await page.locator('#mkBar .mk-ground[data-ground="width"]').getAttribute('data-feet')),50000.125,'slider presentation must not quantize the typed physical width');
       assert.equal(await page.locator('#mkBar [data-edit-ground="width"]').textContent(),`${(50000).toLocaleString('en-US')} ft`);
       await page.locator('#mkBar [data-ground-range="width"]').focus();await page.keyboard.press('ArrowLeft');await page.keyboard.press('ArrowLeft');
-      assert.equal(await page.locator('#mkBar [data-ground-range="width"]').inputValue(),'998','keyboard range steps keep focus');
+      assert.equal(await page.locator('#mkBar [data-ground-range="width"]').inputValue(),String(widthPosition-2),'keyboard range steps keep focus');
       await page.locator('#mkBar [data-ground-range="width"]').fill('500');
       assert(Number(await page.locator('#mkBar .mk-ground[data-ground="width"]').getAttribute('data-feet'))<50000.125);
       await page.locator('#mkBar [data-edit-ground="width"]').click();
@@ -238,6 +271,7 @@ const inside=async(page,selector)=>{
         checked:document.querySelector('#cspAccentPicker [aria-checked="true"]')?.dataset.accent}));
       assert.deepEqual([accent.on,accent.knob,accent.checked],['#ff9f0a','rgb(255, 159, 10)','#ff9f0a'],'a swatch recolours the switches');
       assert(accent.knobSize>accent.track,'the knob is larger than its groove');
+      await page.waitForFunction(()=>document.querySelector('#mkSyncStatus')?.dataset.state==='synced'||[...window.CSPMarkup._layers.values()].every(layer=>layer.syncedAt===layer.doc.markup.updated));
       await page.reload({waitUntil:'domcontentloaded'});
       await page.waitForFunction(()=>window.CSPMarkup?._layers.size===2);
       assert.equal(await page.evaluate(()=>getComputedStyle(document.documentElement).getPropertyValue('--csp-control-on').trim()),'#ff9f0a','the switch colour is applied at boot');
@@ -259,10 +293,17 @@ const inside=async(page,selector)=>{
       // under the phone sheet the bar correctly stays hidden.
       await page.evaluate(([id,fid])=>{
         const f=window.CSPMarkup._layers.get(id).doc.features.find(x=>x.properties.fid===fid),c=f.geometry.coordinates.flat(2);
-        window.ClearSkiesPortalBridge.map.setView([c[1],c[0]],window.ClearSkiesPortalBridge.map.getZoom(),{animate:false});
+        const map=window.ClearSkiesPortalBridge.map;
+        map.setView([c[1],c[0]],map.getZoom(),{animate:false});
+        const side=document.getElementById('side').getBoundingClientRect();
+        if(!document.body.classList.contains('collapsed')&&innerWidth>760)
+          map.panBy([-side.right/2,0],{animate:false});
+        else if(innerWidth<=760)
+          map.panBy([0,(innerHeight-side.top)/2],{animate:false});
         window.CSPMarkup._select(fid);
       },[firstId,mark.id]);
       await page.locator('#mkBar .tool-close').click();
+      await page.locator('.mk-selbar').waitFor({state:'visible'});
       assert(await visible(page,'.mk-selbar'),'a selected mark shows its actions once the tools close');
       await inside(page,'.mk-selbar');
       assert.deepEqual(await page.locator('.mk-selbar [data-sel]').evaluateAll(els=>els.map(el=>el.dataset.sel)),['style','duplicate','delete']);

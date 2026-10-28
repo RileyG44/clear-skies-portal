@@ -31,22 +31,13 @@ if [[ -z "$NODE_BIN" ]]; then
 fi
 
 install -d -m 700 "$AGENT_DIR" "$DATA_DIR" "$RUNTIME_DIR" "$LOG_DIR" "$CACHE_DIR"
-install -d -m 755 "$RUNTIME_DIR/vendor"
-for asset in server.js cache-budget.js wadnr.js dnr-archive.js wadnr-ingest-worker.js terrain-pool.js terrain-worker.js usgs.js cog.js mosaic-core.js terrain-core.js terrain-raster.js terrain-drape-core.js terrain-drape-pool.js terrain-drape-worker.js png-stream.js markup.js markup-3d.js tile-pipeline.js gpu-terrain-shaders.js lidar-render.js lidar-studio.js analysis-layers.js gpu-terrain-store.js gpu-terrain-engine.js gpu-terrain-layer.js gpu-terrain-3d-cache.js gpu-terrain-3d-renderer.js gpu-terrain-3d-layer.js \
-             public-terrain.js public-terrain-worker.js ui-theme.css ui-system.css ui-system.js maxar-catalog.json nadi1-cordilleran.json \
-             elevation-bands.js elevation-tile-core.js wa-archaeology.js glacial-research-core.js glacial-segment-core.js glacial-segment-features.js glacial-moraine-classifier.js glacial-zone-core.js glacial-zone-features.js glacial-belt-classifier.js glacial-moraine-analysis.js terrain-analysis-core.js research-analysis.js research-worker.js point-cloud-core.js point-cloud-viewer.js point-cloud-catalog.json index.html version.js sw.js manifest.json \
-             icon-180.png icon-192.png icon-512.png sources.json LICENSE; do
+# site.json lists the app; the engine also needs its own Node modules.
+for asset in $("$NODE_BIN" -e 'const s=require(process.argv[1]);console.log([...s.web,...s.app,...s.engine].filter(f=>!f.startsWith("vendor/")).join("\n"))' "$REPO_ROOT/site.json"); do
+  install -d -m 755 "$RUNTIME_DIR/${asset:h}"
   install -m 644 "$REPO_ROOT/$asset" "$RUNTIME_DIR/$asset"
 done
-rm -rf "$RUNTIME_DIR/vendor/potree"
-cp -R "$REPO_ROOT/vendor/potree" "$RUNTIME_DIR/vendor/potree"
-for directory in lerc icons fonts; do
-  install -d -m 755 "$RUNTIME_DIR/vendor/$directory"
-  cp -R "$REPO_ROOT/vendor/$directory/." "$RUNTIME_DIR/vendor/$directory/"
-done
-for asset in dnr-runtime.cjs dnr-runtime-licenses.txt maplibre-gl.mjs maplibre-gl-shared.mjs maplibre-gl-worker.mjs maplibre-gl.css leaflet-rotate.umd.min.js; do
-  install -m 644 "$REPO_ROOT/vendor/$asset" "$RUNTIME_DIR/vendor/$asset"
-done
+rm -rf "$RUNTIME_DIR/vendor"
+cp -R "$REPO_ROOT/vendor" "$RUNTIME_DIR/vendor"
 install -m 700 "$SCRIPT_DIR/launch-terrain-engine.sh" "$RUNTIME_DIR/launch-terrain-engine.sh"
 install -m 700 "$SCRIPT_DIR/share-terrain-engine.sh" "$RUNTIME_DIR/share-terrain-engine.sh"
 

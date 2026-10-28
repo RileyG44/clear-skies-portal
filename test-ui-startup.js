@@ -1,6 +1,6 @@
 'use strict';
 const assert=require('node:assert/strict'),fs=require('node:fs'),vm=require('node:vm');
-const html=fs.readFileSync('index.html','utf8'),ui=fs.readFileSync('ui-system.js','utf8');
+const html=require("./test-fixtures/page-source.js"),ui=fs.readFileSync('ui-system.js','utf8');
 const bootSource=[...html.matchAll(/<script(?:\s[^>]*)?>([\s\S]*?)<\/script>/g)].map(m=>m[1]).find(s=>s.includes('window.CSPBoot'));
 assert(bootSource,'the startup recovery controller must ship inline');
 function fixture({loaded=true,cache}={}){
@@ -80,7 +80,7 @@ async function workerCache(){
   const base='https://portal.test/';
   const context={URL,self:{location:{origin:new URL(base).origin},addEventListener:(n,f)=>events[n]=f,skipWaiting:()=>Promise.resolve()},
     caches:{open:async()=>({addAll:async list=>{for(const url of list)cached.add(new URL(url,base).href)}}),
-      match:async req=>cached.has(typeof req==='string'?req:req.url)?{ok:true,fromCache:true}:null},fetch:async()=>{throw Error('offline')}};
+      match:async req=>cached.has(typeof req==='string'?req:req.url)?{ok:true,fromCache:true}:null},fetch:async url=>{if(String(url).endsWith('site.json'))return {ok:true,json:async()=>JSON.parse(fs.readFileSync('site.json','utf8'))};throw Error('offline')}};
   vm.runInNewContext(fs.readFileSync('sw.js','utf8'),context);
   events.install({waitUntil:p=>installed=p});await installed;
   const urls=[...html.matchAll(/(?:src|href)="([^\"]+\?build=[^\"]+)"/g)].map(m=>m[1]);

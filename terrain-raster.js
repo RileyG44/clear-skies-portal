@@ -17,14 +17,20 @@
   const D2R=Math.PI/180;
   const NODATA_LIMIT=-1e20;
   const TINT_OF=rampWriter("relief");
-  const SLOPE_OF=rampWriter([
+  /* Slope in degrees. LiDAR Studio's default palettes and the map legend
+     read these stops too. */
+  const SLOPE_STOPS=Object.freeze([
     [0,"#f2f4ee"],[5,"#b1d28b"],[15,"#f6da6f"],[30,"#f09649"],
     [45,"#d54650"],[60,"#762c69"],[90,"#321948"]
   ]);
-  const ASPECT_OF=rampWriter([
+  /* A cyclic, cardinally meaningful aspect palette: cool north, green east,
+     warm south, violet west. Below half a degree of slope aspect is shown as
+     undefined rather than amplifying sub-accuracy DEM noise into speckle. */
+  const ASPECT_STOPS=Object.freeze([
     [0,"#4d78c8"],[45,"#3ba5b0"],[90,"#57a765"],[135,"#c9ad4f"],
     [180,"#d96b52"],[225,"#c45b82"],[270,"#8d65bb"],[315,"#5e77c5"],[360,"#4d78c8"]
   ]);
+  const SLOPE_OF=rampWriter(SLOPE_STOPS),ASPECT_OF=rampWriter(ASPECT_STOPS);
   const ASPECT_FLAT_GRADE=Math.tan(0.5*D2R);
   const CONTOUR_FT={c2:2,c5:5,c10:10,c25:25};
   const MIN_CONTOUR_PX=3;
@@ -45,7 +51,8 @@
   }
 
   function valid(value,noData){
-    return Number.isFinite(value)&&value>NODATA_LIMIT&&(noData===undefined||!Object.is(value,noData));
+    /* Two comparisons reject NaN and both infinities, as Number.isFinite would. */
+    return value>NODATA_LIMIT&&value<Infinity&&(noData===undefined||!Object.is(value,noData));
   }
 
   function valueAt(info,x,y){
@@ -67,10 +74,17 @@
       for(let channel=0;channel<4;channel++)out[offset+channel]=Math.round(left.color[channel]+(right.color[channel]-left.color[channel])*t);
     };
   }
+  /* Horn's 3x3 gradient, the estimator ArcGIS and GDAL use, so a render is
+     comparable to the 3DEP and WA DNR renders beside it. */
   function gradientAt(info,x,y,out){
-    const a=valueAt(info,x-1,y-1),b=valueAt(info,x,y-1),c=valueAt(info,x+1,y-1);
-    const d=valueAt(info,x-1,y),f=valueAt(info,x+1,y);
-    const g=valueAt(info,x-1,y+1),h=valueAt(info,x,y+1),k=valueAt(info,x+1,y+1);
+    let a,b,c,d,f,g,h,k;
+    if(info.skirted){   // every neighbour is inside the skirt: read it directly
+      const grid=info.grid,row=info.stride,i=(y+1)*row+x+1;
+      a=grid[i-row-1];b=grid[i-row];c=grid[i-row+1];d=grid[i-1];f=grid[i+1];g=grid[i+row-1];h=grid[i+row];k=grid[i+row+1];
+    }else{
+      a=valueAt(info,x-1,y-1);b=valueAt(info,x,y-1);c=valueAt(info,x+1,y-1);d=valueAt(info,x-1,y);f=valueAt(info,x+1,y);
+      g=valueAt(info,x-1,y+1);h=valueAt(info,x,y+1);k=valueAt(info,x+1,y+1);
+    }
     const marker=info.noData;
     if(!valid(a,marker)||!valid(b,marker)||!valid(c,marker)||!valid(d,marker)||
        !valid(f,marker)||!valid(g,marker)||!valid(h,marker)||!valid(k,marker))return false;
@@ -100,15 +114,19 @@
     const shadeMulti=terrain.createMultidirectionalHillshade({altitude,ambient,
       azimuths:[azimuth-90,azimuth-45,azimuth,azimuth+45]});
     const gradient={dzdx:0,dzdy:0},colour=new Uint8ClampedArray(4);
+    const contour=Object.prototype.hasOwnProperty.call(CONTOUR_FT,style),shade=style==="hsmulti"?shadeMulti:shadeDirect;
     for(let y=0;y<info.height;y++) for(let x=0;x<info.width;x++){
       const value=valueAt(info,x,y),offset=(y*info.width+x)*4;
       if(!valid(value,info.noData)) continue;
       if(!gradientAt(info,x,y,gradient)) continue;
 
-      if(Object.prototype.hasOwnProperty.call(CONTOUR_FT,style)){
+      if(contour){
         const feet=value*3.28084;
         let interval=CONTOUR_FT[style];
-        const perPixel=Math.hypot(gradient.dzdx,gradient.dzdy)*info.groundRes*3.28084;
+        const perPixel=Math.hypot(gradient.dzdx,gradient.dzdy)*info.groundRes*3.28084;   // feet crossed per pixel
+        /* Thin adaptively: a 10 ft interval over 700 m of alpine relief is ~230
+           lines in one tile, which reads as mud. Promote to the index interval
+           where lines would collide, and draw nothing where even those would. */
         if(perPixel>0){
           const spacing=interval/perPixel;
           if(spacing<MIN_CONTOUR_PX){
@@ -141,12 +159,11 @@
         out[offset+1]=Math.min(255,Math.round(colour[1]*multiplier));
         out[offset+2]=Math.min(255,Math.round(colour[2]*multiplier));out[offset+3]=255;
       }else{
-        const shade=(style==="hsmulti"?shadeMulti:shadeDirect)(gradient.dzdx,gradient.dzdy);
-        const byte=Math.round(shade*255);out[offset]=byte;out[offset+1]=byte;out[offset+2]=byte;out[offset+3]=255;
+        const byte=Math.round(shade(gradient.dzdx,gradient.dzdy)*255);out[offset]=byte;out[offset+1]=byte;out[offset+2]=byte;out[offset+3]=255;
       }
     }
     return out;
   }
 
-  return Object.freeze({VERSION:2,STYLES,ASPECT_FLAT_GRADE,CONTOUR_FT,hasData,renderRgba});
+  return Object.freeze({VERSION:2,STYLES,ASPECT_FLAT_GRADE,CONTOUR_FT,SLOPE_STOPS,ASPECT_STOPS,hasData,renderRgba});
 });

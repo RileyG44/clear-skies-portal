@@ -760,54 +760,64 @@ function currentStyle(){
   const ink=family==="highlight"?styles.highlight:styles.ink;
   return {family,color:ink.color,width:ink.width,opacity:ink.opacity,fillColor:styles.fill.color,fillOpacity:styles.fill.opacity,size:styles.text.size,eraser:styles.eraser.size};
 }
+/* The ground size the current tool draws at, in metres: a stroke width, or
+   the size of new text and pins. Undefined until one has been chosen. */
+function toolGroundMetres(key,family){
+  const text=styles.text;
+  if(key!=="size") return (family==="highlight"?styles.highlight:styles.ink).groundWidth;
+  if(tool!=="pin") return text.groundSize;
+  return text.pinGroundSize??(text.groundSize!=null?text.groundSize*1.4:undefined);
+}
+/* Ground sizes read like the other sliders: label, slider, value. The value
+   is a button that opens an exact field for a typed number. */
+function groundControl(key,label,px,f,s){
+  const metres=f?(f.properties[key]||0):toolGroundMetres(key,s.family)??px*here(),value=+feet(metres).toFixed(4),min=s.family==="shape"?0:.1,max=Math.max(10000,value);
+  return `<div class="mk-slider mk-ground" data-ground="${key}" data-label="${label}" data-feet="${value}" data-feet-min="${min}"><span>${label}</span><input type="range" data-ground-range="${key}" min="0" max="1000" step="1" value="${widthRangePosition(value,min,max)}" data-feet-max="${max}" aria-label="${label}" aria-valuetext="${spokenFeet(value)}"><button type="button" class="mk-value" data-edit-ground="${key}" aria-haspopup="dialog" aria-label="${label}: ${spokenFeet(value)}. Type a value" title="Type a value">${fmtFeet(value)}</button></div>`;
+}
+const valueRow=(key,label,value)=>`<div class="mk-slider mk-value-row" data-feet="${value}"><span>${label}</span><button type="button" class="mk-value" data-edit-placement="${key}" aria-haspopup="dialog" aria-label="${label}: ${spokenFeet(value)}. Type a value" title="Type a value">${fmtFeet(value)}</button></div>`;
+const TOOL_LABELS={select:"Select",pan:"Pan",pen:"Pen",highlight:"Highlight",eraser:"Eraser",shape:"Shapes",text:"Text",pin:"Pin"};
+function toolButtons(){
+  const shape=shapeById(styles.shape);
+  return TOOLS.map(t=>t?`<button type="button" class="mk-tool" data-tool="${t[0]}" aria-pressed="${tool===t[0]}" title="${t[2]}" aria-label="${t[2].replace(/ \(.\)$/,"")}">${
+    t[0]==="shape"?`<span class="mk-shape-icons"><span class="mk-shape-glyph">${shapePreview(shape)}</span><img class="mk-caret" src="${icon("chevron-down")}" alt=""></span>`:`<img src="${icon(t[1])}" alt="">`}<span class="mk-tool-label">${TOOL_LABELS[t[0]]}</span></button>`:sep).join("");
+}
+/* The options row for the selected mark, or for the tool in hand. */
+function styleOptions(f,s){
+  const fam=s.family,opacity=()=>slider("opacity","Opacity",s.opacity,5,100,1,"%");
+  let opts;
+  if(fam==="eraser") opts=slider("eraser","Size",s.eraser,8,120,1,"px")+`<span class="mk-hint">Drag across marks to erase them</span>`;
+  else if(fam==="line"||fam==="highlight") opts=chip("color",s.color,"Colour")+groundControl("width","Width",s.width,f,s)+opacity();
+  else if(fam==="shape") opts=chip("color",s.color,s.width?"Outline colour":"Outline colour (no outline)")+groundControl("width","Outline",s.width,f,s)+opacity()+sep+
+    chip("fill",s.fillColor==="auto"?s.color:s.fillColor,s.fillColor===null?"Fill: none":"Fill colour",s.fillColor===null)+(s.fillColor===null?"":slider("fillOpacity","Fill",s.fillOpacity,0,100,1,"%"));
+  else if(fam==="text") opts=chip("color",s.color,"Colour")+((f?.properties.kind||tool)==="pin"?groundControl("size","Size",s.size,f,s):slider("size","Font size",s.size,8,160,1,"px"))+opacity();
+  else opts=`<span class="mk-hint">${tool==="select"?`${coarse()?"Tap":"Click"} a mark to select it · drag to move · handles resize and rotate`:"Drag to move around the map"}</span>`;
+  if(view3d()&&fam&&fam!=="eraser"){
+    const snapped=f?!f.properties.space3d:placementSnaps();
+    opts+=sep+`<label class="mk-snap"><input type="checkbox" data-placement="snap" ${snapped?"checked":""}>Snap to surface</label>`;
+    if(!snapped) opts+=valueRow(f?"elevation":"distance",f?"Elevation":"Distance",f?feet(f.properties.space3d?.anchor[2]):styles.placement.distance);
+  }
+  return opts;
+}
+function selectionActions(f){
+  const kind=f.properties.kind;let actions="";
+  if(kind==="text"||kind==="pin") actions+=`<button type="button" class="mk-text-btn" data-act="edit-text">Edit text</button>`;
+  if(kind==="area"||kind==="shape"||kind==="rect") actions+=`<button type="button" class="mk-text-btn" data-act="points" aria-pressed="${pointsMode}">Edit points</button>`;
+  return actions+`<button type="button" class="mk-icon-btn" data-act="duplicate" title="Duplicate (Ctrl+D)" aria-label="Duplicate"><img src="${icon("copy")}" alt=""></button>
+      <button type="button" class="mk-icon-btn mk-danger" data-act="delete" title="Delete (Delete key)" aria-label="Delete selected"><img src="${icon("trash-2")}" alt=""></button>`;
+}
 function paintBar(){
   placeSelBar();
   if(!editing||!toolsOpen){ bar.hidden=true;return }
   // Background source/view refreshes must not replace the field being typed in.
   if(layerDetailsDraft?.layer===editing&&bar.contains(document.activeElement)&&document.activeElement.matches("[data-layer-detail]"))return;
   bar.hidden=false;
-  const f=selectedFeature(),s=currentStyle(),m=editing.doc.markup;
-  const shape=shapeById(styles.shape);
-  /* Ground sizes read like the other sliders: label, slider, value. The value
-     is a button that opens an exact field for a typed number. */
-  const ground=(key,label,px)=>{
-    const metres=f?(f.properties[key]||0):(key==="size"?(tool==="pin"?styles.text.pinGroundSize??(styles.text.groundSize!=null?styles.text.groundSize*1.4:undefined):styles.text.groundSize):(s.family==="highlight"?styles.highlight:styles.ink).groundWidth)??px*here(),value=+feet(metres).toFixed(4),min=s.family==="shape"?0:.1,max=Math.max(10000,value);
-    return `<div class="mk-slider mk-ground" data-ground="${key}" data-label="${label}" data-feet="${value}" data-feet-min="${min}"><span>${label}</span><input type="range" data-ground-range="${key}" min="0" max="1000" step="1" value="${widthRangePosition(value,min,max)}" data-feet-max="${max}" aria-label="${label}" aria-valuetext="${spokenFeet(value)}"><button type="button" class="mk-value" data-edit-ground="${key}" aria-haspopup="dialog" aria-label="${label}: ${spokenFeet(value)}. Type a value" title="Type a value">${fmtFeet(value)}</button></div>`;
-  };
-  const valueRow=(key,label,value)=>`<div class="mk-slider mk-value-row" data-feet="${value}"><span>${label}</span><button type="button" class="mk-value" data-edit-placement="${key}" aria-haspopup="dialog" aria-label="${label}: ${spokenFeet(value)}. Type a value" title="Type a value">${fmtFeet(value)}</button></div>`;
-  const tools=TOOLS.map(t=>t?`<button type="button" class="mk-tool" data-tool="${t[0]}" aria-pressed="${tool===t[0]}" title="${t[2]}" aria-label="${t[2].replace(/ \(.\)$/,"")}">${
-    t[0]==="shape"?`<span class="mk-shape-icons"><span class="mk-shape-glyph">${shapePreview(shape)}</span><img class="mk-caret" src="${icon("chevron-down")}" alt=""></span>`:`<img src="${icon(t[1])}" alt="">`}<span class="mk-tool-label">${{select:"Select",pan:"Pan",pen:"Pen",highlight:"Highlight",eraser:"Eraser",shape:"Shapes",text:"Text",pin:"Pin"}[t[0]]}</span></button>`:sep).join("");
+  const f=selectedFeature(),actions=f?selectionActions(f):"",pending=draft&&draft.kind==="area";
   const undoCount=stackFor(undoStacks,editing).length,redoCount=stackFor(redoStacks,editing).length;
-  let opts="";
-  const fam=s.family;
-  if(fam==="eraser") opts=slider("eraser","Size",s.eraser,8,120,1,"px")+`<span class="mk-hint">Drag across marks to erase them</span>`;
-  else if(fam==="line"||fam==="highlight") opts=chip("color",s.color,"Colour")+ground("width","Width",s.width)+slider("opacity","Opacity",s.opacity,5,100,1,"%");
-  else if(fam==="shape") opts=chip("color",s.color,s.width?"Outline colour":"Outline colour (no outline)")+ground("width","Outline",s.width)+slider("opacity","Opacity",s.opacity,5,100,1,"%")+sep+
-    chip("fill",s.fillColor==="auto"?s.color:s.fillColor,s.fillColor===null?"Fill: none":"Fill colour",s.fillColor===null)+(s.fillColor===null?"":slider("fillOpacity","Fill",s.fillOpacity,0,100,1,"%"));
-  else if(fam==="text") opts=chip("color",s.color,"Colour")+((f?.properties.kind||tool)==="pin"?ground("size","Size",s.size):slider("size","Font size",s.size,8,160,1,"px"))+slider("opacity","Opacity",s.opacity,5,100,1,"%");
-  else opts=`<span class="mk-hint">${tool==="select"?`${coarse()?"Tap":"Click"} a mark to select it · drag to move · handles resize and rotate`:"Drag to move around the map"}</span>`;
-  if(view3d()&&fam&&fam!=="eraser"){
-    const snapped=f?!f.properties.space3d:placementSnaps();
-    opts+=sep+`<label class="mk-snap"><input type="checkbox" data-placement="snap" ${snapped?"checked":""}>Snap to surface</label>`;
-    if(!snapped){
-      const elevation=f?.properties.space3d?.anchor[2];
-      opts+=valueRow(f?"elevation":"distance",f?"Elevation":"Distance",f?feet(elevation):styles.placement.distance);
-    }
-  }
-  let actions="";
-  if(f){
-    const p=f.properties;
-    if(p.kind==="text"||p.kind==="pin") actions+=`<button type="button" class="mk-text-btn" data-act="edit-text">Edit text</button>`;
-    if(p.kind==="area"||p.kind==="shape"||p.kind==="rect") actions+=`<button type="button" class="mk-text-btn" data-act="points" aria-pressed="${pointsMode}">Edit points</button>`;
-    actions+=`<button type="button" class="mk-icon-btn" data-act="duplicate" title="Duplicate (Ctrl+D)" aria-label="Duplicate"><img src="${icon("copy")}" alt=""></button>
-      <button type="button" class="mk-icon-btn mk-danger" data-act="delete" title="Delete (Delete key)" aria-label="Delete selected"><img src="${icon("trash-2")}" alt=""></button>`;
-  }
-  const pending=draft&&draft.kind==="area";
   bar.innerHTML=`
     <div class="tool-popover-head"><div class="tool-popover-title" id="mkBarTitle">Markup</div><button type="button" class="tool-close" data-act="close" aria-label="Close markup tools">&times;</button></div>
     <div class="mk-context">${layerContextHtml()}</div>
-    <div class="mk-tools" role="toolbar" aria-label="Markup tools">${tools}</div>
-    <div class="mk-opts">${opts}${actions?`<div class="mk-selection-actions">${actions}</div>`:""}</div>
+    <div class="mk-tools" role="toolbar" aria-label="Markup tools">${toolButtons()}</div>
+    <div class="mk-opts">${styleOptions(f,currentStyle())}${actions?`<div class="mk-selection-actions">${actions}</div>`:""}</div>
     <div class="mk-footer"><div class="mk-history">
       <button type="button" class="mk-icon-btn" data-act="undo" title="Undo (Ctrl+Z)" aria-label="Undo" ${undoCount?"":"disabled"}><img src="${icon("undo-2")}" alt=""></button>
       <button type="button" class="mk-icon-btn" data-act="redo" title="Redo (Ctrl+Shift+Z)" aria-label="Redo" ${redoCount?"":"disabled"}><img src="${icon("redo-2")}" alt=""></button>

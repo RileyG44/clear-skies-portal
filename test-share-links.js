@@ -1,12 +1,11 @@
 'use strict';
 const fs=require('node:fs'),vm=require('node:vm'),assert=require('node:assert/strict');
 const path=require('node:path'),root=__dirname;
-const ui=fs.readFileSync(path.join(root,'ui-system.js'),'utf8'),html=fs.readFileSync(path.join(root,'index.html'),'utf8');
-const window={};new Function('window',ui.slice(0,ui.indexOf('/* End full-state link codec. */')))(window);
-const C=window.CSPShareCodec;
+const html=require("./test-fixtures/page-source.js");
+const C=require('./share-state.js');
 const fixture=JSON.parse(fs.readFileSync(path.join(root,'test-fixtures/share-state-v1.json'),'utf8'));
 const controls=Object.entries(fixture.controls).map(([id,value])=>({id,type:typeof value==='boolean'?'checkbox':/^#[a-f0-9]{6}$/i.test(value)?'color':value!==''&&Number.isFinite(+value)?'number':'text',tagName:'INPUT',min:'',max:''}));
-const ctx={document:{querySelectorAll:selector=>selector==='input[id],select[id]'?controls:[]},URL,
+const ctx={CSPShareState:C,document:{querySelectorAll:selector=>selector==='input[id],select[id]'?controls:[]},URL,
  CSPLidarRender:require(path.join(root,'lidar-render.js')),CSPAnalysisLayers:require(path.join(root,'analysis-layers.js')),
  researchStyleDefaults:()=>({palette:'standard',blend:'normal',opacity:.82,relief:0,reverse:false,visible:true}),researchPaletteChoices:()=>[],
  VIEW_MAX:28,OVERLAYS:fixture.overlays.map(o=>({id:o.id})),RESEARCH_LABELS:{curvature:'Surface curvature (Laplacian)'},RESEARCH_PARAMS:{scale:{options:[['balanced','Balanced']]}},};

@@ -1,7 +1,7 @@
 "use strict";
-/* Exercise actual files and the warm functions with stub upstreams. These
+/* Exercise actual files and the download routes with stub upstreams. These
    tests must never use the installed service/cache or make network requests. */
-const assert=require("assert/strict"),fs=require("fs"),fsp=fs.promises,os=require("os"),path=require("path"),vm=require("vm");
+const assert=require("assert/strict"),fs=require("fs"),fsp=fs.promises,os=require("os"),path=require("path"),http=require("http");
 const budget=require("./cache-budget.js"),{sha1}=budget;
 const dirs=[];let checks=0;
 const temp=()=>{const dir=fs.mkdtempSync(path.join(os.tmpdir(),"csp-budget-"));dirs.push(dir);return dir};
@@ -11,42 +11,65 @@ async function file(dir,name,size,atime=old,mtime=old){
 }
 async function pair(dir,key,size,atime=old,mtime=old){await file(dir,key,size,atime,mtime);await file(dir,key+".meta",10,atime,mtime)}
 async function exists(f){try{await fsp.access(f);return true}catch{return false}}
-function extract(source,name){
-  const start=source.indexOf(`async function ${name}(`),end=source.indexOf(`\n}\n`,start)+2;
-  assert(start>=0&&end>start);return source.slice(start,end);
-}
+/* Drive the real download routes, with only the network and terrain workers
+   stubbed: the tiles each download caches must be exactly the keys its
+   manifest pins, and a manifest that cannot be written must say so. */
 async function warmKeyChecks(){
-  const source=fs.readFileSync(path.join(__dirname,"server.js"),"utf8"),raw=fs.readFileSync(path.join(__dirname,"usgs.js"),"utf8");
   const tile={z:13,x:1380,y:2880},N=2**tile.z;
-  const lon=(tile.x+.4)/N*360-180,lat=Math.atan(Math.sinh(Math.PI*(1-2*(tile.y+.4)/N)))*180/Math.PI;
-  const bbox=[lon,lat-.00001,lon+.00001,lat],base={bbox,z0:13,z1:13,label:"test"};
+  const bboxOf=x=>{const lon=(x+.4)/N*360-180,lat=Math.atan(Math.sinh(Math.PI*(1-2*(tile.y+.4)/N)))*180/Math.PI;return [lon,lat-.00001,lon+.00001,lat]};
+  const bbox=bboxOf(tile.x),base={bbox,z0:13,z1:13,label:"test"};
   assert.deepEqual(budget.tileRange(bbox,13),{x0:tile.x,x1:tile.x,y0:tile.y,y1:tile.y});
-  const writes=[],manifests=[],ctx={cacheBudgetCore:budget,key:sha1,tileRange:budget.tileRange,mercBbox:budget.mercBbox,
-    warm:{},usgsWarm:{controllers:new Set()},terrainPool:{size:3,run:async()=>({png:Buffer.from("png")})},
-    cacheGet:()=>null,cachePut:(k)=>writes.push(k),upstream:async()=>({status:200,body:Buffer.from("png")}),
-    isPng:()=>true,waQuery:async()=>[],areaSave:a=>manifests.push(a),dsFingerprint:()=>[],
-    WADNR_HOST:"example",WADNR_MAP:"/test",TTL_TILE:1,TILE_MS:1,nationalElevationTiff:async()=>Buffer.alloc(1),
-    AbortController,Buffer,usgs:{finalizeWarm:async job=>manifests.push(job)}};
-  vm.createContext(ctx);vm.runInContext(extract(source,"startWarm")+"\n"+extract(source,"startUsgsWarm"),ctx);
-  const job={...base,layers:"0,7",rule:"Slope Map"};await ctx.startWarm(job);
-  const bb=budget.mercBbox(tile.z,tile.x,tile.y),rr=encodeURIComponent(JSON.stringify({rasterFunction:job.rule}));
-  const expected=[sha1(`wadnr:export:?bbox=${bb}&bboxSR=3857&imageSR=3857&size=256,256&format=png32&transparent=true&dpi=96&f=image&layers=show:0,7`),
-    sha1(`3dep:/arcgis/rest/services/3DEPElevation/ImageServer/exportImage?bbox=${bb}&bboxSR=3857&imageSR=3857&size=256,256&format=png&transparent=true&f=image&renderingRule=${rr}`)];
-  assert.deepEqual(writes,expected);assert.deepEqual(new Set(budget.manifestKeys(manifests[0],"areas")),new Set(expected));
-  writes.length=0;const usgsJob={...base,style:"slope",raw:true};await ctx.startUsgsWarm(usgsJob);
-  const national=sha1(`elevation-national-v1:13/${tile.x}/${tile.y}`),elev=sha1(`usgselev:13/${tile.x}/${tile.y}`);
-  assert.deepEqual(new Set(writes),new Set([national,elev]));
-  const style=sha1(`terrain-v3:slope:13/${tile.x}/${tile.y}`);
-  assert.deepEqual(new Set(budget.manifestKeys(usgsJob,"usgs/areas")),new Set([style,national,elev]));
-  assert.deepEqual(new Set(budget.manifestKeys({...usgsJob,raw:false},"usgs/areas")),new Set([style,national]));
-  const legacyWrites=[],legacy={cacheBudget:budget,planTiles:()=>[tile],warm:{},renderTile:async()=>({png:Buffer.from("png"),meta:{sources:[]}}),finalizeWarm:async()=>{}};
-  vm.createContext(legacy);vm.runInContext(extract(raw,"startWarm"),legacy);
-  await legacy.startWarm(usgsJob,{get:()=>null,put:(s,z,x,y,png,k)=>legacyWrites.push(k)});
-  assert.deepEqual(legacyWrites,[style]);
-  const dir=temp();await file(dir,"areas/sample.json",0);await fsp.writeFile(path.join(dir,"areas/sample.json"),JSON.stringify(job));
-  await file(dir,"usgs/areas/sample.json",0);await fsp.writeFile(path.join(dir,"usgs/areas/sample.json"),JSON.stringify(usgsJob));
-  assert.deepEqual((await budget.readPins(dir)).pins,new Set([...expected,style,national,elev]));
-  checks+=7;return {job,usgsJob,national,style};
+  const cache=temp(),areas=path.join(cache,"areas"),usgsAreas=path.join(cache,"usgs","areas");
+  const usgs=require("./usgs.js"),png=usgs.encodePNG(Buffer.alloc(4,255),1,1);
+  /* An empty 1 m index (INDEX_VERSION 2, as check-static requires) keeps the
+     real finalizer off the network: it records no source COGs. */
+  usgs.init(cache);fs.mkdirSync(areas);fs.writeFileSync(path.join(cache,"usgs","index.json"),JSON.stringify({v:2,projects:{}}));
+  Object.assign(require("./engine/upstream.js"),{upstream:async({path})=>({status:200,type:"image/png",body:path==="/query"?Buffer.from("[]"):png})});
+  Object.assign(require("./engine/terrain.js"),{nationalElevationTiff:async()=>Buffer.alloc(1)});
+  const cacheBudget=require("./engine/tile-cache.js").init(cache,{canEvict:()=>false});
+  const downloads=require("./engine/downloads.js");
+  downloads.init({areasDir:areas,pool:{size:3,run:async()=>({png:Buffer.from("png")})},budget:cacheBudget});
+  const server=http.createServer((req,res)=>{const u=new URL(req.url,"http://x");downloads.routes[u.pathname](req,res,{u,p:u.pathname})});
+  await new Promise(resolve=>server.listen(0,"127.0.0.1",resolve));
+  const at=route=>`http://127.0.0.1:${server.address().port}${route}`;
+  const cached=()=>new Set(fs.readdirSync(cache).filter(f=>/^[0-9a-f]{40}$/.test(f)));
+  async function download(start,job){
+    const before=cached();let status;
+    assert.equal((await fetch(at(start),{method:"POST",body:JSON.stringify(job)})).status,200);
+    while((status=await (await fetch(at(start+"/status"))).json()).running) await new Promise(r=>setTimeout(r,10));
+    return {status,written:new Set([...cached()].filter(k=>!before.has(k)))};
+  }
+  const manifests=dir=>fs.readdirSync(dir).map(f=>JSON.parse(fs.readFileSync(path.join(dir,f),"utf8")));
+  try{
+    const job={...base,layers:"0,7",rule:"Slope Map"},{status,written}=await download("/api/warm",job);
+    assert.equal(status.unrecorded,"");
+    const [manifest]=manifests(areas);
+    const bb=budget.mercBbox(tile.z,tile.x,tile.y),rr=encodeURIComponent(JSON.stringify({rasterFunction:job.rule}));
+    const expected=[sha1(`wadnr:export:?bbox=${bb}&bboxSR=3857&imageSR=3857&size=256,256&format=png32&transparent=true&dpi=96&f=image&layers=show:0,7`),
+      sha1(`3dep:/arcgis/rest/services/3DEPElevation/ImageServer/exportImage?bbox=${bb}&bboxSR=3857&imageSR=3857&size=256,256&format=png&transparent=true&f=image&renderingRule=${rr}`)];
+    const [w,s,e,n]=bbox,query=sha1("wadnr:query:"+JSON.stringify({type:"Polygon",coordinates:[[[w,s],[e,s],[e,n],[w,n],[w,s]]]}));
+    assert.deepEqual(written,new Set([...expected,query]),"the tiles plus the catalogue answer");
+    assert.deepEqual(new Set(budget.manifestKeys(manifest,"areas")),new Set(expected));
+    const usgsJob={...base,style:"slope",raw:true},usgsRun=await download("/api/usgs/warm",usgsJob);
+    const national=sha1(`elevation-national-v1:13/${tile.x}/${tile.y}`),elev=sha1(`usgselev:13/${tile.x}/${tile.y}`);
+    assert.deepEqual(usgsRun.written,new Set([national,elev]));assert.equal(usgsRun.status.unrecorded,"");
+    const [usgsManifest]=manifests(usgsAreas);
+    assert.deepEqual([usgsManifest.source,usgsManifest.style,usgsManifest.raw,usgsManifest.bbox],["usgs1m","slope",true,bbox],"the real finalizer records the area");
+    const style=sha1(`terrain-v3:slope:13/${tile.x}/${tile.y}`);
+    assert.deepEqual(new Set(budget.manifestKeys(usgsManifest,"usgs/areas")),new Set([style,national,elev]));
+    assert.deepEqual(new Set(budget.manifestKeys({...usgsManifest,raw:false},"usgs/areas")),new Set([style,national]));
+    assert.deepEqual((await budget.readPins(cache)).pins,new Set([...expected,style,national,elev]),"the cache pins what both manifests list");
+    /* A manifest that cannot be written leaves the tiles but reports the area unrecorded. */
+    fs.chmodSync(areas,0o500);fs.chmodSync(usgsAreas,0o500);
+    try{
+      const failed=await download("/api/warm",{...job,bbox:bboxOf(tile.x+2)}),failedUsgs=await download("/api/usgs/warm",usgsJob);
+      assert(failed.written.size>0&&failed.status.unrecorded,"WA DNR tiles arrive but the area is reported unrecorded");
+      assert(failedUsgs.status.skipped===1&&failedUsgs.status.unrecorded,"so is a 1 m area");
+      assert.equal(manifests(areas).length+manifests(usgsAreas).length,2,"and no partial manifest is left behind");
+      assert.deepEqual(fs.readdirSync(areas).concat(fs.readdirSync(usgsAreas)).filter(f=>!f.endsWith(".json")),[]);
+    }finally{ fs.chmodSync(areas,0o700);fs.chmodSync(usgsAreas,0o700) }
+    checks+=11;return {job,usgsJob:usgsManifest,national,style};
+  }finally{ server.close();await cacheBudget.close() }
 }
 (async()=>{
   try{

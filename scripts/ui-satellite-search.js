@@ -3,12 +3,12 @@
    ui-map-popovers.js; the app's dependencies stay unchanged.
    node scripts/ui-satellite-search.js [http://127.0.0.1:8765/] */
 const assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path');
-const {chromium}=require(process.env.PLAYWRIGHT_MODULE||'playwright');
+const {launchUIBrowser}=require('./lib/browser.js');
 const base=process.argv[2]||'http://127.0.0.1:8765/';
-const output=path.join(__dirname,'..','.codex-audits');
+const output=process.env.CSP_UI_OUTPUT||path.join(__dirname,'..','.codex-audits');
 const place={primary:'Moses Lake',secondary:'Grant, Washington, United States',kind:'town',lat:47.13,lng:-119.28};
 (async()=>{
-  const browser=await chromium.launch();fs.mkdirSync(output,{recursive:true});
+  const browser=await launchUIBrowser();fs.mkdirSync(output,{recursive:true});
   try{
     for(const [label,width,height,touch] of [['desktop',1440,900,false],['dark',1440,900,false],['mobile',390,844,true],['small-mobile',320,568,true],['mobile-fallback',390,844,true],['classic',1440,900,false]]){
       const context=await browser.newContext({viewport:{width,height},isMobile:touch,hasTouch:touch,serviceWorkers:'block'});
@@ -32,10 +32,9 @@ const place={primary:'Moses Lake',secondary:'Grant, Washington, United States',k
       },route);
       await navigate('satellite');
       if(label==='classic'){
-        assert.equal(await page.locator('#cspSatQuery').count(),0,'classic keeps its original search/filter layout');
-        assert(await page.locator('.pane[data-pane="filters"]').isVisible());
-        assert.equal(await page.locator('#days').evaluate(el=>el.previousElementSibling.tagName),'LABEL');
-        await context.close();console.log('PASS classic: original filters preserved');continue;
+        assert.equal(await page.locator('#cspSatQuery').count(),1,'legacy query URLs use the supported shell');
+        assert(await page.locator('#days').isVisible(),'the supported shell retains date filtering');
+        assert(await page.locator('#cloud').isVisible(),'the supported shell retains cloud filtering');
       }
       const input=page.locator('#cspSatQuery');
       const waitForSuggestions=async()=>{

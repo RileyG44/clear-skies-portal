@@ -47,3 +47,6 @@ markup/
 # Native iOS app (docs/ios CR-001): this Mac's signing team and Xcode user state
 ios/Config/Local.xcconfig
 ios/**/xcuserdata/
+
+# Built from app/ by site.js (the engine) and scripts/assemble-site.py
+/app.js

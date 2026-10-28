@@ -111,24 +111,7 @@ scene filters below the search field. Filter values survive navigation
 between panels. The sidebar and panels use grouped rows, with a pointer halo
 and glass hover effect on desktop; Reduce Motion disables those pointer effects.
 
-Browser regressions: `node scripts/ui-map-popovers.js` covers light/dark desktop,
-mobile, narrow phones, landscape, editing, layer switching, drawing, keyboard
-focus, panel transitions, Reduced Motion, the camera's two actions and the
-Appearance colours and presets (including after a reload), the typed width field
-and the selected mark's Delete/Undo bar. `test-markup-controls.js` exercises
-metadata drafts, slider math, typed feet, exact units and one-step width undo in `npm test`.
-`node scripts/ui-snapshot.js` checks whole-view Capture, area selection and exported pixels.
-`node scripts/ui-satellite-search.js` covers scene filters, custom dates, search
-keys, dismissed lookups, mobile focus, source credits, header alignment, pinned
-navigation controls and both dropdown styles, plus the classic fallback.
-`node scripts/ui-sheet-chrome.js` checks the compact phone footer, toolbar
-fade/slide and direct swipe tracking, Reduced Motion, and Settings utilities.
-`node scripts/ui-review-regressions.js` covers touch scrolling and completed
-taps, committed locations and retained drafts, result-selection animations,
-reduced-motion and scaled-pointer geometry, short-screen navigation, readable
-date shortcuts, phone picker targets and unsupported-picker motion safeguards.
-All accept a local server URL and the optional `PLAYWRIGHT_MODULE` environment
-variable; browser tooling is not an application dependency.
+The interface's browser regression scripts are listed in [docs/TESTING.md](docs/TESTING.md).
 
 ## Run it in a Codespace
 
@@ -299,7 +282,7 @@ It prints `https://<this-mac>.<tailnet>.ts.net:8443/`, which opens on any
 device signed in to your tailnet. It is tailnet-only; never use Funnel for it.
 Preview pages show a **Preview** badge beside the build stamp and in the tab
 title, and they skip the offline service worker so every reload shows the latest
-push. Append `?ui=classic` to compare against the previous interface. The
+push. Legacy `?ui=classic` URLs now open the same supported interface. The
 branch has to include this script's server support (merge `main` into older
 branches first).
 
@@ -312,6 +295,9 @@ npm test           # terrain unit tests plus black-box server tests
 npm run verify     # all checks, tests, and dependency audit
 pip install -r requirements.txt
 ```
+
+[docs/TESTING.md](docs/TESTING.md) lists the tests and the optional browser,
+GPU, performance and iPhone verification suites.
 
 `npm run vendor` refreshes the checked-in browser bundles from the installed
 packages. CI (`.github/workflows/ci.yml`) syntax-checks the JavaScript and Python,
@@ -395,6 +381,12 @@ Source requests run eight at a time from the browser cache first, with a ceiling
 30,000 tiles per export. A tile a source answers with "no data" (outside a scene's
 footprint) is left empty rather than reported as a failure.
 
+On desktop the lower-left corner of the map shows the cursor's latitude/longitude and
+approximate ground elevation in feet, with colour keys for visible terrain, elevation,
+surface-analysis and snow layers. The **Map info** switch in the export settings adds the
+same details to the image's lower-left corner; the location is frozen when an area
+selection starts.
+
 A PNG is still a finite raster image: you can zoom into it until you reach the chosen
 pixel resolution, not indefinitely. A future research-grade export for continued
 map-like zoom would be a tiled package or Cloud-Optimized GeoTIFF rather than one PNG.
@@ -432,29 +424,26 @@ The drawing bar works like a paint program:
 
 Marks are anchored to the ground: positions are latitude/longitude and every size is in
 metres, so they grow and shrink with the map like writing on a paper map and stay put
-at any zoom or rotation. Each layer has its own switch, opacity and place in **Layers**,
-so projects can be shown one at a time or together, and they come through in PNG
-exports.
+at any zoom or rotation. The same layers draw on the 2D map and on 3D terrain, where
+marks follow the surface (or float at a set height with **Snap to surface** off). Each
+layer has its own switch, opacity and place in **Layers**, so projects can be shown one
+at a time or together, and visible layers come through in PNG exports.
 
-Where they live:
-
-- **This device:** every layer is kept in the browser (IndexedDB), so markup works with
-  no engine, offline, in the field.
-- **Your computer:** when the terrain engine is reachable, each layer is also saved as
-  `markup/<layer-id>.geojson` beside `server.js` (or `CSP_MARKUP_DIR`). That folder is
-  in `.gitignore`, so markup is never committed. The files are plain GeoJSON and open in
-  QGIS or Google Earth.
-- **Between devices:** the engine copy is the shared one. The newer copy of a layer
-  wins; a deleted layer goes to `markup/.trash/` and leaves a tombstone so an older
-  offline copy cannot bring it back. An engine started from code older than markup
-  answers 404; the app says so and keeps the layers on the device until the engine is
-  updated and restarted.
+Where they live: layers belong to the terrain engine, not the browser. Each is saved as
+`markup/<layer-id>.geojson` beside `server.js` (or in `CSP_MARKUP_DIR`), a folder listed
+in `.gitignore`; the files are plain GeoJSON and open in QGIS or Google Earth. With no
+engine connected there is no markup, and switching engines shows that engine's layers.
+The newer copy of a layer wins; a deleted layer goes to `markup/.trash/` and leaves a
+tombstone so an older copy on another device cannot bring it back. Whether a layer is
+shown, and how strongly, is this device's choice and is not saved with the layer.
 
 ## What's in the box
 
 | File | What it is |
 |---|---|
-| `index.html` | The whole app — one self-contained file, Leaflet inlined |
+| `index.html` | The page: markup and startup recovery. Loads the scripts below |
+| `app/` | The browser application, one file per feature (map, search, terrain, overlays, …). `site.json` lists them in order; the engine and `scripts/assemble-site.py` join them into `app.js` |
+| `site.json` / `site.js` | The one list of shipped files, read by the server, service worker, Pages/iOS assembler, Mac app and installer |
 | `ui-system.js` / `ui-system.css` | Task-oriented navigation shell, active-layer stack, category isolation, and responsive visual system |
 | `vendor/` | Pinned browser bundles for MapLibre GL JS and Leaflet rotation |
 | `terrain-raster.js` | Shared deterministic CPU terrain styling used by 2D, 3D protocol tiles, and tests |
@@ -462,29 +451,31 @@ Where they live:
 | `point-cloud-core.js` | Tested Web Mercator camera, coverage selection, and synchronization helpers |
 | `point-cloud-catalog.json` | Generated index of the 30 Washington USGS EPT projects |
 | `mosaic-core.js` | Tested footprint geometry, antimeridian, identity, coverage and imagery LOD helpers |
-| `server.js` | Local terrain engine: static files, validated proxying, request coalescing, retries and disk cache |
+| `server.js` | Local terrain engine: wires the `engine/` route modules together and serves the static app |
+| `engine/` | One module per engine concern: HTTP helpers, tile cache, upstream scheduling, terrain, WA DNR, downloads, proxies, snapshots and markup storage |
+| `share-state.js`, `coordinates.js` | Share-link codec and validation; coordinate parsing. Loaded by the page and tested directly |
+| `location-search.js` | Search/autocomplete controller; owns pending suggestions, debounce and cancellation behind injected map/scene actions |
+| `research-contract.js` | Page-safe request bounds, result framing, offload policy and landform labels; algorithms run in `research-worker.js` or the engine |
 | `scripts/install-mac-service.sh` | Installs a loopback-only, self-healing macOS terrain-engine service |
-| `SOL_HIGH_IMPLEMENTATION_HANDOFF.md` | Detailed implementation plan for the remaining lidar, landscape, geology, sidebar, persistence and imagery work |
+| `run.command` | Double-click launcher for macOS: checks Node, starts the engine and opens the browser |
+| `electron-builder.js` | Mac app packaging (`npm run dist`) |
 | `test-server.js` | Offline black-box checks for CORS, request limits, traversal protection and server health |
 | `version.js` | One build identifier shared by the page and service worker cache |
-| `TODO.md` | Work queue. Say "check the TODO" to a fresh Claude session and it picks up from there |
 | `THREE_D_TERRAIN.md` | 2D rotation, 3D terrain, lighting architecture, limitations, and QA handoff |
 | `POINT_CLOUD_3D.md` | Linked point-cloud architecture, verified data facts, as-built notes, and QA handoff |
-| `UI_REDESIGN.md` | Interface information architecture, visual authority, integration boundaries, and maintenance checklist |
-| `source-catalog.md` | ~50 free imagery sources with endpoints, licences, resolutions |
+| `docs/UI_REDESIGN.md` | Interface information architecture, visual authority, integration boundaries, and maintenance checklist |
+| `docs/research/source-catalog.md` | ~50 free imagery sources with endpoints, licences, resolutions |
 | `sources.json` | Machine-readable version of the catalog |
-| `hiking-stack.md` | The Western-US subset: snow, fire, route-finding |
-| `lidar-research.md` | Lidar sources, verified endpoints, coverage gaps |
+| `docs/research/hiking-stack.md` | The Western-US subset: snow, fire, route-finding |
+| `docs/research/lidar-research.md` | Lidar sources, verified endpoints, coverage gaps |
 | `trailcheck.py` | Standalone: snow line from Sentinel-2 NDSI + fire + SNOTEL |
-| `snowline.py` | Earlier snow-line-only version |
-| `probe.py` | Tiny script that reports scene freshness at a few test points |
 | `cog.js` | COG/GeoTIFF reader — TIFF LZW + floating-point predictor, geodesy. No dependencies |
 | `usgs.js` | USGS 3DEP 1 m DEM source: S3 index, range reads, terrain rendering, PNG encoder |
 | `nadi1-cordilleran.json` | NADI-1 Cordilleran ice margins, 25–10.5 ka, clipped to the Pacific Northwest (Dalton et al. 2023, CC BY 4.0). Rebuild with `scripts/build-nadi1-cordilleran.py` |
 | `test-cog.js` | Offline checks: LZW, predictor, geodesy, cell maths, PNG. `node test-cog.js` |
 | `.devcontainer/` | Codespaces / Dev Containers setup — Node 24, Python 3.14, port 8765 |
 | `.github/workflows/ci.yml` | Syntax checks, `sources.json` validation, server smoke test |
-| `requirements.txt` | Python deps for the three scripts |
+| `requirements.txt` | Python deps for `trailcheck.py` |
 
 `.cache/` appears next to `server.js` once you run it. Safe to delete; it just rebuilds.
 
@@ -674,9 +665,3 @@ with `satportal` only as its working directory, so filtering on the path finds n
 Get-NetTCPConnection -LocalPort 8765 -State Listen |
   ForEach-Object { Stop-Process -Id $_.OwningProcess -Force }
 ```
-
-### Map annotation layers
-
-Use **Markup → New markup layer** or the pencil button to draw on either the 2D map or 3D terrain. Pen, highlighter, shapes, arrows, notes, and pins use geographic positions and fixed ground dimensions. Width and text size are entered in feet; orbiting or zooming does not change the saved position or size. In 3D the marks follow the terrain surface. The camera includes visible markup in PNGs, including large 2D exports. Hide a layer to exclude it from the image. Existing markup layers work in both views without conversion.
-
-On desktop, the lower-left map corner shows the cursor’s latitude/longitude and approximate ground elevation in feet, plus color keys for visible terrain, elevation, surface-analysis and snow layers. The readout stays fixed in the screen’s lower-left corner and is covered when the sidebar opens. In the camera/export controls, **Include coordinates, elevation and color keys** adds these details to the saved image’s lower-left corner; the choice is remembered. The location is frozen when area selection starts, and a selection-center reading is used if no cursor location has been chosen.

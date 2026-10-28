@@ -144,7 +144,7 @@ async function main(){
   await previewChannelChecks();
   const port=await freePort();
   const upstreamLog=path.join(cache,"upstream.log");
-  const child=spawn(process.execPath,["--require",path.join(root,"test-elevation-upstream-fixture.js"),"server.js"],{
+  const child=spawn(process.execPath,["--require",path.join(root,"test-fixtures","elevation-upstream.js"),"server.js"],{
     cwd:root,
     env:{...process.env,PORT:String(port),HOST:"127.0.0.1",CSP_CACHE_DIR:cache,CSP_TERRAIN_WORKERS:"1",CSP_CHANNEL:"",
          CSP_TEST_UPSTREAM_LOG:upstreamLog},

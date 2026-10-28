@@ -1,6 +1,6 @@
 "use strict";
 const assert=require("node:assert/strict"),fs=require("node:fs"),vm=require("node:vm");
-const html=fs.readFileSync(require.resolve("./index.html"),"utf8");
+const html=require("./test-fixtures/page-source.js");
 const adapter=fs.readFileSync(require.resolve("./ios/Resources/native-shell.js"),"utf8");
 const section=(source,start,end)=>source.slice(source.indexOf(start),source.indexOf(end,source.indexOf(start)));
 
@@ -69,7 +69,8 @@ async function main(){
   assert.equal(native.commands.centerSelected(),false);assert.equal(actions.centers.length,0);
 
   const root={hidden:false},view={panel:"ctl"};let closed=0;
-  const panel={view,document:{getElementById:()=>root},$:selector=>({click(){assert.equal(selector,"#ctlCollapse");closed++;root.hidden=true;}}),schedule(){}};
+  const panel={view,document:{getElementById:()=>root},$:selector=>({click(){assert.equal(selector,"#ctlCollapse");closed++;root.hidden=true;}}),schedule(){},
+    snapshotItems(){},serverItems(){},terrainSourceItems(){}};
   vm.createContext(panel);
   vm.runInContext(section(adapter,"const PANELS =", "  const openPanel =")+
     "\nconst commands={"+section(adapter,"closePanel(id) {", "    statusText:").trim().replace(/,$/,"")+"}; globalThis.close=commands.closePanel;",panel);

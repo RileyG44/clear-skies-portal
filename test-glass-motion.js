@@ -1,6 +1,6 @@
 'use strict';
 const assert=require('node:assert/strict'),fs=require('node:fs'),vm=require('node:vm');
-const source=fs.readFileSync('index.html','utf8'),css=fs.readFileSync('ui-system.css','utf8');
+const source=require("./test-fixtures/page-source.js"),css=fs.readFileSync('ui-system.css','utf8');
 const start=source.indexOf('let map3dGlassTimer='),end=source.indexOf('function setTerrainModeUi(',start);
 assert(start>=0&&end>start,'the motion lifecycle must exist');
 let now=0,sequence=0,writes=[];
@@ -79,7 +79,7 @@ function covers(selector,target){
   return true;
 }
 const styleBlocks=Array.from(source.matchAll(/<style\b[^>]*>([\s\S]*?)<\/style>/gi),m=>m[1]).join('\n');
-const styles=[['index.html',styleBlocks],['ui-system.css',css],['ui-theme.css',fs.readFileSync('ui-theme.css','utf8')]];
+const styles=[['index.html',styleBlocks],['ui-base.css',fs.readFileSync('ui-base.css','utf8')],['ui-system.css',css],['ui-theme.css',fs.readFileSync('ui-theme.css','utf8')]];
 let blurRules=0;
 for(const [file,text] of styles) for(const rule of rules(text)) if(filterValues(rule).some(value=>!/^none(?:\s*!important)?$/.test(value))){
   blurRules++;

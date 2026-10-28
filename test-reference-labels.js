@@ -1,6 +1,6 @@
 'use strict';
 const assert=require('node:assert/strict'),fs=require('node:fs'),vm=require('node:vm');
-const source=fs.readFileSync('index.html','utf8');
+const source=require("./test-fixtures/page-source.js");
 function extend(props){function Layer(url,options){this.options=options;this._map={};this.events={};this.initialize?.(url,options)}Layer.prototype=Object.assign(Object.create(this.prototype||{}),props);Layer.extend=extend;return Layer}
 const requests=[],timers=new Map();let timerID=0;
 const Base=extend.call(function(){},{initialize(url,options){this.options=options},on(name,fn){this.events[name]=fn},fire(){},createTile(c,done){const image={url:this.getTileUrl(c)};requests.push({image,done});return image}});

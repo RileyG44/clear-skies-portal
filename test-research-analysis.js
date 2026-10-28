@@ -66,7 +66,28 @@ assert.throws(()=>A.decodeResult(corrupt),/signature/);
 
 // Ordinary browser loading gets the same API without Node globals.
 const browser={globalThis:{CSPGlacialResearch:require("./glacial-research-core.js")},TextEncoder,TextDecoder};
+vm.runInNewContext(fs.readFileSync(require.resolve("./research-contract.js"),"utf8"),browser);
 vm.runInNewContext(fs.readFileSync(require.resolve("./research-analysis.js"),"utf8"),browser);
 assert.equal(typeof browser.globalThis.CSPResearchAnalysis.shouldOffload,"function");
 
 console.log("research analysis dispatcher checks passed");
+
+// The actual worker loads its declared dependencies and returns the same data
+// as Node, without needing any page globals or preloaded algorithms.
+{
+  const path=require('node:path'),root=__dirname,messages=[];
+  const worker={postMessage:message=>messages.push(message),TextEncoder,TextDecoder};
+  worker.self=worker;worker.globalThis=worker;
+  const context=vm.createContext(worker);
+  worker.importScripts=(...files)=>files.forEach(file=>vm.runInContext(fs.readFileSync(path.join(root,file),'utf8'),context,{filename:file}));
+  vm.runInContext(fs.readFileSync(path.join(root,'research-worker.js'),'utf8'),context);
+  const payload={id:7,product:'lrm',scale:'fine',grid,width,height,resolution:2};
+  worker.onmessage({data:payload});
+  assert.equal(messages[0].ok,true);assert.equal(messages[0].id,7);
+  assert.deepEqual([...messages[0].data],[...A.run(payload).data]);
+  assert.equal(require('./terrain-analysis-core.js').GEOMORPHON_CLASSES,require('./research-contract.js').GEOMORPHON_CLASSES);
+  const page={TextEncoder,TextDecoder};page.globalThis=page;
+  vm.runInNewContext(fs.readFileSync(require.resolve('./research-contract.js'),'utf8'),page);
+  assert.equal(page.CSPTerrainAnalysis,undefined);assert.equal(page.CSPResearchAnalysis,undefined);
+  assert.deepEqual([...page.CSPResearchContract.decodeResult(new Uint8Array(wire)).data],[...A.decodeResult(wire).data]);
+}

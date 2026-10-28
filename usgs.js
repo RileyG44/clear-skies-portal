@@ -15,7 +15,7 @@ const fs    = require("fs");
 const path  = require("path");
 const zlib  = require("zlib");
 const cog   = require("./cog.js");
-const terrain = require("./terrain-core.js");
+const raster = require("./terrain-raster.js");
 const cacheBudget=require("./cache-budget.js");
 let cacheWrite=()=>{},cacheWriteGate=cacheBudget.writeGate;
 function setCacheWriteGate(gate){cacheWriteGate=gate}
@@ -116,12 +116,6 @@ async function s3head(pathname){
    a wrong "Mt Baker has no coverage" answer. */
 let INDEX = null;
 let INDEX_PENDING = null;
-
-function atomicJson(file, value){
-  const tmp=`${file}.${process.pid}.${Date.now()}.tmp`;
-  try{ fs.writeFileSync(tmp,JSON.stringify(value)); fs.renameSync(tmp,file) }
-  catch(e){ try{ fs.unlinkSync(tmp) }catch(_){} }
-}
 
 function scopeList(){
   if(/^all$/i.test(SCOPE)) return [""];            // empty prefix lists the lot
@@ -224,7 +218,7 @@ async function buildIndexNow(states, force){
   });
   out.failed=failed;
   INDEX=out;
-  atomicJson(f,out);
+  try{ cacheBudget.writeJsonAtomic(f,out) }catch(e){}   // a cache: rebuilt if missing
   return out;
 }
 async function getIndex(){ return INDEX || buildIndex(null) }
@@ -265,7 +259,7 @@ function loadZones(){
        for(const k in o) ZONES.set(k, o[k]); }catch(e){}
 }
 function saveZones(){
-  atomicJson(zonesPath(),Object.fromEntries(ZONES));
+  try{ cacheBudget.writeJsonAtomic(zonesPath(),Object.fromEntries(ZONES)) }catch(e){}
 }
 
 async function resolveCellZone(proj, file, size){
@@ -674,108 +668,12 @@ async function sampleGrid(z,x,y,size,options={}){
                     key:o.key, level:o.lvl, res:+o.res.toFixed(2), cogTiles:o.tiles.size}))};
 }
 
-/* Horn's 3x3 gradient — the same estimator ArcGIS and GDAL use, so the result
-   is comparable to the 3DEP and WA DNR renders it sits beside. */
-function gradient(g,n,i,j,res){
-  const at=(r,c)=>{
-    const v=g[Math.min(n-1,Math.max(0,r))*n + Math.min(n-1,Math.max(0,c))];
-    return v===NODATA ? NaN : v;
-  };
-  const a=at(i-1,j-1), b=at(i-1,j), c=at(i-1,j+1);
-  const d=at(i,j-1),   f=at(i,j+1);
-  const gg=at(i+1,j-1),h=at(i+1,j), k=at(i+1,j+1);
-  if(a!==a||b!==b||c!==c||d!==d||f!==f||gg!==gg||h!==h||k!==k) return null;   // any NaN (no array per pixel)
-  return { dzdx:((c+2*f+k)-(a+2*d+gg))/(8*res),
-           dzdy:((gg+2*h+k)-(a+2*b+c))/(8*res) };
-}
-
-const D2R=Math.PI/180;
-/* Lighting objects are compiled once, outside the 65,536-pixel tile loop.
-   A small ambient term keeps legitimate back-slopes readable rather than
-   turning them into apparent black/no-data holes. */
-const SHADE_315=terrain.createHillshade({azimuth:315,altitude:45,ambient:0.12});
-const SHADE_MULTI=terrain.createMultidirectionalHillshade({altitude:45,ambient:0.12});
-const TINT_OF=terrain.createElevationColorizer("relief");
-const SLOPE_OF=terrain.createElevationColorizer([
-  [0,"#f2f4ee"],[5,"#b1d28b"],[15,"#f6da6f"],[30,"#f09649"],
-  [45,"#d54650"],[60,"#762c69"],[90,"#321948"]
-]);
-/* A cyclic, cardinally meaningful aspect palette: cool north, green east,
-   warm south, violet west.  Values below half a degree are displayed as
-   undefined rather than amplifying sub-accuracy DEM noise into colored speckle. */
-const ASPECT_OF=terrain.createElevationColorizer([
-  [0,"#4d78c8"],[45,"#3ba5b0"],[90,"#57a765"],[135,"#c9ad4f"],
-  [180,"#d96b52"],[225,"#c45b82"],[270,"#8d65bb"],[315,"#5e77c5"],[360,"#4d78c8"]
-]);
-const ASPECT_FLAT_GRADE=Math.tan(0.5*D2R);
-
-const CONTOUR_FT = { c2:2, c5:5, c10:10, c25:25 };
-const MIN_CONTOUR_PX = 3;     // closer than this and adjacent lines merge
-
-function renderRgba(style, S){
-  const {grid,n,size,groundRes}=S;
-  const out=Buffer.alloc(size*size*4);
-  for(let y=0;y<size;y++) for(let x=0;x<size;x++){
-    const i=y+1, j=x+1;
-    const v=grid[i*n+j];
-    const o=(y*size+x)*4;
-    if(v===NODATA){ out[o+3]=0; continue }
-    let r=0,g=0,b=0,a=255;
-
-    if(style in CONTOUR_FT){
-      const gr=gradient(grid,n,i,j,groundRes);
-      if(!gr){ out[o+3]=0; continue }
-      const ft=v*3.28084;
-      let iv=CONTOUR_FT[style];
-      const perPx=Math.hypot(gr.dzdx,gr.dzdy)*groundRes*3.28084;  // feet crossed per pixel
-      /* Thin adaptively. A 10 ft interval over 700 m of alpine relief is ~230
-         lines in one tile, which reads as mud rather than as contours. Promote
-         to the index interval where they would collide, and drop out entirely
-         where even those would — better to draw nothing than to draw a smear. */
-      if(perPx>0){
-        const spacing=iv/perPx;                       // pixels between neighbours
-        if(spacing<MIN_CONTOUR_PX){
-          if(spacing*5>=MIN_CONTOUR_PX) iv*=5;
-          else { out[o+3]=0; continue }
-        }
-      }
-      const k=ft/iv;
-      const d=Math.abs(k-Math.round(k))*iv;
-      const w=Math.max(0.35, Math.min(iv*0.5, perPx*0.7));
-      if(d>=w){ out[o+3]=0; continue }
-      const isIndex=Math.round(k)%5===0;
-      out[o]=isIndex?120:150; out[o+1]=isIndex?70:110; out[o+2]=isIndex?40:80;
-      out[o+3]=isIndex?255:200;
-      continue;
-    }
-
-    const gr=gradient(grid,n,i,j,groundRes);
-    if(!gr){ out[o+3]=0; continue }
-
-    if(style==="slope"){
-      const c=SLOPE_OF(Math.atan(Math.hypot(gr.dzdx,gr.dzdy))/D2R);
-      [r,g,b]=c;
-    }else if(style==="aspect"){
-      const asp=terrain.aspectDegrees(gr,{flatThreshold:ASPECT_FLAT_GRADE});
-      if(asp===null){ out[o+3]=0; continue }
-      const c=ASPECT_OF(asp); [r,g,b]=c;
-    }else if(style==="hsmulti"){
-      const g8=Math.round(SHADE_MULTI(gr.dzdx,gr.dzdy)*255); r=g=b=g8;
-    }else if(style==="tint"){
-      const s=SHADE_315(gr.dzdx,gr.dzdy);
-      [r,g,b]=terrain.shadeTint(TINT_OF(v),s);
-    }else{                                            // hs
-      const g8=Math.round(SHADE_315(gr.dzdx,gr.dzdy)*255); r=g=b=g8;
-    }
-    out[o]=r; out[o+1]=g; out[o+2]=b; out[o+3]=a;
-  }
-  return out;
-}
-
+/* Tiles are styled by terrain-raster.js, the renderer the browser and the 3D
+   drape use, so every surface draws the same palettes with the same math. */
 function render(style,S){
-  return encodePNG(renderRgba(style,S),S.size,S.size);
+  const rgba=raster.renderRgba(style,S);
+  return encodePNG(Buffer.from(rgba.buffer,rgba.byteOffset,rgba.byteLength),S.size,S.size);
 }
-
 /* Elevation as a picture, so the browser can threshold it without asking again.
    Terrarium encoding: (R*256 + G + B/256) - 32768, which holds a centimetre of
    precision over the whole range. The tile carries no threshold, so it caches
@@ -842,16 +740,10 @@ async function checkFresh(entries){
   return out;
 }
 
-/* ------------------------------------------------------ area download
-   Rendered tiles and the byte ranges behind them both land in the cache, so a
-   download that is stopped and restarted skips whatever already arrived —
-   resume falls out of the range cache rather than needing its own bookkeeping.
-   The manifest records each source COG's ETag, which is what makes the
-   catalogue-diff staleness check unnecessary for this source. */
-const warm = {running:false, stop:false, total:0, done:0, ok:0, skipped:0, bytes:0, label:"", error:""};
-const warmState = () => ({running:warm.running, total:warm.total, done:warm.done, ok:warm.ok,
-                          skipped:warm.skipped, bytes:warm.bytes, label:warm.label, error:warm.error});
-function stopWarm(){ warm.stop=true; return warmState() }
+/* ------------------------------------------------------ area manifests
+   engine/downloads.js fetches a 1 m area; its manifest, kept here, records
+   each source COG's ETag, which is what makes the catalogue-diff staleness
+   check unnecessary for this source. */
 
 function areasDir(){ const d=path.join(CACHE_DIR,"usgs","areas");
   try{ fs.mkdirSync(d,{recursive:true}) }catch(e){} return d }
@@ -862,19 +754,9 @@ function areaList(){
     }).filter(Boolean).sort((a,b)=>(b.created||0)-(a.created||0));
   }catch(e){ return [] }
 }
-function areaSave(a){
-  try{ fs.writeFileSync(path.join(areasDir(), a.id+".json"), JSON.stringify(a,null,1)) }catch(e){}
-}
-
-const tileRange=cacheBudget.tileRange;
-function planTiles(bbox,z0,z1){
-  const out=[];
-  for(let z=z0; z<=z1; z++){
-    const r=tileRange(bbox,z);
-    for(let x=r.x0;x<=r.x1;x++) for(let y=r.y0;y<=r.y1;y++) out.push({z,x,y});
-  }
-  return out;
-}
+/* Throws when the manifest cannot be written: without it the area is neither
+   pinned in the cache nor listed, so the download must not report success. */
+function areaSave(a){ cacheBudget.writeJsonAtomic(path.join(areasDir(),a.id+".json"),a,1) }
 
 /* Which COGs underlie an area. Derived from the bbox rather than from whatever
    the run happened to fetch — otherwise a fully-resumed download (every tile a
@@ -920,38 +802,6 @@ async function finalizeWarm(job,usedKeys,stats){
   });
 }
 
-async function startWarm(job, tileCache){
-  const bbox=job.bbox, z0=Math.max(1,job.z0|0), z1=Math.min(20,job.z1|0);
-  const style=String(job.style||"hs");
-  const tiles=planTiles(bbox,z0,z1);
-  Object.assign(warm,{running:true, stop:false, total:tiles.length, done:0, ok:0,
-                      skipped:0, bytes:0, label:`z${z0}-${z1} ${style}`, error:""});
-  const usedKeys=new Set();
-  const worker=async()=>{
-    while(tiles.length && !warm.stop){
-      const t=tiles.pop(); if(!t) break;
-      try{
-        const pre = tileCache && tileCache.get(style,t.z,t.x,t.y,cacheBudget.renderedWarmKey(style,t.z,t.x,t.y));
-        if(pre){ warm.skipped++; warm.bytes+=pre.length; }
-        else{
-          const r=await renderTile(style,t.z,t.x,t.y,256);
-          if(r){
-            warm.ok++; warm.bytes+=r.png.length;
-            r.meta.sources.forEach(sc=>usedKeys.add(sc.key));
-            if(tileCache) tileCache.put(style,t.z,t.x,t.y,r.png,cacheBudget.renderedWarmKey(style,t.z,t.x,t.y));
-          }
-        }
-      }catch(e){ warm.error=String(e.message||e) }
-      warm.done++;
-    }
-  };
-  await Promise.all(Array.from({length:4}, worker));
-  if(!warm.stop && (warm.ok||warm.skipped)){
-    await finalizeWarm(job,usedKeys,warm);
-  }
-  warm.running=false;warm.stop=false;
-}
-
 /* Re-HEAD each recorded COG and compare. A changed ETag means the tile was
    re-issued; unlike the WA DNR path this needs no catalogue diff. */
 async function areaCheck(a){
@@ -963,13 +813,9 @@ async function areaCheck(a){
   return out;
 }
 
-module.exports.warmState=warmState;
-module.exports.startWarm=startWarm;
-module.exports.stopWarm=stopWarm;
 module.exports.finalizeWarm=finalizeWarm;
 module.exports.areaList=areaList;
 module.exports.areaCheck=areaCheck;
-module.exports.planTiles=planTiles;
 module.exports.sourcesForArea=sourcesForArea;
 
 
@@ -1123,7 +969,7 @@ async function fabric(bbox, opt){
 }
 
 module.exports = Object.assign(module.exports, { init, buildIndex, getIndex, findCells, cellCandidates, addTileKey, projectCell, sampleBest, cellOf, cellBounds, projectYear, scopeList, fabric, sampleUTMGrid, elevTile,
-                   openCog, cogTile, fetchRange, renderTile, sampleGrid, utmGrid, encodePNG, renderRgba,
+                   openCog, cogTile, fetchRange, renderTile, sampleGrid, utmGrid, encodePNG,
                    checkFresh, tileKey, tileUrl, s3head, S3_BASE });
 
 module.exports.onCacheWrite=onCacheWrite;

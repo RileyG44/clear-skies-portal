@@ -179,7 +179,7 @@
 
 /* Liquid Glass palette (September 2026 preview).
  *
- * ui-system.js puts .csp-glass on <html> unless the URL carries ?ui=classic, so
+ * ui-system.js puts .csp-glass on <html> for the supported shell, so
  * the previous palette above stays one query string away for side-by-side
  * review. Values follow Apple's system colours rather than inventing new ones:
  * label/secondaryLabel inks, systemGroupedBackground surfaces, systemBlue as

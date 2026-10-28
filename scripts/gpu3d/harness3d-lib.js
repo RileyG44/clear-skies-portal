@@ -4,13 +4,11 @@
    SwiftShader/software renderers invalidate performance (reported, not hidden). */
 const fs = require('fs');
 const path = require('path');
-const http = require('http');
-const { spawn } = require('child_process');
+const {startServer}=require('../lib/test-server.js');
 const lib2d = require('../gpu2d/harness-lib.js');
 
 const REPO = path.resolve(__dirname, '..', '..');
-const CHROME_PW = '/Users/riley/.npm/_npx/31e32ef8478fbf80/node_modules/playwright';
-const WEBKIT_PW = '/Users/riley/.npm/_npx/e41f203b7505f1fb/node_modules/playwright-core';
+const {launchBrowser}=require('../lib/browser.js');
 const CHROME_ARGS = ['--use-angle=metal', '--enable-gpu', '--ignore-gpu-blocklist'];
 const CENTER = { lat: 47.858, lng: -118.33 };
 const CAMERA = { center: [CENTER.lng, CENTER.lat], zoom: 14, pitch: 58, bearing: 37 };
@@ -76,44 +74,15 @@ function fixturePng() {
   return encodePNG(b, 256, 256);
 }
 
-function portOpen(port) {
-  return new Promise((resolve) => {
-    const req = http.get({ host: '127.0.0.1', port, timeout: 1500 }, (res) => { res.resume(); resolve(res.statusCode < 500); });
-    req.on('error', () => resolve(false));
-    req.on('timeout', () => { req.destroy(); resolve(false); });
-  });
+async function spawnServer(args){
+  if(!args.spawnPort)return null;
+  return startServer({root:REPO,port:args.spawnPort,cacheDir:args.cache});
 }
-
-async function spawnServer(args) {
-  if (!args.spawnPort) return null;
-  fs.mkdirSync(args.cache, { recursive: true });
-  const child = spawn(process.execPath, [path.join(REPO, 'scripts', 'dev-server.js'), '--port', String(args.spawnPort)], {
-    cwd: REPO, env: { ...process.env, HOST: '127.0.0.1', PORT: String(args.spawnPort), CSP_CACHE_DIR: args.cache },
-    stdio: ['ignore', 'pipe', 'pipe'], detached: true
-  });
-  let log = '';
-  child.stdout.on('data', (d) => { log = (log + d).slice(-4000); });
-  child.stderr.on('data', (d) => { log = (log + d).slice(-4000); });
-  const t0 = Date.now();
-  while (Date.now() - t0 < 45000) {
-    if (child.exitCode != null) throw new Error('dev-server exited ' + child.exitCode + '\n' + log);
-    if (await portOpen(args.spawnPort)) return child;
-    await new Promise((r) => setTimeout(r, 200));
-  }
-  try { process.kill(-child.pid, 'SIGKILL'); } catch (e) {}
-  throw new Error('dev-server did not listen on ' + args.spawnPort + '\n' + log);
-}
-
-async function stopServer(child) {
-  if (!child || child.exitCode != null) return;
-  try { process.kill(-child.pid, 'SIGTERM'); } catch (e) { try { child.kill('SIGTERM'); } catch (e2) {} }
-  await new Promise((r) => setTimeout(r, 800));
-  if (child.exitCode == null) { try { process.kill(-child.pid, 'SIGKILL'); } catch (e) {} }
-}
+async function stopServer(server){await server?.stop()}
 
 async function launch(browserName) {
-  if (browserName === 'webkit') return require(WEBKIT_PW).webkit.launch({ headless: true });
-  return require(CHROME_PW).chromium.launch({ channel: 'chrome', headless: true, args: CHROME_ARGS });
+  if (browserName === 'webkit') return launchBrowser('webkit');
+  return launchBrowser('chrome',{args:CHROME_ARGS});
 }
 
 /* Installs: Worker/render counters (init script), synthetic terrain routes,
@@ -154,7 +123,7 @@ async function installFixture(context, args, png) {
   await context.route(args.origin + '**', async (route) => {
     const url = new URL(route.request().url());
     counts.total++;
-    if (url.pathname !== '/' && url.pathname !== '/index.html') return route.fallback();
+    if (url.pathname !== '/app.js') return route.fallback();
     const res = await route.fetch();
     let html = await res.text();
     const hook = 'window.CSPMarkup?.attach3d(module,map3d);';

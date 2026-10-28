@@ -1,7 +1,7 @@
 'use strict';
 const fs=require('fs'),path=require('path'),assert=require('node:assert/strict');
 const root=process.cwd(),B=process.env.B||'webkit';
-const pw=require(B==='webkit'?'/Users/riley/.npm/_npx/e41f203b7505f1fb/node_modules/playwright-core':'/Users/riley/.npm/_npx/31e32ef8478fbf80/node_modules/playwright');
+const pw=require('../lib/playwright.js');
 const {prepare}=require(path.join(root,'scripts/gpu2d/layer-browser'));
 const {encodePNG}=require(path.join(root,'usgs'));
 const {decodePng}=require(path.join(root,'scripts/gpu2d/harness-lib'));
@@ -15,7 +15,7 @@ const out=path.join(root,'output/performance-audit');fs.mkdirSync(out,{recursive
  await page.evaluate(()=>{if(!document.body.classList.contains('collapsed'))document.getElementById('sideToggle').click();ClearSkiesPortalBridge.map.invalidateSize({pan:false});});
  await page.waitForTimeout(1500);
  await page.waitForFunction(()=>ClearSkiesPortalBridge.gpuTerrain().getStore().stats().pending===0);
- report.build=await page.evaluate(()=>CSP_BUILD);report.sourceHashes=Object.fromEntries(['index.html','gpu-terrain-engine.js','gpu-terrain-layer.js','gpu-terrain-store.js'].map(p=>[p,require('crypto').createHash('sha256').update(fs.readFileSync(path.join(root,p))).digest('hex')]));
+ report.build=await page.evaluate(()=>CSP_BUILD);report.sourceHashes=Object.fromEntries(['index.html','gpu-terrain-engine.js','gpu-terrain-layer.js','gpu-terrain-store.js'].map(p=>[p,fs.readFileSync(path.join(root,p))]).concat([['app.js',require('../../site.js').appSource(root)]]).map(([p,b])=>[p,require('crypto').createHash('sha256').update(b).digest('hex')]));
  report.checks.sourceReplacement=await page.evaluate(async()=>{const g=ClearSkiesPortalBridge.gpuTerrain(),s=g.getStore(),req=s.options.request,before={coverage:g._coverage?.coverage,tiles:s.stats().tiles};s.options.request=(...a)=>new Promise(r=>setTimeout(r,1500)).then(()=>req(...a));const el=document.getElementById('terSrc');el.value='auto';el.dispatchEvent(new Event('change',{bubbles:true}));await new Promise(r=>setTimeout(r,250));const during={coverage:g._coverage?.coverage,pixelCoverage:(await g.getEngine().readProvenance(g._view)).coverage,tiles:s.stats().tiles};await new Promise(r=>setTimeout(r,2400));s.options.request=req;return {before,during,after:{coverage:g._coverage?.coverage,tiles:s.stats().tiles},fixture:'1500ms request-adapter delay on source replacement'};});
  assert(report.checks.sourceReplacement.during.pixelCoverage>=.98,'source refresh erased valid terrain');
  report.checks.duplicateRenders=await page.evaluate(async()=>{

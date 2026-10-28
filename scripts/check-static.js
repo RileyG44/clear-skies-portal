@@ -8,10 +8,38 @@ const vm = require("vm");
 const root = path.resolve(__dirname,"..");
 const read = name => fs.readFileSync(path.join(root,name),"utf8");
 
-const index = read("index.html");
-const inline = [...index.matchAll(/<script(?![^>]*\bsrc=)[^>]*>([\s\S]*?)<\/script>/gi)];
-assert(inline.length>=2,"expected Leaflet and application inline scripts");
+const page = read("index.html");
+const appScript = require("../site.js").appSource(root);
+/* Most checks below read the page as it once was: markup, base styles and app. */
+const index = [page,read("ui-base.css"),appScript].join("\n");
+const inline = [...page.matchAll(/<script(?![^>]*\bsrc=)[^>]*>([\s\S]*?)<\/script>/gi)];
+assert(inline.length>=2,"expected the startup and Leaflet-patch inline scripts");
 inline.forEach((match,i)=>new vm.Script(match[1],{filename:`index.html#inline-${i+1}`}));
+new vm.Script(appScript,{filename:"app.js"});
+
+/* site.json is the one list of shipped files; every consumer reads it, so the
+   checks are that it is complete, exists and parses. */
+{
+  const site=JSON.parse(read("site.json"));
+  const all=[...site.web,...site.vendor,...site.engine];
+  assert.equal(new Set(all).size,all.length,"site.json lists a file twice");
+  for(const file of all) assert(fs.existsSync(path.join(root,file)),`site.json lists a missing file: ${file}`);
+  const served=new Set([...site.web,"app.js",...site.vendor]);
+  for(const file of site.app) assert(fs.existsSync(path.join(root,file)),`site.json lists a missing app file: ${file}`);
+  for(const [,url] of page.matchAll(/<(?:script|link)\b[^>]*\b(?:src|href)="(?![a-z]+:|\/\/|[?#])([^"?#]+)/g))
+    assert(served.has(url),`index.html loads ${url}, which site.json does not ship`);
+  const icons=fs.readdirSync(path.join(root,"vendor","icons")).map(f=>`vendor/icons/${f}`);
+  assert.deepEqual(icons.filter(f=>!served.has(f)),[],"every vendored icon must be served and precached");
+  for(const source of [index,read("ui-system.js"),read("markup.js"),read("lidar-studio.js")])
+    for(const [,name] of source.matchAll(/\bicon\("([a-z0-9-]+)"\)|vendor\/icons\/([a-z0-9-]+)\.svg/g))
+      if(name) assert(served.has(`vendor/icons/${name}.svg`),`icon ${name} is not vendored`);
+  for(const file of [...site.web,...site.engine].filter(f=>/\.m?js$/.test(f)).concat(["electron/main.js","electron/preload.js","dnr-raster-source.mjs"])){
+    const check=require("child_process").spawnSync(process.execPath,["--check",path.join(root,file)],{encoding:"utf8"});
+    assert.equal(check.status,0,`${file} has a syntax error:\n${check.stderr}`);
+  }
+  for(const icon of JSON.parse(read("manifest.json")).icons||[])
+    assert(served.has(icon.src),`manifest icon ${icon.src} is not shipped`);
+}
 
 // Exercise the STAC normalizer as JavaScript, not just as parsed source. This
 // catches accidental cross-function locals (for example nativeMax) that only
@@ -54,14 +82,10 @@ new vm.Script(read("terrain-raster.js"),{filename:"terrain-raster.js"});
 for(const asset of ["terrain-drape-core.js","terrain-drape-pool.js","terrain-drape-worker.js",
                     "gpu-terrain-shaders.js","gpu-terrain-store.js","gpu-terrain-engine.js","gpu-terrain-layer.js","gpu-terrain-3d-cache.js","gpu-terrain-3d-renderer.js","gpu-terrain-3d-layer.js"]){
   new vm.Script(read(asset),{filename:asset});
-  for(const file of ["server.js","sw.js","package.json",".github/workflows/ci.yml","scripts/minify-site.js","scripts/install-mac-service.sh"])
-    assert(read(file).includes(asset),`${file} must ship ${asset}`);
 }
 
 new vm.Script(read("markup-3d.js"),{filename:"markup-3d.js"});
 assert(index.indexOf('<script src="markup-3d.js?build=')<index.indexOf('<script src="markup.js?build='),"world renderer loads before markup tools");
-for(const file of ["server.js","sw.js","package.json",".github/workflows/ci.yml","scripts/minify-site.js","scripts/install-mac-service.sh"])
-  assert(read(file).includes("markup-3d.js"),`${file} must ship markup-3d.js`);
 
 new vm.Script(read("elevation-bands.js"),{filename:"elevation-bands.js"});
 new vm.Script(read("elevation-tile-core.js"),{filename:"elevation-tile-core.js"});
@@ -108,13 +132,6 @@ assert(index.includes(`<link rel="stylesheet" href="ui-theme.css?build=${version
 assert(index.includes(`<link rel="stylesheet" href="ui-system.css?build=${versionSandbox.CSP_BUILD}">`)&&
        index.includes(`<script src="ui-system.js?build=${versionSandbox.CSP_BUILD}"></script>`),
        "the task-oriented interface assets must share the deployed build version");
-assert(read("sw.js").includes('"./ui-system.css"')&&read("sw.js").includes('"./ui-system.js"'),
-       "the task-oriented interface must be available in the offline shell");
-const deploymentWorkflow=read(".github/workflows/ci.yml");
-const pagesCopy=deploymentWorkflow.split("\n").find(line=>line.includes("cp index.html"))||"";
-for(const asset of ["ui-theme.css","ui-system.css","ui-system.js"])
-  assert(pagesCopy.split(/\s+/).includes(asset),
-         `the GitHub Pages artifact must include ${asset}`);
 assert(uiSystem.includes('pane.classList.toggle("csp-route-hidden"')&&
        uiStyles.includes(".pane.csp-route-hidden"),
        "route membership must use an independent gate that legacy pane visibility cannot overwrite");
@@ -134,15 +151,14 @@ assert(index.includes(`<script src="terrain-core.js?build=${versionSandbox.CSP_B
 assert(index.includes(`<script src="elevation-bands.js?build=${versionSandbox.CSP_BUILD}"></script>`),"index must load the tested elevation-band core");
 assert(index.includes(`<script src="elevation-tile-core.js?build=${versionSandbox.CSP_BUILD}"></script>`),"index must decode packed elevation before resampling");
 assert(index.includes(`<script src="public-terrain.js?build=${versionSandbox.CSP_BUILD}"></script>`),"index must load the public terrain source registry");
-for(const asset of ["public-terrain.js","public-terrain-worker.js"])
-  assert(fs.existsSync(path.join(root,asset)),`public terrain asset is missing: ${asset}`);
-for(const asset of ["LercDecode.js","LercDecode.es.js","lerc-wasm.wasm"])
-  assert(fs.existsSync(path.join(root,"vendor","lerc",asset)),`LERC decoder asset is missing: ${asset}`);
-assert(read("sw.js").includes('"./public-terrain-worker.js"'),"the offline shell must cache the public terrain worker");
-assert(deploymentWorkflow.includes("public-terrain.js public-terrain-worker.js"),"GitHub Pages must ship the public terrain assets");
 assert(index.includes(`<script src="wa-archaeology.js?build=${versionSandbox.CSP_BUILD}"></script>`),"index must load the public-safe archaeology index");
-assert(index.includes(`<script src="glacial-research-core.js?build=${versionSandbox.CSP_BUILD}"></script>`),"index must load geomorphology primitives");
-assert(index.includes(`<script src="research-analysis.js?build=${versionSandbox.CSP_BUILD}"></script>`),"index must load the shared analysis dispatcher");
+/* The page only dispatches analysis; the glacial algorithms run in the worker
+   (and on the engine), so they ship for it but are not page scripts. */
+for(const file of ["glacial-research-core.js","glacial-segment-core.js","glacial-segment-features.js","glacial-moraine-classifier.js",
+                   "glacial-zone-core.js","glacial-zone-features.js","glacial-belt-classifier.js","glacial-moraine-analysis.js",
+                   "terrain-analysis-core.js","research-analysis.js"])
+  assert(read("research-worker.js").includes(`"./${file}"`)&&!page.includes(`src="${file}`),`${file} belongs to the analysis worker, not the page`);
+assert(index.includes(`<script src="research-contract.js?build=${versionSandbox.CSP_BUILD}"></script>`),"index must load the lightweight analysis contract");
 assert(read("sw.js").includes(`const CSP_BUILD = "${versionSandbox.CSP_BUILD}";`),
        "service worker cache namespace must use the page build version");
 /* Shipping a fix is not the same as anyone receiving it. Same-origin assets are
@@ -196,8 +212,6 @@ assert(index.includes('id="buildDiag"'),"the geometry readout must be reachable 
      neither inherit colour nor be filtered without inverting its box too. */
   assert(uiCss.includes("background-image:var(--ui-check-glyph)"),
     "the checked tick must be themed, or it is white on a white box in dark");
-  for(const file of ["sw.js","server.js",".github/workflows/ci.yml"])
-    assert(read(file).includes("ui-theme.css"),`${file} must ship the palette`);
 
   /* An inverted surface cannot take the page's ink. The map's coordinate
      tooltip was --ui-tooltip filled and --ui-text lettered, which is two
@@ -278,9 +292,6 @@ assert(index.includes('id="buildDiag"'),"the geometry readout must be reachable 
     assert(new RegExp(`:is\\([^)]*${selector.replace(/[.#]/g,m=>"\\"+m)}[^)]*\\)\\{[^}]*background-color:var\\(--lg-popover\\)`).test(ui),
       `${selector} must use the frosted Liquid Glass material`);
   assert(read("ui-system.js").includes('"Search":long'),"the placeholder must shorten in a narrow field instead of clipping");
-  assert(fs.existsSync(path.join(root,"vendor","fonts","inter-latin-wght-normal.woff2")),"the Inter fallback face must be vendored");
-  assert(read("sw.js").includes("./vendor/fonts/inter-latin-wght-normal.woff2"),"the fallback face must be in the offline shell");
-  assert(read("scripts/install-mac-service.sh").includes("lerc icons fonts"),"the installed engine must carry the fonts");
 }
 
 /* Redesign shell. Every width rule under .csp-redesign carries !important, so
@@ -348,8 +359,6 @@ assert(read(".gitignore").includes("\nmarkup/"),"markup layers are the user's fi
   assert(!/indexedDB|\bidb\./.test(markup),"markup layers are kept only by the running terrain engine, never in the browser");
   assert(!markup.includes("`Markup ${"),"the site never makes a markup layer of its own; people name the layers they make");
   assert(markup.includes("visible:view.on===true"),"markup layers stay off until turned on on this device"); }
-for(const file of ["server.js","sw.js","package.json",".github/workflows/ci.yml","scripts/minify-site.js"])
-  assert(read(file).includes("markup.js"),`${file} must ship markup.js`);
 /* The elevation spectrum and highlights drape in 3D, over any terrain or
    lidar layer or on their own, coloured by the same function as 2D. */
 assert(index.includes('module.addProtocol("cspelev"')&&index.includes('function elevationColours(')&&
@@ -358,8 +367,6 @@ assert(index.includes('module.addProtocol("cspelev"')&&index.includes('function 
        "the elevation spectrum must render in 3D from the shared 2D colouring, with or without a terrain layer");
 assert(index.includes('noFinerDetail=!map3d&&scale>8'),
        "scales past 8x are offered only where a source has finer tiles");
-for(const file of ["server.js","sw.js","package.json",".github/workflows/ci.yml","scripts/minify-site.js"])
-  assert(read(file).includes("png-stream.js"),`${file} must ship the PNG encoder`);
 assert(!/"#snapshot"\)\)\s*\$\("#snapshot"\)\.onclick/.test(fs.readFileSync(path.join(root,"ui-system.js"),"utf8")),
        "the redesign must not re-route the camera button away from the map selection");
 assert(index.includes('touchShare=matchMedia("(pointer: coarse)").matches')&&
@@ -430,8 +437,6 @@ assert(index.includes('new ElevLayer({...elevationSourceOptions()'),
 assert(!index.includes('elevRawLayer'),"elevation spectrum must not double-paint national and raw colour tiles");
 assert(index.includes('new CSPTilePipeline.ProgressiveGrid')&&index.includes('new CSPTilePipeline.RequestPool'),
        "terrain consumers must share the tested request and refinement pipeline");
-for(const file of ["server.js","sw.js","package.json",".github/workflows/ci.yml"])
-  assert(read(file).includes("tile-pipeline.js"),`${file} must ship the shared pipeline`);
 assert(index.includes('fallbackNativeZoom:15'),"browser elevation fallback must stretch its last native tile");
 assert(index.includes('const VIEW_MAX=28'),"the map must support deep visual overzoom");
 assert(index.includes('rotate:true,dragRotate:true,touchRotate:true')&&index.includes('id="bearingReset"'),
@@ -673,7 +678,7 @@ assert(index.includes('function inputPercent(id,fallback)')&&
 assert(index.includes('(0.15+0.85*t)'),"neutral elevation shading must not darken the whole basemap");
 assert(index.includes('class ElevationGpuRenderer'),"elevation recolouring must use the shared WebGL2 renderer");
 assert(index.includes('elevation-tiles-prod/terrarium'),"elevation must have a browser-direct national fallback");
-assert(index.includes('CSPResearchAnalysis.shouldOffload({connected:PROXY'),
+assert(index.includes('CSPResearchContract.shouldOffload({connected:PROXY'),
        "large and mobile research rasters must prefer the connected M2 engine");
 assert(index.includes('return {...await runResearchWorker(payload),engine:"browser worker fallback"}'),
        "M2 analysis failure must retain an automatic browser-worker fallback");
@@ -727,7 +732,7 @@ assert.match(index,/id:"waarchaeology"[\s\S]{0,420}CSPWaArchaeology\?\.featureCo
 assert(index.includes('p.precision==="estimated"')&&read("wa-archaeology.js").includes('"Estimated research waypoint"'),
        "archaeology markers must visually and textually distinguish estimated locations");
 assert(index.includes('id="coordCopy"')&&index.includes('id="coordOpen"')&&
-       index.includes("https://www.google.com/maps/search/?api=1")&&index.includes("https://earth.google.com/web/search/"),
+       read("location-search.js").includes("https://www.google.com/maps/search/?api=1")&&read("location-search.js").includes("https://earth.google.com/web/search/"),
        "the search row must copy a selected coordinate and offer cross-platform Google Maps and Earth links");
 {
   const menu=index.slice(index.indexOf("menuEl.innerHTML="),index.indexOf("menuEl.style.display=\"block\""));
@@ -762,7 +767,13 @@ vm.runInNewContext(`${namedFunction(index,"elevRampRgb")}; center=elevRampRgb(50
 assert.deepEqual(Array.from(elevSandbox.center),[255,255,250],"reference elevation must be white");
 assert(elevSandbox.lower[0]>elevSandbox.lower[2],"lower elevations must trend red");
 assert(elevSandbox.upper[2]>elevSandbox.upper[0],"higher elevations must trend blue");
-const server=read("server.js");
+/* The engine: server.js wires together the route modules in engine/. */
+const engineFiles=["server.js",...fs.readdirSync(path.join(root,"engine")).map(f=>"engine/"+f)];
+const server=engineFiles.map(read).join("\n");
+/* Node also has a global Web Crypto `crypto` without randomBytes/createHash,
+   so a module that forgets the require still loads and fails only when used. */
+for(const file of engineFiles)
+  assert(!/\bcrypto\.(randomBytes|createHash)/.test(read(file))||/require\("crypto"\)/.test(read(file)),`${file} must require("crypto") itself`);
 assert(server.includes('if(z>=13) try{ raw=await terrainTask'),"raw lidar elevation must be reserved for useful close zooms");
 assert(server.includes('const TERRAIN_RENDER_VERSION = "terrain-v3"')&&index.includes("?rv=terrain-v3&${RAW_COVERAGE_QUERY}`"),
        "corrected terrain renders must use a new server-cache namespace");
@@ -772,7 +783,7 @@ assert(server.includes('function slot(signal,host)')&&server.includes('line.queu
        "abandoned viewport requests must leave the upstream concurrency queue immediately");
 assert(server.includes('"X-CSP-Error":"upstream"'),
        "transient tile failures must remain retryable without noisy broken-image responses");
-assert(server.includes('p==="/api/terrain/analyze"&&req.method==="POST"')&&server.includes('transferList:[grid.buffer]'),
+assert(server.includes('"/api/terrain/analyze":async')&&server.includes('POST_ONLY=new Set(["/api/terrain/analyze"')&&server.includes('transferList:[grid.buffer]'),
        "viewport DEM analysis must be validated and transferred off the Node event loop");
 assert(server.includes('"gis.dnr.wa.gov"'),
        "the screenshot image proxy must allow the exact WGS raster host used by research overlays");
@@ -780,10 +791,6 @@ assert(server.includes('"earthquake.usgs.gov"')&&server.includes('"tiles.arcgis.
        "the snapshot helper must allow only the exact new USGS raster hosts");
 assert(server.includes("const TTL_SNOW   = 2*3600*1000"),
        "the M2 snow cache must not hide most of NOAA's four daily updates");
-for(const asset of ["mosaic-core.js","terrain-core.js","terrain-raster.js","elevation-bands.js","elevation-tile-core.js","wa-archaeology.js",
-                    "glacial-research-core.js","terrain-analysis-core.js","research-analysis.js","research-worker.js","maxar-catalog.json",
-                    "lidar-render.js","lidar-studio.js","analysis-layers.js"])
-  assert(read(".github/workflows/ci.yml").includes(asset),`Pages artifact must include ${asset}`);
 
 /* Global imagery. The portal shipped without any: cartographic basemaps plus a
    US-only high-resolution tier, so everywhere abroad fell back to grey tiles. */
@@ -809,38 +816,12 @@ assert(index.includes("o.nonCommercial?")&&index.includes('.ovrow .nc{'),
        "a non-commercial layer must carry its restriction on the row that switches it on");
 assert(index.includes('fetch("./maxar-catalog.json"'),
        "the VHR coverage index must ship with the app rather than crawl S3 per visitor");
-assert(read("package.json").includes("test-maxar-catalog.js"),
-       "the shipped VHR coverage index must be covered by the test suite");
 assert(read("package.json").includes("sync-maxar-catalog.js"),
        "the VHR coverage index must be regenerable from a documented script");
-/* A shipped runtime file has to be listed in three unrelated places - the Pages
-   artifact, the service worker precache, and the engine's own static allowlist.
-   Missing the last one served a 404 only when the browser asked for it. */
-for(const [file,label] of [["server.js","the local engine"],["sw.js","the service worker"]])
-  assert(read(file).includes("maxar-catalog.json"),
-         `${label} must serve the VHR coverage index`);
-/* NADI-1 ice margins ship as one bundled file; like the VHR index it has to be
-   in the Pages artifact, the precache, the engine allowlist and the installer. */
 assert(index.includes('id:"nadi1ice"')&&index.includes('geojson:"./nadi1-cordilleran.json"'),
        "the NADI-1 ice-margin overlay must load its bundled slices");
 assert(index.includes("ovSliceData(o,result.data)")&&index.includes('id="ovTime_${o.id}"'),
        "a time-sliced overlay must draw one slice and expose its slider");
-for(const file of [".github/workflows/ci.yml","sw.js","server.js","scripts/install-mac-service.sh","scripts/minify-site.js"])
-  assert(read(file).includes("nadi1-cordilleran.json"),`${file} must ship the NADI-1 ice-margin slices`);
-/* The LiDAR colour studio loads from index.html, so every runtime that
-   serves the page has to carry it. */
-for(const file of ["server.js","sw.js","package.json","scripts/install-mac-service.sh","scripts/minify-site.js"])
-  for(const asset of ["lidar-render.js","lidar-studio.js","analysis-layers.js"])
-    assert(read(file).includes(asset),`${file} must ship ${asset}`);
-/* Server-only cache logic must ship with both runtime distributions without
-   becoming a browser asset or a service-worker precache entry. */
-for(const file of ["package.json","scripts/install-mac-service.sh"])
-  assert(read(file).includes("cache-budget.js"),`${file} must ship the cache budget`);
-assert(!read("sw.js").includes("cache-budget.js"),"cache budget is server-only");
-const installer=read("scripts/install-mac-service.sh");
-for(const asset of ["terrain-core.js","terrain-raster.js","elevation-bands.js","elevation-tile-core.js","wa-archaeology.js",
-                    "glacial-research-core.js","terrain-analysis-core.js","research-analysis.js","research-worker.js"])
-  assert(installer.includes(asset),`installed M2 runtime must include ${asset}`);
 for(const script of ["scripts/launch-terrain-engine.sh","scripts/install-mac-service.sh"]){
   const source=read(script);
   assert.match(source,/127\.0\.0\.1/,`${script} must keep the engine loopback-only`);
@@ -849,21 +830,16 @@ const launchAgent=read("scripts/com.rileyg44.clear-skies-portal.plist");
 assert(launchAgent.includes('<key>CSP_TERRAIN_WORKERS</key>')&&launchAgent.includes('<string>6</string>'),
        "the dedicated M2 service must run six terrain workers");
 assert(launchAgent.includes('<string>Interactive</string>'),"the dedicated terrain service must receive interactive scheduling");
-assert(read("server.js").includes("cacheDisk:cacheDiskStats()"),"health must expose cache disk safety");
+assert(server.includes("cacheDisk:tileCache.cacheDiskStats()"),"health must expose cache disk safety");
 const watchdog=read("scripts/launch-terrain-engine.sh");
 assert(watchdog.includes("MAX_HEALTH_MISSES"),"watchdog must restart an unresponsive HTTP coordinator");
 assert(!watchdog.includes("engine_busy"),"high CPU must not conceal a dead HTTP coordinator");
-for(const file of ["terrain-pool.js","terrain-worker.js"])
-  assert(fs.existsSync(path.join(root,file)),`missing terrain runtime: ${file}`);
 
-const manifest=JSON.parse(read("manifest.json"));
 const sources=JSON.parse(read("sources.json"));
 const pkg=JSON.parse(read("package.json"));
 assert(Array.isArray(sources.sources)&&sources.sources.length>0,"sources.json needs active sources");
 assert.equal(pkg.dependencies["maplibre-gl"],"^6.6.0","3D terrain must pin the reviewed MapLibre major/minor");
 assert.equal(pkg.dependencies["@tomickigrzegorz/leaflet-rotate"],"^0.2.4","2D rotation must use the reviewed MIT plugin");
-for(const asset of ["maplibre-gl.mjs","maplibre-gl-shared.mjs","maplibre-gl-worker.mjs","maplibre-gl.css","leaflet-rotate.umd.min.js"])
-  assert(fs.existsSync(path.join(root,"vendor",asset)),`missing vendored renderer asset: ${asset}`);
 /* The sun controls do nothing for derived styles, and nothing for the published
    WA DNR hillshade that "best available" silently switches to past z13 over
    Washington. Both used to fail in silence: the slider moved, the readout
@@ -904,9 +880,9 @@ assert(index.includes('id="pointCloudPanel"')&&index.includes('id="terModePoints
   assert(entries.length>20,"overlay registry did not parse");
   const groups=entries.map(entry=>entry.match(/group:"([^"]+)"/)?.[1]);
   assert(groups.every(Boolean),"every overlay must sit in a group; none may float above the first heading");
-  const declared=index.match(/const OVERLAY_GROUPS=\[([^\]]+)\]/);
+  const declared=index.match(/const OVERLAY_GROUP_ROUTES=\{([^}]+)\}/);
   assert(declared,"the overlay group order must be declared, not left to registry order");
-  const names=[...declared[1].matchAll(/"([^"]+)"/g)].map(m=>m[1]);
+  const names=[...declared[1].matchAll(/"([^"]+)":/g)].map(m=>m[1]);
   for(const group of new Set(groups))
     assert(names.includes(group),`overlay group ${group} is not in the declared order`);
   const counts={};
@@ -922,8 +898,6 @@ for(const asset of ["build/potree/potree.js","build/potree/workers/EptLaszipDeco
   assert(fs.existsSync(path.join(root,"vendor","potree",asset)),`missing vendored Potree asset: ${asset}`);
 const pointCatalog=JSON.parse(read("point-cloud-catalog.json"));
 assert.equal(pointCatalog.projects.length,30,"Washington point-cloud catalog must contain 30 projects");
-for(const icon of manifest.icons||[])
-  assert(fs.existsSync(path.join(root,icon.src)),`missing manifest icon: ${icon.src}`);
 
 /* MapLibre 6's jumpTo samples terrain at the fractional zoom it is given, which
    names no tile and reads 0 - the camera sank underground mid-zoom and the 3D

@@ -3,7 +3,7 @@ const assert=require("node:assert/strict");
 const Layer=require("./gpu-terrain-3d-layer.js"),Cache=require("./gpu-terrain-3d-cache.js");
 // A spectrum debounce queued before GPU activation must not restore CPU URLs.
 {
-  const fs=require("node:fs"),vm=require("node:vm"),html=fs.readFileSync(require.resolve("./index.html"),"utf8");
+  const fs=require("node:fs"),vm=require("node:vm"),html=require("./test-fixtures/page-source.js");
   const fn=html.slice(html.indexOf("function sync3dSpectrum(){"),html.indexOf("/* Numbers for what an aspect map"));
   let callback,writes=0,cleared=0,deferred=0,paint=false;
   const env={elev3dTimer:0,gpu3d:null,map3dBuiltKey:"same",map3dStructureKey:()=>"same",

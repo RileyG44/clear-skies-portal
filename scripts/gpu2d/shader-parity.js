@@ -16,7 +16,7 @@
  *
  * Browsers (real GPUs; chrome-headless-shell is software, do not use):
  *   Chrome+Metal and WebKit via the Playwright installs named in the spec.
- * Override the module paths with CSP_PW_CHROME / CSP_PW_WEBKIT if needed.
+ * Playwright comes from scripts/lib/playwright.js.
  */
 const shaders = require("../../gpu-terrain-shaders.js");
 const terrainCore = require("../../terrain-core.js");
@@ -27,10 +27,6 @@ const elevationBands = require("../../elevation-bands.js");
 const W = 256, H = 256;
 const GROUND_RES = 1.5;
 const LIGHTING = { azimuth: 315, altitude: 45, ambient: 0.12 };
-const CHROME_MODULE = process.env.CSP_PW_CHROME ||
-  "/Users/riley/.npm/_npx/31e32ef8478fbf80/node_modules/playwright";
-const WEBKIT_MODULE = process.env.CSP_PW_WEBKIT ||
-  "/Users/riley/.npm/_npx/e41f203b7505f1fb/node_modules/playwright-core";
 
 /* ---------------- fixture ---------------- */
 
@@ -215,8 +211,7 @@ function resampleBytes(bytes, bearingDeg) {
  * discrete pipeline reproduces the same ~19% of aspect pixels over
  * 3/255), so rotation plumbing is validated exactly here instead:
  * same rotated field, same Sobel, shaders.rotateGradient, CPU colours. */
-const ASPECT_STOPS = [[0, "#4d78c8"], [45, "#3ba5b0"], [90, "#57a765"], [135, "#c9ad4f"],
-  [180, "#d96b52"], [225, "#c45b82"], [270, "#8d65bb"], [315, "#5e77c5"], [360, "#4d78c8"]]
+const ASPECT_STOPS = raster.ASPECT_STOPS
   .map(([v, hex]) => [v, [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16))]);
 
 function simulateRotated(style, gridRot, bearing) {
@@ -468,12 +463,12 @@ async function runBrowser(kind, launch) {
   const which = process.argv[2] || "both";
   const all = [];
   if (which === "chrome" || which === "both") {
-    const pw = require(CHROME_MODULE);
+    const pw = require('../lib/playwright.js');
     all.push(...await runBrowser("chrome-metal", () =>
       pw.chromium.launch({ channel: "chrome", headless: true, args: ["--use-angle=metal", "--enable-gpu", "--ignore-gpu-blocklist"] })));
   }
   if (which === "webkit" || which === "both") {
-    const pw = require(WEBKIT_MODULE);
+    const pw = require('../lib/playwright.js');
     all.push(...await runBrowser("webkit", () => pw.webkit.launch()));
   }
   let failures = 0;

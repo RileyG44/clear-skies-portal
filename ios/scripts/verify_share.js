@@ -2,7 +2,7 @@
    fixture selected so Apple's share sheet can be verified with a real tap.
    The raster is synthetic verification data, not a scientific reference. */
 return (async () => {
-  const B = window.ClearSkiesPortalBridge, C = window.CSPShareCodec, R = window.CSPLidarRender;
+  const B = window.ClearSkiesPortalBridge, C = window.CSPShareState, R = window.CSPLidarRender;
   const failures = [], reports = [], originalAlert = window.alert;
   const canonical = value => !value || typeof value !== "object" ? value : Array.isArray(value)
     ? value.map(canonical) : Object.fromEntries(Object.keys(value).sort().map(key => [key, canonical(value[key])]));
@@ -31,7 +31,12 @@ return (async () => {
     const grid = Float32Array.from({length:width*height}, (_,i) =>
       150 + .3 * (i%width-12)**2 + .04 * (Math.floor(i/width)-10));
     grid[3] = NaN;
-    const result = CSPResearchAnalysis.run({product:"curvature",scale:"fine",grid,width,height,resolution:2});
+    // The page runs analysis in research-worker.js, so the fixture does too.
+    const result = await new Promise((resolve, reject) => {
+      const worker = new Worker("research-worker.js");
+      worker.onmessage = ({data:{id, ok, error, ...output}}) => { worker.terminate(); ok ? resolve(output) : reject(Error(error)); };
+      worker.postMessage({id:1, product:"curvature", scale:"fine", grid:grid.slice(), width, height, resolution:2});
+    });
     const bounds = [-117.405,47.655,-117.395,47.665];
     state.research = {live:false,layers:[{id:"a101",product:"curvature",params:{scale:"fine"},
       style:{palette:"standard",blend:"multiply",opacity:.64,relief:0,reverse:true,visible:true},

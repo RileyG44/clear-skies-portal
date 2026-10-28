@@ -11,11 +11,8 @@
      node server.js &
      node scripts/ui-snapshot.js [http://127.0.0.1:8765/]
 
-   Needs Playwright (npm i --no-save playwright && npx playwright install
-   chromium); it is deliberately not a dependency of the app. */
-let chromium;
-try { ({ chromium } = require(process.env.PLAYWRIGHT_MODULE || 'playwright')); }
-catch { console.error('ui-snapshot needs Playwright: npm i --no-save playwright && npx playwright install chromium'); process.exit(2); }
+   Uses the installed Chrome through scripts/lib/browser.js; see docs/TESTING.md. */
+const {launchUIBrowser}=require('./lib/browser.js');
 const fs = require('fs'), path = require('path');
 const { encodePNG } = require(path.join(__dirname, '..', 'usgs.js'));
 const base = process.argv[2] || 'http://127.0.0.1:8765/';
@@ -39,7 +36,7 @@ function patternTile(z, x, y, label) {
 const pngSize = buf => ({ w: buf.readUInt32BE(16), h: buf.readUInt32BE(20) });
 
 (async () => {
-  const browser = await chromium.launch();
+  const browser = await launchUIBrowser();
   const results = []; const ok = (name, cond, info = '') => results.push(`${cond ? 'ok  ' : 'FAIL'} ${name}${info ? '  ' + info : ''}`);
   const errs = [];
   for (const bearing of [0, 30]) {

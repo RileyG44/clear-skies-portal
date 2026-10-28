@@ -3,7 +3,7 @@
 // Existing GPU_2D_TERRAIN_SPEC §9 real-browser workflow, with no live requests.
 const fs = require('node:fs'), path = require('node:path');
 const root = path.resolve(__dirname, '../..'), fixture = require('./capture-fixture.js');
-const html = fs.readFileSync(path.join(root, 'index.html'), 'utf8');
+const html = require('../../test-fixtures/page-source.js');
 const section = (start, end) => {
   const from = html.indexOf(start), to = html.indexOf(end, from);
   if (from < 0 || to < 0) throw Error(`Missing production compositor: ${start}`);
@@ -24,9 +24,9 @@ if (option('device-probe')) {
   process.exit(0);
 }
 const launchers = {
-  chrome: () => require('/Users/riley/.npm/_npx/31e32ef8478fbf80/node_modules/playwright').chromium.launch({ channel: 'chrome', headless: true,
+  chrome: () => require('../lib/playwright.js').chromium.launch({ channel: 'chrome', headless: true,
     args: ['--use-angle=metal', '--enable-gpu', '--ignore-gpu-blocklist'] }),
-  webkit: () => require('/Users/riley/.npm/_npx/e41f203b7505f1fb/node_modules/playwright-core').webkit.launch()
+  webkit: () => require('../lib/playwright.js').webkit.launch()
 };
 (async () => {
   const browsers = {}, choice = option('browser') || 'both';

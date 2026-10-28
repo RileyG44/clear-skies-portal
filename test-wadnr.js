@@ -123,7 +123,7 @@ async function rasterChecks(){
   return {record,z,x,y,cacheDir:path.join(root,"raster")};
 }
 function sourceChoiceChecks(){
-  const html=fs.readFileSync(path.join(__dirname,"index.html"),"utf8");
+  const html=require("./test-fixtures/page-source.js");
   assert(!/<option value="wadnr/.test(html),"WA DNR is an explicit area fetch, never a source dropdown default");
   assert(html.includes('id="dnrSelect"')&&html.includes('id="dnrFetch"'),"terrain panel offers select-and-fetch for WA DNR areas");
   const fn=html.slice(html.indexOf("function chooseTerrain(style){"),html.indexOf("/* Presentation is independent",html.indexOf("function chooseTerrain(style){")));

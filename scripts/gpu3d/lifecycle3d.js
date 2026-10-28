@@ -163,13 +163,6 @@ async function capture(page, filename) {
   return shot;
 }
 
-function stageDetails(gpu, extra) {
-  return {
-    gpu: gpu ? { present: gpu.present, dataset: gpu.dataset, callError: gpu.callError, stats: gpu.stats } : null,
-    ...extra
-  };
-}
-
 async function desktopLifecycle(page, counts) {
   let entered;
   await addTest('desktop', '1. enter 3D and validate enabled controller', async () => {

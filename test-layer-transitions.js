@@ -1,6 +1,6 @@
 'use strict';
 const fs=require('node:fs'),vm=require('node:vm'),assert=require('node:assert/strict');
-const html=fs.readFileSync(require.resolve('./index.html'),'utf8');
+const html=require("./test-fixtures/page-source.js");
 class Canvas{}
 class Layer{
   constructor(content=true){this.options={opacity:.7};this.opacity=.7;this.handlers=new Map();this._tiles={a:{loaded:1,current:true,el:Object.assign(new Canvas(),{_cspHasContent:content})}};}
@@ -51,7 +51,7 @@ async function main(){
     MOSAIC_ON:true,MOSAIC_ONCE:true,mosToken:5,mosAbort:mosaicController,
     mosTimer:context.setTimeout(()=>{throw Error('removed mosaic timer ran');}),
     clearTimeout:context.clearTimeout,syncChecks:()=>{},hideMenu:()=>{},hideSceneControls:()=>{},
-    render:()=>{},document:{dispatchEvent:()=>{}},CustomEvent:class{},
+    render:()=>{},announceLayers:()=>{},
     cspInput:()=>{throw Error('Off must remove the scene, not change its opacity');}
   };
   vm.createContext(scene);

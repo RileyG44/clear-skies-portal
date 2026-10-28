@@ -8,7 +8,7 @@ async function rejectsCode(promise,code){
 }
 
 async function main(){
-  const workerFile=path.join(__dirname,"test-terrain-worker-fixture.js");
+  const workerFile=path.join(__dirname,"test-fixtures","terrain-worker.js");
   const pool=new TerrainPool({cacheDir:__dirname,size:1,maxQueue:8,workerFile});
   try{
     const blocker=pool.run("delay",{ms:60,value:"blocker"});

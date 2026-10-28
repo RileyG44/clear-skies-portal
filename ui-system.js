@@ -1,67 +1,3 @@
-/* Full display-state links, CR-003 r1. Only data crosses this boundary;
-   typed raster buffers retain their original bits, including nodata NaNs. */
-window.CSPShareCodec = (() => {
-  "use strict";
-  const arrays = {Float32Array,Float64Array,Int8Array,Uint8Array,Uint8ClampedArray,Int16Array,Uint16Array,Int32Array,Uint32Array};
-  const base64 = bytes => {
-    let value="";
-    for(let i=0;i<bytes.length;i+=16384)value+=String.fromCharCode(...bytes.subarray(i,i+16384));
-    return btoa(value).replace(/\+/g,"-").replace(/\//g,"_").replace(/=+$/,"");
-  };
-  const bytes = value => {
-    if(typeof value!=="string"||!/^[A-Za-z0-9_-]*$/.test(value)||value.length%4===1)throw Error("Malformed share-link data.");
-    const text=atob(value.replace(/-/g,"+").replace(/_/g,"/"));
-    return Uint8Array.from(text,c=>c.charCodeAt(0));
-  };
-  function pack(value){
-    if(ArrayBuffer.isView(value)){
-      if(!arrays[value.constructor.name])throw Error("Unsupported shared raster type.");
-      return {$binary:value.constructor.name,data:base64(new Uint8Array(value.buffer,value.byteOffset,value.byteLength)),length:value.length};
-    }
-    if(typeof value==="number"&&!Number.isFinite(value))return {$number:String(value)};
-    if(value===null||["string","boolean","number"].includes(typeof value))return value;
-    if(Array.isArray(value))return value.map(pack);
-    if(!value||typeof value!=="object"||![Object.prototype,null].includes(Object.getPrototypeOf(value)))throw Error("Unsupported share-link value.");
-    const result=Object.create(null);
-    for(const [key,item] of Object.entries(value)){
-      if(["__proto__","constructor","prototype"].includes(key))throw Error("Invalid share-link field.");
-      if(item!==undefined)result[key]=pack(item);
-    }
-    return result;
-  }
-  function unpack(value){
-    if(!value||typeof value!=="object")return value;
-    if(Array.isArray(value))return value.map(unpack);
-    if(Object.keys(value).some(key=>["__proto__","constructor","prototype"].includes(key)))throw Error("Invalid share-link field.");
-    if(Object.hasOwn(value,"$binary")){
-      const Type=arrays[value.$binary],data=bytes(value.data);
-      if(!Type||!Number.isSafeInteger(value.length)||value.length<0||data.byteLength!==value.length*Type.BYTES_PER_ELEMENT||Object.keys(value).length!==3)throw Error("Invalid shared raster buffer.");
-      return new Type(data.buffer);
-    }
-    if(Object.hasOwn(value,"$number")){
-      if(Object.keys(value).length!==1||!["NaN","Infinity","-Infinity"].includes(value.$number))throw Error("Invalid shared number.");
-      return Number(value.$number);
-    }
-    return Object.fromEntries(Object.entries(value).map(([key,item])=>[key,unpack(item)]));
-  }
-  async function encode(state){
-    if(typeof CompressionStream!=="function")throw Error("This browser cannot create full-state links.");
-    const data=new TextEncoder().encode(JSON.stringify(pack(state)));
-    const compressed=await new Response(new Blob([data]).stream().pipeThrough(new CompressionStream("gzip"))).arrayBuffer();
-    return "1."+base64(new Uint8Array(compressed));
-  }
-  async function decode(value){
-    if(typeof value!=="string"||!value.startsWith("1."))throw Error("This share-link version is not supported.");
-    if(typeof DecompressionStream!=="function")throw Error("This browser cannot open full-state links.");
-    try{
-      const data=await new Response(new Blob([bytes(value.slice(2))]).stream().pipeThrough(new DecompressionStream("gzip"))).text();
-      return unpack(JSON.parse(data));
-    }catch(error){throw Error("The share link is damaged or contains invalid data.");}
-  }
-  return Object.freeze({encode,decode,pack,unpack});
-})();
-/* End full-state link codec. */
-
 (function(){
 "use strict";
 
@@ -421,8 +357,7 @@ function routeForLayer(layer){
   if(layer.id.startsWith("elevation-")) return "elevation";
   if(layer.id.startsWith("analysis:")) return "analyze";
   if(layer.id.startsWith("overlay:")){
-    const group=(bridge.overlayCatalog().find(o=>`overlay:${o.id}`===layer.id)||{}).group;
-    return group==="Imagery"?"satellite":group==="Conditions"?"conditions":group==="Geology & hazards"?"geology":group==="Past landscapes"?"past":"labels";
+    return (bridge.overlayCatalog().find(o=>`overlay:${o.id}`===layer.id)||{}).route||"labels";
   }
   return "layers";
 }
@@ -1006,7 +941,7 @@ function renderSettingsView(){
     <div class="csp-setting-row">
       <div class="csp-setting-text"><strong>Default resolution</strong><span>Used the next time the camera pop-up opens.</span></div>
       <select data-export-scale aria-label="Default export resolution">
-        ${[1,2,4,8,16,32].map(v=>`<option value="${v}">${v}×</option>`).join("")}
+        ${[...$("#snapshotScale").options].map(option=>`<option value="${option.value}">${option.value}×</option>`).join("")}
       </select>
     </div>
     <label class="csp-setting-row">
@@ -1301,8 +1236,9 @@ function updateCounts(){
   set("elevation",elevationCount?String(elevationCount):"");
   const analysisCount=active.filter(layer=>layer.id.startsWith("analysis:")).length;set("analyze",analysisCount?String(analysisCount):"");
   const markupCount=active.filter(layer=>layer.id.startsWith("markup:")).length;set("markup",markupCount?String(markupCount):"");
-  for(const [key,group] of [["conditions","Conditions"],["geology","Geology & hazards"],["past","Past landscapes"],["labels","Labels & reference"]]){
-    const ids=new Set(catalog.filter(item=>item.group===group).map(item=>`overlay:${item.id}`));
+  // The Satellite count is its search results; the overlay groups count active layers.
+  for(const key of new Set(catalog.map(item=>item.route).filter(route=>route&&route!=="satellite"))){
+    const ids=new Set(catalog.filter(item=>item.route===key).map(item=>`overlay:${item.id}`));
     const count=active.filter(layer=>ids.has(layer.id)).length;set(key,count?String(count):"");
   }
   const copy=coordinateActions.querySelector('[data-coordinate="copy"]'),maps=coordinateActions.querySelector('[data-coordinate="maps"]'),earth=coordinateActions.querySelector('[data-coordinate="earth"]');
@@ -1327,12 +1263,12 @@ document.addEventListener("csp:open-route",event=>{
 });
 new MutationObserver(()=>scheduleLayerRefresh(80)).observe($("#ctl"),{attributes:true,childList:true,subtree:true,characterData:true});
 new MutationObserver(()=>scheduleLayerRefresh(80)).observe($("#panes"),{attributes:true,subtree:true,attributeFilter:["class","hidden","aria-pressed"]});
-setInterval(()=>{ if(document.visibilityState==="visible") scheduleLayerRefresh(0) },1800);
+if($("#n_results")) new MutationObserver(updateCounts).observe($("#n_results"),{childList:true,characterData:true,subtree:true});
 
 /* Slider groove fill. A range cannot style its own filled portion in WebKit,
-   so the value is mirrored into --csp-fill. Programmatic resets do not fire
-   input events, so a periodic sweep catches those; it only writes when the
-   value changed. */
+   so the value is mirrored into --csp-fill. Scripts that set a value (resets,
+   presets, restored links) fire no input event, so the value setter itself
+   refreshes the fill, and a changed min or max does the same. */
 function syncRangeFill(input){
   if(!input) return;
   const min=+input.min||0,max=input.max===""?100:+input.max,value=+input.value;
@@ -1343,10 +1279,14 @@ function syncRangeFill(input){
 }
 const syncAllRangeFills=()=>{for(const input of document.querySelectorAll('input[type="range"]')) syncRangeFill(input)};
 document.addEventListener("input",event=>{if(event.target.matches?.('input[type="range"]')) syncRangeFill(event.target)},true);
-document.addEventListener("click",()=>requestAnimationFrame(syncAllRangeFills),true);
-setInterval(()=>{ if(document.visibilityState==="visible") syncAllRangeFills() },1000);
+{
+  const value=Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,"value");
+  Object.defineProperty(HTMLInputElement.prototype,"value",{...value,set(next){value.set.call(this,next);if(this.type==="range") syncRangeFill(this)}});
+}
+new MutationObserver(records=>{for(const record of records) if(record.target.type==="range") syncRangeFill(record.target)})
+  .observe(document.body,{attributes:true,subtree:true,attributeFilter:["min","max","value"]});
 /* Panels that rebuild their sliders (markup tools, layer cards, popovers) are
-   filled as the new inputs arrive rather than at the next sweep. */
+   filled as the new inputs arrive. */
 const rangeArrivals=new MutationObserver(records=>{
   for(const record of records) for(const node of record.addedNodes){
     if(node.nodeType!==1) continue;
@@ -1354,7 +1294,7 @@ const rangeArrivals=new MutationObserver(records=>{
     else node.querySelectorAll('input[type="range"]').forEach(syncRangeFill);
   }
 });
-for(const root of [side,$("#mkBar"),$("#pointCloudPanel"),$("#terrainSourcePanel")].filter(Boolean))
+for(const root of [side,$("#mkBar"),$("#pointCloudPanel"),$("#terrainSourcePanel"),$("#ctl")].filter(Boolean))
   rangeArrivals.observe(root,{childList:true,subtree:true});
 syncAllRangeFills();
 
@@ -1455,8 +1395,16 @@ if(sheetMode()&&!isCollapsed()){
     }
     return null;
   };
-  let gesture=null,suppressClick=false;
-  const suppressNextClick=()=>{suppressClick=true;setTimeout(()=>{suppressClick=false},0)};
+  let gesture=null,suppressClick=false,suppressTimer=0;
+  /* A touch tap is followed by a compatibility click. On Chrome that click can
+     arrive after a 0ms timer, and it would step the detent straight back.
+     Hold the swallow long enough for the late click, and release it once the
+     click has been seen so the next press still counts. */
+  const suppressNextClick=()=>{
+    suppressClick=true;
+    clearTimeout(suppressTimer);
+    suppressTimer=setTimeout(()=>{suppressClick=false},400);
+  };
   const begin=(x,y,target,source)=>{
     gesture={x,y,startH:side.getBoundingClientRect().height,from:currentDetent(),target,source,
              onGrabber:target===grabber,scroller:scrollerFor(target),mode:null,samples:[{y,t:performance.now()}]};
@@ -1562,7 +1510,7 @@ if(sheetMode()&&!isCollapsed()){
   side.addEventListener("pointerup",()=>{if(gesture?.source==="mouse") end()});
   side.addEventListener("pointercancel",()=>{if(gesture?.source==="mouse") end()});
   side.addEventListener("click",event=>{
-    if(suppressClick) return;
+    if(suppressClick){suppressClick=false;clearTimeout(suppressTimer);return}
     if(event.target===grabber){
       // keyboard activation, or a tap the gesture code did not see
       goToDetent(currentDetent()==="peek"?"medium":currentDetent()==="medium"?"large":"medium");
