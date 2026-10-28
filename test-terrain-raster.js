@@ -2,7 +2,6 @@
 
 const assert=require("assert/strict");
 const raster=require("./terrain-raster.js");
-const usgs=require("./usgs.js");
 
 function skirtedPlane(size,dzdx,dzdy,origin=100){
   const n=size+2;
@@ -26,10 +25,17 @@ function pixel(rgba,width,x,y){
   return Array.from(rgba.slice(offset,offset+4));
 }
 
-for(const style of raster.STYLES.filter(style=>style!=="northness")){
-  const surface=skirtedPlane(9,0.4,-0.25);
-  assert.deepEqual(Array.from(raster.renderRgba(style,surface)),Array.from(usgs.renderRgba(style,surface)),
-    `${style} browser raster must match the M2 worker palette and math`);
+// An engine tile carries a one-pixel skirt, read directly. Its pixels must
+// equal the interior of the same grid rendered as a plain, edge-clamped one.
+{
+  const skirted=skirtedPlane(9,0.4,-0.25),n=skirted.n;
+  for(let i=0;i<skirted.grid.length;i+=7) skirted.grid[i]+=Math.sin(i)*3;
+  skirted.grid[5*n+6]=Math.fround(-1e30);
+  for(const style of raster.STYLES){
+    const own=raster.renderRgba(style,skirted),whole=raster.renderRgba(style,{grid:skirted.grid,width:n,height:n,groundRes:1});
+    for(let y=0;y<9;y++) for(let x=0;x<9;x++)
+      assert.deepEqual(pixel(own,9,x,y),pixel(whole,n,x+1,y+1),`${style} skirted pixel ${x},${y}`);
+  }
 }
 
 // A browser tile has no one-pixel source skirt. Clamp its edge samples for a

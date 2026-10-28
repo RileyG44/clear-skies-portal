@@ -3,6 +3,7 @@
 const assert=require("assert/strict");
 const terrain=require("./terrain-core.js");
 const usgs=require("./usgs.js");
+const raster=require("./terrain-raster.js");   // the engine styles its tiles with this
 const cog=require("./cog.js");
 
 function plane(size,dzdx,dzdy,origin=100){
@@ -15,7 +16,7 @@ function plane(size,dzdx,dzdy,origin=100){
 }
 
 function center(style,surface){
-  const rgba=usgs.renderRgba(style,surface);
+  const rgba=raster.renderRgba(style,surface);
   const x=Math.floor(surface.size/2),y=Math.floor(surface.size/2);
   return Array.from(rgba.slice((y*surface.size+x)*4,(y*surface.size+x)*4+4));
 }
