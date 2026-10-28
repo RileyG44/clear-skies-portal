@@ -17,12 +17,14 @@ the network, the live service on port 8765 or its cache: server tests start
 
 These need a real browser and are run by hand when their area changes. They
 load Playwright through `scripts/lib/playwright.js` (the `playwright-core`
-dev dependency, or the module named by `PLAYWRIGHT_MODULE`) and drive the
-installed Chrome or Playwright's WebKit. None of them touch port 8765.
+dev dependency, or the module named by `PLAYWRIGHT_MODULE`) and drive
+Chromium (Chrome, for the GPU suites) or WebKit. The GPU and performance suites start their own
+server on an isolated port and never use the service on 8765.
 
 ### Interface (`scripts/ui-*.js`)
 
-Run against a server from your checkout: `node scripts/ui-snapshot.js http://127.0.0.1:8765/`.
+Start a server from your checkout on a spare port and pass its address:
+`PORT=8830 node server.js`, then `node scripts/ui-snapshot.js http://127.0.0.1:8830/`.
 
 | Script | Checks |
 |---|---|
