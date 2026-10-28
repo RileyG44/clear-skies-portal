@@ -2,6 +2,7 @@
 /* Exercise actual files and the download routes with stub upstreams. These
    tests must never use the installed service/cache or make network requests. */
 const assert=require("assert/strict"),fs=require("fs"),fsp=fs.promises,os=require("os"),path=require("path"),http=require("http");
+const {execFileSync}=require("child_process");
 const budget=require("./cache-budget.js"),{sha1}=budget;
 const dirs=[];let checks=0;
 const temp=()=>{const dir=fs.mkdtempSync(path.join(os.tmpdir(),"csp-budget-"));dirs.push(dir);return dir};
@@ -11,6 +12,17 @@ async function file(dir,name,size,atime=old,mtime=old){
 }
 async function pair(dir,key,size,atime=old,mtime=old){await file(dir,key,size,atime,mtime);await file(dir,key+".meta",10,atime,mtime)}
 async function exists(f){try{await fsp.access(f);return true}catch{return false}}
+/* 0o500 blocks new files on Unix. On Windows chmod only sets the read-only
+   attribute, and a directory ignores that, so deny adding a file instead.
+   Everyone is *S-1-1-0 so the command does not depend on a localised name. */
+const sealManifestDir=dir=>{
+  if(process.platform==="win32") execFileSync("icacls",[dir,"/deny","*S-1-1-0:(WD,AD)"],{stdio:"ignore",windowsHide:true});
+  else fs.chmodSync(dir,0o500);
+};
+const unsealManifestDir=dir=>{
+  if(process.platform==="win32") execFileSync("icacls",[dir,"/remove:d","*S-1-1-0"],{stdio:"ignore",windowsHide:true});
+  else fs.chmodSync(dir,0o700);
+};
 /* Drive the real download routes, with only the network and terrain workers
    stubbed: the tiles each download caches must be exactly the keys its
    manifest pins, and a manifest that cannot be written must say so. */
@@ -60,14 +72,14 @@ async function warmKeyChecks(){
     assert.deepEqual(new Set(budget.manifestKeys({...usgsManifest,raw:false},"usgs/areas")),new Set([style,national]));
     assert.deepEqual((await budget.readPins(cache)).pins,new Set([...expected,style,national,elev]),"the cache pins what both manifests list");
     /* A manifest that cannot be written leaves the tiles but reports the area unrecorded. */
-    fs.chmodSync(areas,0o500);fs.chmodSync(usgsAreas,0o500);
+    sealManifestDir(areas);sealManifestDir(usgsAreas);
     try{
       const failed=await download("/api/warm",{...job,bbox:bboxOf(tile.x+2)}),failedUsgs=await download("/api/usgs/warm",usgsJob);
       assert(failed.written.size>0&&failed.status.unrecorded,"WA DNR tiles arrive but the area is reported unrecorded");
       assert(failedUsgs.status.skipped===1&&failedUsgs.status.unrecorded,"so is a 1 m area");
       assert.equal(manifests(areas).length+manifests(usgsAreas).length,2,"and no partial manifest is left behind");
       assert.deepEqual(fs.readdirSync(areas).concat(fs.readdirSync(usgsAreas)).filter(f=>!f.endsWith(".json")),[]);
-    }finally{ fs.chmodSync(areas,0o700);fs.chmodSync(usgsAreas,0o700) }
+    }finally{ unsealManifestDir(areas);unsealManifestDir(usgsAreas) }
     checks+=11;return {job,usgsJob:usgsManifest,national,style};
   }finally{ server.close();await cacheBudget.close() }
 }
