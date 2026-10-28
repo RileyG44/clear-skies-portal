@@ -2,7 +2,7 @@
    fixture selected so Apple's share sheet can be verified with a real tap.
    The raster is synthetic verification data, not a scientific reference. */
 return (async () => {
-  const B = window.ClearSkiesPortalBridge, C = window.CSPShareCodec, R = window.CSPLidarRender;
+  const B = window.ClearSkiesPortalBridge, C = window.CSPShareState, R = window.CSPLidarRender;
   const failures = [], reports = [], originalAlert = window.alert;
   const canonical = value => !value || typeof value !== "object" ? value : Array.isArray(value)
     ? value.map(canonical) : Object.fromEntries(Object.keys(value).sort().map(key => [key, canonical(value[key])]));

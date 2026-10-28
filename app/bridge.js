@@ -219,103 +219,17 @@ function cspCaptureShareState(){
     markup:window.CSPMarkup?.displayState()||[],pointCloud:pointCloudPanel?.displayState()||null,order};
   cspValidateShareState(state);return state;
 }
-function cspShareAssert(condition,message){if(!condition)throw Error("Invalid share link: "+message);}
-function cspShareSame(a,b){
-  if(a===b)return true;
-  if(!a||!b||typeof a!=="object"||typeof b!=="object"||Array.isArray(a)!==Array.isArray(b))return false;
-  const keys=Object.keys(a);
-  return keys.length===Object.keys(b).length&&keys.every(key=>Object.hasOwn(b,key)&&cspShareSame(a[key],b[key]));
+/* Everything a share link may hold on this page; share-state.js checks it. */
+function cspShareEnvironment(){
+  return {controls:cspShareControls(),viewMax:VIEW_MAX,overlays:OVERLAYS,
+    pointCloudClasses:[...document.querySelectorAll("[data-pc-class]")].map(el=>el.dataset.pcClass),
+    lidarRender:CSPLidarRender,analysisLayers:CSPAnalysisLayers,researchLabels:RESEARCH_LABELS,researchParams:RESEARCH_PARAMS,
+    researchStyleDefaults,researchPaletteChoices};
 }
-function cspShareGeometry(geometry){
-  const point=p=>Array.isArray(p)&&p.length>=2&&p.every(Number.isFinite);
-  const line=p=>Array.isArray(p)&&p.length>=2&&p.every(point);
-  const polygon=p=>Array.isArray(p)&&p.length>0&&p.every(ring=>line(ring)&&ring.length>=4);
-  return !!geometry&&({Point:point,LineString:line,Polygon:polygon,MultiPolygon:p=>Array.isArray(p)&&p.length>0&&p.every(polygon)})[geometry.type]?.(geometry.coordinates)===true;
-}
-function cspShareSafeURL(value){
-  if(value==null||value==="")return;
-  const url=new URL(value);
-  cspShareAssert(url.protocol==="https:"&&!url.username&&!url.password,"unsafe imagery address");
-  const hosts=["planetarycomputer.microsoft.com","earth-search.aws.element84.com","earth-search.aws.element84.com.s3.amazonaws.com","titiler.xyz","gibs.earthdata.nasa.gov","worldview.earthdata.nasa.gov","browser.dataspace.copernicus.eu","search.asf.alaska.edu","cmr.earthdata.nasa.gov","landsatlook.usgs.gov","sentinel-cogs.s3.us-west-2.amazonaws.com","naipeuwest.blob.core.windows.net","naipblobs.blob.core.windows.net"];
-  cspShareAssert(hosts.includes(url.hostname)||/\.(?:amazonaws\.com|blob\.core\.windows\.net)$/.test(url.hostname),"imagery address is not a supported public provider");
-  for(const [key,v] of url.searchParams){
-    cspShareAssert(!/^(?:engine|server|apiBase|sig|signature|token|access_token|api.?key|key|credential|authorization|x-amz-.+)$/i.test(key),"credentials cannot be shared");
-    if(/^https?:\/\//i.test(v))cspShareSafeURL(v);
-  }
-}
-function cspValidateShareScene(scene){
-  cspShareAssert(scene&&typeof scene.id==="string"&&typeof scene.srcKey==="string"&&typeof scene.label==="string"&&Number.isFinite(Date.parse(scene.date)),"imagery identity");
-  if(scene.tiles){cspShareAssert(["xyz","tilejson"].includes(scene.tiles.type)&&typeof scene.tiles.url==="string"&&scene.tiles.url.length>0,"imagery tile format");cspShareSafeURL(scene.tiles.url)}
-  if(scene.link)cspShareSafeURL(scene.link);
-  if(scene.bbox)cspShareAssert(scene.bbox.length===4&&scene.bbox.every(Number.isFinite),"imagery footprint");
-  if(scene.geom)cspShareAssert(cspShareGeometry(scene.geom),"imagery geometry");
-  for(const key of ["cloud","gsd","nativeMax"])if(scene[key]!=null)cspShareAssert(Number.isFinite(scene[key]),"imagery "+key);
-}
-function cspValidateShareState(state){
-  const keys=["version","view","theme","controls","studio","terrainLook","overlays","alerts","imagery","research","markup","pointCloud","order"];
-  cspShareAssert(state&&state.version===1&&Object.keys(state).length===keys.length&&keys.every(key=>Object.hasOwn(state,key)),"unsupported state format");
-  const v=state.view,p=v?.location;
-  cspShareAssert(v&&Array.isArray(v.center)&&v.center.length===2&&v.center.every(Number.isFinite)&&Math.abs(v.center[0])<=90&&Math.abs(v.center[1])<=180&&Number.isFinite(v.zoom)&&v.zoom>=0&&v.zoom<=VIEW_MAX&&["2d","3d"].includes(v.mode)&&Number.isFinite(v.bearing)&&Number.isFinite(v.pitch),"map view");
-  cspShareAssert(p&&Number.isFinite(p.lat)&&Math.abs(p.lat)<=90&&Number.isFinite(p.lng)&&Math.abs(p.lng)<=180&&typeof p.label==="string"&&v.center[0]===p.lat&&v.center[1]===p.lng,"selected location");
-  cspShareAssert(["light","dark"].includes(state.theme),"map theme");
-  const controls=new Map(cspShareControls().map(el=>[el.id,el]));
-  cspShareAssert(state.controls&&typeof state.controls==="object"&&!Array.isArray(state.controls),"display controls");
-  cspShareAssert(Object.keys(state.controls).length===controls.size,"incomplete or unsupported display controls");
-  for(const [id,value] of Object.entries(state.controls)){
-    const el=controls.get(id);cspShareAssert(el,"unsupported control "+id);
-    if(el.type==="checkbox")cspShareAssert(typeof value==="boolean","checkbox "+id);
-    else{
-      cspShareAssert(typeof value==="string","value "+id);
-      if(el.tagName==="SELECT")cspShareAssert([...el.options].some(o=>o.value===value),"unsupported option for "+id);
-      if(el.type==="color")cspShareAssert(/^#[0-9a-f]{6}$/i.test(value),"color "+id);
-      if(["range","number"].includes(el.type))cspShareAssert(value!==""&&Number.isFinite(+value)&&(!el.min||+value>=+el.min)&&(!el.max||+value<=+el.max),"range "+id);
-      if(el.type==="date")cspShareAssert(value===""||/^\d{4}-\d{2}-\d{2}$/.test(value)&&Number.isFinite(Date.parse(value)),"date "+id);
-    }
-  }
-  cspShareAssert(Array.isArray(state.overlays)&&state.overlays.every(item=>OVERLAYS.some(o=>o.id===item.id)&&Number.isFinite(item.opacity)&&item.opacity>=0&&item.opacity<=100),"overlay settings");
-  for(const item of state.overlays){const o=OVERLAYS.find(o=>o.id===item.id);if(item.timeSlice!=null)cspShareAssert(o.timeSlice?.values.includes(item.timeSlice),"overlay time slice");if(item.lineWidth!=null)cspShareAssert(o.lineWidth&&Number.isFinite(item.lineWidth)&&item.lineWidth>0,"overlay line width")}
-  cspShareAssert(state.terrainLook&&["contrast","saturation","brightness"].every(key=>Number.isFinite(state.terrainLook[key])),"terrain appearance");
-  if(state.studio){
-    cspShareAssert(state.studio.state&&cspShareSame(state.studio.state,CSPLidarRender.normalizeState(state.studio.state)),"unsupported terrain mix settings");
-    for(const fit of [state.studio.fitted,state.studio.flatFitted])cspShareAssert(fit&&typeof fit==="object"&&Object.values(fit).every(range=>Array.isArray(range)&&range.length===2&&range.every(Number.isFinite)&&range[1]>range[0]),"terrain display range");
-    cspShareAssert(state.studio.remFloor===null||Number.isFinite(state.studio.remFloor),"relative elevation floor");
-  }
-  cspShareAssert(state.alerts&&typeof state.alerts.types==="object"&&["nws","quakes","volcanoes","fires","viewport"].every(key=>typeof state.alerts[key]==="boolean"),"condition filters");
-  if(state.imagery){cspValidateShareScene(state.imagery.primary);cspShareAssert(Array.isArray(state.imagery.neighbours),"imagery neighbours");state.imagery.neighbours.forEach(cspValidateShareScene);if(state.imagery.backdrop)cspValidateShareScene(state.imagery.backdrop)}
-  cspShareAssert(state.research&&typeof state.research.live==="boolean"&&Array.isArray(state.research.layers)&&state.research.layers.length<=CSPAnalysisLayers.MAX_LAYERS,"analysis layers");
-  for(const entry of state.research.layers){
-    cspShareAssert(/^a\d+$/.test(entry.id)&&RESEARCH_LABELS[entry.product]&&entry.style&&entry.params,"analysis identity");
-    cspShareAssert(cspShareSame(entry.style,CSPAnalysisLayers.normalizeStyle(entry.style,researchStyleDefaults(entry.product))),"unsupported analysis style");
-    const palettes=researchPaletteChoices(entry.product);
-    cspShareAssert(palettes.length?palettes.some(p=>p.id===entry.style.palette):entry.style.palette==="standard","unsupported analysis palette");
-    for(const [key,value] of Object.entries(entry.params))cspShareAssert(RESEARCH_PARAMS[key]?.options.some(o=>o[0]===value),"analysis parameter");
-    if(entry.last){
-      const c=entry.last.capture,r=entry.last.result;
-      cspShareAssert(c&&Number.isSafeInteger(c.width)&&c.width>0&&Number.isSafeInteger(c.height)&&c.height>0&&Number.isFinite(c.resolution)&&c.resolution>0,"analysis dimensions");
-      const raster=data=>ArrayBuffer.isView(data)&&data.length===c.width*c.height;
-      cspShareAssert(raster(c.elevation)&&r&&raster(r.data)&&r.width===c.width&&r.height===c.height&&typeof r.label==="string"&&(!r.secondary||raster(r.secondary))&&(!c.hillshade||raster(c.hillshade)),"analysis raster");
-      const bounds=b=>Array.isArray(b)&&b.length===4&&b.every(Number.isFinite)&&b[1]>=-90&&b[3]<=90&&b[1]<b[3]&&b[0]<b[2];
-      cspShareAssert(bounds(entry.last.bounds)&&c.raster&&bounds(c.raster.bounds)&&c.raster.width===c.width&&c.raster.height===c.height,"analysis bounds");
-    }
-  }
-  cspShareAssert(Array.isArray(state.markup),"annotations");
-  for(const entry of state.markup){const doc=entry.doc;cspShareAssert(doc?.type==="FeatureCollection"&&typeof doc.markup?.id==="string"&&/^[a-z0-9_-]+$/i.test(doc.markup.id)&&typeof doc.markup.name==="string"&&/^#[0-9a-f]{6}$/i.test(doc.markup.color)&&Array.isArray(doc.features)&&Number.isFinite(entry.opacity)&&entry.opacity>=0&&entry.opacity<=100&&Number.isFinite(entry.rank),"annotation layer");
-    for(const f of doc.features){cspShareAssert(f?.type==="Feature"&&["Point","LineString","Polygon"].includes(f.geometry?.type)&&cspShareGeometry(f.geometry)&&f.properties&&["pen","highlight","line","arrow","arrow2","area","rect","shape","circle","text","pin"].includes(f.properties.kind),"annotation feature");
-      const p=f.properties;
-      for(const key of ["color","fillColor"])if(p[key]!=null)cspShareAssert(/^#[0-9a-f]{6}(?:[0-9a-f]{2})?$/i.test(p[key]),"annotation color");
-      for(const key of ["width","radius","size","rot","opacity","fill"])if(p[key]!=null)cspShareAssert(typeof p[key]==="number"&&Number.isFinite(p[key]),"annotation numeric style");
-      if(p.text!=null)cspShareAssert(typeof p.text==="string","annotation text");
-      if(p.space3d)cspShareAssert(Array.isArray(p.space3d.anchor)&&p.space3d.anchor.length>=2&&p.space3d.anchor.every(Number.isFinite),"3D annotation anchor");
-    }
-  }
-  if(state.pointCloud){cspShareAssert(state.pointCloud.classes&&[...document.querySelectorAll("[data-pc-class]")].every(el=>typeof state.pointCloud.classes[el.dataset.pcClass]==="boolean"),"point-cloud classes");const c=state.pointCloud.camera;cspShareAssert(state.pointCloud.project==null||typeof state.pointCloud.project==="string","point-cloud project");if(c)cspShareAssert(Array.isArray(c.position)&&c.position.length===3&&c.position.every(Number.isFinite)&&[c.yaw,c.pitch,c.radius].every(Number.isFinite)&&c.radius>0,"point-cloud camera")}
-  const layerIds=new Set(["basemap","scene","terrain","elevation-spectrum","elevation-bands","active-fires",
-    ...state.overlays.map(o=>"overlay:"+o.id),...state.research.layers.map(e=>"analysis:"+e.id),...state.markup.map(e=>"markup:"+e.doc.markup.id)]);
-  cspShareAssert(Array.isArray(state.order)&&new Set(state.order).size===state.order.length&&state.order.every(id=>layerIds.has(id)),"layer order");
-  return state;
-}
+function cspValidateShareScene(scene){return CSPShareState.validateScene(scene)}
+function cspValidateShareState(state){return CSPShareState.validate(state,cspShareEnvironment())}
 async function cspShareURL(){
-  const state=cspCaptureShareState(),payload=await window.CSPShareCodec.encode(state);
+  const state=cspCaptureShareState(),payload=await window.CSPShareState.encode(state);
   return CSP_SHARE_WEB_URL+"#csp="+payload;
 }
 async function cspRestoreShareState(state){
@@ -416,7 +330,7 @@ function cspReceiveShare(){
     while(cspShareRequested!==undefined){
       const next=cspShareRequested;cspShareRequested=undefined;
       try{
-        const state=await window.CSPShareCodec.decode(next);
+        const state=await window.CSPShareState.decode(next);
         if(cspShareRequested!==undefined)continue;
         result=await cspRestoreShareState(state);
       }catch(error){

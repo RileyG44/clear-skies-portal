@@ -23,7 +23,7 @@ const context={
   acAbort:{abort:()=>calls.aborts++},acTimer:null,acList:[{stale:true}],acIdx:0,
 };
 vm.createContext(context);
-vm.runInContext(section('function parseCoordinates(','\nasync function geocode('),context);
+context.parseCoordinates=require('./coordinates.js').parse;
 vm.runInContext(section('function coordinateForActions(','\nfunction hideCoordinateMenu('),context);
 vm.runInContext(section('function acInput(','\nfunction acKey('),context);
 vm.runInContext(section('async function doSearch(','\n$("#go").onclick='),context);
