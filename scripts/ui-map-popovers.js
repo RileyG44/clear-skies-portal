@@ -30,17 +30,35 @@ const inside=async(page,selector)=>{
       // person's terrain engine. Persistence itself has separate unit tests.
       // The site ships no markup layers, so the stand-in engine supplies one.
       const fixture={type:'FeatureCollection',markup:{id:'ui-test',name:'UI test',description:'',color:'#ff3b30',created:1,updated:1},features:[]};
-      // An engine-owned document must survive reload. The fixture stores writes
-      // and lists their current revisions, as the real markup API does.
-      const documents=new Map([[fixture.markup.id,fixture]]);
+      // An engine-owned document must survive reload. The stand-in keeps the
+      // real markup API's rules: newer copies win, deletes leave tombstones.
+      const docs=new Map([[fixture.markup.id,fixture]]),deleted={};
       await page.route('**/api/markup**',route=>{
-        const request=route.request(),id=new URL(request.url()).pathname.split('/')[3];
-        if(request.method()==='POST'){
-          const doc=request.postDataJSON();documents.set(id,doc);
+        const request=route.request(),url=new URL(request.url());
+        const match=/^\/api\/markup(?:\/([^/]+)(\/delete)?)?$/.exec(url.pathname);
+        if(!match) return route.fulfill({status:404,json:{error:'no such markup route'}});
+        const id=match[1]?decodeURIComponent(match[1]):'',method=request.method();
+        if(!id&&method==='GET'){
+          return route.fulfill({json:{layers:[...docs.values()].map(doc=>({id:doc.markup.id,name:doc.markup.name,color:doc.markup.color,updated:doc.markup.updated,count:(doc.features||[]).length})),deleted}});
+        }
+        if(match[2]){
+          const at=Number(request.postDataJSON()?.at)||Date.now();
+          docs.delete(id);deleted[id]=Math.max(deleted[id]||0,at);
+          return route.fulfill({json:{ok:true,deleted:deleted[id]}});
+        }
+        if(method==='GET'){
+          const doc=docs.get(id);
+          return doc?route.fulfill({json:doc}):route.fulfill({status:404,json:{error:'no such markup layer'}});
+        }
+        if(method==='POST'){
+          const doc=request.postDataJSON();
+          if(deleted[id]&&deleted[id]>=doc.markup.updated) return route.fulfill({status:410,json:{error:'markup layer was deleted',deleted:deleted[id]}});
+          const stored=docs.get(id);
+          if(stored&&stored.markup.updated>doc.markup.updated) return route.fulfill({status:409,json:stored});
+          docs.set(id,doc);
           return route.fulfill({json:{ok:true,updated:doc.markup.updated}});
         }
-        if(id)return route.fulfill({json:documents.get(id)});
-        return route.fulfill({json:{layers:[...documents.values()].map(doc=>({...doc.markup,count:doc.features.length})),deleted:{}}});
+        return route.fulfill({status:405,json:{error:'method not allowed'}});
       });
       await page.goto(base,{waitUntil:'domcontentloaded'});
       await page.waitForFunction(()=>window.CSPMarkup?._layers.size>0);
@@ -84,8 +102,14 @@ const inside=async(page,selector)=>{
       await page.locator('#mkBar [data-edit-ground="width"]').click();
       assert.equal(await page.locator('#mkPop .mk-value-input').inputValue(),'50000.125','reopening retains an exact large fractional width');
       await page.locator('#mkPop .mk-value-input').press('Enter');
-      const widthPosition=+await page.locator('#mkBar [data-ground-range="width"]').inputValue();
-      assert(widthPosition>0&&widthPosition<=1000,'a large exact width maps inside the current logarithmic range');
+      const widthRange=await page.locator('#mkBar [data-ground-range="width"]').evaluate(range=>{
+        const control=range.closest('.mk-ground');
+        const feet=Number(control.dataset.feet),min=Number(control.dataset.feetMin),max=Number(range.dataset.feetMax);
+        return {value:Number(range.value),position:Math.round(1000*Math.log((Math.max(min,Math.min(max,feet))+.1)/(min+.1))/Math.log((max+.1)/(min+.1))),feet,max};
+      });
+      assert.equal(widthRange.value,widthRange.position,`slider sits at the logarithmic position of ${widthRange.feet} ft`);
+      assert(widthRange.max>=50000,'typing past the previous maximum extends the slider range');
+      const widthPosition=widthRange.value;
       assert.equal(Number(await page.locator('#mkBar .mk-ground[data-ground="width"]').getAttribute('data-feet')),50000.125,'slider presentation must not quantize the typed physical width');
       assert.equal(await page.locator('#mkBar [data-edit-ground="width"]').textContent(),`${(50000).toLocaleString('en-US')} ft`);
       await page.locator('#mkBar [data-ground-range="width"]').focus();await page.keyboard.press('ArrowLeft');await page.keyboard.press('ArrowLeft');
