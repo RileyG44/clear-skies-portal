@@ -75,9 +75,44 @@ function cursorLoadedElevation(ll){
   }
   return best;
 }
+/* Distance key. The bar is the ground length of its own width at the
+   camera's zoom and latitude. Leaflet's world is 256 px at zoom 0;
+   MapLibre publishes the same scale as pixelsPerMeter on its transform
+   (512 px at zoom 0). Pitch is not part of that scale. Reading it from
+   the transform avoids MapLibre's terrain unproject, which ray-marches
+   the DEM. The app has no metric switch: elevations and markup
+   distances are feet, so the bar is feet until it reaches a mile. */
+const DISTANCE_EARTH_M=40075016.68557849,DISTANCE_FOOT_M=0.3048,DISTANCE_MILE_M=1609.344;
+function niceDistance(value){
+  if(!(value>0)||!Number.isFinite(value))return null;
+  const pow=10**Math.floor(Math.log10(value)),d=value/pow;
+  return (d>=10?10:d>=5?5:d>=3?3:d>=2?2:1)*pow;
+}
+function formatDistance(value){
+  const rounded=value>=100?Math.round(value):Math.round(value*100)/100;
+  return rounded.toLocaleString(undefined,{maximumFractionDigits:rounded>=100?0:2});
+}
+function distanceKeyFromMetres(maxMetres){
+  if(!(maxMetres>0)||!Number.isFinite(maxMetres))return null;
+  if(maxMetres>=DISTANCE_MILE_M){
+    const amount=niceDistance(maxMetres/DISTANCE_MILE_M);
+    return {metres:amount*DISTANCE_MILE_M,label:`${formatDistance(amount)} mi`};
+  }
+  const amount=niceDistance(maxMetres/DISTANCE_FOOT_M);
+  return amount?{metres:amount*DISTANCE_FOOT_M,label:`${formatDistance(amount)} ft`}:null;
+}
+function distanceKey(metresPerPixel,maxBarPx){
+  if(!(metresPerPixel>0)||!(maxBarPx>0))return null;
+  const key=distanceKeyFromMetres(metresPerPixel*maxBarPx);
+  return key?{metres:key.metres,label:key.label,widthPx:key.metres/metresPerPixel}:null;
+}
+function mercatorMetresPerPixel(lat,zoom,worldPx){
+  const cos=Math.cos(lat*Math.PI/180);
+  return worldPx>0&&Number.isFinite(cos)&&cos>0?DISTANCE_EARTH_M*cos/worldPx:null;
+}
 const readoutRoot=document.createElement("aside");readoutRoot.id="mapReadout";
 readoutRoot.setAttribute("aria-label","Map info");
-readoutRoot.innerHTML='<button type="button" class="map-info-toggle" aria-label="Show map info" aria-expanded="false" aria-controls="mapInfoContent"><svg class="map-info-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><circle cx="12" cy="12" r="9"></circle><path d="M12 11v6M12 7v1"></path></svg><span class="map-info-title">Map info</span><svg class="map-info-close" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"></path></svg></button><div id="mapInfoContent" hidden><div class="cursor-location"><div id="cursorBasis">Cursor location</div><div id="cursorCoordinates">Move the cursor over the map</div><div id="cursorElevation">Elevation —</div><div id="cursorSource"></div><div id="cursorAnalysis" hidden></div></div><div class="map-info-terrain" role="status"><div class="key-name">Terrain</div><div id="mapInfoTerrain"></div></div><div class="map-colour-keys"></div></div>';
+readoutRoot.innerHTML='<button type="button" class="map-info-toggle" aria-label="Show map info" aria-expanded="false" aria-controls="mapInfoContent"><svg class="map-info-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><circle cx="12" cy="12" r="9"></circle><path d="M12 11v6M12 7v1"></path></svg><span class="map-info-title">Map info</span><svg class="map-info-close" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"></path></svg></button><div id="mapInfoContent" hidden><div class="cursor-location"><div id="cursorBasis">Cursor location</div><div id="cursorCoordinates">Move the cursor over the map</div><div id="cursorElevation">Elevation —</div><div id="cursorSource"></div><div id="cursorAnalysis" hidden></div></div><div class="map-info-terrain" role="status"><div class="key-name">Terrain</div><div id="mapInfoTerrain"></div></div><div class="map-info-legend"><div class="map-distance-key" hidden></div><div class="map-colour-keys"></div></div></div>';
 $("#app").append(readoutRoot);
 let mapInfoAnimation=null,mapInfoFade=null;
 function setMapInfoExpanded(expanded){
@@ -363,10 +398,37 @@ window.ClearSkiesPortalBridge.mapReadoutState=()=>({
   analysis:$("#cursorAnalysis").hidden?"":$("#cursorAnalysis").textContent,
   terrain:mapInfoTerrainState()
 });
+let distancePreview=null,distanceFrame=0;
+function readoutMetresPerPixel(){
+  if(document.body.classList.contains("terrain-3d")&&map3d){
+    const ppm=map3d.transform?.pixelsPerMeter;
+    if(ppm>0&&Number.isFinite(ppm))return 1/ppm;
+    return mercatorMetresPerPixel(map3d.getCenter().lat,map3d.getZoom(),map3d.transform?.worldSize||512*2**map3d.getZoom());
+  }
+  const zoom=distancePreview?.zoom??map.getZoom(),lat=distancePreview?.lat??map.getCenter().lat;
+  return mercatorMetresPerPixel(lat,zoom,map.options.crs.scale(zoom));
+}
+function paintMapDistanceKey(){
+  const element=$(".map-distance-key",readoutRoot);
+  const inner=Math.max(90,(parseFloat(readoutRoot.style.getPropertyValue("--map-info-width"))||260)-24);
+  const maxBar=Math.max(32,inner-58);
+  const key=distanceKey(readoutMetresPerPixel(),maxBar);
+  if(!key){element.hidden=true;element.textContent="";element.removeAttribute("aria-label");return}
+  const widthPx=Math.min(maxBar,key.widthPx);
+  const bar=`<span class="distance-bar" style="width:${widthPx.toFixed(1)}px"></span>`;
+  const html=`<div class="key-name">Distance</div><div class="distance-scale">${bar}<span class="distance-label">${esc(key.label)}</span></div>`;
+  if(element.innerHTML!==html)element.innerHTML=html;
+  element.hidden=false;
+  element.setAttribute("aria-label",`Distance scale, ${key.label}`);
+}
+function scheduleDistanceKey(){
+  if(distanceFrame)return;
+  distanceFrame=requestAnimationFrame(()=>{distanceFrame=0;paintMapDistanceKey()});
+}
 function placeMapReadout(){
   const app=$("#app").getBoundingClientRect();
   readoutRoot.style.setProperty("--map-info-width",Math.max(130,Math.min(260,app.width-82))+"px");
-  paintTerrainStatus();updateNativeMapReadout();paintMapInfoTerrain();paintMapReadoutKeys();
+  paintTerrainStatus();updateNativeMapReadout();paintMapInfoTerrain();paintMapReadoutKeys();paintMapDistanceKey();
 }
 let readoutRefresh=0;
 function scheduleMapReadout(){
@@ -381,10 +443,17 @@ new MutationObserver(paintMapInfoTerrain).observe(terrainLoadStatus,{attributes:
 document.addEventListener("csp:location",scheduleMapReadout);
 map.on("movestart",()=>{if((NATIVE_HOST||innerWidth<=760)&&!map3d)invalidateNativeMapReadout()});
 map.on("moveend",()=>{if((NATIVE_HOST||innerWidth<=760)&&!map3d){nativeReadoutMoving=false;scheduleMapReadout()}});
+map.on("zoomanim",event=>{
+  if(!Number.isFinite(event?.zoom))return;
+  distancePreview={zoom:event.zoom,lat:event.center?.lat??map.getCenter().lat};
+  scheduleDistanceKey();
+});
+map.on("move",()=>{if(!distancePreview)scheduleDistanceKey()});
+map.on("zoomend moveend",()=>{distancePreview=null;scheduleDistanceKey()});
 {
   let readout3d=null;
   new MutationObserver(()=>{
-    if(map3d&&map3d!==readout3d){readout3d=map3d;map3d.on("movestart",()=>{if(NATIVE_HOST||innerWidth<=760)invalidateNativeMapReadout()});map3d.on("moveend",()=>{nativeReadoutMoving=false;scheduleMapReadout()})}
+    if(map3d&&map3d!==readout3d){readout3d=map3d;map3d.on("movestart",()=>{if(NATIVE_HOST||innerWidth<=760)invalidateNativeMapReadout()});map3d.on("move",scheduleDistanceKey);map3d.on("moveend",()=>{nativeReadoutMoving=false;scheduleMapReadout()})}
     if(!map3d)nativeReadoutMoving=false;
   }).observe(document.body,{attributes:true,attributeFilter:["class"]});
 }

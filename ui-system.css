@@ -2213,6 +2213,13 @@ body.terrain-3d .mk-selbar{z-index:970}
 #mapReadout .map-info-terrain{display:grid;gap:2px}
 #mapReadout #mapInfoTerrain{font-size:11px;color:var(--ui-text-muted)}
 #mapReadout .map-colour-keys:empty{display:none}
+#mapReadout .map-info-legend{display:grid;gap:7px}
+#mapReadout .map-info-legend:not(:has(.map-colour-key)):has(.map-distance-key[hidden]){display:none}
+#mapReadout .map-distance-key{display:grid;gap:2px}
+#mapReadout .map-distance-key[hidden]{display:none}
+#mapReadout .distance-scale{display:flex;align-items:center;gap:8px;min-width:0}
+#mapReadout .distance-bar{box-sizing:border-box;height:8px;flex:none;border:1.5px solid var(--map-readout-ink);border-top:0}
+#mapReadout .distance-label{font-size:9px;font-weight:600;line-height:1;white-space:nowrap}
 #mapReadout[hidden]{display:none}
 /* The translucent menu must fully cover the readout without moving it. */
 body:not(.collapsed) #mapReadout{visibility:hidden}
