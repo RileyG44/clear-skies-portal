@@ -5,7 +5,7 @@
     "png-stream.js", "markup.js", "markup-3d.js", "terrain-core.js", "terrain-raster.js",
     "terrain-drape-core.js", "terrain-drape-pool.js", "terrain-drape-worker.js",
     "elevation-bands.js", "elevation-tile-core.js", "tile-pipeline.js", "gpu-terrain-shaders.js",
-    "lidar-render.js", "lidar-studio.js", "analysis-layers.js", "share-state.js", "coordinates.js", "gpu-terrain-store.js",
+    "lidar-render.js", "lidar-studio.js", "analysis-layers.js", "share-state.js", "coordinates.js", "location-search.js", "gpu-terrain-store.js",
     "gpu-terrain-engine.js", "gpu-terrain-layer.js", "gpu-terrain-3d-cache.js",
     "gpu-terrain-3d-renderer.js", "gpu-terrain-3d-layer.js", "wa-archaeology.js",
     "glacial-research-core.js", "glacial-segment-core.js", "glacial-segment-features.js",

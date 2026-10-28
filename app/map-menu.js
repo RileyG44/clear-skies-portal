@@ -201,19 +201,6 @@ async function copyMapCoordinates(ll){
    valid coordinate pair being typed takes precedence immediately. Google Maps
    uses its documented cross-platform URL; Earth accepts decimal coordinates
    in the web search path and hands off to an installed app where supported. */
-function coordinateForActions(){
-  let typed;
-  try{ typed=parseCoordinates($("#q").value) }catch(error){ return null }
-  const ll=typed||LOC;
-  return ll&&Number.isFinite(ll.lat)&&Number.isFinite(ll.lng)&&Math.abs(ll.lat)<=90&&Math.abs(ll.lng)<=180 ? ll : null;
-}
-function coordinateLinks(ll){
-  const compact=`${ll.lat.toFixed(6)},${ll.lng.toFixed(6)}`;
-  return {
-    maps:`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(compact)}`,
-    earth:`https://earth.google.com/web/search/${compact}/`
-  };
-}
 function hideCoordinateMenu(){
   const menu=$("#coordMenu"),button=$("#coordOpen");
   menu.hidden=true;button.setAttribute("aria-expanded","false");

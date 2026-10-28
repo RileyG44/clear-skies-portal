@@ -390,6 +390,6 @@ map.on("moveend",()=>{if((NATIVE_HOST||innerWidth<=760)&&!map3d){nativeReadoutMo
 }
 addEventListener("resize",scheduleMapReadout);scheduleMapReadout();
 
-$("#q").addEventListener("focus",()=>{ if(acList.length && $("#q").value.trim().length>=3) acRender() });
+$("#q").addEventListener("focus",locationSearch.focus);
 $("#q").addEventListener("blur",()=>setTimeout(acHide,120));
 document.addEventListener("click",e=>{ if(!e.target.closest("#iw")) acHide() });

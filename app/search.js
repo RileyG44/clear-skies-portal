@@ -71,68 +71,8 @@ function res(g){
 }
 
 /* ---------------------------------------------------------------- search */
-/* Photon (photon.komoot.io) is an OSM geocoder purpose-built for type-ahead and
-   permits autocomplete traffic; Nominatim's usage policy does not. No key needed. */
-const PHOTON="https://photon.komoot.io";
-/* One parser for search, autocomplete and coordinate actions. Google Earth
-   copies DMS with hemisphere letters; keyboards may use straight or typographic
-   degree/prime marks. Return null for place names, but never geocode an invalid
-   coordinate as though it were a place. Decimal output stays latitude first. */
-function parseCoordinates(value){ return CSPCoordinates.parse(value) }
-
-async function geocode(t){
-  const r=await fetch(PHOTON+"/api/?limit=1&q="+encodeURIComponent(t));
-  const j=await r.json();
-  const f=(j.features||[])[0];
-  if(!f) throw new Error("Location not found");
-  return {lat:f.geometry.coordinates[1], lng:f.geometry.coordinates[0],
-          name:placeLabel(f.properties), extent:f.properties.extent};
-}
-
-/* Photon feature -> display strings */
-function placeLabel(p){
-  return p.name || [p.housenumber,p.street].filter(Boolean).join(" ") || p.city || p.county || "Unnamed place";
-}
-function placeContext(p){
-  return [p.city && p.city!==p.name ? p.city : null, p.county, p.state, p.country]
-         .filter(Boolean).filter((v,i,a)=>a.indexOf(v)===i).join(", ");
-}
-function placeKind(p){
-  return String(p.osm_value || p.osm_key || p.type || "place").replace(/_/g," ");
-}
-
-/* ------------------------------------------------- autocomplete */
-let acAbort=null, acTimer=null, acList=[], acIdx=-1, acGeneration=0;
-const acEl=(()=>{ const d=document.createElement("div"); d.id="ac"; d.style.display="none";
-                  document.getElementById("iw").appendChild(d); return d })();
-
-function splitName(f){
-  const p=f.properties||{};
-  return { primary: placeLabel(p), secondary: placeContext(p) };
-}
-function kindOf(f){ return placeKind(f.properties||{}) }
-
-function acHide(){ acEl.style.display="none"; acIdx=-1 }
-/* A search that has already run must not be followed by the suggestion list
-   it overtook: the debounce timer or an in-flight lookup would otherwise land
-   after Enter and reopen the dropdown over the panel. */
-function acCancel(){ clearTimeout(acTimer); if(acAbort) acAbort.abort(); acGeneration++; acList=[] }
-function acShow(html){ acEl.innerHTML=html; acEl.style.display="block" }
-
-function acRender(){
-  if(!acList.length){ acHide(); return }
-  acShow(acList.map((i,n)=>{
-    return `<div class="r ${n===acIdx?"k":""}" data-n="${n}">
-      <div class="p">${esc(i.primary)}</div>
-      <div class="s">${esc(i.secondary)}</div>
-      <div class="t">${esc(i.kind)}</div></div>`;
-  }).join(""));
-  acEl.querySelectorAll(".r").forEach(el=>{
-    el.onmousedown=e=>e.preventDefault();
-    el.onclick=()=>acPick(+el.dataset.n);
-  });
-}
-function esc(s){ return String(s==null?"":s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c])) }
+const {parseCoordinates,coordinateLinks,escape:esc}=CSPLocationSearch;
+const PHOTON=CSPLocationSearch.endpoint;
 /* Phones are tapped, not clicked: the hints that name the gesture say so. */
 const MAP_TAP=matchMedia("(pointer:coarse)").matches?"tap":"click";
 if(MAP_TAP==="tap"){
@@ -144,44 +84,16 @@ function safeHttpUrl(value){
   catch(e){ return "" }
 }
 
-function acPick(n){
-  const place=acList[n];if(place) cspSearchPlace(place);
-}
-
-async function acQuery(t){
-  if(acAbort) acAbort.abort();
-  acAbort=new AbortController();
-  const generation=++acGeneration;
-  try{
-    const found=await cspPlaceSuggestions(t,acAbort.signal);
-    if(generation!==acGeneration||document.activeElement!==$("#q")||$("#q").value.trim()!==t) return;
-    acList=found;acIdx=-1;
-    if(!acList.length) acShow('<div class="note">No matches</div>');
-    else acRender();
-  }catch(e){
-    if(e?.name==="AbortError"||generation!==acGeneration||document.activeElement!==$("#q")||$("#q").value.trim()!==t) return;
-    acList=[]; acShow(`<div class="note">Place search unavailable \u2014 you can still paste coordinates or double-${MAP_TAP} the map</div>`);
-  }
-}
-
-function acInput(){
-  const t=$("#q").value.trim();
-  clearTimeout(acTimer);
-  if(acAbort) acAbort.abort();
-  acList=[];acIdx=-1;
-  try{ if(t.length<3 || parseCoordinates(t)){ acHide(); return } }
-  catch(error){ acHide(); return }
-  acShow('<div class="note">Searching\u2026</div>');
-  acTimer=setTimeout(()=>acQuery(t), 280);   // debounce, respects Nominatim rate limits
-}
-
-function acKey(e){
-  const open=acEl.style.display!=="none" && acList.length;
-  if(e.key==="ArrowDown"&&open){ e.preventDefault(); acIdx=(acIdx+1)%acList.length; acRender() }
-  else if(e.key==="ArrowUp"&&open){ e.preventDefault(); acIdx=acIdx<0?acList.length-1:(acIdx-1+acList.length)%acList.length; acRender() }
-  else if(e.key==="Enter"){ if(open&&acIdx>=0){ e.preventDefault(); acPick(acIdx) } else { acCancel(); acHide(); doSearch() } }
-  else if(e.key==="Escape"){ if(open) e.preventDefault(); acCancel(); acHide() }
-}
+const acEl=(()=>{ const d=document.createElement("div"); d.id="ac"; d.style.display="none";
+  document.getElementById("iw").appendChild(d); return d })();
+const locationSearch=CSPLocationSearch.createController({
+  input:$("#q"),results:acEl,status:statusEl,map,selected:()=>LOC,select:setLoc,
+  search:run,pick:cspSearchPlace,isFocused:()=>document.activeElement===$("#q"),
+  tap:MAP_TAP,clearLocation:clearLoc,nativeHost:()=>NATIVE_HOST
+});
+const {hide:acHide,cancel:acCancel,input:acInput,key:acKey,search:doSearch,
+  coordinates:coordinateForActions}=locationSearch;
+const cspPlaceSuggestions=CSPLocationSearch.suggestions;
 
 /* ------------------------------------------------- current location */
 function geolocate(){

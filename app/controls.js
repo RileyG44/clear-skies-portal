@@ -140,38 +140,6 @@ for(const id of ["days","dFrom","dTo","cloud","vis","sort","viewable","mosaic","
   $("#"+id).addEventListener("change",saveSearchPrefs);
 $("#op").addEventListener("change",saveSearchPrefs);
 
-async function doSearch(){
-  const t=$("#q").value.trim(); if(!t) return;
-  acCancel(); acHide();
-  try{
-    const ll=parseCoordinates(t);
-    if(ll){ setLoc(ll.lat,ll.lng,/*keepLabel*/true,t); map.setView([ll.lat,ll.lng], Math.max(map.getZoom(),10)); }
-    else{
-      statusEl.dataset.kind="general",statusEl.innerHTML='<span class="spin"></span> Geocoding…';
-      const g=await geocode(t);
-      setLoc(g.lat,g.lng,/*keepLabel*/true,t); map.setView([g.lat,g.lng],11);
-    }
-    run();
-  }catch(e){ statusEl.dataset.kind="general",statusEl.innerHTML=`<span class="chip err">${e.message}</span>` }
-}
-/* The Satellite panel's own search field drives the same location and scene
-   search as the main field; its suggestions come from the same geocoder and
-   coordinate parser, so a pasted Google Earth position works in both. */
-async function cspPlaceSuggestions(text,signal){
-  const t=String(text||"").trim();
-  try{ if(t.length<3||parseCoordinates(t)) return [] }catch(error){ return [] }
-  const r=await fetch(PHOTON+"/api/?limit=6&q="+encodeURIComponent(t),{signal});
-  if(!r.ok) throw new Error("geocoder "+r.status);
-  const seen=new Set();
-  return ((await r.json()).features||[]).filter(f=>f.geometry&&f.geometry.coordinates).map(f=>{
-    const s=splitName(f);
-    return {primary:s.primary,secondary:s.secondary,kind:kindOf(f),lat:f.geometry.coordinates[1],lng:f.geometry.coordinates[0],extent:f.properties.extent||null};
-  }).filter(place=>{
-    const key=[place.primary,place.secondary,place.kind].join("|").toLowerCase();
-    if(seen.has(key)) return false;
-    seen.add(key);return true;
-  });
-}
 function cspSearchPlace(place){
   if(!place||!Number.isFinite(place.lat)||!Number.isFinite(place.lng)) return;
   acCancel();acHide();
@@ -221,7 +189,7 @@ $("#go").onclick=doSearch;
 $("#loc").onclick=geolocate;
 $("#q").addEventListener("input",()=>{ acInput();updateCoordinateActions() });
 $("#q").addEventListener("keydown",acKey);
-$("#qClear").onclick=()=>{ clearLoc();if(!NATIVE_HOST) $("#q").focus({preventScroll:true}) };
+$("#qClear").onclick=locationSearch.clear;
 /* Escape clears the selection from the search field or the map, but only
    once nothing else wanted it: an open menu, a markup edit or an area
    selection takes Escape first. Those are read before any handler runs,

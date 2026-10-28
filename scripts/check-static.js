@@ -731,7 +731,7 @@ assert.match(index,/id:"waarchaeology"[\s\S]{0,420}CSPWaArchaeology\?\.featureCo
 assert(index.includes('p.precision==="estimated"')&&read("wa-archaeology.js").includes('"Estimated research waypoint"'),
        "archaeology markers must visually and textually distinguish estimated locations");
 assert(index.includes('id="coordCopy"')&&index.includes('id="coordOpen"')&&
-       index.includes("https://www.google.com/maps/search/?api=1")&&index.includes("https://earth.google.com/web/search/"),
+       read("location-search.js").includes("https://www.google.com/maps/search/?api=1")&&read("location-search.js").includes("https://earth.google.com/web/search/"),
        "the search row must copy a selected coordinate and offer cross-platform Google Maps and Earth links");
 {
   const menu=index.slice(index.indexOf("menuEl.innerHTML="),index.indexOf("menuEl.style.display=\"block\""));
