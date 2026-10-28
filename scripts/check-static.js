@@ -155,9 +155,10 @@ assert(index.includes(`<script src="wa-archaeology.js?build=${versionSandbox.CSP
 /* The page only dispatches analysis; the glacial algorithms run in the worker
    (and on the engine), so they ship for it but are not page scripts. */
 for(const file of ["glacial-research-core.js","glacial-segment-core.js","glacial-segment-features.js","glacial-moraine-classifier.js",
-                   "glacial-zone-core.js","glacial-zone-features.js","glacial-belt-classifier.js","glacial-moraine-analysis.js"])
+                   "glacial-zone-core.js","glacial-zone-features.js","glacial-belt-classifier.js","glacial-moraine-analysis.js",
+                   "terrain-analysis-core.js","research-analysis.js"])
   assert(read("research-worker.js").includes(`"./${file}"`)&&!page.includes(`src="${file}`),`${file} belongs to the analysis worker, not the page`);
-assert(index.includes(`<script src="research-analysis.js?build=${versionSandbox.CSP_BUILD}"></script>`),"index must load the shared analysis dispatcher");
+assert(index.includes(`<script src="research-contract.js?build=${versionSandbox.CSP_BUILD}"></script>`),"index must load the lightweight analysis contract");
 assert(read("sw.js").includes(`const CSP_BUILD = "${versionSandbox.CSP_BUILD}";`),
        "service worker cache namespace must use the page build version");
 /* Shipping a fix is not the same as anyone receiving it. Same-origin assets are
@@ -677,7 +678,7 @@ assert(index.includes('function inputPercent(id,fallback)')&&
 assert(index.includes('(0.15+0.85*t)'),"neutral elevation shading must not darken the whole basemap");
 assert(index.includes('class ElevationGpuRenderer'),"elevation recolouring must use the shared WebGL2 renderer");
 assert(index.includes('elevation-tiles-prod/terrarium'),"elevation must have a browser-direct national fallback");
-assert(index.includes('CSPResearchAnalysis.shouldOffload({connected:PROXY'),
+assert(index.includes('CSPResearchContract.shouldOffload({connected:PROXY'),
        "large and mobile research rasters must prefer the connected M2 engine");
 assert(index.includes('return {...await runResearchWorker(payload),engine:"browser worker fallback"}'),
        "M2 analysis failure must retain an automatic browser-worker fallback");

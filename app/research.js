@@ -120,7 +120,7 @@ const RESEARCH_LOOKS={
   rrim:{palettes:["red","ochre","blue"],range:"rrim",blend:"normal",
     labels:["Hollow","Steep","Ridge"],read:(v,s)=>`Slope ${Math.round(s)}° · ${v>=0?"convex":"concave"} ${Math.abs(v).toFixed(1)}°`},
   geomorphons:{palettes:["geoEarth","geoClassic"],range:"categories",blend:"normal",alpha:.86,
-    read:v=>CSPTerrainAnalysis.GEOMORPHON_CLASSES[v]||""},
+    read:v=>CSPResearchContract.GEOMORPHON_CLASSES[v]||""},
   drainage:{palettes:["water","glow","lava"],range:"log",blend:"normal",
     labels:["Rill","","Main stem"],read:v=>`Drains ${researchArea(v)}`},
   wetness:{palettes:["wet","viridis","glacier"],range:"quantile",blend:"normal",alpha:.86,
@@ -280,7 +280,7 @@ function researchLookColours(result,product,paletteId,reverse){
   const palette=RESEARCH_PALETTES[paletteId]||{stops:researchStudioStops(paletteId)||RESEARCH_PALETTES[look.palettes[0]].stops};
   const alpha=look.alpha??1,name=result.label;
   if(look.range==="categories"){
-    const colors=palette.categories.map(researchHex),classes=CSPTerrainAnalysis.GEOMORPHON_CLASSES;
+    const colors=palette.categories.map(researchHex),classes=CSPResearchContract.GEOMORPHON_CLASSES;
     const order=[2,3,4,5,6,7,8,9,10,1],width=100/order.length;
     return {colourAt:value=>value>=1&&value<=10?{rgb:colors[value-1],alpha}:null,
       legend:{name,bar:`linear-gradient(90deg,${order.map((c,i)=>`${palette.categories[c-1]} ${i*width}% ${(i+1)*width}%`).join(",")})`,labels:[classes[2],classes[6],classes[10]+" · flat"]}};
@@ -360,7 +360,7 @@ function runResearchWorker(payload){
 }
 function shouldOffloadResearch(raster){
   const mobile=matchMedia("(pointer: coarse)").matches||(navigator.maxTouchPoints>1&&innerWidth<900);
-  return CSPResearchAnalysis.shouldOffload({connected:PROXY,mobile,cells:raster.grid.length,
+  return CSPResearchContract.shouldOffload({connected:PROXY,mobile,cells:raster.grid.length,
     hardwareConcurrency:navigator.hardwareConcurrency||0});
 }
 async function runResearchServer(payload){
@@ -378,7 +378,7 @@ async function runResearchServer(payload){
     const response=await fetch(api("/api/terrain/analyze?"+query),{method:"POST",body:payload.grid,
       headers:{"Content-Type":"application/octet-stream"},cache:"no-store",signal:controller.signal});
     if(!response.ok) throw new Error(`M2 analysis HTTP ${response.status}`);
-    return {id:payload.id,ok:true,...CSPResearchAnalysis.decodeResult(await response.arrayBuffer())};
+    return {id:payload.id,ok:true,...CSPResearchContract.decodeResult(await response.arrayBuffer())};
   }catch(error){
     if(timedOut) throw new Error("M2 analysis timed out");
     throw error;

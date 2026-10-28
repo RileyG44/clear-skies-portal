@@ -70,7 +70,7 @@ const normalized=researchEnv.researchColourRaster({width:1,height:1,label:'Anoma
 assert.equal(normalized.legend.labels[2],'1 σ','standardized anomalies must not be labelled as feet');
 
 /* LiDAR analysis looks: palettes, classes and the cursor readout text. */
-researchEnv.CSPTerrainAnalysis=require('./terrain-analysis-core.js');researchEnv.reliefZFactor=c=>1;
+researchEnv.CSPResearchContract=require('./research-contract.js');researchEnv.reliefZFactor=c=>1;
 rendered.length=0;researchEnv.researchQuantile=(data,q)=>q<.5?0:1;
 const skyView=researchEnv.researchColourRaster({width:2,height:1,label:'Sky-view factor',data:new Float32Array([0,1])},'svf',{palette:'grey'});
 assert.deepEqual([...rendered[0].data],[11,11,13,255,255,255,255,255],'sky-view greyscale runs dark to white');

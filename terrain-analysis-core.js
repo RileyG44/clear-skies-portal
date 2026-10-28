@@ -21,10 +21,10 @@
  * the same size as the input so research-analysis.js can frame them. */
 (function(root,factory){
   "use strict";
-  const api=factory();
+  const api=factory(typeof module==="object"&&module.exports?require("./research-contract.js"):root.CSPResearchContract);
   if(typeof module==="object"&&module.exports) module.exports=api;
   if(root) root.CSPTerrainAnalysis=api;
-})(typeof globalThis!=="undefined"?globalThis:this,function(){
+})(typeof globalThis!=="undefined"?globalThis:this,function(contract){
   "use strict";
 
   const D2R=Math.PI/180,R2D=180/Math.PI;
@@ -157,7 +157,7 @@
 
   /* Geomorphons. GRASS r.geomorphon lookup: rows count lower directions,
      columns count higher directions. */
-  const GEOMORPHON_CLASSES=Object.freeze(["","Flat","Peak","Ridge","Shoulder","Spur","Slope","Hollow","Footslope","Valley","Pit"]);
+  const GEOMORPHON_CLASSES=contract.GEOMORPHON_CLASSES;
   const FL=1,PK=2,RI=3,SH=4,SP=5,SL=6,HL=7,FS=8,VL=9,PT=10;
   const GEOMORPHON_TABLE=[
     [FL,FL,FL,FS,FS,VL,VL,VL,PT],
