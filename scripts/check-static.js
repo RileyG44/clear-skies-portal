@@ -152,7 +152,11 @@ assert(index.includes(`<script src="elevation-bands.js?build=${versionSandbox.CS
 assert(index.includes(`<script src="elevation-tile-core.js?build=${versionSandbox.CSP_BUILD}"></script>`),"index must decode packed elevation before resampling");
 assert(index.includes(`<script src="public-terrain.js?build=${versionSandbox.CSP_BUILD}"></script>`),"index must load the public terrain source registry");
 assert(index.includes(`<script src="wa-archaeology.js?build=${versionSandbox.CSP_BUILD}"></script>`),"index must load the public-safe archaeology index");
-assert(index.includes(`<script src="glacial-research-core.js?build=${versionSandbox.CSP_BUILD}"></script>`),"index must load geomorphology primitives");
+/* The page only dispatches analysis; the glacial algorithms run in the worker
+   (and on the engine), so they ship for it but are not page scripts. */
+for(const file of ["glacial-research-core.js","glacial-segment-core.js","glacial-segment-features.js","glacial-moraine-classifier.js",
+                   "glacial-zone-core.js","glacial-zone-features.js","glacial-belt-classifier.js","glacial-moraine-analysis.js"])
+  assert(read("research-worker.js").includes(`"./${file}"`)&&!page.includes(`src="${file}`),`${file} belongs to the analysis worker, not the page`);
 assert(index.includes(`<script src="research-analysis.js?build=${versionSandbox.CSP_BUILD}"></script>`),"index must load the shared analysis dispatcher");
 assert(read("sw.js").includes(`const CSP_BUILD = "${versionSandbox.CSP_BUILD}";`),
        "service worker cache namespace must use the page build version");
