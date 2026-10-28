@@ -381,6 +381,12 @@ Source requests run eight at a time from the browser cache first, with a ceiling
 30,000 tiles per export. A tile a source answers with "no data" (outside a scene's
 footprint) is left empty rather than reported as a failure.
 
+On desktop the lower-left corner of the map shows the cursor's latitude/longitude and
+approximate ground elevation in feet, with colour keys for visible terrain, elevation,
+surface-analysis and snow layers. The **Map info** switch in the export settings adds the
+same details to the image's lower-left corner; the location is frozen when an area
+selection starts.
+
 A PNG is still a finite raster image: you can zoom into it until you reach the chosen
 pixel resolution, not indefinitely. A future research-grade export for continued
 map-like zoom would be a tiled package or Cloud-Optimized GeoTIFF rather than one PNG.
@@ -418,23 +424,18 @@ The drawing bar works like a paint program:
 
 Marks are anchored to the ground: positions are latitude/longitude and every size is in
 metres, so they grow and shrink with the map like writing on a paper map and stay put
-at any zoom or rotation. Each layer has its own switch, opacity and place in **Layers**,
-so projects can be shown one at a time or together, and they come through in PNG
-exports.
+at any zoom or rotation. The same layers draw on the 2D map and on 3D terrain, where
+marks follow the surface (or float at a set height with **Snap to surface** off). Each
+layer has its own switch, opacity and place in **Layers**, so projects can be shown one
+at a time or together, and visible layers come through in PNG exports.
 
-Where they live:
-
-- **This device:** every layer is kept in the browser (IndexedDB), so markup works with
-  no engine, offline, in the field.
-- **Your computer:** when the terrain engine is reachable, each layer is also saved as
-  `markup/<layer-id>.geojson` beside `server.js` (or `CSP_MARKUP_DIR`). That folder is
-  in `.gitignore`, so markup is never committed. The files are plain GeoJSON and open in
-  QGIS or Google Earth.
-- **Between devices:** the engine copy is the shared one. The newer copy of a layer
-  wins; a deleted layer goes to `markup/.trash/` and leaves a tombstone so an older
-  offline copy cannot bring it back. An engine started from code older than markup
-  answers 404; the app says so and keeps the layers on the device until the engine is
-  updated and restarted.
+Where they live: layers belong to the terrain engine, not the browser. Each is saved as
+`markup/<layer-id>.geojson` beside `server.js` (or in `CSP_MARKUP_DIR`), a folder listed
+in `.gitignore`; the files are plain GeoJSON and open in QGIS or Google Earth. With no
+engine connected there is no markup, and switching engines shows that engine's layers.
+The newer copy of a layer wins; a deleted layer goes to `markup/.trash/` and leaves a
+tombstone so an older copy on another device cannot bring it back. Whether a layer is
+shown, and how strongly, is this device's choice and is not saved with the layer.
 
 ## What's in the box
 
@@ -662,9 +663,3 @@ with `satportal` only as its working directory, so filtering on the path finds n
 Get-NetTCPConnection -LocalPort 8765 -State Listen |
   ForEach-Object { Stop-Process -Id $_.OwningProcess -Force }
 ```
-
-### Map annotation layers
-
-Use **Markup → New markup layer** or the pencil button to draw on either the 2D map or 3D terrain. Pen, highlighter, shapes, arrows, notes, and pins use geographic positions and fixed ground dimensions. Width and text size are entered in feet; orbiting or zooming does not change the saved position or size. In 3D the marks follow the terrain surface. The camera includes visible markup in PNGs, including large 2D exports. Hide a layer to exclude it from the image. Existing markup layers work in both views without conversion.
-
-On desktop, the lower-left map corner shows the cursor’s latitude/longitude and approximate ground elevation in feet, plus color keys for visible terrain, elevation, surface-analysis and snow layers. The readout stays fixed in the screen’s lower-left corner and is covered when the sidebar opens. In the camera/export controls, **Include coordinates, elevation and color keys** adds these details to the saved image’s lower-left corner; the choice is remembered. The location is frozen when area selection starts, and a selection-center reading is used if no cursor location has been chosen.
