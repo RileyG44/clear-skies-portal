@@ -632,27 +632,118 @@ struct Toasts: View {
 /// after iOS ends its process.
 struct LaunchCover: View {
     var restoring = false
+    @Environment(\.accessibilityReduceMotion) private var reducedMotion
+    @Environment(\.displayScale) private var displayScale
+    @State private var started = Date()
 
     var body: some View {
-        ZStack {
-            Color("CanvasBackground").ignoresSafeArea()
-            VStack(spacing: 12) {
-                Image(systemName: "mountain.2")
-                    .font(.system(size: 26))
-                    .foregroundStyle(.secondary)
-                    .symbolEffect(.pulse, options: .repeating)
-                VStack(spacing: 2) {
-                    Text("Clear Skies").portalFont(.headline)
-                    Text(restoring ? "Restoring your map…" : "Loading your map and tools…")
-                        .portalFont(.footnote)
-                        .foregroundStyle(.secondary)
+        GeometryReader { geometry in
+            let still = reducedMotion
+            let scale = max(1, floor(min((geometry.size.width - 48) / 240,
+                                         (geometry.size.height - 48) / 96, 3) * displayScale)) / displayScale
+            TimelineView(.animation(minimumInterval: 1.0 / 24, paused: still)) { timeline in
+                let frame = still ? 0 : Int(max(0, timeline.date.timeIntervalSince(started)) * 24) % 192
+                Image(uiImage: PixelSatellite.image(frame: frame))
+                    .interpolation(.none)
+                    .resizable()
+                    .frame(width: 240 * scale, height: 96 * scale)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+            }
+        }
+        .background(Color.black.ignoresSafeArea())
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(restoring ? "Restoring your map" : "Loading your map and tools")
+        .transition(.opacity)
+    }
+}
+
+/// Pixel-for-pixel port of Riley's centered satellite generator, 2026-10-28.
+/// Render at logical resolution, then scale without interpolation.
+private enum PixelSatellite {
+    private static let stars: [(Int, Int, Double)] = [(162,19,0.7417869892607294),(206,47,0.9424502837770503),(192,44,0.922324996665417),(10,32,0.7759585674357169),(66,44,0.05185325369909766),(43,10,0.3717933555623072),(225,18,0.38075791704476514),(29,39,0.24933071444268662),(190,16,0.408151054974514),(49,27,0.15960421235803823),(207,7,0.13876741839890316),(161,31,0.1266992325502697),(3,3,0.2094563824951179),(58,13,0.8724077654368019),(77,23,0.9614779889500835),(141,46,0.6257301956771277),(49,47,0.19687904392603262),(231,27,0.29878889785386775),(95,29,0.1659560571297456),(40,19,0.06513971337567626),(80,41,0.5861412585033708),(155,46,0.7076761524222557),(19,22,0.35535135729996914),(81,33,0.6964198076411567),(50,33,0.47253834981224785),(48,6,0.25618183594271204),(8,25,0.8448808893881297),(7,38,0.7877383039804342),(96,27,0.5785188290568746),(5,31,0.04672711869894153),(49,42,0.9551798995911663),(53,10,0.7557364124513177),(212,32,0.34438181305301196),(93,36,0.25089395624103406),(121,9,0.5897633712619398),(202,26,0.8596943191875801),(12,30,0.9458001850421838),(26,16,0.34074053550422223),(159,26,0.9180871855333121),(90,20,0.9241976194277907)]
+    private static let surface: [Int] = {
+        let control = [(0,72),(16,62),(30,74),(46,66),(60,78),(76,64),(92,76),(108,68),
+                       (122,80),(138,64),(154,76),(170,62),(186,74),(204,66),(220,78),(240,70)]
+        return (0..<240).map { x in
+            let i = (0..<control.count-1).first { x <= control[$0+1].0 }!
+            let (x0,y0) = control[i], (x1,y1) = control[i+1]
+            return Int((Double(y0) + Double(y1-y0) * Double(x-x0) / Double(x1-x0)).rounded(.toNearestOrEven))
+        }
+    }()
+    static func image(frame f: Int) -> UIImage {
+        let format = UIGraphicsImageRendererFormat()
+        format.scale = 1
+        format.opaque = true
+        return UIGraphicsImageRenderer(size: CGSize(width: 240, height: 96), format: format).image { renderer in
+            let c = renderer.cgContext
+            c.setShouldAntialias(false)
+            c.setFillColor(UIColor.black.cgColor)
+            c.fill(CGRect(x: 0, y: 0, width: 240, height: 96))
+            let white = UIColor(white: 235.0/255, alpha: 1)
+            let gray = UIColor(white: 120.0/255, alpha: 1)
+            let dark = UIColor(white: 55.0/255, alpha: 1)
+            func point(_ x: Int, _ y: Int, _ color: UIColor) {
+                c.setFillColor(color.cgColor)
+                c.fill(CGRect(x: x, y: y, width: 1, height: 1))
+            }
+            func line(_ ax: Int, _ ay: Int, _ bx: Int, _ by: Int, _ visit: (Int, Int, Int) -> Void) {
+                var x = ax, y = ay, i = 0
+                let dx = abs(bx-x), dy = abs(by-y), sx = x < bx ? 1 : -1, sy = y < by ? 1 : -1
+                var error = dx-dy
+                while true {
+                    visit(x,y,i); i += 1
+                    if x == bx && y == by { break }
+                    let e = 2*error
+                    if e > -dy { error -= dy; x += sx }
+                    if e < dx { error += dx; y += sy }
                 }
             }
-            .padding(.horizontal, 28)
-            .padding(.vertical, 22)
-            .chromeGlass(in: .rect(cornerRadius: 22), interactive: false)
+            func solid(_ x: Int, _ y: Int, _ bx: Int, _ by: Int, _ color: UIColor) {
+                line(x,y,bx,by) { px,py,_ in point(px,py,color) }
+            }
+            func rect(_ x: Int, _ y: Int, _ bx: Int, _ by: Int) {
+                c.setFillColor(UIColor.black.cgColor)
+                c.fill(CGRect(x: x, y: y, width: bx-x+1, height: by-y+1))
+                solid(x,y,bx,y,white); solid(bx,y,bx,by,white)
+                solid(bx,by,x,by,white); solid(x,by,x,y,white)
+            }
+            let t = Double(f)/192
+            func round(_ v: Double) -> Int { Int(v.rounded(.toNearestOrEven)) }
+            for (x,y,phase) in stars {
+                let tw = sin(2 * .pi * (2*t+phase))
+                if tw > -0.2 { point(x,y,tw > 0.5 ? white : gray) }
+            }
+            for x in 0..<240 {
+                let y = surface[x]
+                point(x,y,white)
+                for py in stride(from: y+3, to: 96, by: 4) where (x+py*3)%6 == 0 { point(x,py,dark) }
+            }
+            for (k,x) in [22,66,100,148,180,214].enumerated() {
+                let y = surface[x]
+                solid(x,y-1,x,y-6,gray)
+                if k%2 == 0 { solid(x-2,y-2,x+2,y-2,gray); solid(x-1,y-4,x+1,y-4,gray) }
+                else { solid(x-2,y-5,x+2,y-5,gray) }
+            }
+            let sx = 120, sy = round(26+1.2*sin(2 * .pi * t))
+            for (k,o) in [-9,0,9].enumerated() {
+                let hx = max(0,min(239,sx+round(Double(o)*1.6+9*sin(2 * .pi * (t+Double(k)/3)))))
+                let by = surface[hx]-1
+                line(sx+o/3,sy+6,hx,by) { x,y,i in
+                    if ((i-f*2+k*2)%6+6)%6 < 3 { point(x,y,white) }
+                }
+                if (f+k*2)%4 < 2 { point(hx+1,by,white); point(hx-1,by,white); point(hx,by-1,white) }
+            }
+            for (x,bx) in [(sx-16,sx-7),(sx+7,sx+16)] {
+                rect(x,sy-3,bx,sy+3)
+                for gx in stride(from: x+3, to: bx, by: 3) { solid(gx,sy-2,gx,sy+2,gray) }
+            }
+            solid(sx-6,sy,sx-4,sy,white); solid(sx+4,sy,sx+6,sy,white)
+            rect(sx-4,sy-4,sx+4,sy+4)
+            c.setFillColor(white.cgColor)
+            c.fill(CGRect(x: sx-1,y: sy-1,width: 3,height: 3))
+            solid(sx,sy-5,sx,sy-8,white); point(sx,sy-9,white)
+            solid(sx-1,sy+5,sx+1,sy+5,white)
         }
-        .transition(.opacity)
     }
 }
 

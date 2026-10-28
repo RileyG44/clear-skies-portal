@@ -5,7 +5,8 @@ const bootSource=[...html.matchAll(/<script(?:\s[^>]*)?>([\s\S]*?)<\/script>/g)]
 assert(bootSource,'the startup recovery controller must ship inline');
 function fixture({loaded=true,cache}={}){
   const rootEvents={},docEvents={},winEvents={},timers=new Map(),classes=new Set();
-  const nodes=Object.fromEntries(['cspStartup','cspStartupMessage','cspStartupRetry'].map(id=>[id,{hidden:false,textContent:''}]));
+  const nodes=Object.fromEntries(['cspStartup','cspStartupMessage','cspStartupRetry'].map(id=>[id,{hidden:false,textContent:'',classes:new Set(),classList:{toggle(c,on){if(on)this.owner.classes.add(c);else this.owner.classes.delete(c)}}}]));
+  for(const node of Object.values(nodes))node.classList.owner=node;
   let reloads=0,timerId=0,destination;
   const root={classList:{add:c=>classes.add(c),remove:c=>classes.delete(c)},style:{setProperty(){}},addEventListener:(n,f)=>rootEvents[n]=f};
   const context={window:{addEventListener:(n,f)=>winEvents[n]=f},document:{documentElement:root,getElementById:id=>nodes[id],addEventListener:(n,f)=>docEvents[n]=f},
@@ -17,9 +18,11 @@ function fixture({loaded=true,cache}={}){
 }
 {
   const f=fixture();assert(f.classes.has('csp-boot'));
+  assert(!f.nodes.cspStartup.classes.has('failed'),'normal startup has no recovery controls');
   f.timers.get(1).fn();
   assert(f.classes.has('csp-boot'),'a slow load must not reveal incomplete or legacy controls');
   assert.match(f.nodes.cspStartupMessage.textContent,/longer/);
+  assert(f.nodes.cspStartup.classes.has('failed'),'slow startup reveals recovery controls');
   f.rootEvents['csp:ready']();
   assert(!f.classes.has('csp-boot'));assert(f.nodes.cspStartup.hidden);
   assert.equal(f.timers.size,0);
