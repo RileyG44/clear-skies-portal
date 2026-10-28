@@ -3,15 +3,15 @@
    runtime documented in README, with real DOM, routing and search controllers.
    node scripts/ui-review-regressions.js [http://127.0.0.1:8765/] */
 const assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path');
-const {chromium}=require('./lib/playwright.js');
+const {launchUIBrowser}=require('./lib/browser.js');
 const base=process.argv[2]||'http://127.0.0.1:8765/';
-const output=path.join(__dirname,'..','.codex-audits');
+const output=process.env.CSP_UI_OUTPUT||path.join(__dirname,'..','.codex-audits');
 const places=Array.from({length:6},(_,i)=>({type:'Feature',geometry:{type:'Point',coordinates:[-119.28,47.13+i*.01]},
   properties:{name:'Place '+(i+1),county:'Grant County',state:'Washington',country:'United States of America',osm_value:'town'}}));
 const scenes=Array.from({length:3},(_,i)=>({type:'Feature',id:'review-scene-'+i,collection:'sentinel-2-l2a',geometry:null,
   properties:{datetime:'2026-10-16T12:00:00Z','eo:cloud_cover':4},assets:{}}));
 (async()=>{
-  const browser=await chromium.launch();fs.mkdirSync(output,{recursive:true});
+  const browser=await launchUIBrowser();fs.mkdirSync(output,{recursive:true});
   async function create(width,height,touch=false,unsupportedPicker=false){
     const context=await browser.newContext({viewport:{width,height},isMobile:touch,hasTouch:touch,serviceWorkers:'block'});
     await context.addInitScript(()=>{
@@ -154,8 +154,8 @@ const scenes=Array.from({length:3},(_,i)=>({type:'Feature',id:'review-scene-'+i,
     for(const [width,height] of [[320,568],[844,390]]){
       const small=await create(width,height,true),{page:s}=small;
       await s.evaluate(()=>{document.body.classList.remove('collapsed');document.body.dataset.cspView='nav';document.body.dataset.cspDetent='medium'});await s.waitForTimeout(500);
-      const layout=await s.evaluate(()=>{const nav=document.getElementById('cspNav'),scroll=document.getElementById('cspNavScroll'),foot=nav.querySelector('.foot');return {space:scroll.clientHeight,gap:nav.getBoundingClientRect().bottom-foot.getBoundingClientRect().bottom,height:foot.getBoundingClientRect().height,metadata:getComputedStyle(foot.querySelector('.foot-meta')).display,rows:[...foot.querySelectorAll('.csp-nav-button')].map(el=>el.getBoundingClientRect().height)}});
-      assert(layout.height<=80&&Math.abs(layout.gap)<1&&layout.metadata==='none','compact utilities stay pinned');
+      const layout=await s.evaluate(()=>{const nav=document.getElementById('cspNav'),scroll=document.getElementById('cspNavScroll'),foot=nav.querySelector('.foot');return {space:scroll.clientHeight,gap:nav.getBoundingClientRect().bottom-foot.getBoundingClientRect().bottom,height:foot.getBoundingClientRect().height,metadata:foot.querySelector('.foot-meta')?getComputedStyle(foot.querySelector('.foot-meta')).display:'absent',rows:[...foot.querySelectorAll('.csp-nav-button')].map(el=>el.getBoundingClientRect().height)}});
+      assert(layout.height<=80&&Math.abs(layout.gap)<1&&['none','absent'].includes(layout.metadata),'compact utilities stay pinned');
       assert(layout.rows.every(h=>h>=44),'utility targets remain at least 44px');
       if(width===844) assert(layout.space>=220,'landscape keeps useful space for the tool list');
       await s.screenshot({path:path.join(output,`review-fixed-nav-${width}.png`)});

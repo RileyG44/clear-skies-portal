@@ -18,19 +18,40 @@ the network, the live service on port 8765 or its cache: server tests start
 These need a real browser and are run by hand when their area changes. They
 load Playwright through `scripts/lib/playwright.js` (the `playwright-core`
 dev dependency, or the module named by `PLAYWRIGHT_MODULE`) and drive
-Chromium (Chrome, for the GPU suites) or WebKit. The GPU and performance suites start their own
+installed Google Chrome by default for interface suites, or WebKit. Set
+`CSP_UI_BROWSER=chromium` to use a downloaded Playwright Chromium, or
+`CSP_UI_BROWSER=webkit` for interface workloads supported by WebKit. GPU
+suites choose their browser explicitly and keep their real-GPU requirements. The GPU and performance suites start their own
 server on an isolated port and never use the service on 8765.
 
 ### Interface (`scripts/ui-*.js`)
 
-Start a server from your checkout on a spare port and pass its address:
-`PORT=8830 node server.js`, then `node scripts/ui-snapshot.js http://127.0.0.1:8830/`.
+Run named workloads with an isolated server and temporary cache/markup storage:
+
+```
+node scripts/run-ui.js map-popovers review-regressions sheet-chrome satellite-search sheet
+```
+
+The runner refuses occupied ports, runs workloads sequentially and cleans up
+its server/storage on success or failure. `CSP_UI_OUTPUT=/absolute/path` puts
+popover/review/satellite screenshots outside the default `.codex-audits`.
+Individual scripts still accept an explicit server URL; their default 8765
+attaches to a running service, so use the runner for isolated verification.
+The shared server and browser lifecycle lives in `scripts/lib/` and is also
+used by the GPU harnesses. This does not merge their GPU/device assertions.
+
+These suites verify the supported shell, including old `?ui=classic` URLs.
+The collapsed portrait sheet is a 52px search capsule; its grabber appears
+only when expanded. Build/reset utilities are in Settings. The markup
+fixture persists saves across reload, matching engine ownership. Browser
+fixtures do not establish live-provider, physical-device, UIKit, or offline
+upgrade acceptance. Run the native/device gates separately.
 
 | Script | Checks |
 |---|---|
 | `ui-map-popovers.js` | Dock popovers in light and dark on desktop, phones and landscape: editing, layer switching, drawing, keyboard focus, panel transitions, Reduced Motion, the camera's two actions, Appearance colours and presets after a reload, the typed width field and the selected mark's Delete/Undo bar |
 | `ui-snapshot.js` | Capture: whole view, area selection, handles, exported pixels |
-| `ui-satellite-search.js` | Scene filters, custom dates, search keys, dismissed lookups, mobile focus, source credits, header alignment, pinned navigation and both dropdown styles, plus the classic fallback |
+| `ui-satellite-search.js` | Scene filters, custom dates, search keys, dismissed lookups, mobile focus, source credits, header alignment, pinned navigation and both dropdown styles, plus legacy query URLs on the supported shell |
 | `ui-sheet.js`, `ui-sheet-chrome.js` | Phone bottom sheet detents and grabber keys; compact footer, toolbar fade/slide, direct swipe tracking, Reduced Motion and Settings utilities |
 | `ui-stress.js` | Search row and coordinate shortcuts across phone to desktop sizes |
 | `ui-review-regressions.js` | Touch scrolling and completed taps, committed locations and retained drafts, result-selection animations, scaled-pointer geometry, short screens, date shortcuts and phone picker targets |

@@ -11,8 +11,8 @@
      node server.js &
      node scripts/ui-snapshot.js [http://127.0.0.1:8765/]
 
-   Uses Chromium from scripts/lib/playwright.js (npx playwright-core install chromium). */
-const { chromium } = require('./lib/playwright.js');
+   Uses the installed Chrome through scripts/lib/browser.js; see docs/TESTING.md. */
+const {launchUIBrowser}=require('./lib/browser.js');
 const fs = require('fs'), path = require('path');
 const { encodePNG } = require(path.join(__dirname, '..', 'usgs.js'));
 const base = process.argv[2] || 'http://127.0.0.1:8765/';
@@ -36,7 +36,7 @@ function patternTile(z, x, y, label) {
 const pngSize = buf => ({ w: buf.readUInt32BE(16), h: buf.readUInt32BE(20) });
 
 (async () => {
-  const browser = await chromium.launch();
+  const browser = await launchUIBrowser();
   const results = []; const ok = (name, cond, info = '') => results.push(`${cond ? 'ok  ' : 'FAIL'} ${name}${info ? '  ' + info : ''}`);
   const errs = [];
   for (const bearing of [0, 30]) {

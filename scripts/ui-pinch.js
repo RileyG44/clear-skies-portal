@@ -12,8 +12,8 @@
      node server.js &
      node scripts/ui-pinch.js [http://127.0.0.1:8765/]
 
-   Uses Chromium from scripts/lib/playwright.js (npx playwright-core install chromium). */
-const { chromium } = require('./lib/playwright.js');
+   Uses the installed Chrome through scripts/lib/browser.js; see docs/TESTING.md. */
+const {launchUIBrowser}=require('./lib/browser.js');
 const path = require('path');
 const { encodePNG } = require(path.join(__dirname, '..', 'usgs.js'));
 const base = process.argv[2] || 'http://127.0.0.1:8765/';
@@ -35,7 +35,7 @@ const image = (() => {
 })();
 
 (async () => {
-  const browser = await chromium.launch();
+  const browser = await launchUIBrowser();
   const results = []; const ok = (name, cond, info = '') => results.push(`${cond ? 'ok  ' : 'FAIL'} ${name}${info ? '  ' + info : ''}`);
   const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 3, isMobile: true, hasTouch: true });
   const later = ms => new Promise(r => setTimeout(r, ms * (0.6 + Math.random() * 0.8)));

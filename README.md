@@ -282,7 +282,7 @@ It prints `https://<this-mac>.<tailnet>.ts.net:8443/`, which opens on any
 device signed in to your tailnet. It is tailnet-only; never use Funnel for it.
 Preview pages show a **Preview** badge beside the build stamp and in the tab
 title, and they skip the offline service worker so every reload shows the latest
-push. Append `?ui=classic` to compare against the previous interface. The
+push. Legacy `?ui=classic` URLs now open the same supported interface. The
 branch has to include this script's server support (merge `main` into older
 branches first).
 
@@ -454,6 +454,8 @@ shown, and how strongly, is this device's choice and is not saved with the layer
 | `server.js` | Local terrain engine: wires the `engine/` route modules together and serves the static app |
 | `engine/` | One module per engine concern: HTTP helpers, tile cache, upstream scheduling, terrain, WA DNR, downloads, proxies, snapshots and markup storage |
 | `share-state.js`, `coordinates.js` | Share-link codec and validation; coordinate parsing. Loaded by the page and tested directly |
+| `location-search.js` | Search/autocomplete controller; owns pending suggestions, debounce and cancellation behind injected map/scene actions |
+| `research-contract.js` | Page-safe request bounds, result framing, offload policy and landform labels; algorithms run in `research-worker.js` or the engine |
 | `scripts/install-mac-service.sh` | Installs a loopback-only, self-healing macOS terrain-engine service |
 | `run.command` | Double-click launcher for macOS: checks Node, starts the engine and opens the browser |
 | `electron-builder.js` | Mac app packaging (`npm run dist`) |

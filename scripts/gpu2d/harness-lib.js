@@ -5,15 +5,14 @@
    The live service on port 8765 is never used. */
 const fs = require('fs');
 const path = require('path');
-const http = require('http');
 const zlib = require('zlib');
 const crypto = require('crypto');
-const { spawn } = require('child_process');
+const {portOpen,startServer:spawnTestServer}=require('../lib/test-server.js');
 
 const REPO = path.resolve(__dirname, '..', '..');
 const RESULTS = path.join(__dirname, 'results');
 const HOOK = fs.readFileSync(path.join(__dirname, 'page-hook.js'), 'utf8');
-const pw = require('../lib/playwright.js');
+const {launchBrowser:openBrowser}=require('../lib/browser.js');
 const CHROME_ARGS = ['--use-angle=metal', '--enable-gpu', '--ignore-gpu-blocklist'];
 const VIEWPORT = { width: 1440, height: 900 };
 const DPR = 2;
@@ -49,7 +48,6 @@ const PAN_MOVES = [
   { lat: 47.875327, lng: -118.41174, zoom: 16.0367 }
 ];
 const WARM_VERSION = 2;
-const ownedServers = new Set();
 
 const CONTROLS = {
   style: ['#terStyle', false],
@@ -377,59 +375,7 @@ function sha256(buffer) {
   return crypto.createHash('sha256').update(buffer).digest('hex');
 }
 
-function portOpen(port) {
-  return new Promise((resolve) => {
-    const req = http.get({ host: '127.0.0.1', port, path: '/', timeout: 1500 }, (res) => {
-      res.resume();
-      resolve(res.statusCode > 0 && res.statusCode < 500);
-    });
-    req.on('error', () => resolve(false));
-    req.on('timeout', () => { req.destroy(); resolve(false); });
-  });
-}
-
-function stopChild(child) {
-  return new Promise((resolve) => {
-    if (!child || child.exitCode != null) return resolve();
-    const pid = child.pid;
-    const done = () => resolve();
-    const timer = setTimeout(() => {
-      try { process.kill(-pid, 'SIGKILL'); } catch (error) { try { child.kill('SIGKILL'); } catch (e) {} }
-      done();
-    }, 2500);
-    child.once('exit', () => { clearTimeout(timer); done(); });
-    try { process.kill(-pid, 'SIGTERM'); }
-    catch (error) { try { child.kill('SIGTERM'); } catch (e) {} }
-  });
-}
-
-async function startServer({ port, cacheDir }) {
-  fs.mkdirSync(cacheDir, { recursive: true });
-  const child = spawn(process.execPath, ['server.js'], {
-    cwd: REPO,
-    env: { ...process.env, HOST: '127.0.0.1', PORT: String(port), CSP_CACHE_DIR: cacheDir },
-    stdio: ['ignore', 'pipe', 'pipe'],
-    detached: true
-  });
-  ownedServers.add(child);
-  let log = '';
-  const take = (buf) => { log += buf.toString(); if (log.length > 80000) log = log.slice(-40000); };
-  child.stdout.on('data', take);
-  child.stderr.on('data', take);
-  const started = Date.now();
-  while (Date.now() - started < 45000) {
-    if (child.exitCode != null) throw new Error('server exited ' + child.exitCode + '\n' + log.slice(-2000));
-    if (await portOpen(port)) {
-      return {
-        port, cacheDir, owned: true, child,
-        async stop() { ownedServers.delete(child); await stopChild(child); }
-      };
-    }
-    await new Promise((r) => setTimeout(r, 200));
-  }
-  await stopChild(child);
-  throw new Error('server did not listen on ' + port + '\n' + log.slice(-2000));
-}
+const startServer=options=>spawnTestServer({...options,root:REPO});
 
 async function ensureServer({ port, cacheDir, reuse }) {
   if (port === 8765) throw new Error('Port 8765 is the live service.');
@@ -447,10 +393,10 @@ async function ensureServer({ port, cacheDir, reuse }) {
 }
 
 async function launchBrowser(browserName, { memory } = {}) {
-  if (browserName === 'webkit') return pw.webkit.launch({ headless: true });
+  if (browserName === 'webkit') return openBrowser('webkit');
   const args = CHROME_ARGS.slice();
   if (memory) args.push('--enable-precise-memory-info', '--js-flags=--expose-gc');
-  return pw.chromium.launch({ channel: 'chrome', headless: true, args });
+  return openBrowser('chrome',{args});
 }
 
 async function installRoute(context, port) {
@@ -1205,14 +1151,6 @@ function selfTest() {
   const ok = mismatch === 0 && greyMiss === 0 && same.pctWithin3 === 100 && one.over3 === 1 && iou.tolerant > iou.strict && stats.median === 2 && paethRow === 0 && rotateOk;
   return { ok, mismatch, greyMiss, sameWithin: same.pctWithin3, oneOver: one.over3, iou, median: stats.median, paethRow, rotateOk, landed };
 }
-
-process.on('exit', () => {
-  for (const child of ownedServers) {
-    try { process.kill(-child.pid, 'SIGTERM'); } catch (error) {}
-  }
-});
-process.on('SIGINT', () => { process.exit(130); });
-process.on('SIGTERM', () => { process.exit(143); });
 
 module.exports = {
   REPO, RESULTS, VIEWPORT, DPR, CENTER, VIEWS, ZOOMS, STYLES, CONTOUR_STYLES, BEARINGS, PAN_MOVES,

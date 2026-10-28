@@ -5,12 +5,12 @@
      PLAYWRIGHT_MODULE=/path/to/playwright node scripts/ui-terrain-drape.js http://127.0.0.1:8765/
    Playwright is optional, as in the other scripts/ui-*.js workflows. */
 const assert=require('assert/strict'),fs=require('fs');
-const {chromium}=require('./lib/playwright.js');
+const {launchUIBrowser}=require('./lib/browser.js');
 const path=require('path');const root=path.join(__dirname,'..');const {encodePNG}=require(path.join(root,'usgs.js'));
 const terrarium=(h,amp)=>{const b=Buffer.alloc(256*256*4);for(let j=0;j<256;j++)for(let i=0;i<256;i++){const v=Math.round((h+amp*Math.sin(i/9)+amp*Math.cos(j/7)+32768)*256),o=(j*256+i)*4;b[o]=v>>16;b[o+1]=(v>>8)&255;b[o+2]=v&255;b[o+3]=255;}return encodePNG(b,256,256);};
 const png=terrarium(1200,40);
 (async()=>{
-  const browser=await chromium.launch({args:['--use-angle=swiftshader','--enable-unsafe-swiftshader','--ignore-gpu-blocklist']});
+  const browser=await launchUIBrowser({args:['--use-angle=swiftshader','--enable-unsafe-swiftshader','--ignore-gpu-blocklist']});
   try{
   const page=await browser.newPage({viewport:{width:1280,height:800},serviceWorkers:'block'});
   const errors=[];page.on('pageerror',e=>errors.push('pageerror: '+e.message));

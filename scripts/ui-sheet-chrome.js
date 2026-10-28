@@ -3,10 +3,10 @@
    Playwright runtime as ui-map-popovers.js.
    node scripts/ui-sheet-chrome.js [http://127.0.0.1:8765/] */
 const assert=require('node:assert/strict');
-const {chromium}=require('./lib/playwright.js');
+const {launchUIBrowser}=require('./lib/browser.js');
 const base=process.argv[2]||'http://127.0.0.1:8765/';
 (async()=>{
-  const browser=await chromium.launch();
+  const browser=await launchUIBrowser();
   try{
     for(const label of ['light','dark','system-reduced','app-reduced']){
       const reduced=label.endsWith('reduced');
@@ -40,9 +40,9 @@ const base=process.argv[2]||'http://127.0.0.1:8765/';
         const settings=document.getElementById('cspSettingsNav'),foot=nav.querySelector('.foot');
         return {gap:nav.getBoundingClientRect().bottom-settings.getBoundingClientRect().bottom,
           sheetGap:document.getElementById('side').getBoundingClientRect().bottom-settings.getBoundingClientRect().bottom,
-          meta:getComputedStyle(foot.querySelector('.foot-meta')).display,height:foot.getBoundingClientRect().height};
+          meta:foot.querySelector('.foot-meta')?getComputedStyle(foot.querySelector('.foot-meta')).display:'absent',height:foot.getBoundingClientRect().height};
       });
-      assert(footer.gap<=10&&footer.meta==='none'&&footer.height<130,'Settings sits at the bottom without a metadata shelf');
+      assert(footer.gap<=10&&['none','absent'].includes(footer.meta)&&footer.height<130,'Settings sits at the bottom without a metadata shelf');
       assert(footer.sheetGap<45,'the home-indicator inset is reserved once');
       await step();await page.waitForTimeout(90);let mid=await state();
       if(reduced) assert.equal(mid.opacity,0,'Reduce Motion hides without a spatial transition');
@@ -71,7 +71,7 @@ const base=process.argv[2]||'http://127.0.0.1:8765/';
         await session.detach();
       }
       await page.evaluate(()=>document.querySelector('.csp-nav-button[data-route="settings"]').click());
-      assert.equal(await page.locator('[data-device-build]').textContent(),await page.evaluate(()=>window.CSP_BUILD));
+      assert.equal(await page.locator('[data-device-build]').textContent(),await page.evaluate(()=>`build ${window.CSP_BUILD}`));
       await page.locator('[data-build-details]').click();
       assert(await page.locator('.csp-device-card #buildDiag').isVisible(),'build diagnostics remain available in Settings');
       await page.locator('[data-build-details]').click();assert.equal(await page.locator('#buildDiag').count(),0);
@@ -81,7 +81,9 @@ const base=process.argv[2]||'http://127.0.0.1:8765/';
       });
       assert.equal(await page.evaluate(()=>window.resetForwarded),1,'Settings retains the existing layout reset action');
       await page.setViewportSize({width:1440,height:900});await page.waitForTimeout(100);
-      assert(await page.locator('#cspNav .foot-meta').isVisible(),'desktop keeps its compact build/reset row');
+      await page.evaluate(()=>document.querySelector('.csp-nav-button[data-route="settings"]').click());
+      assert(await page.locator('[data-device-build]').isVisible(),'desktop retains build details in Settings');
+      assert(await page.locator('[data-reset-layout]').isVisible(),'desktop retains layout reset in Settings');
       assert(!(await state()).inert,'leaving the phone layout restores tool accessibility');
       assert.deepEqual(errors,[],`${label} has no page errors`);
       console.log(`PASS ${label}: compact footer, hide/reveal motion, drag tracking, accessibility and Settings utilities`);

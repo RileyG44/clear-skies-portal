@@ -12,8 +12,8 @@
      node server.js &
      node scripts/ui-stress.js [http://127.0.0.1:8765/] [output-dir]
 
-   Uses Chromium from scripts/lib/playwright.js (npx playwright-core install chromium). */
-const { chromium } = require('./lib/playwright.js');
+   Uses the installed Chrome through scripts/lib/browser.js; see docs/TESTING.md. */
+const {launchUIBrowser}=require('./lib/browser.js');
 const fs = require('fs');
 const path = require('path');
 const base = process.argv[2] || 'http://127.0.0.1:8765/';
@@ -92,7 +92,7 @@ function check(m, kind, state) {
 }
 
 (async () => {
-  const browser = await chromium.launch();
+  const browser = await launchUIBrowser();
   const rows = []; let fails = 0;
   const cases = [];
   for (const [name, w, h, kind] of viewports) for (const state of states) cases.push({ name, w, h, kind, state });
