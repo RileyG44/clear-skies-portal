@@ -3,7 +3,7 @@
    Playwright runtime as ui-map-popovers.js.
    node scripts/ui-sheet-chrome.js [http://127.0.0.1:8765/] */
 const assert=require('node:assert/strict');
-const {chromium}=require(process.env.PLAYWRIGHT_MODULE||'playwright');
+const {chromium}=require('./lib/playwright.js');
 const base=process.argv[2]||'http://127.0.0.1:8765/';
 (async()=>{
   const browser=await chromium.launch();

@@ -3,7 +3,7 @@
    runtime documented in README, with real DOM, routing and search controllers.
    node scripts/ui-review-regressions.js [http://127.0.0.1:8765/] */
 const assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path');
-const {chromium}=require(process.env.PLAYWRIGHT_MODULE||'playwright');
+const {chromium}=require('./lib/playwright.js');
 const base=process.argv[2]||'http://127.0.0.1:8765/';
 const output=path.join(__dirname,'..','.codex-audits');
 const places=Array.from({length:6},(_,i)=>({type:'Feature',geometry:{type:'Point',coordinates:[-119.28,47.13+i*.01]},

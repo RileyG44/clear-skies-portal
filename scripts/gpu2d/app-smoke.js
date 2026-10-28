@@ -6,7 +6,7 @@
 const fs=require('node:fs'),assert=require('node:assert/strict');
 const {prepare}=require('./layer-browser');
 const which=process.env.B||'chrome';
-const pw=require(which==='webkit'?'/Users/riley/.npm/_npx/e41f203b7505f1fb/node_modules/playwright-core':'/Users/riley/.npm/_npx/31e32ef8478fbf80/node_modules/playwright');
+const pw=require('../lib/playwright.js');
 (async()=>{
  const browser=which==='webkit'?await pw.webkit.launch():await pw.chromium.launch({channel:'chrome',headless:true,args:['--use-angle=metal','--enable-gpu','--ignore-gpu-blocklist']});
  const report={browser:which,fixture:'flat 352m native Terrarium, production modules',checks:[]};

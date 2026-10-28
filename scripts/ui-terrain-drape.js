@@ -5,7 +5,7 @@
      PLAYWRIGHT_MODULE=/path/to/playwright node scripts/ui-terrain-drape.js http://127.0.0.1:8765/
    Playwright is optional, as in the other scripts/ui-*.js workflows. */
 const assert=require('assert/strict'),fs=require('fs');
-const {chromium}=require(process.env.PLAYWRIGHT_MODULE||'playwright');
+const {chromium}=require('./lib/playwright.js');
 const path=require('path');const root=path.join(__dirname,'..');const {encodePNG}=require(path.join(root,'usgs.js'));
 const terrarium=(h,amp)=>{const b=Buffer.alloc(256*256*4);for(let j=0;j<256;j++)for(let i=0;i<256;i++){const v=Math.round((h+amp*Math.sin(i/9)+amp*Math.cos(j/7)+32768)*256),o=(j*256+i)*4;b[o]=v>>16;b[o+1]=(v>>8)&255;b[o+2]=v&255;b[o+3]=255;}return encodePNG(b,256,256);};
 const png=terrarium(1200,40);

@@ -8,6 +8,7 @@
 const http  = require("http");
 const fs    = require("fs");
 const path  = require("path");
+const crypto= require("crypto");
 const usgs  = require("./usgs.js");
 const cacheBudgetCore=require("./cache-budget.js");
 const {TerrainPool}=require("./terrain-pool.js");
@@ -47,6 +48,17 @@ fs.mkdirSync(AREAS, {recursive:true});
 /* Everything the browser may load; see site.json. app.js is built from app/. */
 const APP_SCRIPT = path.join(ROOT,"app.js");
 const PUBLIC_FILES = new Set([...SITE.web,"app.js",...SITE.vendor]);
+
+/* app.js is rebuilt only when one of its files changes. */
+let appBuilt=null;
+function appScript(){
+  const stamp=SITE.app.map(file=>{const st=fs.statSync(path.join(ROOT,file));return st.size+"@"+st.mtimeMs}).join();
+  if(!appBuilt||appBuilt.stamp!==stamp){
+    const body=Buffer.from(SITE.appSource(ROOT));
+    appBuilt={stamp,body,etag:`"${crypto.createHash("sha1").update(body).digest("base64url").slice(0,20)}"`};
+  }
+  return appBuilt;
+}
 
 const MAX_RENDER_QUEUE = 40;
 /* Budget work stays off request paths. A dedicated worker scans/sorts/deletes.
@@ -137,7 +149,7 @@ const server = http.createServer(async (req,res)=>{
     const publicRel=rel.split(path.sep).join("/");
     if(!PUBLIC_FILES.has(publicRel)&&!publicRel.startsWith("vendor/potree/"))
       return send(res,404,"text/plain",Buffer.from("not found"));
-    return sendStatic(req,res,f,f===APP_SCRIPT?Buffer.from(SITE.appSource(ROOT)):null);
+    return sendStatic(req,res,f,f===APP_SCRIPT?appScript():null);
   }catch(err){
     const status=Number(err&&err.status)||500;
     if(status>=500) console.error(err);

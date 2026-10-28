@@ -3,7 +3,7 @@
    ui-map-popovers.js; the app's dependencies stay unchanged.
    node scripts/ui-satellite-search.js [http://127.0.0.1:8765/] */
 const assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path');
-const {chromium}=require(process.env.PLAYWRIGHT_MODULE||'playwright');
+const {chromium}=require('./lib/playwright.js');
 const base=process.argv[2]||'http://127.0.0.1:8765/';
 const output=path.join(__dirname,'..','.codex-audits');
 const place={primary:'Moses Lake',secondary:'Grant, Washington, United States',kind:'town',lat:47.13,lng:-119.28};

@@ -9,8 +9,7 @@ const { spawn } = require('child_process');
 const lib2d = require('../gpu2d/harness-lib.js');
 
 const REPO = path.resolve(__dirname, '..', '..');
-const CHROME_PW = '/Users/riley/.npm/_npx/31e32ef8478fbf80/node_modules/playwright';
-const WEBKIT_PW = '/Users/riley/.npm/_npx/e41f203b7505f1fb/node_modules/playwright-core';
+const pw = require('../lib/playwright.js');
 const CHROME_ARGS = ['--use-angle=metal', '--enable-gpu', '--ignore-gpu-blocklist'];
 const CENTER = { lat: 47.858, lng: -118.33 };
 const CAMERA = { center: [CENTER.lng, CENTER.lat], zoom: 14, pitch: 58, bearing: 37 };
@@ -112,8 +111,8 @@ async function stopServer(child) {
 }
 
 async function launch(browserName) {
-  if (browserName === 'webkit') return require(WEBKIT_PW).webkit.launch({ headless: true });
-  return require(CHROME_PW).chromium.launch({ channel: 'chrome', headless: true, args: CHROME_ARGS });
+  if (browserName === 'webkit') return pw.webkit.launch({ headless: true });
+  return pw.chromium.launch({ channel: 'chrome', headless: true, args: CHROME_ARGS });
 }
 
 /* Installs: Worker/render counters (init script), synthetic terrain routes,

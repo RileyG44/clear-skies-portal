@@ -15,8 +15,8 @@ for(let i=0;i<fixturePixels.length;i+=4)fixturePixels.set([129,96,0,255],i);
 const fixturePNG=require(path.join(root,'usgs')).encodePNG(fixturePixels,256,256);
 const shell=fs.readFileSync(path.join(root,'ios/Resources/native-shell.js'),'utf8');
 const template=fs.readFileSync(path.join(root,'ios/Resources/native-host.js'),'utf8');
-const chrome=require('/Users/riley/.npm/_npx/31e32ef8478fbf80/node_modules/playwright');
-const wk=require('/Users/riley/.npm/_npx/e41f203b7505f1fb/node_modules/playwright-core');
+const chrome=require('../lib/playwright.js');
+const wk=require('../lib/playwright.js');
 const types={html:'text/html',js:'text/javascript',mjs:'text/javascript',css:'text/css',json:'application/json',wasm:'application/wasm',woff2:'font/woff2',svg:'image/svg+xml',png:'image/png'};
 const server=http.createServer((req,res)=>{
  const url=new URL(req.url,'http://localhost');

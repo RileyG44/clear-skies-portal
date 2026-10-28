@@ -3,7 +3,7 @@
    ui-snapshot.js; no browser tooling is added to the application's lockfile.
    node scripts/ui-map-popovers.js [http://127.0.0.1:8765/] */
 const assert=require('node:assert/strict'),path=require('node:path'),fs=require('node:fs');
-const {chromium}=require(process.env.PLAYWRIGHT_MODULE||'playwright');
+const {chromium}=require('./lib/playwright.js');
 const base=process.argv[2]||'http://127.0.0.1:8765/';
 const output=path.join(__dirname,'..','.codex-audits');
 // A closing panel is already logically hidden and ignores input while its

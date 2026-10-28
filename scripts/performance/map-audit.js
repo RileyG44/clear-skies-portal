@@ -1,7 +1,7 @@
 'use strict';
 const fs=require('fs'),path=require('path'),assert=require('node:assert/strict');
 const root=process.cwd(),B=process.env.B||'webkit';
-const pw=require(B==='webkit'?'/Users/riley/.npm/_npx/e41f203b7505f1fb/node_modules/playwright-core':'/Users/riley/.npm/_npx/31e32ef8478fbf80/node_modules/playwright');
+const pw=require('../lib/playwright.js');
 const {prepare}=require(path.join(root,'scripts/gpu2d/layer-browser'));
 const {encodePNG}=require(path.join(root,'usgs'));
 const {decodePng}=require(path.join(root,'scripts/gpu2d/harness-lib'));

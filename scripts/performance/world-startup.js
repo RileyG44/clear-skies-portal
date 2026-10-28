@@ -4,7 +4,7 @@
  * B=webkit|chrome CSP_GPU2D_URL=http://127.0.0.1:8812 node <this file> */
 const fs=require('node:fs'),path=require('node:path'),assert=require('node:assert/strict');
 const which=process.env.B||'webkit',root=path.resolve(__dirname,'../..');
-const pw=require(which==='webkit'?'/Users/riley/.npm/_npx/e41f203b7505f1fb/node_modules/playwright-core':'/Users/riley/.npm/_npx/31e32ef8478fbf80/node_modules/playwright');
+const pw=require('../lib/playwright.js');
 const {prepare}=require('../gpu2d/layer-browser');
 const out=path.join(root,'output/performance-audit/prewarm');fs.mkdirSync(out,{recursive:true});
 (async()=>{

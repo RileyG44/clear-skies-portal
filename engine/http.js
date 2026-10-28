@@ -2,7 +2,6 @@
    responses, including static files. */
 "use strict";
 const fs = require("fs");
-const crypto = require("crypto");
 const path = require("path");
 const zlib = require("zlib");
 
@@ -92,8 +91,8 @@ function send(res, status, type, body, extra={}){
   },()=>{ if(!res.destroyed&&!res.writableEnded) res.writeHead(status,headers).end(body) });
 }
 
-/* Static files: an ETag from size and mtime (or the content, for bytes the
-   caller built), so a reload revalidates with a
+/* Static files: an ETag from size and mtime (or one the caller supplies with
+   bytes it built), so a reload revalidates with a
    304 instead of re-downloading the 640 KB app shell, and the compressed form
    is made once per file version (at a higher level, since it is reused) rather
    than on every request. `no-cache` still asks on every load, so a deploy is
@@ -102,7 +101,7 @@ const staticCompressed=new Map();          // path|etag|encoding -> Buffer
 async function sendStatic(req,res,f,built=null){
   let size, etag;
   if(built){
-    size=built.length; etag=`"${crypto.createHash("sha1").update(built).digest("base64url").slice(0,20)}"`;
+    size=built.body.length; etag=built.etag;
   }else{
     let st; try{ st=await fs.promises.stat(f) }catch(e){ return send(res,404,"text/plain",Buffer.from("not found")) }
     if(!st.isFile()) return send(res,404,"text/plain",Buffer.from("not found"));
@@ -118,7 +117,7 @@ async function sendStatic(req,res,f,built=null){
     if(origin){ headers["Access-Control-Allow-Origin"]=origin; headers.Vary+=", Origin" }
     return res.writeHead(304,headers).end();
   }
-  let buf=built; if(!buf) try{ buf=await fs.promises.readFile(f) }catch(e){ return send(res,404,"text/plain",Buffer.from("not found")) }
+  let buf=built&&built.body; if(!buf) try{ buf=await fs.promises.readFile(f) }catch(e){ return send(res,404,"text/plain",Buffer.from("not found")) }
   if(!encoding) return send(res,200,type,buf,extra);
   const key=`${f}|${etag}|${encoding}`;
   let out=staticCompressed.get(key);

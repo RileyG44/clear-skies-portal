@@ -13,8 +13,7 @@ const { spawn } = require('child_process');
 const REPO = path.resolve(__dirname, '..', '..');
 const RESULTS = path.join(__dirname, 'results');
 const HOOK = fs.readFileSync(path.join(__dirname, 'page-hook.js'), 'utf8');
-const CHROME_PW = '/Users/riley/.npm/_npx/31e32ef8478fbf80/node_modules/playwright';
-const WEBKIT_PW = '/Users/riley/.npm/_npx/e41f203b7505f1fb/node_modules/playwright-core';
+const pw = require('../lib/playwright.js');
 const CHROME_ARGS = ['--use-angle=metal', '--enable-gpu', '--ignore-gpu-blocklist'];
 const VIEWPORT = { width: 1440, height: 900 };
 const DPR = 2;
@@ -447,13 +446,7 @@ async function ensureServer({ port, cacheDir, reuse }) {
   return startServer({ port, cacheDir });
 }
 
-function playwrightFor(browser) {
-  if (browser === 'webkit') return require(WEBKIT_PW);
-  return require(CHROME_PW);
-}
-
 async function launchBrowser(browserName, { memory } = {}) {
-  const pw = playwrightFor(browserName);
   if (browserName === 'webkit') return pw.webkit.launch({ headless: true });
   const args = CHROME_ARGS.slice();
   if (memory) args.push('--enable-precise-memory-info', '--js-flags=--expose-gc');

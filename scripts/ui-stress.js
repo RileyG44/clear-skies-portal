@@ -12,11 +12,8 @@
      node server.js &
      node scripts/ui-stress.js [http://127.0.0.1:8765/] [output-dir]
 
-   Needs Playwright (npm i --no-save playwright && npx playwright install
-   chromium); it is deliberately not a dependency of the app. */
-let chromium;
-try { ({ chromium } = require(process.env.PLAYWRIGHT_MODULE || 'playwright')); }
-catch { console.error('ui-stress needs Playwright: npm i --no-save playwright && npx playwright install chromium'); process.exit(2); }
+   Uses Chromium from scripts/lib/playwright.js (npx playwright-core install chromium). */
+const { chromium } = require('./lib/playwright.js');
 const fs = require('fs');
 const path = require('path');
 const base = process.argv[2] || 'http://127.0.0.1:8765/';
