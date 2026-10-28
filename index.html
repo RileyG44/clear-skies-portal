@@ -24,6 +24,20 @@
      the map buttons start below it. -->
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <title>Clear Skies — Portal</title>
+<style>
+/* Keep layout measurable during startup, with a separate recovery view if a
+   required script fails. The legacy interface is no longer a fallback. */
+html.csp-boot{background:#000}
+html.csp-boot #app{visibility:hidden}
+#cspStartup{position:fixed;inset:0;z-index:10000;display:grid;place-content:center;justify-items:center;gap:12px;box-sizing:border-box;padding:max(24px,env(safe-area-inset-top)) max(24px,env(safe-area-inset-right)) max(24px,env(safe-area-inset-bottom)) max(24px,env(safe-area-inset-left));background:#000;color:#ebebeb;font:15px/1.5 system-ui;text-align:center}
+#cspStartup[hidden]{display:none}
+#cspPixelLoader{image-rendering:pixelated;image-rendering:crisp-edges;max-width:100%;object-fit:contain}
+html.csp-boot #cspStartup:not(.failed) #cspStartupMessage{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%);margin:0}
+html.csp-boot #cspStartup:not(.failed) #cspStartupRetry{display:none}
+#cspStartupMessage{position:static;width:auto;height:auto;clip-path:none;max-width:420px}
+#cspStartupRetry{display:grid;place-items:center;min-height:44px;padding:0 20px;border:1px solid #787878;border-radius:9px;color:inherit;text-decoration:none}
+
+</style>
 <script>
 (function(){
   var root=document.documentElement;
@@ -42,7 +56,7 @@
   var boot=window.CSPBoot={done:false,message:"Loading your map and tools…"};
   var paint=function(){
     var panel=document.getElementById("cspStartup"),text=document.getElementById("cspStartupMessage");
-    if(panel)panel.hidden=boot.done;
+    if(panel){panel.hidden=boot.done;panel.classList.toggle("failed",!!boot.failed)}
     if(text)text.textContent=boot.message;
   };
   /* This listener exists before any external stylesheet or script can stall.
@@ -62,7 +76,7 @@
       }):null;
     }).catch(function(){}).then(function(){clearTimeout(fallback);navigate()});
   });
-  boot.fail=function(message){if(boot.done)return;boot.message=message||"The portal could not finish starting. Reload to try again.";paint()};
+  boot.fail=function(message){if(boot.done)return;boot.failed=true;boot.message=message||"The portal could not finish starting. Reload to try again.";paint()};
   var timer=setTimeout(function(){boot.fail("The portal is taking longer to start. Check your connection, then reload.")},12000);
   root.addEventListener("csp:ready",function(){boot.done=true;clearTimeout(timer);root.classList.remove("csp-boot");paint()},{once:true});
   document.addEventListener("DOMContentLoaded",paint,{once:true});
@@ -71,30 +85,57 @@
   },true);
 })();
 </script>
-<link rel="stylesheet" href="vendor/leaflet.css?build=2026-10-28a">
-<link rel="stylesheet" href="ui-base.css?build=2026-10-28a">
-<style>
-/* Keep layout measurable during startup, with a separate recovery view if a
-   required script fails. The legacy interface is no longer a fallback. */
-html.csp-boot{background:var(--ui-sunken)}
-html.csp-boot #app{visibility:hidden}
-#cspStartup{position:fixed;inset:0;z-index:10000;display:grid;place-content:center;gap:12px;padding:28px;background:var(--ui-sunken);color:var(--ui-text);font:15px/1.5 system-ui;text-align:center}
-#cspStartup[hidden]{display:none}
-#cspStartup h1{margin:0;font-size:22px}
-#cspStartup p{max-width:420px;margin:0}
-#cspStartup a{justify-self:center;min-height:44px;padding:0 20px;border:1px solid var(--ui-line);border-radius:9px;background:var(--ui-surface);color:inherit;font:inherit;display:grid;place-items:center;text-decoration:none}
-</style>
-<link rel="stylesheet" href="ui-theme.css?build=2026-10-28a">
-<link rel="stylesheet" href="ui-system.css?build=2026-10-28a">
+
 </head>
 <body>
 <!-- The modern shell is the only interface, at every viewport size. -->
 <script>document.body.classList.add("csp-redesign");document.documentElement.classList.toggle("csp-glass",true);</script>
 <section id="cspStartup" role="status" aria-live="polite">
-  <h1>Clear Skies</h1>
+  <canvas id="cspPixelLoader" width="240" height="96" aria-hidden="true"></canvas>
   <p id="cspStartupMessage">Loading your map and tools…</p>
   <a id="cspStartupRetry" href="?reload=2026-10-24n">Reload portal</a>
 </section>
+<script>
+// Port of Riley's satellite-loader-gen.py (2026-10-28 centered revision).
+(function(){
+  var canvas=document.getElementById("cspPixelLoader"),ctx=canvas.getContext("2d"),panel=canvas.parentElement;
+  var stars=[[162,19,0.7417869892607294],[206,47,0.9424502837770503],[192,44,0.922324996665417],[10,32,0.7759585674357169],[66,44,0.05185325369909766],[43,10,0.3717933555623072],[225,18,0.38075791704476514],[29,39,0.24933071444268662],[190,16,0.408151054974514],[49,27,0.15960421235803823],[207,7,0.13876741839890316],[161,31,0.1266992325502697],[3,3,0.2094563824951179],[58,13,0.8724077654368019],[77,23,0.9614779889500835],[141,46,0.6257301956771277],[49,47,0.19687904392603262],[231,27,0.29878889785386775],[95,29,0.1659560571297456],[40,19,0.06513971337567626],[80,41,0.5861412585033708],[155,46,0.7076761524222557],[19,22,0.35535135729996914],[81,33,0.6964198076411567],[50,33,0.47253834981224785],[48,6,0.25618183594271204],[8,25,0.8448808893881297],[7,38,0.7877383039804342],[96,27,0.5785188290568746],[5,31,0.04672711869894153],[49,42,0.9551798995911663],[53,10,0.7557364124513177],[212,32,0.34438181305301196],[93,36,0.25089395624103406],[121,9,0.5897633712619398],[202,26,0.8596943191875801],[12,30,0.9458001850421838],[26,16,0.34074053550422223],[159,26,0.9180871855333121],[90,20,0.9241976194277907]];
+  var ctrl=[[0,72],[16,62],[30,74],[46,66],[60,78],[76,64],[92,76],[108,68],[122,80],[138,64],[154,76],[170,62],[186,74],[204,66],[220,78],[240,70]],surf=[];
+  // Python round uses ties-to-even, including the half-pixel hill vertices.
+  function round(v){var n=Math.floor(v),d=v-n;return d===.5?n+n%2:Math.round(v)}
+  for(var x=0,j=0;x<240;x++){while(x>ctrl[j+1][0])j++;var a=ctrl[j],b=ctrl[j+1];surf.push(round(a[1]+(b[1]-a[1])*(x-a[0])/(b[0]-a[0])))}
+  var W="#ebebeb",G="#787878",D="#373737";
+  function point(x,y,c){ctx.fillStyle=c;ctx.fillRect(x,y,1,1)}
+  function line(x,y,bx,by,visit){var dx=Math.abs(bx-x),dy=Math.abs(by-y),sx=x<bx?1:-1,sy=y<by?1:-1,err=dx-dy,i=0;while(true){visit(x,y,i++);if(x===bx&&y===by)break;var e=2*err;if(e>-dy){err-=dy;x+=sx}if(e<dx){err+=dx;y+=sy}}}
+  function solid(x,y,bx,by,c){line(x,y,bx,by,function(px,py){point(px,py,c)})}
+  function rect(x,y,bx,by){ctx.fillStyle="#000";ctx.fillRect(x,y,bx-x+1,by-y+1);solid(x,y,bx,y,W);solid(bx,y,bx,by,W);solid(bx,by,x,by,W);solid(x,by,x,y,W)}
+  function draw(f){var t=f/192;ctx.fillStyle="#000";ctx.fillRect(0,0,240,96);
+    stars.forEach(function(s){var tw=Math.sin(2*Math.PI*(2*t+s[2]));if(tw>-.2)point(s[0],s[1],tw>.5?W:G)});
+    for(var x=0;x<240;x++){point(x,surf[x],W);for(var y=surf[x]+3;y<96;y+=4)if((x+y*3)%6===0)point(x,y,D)}
+    [22,66,100,148,180,214].forEach(function(x,k){var y=surf[x];solid(x,y-1,x,y-6,G);if(k%2===0){solid(x-2,y-2,x+2,y-2,G);solid(x-1,y-4,x+1,y-4,G)}else solid(x-2,y-5,x+2,y-5,G)});
+    var sx=120,sy=round(26+1.2*Math.sin(2*Math.PI*t));
+    [-9,0,9].forEach(function(o,k){var hx=Math.max(0,Math.min(239,sx+round(o*1.6+9*Math.sin(2*Math.PI*(t+k/3))))),by=surf[hx]-1;
+      line(sx+Math.floor(o/3),sy+6,hx,by,function(x,y,i){if(((i-f*2+k*2)%6+6)%6<3)point(x,y,W)});
+      if((f+k*2)%4<2){point(hx+1,by,W);point(hx-1,by,W);point(hx,by-1,W)}});
+    [[sx-16,sx-7],[sx+7,sx+16]].forEach(function(p){rect(p[0],sy-3,p[1],sy+3);for(var x=p[0]+3;x<p[1];x+=3)solid(x,sy-2,x,sy+2,G)});
+    solid(sx-6,sy,sx-4,sy,W);solid(sx+4,sy,sx+6,sy,W);rect(sx-4,sy-4,sx+4,sy+4);
+    ctx.fillStyle=W;ctx.fillRect(sx-1,sy-1,3,3);solid(sx,sy-5,sx,sy-8,W);point(sx,sy-9,W);solid(sx-1,sy+5,sx+1,sy+5,W);
+  }
+  function resize(){var box=panel.getBoundingClientRect(),style=getComputedStyle(panel),w=box.width-parseFloat(style.paddingLeft)-parseFloat(style.paddingRight),h=box.height-parseFloat(style.paddingTop)-parseFloat(style.paddingBottom),dpr=devicePixelRatio||1;
+    var scale=Math.max(1,Math.floor(Math.min(w/240,h/96,3)*dpr));canvas.style.width=240*scale/dpr+"px";canvas.style.height=96*scale/dpr+"px"}
+  var motion=matchMedia("(prefers-reduced-motion: reduce)"),start=performance.now(),last=-1,raf;
+  function tick(now){if(window.CSPBoot.done){cleanup();return}var still=motion.matches||document.documentElement.classList.contains("csp-reduce-motion"),f=still?0:Math.floor((now-start)*24/1000)%192;if(f!==last){draw(f);last=f}if(!still)raf=requestAnimationFrame(tick)}
+  function restart(){cancelAnimationFrame(raf);tick(performance.now())}
+  function cleanup(){cancelAnimationFrame(raf);removeEventListener("resize",resize);motion.removeEventListener("change",restart)}
+  document.documentElement.addEventListener("csp:ready",cleanup,{once:true});addEventListener("resize",resize);motion.addEventListener("change",restart);
+  resize();tick(start);
+})();
+</script>
+<!-- Start the inline loader before any external stylesheet can stall. -->
+<link rel="stylesheet" href="vendor/leaflet.css?build=2026-10-28b">
+<link rel="stylesheet" href="ui-base.css?build=2026-10-28b">
+<link rel="stylesheet" href="ui-theme.css?build=2026-10-28b">
+<link rel="stylesheet" href="ui-system.css?build=2026-10-28b">
 <div id="app">
   <div id="side">
     <nav id="cspNav" aria-label="Clear Skies workspace">
@@ -892,8 +933,8 @@ html.csp-boot #app{visibility:hidden}
 </div>
 <div id="paneLive" role="status" aria-live="polite"></div>
 
-<script src="vendor/leaflet.js?build=2026-10-28a"></script>
-<script src="vendor/leaflet-rotate.umd.min.js?build=2026-10-28a"></script>
+<script src="vendor/leaflet.js?build=2026-10-28b"></script>
+<script src="vendor/leaflet-rotate.umd.min.js?build=2026-10-28b"></script>
 <script>
 /* leaflet-rotate wraps Renderer.onAdd(map) and reads map._rotate, but Leaflet's
    Canvas and SVG renderers call Renderer.prototype.onAdd.call(this) with no
@@ -905,37 +946,37 @@ html.csp-boot #app{visibility:hidden}
   L.Renderer.prototype.onAdd=function(map){return onAdd.call(this,map||this._map)};
 })();
 </script>
-<script src="version.js?build=2026-10-28a"></script>
-<script src="mosaic-core.js?build=2026-10-28a"></script>
-<script src="png-stream.js?build=2026-10-28a"></script>
-<script src="terrain-core.js?build=2026-10-28a"></script>
-<script src="terrain-raster.js?build=2026-10-28a"></script>
-<script src="elevation-bands.js?build=2026-10-28a"></script>
-<script src="elevation-tile-core.js?build=2026-10-28a"></script>
-<script src="terrain-drape-core.js?build=2026-10-28a"></script>
-<script src="terrain-drape-pool.js?build=2026-10-28a"></script>
-<script src="public-terrain.js?build=2026-10-28a"></script>
-<script src="tile-pipeline.js?build=2026-10-28a"></script>
-<script src="gpu-terrain-shaders.js?build=2026-10-28a"></script>
-<script src="lidar-render.js?build=2026-10-28a"></script>
-<script src="lidar-studio.js?build=2026-10-28a"></script>
-<script src="analysis-layers.js?build=2026-10-28a"></script>
-<script src="share-state.js?build=2026-10-28a"></script>
-<script src="coordinates.js?build=2026-10-28a"></script>
-<script src="location-search.js?build=2026-10-28a"></script>
-<script src="gpu-terrain-store.js?build=2026-10-28a"></script>
-<script src="gpu-terrain-engine.js?build=2026-10-28a"></script>
-<script src="gpu-terrain-layer.js?build=2026-10-28a"></script>
-<script src="gpu-terrain-3d-cache.js?build=2026-10-28a"></script>
-<script src="gpu-terrain-3d-renderer.js?build=2026-10-28a"></script>
-<script src="gpu-terrain-3d-layer.js?build=2026-10-28a"></script>
-<script src="wa-archaeology.js?build=2026-10-28a"></script>
-<script src="research-contract.js?build=2026-10-28a"></script>
-<script src="point-cloud-core.js?build=2026-10-28a"></script>
-<script src="point-cloud-viewer.js?build=2026-10-28a"></script>
-<script src="app.js?build=2026-10-28a"></script>
-<script src="markup-3d.js?build=2026-10-28a"></script>
-<script src="markup.js?build=2026-10-28a"></script>
-<script src="ui-system.js?build=2026-10-28a"></script>
+<script src="version.js?build=2026-10-28b"></script>
+<script src="mosaic-core.js?build=2026-10-28b"></script>
+<script src="png-stream.js?build=2026-10-28b"></script>
+<script src="terrain-core.js?build=2026-10-28b"></script>
+<script src="terrain-raster.js?build=2026-10-28b"></script>
+<script src="elevation-bands.js?build=2026-10-28b"></script>
+<script src="elevation-tile-core.js?build=2026-10-28b"></script>
+<script src="terrain-drape-core.js?build=2026-10-28b"></script>
+<script src="terrain-drape-pool.js?build=2026-10-28b"></script>
+<script src="public-terrain.js?build=2026-10-28b"></script>
+<script src="tile-pipeline.js?build=2026-10-28b"></script>
+<script src="gpu-terrain-shaders.js?build=2026-10-28b"></script>
+<script src="lidar-render.js?build=2026-10-28b"></script>
+<script src="lidar-studio.js?build=2026-10-28b"></script>
+<script src="analysis-layers.js?build=2026-10-28b"></script>
+<script src="share-state.js?build=2026-10-28b"></script>
+<script src="coordinates.js?build=2026-10-28b"></script>
+<script src="location-search.js?build=2026-10-28b"></script>
+<script src="gpu-terrain-store.js?build=2026-10-28b"></script>
+<script src="gpu-terrain-engine.js?build=2026-10-28b"></script>
+<script src="gpu-terrain-layer.js?build=2026-10-28b"></script>
+<script src="gpu-terrain-3d-cache.js?build=2026-10-28b"></script>
+<script src="gpu-terrain-3d-renderer.js?build=2026-10-28b"></script>
+<script src="gpu-terrain-3d-layer.js?build=2026-10-28b"></script>
+<script src="wa-archaeology.js?build=2026-10-28b"></script>
+<script src="research-contract.js?build=2026-10-28b"></script>
+<script src="point-cloud-core.js?build=2026-10-28b"></script>
+<script src="point-cloud-viewer.js?build=2026-10-28b"></script>
+<script src="app.js?build=2026-10-28b"></script>
+<script src="markup-3d.js?build=2026-10-28b"></script>
+<script src="markup.js?build=2026-10-28b"></script>
+<script src="ui-system.js?build=2026-10-28b"></script>
 </body>
 </html>

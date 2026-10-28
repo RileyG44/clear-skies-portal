@@ -31,7 +31,7 @@ targets:
           - Inter.ttf
           - Pacifico.ttf
         UILaunchScreen:
-          UIColorName: CanvasBackground
+          UIColorName: LaunchBackground
         UIApplicationSceneManifest:
           UIApplicationSupportsMultipleScenes: false
         UISupportedInterfaceOrientations:

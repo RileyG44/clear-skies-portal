@@ -515,6 +515,37 @@ scientific or shared-code regression checks, commit or deployment. Acceptance
 does not mark r1 implemented/verified. Only CR-007 and the decision/handoff
 records changed, uncommitted for the parent; unrelated work is preserved.
 
+## CR-008 — pixel satellite startup cover
+
+Status: ACCEPTED 2026-10-28 (America/Los_Angeles), exact r1 only
+Request: change-requests/CR-008-pixel-loader.md
+Binding: SHA-256 56d5e2d2e090e8365857782249e681cd7369e01666a7942e2c57a78f109adc47
+of original r1 file, normalized workflow Status DRAFT; reproduction details and
+independently verified actual parent user-message metadata are in CR-008.
+Owner: dedicated Spec Owner sub-agent (Codex), CR-008 r1 only; ends at handoff.
+Authority: Riley's direct startup build instruction and updated centered-satellite,
+no-HUD design instruction, read through t3_thread_read user_message positions 0
+and 3, under GOV-002. No additional confirmation required.
+
+Accepted scope: replace shared web/Electron boot panel appearance, native iOS
+pending-ready cover and static iOS launch background using updated generator:
+240×96 crisp pixels, centered satellite with gentle vertical hover and three
+sweeping dashed beams, hills/props/stars, pure black, no HUD or border. Still
+frame for reduced motion, safe-area fit and meaningful accessible status;
+preserve readiness/timing/recovery/reload and PR #38/scientific/loading contracts.
+Complete CR-008's named tests, current iOS build and web phone/desktop/iOS
+simulator visual evidence; acceptance is not implementation verification.
+
+Permanent bounded appearance supplement to SPEC.md 0.1.0-draft and CR-001's
+unchanged-web/glass requirements for startup only. SPEC and pending BASE-001
+remain unchanged/unapproved. All other CRs, architecture/capabilities, open
+items, PERF/release gates and CR-001 expiry remain. No push, deployment or
+TestFlight; Riley's latest instruction explicitly prohibits them for this task.
+Only owner records changed; no app edits, runtime/device/scientific tests or
+commit by this owner. Next action: parent implements/verifies exact r1 with
+these conditions; necessary revisions follow GOV-002 and a traceable owner
+record. No ongoing owner or custody transfer; enforcement remains unverified.
+
 ## Open decisions
 
 D-01 and D-03 through D-08 in SPEC.md remain unresolved. D-02 is resolved for
@@ -569,3 +600,8 @@ DATA-06; all broader D-06 decisions remain open.
   revise CR-006 item 1 (LiDAR only) and supplement CR-001's unchanged-web
   condition. Pending BASE-001 and other scope/gates are preserved; implementation
   and runtime verification remain with the parent.
+
+- 2026-10-28: CR-008 r1 accepted under independently verified direct build/update
+  instructions for pixel startup cover and black iOS launch. Startup appearance
+  only; no loading/scientific/timing changes, push or TestFlight. Pending baseline,
+  prior CRs, open decisions and release gates retained; verification with parent.

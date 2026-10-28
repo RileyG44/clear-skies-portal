@@ -3,24 +3,24 @@
 Project: Clear Skies Native iOS
 Appointed by: Riley Grant, current 2026-09-06 user request
 Initial agent: /root/spec_owner (session handle, not a permanent service)
-Current owner session: none after this handoff. The dedicated Spec Owner review
-sub-agent (Claude) recorded CR-007 r1 acceptance on 2026-10-27 under Riley's direct
-LiDAR menu/sun dial instruction and GOV-002. This bounded session ended at handoff;
+Current owner session: none after this handoff. Dedicated Spec Owner review
+sub-agent (Codex) accepted CR-008 r1 on 2026-10-28 under Riley's direct pixel
+startup loader instructions and GOV-002. This bounded session ended at handoff;
 it is not a running service and the implementer does not inherit owner custody.
 Current baseline: SPEC.md 0.1.0-draft (commit 142fdf47) — not approved by
 Riley; BASE-001 pending
 Accepted requests: CR-001 r1 (2026-10-21), CR-002 r1 (2026-10-24), CR-003 r1
 (2026-10-25), CR-004 r1 with r1-a1, CR-005 r1 and CR-006 r1 (2026-10-26),
-CR-007 r1 (2026-10-27); see DECISIONS.md.
+CR-007 r1 (2026-10-27), CR-008 r1 (2026-10-28); see DECISIONS.md.
 Current authority: GOV-002, Riley's direct build instruction authorizes necessary
 task changes and dedicated owner review without repeated CR/restoration questions.
-Current task: CR-007 r1 accepted for bounded implementation/verification by its
-parent: Presets-first LiDAR menu on all clients, native LiDAR disclosures and
-saved-preset deletion, and the native sun dial brought to web/desktop over the
-existing `#terSunAz`/`#terSunAlt` inputs. Only CR-007 r1 was reviewed for
-acceptance by this session. CR-007 revises CR-006 item 1 for the LiDAR route only;
-CR-006's other routes, CR-004 r1+r1-a1 and CR-005 r1 remain as recorded. Runtime
-verification is not supplied by this handoff.
+Current task: CR-008 r1 accepted for bounded startup appearance replacement
+and verification by parent. Updated pixel satellite on black for shared web/
+Electron and native iOS pending-ready cover, plain black static iOS launch;
+no HUD or horizontal satellite travel. Loading/readiness/recovery/scientific
+logic remains unchanged. Own branch, no push, no TestFlight. Only CR-008 r1
+reviewed by this session; prior CR scopes/conditions remain. Runtime verification
+is not supplied by this handoff.
 
 ## Start here
 
@@ -403,3 +403,29 @@ request does not establish approval for this one.
   unverified.
 - Continuity: this dedicated CR-007-r1-only session ended at this handoff. No
   ongoing owner remains; the parent implementer does not inherit owner custody.
+
+
+## Handoff — 2026-10-28 (CR-008 r1 only)
+
+- Disposition: exact CR-008 r1 ACCEPTED. Original proposal SHA-256
+  56d5e2d2e090e8365857782249e681cd7369e01666a7942e2c57a78f109adc47,
+  independently reproduced; binding and full evidence are in CR-008.
+- Authority: independently read actual completed/untruncated user_message
+  positions 0 and 3 via t3_thread_read in parent thread. Direct build plus updated
+  no-HUD, fixed-horizontal-center satellite design authorize this bounded review
+  under GOV-002; latest instruction says own branch, no push, no TestFlight.
+- Accepted: shared web/Electron pixel startup panel, existing native pending-ready
+  cover and black static iOS launch; updated generator, safe areas/crisp pixels,
+  still reduced-motion frame, accessible status. Preserve readiness/timing and
+  recovery/error/reload behavior, PR #38 and all scientific/loading invariants.
+- Baseline: SPEC.md 0.1.0-draft remains unapproved, BASE-001 pending; accepted
+  CR-001–008 supplements apply. CR-008 supplements only startup appearance;
+  no other architecture/capability/open-decision/PERF/release changes. CR-001
+  exception expiry remains BASE-001 approval/rejection or 2027-01-31 first.
+- Next action: parent implements and verifies CR-008 r1, including named tests,
+  current iOS build and web phone/desktop plus simulator screenshots; record
+  limitations honestly. This owner provides static consistency/authority/digest
+  evidence only, no implementation, runtime, scientific or device validation.
+- Records: only CR-008, DECISIONS and this handoff modified, uncommitted for parent.
+  No app edits, commit, push, deployment or distribution. This owner session ends;
+  no continuing owner/custody transfer. Branch protection enforcement unverified.

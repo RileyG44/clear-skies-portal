@@ -130,7 +130,7 @@ function createWindow(){
   };
   win = new BrowserWindow({
     width: 1400, height: 900, minWidth: 900, minHeight: 600,
-    backgroundColor: "#0b0f14",
+    backgroundColor: "#000000",
     title: "Clear Skies Portal",
     // macOS draws the traffic lights over the page. The page keeps a clear
     // drag strip; it does not paint a title bar.

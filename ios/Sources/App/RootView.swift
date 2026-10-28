@@ -20,6 +20,7 @@ struct RootView: View {
                     .opacity(portal.ready ? 1 : 0)
                 if !portal.ready {
                     LaunchCover(restoring: portal.restoring)
+                        .padding(.bottom, portal.host.webView.window?.safeAreaInsets.bottom ?? 0)
                 }
                 if let sheet = portal.shell.activeSheet {
                     FloatingToolsSheet(sheet: sheet, geometry: geometry, keyboardHeight: keyboardHeight,
