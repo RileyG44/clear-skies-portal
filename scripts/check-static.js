@@ -762,7 +762,8 @@ vm.runInNewContext(`${namedFunction(index,"elevRampRgb")}; center=elevRampRgb(50
 assert.deepEqual(Array.from(elevSandbox.center),[255,255,250],"reference elevation must be white");
 assert(elevSandbox.lower[0]>elevSandbox.lower[2],"lower elevations must trend red");
 assert(elevSandbox.upper[2]>elevSandbox.upper[0],"higher elevations must trend blue");
-const server=read("server.js");
+/* The engine: server.js wires together the route modules in engine/. */
+const server=["server.js",...fs.readdirSync(path.join(root,"engine")).map(f=>"engine/"+f)].map(read).join("\n");
 assert(server.includes('if(z>=13) try{ raw=await terrainTask'),"raw lidar elevation must be reserved for useful close zooms");
 assert(server.includes('const TERRAIN_RENDER_VERSION = "terrain-v3"')&&index.includes("?rv=terrain-v3&${RAW_COVERAGE_QUERY}`"),
        "corrected terrain renders must use a new server-cache namespace");
@@ -772,7 +773,7 @@ assert(server.includes('function slot(signal,host)')&&server.includes('line.queu
        "abandoned viewport requests must leave the upstream concurrency queue immediately");
 assert(server.includes('"X-CSP-Error":"upstream"'),
        "transient tile failures must remain retryable without noisy broken-image responses");
-assert(server.includes('p==="/api/terrain/analyze"&&req.method==="POST"')&&server.includes('transferList:[grid.buffer]'),
+assert(server.includes('"/api/terrain/analyze":async')&&server.includes('POST_ONLY=new Set(["/api/terrain/analyze"')&&server.includes('transferList:[grid.buffer]'),
        "viewport DEM analysis must be validated and transferred off the Node event loop");
 assert(server.includes('"gis.dnr.wa.gov"'),
        "the screenshot image proxy must allow the exact WGS raster host used by research overlays");
@@ -819,7 +820,7 @@ const launchAgent=read("scripts/com.rileyg44.clear-skies-portal.plist");
 assert(launchAgent.includes('<key>CSP_TERRAIN_WORKERS</key>')&&launchAgent.includes('<string>6</string>'),
        "the dedicated M2 service must run six terrain workers");
 assert(launchAgent.includes('<string>Interactive</string>'),"the dedicated terrain service must receive interactive scheduling");
-assert(read("server.js").includes("cacheDisk:cacheDiskStats()"),"health must expose cache disk safety");
+assert(server.includes("cacheDisk:tileCache.cacheDiskStats()"),"health must expose cache disk safety");
 const watchdog=read("scripts/launch-terrain-engine.sh");
 assert(watchdog.includes("MAX_HEALTH_MISSES"),"watchdog must restart an unresponsive HTTP coordinator");
 assert(!watchdog.includes("engine_busy"),"high CPU must not conceal a dead HTTP coordinator");

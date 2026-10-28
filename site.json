@@ -47,7 +47,9 @@
     "vendor/icons/x.svg"
   ],
   "engine": [
-    "server.js", "site.js", "cache-budget.js", "cog.js", "usgs.js", "terrain-pool.js", "terrain-worker.js",
+    "server.js", "site.js", "engine/http.js", "engine/tile-cache.js", "engine/upstream.js",
+    "engine/images.js", "engine/params.js", "engine/snapshot.js", "engine/markup-store.js",
+    "engine/terrain.js", "engine/downloads.js", "engine/dnr-routes.js", "engine/proxies.js", "cache-budget.js", "cog.js", "usgs.js", "terrain-pool.js", "terrain-worker.js",
     "wadnr.js", "wadnr-ingest-worker.js", "dnr-archive.js", "LICENSE",
     "vendor/dnr-runtime.cjs", "vendor/dnr-runtime-licenses.txt", "vendor/dnr-lerc-LICENSE.txt"
   ]

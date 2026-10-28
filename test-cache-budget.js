@@ -16,7 +16,7 @@ function extract(source,name){
   assert(start>=0&&end>start);return source.slice(start,end);
 }
 async function warmKeyChecks(){
-  const source=fs.readFileSync(path.join(__dirname,"server.js"),"utf8"),raw=fs.readFileSync(path.join(__dirname,"usgs.js"),"utf8");
+  const source=fs.readFileSync(path.join(__dirname,"engine","downloads.js"),"utf8"),raw=fs.readFileSync(path.join(__dirname,"usgs.js"),"utf8");
   const tile={z:13,x:1380,y:2880},N=2**tile.z;
   const lon=(tile.x+.4)/N*360-180,lat=Math.atan(Math.sinh(Math.PI*(1-2*(tile.y+.4)/N)))*180/Math.PI;
   const bbox=[lon,lat-.00001,lon+.00001,lat],base={bbox,z0:13,z1:13,label:"test"};
