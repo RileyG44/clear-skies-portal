@@ -767,7 +767,12 @@ assert.deepEqual(Array.from(elevSandbox.center),[255,255,250],"reference elevati
 assert(elevSandbox.lower[0]>elevSandbox.lower[2],"lower elevations must trend red");
 assert(elevSandbox.upper[2]>elevSandbox.upper[0],"higher elevations must trend blue");
 /* The engine: server.js wires together the route modules in engine/. */
-const server=["server.js",...fs.readdirSync(path.join(root,"engine")).map(f=>"engine/"+f)].map(read).join("\n");
+const engineFiles=["server.js",...fs.readdirSync(path.join(root,"engine")).map(f=>"engine/"+f)];
+const server=engineFiles.map(read).join("\n");
+/* Node also has a global Web Crypto `crypto` without randomBytes/createHash,
+   so a module that forgets the require still loads and fails only when used. */
+for(const file of engineFiles)
+  assert(!/\bcrypto\.(randomBytes|createHash)/.test(read(file))||/require\("crypto"\)/.test(read(file)),`${file} must require("crypto") itself`);
 assert(server.includes('if(z>=13) try{ raw=await terrainTask'),"raw lidar elevation must be reserved for useful close zooms");
 assert(server.includes('const TERRAIN_RENDER_VERSION = "terrain-v3"')&&index.includes("?rv=terrain-v3&${RAW_COVERAGE_QUERY}`"),
        "corrected terrain renders must use a new server-cache namespace");

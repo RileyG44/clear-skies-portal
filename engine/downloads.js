@@ -2,6 +2,7 @@
    resumable raw USGS 1 m download, each with a manifest that records what
    was fetched and the catalogue state it matched. */
 "use strict";
+const crypto = require("crypto");
 const fs = require("fs");
 const path = require("path");
 const usgs = require("../usgs.js");
@@ -21,7 +22,7 @@ const running=()=>warm.running||usgsWarm.running||usgs.warmState().running;
 function atomicWriteJson(target,value){
   const tmp=`${target}.tmp-${process.pid}-${crypto.randomBytes(4).toString("hex")}`;
   try{ fs.writeFileSync(tmp,JSON.stringify(value,null,1)); fs.renameSync(tmp,target) }
-  catch(e){ try{ fs.unlinkSync(tmp) }catch(e2){} }
+  catch(e){ try{ fs.unlinkSync(tmp) }catch(e2){} throw e }
 }
 
 /* -------------------------------------------------- area manifests
@@ -159,7 +160,7 @@ async function startWarm(job){
         created: Date.now(), checked: Date.now(),
         datasets: dsFingerprint(rows), stale:false, added:[], changed:[]
       });
-    }catch(e){}
+    }catch(e){ console.error("area manifest not recorded:",e) }
   }
   warm.running=false;warm.stop=false;
 }
