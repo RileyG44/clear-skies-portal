@@ -4,20 +4,21 @@ Project: Clear Skies Native iOS
 Appointed by: Riley Grant, current 2026-09-06 user request
 Initial agent: /root/spec_owner (session handle, not a permanent service)
 Current owner session: none after this handoff. Dedicated Spec Owner sub-agent
-`/root/spec_owner` (Codex) accepted exact CR-011 r1 on 2026-10-29 under independently
-verified direct DNR/progress and continuation instructions and GOV-002. Session
-ends; implementer gains no custody.
+`/root/spec_owner` (Codex) accepted exact CR-012 r1 on 2026-10-29 in a fresh
+bounded session after CR-011 handoff, under independently verified DNR/repair/
+exact-patch instructions and GOV-002. Session ends; implementer gains no custody.
 Current baseline: SPEC.md 0.1.0-draft (commit 142fdf47), unapproved; BASE-001 pending.
-Accepted requests: CR-001–011 r1, CR-004 placement addendum r1-a1; exact requests
+Accepted requests: CR-001–012 r1, CR-004 placement addendum r1-a1; exact requests
 and DECISIONS.md govern scopes/conditions. Current authority: GOV-002.
-Current task: parent implements/verifies CR-011 on isolated branch. Best available
-uses valid cached DNR without per-device download gating; no implicit acquisition
-or restore, preserve explicit source intent and scientific/loading invariants.
-Repair existing on-map download progress safe-area placement, preserving map
-selections, info controls and ordinary web anchoring. Existing camera/presets,
-share/session precedence and all other CRs stay intact. Parent owns verification
-and separate shipping authority; owner acceptance supplies no runtime or release
-acceptance. Full conditions and verified authority are in CR-011/DECISIONS.md.
+Current task: parent implements/verifies CR-012 on isolated branch. Restore
+published DNR only for Auto ordinary unmodified 2D hs, retaining cached numeric
+DNR above it and numeric fallbacks beneath true transparency. Published pixels
+never become elevation, measurements, modified/analytical styles, spectrum or
+3D; explain fixed provider lighting. Preserve explicit source intent, cache-only
+numeric browsing, truthful pixel provenance and stationary retry/refinement.
+CR-011 and all other scientific/loading/UI/restore contracts remain. Parent owns
+verification and separate shipping authority; owner acceptance supplies no
+runtime/scientific/release acceptance. Full conditions in CR-012/DECISIONS.md.
 
 ## Start here
 
@@ -508,3 +509,40 @@ request does not establish approval for this one.
   parent. No app edits, runtime/device/scientific tests, commit or deployment.
   Enforcement remains unverified. This session ends here; no ongoing owner or
   approval custody transfers to the coordinating implementer.
+
+## Handoff — 2026-10-29 (CR-012 r1 only)
+
+- Exact CR-012 r1 ACCEPTED in a fresh one-request owner session after CR-011
+  handoff. Independently reproduced 5,198 proposal bytes, SHA-256
+  2c6e910d82ca77507a95c4610c7cb829b098f13e9cb4ef699f94e8a6368c7172;
+  normalize only workflow Status to DRAFT. Later traceability binding, not
+  represented as presented to Riley.
+- Independently read actual DNR/continuation user_messages 720/749 and ongoing
+  blurry-patch/challenge messages 999/1005/1222 in the
+  [source thread](t3-thread://v2/25ec7f29-6fda-4160-a0ec-8450030a6239/thread:project:95d7b465-9ac4-4d9b-ad2b-94155aa5a211:23c965b7-44ea-424d-bfea-4b195e8b5ef6).
+  Actual completed/untruncated user_message1228 confirms "It was sharp in Clear
+  Skies before". GOV-002 covers necessary bounded changes and this review
+  without reconfirmation; shipping remains separate authority.
+- Read governing/accepted records and inspected actual existing image URL/
+  compositor, numeric/GPU and source-choice/application paths, source info,
+  lighting and coverage refresh. Viewed supplied sharp DNR PNG and read request/
+  layer/identify metadata. Published layer944 returns value221 in supplied
+  evidence; image detail is not numeric elevation or verified native spacing.
+  No owner live network, device, runtime or scientific test performed.
+- Parent may implement/verify exact r1 with its owner conditions: eligible Auto
+  ordinary unmodified hs only; per-pixel numeric DNR > published DNR > numeric
+  fallback; real validity/provenance and single opacity; explicit choices and
+  every analytical/modified/numeric/3D consumer preserved; fixed image lighting
+  explained and no image-derived heights. Keep useful pixels and bounded
+  stationary retry/catalog refinement, cancellation and stale-result rejection.
+  No implicit acquisition/restore/index mutation. Correct overbroad no-data
+  diagnosis; distinguish federal missing samples from unavailable legacy files.
+- Complete exact-region simulator/live-image comparison and all r1 failure,
+  ordering, nodata, intent, style-exclusion, lighting, memory/resource, tests and
+  matching Debug/Release asset checks. Disclose analytical coverage limits and
+  physical-phone timing uncertainty. Acceptance is not implementation validation.
+- SPEC.md/BASE-001 remain unchanged/unapproved; other CRs, architecture, broader
+  D-06, open decisions, PERF/release gates and CR-001 distribution/expiry remain.
+  Only CR-012, DECISIONS and this handoff changed, uncommitted for parent. No app
+  edits, tests, commit or deployment by owner. Enforcement unverified. Session
+  ends here; no perpetual owner or custody transfer to the implementer.

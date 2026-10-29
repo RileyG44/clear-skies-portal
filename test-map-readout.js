@@ -49,6 +49,19 @@ assert.equal(env.cursorTileSample(tile,{x:400,y:150}),1000,'grid dimensions are 
 assert.equal(env.cursorTileSample(tile,{x:-112,y:150}),1000,'wrapped longitude samples the same tile');
 assert.equal(env.cursorTileSample(tile,{x:255,y:150}),null,'a point outside a tile cannot use its elevation');
 assert.equal(env.cursorTileSample(tile,{x:400,y:256}),null,'tile boundary does not index the next row');
+/* Displayed published-image provenance must never label numeric measurements.
+   A hidden GPU layer also cannot hide the current composite's numeric grid. */
+{
+  const measured={...tile,cv:{width:2,height:2,dataset:{cspElevationSource:'WA DNR published hillshade'}},ranks:new Uint8Array([5,3,0,2])};
+  const read={...env,gpuTerrainEnabled:true,gpuTerrainLayer:{sampleAt:()=>({value:25,label:'GPU elevation'})},
+    elevLayer:null,terBase:null,terLayer:{_store:new Map([['tile',measured]])},CSPPublicTerrain:require('./public-terrain')};
+  let gpuVisible=false;read.map={...read.map,hasLayer:()=>gpuVisible};
+  vm.runInNewContext(source.slice(source.indexOf('function cursorLoadedElevation('),source.indexOf('/* Distance key.')),read);
+  assert.equal(read.cursorLoadedElevation({x:400,y:0}).source,read.CSPPublicTerrain.SOURCES[3].label,'readout uses the numeric pixel rank beneath the image');
+  assert.equal(read.cursorLoadedElevation({x:400,y:150}).source,read.CSPPublicTerrain.SOURCES[2].label);
+  assert.equal(read.cursorLoadedElevation({x:256,y:150}),null,'published detail cannot fill a numeric measurement hole');
+  gpuVisible=true;assert.equal(read.cursorLoadedElevation({x:400,y:0}).source,'GPU elevation','a visible numeric GPU layer retains its sampler');
+}
 const ctx={calls:[],save(){},restore(){},setTransform(...args){this.calls.push(['transform',...args])},
   fillText(...args){this.calls.push(['text',...args])},fillRect(...args){this.calls.push(['rect',...args])},
   createLinearGradient(){return {addColorStop(){}}}};

@@ -10,7 +10,7 @@
     1:{label:'AWS global terrain (overview)',url:'https://registry.opendata.aws/terrain-tiles/',nativeLabel:'~98 ft source spacing (1 arc-second overview)'},
     2:{label:'USGS 3DEP elevation',url:SERVICE,nativeLabel:'Provider mosaic varies; 3.3 ft where available'},
     3:{label:'USGS 3.3 ft DEM',url:'https://www.usgs.gov/3d-elevation-program',nativeLabel:'3.3 ft where the selected survey covers this point'},
-    4:{label:'WA DNR published LiDAR hillshade',url:'https://lidarportal.dnr.wa.gov/',nativeLabel:'Project-native spacing varies; published hillshade'},
+    4:{label:'WA DNR published LiDAR hillshade',url:'https://lidarportal.dnr.wa.gov/',nativeLabel:'Published hillshade; native spacing not established'},
     5:{label:'WA DNR bare-earth elevation',url:'https://lidarportal.dnr.wa.gov/',nativeLabel:'Numeric DTM; survey spacing varies'}
   });
   function nationalUrl(coords,size=256){

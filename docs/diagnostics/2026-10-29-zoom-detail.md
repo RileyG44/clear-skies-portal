@@ -1,47 +1,79 @@
 # Zoom detail investigation, 2026-10-29
 
-Scope: follow-up to the cached-DNR and iPhone progress repair in PR #46,
-including Riley's IMG_2959 persistent sharp/blurry boundary. This is evidence,
-not a specification change. SPEC.md 0.1.0-draft remains unapproved; CR-001 and
-accepted CR-011 r1 govern the bounded source/progress implementation. Existing
-ENGINEERING_REVIEW loading and scientific contracts still apply.
+Scope: follow-up to PR #46 and Riley's IMG_2959 persistent sharp/blurry
+boundary. This is implementation evidence. SPEC.md 0.1.0-draft remains
+unapproved; accepted CR-001, CR-011 r1 and CR-012 r1 govern this repair.
+ENGINEERING_REVIEW scientific/loading contracts remain in force.
 
-## The screenshot boundary is a source gap
+## Available DNR imagery was omitted
 
-The screenshot's selected coordinate is 45.97929,-121.14818. The Dell's complete
-26-project USGS index identifies two candidates in zone 10, cell x64y510:
+The earlier conclusion that no high-resolution product covered this patch was
+wrong. Riley confirmed that it had rendered sharply in Clear Skies before.
+Federal elevation has a real gap here, but published WA DNR hillshade does not.
+Auto had stopped selecting the app's retained published-image route. It chose
+cached numeric DNR, then USGS and national elevation; neither of the two cached
+DNR rasters covers this patch. Repeating or retrying those numeric requests
+therefore left the patch coarse even though detailed DNR imagery was available.
+The precise build Riley last saw sharply is unknown.
 
-| USGS project | Native spacing | Native value at selected point |
-| --- | --- | --- |
-| WA_FEMAHQ_2018_D18 | 1 m | -999999, declared nodata |
-| WA_Mount_Adams_LiDAR_2016_D16 | 1 m | -999999, declared nodata |
+At screenshot marker **45.97929,-121.14818**, DNR MapServer layer **944**,
+Gorge East Wali 2022, returns detailed hillshade and identify value **221**.
+Direct 256- and 512-pixel exports visibly contain fine terrain. A catalog
+footprint alone would not establish coverage; actual image/identify evidence
+establishes this published product. Gray image values are not elevations.
 
-Read both public S3 COGs independently with GDAL through rasterio, in addition
-to the application's own range reader. Both agree on CRS EPSG:26910, 1 m
-transform and nodata. Each has zero valid samples in a 500 x 500 m window
-around the point. The National Map product API lists the same FEMA raster.
-The public S3 project listing agrees with the engine's Washington roster.
+The two indexed federal 1 m files really contain nodata at this point:
 
-The real iOS 26 simulator reproduces the diagonal boundary and a horizontal
-survey edge in this vicinity. At z16.5 the settled viewport contains 1,579,948
-USGS-rank samples and 3,925,076 national-rank samples, with zero pending/failed
-requests. At a closer z17.8 view within the hole, the settled display is entirely
-national elevation. These are display sample counts, not native source spacing
-or accuracy. A successful request or survey bounding box does not establish
-valid elevation coverage.
+| Federal source | Independent result |
+| --- | --- |
+| WA_FEMAHQ_2018_D18 | -999999, declared nodata; no valid pixels in 500 m window |
+| WA_Mount_Adams_LiDAR_2016_D16 | -999999, declared nodata; no valid pixels in 500 m window |
+| National ImageServer, three cataloged 1 m items | Each identifies as NoData |
+| Third legacy MountAdams file URL | HTTP 404; unavailable, not a verified file-content sample |
 
-DNR's catalogue lists Gorge East Wali 2022 and other candidate surveys nearby.
-Their footprints alone do not establish valid pixels. Neither of the Dell's
-two cached DNR rasters covers this location. No DNR acquisition was initiated
-to diagnose it; browsing remains cache-only. A user-selected DNR download is
-needed before this app can use additional DNR rasters here. A retry fix alone
-does not remove genuine holes from the federal source.
+Rasterio/GDAL independently confirms the two current COGs' values, EPSG:26910
+and 1 m transforms. National ImageServer's coarser elevation returns about
+821.532 m. These facts explain the federal fallback; they do not establish
+absence of DNR imagery. Numeric DNR analysis here still requires suitable
+cached/user-downloaded elevation; ordinary hillshade can use the published
+product immediately without acquiring a source archive.
 
-Raw evidence under `/tmp/csp-dnr-finish/`: `stuck-baseline.json`,
-`stuck-wide.json`, `stuck-native-sources.json`, `stuck-rasterio.json`,
-`stuck-dnr-coverage.json`, `tnm-point.json`, `all-projects.xml` and
-`stuck-survey-boundary.png`. Diagnostic COG reads used a separate local cache,
-not changes to the live Dell cache.
+## Repaired image selection and measured result
+
+Build `2026-10-29e` restores published DNR only for Auto, close-view, ordinary
+unmodified **2D hs**. One image tile composites valid cached numeric DNR above
+published DNR and numeric USGS/national/overview below actual transparent
+image pixels. Source percentages count actual contributions. Images remain
+separate from numeric grids, readout, measurements, analytical/colored/modified
+Studio styles, elevation spectrum and 3D. Explicit National/USGS choices stay
+numeric. Source and lighting notes explain fixed provider lighting.
+
+Same iPhone 17 Pro / iOS 26 simulator camera before and after:
+center **45.9796901,-121.1442121**, zoom **15.5**, bearing 0. The actual Classic
+preset is active, Auto, hs, 100% opacity. At 25 seconds without another pan,
+build `d` displays 51% USGS and 49% national samples, reproducing the soft
+patch. Build `e` displays 100% published DNR at this view, all 50 resident tiles
+settled, none failed, and the formerly soft ground visibly sharp. These are
+simulator display samples, not a physical-phone performance or native-spacing
+claim. Nearby catalog projects are candidates; the mosaic does not identify
+the supplying survey for each displayed pixel.
+
+[Before screenshot](assets/2026-10-29-hillshade-before.png) ·
+[After screenshot](assets/2026-10-29-hillshade-after.png).
+
+Published requests share a four-slot pool with a 16 MiB decoded-image cache.
+Transient errors retry while stationary with exponential backoff capped at
+30 seconds; valid transparent PNGs are final absence. Numeric grids survive
+retry, useful pixels remain visible, late numeric DNR keeps priority, departing
+consumers cancel only their own work, and failed staging retains the old map.
+
+Raw evidence: `/tmp/csp-detail-recheck/patch-before.json`, `patch-after.json`,
+matching PNGs, `dnr-point-identify3.json`, `dnr-sharp-512.png`,
+`national-point-query2.json`, `national-identify2.json`, and `dnr-mapserver.json`.
+The earlier federal raster evidence remains in `/tmp/csp-dnr-finish/`:
+`stuck-rasterio.json`, `tnm-point.json` and `all-projects.xml`. The earlier
+unfiltered `national-point-catalog.json` is not used as query evidence.
+Diagnosis did not mutate the live numeric DNR index or acquire/restore an archive.
 
 ## A distinct retry defect is repaired
 

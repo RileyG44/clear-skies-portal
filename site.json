@@ -20,7 +20,7 @@
     "app/config.js", "app/map.js", "app/search.js", "app/results.js", "app/snapshot.js",
     "app/scenes.js", "app/map-menu.js", "app/panes.js", "app/terrain-sources.js",
     "app/terrain-3d.js", "app/terrain.js", "app/overlays.js", "app/areas.js", "app/controls.js",
-    "app/elevation.js", "app/research.js", "app/spectrum.js", "app/bridge.js", "app/readout.js"
+    "app/elevation.js", "app/published-hillshade.js", "app/research.js", "app/spectrum.js", "app/bridge.js", "app/readout.js"
   ],
   "vendor": [
     "vendor/leaflet.js", "vendor/leaflet.css", "vendor/maplibre-gl.mjs", "vendor/maplibre-gl-shared.mjs", "vendor/maplibre-gl-worker.mjs",

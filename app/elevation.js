@@ -607,7 +607,7 @@ const ElevLayer = L.GridLayer.extend({
       cv._cspHasContent=false;cv._cspSourceCounts={};this._store.delete(key);
     }
     const controller=new AbortController(),pending={controller,canvas:cv};this._pending.set(key,pending);
-    const progress=new CSPTilePipeline.ProgressiveGrid(size.x*size.y);
+    const progress=this._progressForTile?.(cv)||new CSPTilePipeline.ProgressiveGrid(size.x*size.y);
     let settled=false;
     const accept=(values,rank,label,sampleMeters,sharper=false,surveys=[])=>{
       if(controller.signal.aborted||!progress.accept(values,rank,sharper))return;
@@ -655,16 +655,17 @@ const ElevLayer = L.GridLayer.extend({
     // Dispatch preferred sources immediately. A stalled overview cannot hold
     // higher-resolution terrain hostage; response order never reduces quality.
     const jobs=sources.map(([template,max,rank,label])=>load(template,Math.min(shown,max),rank,label));
-    Promise.allSettled(jobs).then(async results=>{
+    return Promise.allSettled(jobs).then(async results=>{
       if(controller.signal.aborted)return;
       if(!settled){settled=true;done(new Error("Elevation unavailable"),cv);}
       const best=sources.find(([,,rank])=>progress.counts[rank]>0);
       if(best&&Math.min(coords.z,best[1])>Math.min(shown,best[1]))
-        await load(best[0],Math.min(coords.z,best[1]),best[2],best[3],true).catch(()=>{});
+        await load(best[0],Math.min(coords.z,best[1]),best[2],best[3],true).catch(reason=>results.push({status:"rejected",reason}));
       if(controller.signal.aborted)return;
       cv._cspRefining=false;cv._cspRefineFailed=results.some(result=>result.status==="rejected");
       if(this._pending.get(key)===pending)this._pending.delete(key);
       this.fire("tilerefine",{tile:cv,coords});
+      return results;
     });
   },
   setSourceOptions:function(options){

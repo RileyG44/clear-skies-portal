@@ -216,7 +216,10 @@ Follow-up on Riley's IMG_2959 persistent blurry-patch report:
   responses were simulated; successful elevation was read from the live
   engine. Evidence: `/tmp/csp-dnr-finish/provisional-before.json`,
   `provisional-after.json` and matching PNGs. This fixture demonstrates the
-  retry defect; it is not the cause of the screenshot's true nodata boundary.
+  retry defect; it does not by itself diagnose IMG_2959. The federal nodata
+  finding remains valid, but the earlier global no-detail conclusion was wrong:
+  available published DNR hillshade was omitted. CR-012 restores that product
+  for ordinary unmodified 2D hillshade; numeric analysis remains separate.
 - Final `d`: all 68 Node test files, static checks, audit (zero vulnerabilities),
   13 iOS Python checks, Debug simulator build and Release archive/export pass.
   The new regression fails against the previous fetch helper and passes after

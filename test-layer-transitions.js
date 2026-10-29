@@ -14,6 +14,7 @@ async function main(){
   const map={layers:new Set(),hasLayer(layer){return this.layers.has(layer);},removeLayer(layer){this.layers.delete(layer);}};
   const timers=new Map();let timerId=0;
   const context={map,HTMLCanvasElement:Canvas,setTimeout:fn=>{timers.set(++timerId,fn);return timerId;},clearTimeout:id=>timers.delete(id),
+    gpuTerrainEnabled:false,gpuTerrainLayer:null,PublishedHillshadeLayer:class extends Layer{},
     terrainSwap:null,terrainSwapMessage:'',terBase:null,terLayer:null,terSig:null,
     terrainLoadStatus:{dataset:{}},scheduleTerrainStatus:()=>{},applyTerrainAppearanceTo:()=>{},$:()=>({value:'70'}),
     mosToken:1,PENDING_NEIGH:new Set()};
@@ -29,6 +30,35 @@ async function main(){
   const failed=new Layer(false);context.installTerrain(null,failed);context.terrainSwap(false);
   assert.equal(context.terLayer,next,'failed replacement restores the working layer');
   assert.equal(map.hasLayer(failed),false);assert.equal(next.opacity,.7);
+  // A transiently empty published candidate keeps the current GPU map while
+  // its stationary retry runs, and can commit after the original deadline.
+  const gpu=new Layer(),published=new context.PublishedHillshadeLayer(false);let syncs=0;
+  Object.assign(context,{gpuTerrainEnabled:true,gpuTerrainLayer:gpu,syncGpuTerrain:()=>syncs++,terLayer:gpu});
+  map.layers.add(gpu);published._tiles.a.el._cspRefining=true;
+  context.installTerrain(null,published);
+  assert.equal(context.terrainSwap.displayedLayer,gpu);
+  const deadline=[...timers].at(-1);timers.delete(deadline[0]);deadline[1]();
+  assert(map.hasLayer(gpu),'a published retry preserves the displayed GPU layer past the staging deadline');
+  assert.equal(published.opacity,0);
+  published._tiles.a.el._cspHasContent=true;published._tiles.a.el._cspRefining=false;published.emit('load');
+  assert.equal(map.hasLayer(gpu),false);assert.equal(published.opacity,.7);assert.equal(syncs,1);
+  Object.assign(context,{gpuTerrainEnabled:false,gpuTerrainLayer:null});
+  // The CPU fallback must replace the image subclass when intent becomes
+  // numeric. Reusing it through instanceof AnalyticTerrainLayer leaks images
+  // into explicit source choices or analytical styles on non-WebGL devices.
+  class Numeric extends Layer{
+    constructor(options){super();this.options=options;}
+    setSourceOptions(){assert.fail('the published subclass must not be reused for numeric-only intent');}
+  }
+  class Published extends Numeric{}
+  const image=new Published({opacity:.7});let installed;
+  const cpuControls={'#terStyle':{value:'slope'},'#terSrc':{value:'3dep'},'#terOp':{value:'70'}};
+  const cpu={...context,terLayer:image,terrainSwap:null,terSig:'image',AnalyticTerrainLayer:Numeric,PublishedHillshadeLayer:Published,
+    $:id=>cpuControls[id],chooseTerrain:()=>({src:'3dep'}),PROXY:true,TILE_OPTS:{},VIEW_MAX:22,TERRAIN_OVERZOOM:18,STYLE_NAME:{slope:'Slope'},
+    elevationSourceOptions:()=>({sourceKey:'national'}),waLiveIds:()=>[],setCount:()=>{},paintTerrainInfo:()=>{},
+    installTerrain:(base,layer)=>{installed=layer;}};
+  vm.runInNewContext(html.slice(html.indexOf('function applyTerrain('),html.indexOf('function paintTerrainInfo(')),cpu);
+  cpu.applyTerrain();assert(installed instanceof Numeric);assert(!(installed instanceof Published),'numeric-only intent installs a numeric layer without published imagery');
   const candidate=new Layer();const ready=context.waitForLayerTiles(candidate,1);
   assert.equal(candidate.opacityAtAdd,0,'mosaic candidate must never flash during validation');
   candidate.emit('tileload');candidate.emit('load');
@@ -136,7 +166,7 @@ async function main(){
   const status={document:{body:{classList:{contains:()=>is3d}}},navigator:{onLine:true},$:id=>statusControls[id],
     terrainLoadStatus:{hidden:false,dataset:{},textContent:''},terrainSwap:null,terrainSwapMessage:'Requested terrain unavailable · previous map preserved.',
     terLayer:null,elevLayer:null,dnrAreas:[],terrainLayerSummary:()=>summary,elevationActive:()=>false,
-    public3dSourceText:()=>text3d,dnrAcquisitionText:()=>'',esc:value=>value,renderTerrainSourcePanel:()=>{},CompositeTerrainLayer:class{}};
+    public3dSourceText:()=>text3d,dnrAcquisitionText:()=>'',esc:value=>value,renderTerrainSourcePanel:()=>{},CompositeTerrainLayer:class{},PublishedHillshadeLayer:class{}};
   vm.createContext(status);
   vm.runInContext(section('function paintTerrainStatus(','\nmap.on("moveend",scheduleTerrainStatus);'),status);
   status.paintTerrainStatus();assert.equal(status.terrainLoadStatus.dataset.state,'partial','failed replacement stays partial after repaint');

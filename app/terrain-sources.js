@@ -73,11 +73,9 @@ const UsgsLayer = ResilientTileLayer.extend({
    20-tile view filled), so ask for as many projects as plausibly overlap. */
 const WA_PER_TILE = 8;
 
-/* WA DNR's hillshade is a tile cache, so an export has to stay at a scale the
-   cache holds: 512 px at 192 dpi covers the scale 256 px at 96 dpi does, while
-   512 px at 96 dpi is one level past the cache and comes back stamped "Map data
-   not yet available". Engines that predate the dpi parameter always sent 96,
-   so they only ever get 256 px. */
+/* Preserve the same export scale when increasing image density. Engines that
+   predate the dpi parameter always sent 96, so they only receive 256 px. The
+   current DNR MapServer renders exports dynamically (not a fused tile cache). */
 const waSharpPx=()=>serverHealth?.features?.includes("wadnr-dpi")?EXPORT_PX:256;
 function waTileUrl(c,all,px=256){
   const b=tileMerc(c);
@@ -366,7 +364,8 @@ function gpuElevationSources(){
 }
 function gpuTerrainState(){
   const style=$("#terStyle").value;
-  const drawn=style!=="off"&&chooseTerrain(style).src!=="wadnr"?style:"off";
+  const staging=terrainSwap?.displayedLayer===gpuTerrainLayer||terLayer===gpuTerrainLayer;
+  const drawn=style!=="off"&&(chooseTerrain(style).src!=="wadnr"||staging)?style:"off";
   const state=CSPGpuTerrainLayer.buildState({style:drawn,
     opacity:terrainOpacity()/100,look:terrainLook(style),lighting:terrainLighting(),
     spectrum:elevationRenderSettings(),spectrumOpacity:1});
