@@ -27,8 +27,9 @@ Swift. The app adds the iOS layer around it:
 The current Stage 2 build draws search, the map dock, the tool sheet, all 13
 tool routes and the engine/layers/export/scene popovers in SwiftUI. The web
 controls stay laid out off screen as the bridge's source of truth. Map
-selections, the markup drawing toolbar and point-cloud viewer controls remain
-web controls at this stage. See [the implementation checklist](../docs/ios/STAGE2_VERIFICATION.md)
+selections and point-cloud viewer controls remain web controls at this stage.
+The markup drawing toolbar uses the same native bottom pane as other map tools;
+its controls act on the existing web markup model. See [the implementation checklist](../docs/ios/STAGE2_VERIFICATION.md)
 for verification and remaining work; this is an internal build, not a parity
 or release-gate acceptance claim.
 

@@ -3,24 +3,21 @@
 Project: Clear Skies Native iOS
 Appointed by: Riley Grant, current 2026-09-06 user request
 Initial agent: /root/spec_owner (session handle, not a permanent service)
-Current owner session: none after this handoff. Dedicated Spec Owner review
-sub-agent (Codex) accepted CR-008 r1 on 2026-10-28 under Riley's direct pixel
-startup loader instructions and GOV-002. This bounded session ended at handoff;
-it is not a running service and the implementer does not inherit owner custody.
-Current baseline: SPEC.md 0.1.0-draft (commit 142fdf47) — not approved by
-Riley; BASE-001 pending
-Accepted requests: CR-001 r1 (2026-10-21), CR-002 r1 (2026-10-24), CR-003 r1
-(2026-10-25), CR-004 r1 with r1-a1, CR-005 r1 and CR-006 r1 (2026-10-26),
-CR-007 r1 (2026-10-27), CR-008 r1 (2026-10-28); see DECISIONS.md.
-Current authority: GOV-002, Riley's direct build instruction authorizes necessary
-task changes and dedicated owner review without repeated CR/restoration questions.
-Current task: CR-008 r1 accepted for bounded startup appearance replacement
-and verification by parent. Updated pixel satellite on black for shared web/
-Electron and native iOS pending-ready cover, plain black static iOS launch;
-no HUD or horizontal satellite travel. Loading/readiness/recovery/scientific
-logic remains unchanged. Own branch, no push, no TestFlight. Only CR-008 r1
-reviewed by this session; prior CR scopes/conditions remain. Runtime verification
-is not supplied by this handoff.
+Current owner session: none after this handoff. Dedicated Spec Owner sub-agent
+`/root/spec_owner_b` (Codex) accepted CR-010 r1 on 2026-10-28 under Riley's direct
+Part B screenshot/default-view and empty-search instructions, explicit owner
+review authorization and GOV-002. Session ends; implementer gains no custody.
+Current baseline: SPEC.md 0.1.0-draft (commit 142fdf47), unapproved; BASE-001 pending.
+Accepted requests: CR-001–010 r1, CR-004 placement addendum r1-a1; exact requests
+and DECISIONS.md govern scopes/conditions. Current authority: GOV-002.
+Current task: parent implements/verifies CR-009 and CR-010 on isolated branch.
+CR-010 replaces only truly fresh defaults with screenshot-derived western US
+camera, existing Topographic 100% and Rivers and lakes 60%, empty search/no
+selected location. Preserve saved/share/native recovery precedence, PR #38,
+pixel-loader/scientific/loading contracts. Initial camera is provisional until
+measured Pro Max/reference fit; parent records final values and limitations.
+No main push, deployment or TestFlight. This owner supplies static consistency,
+authorization/digest and image-dimension evidence, no runtime acceptance.
 
 ## Start here
 
@@ -429,3 +426,52 @@ request does not establish approval for this one.
 - Records: only CR-008, DECISIONS and this handoff modified, uncommitted for parent.
   No app edits, commit, push, deployment or distribution. This owner session ends;
   no continuing owner/custody transfer. Branch protection enforcement unverified.
+
+## Handoff — 2026-10-28 (CR-009 r1 only)
+
+- Exact CR-009 r1 ACCEPTED; independently reproduced 3,057 proposal bytes,
+  SHA-256 325f115e94316ea4c009944f4a137ecb09b202ff3c23f9465914a307ee11d93c
+  (normalize workflow Status to DRAFT). Exact scope/conditions in request.
+- Independently read inherited actual user messages directing Part A, Part B
+  investigation without guessed viewpoint, explicit owner review, isolation,
+  checks/screenshots and no main push/TestFlight. No external thread read claimed.
+- Static source review: shared native pane and panel routing, mapBusy/drawing
+  updates, native panel description/watching and shared markup dismissal/state.
+  Parent may now implement Part A through existing pane/bridge, preserving every
+  control/auxiliary choice and map gestures. Complete CR-009 verification plan.
+- Part B exact viewpoint and owner record remain outstanding. No startup state
+  implementation accepted here. SPEC.md/BASE-001 stay unchanged/unapproved;
+  CR-001–008, expiry, scientific/loading/share/session/PR #38/pixel-loader
+  contracts and all open decisions/PERF/release gates stay intact.
+- Only CR-009, DECISIONS and this handoff changed, uncommitted for parent.
+  No app changes, runtime/device/scientific checks, commits, push or deployment.
+  Acceptance is not IMPLEMENTED/VERIFIED. Enforcement remains unverified.
+  This one-request owner session ends here; no continuing owner/custody transfer.
+
+## Handoff — 2026-10-28 (CR-010 r1 only)
+
+- Accepted exact original r1, independently reproduced 3,013 bytes and SHA-256
+  1a279c0141d443929eb720380aa6ec3a602baa80842fe7112ad16e4b44866330 before edits;
+  normalize Status to DRAFT. Proposal unchanged, later traceability digest.
+- Independently read inherited actual user build, screenshot/known-marker
+  projection and empty-search/no-selection correction instructions; owner review
+  explicitly authorized, GOV-002 applies. No message URL/metadata supplied and no
+  external-thread inspection claimed.
+- Read governing/accepted records and inspected actual camera, continuous zoom,
+  terrain/studio/overlay preference paths, topo preset/applyLook, shared/native
+  restore and deferred initial-render boundaries. Confirmed image dimensions.
+- Parent may implement/verify r1 with its numbered conditions: eligibility before
+  hydration writes; saved map/layer state, any share payload and native recovery
+  suppress default; no extra state/selection/search; real preset/opacity reuse;
+  measured Pro Max/reference and desktop/aspect fit; no resize overriding a later
+  camera; scientific/loading/PR #38/loader invariants and named checks preserved.
+- Camera candidate in proposal is not verified exact data. Refine only through
+  projection/landmark evidence as r1 permits; record final center/zoom/reference
+  viewport and fit errors/quantization limits. Stop affected camera work/report
+  uncertainty if projection cannot be pinned down confidently.
+- SPEC.md and BASE-001 stay unchanged/unapproved; other CRs, open decisions,
+  PERF/release gates and CR-001 expiry retained. No main push or TestFlight.
+- Only CR-010, DECISIONS and this handoff changed, uncommitted for parent. No app
+  edits, runtime/device/scientific checks, commit, deployment or delegation by
+  this owner. Branch protection enforcement unverified. Session ends at handoff;
+  no ongoing owner/custody transfer.

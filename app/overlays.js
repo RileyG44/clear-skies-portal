@@ -304,7 +304,7 @@ const ovPointCanvas=L.canvas({padding:.5});
 
 const ALERT_PREF_KEY="clearskies.alerts.v1";
 const ALERT_TYPE_DEFAULTS={storm:true,winter:true,fire:true,coast:true,temperature:true,other:true};
-let alertPrefs={nws:true,quakes:true,volcanoes:true,fires:false,viewport:true,
+let alertPrefs={nws:!cspFreshView,quakes:!cspFreshView,volcanoes:!cspFreshView,fires:false,viewport:true,
   nwsSeverity:"all",quakeAge:"week",quakeMag:-1,types:{...ALERT_TYPE_DEFAULTS}};
 const alertRawCache=new Map();
 let alertMoveTimer=null,alertsReady=false,nwsCoverage=null,nwsFetchedAt=0;
@@ -1015,6 +1015,8 @@ setInterval(()=>{
   }
 },60000);
 
-ovLoad(); ovRender(); ovApply();
+ovLoad();
+if (cspFreshView) { ovOn = {water:true}; ovOpacities = {water:60}; }
+ovRender(); ovApply();
 ovThemedReady=true;      // from here a theme switch may rebuild themed overlays
 

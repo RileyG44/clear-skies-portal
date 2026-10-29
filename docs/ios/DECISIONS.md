@@ -546,6 +546,88 @@ commit by this owner. Next action: parent implements/verifies exact r1 with
 these conditions; necessary revisions follow GOV-002 and a traceable owner
 record. No ongoing owner or custody transfer; enforcement remains unverified.
 
+## CR-009 — markup tools in the shared bottom pane
+
+Status: ACCEPTED 2026-10-28 (America/Los_Angeles), exact r1 only
+Request: change-requests/CR-009-markup-bottom-pane.md
+Binding: independently reproduced 3,057 UTF-8/LF bytes before Riley approval
+heading, SHA-256 325f115e94316ea4c009944f4a137ecb09b202ff3c23f9465914a307ee11d93c;
+normalize workflow Status to DRAFT. Later traceability hash, not presented to Riley.
+Owner: dedicated Spec Owner sub-agent `/root/spec_owner` (Codex), r1 only;
+session ends at handoff. Authority: independently read inherited actual user
+build/continuation messages requiring same markup pane, medium map interaction,
+owner review and named verification under GOV-002. No external thread inspection
+or unavailable message metadata claimed; exact quotes are in CR-009.
+
+Accepted scope: iOS markup tool opens through existing FloatingToolsSheet and
+PanelSheet, same detents/handle/dismissal/animation; real shared controls through
+existing bridge, including auxiliary choices and dynamic state. Medium pane
+stays open during map placement/drawing/selection/editing and shared pan/zoom;
+only pane area captures touches. Preserve other panes and sensible expanded,
+closed and continued-editing behavior. Shared web/Electron integration fixes
+remain bounded; native-host-off behavior and matching assets preserved.
+
+Conditions and evidence: CR-009's numbered conditions govern. Static inspection
+covered RootView, ShellModel, native-shell PANELS/mapState/watching/closePanel and
+markup editing/dismissal/tool rendering. Verify actual simulator placement and
+resulting state, all markup control forwarding, touch containment, other panels,
+expanded/closed/reopen, shared checks, Python unittests and iOS build/screenshots.
+No implementation/runtime/device/scientific acceptance supplied by this owner.
+
+Affected: U-01/03/04, UX-02/03/04, CAP-01/03, CR-001 parity/reuse. Permanent bounded
+markup UI supplement only; SPEC.md 0.1.0-draft and BASE-001 unchanged/unapproved.
+Prior CRs, ENGINEERING_REVIEW contracts, PR #38 and pixel loader, scientific and
+loading/session/share semantics, open decisions/PERF/release gates and CR-001
+expiry remain. Part B investigation only, no guessed viewpoint; exact Part B
+state and owner record await Riley's screenshot/link. No main push or TestFlight.
+Next: parent may implement/verify r1 and leave branch committed. Only owner docs
+changed here, uncommitted for parent; no ongoing owner/custody transfer.
+Branch protection enforcement remains unverified.
+
+## CR-010 — western US fresh startup view
+
+Status: ACCEPTED 2026-10-28 (America/Los_Angeles), original r1 only
+Request: change-requests/CR-010-default-startup-view.md
+Binding: independently reproduced 3,013 UTF-8/LF bytes before Riley approval
+heading, Status normalized to DRAFT, SHA-256
+1a279c0141d443929eb720380aa6ec3a602baa80842fe7112ad16e4b44866330.
+Owner: dedicated Spec Owner `/root/spec_owner_b` (Codex), r1 only; ends at handoff.
+Authority: actual inherited user Part B build, supplied screenshot/known-marker
+projection instructions and empty-search/no-selected-location correction, plus
+explicit owner-review authorization under GOV-002. No supplied message URL or
+metadata; no independent external-thread access claimed. Later digest is
+traceability evidence, not represented as presented to Riley.
+
+Accepted: fresh startup only, screenshot-derived western US camera, existing
+Topographic preset at 100%, Rivers and lakes at 60%, empty search and no selected
+location/marker/label or extra overlays. Existing background retained; reference
+extent fits device/desktop aspects. Initial camera candidate 41.637234,-112.985268,
+zoom 4.5 at 430x932 CSS points may refine only through measured projection and
+landmark comparison. It is not verified exact camera data; final values/evidence
+and Pro Max comparison remain with parent. The original proposal and numbered
+owner conditions govern.
+
+Consistency evidence: static camera/continuous zoom, native session/share
+restoration and deferred renderer startup, terrain/overlay/studio preference
+hydration, actual topo scene/applyLook and per-layer opacity paths; independent
+reference image dimension check. No runtime/georeferencing completion claim.
+Conditions: decide fresh eligibility before hydration writes; suppress defaults
+for saved map/layer state, native recovery or any share payload, including invalid
+payload; preserve error reporting/restore precedence. Unrelated appearance/engine
+preferences are not map state. Preserve scientific/loading/PR #38/CR-008 behavior;
+no resize overriding subsequent user/shared camera. Complete r1's tests/build,
+quantified screenshot fit and other-aspect checks; disclose limitations honestly.
+
+Affected U-03, UX-01, CAP-01/03/05/06/09, CR-001 parity and CR-003 no-payload
+behavior. Permanent bounded default-state supplement only; SPEC.md 0.1.0-draft
+and BASE-001 unchanged/unapproved. Other CRs including CR-009, source/scientific/
+loading contracts, open decisions, PERF/release gates and CR-001 expiry remain.
+No main push, deployment or TestFlight. Next: parent implements/verifies r1;
+necessary within-task changes use GOV-002 without repeated approval questions.
+Only owner records changed, uncommitted; no app edits, runtime/device/scientific
+checks, commit or deployment. Branch enforcement unverified. No ongoing owner
+or custody transfer at handoff.
+
 ## Open decisions
 
 D-01 and D-03 through D-08 in SPEC.md remain unresolved. D-02 is resolved for
@@ -605,3 +687,11 @@ DATA-06; all broader D-06 decisions remain open.
   instructions for pixel startup cover and black iOS launch. Startup appearance
   only; no loading/scientific/timing changes, push or TestFlight. Pending baseline,
   prior CRs, open decisions and release gates retained; verification with parent.
+
+- 2026-10-28: CR-009 r1 accepted for markup in existing native bottom pane with
+  interactive map at medium, shared controls and other pane behavior preserved.
+  Part B investigation only pending exact viewpoint; baseline/gates unchanged.
+
+- 2026-10-28: CR-010 r1 accepted for screenshot-derived fresh western US view,
+  Topographic 100%, Rivers and lakes 60%, empty search/no selection, preserving
+  share/saved/native recovery precedence. Camera validation remains with parent.

@@ -120,7 +120,14 @@ final class ShellModel {
         if let map = update.map { applyMap(map) }
         if let dock = update.dock { self.dock = dock }
         if let status = update.status { self.status = status }
-        if let panelOpen = update.panelOpen { self.panelOpen = panelOpen }
+        if let panelOpen = update.panelOpen {
+            self.panelOpen = panelOpen
+            // Draw from a layer page and the dock share the same native pane.
+            if panelOpen == "mkBar", presentedPanel != "mkBar" {
+                detent = .medium
+                activeSheet = .panel("mkBar")
+            }
+        }
         if let page = update.page { self.page = page }
         if let panel = update.panel {
             self.panel = panel
@@ -156,7 +163,7 @@ final class ShellModel {
         if next.theme == "light" || next.theme == "dark" {
             UserDefaults.standard.set(next.theme, forKey: "clearskies.native.theme.v1")
         }
-        if mapBusy, !wasBusy, activeSheet != nil { activeSheet = nil }
+        if mapBusy, !wasBusy, activeSheet != nil, presentedPanel != "mkBar" { activeSheet = nil }
     }
 
     /// Tells the page what the app shows, so it describes only that.
@@ -253,7 +260,7 @@ final class ShellModel {
     }
 
     /// Map tools whose web pop-up the app presents natively.
-    static let toolPanels = ["snapshot": "snapshotPanel", "terrain-source": "terrainSourcePanel", "server": "serverPanel", "scene": "ctl"]
+    static let toolPanels = ["draw": "mkBar", "snapshot": "snapshotPanel", "terrain-source": "terrainSourcePanel", "server": "serverPanel", "scene": "ctl"]
 
     /// Opens a map tool's pop-up natively (Export, Layers, the engine, the
     /// displayed scene), or presses a tool that has no pop-up.
@@ -262,6 +269,9 @@ final class ShellModel {
         if let panel = Self.toolPanels[tool.tool] {
             if presentedPanel == panel { activeSheet = nil; return }
             if panelOpen != panel { call("CSPNativeShell.tool(id)", ["id": tool.id]) }
+            // With no editable layer, Draw opens the layer creation page.
+            // Wait for the real markup panel's state before presenting it.
+            if panel == "mkBar" { return }
             detent = .medium
             activeSheet = .panel(panel)
         } else {

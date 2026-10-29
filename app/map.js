@@ -3,8 +3,22 @@
    that excludes the bottom safe-area strip; using that number as a fixed shell
    height creates a black band below Leaflet. The map intentionally paints into
    the covered area and only controls opt into safe-area insets. */
-// A fresh session opens over North America. Native process recovery calls
-// restoreSession later to resume the same session's camera and layer state.
+// Decide before hydration writes preferences. Any share payload (including an
+// invalid one), native recovery or existing map/layer preferences owns startup.
+function cspFreshStartup(storage, hash, resume) {
+  if (resume || new URLSearchParams(hash.slice(1)).has("csp")) return false;
+  try {
+    return !["clearskies.terrain.v2", "clearskies.lidarStudio.v1", "clearskies.overlays.v1",
+      "clearskies.alerts.v1", "clearskies.search.v1"].some(key => storage.getItem(key) !== null);
+  } catch (_) { return false; }
+}
+const cspFreshView = cspFreshStartup(localStorage, location.hash, window.CSPNativeHost?.resume);
+// CR-010: camera reconstructed from Riley's 430x932-point reference. Fit the
+// same geographic rectangle on other aspect ratios, without selecting a place.
+const CSP_STARTUP_VIEW = Object.freeze({center: [41.637234, -112.985268], zoom: 4.5, width: 430, height: 932});
+function cspStartupZoom(width, height) {
+  return CSP_STARTUP_VIEW.zoom + Math.log2(Math.min(width / CSP_STARTUP_VIEW.width, height / CSP_STARTUP_VIEW.height));
+}
 /* Providers stop publishing new pixels between roughly z8 and z20, but the
    viewer must never turn black past that point. Leaflet requests the source's
    last native tile and scales it through VIEW_MAX. It gets blurrier, never
@@ -41,6 +55,10 @@ const map = L.map("map",{zoomControl:false,doubleClickZoom:false,maxZoom:VIEW_MA
   zoomSnap:0,scrollWheelZoom:false,
   rotate:true,dragRotate:true,touchRotate:true,touchGestures:true,rotateControl:false,
   shiftKeyRotate:false,preventPageGestures:true}).setView([45,-100],3,{animate:false});
+if (cspFreshView) {
+  const size = map.getSize();
+  map.setView(CSP_STARTUP_VIEW.center, cspStartupZoom(size.x, size.y), {animate:false});
+}
 /* Fit the world's finite Mercator height around the viewport, including a
    rotated viewport. A portrait screen crops the world horizontally at its
    widest view instead of exposing empty polar bands. Longitude stays wrapped

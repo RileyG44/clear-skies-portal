@@ -360,6 +360,19 @@ document.documentElement.addEventListener("csp:ready",()=>{cspShareReady=true;cs
 addEventListener("hashchange",cspReceiveShare);
 /* End CR-003 shared display state. */
 
+// Fit only the new fresh default after the shell has established its layout.
+// Existing cameras, share links and recovery never enter this path. On desktop
+// reserve the open sidebar's area; native chrome floats over the full viewport.
+document.documentElement.addEventListener("csp:ready", () => {
+  if (!cspFreshView) return;
+  const size = map.getSize();
+  const left = !NATIVE_HOST && innerWidth > 760 && !document.body.classList.contains("collapsed")
+    ? Math.min(size.x - 1, Math.max(0, sideEl.getBoundingClientRect().right)) : 0;
+  const zoom = cspStartupZoom(size.x - left, size.y);
+  map.setView(CSP_STARTUP_VIEW.center, zoom, {animate:false});
+  if (left) map.panBy([-left / 2, 0], {animate:false});
+}, {once:true});
+
 /* Optional rendering starts in its own task after navigation is usable. A
    device-specific GPU failure must never abort the shell's initialization. */
 document.documentElement.addEventListener("csp:ready",()=>requestAnimationFrame(()=>{

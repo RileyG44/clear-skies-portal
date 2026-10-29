@@ -657,7 +657,7 @@ document.addEventListener("csp:tool-popover-open",event=>{if(editing&&event.deta
 /* A tap on the drawing surface dismisses the controls, not the pen. The
    dock remains available to reopen them without obstructing the next stroke. */
 mapEl.addEventListener("pointerdown",event=>{
-  if(toolsOpen&&!event.target.closest(".tool-popover,#mapDock,#sideToggleDock,.leaflet-control,#ctl"))setToolsOpen(false);
+  if(!window.CSPNativeHost&&toolsOpen&&!event.target.closest(".tool-popover,#mapDock,#sideToggleDock,.leaflet-control,#ctl"))setToolsOpen(false);
 },{capture:true,passive:true});
 function setTool(next){
   finishLayerDetails(true,false);finishGroundEdit();

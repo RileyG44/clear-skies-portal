@@ -560,6 +560,7 @@
   /* Pop-ups the app presents natively. Each keeps its web element as the
      source of truth; closing the native sheet closes the web pop-up. */
   const PANELS = {
+    mkBar: { close: "#mkBar [data-act=close]", title: "Markup", stateless: true, items: markupItems },
     snapshotPanel: { body: ".snapshot-export-body", close: "#snapshotClose", items: snapshotItems },
     serverPanel: { body: "#srvBox", close: "#srvClose", title: "Terrain engine", items: serverItems },
     terrainSourcePanel: { body: "#terrainSourcePanelBody", close: "#terrainSourceClose", stateless: true, items: terrainSourceItems },
@@ -569,6 +570,27 @@
     } }
   };
   const openPanel = () => Object.keys(PANELS).find(id => { const el = document.getElementById(id); return el && !el.hidden; }) || null;
+
+  function markupItems(items, body) {
+    // Keep the actual markup DOM/state/handlers as the owner, including the
+    // auxiliary shape, colour and exact-value choices rebuilt on each action.
+    for (const [selector, title] of [[".mk-tools", "Tools"], [".mk-context", "Markup layer"],
+      [".mk-opts", "Style and selection"], [".mk-footer", "History and editing"]]) {
+      const root = $(selector, body), controls = [];
+      if (root && selector === ".mk-tools") {
+        controls.push({kind:"choices", title:"Tools", options: $$("button[data-tool]", root).map(button => ({
+          ref:refOf(button), title:clean($(".mk-tool-label", button)?.textContent || button.textContent || button.getAttribute("aria-label")),
+          icon:iconOf(button), selected:button.getAttribute("aria-pressed") === "true", disabled:button.disabled || undefined
+        }))});
+      } else if (root) walk(root, controls);
+      if (controls.length) items.push(panelGroup("markup:" + selector, title, controls));
+    }
+    const pop = $("#mkPop");
+    if (pop && !pop.hidden) {
+      const controls = []; walk(pop, controls);
+      items.unshift(panelGroup("markup:choices", pop.getAttribute("aria-label") || "Choices", controls));
+    }
+  }
 
   // Toolbar panels use task-sized native cards rather than a literal walk of
   // desktop form layout. All controls still refer to their original elements.
@@ -675,7 +697,7 @@
     const spec = PANELS[id], el = document.getElementById(id);
     if (!spec || !el || el.hidden) return null;
     const items = [];
-    (spec.items || walkBody)(items, $(spec.body, el));
+    (spec.items || walkBody)(items, spec.body ? $(spec.body, el) : el);
     return { id, title: spec.title || clean($(".tool-popover-title", el)?.textContent),
       state: spec.stateless ? undefined : clean($(".tool-popover-state", el)?.textContent) || undefined, items };
   }
@@ -999,13 +1021,13 @@
     if (!document.body.classList.contains("collapsed")) $("#sideToggle")?.click();
     // These controls have native equivalents. Moving them off screen keeps
     // layout available to the adapter; hide the duplicates from VoiceOver.
-    for (const selector of ["#side", ...Object.keys(PANELS).map(id => "#" + id)])
+    for (const selector of ["#side", ...Object.keys(PANELS).map(id => "#" + id), "#mkPop"])
       $(selector)?.setAttribute("aria-hidden", "true");
     const observer = new MutationObserver(records => {
       if (records.every(record => record.type === "attributes" && record.attributeName === REF)) return;
       schedule();
     });
-    const watched = ["#side", "#mapDock", "#serverPanel", "#snapshotPanel", "#terrainSourcePanel", "#ctl", "#snapshotStatus", "#mapReadout"];
+    const watched = ["#side", "#mapDock", "#serverPanel", "#snapshotPanel", "#terrainSourcePanel", "#ctl", "#snapshotStatus", "#mapReadout", "#mkBar", "#mkPop"];
     for (const target of watched.map(selector => $(selector)).filter(Boolean))
       observer.observe(target, { subtree: true, childList: true, attributes: true, characterData: true });
     const flags = new MutationObserver(() => schedule());

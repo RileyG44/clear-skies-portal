@@ -80,13 +80,12 @@
     + "html.csp-native-chrome body.csp-redesign #side #cspWorkspace{display:flex!important}"
     + "html.csp-native-chrome body.csp-redesign #side #cspWorkspaceScroll{visibility:visible!important}"
     /* The map tools, the view menu and these pop-ups are drawn natively from
-       the same elements (native-shell.js). The markup tools, point-cloud
-       viewer and map selections stay web for now and remain visible. */
+       the same elements (native-shell.js). The point-cloud viewer and map selections remain web controls. */
     + "html.csp-native-chrome :is(#mapDock,#mapModeMenu,#mapReadout){display:none!important}"
     /* Pop-up controls need their layout boxes too: the adapter uses layout
        to distinguish visible controls from conditional ones. display:none
        on a pop-up would also erase its native fields, sliders and buttons. */
-    + "html.csp-native-chrome :is(#serverPanel,#snapshotPanel,#terrainSourcePanel,#ctl){translate:-400vw 0!important;pointer-events:none!important}";
+    + "html.csp-native-chrome :is(#serverPanel,#snapshotPanel,#terrainSourcePanel,#ctl,#mkBar,#mkPop){translate:-400vw 0!important;pointer-events:none!important}";
   root.classList.add("csp-native-chrome");
   root.append(chrome);
   /* native-shell.js reports the page's selected theme; SwiftUI mirrors it

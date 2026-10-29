@@ -237,6 +237,17 @@ $("#elevPaletteReverse").onclick=()=>applySpectrumColors(spectrumHexColors().rev
 $("#elevPaletteReset").onclick=()=>applySpectrumColors(SPECTRUM_PALETTES.classic);
 syncSpectrumPalette();
 loadTerrainPrefs();
+if (cspFreshView && lidarStudio) {
+  // Hydrate the existing model before the normal csp:ready renderer starts;
+  // do not synthesize a user change or start a second startup rendering path.
+  const look = CSPLidarRender.LOOKS.find(look => look.id === "topo");
+  const result = CSPLidarRender.applyScene(lidarStudio.state(), look.scene, look.id);
+  $("#terStyle").value = result.style;
+  $("#terOp").value = look.opacity;
+  lidarStudio.restoreDisplay({state:result.state});
+  saveTerrainPrefs();
+  try { localStorage.setItem(CSPLidarStudio.STORAGE_KEY, JSON.stringify(result.state)); } catch (_) {}
+}
 // The studio mounts before preferences hydrate the native style field.
 // Reconcile its rows and selected look with the restored map, including Off.
 lidarStudio?.refresh();

@@ -70,7 +70,7 @@ async function main(){
 
   const root={hidden:false},view={panel:"ctl"};let closed=0;
   const panel={view,document:{getElementById:()=>root},$:selector=>({click(){assert.equal(selector,"#ctlCollapse");closed++;root.hidden=true;}}),schedule(){},
-    snapshotItems(){},serverItems(){},terrainSourceItems(){}};
+    snapshotItems(){},serverItems(){},terrainSourceItems(){},markupItems(){}};
   vm.createContext(panel);
   vm.runInContext(section(adapter,"const PANELS =", "  const openPanel =")+
     "\nconst commands={"+section(adapter,"closePanel(id) {", "    statusText:").trim().replace(/,$/,"")+"}; globalThis.close=commands.closePanel;",panel);
