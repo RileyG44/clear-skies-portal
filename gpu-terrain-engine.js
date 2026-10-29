@@ -45,6 +45,14 @@
     return Math.min(22, Math.max(0, Math.round(view.zoom) +
       (view.dz === undefined ? (view.dpr >= 1.5 ? 1 : 0) : view.dz)));
   }
+  /* The "Smoother panning" drag frame (CR-008): the same camera on the CSS
+     pixel grid. The explicit dz keeps the live tile level, so the wanted
+     tiles, requests and plan are the live view's; only display sampling
+     changes. Metres per pixel follow the DPR, so shading stays physical. */
+  function gestureView(view) {
+    return {centerMerc: view.centerMerc, zoom: view.zoom, bearing: view.bearing || 0, cssSize: view.cssSize, dpr: 1,
+      dz: tileLevel(view) - Math.round(view.zoom)};
+  }
   function coverageBounds(view, margin, out) {
     var z = tileLevel(view), n = Math.pow(2, z), scale = n / (256 * Math.pow(2, view.zoom));
     var a = (view.bearing || 0) * DEG, c = Math.abs(Math.cos(a)), s = Math.abs(Math.sin(a));
@@ -206,6 +214,7 @@
     var wanted = [], coverageKey = '', viewScalars = new Float64Array(8), lastResult = {coverage: 0, missing: 0};
     viewScalars.fill(NaN);
     var state = {}, field = null, heightProgram, shadeProgram, provenanceProgram, statsProgram, stats = {}, vao, shadeSetters, blockMin = {};
+    var gesture = null, gesturePeakBytes = 0, gestureUnsupported = false;
     var liveAux = {}, auxKey = '', filters = {}, shadeAux = {}, filterRadius = -1, filterWeights = new Float32Array(33);
     var h = {}, maxSize = 0, forcedMaxSize = 0, pendingReads = new Set(), frameRequested = false, phaseMs = {}, gpuTiming = false, gpuTotals = {height: 0, aux: 0, shade: 0, frames: 0}, gpuPixel = new Float32Array(4), gpuByte = new Uint8Array(4);
     /* Diagnostic GPU timing: a one-pixel read waits for the pass that drew
@@ -267,7 +276,7 @@
         resources.framebuffers.forEach(function (f) { gl.deleteFramebuffer(f); }); resources.textures.forEach(function (t) { gl.deleteTexture(t); });
         resources.programs.forEach(function (p) { gl.deleteProgram(p); }); resources.vaos.forEach(function (v) { gl.deleteVertexArray(v); });
       }
-      Object.keys(resources).forEach(function (k) { resources[k].clear(); }); field = null; liveAux = {}; auxKey = '';
+      Object.keys(resources).forEach(function (k) { resources[k].clear(); }); field = null; gesture = null; liveAux = {}; auxKey = '';
     }
     function setters(p) {
       var types = new Map(), out = [];
@@ -654,10 +663,11 @@
       viewScalars[0] = v.centerMerc[0]; viewScalars[1] = v.centerMerc[1]; viewScalars[2] = v.zoom; viewScalars[3] = v.bearing || 0;
       viewScalars[4] = v.cssSize[0]; viewScalars[5] = v.cssSize[1]; viewScalars[6] = v.dpr; viewScalars[7] = tileLevel(v);
     }
-    function render(view) {
+    function render(view, options) {
       frameRequested = false;
       if (!ready || destroyed) return lastResult;
       var start = now(), mark = start, t; drawCalls = 0;
+      var coarse = !!(options && options.coarse) && view.dpr >= 1.5 && !gestureUnsupported;
       // JS time per phase (GPU work runs asynchronously); diagnostics only.
       phaseMs.want = phaseMs.seed = phaseMs.upload = phaseMs.plan = phaseMs.draw = phaseMs.height = phaseMs.aux = phaseMs.shade = 0;
       try {
@@ -679,6 +689,8 @@
         t = now(); phaseMs.upload = t - mark; mark = t;
         var w = Math.max(1, Math.round(view.cssSize[0] * view.dpr)), ht = Math.max(1, Math.round(view.cssSize[1] * view.dpr));
         if (w > maxSize || ht > maxSize) throw new Error('Interactive viewport exceeds WebGL target limits');
+        if (coarse && renderGesture(view, w, ht)) { phaseMs.draw = now() - mark; lastFrameMs = now() - start; return lastResult; }
+        if (gesture) releaseGesture();
         if (!field || field.width !== w || field.height !== ht) {
           freeTarget(field); field = target(w, ht, true); heightDirty = dirty = true;
           canvas.width = w; canvas.height = ht;
@@ -693,6 +705,42 @@
         phaseMs.draw = now() - mark;
       } catch (e) { error = String(e && e.message || e); ready = false; }
       lastFrameMs = now() - start; return lastResult;
+    }
+    /* A drag frame on the CSS grid, stretched to the unchanged canvas. Its
+       targets are separate, so the device-resolution field and canvas keep
+       their size; the next full frame redraws that field and frees these. */
+    function renderGesture(view, w, ht) {
+      var gv = gestureView(view), cw = Math.max(1, Math.round(view.cssSize[0])), ch = Math.max(1, Math.round(view.cssSize[1]));
+      if (canvas.width !== w) canvas.width = w;
+      if (canvas.height !== ht) canvas.height = ht;
+      var fresh = !gesture || gesture.field.width !== cw || gesture.field.height !== ch;
+      if (fresh) { releaseGesture(); gesture = {field: target(cw, ch, true), colour: target(cw, ch, false), aux: {}}; }
+      if (planDirty) buildPlan(view);
+      drawHeight(gesture.field, gv);
+      gesture.aux = deriveAll(gesture.field, gv, state, gesture.aux);
+      drawShade(gesture.field, gesture.colour, gv, null, gesture.aux);
+      gl.bindFramebuffer(gl.READ_FRAMEBUFFER, gesture.colour.framebuffer); gl.bindFramebuffer(gl.DRAW_FRAMEBUFFER, null);
+      gl.blitFramebuffer(0, 0, cw, ch, 0, 0, w, ht, gl.COLOR_BUFFER_BIT, gl.LINEAR);
+      gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+      // One synchronous check per allocation. A context that cannot stretch
+      // this way keeps every frame at full resolution instead.
+      if (fresh && gl.getError() !== gl.NO_ERROR) { gestureUnsupported = true; releaseGesture(); heightDirty = dirty = true; return false; }
+      gesturePeakBytes = Math.max(gesturePeakBytes, gestureBytes());
+      // The canvas no longer shows the device-resolution field.
+      heightDirty = dirty = true; frames++; return true;
+    }
+    function gestureBytes() {
+      if (!gesture) return 0;
+      var n = gesture.field.width * gesture.field.height * 12;
+      ['blur', 'base'].forEach(function (k) {
+        var e = gesture.aux[k]; if (!e) return;
+        [e.a, e.b, e.rows].forEach(function (t) { if (t) n += t.width * t.height * 8; });
+      });
+      return n;
+    }
+    function releaseGesture() {
+      if (!gesture) return;
+      freeTarget(gesture.field); freeTarget(gesture.colour); freeAux(gesture.aux); gesture = null;
     }
     function cancelReads(reason) { pendingReads.forEach(function (job) { job.cancel(reason); }); pendingReads.clear(); }
     function onLost(event) {
@@ -960,12 +1008,13 @@
       get ready() { return ready; },
       setState: function (next) { state = next || {}; dirty = true; if (refreshSources()) heightDirty = planDirty = true; needsFrame(); },
       invalidate: invalidate, render: render, createSnapshot: createSnapshot,
+      releaseGestureTargets: function () { if (!lost) releaseGesture(); },
       releaseExport: releaseExport, exportDetail: exportDetail, neededTiles: function (view) { if (refreshSources()) heightDirty = dirty = planDirty = true; return want(view); }, renderToCanvas: renderToCanvas, readProvenance: readProvenance, sampleValues: sampleValues,
       stats: function () { return {textures: lru.size, textureBytes: lru.bytes, frames: frames, drawCalls: drawCalls, lastFrameMs: lastFrameMs,
         ready: ready, queuedUploads: queue.size,
         exportTextures: Array.from(snapshots).reduce(function (n, capture) { return n + capture.tiles.size; }, 0),
         exportTextureBytes: Array.from(snapshots).reduce(function (n, capture) { return n + capture.bytes; }, 0), uploads: uploads, evictions: evictions, generation: generation, error: error,
-        heightFieldBytes: field ? field.width * field.height * 8 : 0, trackedTiles: known.size, phaseMs: Object.assign({}, phaseMs), planEntries: plan.length,
+        heightFieldBytes: field ? field.width * field.height * 8 : 0, gestureBytes: gestureBytes(), gesturePeakBytes: gesturePeakBytes, trackedTiles: known.size, phaseMs: Object.assign({}, phaseMs), planEntries: plan.length,
         coverageKind: 'resident tile overlap estimate; readProvenance returns sampled pixel coverage', fallback: 'CPU when float targets or self-test unavailable'}; },
       // Diagnostics are deliberately synchronous and are never called by render().
       debugReadHeight: function () { if (!field || !ready) throw new Error('No height field'); return readFloat(field); },
@@ -976,5 +1025,5 @@
     };
   }
   return Object.freeze({VERSION: '1', create: create, _test: Object.freeze({tileLevel: tileLevel, coverageTiles: coverageTiles,
-    cropFor: cropFor, TextureLRU: TextureLRU, drainUploads: drainUploads, auxPlan: auxPlan, auxRadii: auxRadii, snapshotAuxTransform: snapshotAuxTransform})});
+    cropFor: cropFor, TextureLRU: TextureLRU, drainUploads: drainUploads, auxPlan: auxPlan, auxRadii: auxRadii, snapshotAuxTransform: snapshotAuxTransform, gestureView: gestureView})});
 }));
