@@ -234,6 +234,18 @@ const data=values=>({width:2,height:2,grid:new Float32Array(values)});
   assert.equal(detailCalls.length,0,'a cancelled export requests nothing');
   detail.destroy();
 
+  /* A pinch from z13 to z17: the level it passed keeps only its cheap
+     backdrop tile as cover; its slow 1 m render stops holding a slot. */
+  const inflight=[],inflightAt=url=>inflight.find(r=>r.url===url);
+  const pinch=new ElevationTileStore({sources:()=>[source('raw',3,18),source('cover',1,15,{backdrop:true})],
+    request:(url,o)=>new Promise(resolve=>inflight.push({url,o,resolve}))});
+  pinch.want([{z:13,x:0,y:0}]);await tick();
+  pinch.want([{z:17,x:0,y:0}]);await tick();
+  assert.equal(inflightAt('raw/13/0/0').o.signal.aborted,true,'a passed-over 1 m render is cancelled');
+  assert.equal(inflightAt('cover/13/0/0').o.signal.aborted,false,'the backdrop still covers the zoom');
+  assert.ok(inflightAt('raw/17/0/0'),'the level the zoom ended on is requested');
+  pinch.destroy();
+
   const sources=buildSources({dnrEndpoint:'/dnr',rawEndpoint:'/raw',nationalEndpoint:'/national',fallback:'/base/{z}/{x}/{y}',fallbackNativeZoom:15,refineOverview:true},
     {proxy:true,api:x=>x,dz:1,dnrRevision:7,dnrTileAllowed:()=>true,rawCoverageQuery:'r=1'});
   assert.equal(sources.find(s=>s.id==='raw').allowed({z:13}),false);

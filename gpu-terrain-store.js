@@ -251,11 +251,15 @@
         wanted.set(key,job);backdrop.push(job);
       }
     }
-    /* Coarser native tiles still on their way are fallback for this view: a
-       fast zoom in must not cancel them just because it passed their level. */
+    /* Coarser backdrop tiles still on their way are fallback for this view: a
+       fast zoom in must not cancel them just because it passed their level.
+       Only the backdrop's, which are cheap. Kept 1 m, national and DNR tiles
+       for the levels a pinch passed through are slow renders; they held every
+       detail slot, so the view the zoom ended on waited seconds behind levels
+       it no longer shows (measured 4 s on a 17.4 pinch, 2026-10-29). */
     const fallback=new Set();
     for(const d of displayTiles)for(const source of this._sources){
-      if(source.allowed&&!source.allowed(d))continue;
+      if(!source.backdrop||source.allowed&&!source.allowed(d))continue;
       const z=native(source,Math.max(0,d.z-(source.dz??this.options.dz??0)));
       for(let k=1;k<=FALLBACK_LEVELS&&z-k>=0;k++){const c=coords(d,z-k);fallback.add(tileKey(source.id,c.z,c.x,c.y));}
     }
