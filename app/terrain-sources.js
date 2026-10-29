@@ -291,9 +291,11 @@ let nativeEngineSync=Promise.resolve();
 let API = normaliseBase(NATIVE_HOST ? NATIVE_HOST.engineBase() : (SHARED_SERVER || localStorage.getItem("cspServer") || ""));
 const api = p => (NATIVE_HOST ? "" : API) + p;
 /* Bumped when the engine's 1 m coverage changes under an unchanged tile URL
-   (2: projects crossing a UTM zone boundary were half-indexed). Those tiles
-   are immutable in the browser cache, so this query lets corrected ones in. */
-const RAW_COVERAGE_QUERY="ix=2";
+   (2: projects crossing a UTM zone boundary were half-indexed; 3: an index
+   with failed project listings answered "no 1 m here" for most of Washington
+   from 2026-10-21). Those tiles are immutable in the browser cache, so this
+   query lets corrected ones in. */
+const RAW_COVERAGE_QUERY="ix=3";
 
 let terLayer=null, terBase=null, PROXY=false, waCover=null, terTimer=null;
 // One engine/store for both analytical terrain and elevation. The published

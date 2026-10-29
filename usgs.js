@@ -198,7 +198,7 @@ async function buildIndexNow(states, force){
       const st=fs.statSync(f);
       if(Date.now()-st.mtimeMs < INDEX_TTL){
         const cached=JSON.parse(fs.readFileSync(f,"utf8"));
-        if(cached.v===INDEX_VERSION){ INDEX=cached; return INDEX }
+        if(cached.v===INDEX_VERSION){ INDEX=cached; repairIndexSoon(); return INDEX }
       }
     }catch(e){}
   }
@@ -207,21 +207,73 @@ async function buildIndexNow(states, force){
   const names=[];
   for(const st of (states||scopeList())) names.push(...await listProjects(st));
   const uniq=[...new Set(names)].filter(Boolean);
-  let done=0, failed=0;
-  await pool(uniq, INDEX_CONCURRENCY, async p=>{
-    try{
-      const {cells,zone}=await listProjectTiles(p);
-      if(Object.keys(cells).length) out.projects[p]={zone, cells};
-    }catch(e){ failed++ }                 // one unreachable project must not sink the build
-    if(++done % 100 === 0 || done===uniq.length)
-      console.log(`  usgs index: ${done}/${uniq.length} projects` + (failed?` (${failed} failed)`:""));
-  });
-  out.failed=failed;
+  const failedProjects=await listInto(out, uniq);
+  out.failed=failedProjects.length; out.failedProjects=failedProjects;
   INDEX=out;
   try{ cacheBudget.writeJsonAtomic(f,out) }catch(e){}   // a cache: rebuilt if missing
   return out;
 }
-async function getIndex(){ return INDEX || buildIndex(null) }
+async function listInto(out, names){
+  let done=0; const failed=[];
+  await pool(names, INDEX_CONCURRENCY, async p=>{
+    try{
+      const {cells,zone}=await listProjectTiles(p);
+      if(Object.keys(cells).length) out.projects[p]={zone, cells};
+    }catch(e){ failed.push(p) }           // one unreachable project must not sink the build
+    if(++done % 100 === 0 || done===names.length)
+      console.log(`  usgs index: ${done}/${names.length} projects` + (failed.length?` (${failed.length} failed)`:""));
+  });
+  return failed;
+}
+
+/* A listing that failed is unknown coverage, not a gap. On 2026-10-21 one
+   build lost 18 of 25 Washington listings and was then trusted for the whole
+   30-day TTL, so most of the state answered "no 1 m here" and fell back to
+   national 3DEP. An incomplete index keeps serving what it has, and retries
+   its failed projects (or, for an index that predates failedProjects, the
+   whole scope) in the background every INDEX_RETRY until it is complete. */
+const INDEX_RETRY = 10*60*1000;
+let indexRepairAt = 0, indexRepairing = null;
+const indexComplete = idx => !!idx && !(idx.failed>0);
+function repairIndexSoon(){
+  if(indexComplete(INDEX) || indexRepairing || Date.now()-indexRepairAt < INDEX_RETRY) return;
+  repairIndexNow();
+}
+/* One repair at a time per process; a caller during one waits for it. */
+function repairIndexNow(){
+  if(indexRepairing) return indexRepairing;
+  if(!INDEX || indexComplete(INDEX)) return Promise.resolve(INDEX);
+  indexRepairAt=Date.now();
+  return indexRepairing=repairIndex().catch(()=>{}).finally(()=>{ indexRepairing=null }).then(()=>INDEX);
+}
+async function repairIndex(){
+  const f=indexPath(), base=INDEX;
+  /* Several terrain workers share this file: adopt another's repair. */
+  try{
+    const disk=JSON.parse(fs.readFileSync(f,"utf8"));
+    if(disk.v===INDEX_VERSION && disk.scope===base.scope && indexComplete(disk)){ INDEX=disk; return }
+  }catch(e){}
+  const out={...base, projects:{...base.projects}};
+  let names=Array.isArray(base.failedProjects)?base.failedProjects:null;
+  if(!names){
+    names=[];
+    const scope=base.scope==="ALL"?[""]:base.scope.split(",");
+    for(const st of scope) names.push(...await listProjects(st));
+    names=[...new Set(names)].filter(p=>p && !out.projects[p]);
+  }
+  const failedProjects=await listInto(out, names);
+  out.failed=failedProjects.length; out.failedProjects=failedProjects;
+  if(INDEX!==base) return;                // replaced meanwhile (forced rebuild)
+  INDEX=out;
+  try{ cacheBudget.writeJsonAtomic(f,out) }catch(e){}
+}
+async function getIndex(){
+  if(INDEX){ repairIndexSoon(); return INDEX }
+  return buildIndex(null);
+}
+/* Whether a "no 1 m coverage" answer is final. While listings are missing
+   it is provisional and must not be cached as this tile's answer. */
+function coverageFinal(){ return indexComplete(INDEX) }
 
 /* A project's flight year, for preferring newer data. The name is the only
    place it appears; several carry two (2019_D20 = flown 2019, delivered 2020). */
@@ -692,9 +744,12 @@ async function sampleBest(z,x,y,size,sample=sampleGrid){
   return wider && (!first || wider.coverage>first.coverage) ? wider : first;
 }
 
+/* Callers cache null as "no federal coverage"; an index with failed listings
+   cannot know that, so it says so instead (see coverageFinal). */
+const PROVISIONAL_NONE=Object.freeze({provisional:true});
 async function elevTile(z,x,y,size){
   const S=await sampleBest(z,x,y,size||256);
-  if(!S) return null;
+  if(!S) return coverageFinal()?null:PROVISIONAL_NONE;
   const {grid,n}=S; const w=size||256;
   const out=Buffer.alloc(w*w*4);
   for(let yy=0;yy<w;yy++) for(let xx=0;xx<w;xx++){
@@ -717,7 +772,7 @@ async function elevTile(z,x,y,size){
 
 async function renderTile(style,z,x,y,size){
   const S=await sampleBest(z,x,y,size||256);
-  if(!S) return null;
+  if(!S) return coverageFinal()?null:PROVISIONAL_NONE;
   return {png:render(style,S), meta:{coverage:+S.coverage.toFixed(3), groundRes:+S.groundRes.toFixed(2),
                                      sources:S.sources}};
 }
@@ -968,7 +1023,7 @@ async function fabric(bbox, opt){
   };
 }
 
-module.exports = Object.assign(module.exports, { init, buildIndex, getIndex, findCells, cellCandidates, addTileKey, projectCell, sampleBest, cellOf, cellBounds, projectYear, scopeList, fabric, sampleUTMGrid, elevTile,
+module.exports = Object.assign(module.exports, { init, buildIndex, getIndex, coverageFinal, repairIndex:repairIndexNow, findCells, cellCandidates, addTileKey, projectCell, sampleBest, cellOf, cellBounds, projectYear, scopeList, fabric, sampleUTMGrid, elevTile,
                    openCog, cogTile, fetchRange, renderTile, sampleGrid, utmGrid, encodePNG,
                    checkFresh, tileKey, tileUrl, s3head, S3_BASE });
 
