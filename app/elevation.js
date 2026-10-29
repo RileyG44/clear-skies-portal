@@ -496,6 +496,12 @@ async function fetchElevation(url,signal){
         throw new Error(`Elevation HTTP ${response.status}`);
       }
       if(isDnr)dnrLastError="";
+      // Older engines return provisional USGS gaps as a successful empty PNG.
+      // Keep those out of the resident store: no-store means the index did
+      // not establish absence. A rejected request retries even while still.
+      if(url.includes("/api/usgs/elev/")&&response.headers.get("X-Coverage")==="none"&&
+         /\bno-store\b/i.test(response.headers.get("Cache-Control")||""))
+        throw new Error("USGS elevation coverage is still unknown");
       if(response.headers.get("X-Coverage")==="none") return null;
       /* A canvas readback costs several milliseconds per tile, and a fast pan
          or zoom brings dozens at once. The drape workers decode it instead. */

@@ -156,7 +156,7 @@ Next action: parent may implement and verify r1 now that acceptance is recorded.
 ## Implementation and verification
 
 Implemented on `fix/dnr-detail-and-download-progress` from main `5bdd65f`.
-Build stamp: `2026-10-29c`. PR/commit and shipping evidence will be recorded
+Build stamp: `2026-10-29d` (initial source/progress comparison used `c`). PR/commit and shipping evidence will be recorded
 with the implementation; owner acceptance above remains a distinct event.
 
 Verification on 2026-10-29:
@@ -194,6 +194,38 @@ Verification on 2026-10-29:
   static checks pass, vendor synchronization passes, audit reports zero known
   vulnerabilities, and all 13 iOS Python checks pass. Current native simulator
   Xcode build succeeds with the matching minified site and native assets.
+
+Follow-up on Riley's IMG_2959 persistent blurry-patch report:
+- Reproduced its diagonal survey boundary near 45.97929,-121.14818. Both
+  indexed native USGS rasters contain nodata at that point; independent
+  GDAL/rasterio reads also found zero valid samples in the surrounding
+  500 x 500 m window. The settled app uses national elevation in those holes,
+  with no pending or failed requests. No renderer retry can create those
+  missing source samples. The DNR catalogue lists nearby survey candidates,
+  but those rasters are not in the Dell's two-file cache; no new acquisition
+  was started. See `docs/diagnostics/2026-10-29-zoom-detail.md`.
+- Repaired a separate loading defect: provisional USGS index gaps formerly
+  returned HTTP 200 / X-Coverage:none and became resident empty tiles forever.
+  The engine now returns retryable 503 / unknown; the shared client also
+  rejects the older engine's none/no-store combination. Confirmed USGS nodata
+  and cache-only DNR misses keep their existing final behavior.
+- Actual simulator failure/recovery fixture, identical stationary Moses Lake
+  view: installed `c` stayed 100% national after 20 s, with zero retries after
+  upstream recovery. Installed `d` reached 100% USGS at 12 s without a map
+  event, and was fully settled without failure at 20 s. Only provisional
+  responses were simulated; successful elevation was read from the live
+  engine. Evidence: `/tmp/csp-dnr-finish/provisional-before.json`,
+  `provisional-after.json` and matching PNGs. This fixture demonstrates the
+  retry defect; it is not the cause of the screenshot's true nodata boundary.
+- Final `d`: all 68 Node test files, static checks, audit (zero vulnerabilities),
+  13 iOS Python checks, Debug simulator build and Release archive/export pass.
+  The new regression fails against the previous fetch helper and passes after
+  the fix, preserving fallback pixels and retrying without another want().
+- Final real-engine rapid-pan/zoom/revisit checks, including 31-degree bearing
+  and z19.1: all three final views reached 100% DNR with no pending or failed
+  requests and still zero local download areas. Settling observations were
+  2.62 s, 1.30 s and 1.30 s on warm engine data; these are simulator examples,
+  not a physical-phone performance gate. `/tmp/csp-dnr-finish/pan-final.json`.
 
 Limitations: no physical iPhone measurement or reproduction of the reported
 one-minute delay in this continuation. Engine-cached DNR still requires an
