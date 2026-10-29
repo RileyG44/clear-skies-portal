@@ -60,12 +60,15 @@ async function main(){
       {raw:204,national:204,source:"none",coverage:"none"},
       {national:204,source:"none",coverage:"none",fallback:true},
       {z:12,raw:200,national:200,source:"3dep",coverage:"1"},
-      {raw:200,national:200,source:"usgs-1m",legacy:true}
+      {raw:200,national:200,source:"usgs-1m",legacy:true},
+      /* A raw gap saved without the final mark may come from an incomplete
+         1 m index, so it is not this route's exact answer: 1 m is tried first. */
+      {raw:204,national:200,source:"3dep",coverage:"1",fallback:true,unmarked:true}
     ];
-    const put=(key,status,body,coverage)=>{
+    const put=(key,status,body,coverage,final)=>{
       const target=path.join(dir,key);
       fs.writeFileSync(target,status===204?Buffer.alloc(0):body);
-      fs.writeFileSync(target+".meta",JSON.stringify({status,type:"image/png",...(coverage==null?{}:{sourceMeta:{coverage}})}));
+      fs.writeFileSync(target+".meta",JSON.stringify({status,type:"image/png",...(coverage==null?{}:{sourceMeta:{coverage,...(final?{final:true}:{})}})}));
       fs.utimesSync(target,old,old);fs.utimesSync(target+".meta",old,old);
     };
     for(let i=0;i<cases.length;i++){
@@ -73,7 +76,7 @@ async function main(){
       const N=2**c.z,lon=(c.x+.4)/N*360-180,lat=Math.atan(Math.sinh(Math.PI*(1-2*(c.y+.4)/N)))*180/Math.PI;
       fs.writeFileSync(path.join(dir,"usgs/areas",i+".json"),JSON.stringify({bbox:[lon,lat-.00001,lon+.00001,lat],z0:c.z,z1:c.z,raw:true,style:"slope"}));
       const keys=budget.elevationWarmKeys(c);
-      if(c.raw)put(keys.raw,c.raw,raw,c.legacy?undefined:.75);
+      if(c.raw)put(keys.raw,c.raw,raw,c.legacy?undefined:.75,c.raw===204&&!c.unmarked);
       put(keys.national,c.national,national,c.legacy?undefined:1);
     }
     const range=path.join(dir,"usgs",budget.sha1("discarded-cog-range"));
@@ -99,7 +102,7 @@ async function main(){
     }
     assert(ready,"offline server must start\n"+logs);
     for(const c of cases.filter(c=>!c.fallback)){
-      const tile=`${c.z}/${c.x}/${c.y}`,key=budget.sha1("elevation-v4:"+tile);
+      const tile=`${c.z}/${c.x}/${c.y}`,key=budget.sha1("elevation-v5:"+tile);
       assert(!fs.existsSync(path.join(dir,key)),"generic elevation starts uncached");
       const first=await request(port,"/api/elev/"+tile+".png");
       assert.equal(first.status,200);assert.equal(first.headers["x-cache"],"hit");
@@ -111,7 +114,7 @@ async function main(){
         for(let i=0;i<rgba.length;i+=4)assert.deepEqual([...rgba.subarray(i,i+4)],[128,0,0,255],"no coverage is opaque sea-level geometry");
       }else assert.deepEqual(first.body,c.source==="usgs-1m"?raw:national,"saved Terrarium bytes are reused unchanged");
       const meta=JSON.parse(fs.readFileSync(path.join(dir,key+".meta"),"utf8"));
-      assert.equal(meta.status,c.source==="none"?204:200,"reuse also persists elevation-v4");
+      assert.equal(meta.status,c.source==="none"?204:200,"reuse also persists elevation-v5");
       const second=await request(port,"/api/elev/"+tile+".png");
       assert.deepEqual(second.body,first.body);assert.equal(second.headers["x-cache"],"hit");
       assert.equal(second.headers["x-elevation-source"],c.source==="none"?"none":"cached");
@@ -122,7 +125,7 @@ async function main(){
     assert.match(fs.readFileSync(log,"utf8"),/raw-elevation\nupstream\n/,"the fixture catches both forbidden paths");
     /* After the cold check: these trip the national circuit breaker. */
     for(const c of cases.filter(c=>c.fallback)){
-      const tile=`${c.z}/${c.x}/${c.y}`,key=budget.sha1("elevation-v4:"+tile);
+      const tile=`${c.z}/${c.x}/${c.y}`,key=budget.sha1("elevation-v5:"+tile);
       for(let attempt=0;attempt<2;attempt++){
         const res=await request(port,"/api/elev/"+tile+".png");
         assert.equal(res.status,200);assert.equal(res.headers["x-cache"],"saved-fallback");
@@ -131,11 +134,11 @@ async function main(){
         if(c.source==="none"){const {rgba}=pixels(res.body);assert.deepEqual([...rgba.subarray(0,4)],[128,0,0,255])}
         else assert.deepEqual(res.body,national);
       }
-      assert(!fs.existsSync(path.join(dir,key)),"a fallback never persists under elevation-v4, so 1 m is fetched again online");
+      assert(!fs.existsSync(path.join(dir,key)),"a fallback never persists under elevation-v5, so 1 m is fetched again online");
     }
     const attempts=fs.readFileSync(log,"utf8").split("\n").filter(line=>line==="raw-elevation").length;
     assert(attempts>=1+cases.filter(c=>c.fallback).length*2,"1 m lidar is attempted before every national fallback");
-    console.log("saved elevation: 6 exact offline cases + 2 uncached fallbacks passed (ranges evicted, 1 m tried first)");
+    console.log("saved elevation: 6 exact offline cases + 3 uncached fallbacks passed (ranges evicted, 1 m tried first)");
   }finally{
     if(child&&child.exitCode==null){const exited=new Promise(resolve=>child.once("exit",resolve));child.kill();await exited}
     fs.rmSync(dir,{recursive:true,force:true});

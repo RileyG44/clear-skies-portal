@@ -195,12 +195,14 @@ async function startUsgsWarm(job){
         };
         const loadRaw=async()=>{
           const hit=cacheGet(rawKey,TTL_TILE);
-          if(hit){available=true;tileBytes+=hit.body.length;return}
+          if(hit&&(hit.status!==204||hit.sourceMeta&&hit.sourceMeta.final)){available=true;tileBytes+=hit.body.length;return}
           const out=await terrainPool.run("raw-elevation",{...t,size:256},
             {priority:5,timeoutMs:45000,signal:controller.signal});
+          // Unknown coverage is a failed read, never a saved gap.
+          if(out&&out.provisional) throw new Error("1 m coverage index is incomplete; retry later");
           fetched=true;available=true;
           if(out){cachePut(rawKey,200,"image/png",out.png,{coverage:out.coverage});tileBytes+=out.png.length}
-          else cachePut(rawKey,204,"image/png",Buffer.alloc(0));
+          else cachePut(rawKey,204,"image/png",Buffer.alloc(0),{final:true});
         };
         const work=[loadNational()];
         if(job.raw&&t.z>=13) work.push(loadRaw());

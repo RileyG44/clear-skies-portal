@@ -18,7 +18,7 @@ async function main(){
   const context={L:{GridLayer:Grid,setOptions:(self,opts)=>{self.options=opts;},point:(x,y)=>({x,y})},HIDPI:false,
     releaseCanvas:canvas=>{ if(canvas&&canvas.width){ canvas.width=0;canvas.height=0 } },
     document:{createElement:()=>({dataset:{}})},AbortController,DOMException,Float32Array,Promise,
-    PROXY:true,RAW_COVERAGE_QUERY:'ix=2',dnrStatus:{revision:1},dnrTileAllowed:()=>true,maskDnrGrid:grid=>grid,api:value=>'engine'+value,CSPTilePipeline:pipeline,ElevationTileCore:core,CSPPublicTerrain:require('./public-terrain'),
+    PROXY:true,RAW_COVERAGE_QUERY:'ix=3',dnrStatus:{revision:1},dnrTileAllowed:()=>true,maskDnrGrid:grid=>grid,api:value=>'engine'+value,CSPTilePipeline:pipeline,ElevationTileCore:core,CSPPublicTerrain:require('./public-terrain'),
     elevationRequests:new RequestPool(),fetchElevation:(url,signal)=>{
       calls.set(url,(calls.get(url)||0)+1);
       return new Promise((resolve,reject)=>{deferred.set(url,resolve);signal.addEventListener('abort',()=>reject(Object.assign(new Error('cancelled'),{name:'AbortError'})));});
@@ -31,7 +31,7 @@ async function main(){
   const cv=first.createTile(coords,error=>{assert.ifError(error);done++;});
   const cv2=second.createTile(coords,()=>{});await tick();
   assert.equal([...calls.values()].reduce((a,b)=>a+b,0),3,'two consumers must share all three source requests');
-  deferred.get('engine/raw/17/1/2.png?ix=2')({grid:new Float32Array([100,NaN,300,400]),width:2,height:2});await tick();
+  deferred.get('engine/raw/17/1/2.png?ix=3')({grid:new Float32Array([100,NaN,300,400]),width:2,height:2});await tick();
   assert.equal(done,1,'detail paints without waiting for the fallback');
   assert.equal(cv.dataset.cspQuality,'3');assert.equal(cv._cspRefining,true);
   first.fire('tileunload',{coords,tile:cv});
@@ -54,7 +54,7 @@ async function main(){
   const publicCanvas=publicLayer.createTile(publicCoords,error=>{assert.ifError(error);publicDone++;});await tick();
   const directUrl=context.CSPPublicTerrain.nationalUrl(publicCoords);
   assert.ok(calls.has(directUrl),'server-free terrain must request USGS directly');
-  assert.equal(calls.has('engine/raw/17/2/2.png?ix=2'),false,'public visitors never require the private raw endpoint');
+  assert.equal(calls.has('engine/raw/17/2/2.png?ix=3'),false,'public visitors never require the private raw endpoint');
   deferred.get('fallback/17/2/2')({grid:new Float32Array([1,2,3,4]),width:2,height:2});await tick();
   assert.equal(publicCanvas._cspSourceCounts[1],4,'overview is honestly reported while USGS is pending');
   deferred.get(directUrl)({grid:new Float32Array([10,NaN,30,40]),width:2,height:2});await tick();
@@ -75,17 +75,17 @@ async function main(){
   const siblingCanvas=dense.createTile(sibling,()=>{});await tick();
   assert.equal(denseCanvas.width,2,'the canvas holds the full source tile');
   assert.equal(denseCanvas._cspCoords.z,17);
-  assert.equal(calls.get('engine/raw/16/2/3.png?ix=2'),1,'the first pass is the on-screen zoom, shared by sibling tiles');
-  assert.equal(calls.has('engine/raw/17/5/6.png?ix=2'),false,'the finer zoom waits until the tile has painted');
-  deferred.get('engine/raw/16/2/3.png?ix=2')({grid:new Float32Array([1,2,3,4]),width:2,height:2});await tick();
+  assert.equal(calls.get('engine/raw/16/2/3.png?ix=3'),1,'the first pass is the on-screen zoom, shared by sibling tiles');
+  assert.equal(calls.has('engine/raw/17/5/6.png?ix=3'),false,'the finer zoom waits until the tile has painted');
+  deferred.get('engine/raw/16/2/3.png?ix=3')({grid:new Float32Array([1,2,3,4]),width:2,height:2});await tick();
   assert.equal(denseDone,1,'the tile paints from the first pass');
   assert.ok([...dense._store.get('17/5/6').elev].every(v=>v>=1&&v<=4),'the first pass is drawn from the coarser tile');
   deferred.get('engine/national/16/2/3.png')({grid:new Float32Array([9,9,9,9]),width:2,height:2});
   deferred.get('fallback/16/2/3')({grid:new Float32Array([9,9,9,9]),width:2,height:2});await tick();await tick();
-  assert.equal(calls.get('engine/raw/17/5/6.png?ix=2'),1,'then the best source sharpens at the finer zoom');
+  assert.equal(calls.get('engine/raw/17/5/6.png?ix=3'),1,'then the best source sharpens at the finer zoom');
   assert.equal(calls.has('engine/national/17/5/6.png'),false,'only the best source is sharpened');
   assert.equal(denseCanvas._cspRefining,true);
-  deferred.get('engine/raw/17/5/6.png?ix=2')({grid:new Float32Array([5,NaN,7,8]),width:2,height:2});await tick();await tick();
+  deferred.get('engine/raw/17/5/6.png?ix=3')({grid:new Float32Array([5,NaN,7,8]),width:2,height:2});await tick();await tick();
   assert.deepEqual([...dense._store.get('17/5/6').elev],[5,2,7,8],'sharper pixels replace their own source, gaps keep the first pass');
   assert.equal(denseCanvas._cspSourceCounts[3],4,'sharpening does not change attribution');
   assert.equal(denseCanvas._cspRefining,false);assert.equal(denseDone,1);
@@ -99,7 +99,7 @@ async function main(){
   deferred.get('engine/national/15/41/42.png')({grid:new Float32Array([20,20,20,20]),width:2,height:2});
   deferred.get(du)({grid:new Float32Array([50,NaN,50,NaN]),width:2,height:2,
     surveys:[{project:'DNR fixture',datasetId:10,nativeMeters:.5}]});await tick();
-  deferred.get('engine/raw/15/41/42.png?ix=2')({grid:new Float32Array([30,30,30,30]),width:2,height:2});
+  deferred.get('engine/raw/15/41/42.png?ix=3')({grid:new Float32Array([30,30,30,30]),width:2,height:2});
   deferred.get('fallback/15/41/42')({grid:new Float32Array([10,10,10,10]),width:2,height:2});await tick();await tick();
   assert.deepEqual([...dnr._store.get('15/41/42').elev],[50,30,50,30],'actual DNR pixels outrank USGS, while DNR gaps retain labeled USGS');
   assert.equal(dcanvas._cspSourceCounts[5],2);assert.equal(dcanvas._cspSourceCounts[3],2);

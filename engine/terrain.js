@@ -27,6 +27,12 @@ const TERRAIN_DOWNLOAD_STYLES = new Set([...TERRAIN_STYLES,"northness"]);
 
 let terrainPool = null, dnr = null;
 function init(pool,dnrStore){ terrainPool=pool; dnr=dnrStore }
+/* "No 1 m coverage" is final only when the index that said so was complete
+   (usgs.coverageFinal). Answers cached without that mark may come from the
+   incomplete index of October 2026, so they are asked again; a genuine gap
+   costs one in-memory index lookup and is then stored with the mark. */
+const NONE_FINAL = Object.freeze({final:true});
+const staleNone = hit => !!hit && hit.status===204 && !(hit.sourceMeta && hit.sourceMeta.final);
 
 /* Analysis frames are cheap to regenerate and tied to the exact uploaded DEM,
    so keep only a short, bounded memory LRU. They do not belong in the long-
@@ -79,10 +85,12 @@ function warmNeighbourTiles(style,z,x,y){
     const tz=target.z, nx=target.x, ny=target.y, limit=Math.pow(2,tz);
     if(nx<0||ny<0||nx>=limit||ny>=limit) continue;
     const nk=key(`${TERRAIN_RENDER_VERSION}:${style}:${tz}/${nx}/${ny}`);
-    if(warmRingSeen.has(nk)||cacheGet(nk,TTL_TILE)) continue;
+    const cached=cacheGet(nk,TTL_TILE);
+    if(warmRingSeen.has(nk)||cached&&!staleNone(cached)) continue;
     warmRingSeen.add(nk); warmRingStarted++;
     terrainTask(`raw-terrain:${nk}`,"raw-terrain",{style,z:tz,x:nx,y:ny,size:256},{priority:-10,timeoutMs:30000})
-      .then(out=>{ if(out) cachePut(nk,200,"image/png",out.png); else cachePut(nk,204,"image/png",Buffer.alloc(0)) })
+      .then(out=>{ if(out&&out.provisional) return;
+        if(out) cachePut(nk,200,"image/png",out.png); else cachePut(nk,204,"image/png",Buffer.alloc(0),NONE_FINAL) })
       .catch(()=>{})
       .finally(()=>warmRingSeen.delete(nk));
   }
@@ -300,7 +308,7 @@ const routes={
        a cold render, and a steady pan walks off the warm edge (measured:
        first pan a 4 ms hit, the next still a 0.9 s miss). Warming here makes
        the ring travel with the user. */
-    if(hit){ warmNeighbourTiles(style,z,x,y); return hit.status===204
+    if(hit&&!staleNone(hit)){ warmNeighbourTiles(style,z,x,y); return hit.status===204
       ? send(res,200,"image/png",TRANSPARENT,{"X-Cache":"hit","X-Coverage":"none","Cache-Control":"public, max-age=604800, immutable"})
       : send(res,hit.status,hit.type,hit.body,{"X-Cache":"hit","Cache-Control":"public, max-age=604800, immutable"}) }
     let out=null;
@@ -312,8 +320,10 @@ const routes={
       if(terrainAborted(e)) return;
       return send(res,503,"image/png",TRANSPARENT,{"X-Cache":"BUSY","Cache-Control":"no-store","Retry-After":"2"});
     }
+    if(out&&out.provisional)        // coverage unknown: the 1 m index is incomplete
+      return send(res,200,"image/png",TRANSPARENT,{"X-Coverage":"none","Cache-Control":"no-store"});
     if(!out){                       // no federal coverage here — caller falls back
-      cachePut(ck,204,"image/png",Buffer.alloc(0));
+      cachePut(ck,204,"image/png",Buffer.alloc(0),NONE_FINAL);
       return send(res,200,"image/png",TRANSPARENT,{"X-Coverage":"none","Cache-Control":"public, max-age=604800, immutable"});
     }
     cachePut(ck,200,"image/png",out.png);
@@ -386,8 +396,9 @@ const routes={
     if(z<0||z>22||x<0||y<0||x>=limit||y>=limit)
       return send(res,400,"text/plain",Buffer.from("bad tile coordinates"));
     // v4: v3 cached national ground where a newer project's holes or a failed
-    // read hid 1 m data, and kept it for 90 days.
-    const ck=key(`elevation-v4:${z}/${x}/${y}`);
+    // read hid 1 m data, and kept it for 90 days. v5: v4 did the same wherever
+    // an incomplete 1 m index said "no coverage" (October 2026).
+    const ck=key(`elevation-v5:${z}/${x}/${y}`);
     const hit=cacheGet(ck,TTL_TILE);
     if(hit) return hit.status===204
       ? send(res,200,"image/png",SEA_LEVEL_DEM,{"X-Cache":"hit","X-Coverage":"none","X-Elevation-Source":"none","Cache-Control":"public, max-age=604800, immutable"})
@@ -399,7 +410,8 @@ const routes={
        that merely happens to be cached must not stand in for 1 m lidar -
        the 2D layer caches national almost everywhere, and caching it here
        would serve coarser ground for 90 days. */
-    const rawHit=z>=13?cacheGet(key(`usgselev:${z}/${x}/${y}`),TTL_TILE):null;
+    let rawHit=z>=13?cacheGet(key(`usgselev:${z}/${x}/${y}`),TTL_TILE):null;
+    if(staleNone(rawHit)) rawHit=null;
     const nationalKey=key(`elevation-national-v1:${z}/${x}/${y}`);
     const exactNational=z<13||(rawHit&&rawHit.status===204);
     const saved=rawHit&&rawHit.status===200?rawHit:exactNational?cacheGet(nationalKey,TTL_TILE):null;
@@ -420,6 +432,8 @@ const routes={
          close views still receive the newest raw project data. */
       if(z>=13) try{ raw=await terrainTask(`raw-elevation:${ck}`,"raw-elevation",{z,x,y,size:256},
         {priority:55,timeoutMs:30000},signal) }catch(e){ if(terrainAborted(e)) throw e; rawFailed=true }
+      // Unknown 1 m coverage serves national now without storing it, like a failed read.
+      if(raw&&raw.provisional){ raw=null; rawFailed=true }
       if(raw) out={...raw,source:"usgs-1m"};
       else{
         const body=await nationalElevationTiff(z,x,y,256,signal);
@@ -507,7 +521,7 @@ const routes={
       return send(res,400,"text/plain",Buffer.from("bad tile coordinates"));
     const ck=key(`usgselev:${z}/${x}/${y}`);
     const hit=cacheGet(ck, TTL_TILE);
-    if(hit) return hit.status===204
+    if(hit&&!staleNone(hit)) return hit.status===204
       ? send(res,200,"image/png",TRANSPARENT,{"X-Cache":"hit","X-Coverage":"none","Cache-Control":"public, max-age=604800, immutable"})
       : send(res,hit.status,hit.type,hit.body,{"X-Cache":"hit","Cache-Control":"public, max-age=604800, immutable"});
     let out=null;
@@ -517,7 +531,9 @@ const routes={
       if(terrainAborted(e)) return;
       return send(res,503,"image/png",TRANSPARENT,{"X-Cache":"BUSY","Cache-Control":"no-store","Retry-After":"2"});
     }
-    if(!out){ cachePut(ck,204,"image/png",Buffer.alloc(0));
+    if(out&&out.provisional)
+      return send(res,200,"image/png",TRANSPARENT,{"X-Coverage":"none","Cache-Control":"no-store"});
+    if(!out){ cachePut(ck,204,"image/png",Buffer.alloc(0),NONE_FINAL);
               return send(res,200,"image/png",TRANSPARENT,{"X-Coverage":"none","Cache-Control":"public, max-age=604800, immutable"}) }
     cachePut(ck,200,"image/png",out.png,{coverage:out.coverage});
     /* Mirror the tile route: say which project and what ground resolution were
