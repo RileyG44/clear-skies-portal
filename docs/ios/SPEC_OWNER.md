@@ -4,20 +4,20 @@ Project: Clear Skies Native iOS
 Appointed by: Riley Grant, current 2026-09-06 user request
 Initial agent: /root/spec_owner (session handle, not a permanent service)
 Current owner session: none after this handoff. Dedicated Spec Owner sub-agent
-`/root/spec_owner_b` (Codex) accepted CR-010 r1 on 2026-10-28 under Riley's direct
-Part B screenshot/default-view and empty-search instructions, explicit owner
-review authorization and GOV-002. Session ends; implementer gains no custody.
+`/root/spec_owner` (Codex) accepted exact CR-011 r1 on 2026-10-29 under independently
+verified direct DNR/progress and continuation instructions and GOV-002. Session
+ends; implementer gains no custody.
 Current baseline: SPEC.md 0.1.0-draft (commit 142fdf47), unapproved; BASE-001 pending.
-Accepted requests: CR-001–010 r1, CR-004 placement addendum r1-a1; exact requests
+Accepted requests: CR-001–011 r1, CR-004 placement addendum r1-a1; exact requests
 and DECISIONS.md govern scopes/conditions. Current authority: GOV-002.
-Current task: parent implements/verifies CR-009 and CR-010 on isolated branch.
-CR-010 replaces only truly fresh defaults with screenshot-derived western US
-camera, existing Topographic 100% and Rivers and lakes 60%, empty search/no
-selected location. Preserve saved/share/native recovery precedence, PR #38,
-pixel-loader/scientific/loading contracts. Initial camera is provisional until
-measured Pro Max/reference fit; parent records final values and limitations.
-No main push, deployment or TestFlight. This owner supplies static consistency,
-authorization/digest and image-dimension evidence, no runtime acceptance.
+Current task: parent implements/verifies CR-011 on isolated branch. Best available
+uses valid cached DNR without per-device download gating; no implicit acquisition
+or restore, preserve explicit source intent and scientific/loading invariants.
+Repair existing on-map download progress safe-area placement, preserving map
+selections, info controls and ordinary web anchoring. Existing camera/presets,
+share/session precedence and all other CRs stay intact. Parent owns verification
+and separate shipping authority; owner acceptance supplies no runtime or release
+acceptance. Full conditions and verified authority are in CR-011/DECISIONS.md.
 
 ## Start here
 
@@ -475,3 +475,36 @@ request does not establish approval for this one.
   edits, runtime/device/scientific checks, commit, deployment or delegation by
   this owner. Branch protection enforcement unverified. Session ends at handoff;
   no ongoing owner/custody transfer.
+
+## Handoff — 2026-10-29 (CR-011 r1 only)
+
+- Exact CR-011 r1 ACCEPTED. Independently reproduced 4,460 proposal bytes and
+  SHA-256 2a8f1069619e0478960e732d6460fdc6c5e64c3a7d2ff1e42a7ecee7f9abc723
+  before edits; normalize only workflow Status to DRAFT. This later traceability
+  binding was not represented as presented to Riley.
+- Independently read actual user_messages 720 and 749 via t3_thread_read in the
+  [source thread](t3-thread://v2/25ec7f29-6fda-4160-a0ec-8450030a6239/thread:project:95d7b465-9ac4-4d9b-ad2b-94155aa5a211:23c965b7-44ea-424d-bfea-4b195e8b5ef6).
+  Both completed/untruncated. They direct cached/user-downloaded DNR preference,
+  progress placement and completion. GOV-002 supplies bounded owner review
+  authorization without reconfirmation. Also independently read actual shipping
+  user_message 229; deployment authority remains separate from this acceptance.
+- Reviewed governing docs, initial owner review, accepted CR-001–010 proposals,
+  relevant decision/handoff records, real client gates/options/masking, source
+  choices, shared elevation/mesh/fabric sampling, cached server DNR route/status
+  and web/native progress geometry. No runtime or scientific verification.
+- Parent may implement/verify r1 subject to its numbered owner conditions:
+  preserve explicit source selections, valid pixels/provenance/revision, USGS
+  gap filling and no downgrade; footprint hints are not coverage; all implicit
+  paths stay cache-only with no archive acquisition/restore; engine cache is not
+  autonomous phone offline storage. Native collapsed/expanded progress stays
+  usable with controls/safe areas/orientations and ordinary selection/web layout.
+- Complete r1's live-data no-local-area comparison, another cached/uncached
+  region, revision/error/nodata/explicit-choice and no-acquisition checks,
+  portrait/landscape/short-height controls, Node/static/Python checks and iOS
+  build with matched assets. Record physical-phone/full-minute-delay uncertainty.
+- SPEC.md and BASE-001 unchanged/unapproved; broader D-06, other CRs, native
+  architecture, PERF/release gates and CR-001 internal-distribution expiry remain.
+  This owner changed only CR-011, DECISIONS and this handoff, uncommitted for
+  parent. No app edits, runtime/device/scientific tests, commit or deployment.
+  Enforcement remains unverified. This session ends here; no ongoing owner or
+  approval custody transfers to the coordinating implementer.

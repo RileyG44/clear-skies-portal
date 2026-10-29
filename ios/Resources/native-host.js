@@ -82,6 +82,10 @@
     /* The map tools, the view menu and these pop-ups are drawn natively from
        the same elements (native-shell.js). The point-cloud viewer and map selections remain web controls. */
     + "html.csp-native-chrome :is(#mapDock,#mapModeMenu,#mapReadout){display:none!important}"
+    /* The web toolbar has no layout box in the app. Background downloads
+       sit below the 44pt info control and top fade, clear of native tools. */
+    + "html.csp-native-chrome #dnrSelectionBar[data-background=true]{left:calc(env(safe-area-inset-left,0px) + 12px)!important;top:calc(env(safe-area-inset-top,0px) + var(--csp-map-info-height,44px) + 20px)!important;max-width:calc(100vw - env(safe-area-inset-left,0px) - env(safe-area-inset-right,0px) - 88px);max-height:calc(100dvh - env(safe-area-inset-top,0px) - env(safe-area-inset-bottom,0px) - var(--csp-map-info-height,44px) - 36px);overflow-y:auto;overscroll-behavior:contain}"
+    + "html.csp-native-chrome #dnrDownloadToggle{min-height:44px}"
     /* Pop-up controls need their layout boxes too: the adapter uses layout
        to distinguish visible controls from conditional ones. display:none
        on a pop-up would also erase its native fields, sliders and buttons. */

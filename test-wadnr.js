@@ -124,7 +124,7 @@ async function rasterChecks(){
 }
 function sourceChoiceChecks(){
   const html=require("./test-fixtures/page-source.js");
-  assert(!/<option value="wadnr/.test(html),"WA DNR is an explicit area fetch, never a source dropdown default");
+  assert(!/<option value="wadnr/.test(html),"WA DNR is selected through Best available rather than a separate source option");
   assert(html.includes('id="dnrSelect"')&&html.includes('id="dnrFetch"'),"terrain panel offers select-and-fetch for WA DNR areas");
   const fn=html.slice(html.indexOf("function chooseTerrain(style){"),html.indexOf("/* Presentation is independent",html.indexOf("function chooseTerrain(style){")));
   const context={$:()=>({value:"auto"}),map:{getZoom:()=>15},PROXY:true,waIds:()=>[77],waProjects:()=>[],
@@ -139,27 +139,41 @@ function sourceChoiceChecks(){
   vm.runInContext(options+overview,context);
   const auto=context.elevationSourceOptions();
   assert.equal(auto.dnrAcquire,false,"automatic browsing must not trigger large DNR archives");
-  assert(auto.rawEndpoint&&auto.nationalEndpoint,"USGS remains the active default outside fetched areas");
+  assert(auto.rawEndpoint&&auto.nationalEndpoint,"USGS remains available to fill missing cached DNR");
   assert(auto.fallback.startsWith('https://s3.amazonaws.com/'),'older engines retain direct overview access');
   context.serverHealth={features:['overview-elevation']};
   assert.equal(context.elevationSourceOptions().fallback,'/api/elev/overview/{z}/{x}/{y}.png');
   assert.notEqual(context.elevationSourceOptions().sourceKey,auto.sourceKey,'overview capability refreshes the source intent');
   context.$=()=>({value:"3dep"});assert.equal(context.elevationSourceOptions().rawEndpoint,null);
   assert.equal(context.elevationSourceOptions().dnrAcquire,false);
-  // Exercise the real gating/masking helpers, not stubs: a fetched box that
-  // covers the west half of a z14 tile must mask the east half to NaN.
+  assert.equal(context.elevationSourceOptions().dnrEndpoint,null,"explicit national preference excludes DNR");
+  context.$=()=>({value:"usgs1m"});
+  assert.equal(context.elevationSourceOptions().dnrEndpoint,null,"explicit raw USGS preference excludes DNR");
+  assert(context.elevationSourceOptions().rawEndpoint);
+  context.$=()=>({value:"auto"});
+  const firstKey=context.elevationSourceOptions().sourceKey;context.dnrStatus.revision++;
+  assert.notEqual(context.elevationSourceOptions().sourceKey,firstKey,"new cached DNR revises the source intent");
+  // Exercise real candidate gates with no local download records. Cached
+  // bounds are request hints, while returned nodata controls actual coverage.
   const helpers=html.slice(html.indexOf('const DNR_AREA_KEY='),html.indexOf("function elevationSourceOptions(){"));
-  const hctx={localStorage:{getItem:()=>JSON.stringify([{bbox:[-120.2,47.4,-120.15,47.5]}])},dnrElevationAvailable:()=>true};
-  vm.createContext(hctx);vm.runInContext(helpers+';this.__h={dnrAreas,tileBbox,bboxIntersects,bboxContains,maskDnrGrid,dnrTileAllowed}',hctx);Object.assign(hctx,hctx.__h);
-  assert.equal(hctx.dnrAreas.length,1);
-  assert.equal(hctx.bboxContains(hctx.dnrAreas[0].bbox,[-120.19,47.41,-120.16,47.49]),true);
-  const grid=new Float32Array(256*256).fill(100);
-  assert(hctx.bboxIntersects(hctx.tileBbox(14,2723,5731),hctx.dnrAreas[0].bbox),"fixture tile overlaps the fetched box");
-  const masked=hctx.maskDnrGrid(grid,256,256,{z:14,x:2723,y:5731});
-  assert(masked.some(v=>v===100)&&masked.some(v=>Number.isNaN(v)),"boundary tile is masked per-pixel, not dropped whole");
-  const empty=hctx.maskDnrGrid(new Float32Array(4).fill(7),2,2,{z:14,x:2800,y:5800});
-  assert(empty.every(v=>Number.isNaN(v)),"a tile outside every fetched area contributes no DNR pixels");
-  assert.equal(hctx.dnrTileAllowed({z:14,x:2800,y:5800}),false,"outside tiles never request DNR");
+  let preference="auto",online=true;
+  const hctx={localStorage:{getItem:()=>"[]"},dnrElevationAvailable:()=>online,$:()=>({value:preference}),
+    dnrStatus:{revision:2,files:1,cachedBounds:[[-120.2,47.4,-120.15,47.5]]}};
+  vm.createContext(hctx);vm.runInContext(helpers+';this.__h={dnrAreas,tileBbox,bboxIntersects,bboxContains,dnrBboxAllowed,dnrTileAllowed}',hctx);Object.assign(hctx,hctx.__h);
+  assert.equal(hctx.dnrAreas.length,0);
+  const hit={z:14,x:2723,y:5731},miss={z:14,x:2800,y:5800};
+  assert.equal(hctx.dnrTileAllowed(hit),true,"engine-cached detail needs no per-device download box");
+  assert.equal(hctx.dnrTileAllowed(miss),false,"cached bounds avoid irrelevant requests");
+  assert.equal(hctx.dnrBboxAllowed([-120.19,47.41,-120.16,47.49]),true,"fabric uses the same cached-source policy");
+  for(const want of ["3dep","usgs1m"]){preference=want;assert.equal(hctx.dnrTileAllowed(hit),false,"explicit USGS preferences exclude DNR in every consumer");}
+  preference="auto";online=false;assert.equal(hctx.dnrTileAllowed(hit),false,"an unavailable engine contributes no DNR");online=true;
+  hctx.dnrStatus={files:1};assert.equal(hctx.dnrTileAllowed(hit),true,"older engines retain cache-only DNR probing");
+  hctx.dnrStatus={files:0};assert.equal(hctx.dnrTileAllowed(hit),false,"known empty cache without downloads is skipped");
+  hctx.dnrStatus={files:1,cachedBounds:[[null,0,1,2],[4,3,2,1],"invalid"]};
+  assert.equal(hctx.dnrTileAllowed(hit),false,"invalid footprint hints never imply availability");
+  hctx.dnrAreas.push({bbox:[-120.2,47.4,-120.15,47.5]});
+  assert.equal(hctx.dnrTileAllowed(hit),true,"explicit downloads remain eligible before status catches up");
+  assert.equal(hctx.dnrAreas.length,1,"candidate lookup does not manufacture download records");
 }
 async function httpChecks(fixture){
   const dir=path.join(fixture.cacheDir,"wadnr");
@@ -178,6 +192,9 @@ async function httpChecks(fixture){
       if(attempt===99)throw new Error("DNR HTTP fixture did not start: "+logs);
       await new Promise(r=>setTimeout(r,50));
     }
+    const cachedStatus=await (await fetch(base+"/api/wadnr/status")).json();
+    assert.deepEqual(cachedStatus.cachedBounds,[fixture.record.bounds],"status exposes cached raster request hints");
+    assert.equal(cachedStatus.queued,0);assert.equal(cachedStatus.active,null);
     const url=base+`/api/wadnr/elev/${fixture.z}/${fixture.x}/${fixture.y}.png?acquire=0`;
     const first=await fetch(url);assert.equal(first.status,200);assert.equal(first.headers.get("x-elevation-source"),"wadnr-dtm");
     assert.equal(first.headers.get("x-cache"),"miss");
@@ -189,6 +206,8 @@ async function httpChecks(fixture){
     const empty=await fetch(base+"/api/wadnr/elev/17/1/1.png?acquire=0");
     assert.equal(empty.headers.get("x-elevation-source"),"none");
     assert.equal(empty.headers.get("x-coverage"),"none","no-data must never be labeled DNR coverage");
+    const afterReads=await (await fetch(base+"/api/wadnr/status")).json();
+    assert.equal(afterReads.queued,0);assert.equal(afterReads.active,null,"cache-only browsing never queues acquisition");
     const [w,s,e,n]=fixture.record.bounds,bbox=[w+(e-w)*.1,s+(n-s)*.6,w+(e-w)*.4,s+(n-s)*.9];
     const fabric=await fetch(base+"/api/wadnr/fabric?"+new URLSearchParams({bbox:bbox.join(","),strict:"1",n:"64",lo:"20",hi:"80"}));
     const measured=await fabric.json();assert.equal(measured.ok,true,JSON.stringify(measured));

@@ -152,6 +152,8 @@ class DnrStore {
   }
   status(){
     return {revision:this.index.revision,files:this.index.files.length,
+      // Request-planning hints only: each raster can still contain nodata.
+      cachedBounds:this.index.files.map(f=>f.bounds),
       bytes:this.index.files.reduce((sum,f)=>sum+(f.bytes||0),0),maxBytes:this.maxBytes,archive:this.archive.status(),
       active:this.active?{project:this.active.project,state:this.active.state,bytes:this.active.bytes||0,fraction:this.active.fraction||0}:null,
       queued:this.queue.size};

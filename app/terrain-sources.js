@@ -320,7 +320,6 @@ function initGpuTerrain(){
   if(window.CSPGpuTerrainLayer?.resolveFlag(location.search,storage)&&window.CSPGpuTerrainStore&&L.cspGpuTerrainLayer){
     gpuTerrainStore=new CSPGpuTerrainStore.ElevationTileStore({
       sources:gpuElevationSources,request:gpuElevationRequest,
-      mask:(grid,w,h,coords,source)=>source.rank===5?maskDnrGrid(grid,w,h,coords):grid,
       maxBytes:(matchMedia("(pointer:coarse)").matches?64:192)*1024*1024});
     gpuTerrainLayer=L.cspGpuTerrainLayer({store:gpuTerrainStore,state:gpuTerrainState(),zIndex:440,
       maxTextureBytes:(matchMedia("(pointer:coarse)").matches?64:192)*1024*1024,
@@ -406,8 +405,9 @@ function terrainLayerSummary(layer){
 let probeToken=0, terrainQueryToken=0, serverHealth=null, serverProbeTimer=null;
 let waCoverageState="unknown",waCoverageError="",dnrStatus=null,dnrStatusTimer=null,dnrLastError="",dnrRenderedRevision=-1;
 const dnrElevationAvailable=()=>PROXY&&serverHealth?.features?.includes("wadnr-elevation");
-/* WA DNR applies only inside areas the user explicitly fetched. Selecting a
-   source never starts a DNR download; panning never does either. */
+/* Prefer WA DNR already held by the engine, including explicit downloads.
+   Browsing only reads cached rasters; it never acquires or restores archives.
+   Device-local areas record downloads/outlines, not permission to render. */
 const DNR_AREA_KEY="clearskies.wadnrAreas.v1";
 let dnrAreas=(()=>{try{const v=JSON.parse(localStorage.getItem(DNR_AREA_KEY)||"[]");
   return Array.isArray(v)?v.filter(a=>Array.isArray(a?.bbox)&&a.bbox.length===4&&a.bbox.every(Number.isFinite)&&a.bbox[0]<a.bbox[2]&&a.bbox[1]<a.bbox[3]):[]}catch{return[]}})();
@@ -417,22 +417,23 @@ function tileBbox(z,x,y){const n=2**z,lon=xx=>xx/n*360-180,lat=yy=>Math.atan(Mat
   return [lon(x),lat(y+1),lon(x+1),lat(y)]}
 function bboxIntersects(a,b){return a[0]<b[2]&&a[2]>b[0]&&a[1]<b[3]&&a[3]>b[1]}
 function bboxContains(outer,inner){return outer[0]<=inner[0]&&outer[1]<=inner[1]&&outer[2]>=inner[2]&&outer[3]>=inner[3]}
-function dnrTileAllowed(coords){return dnrElevationAvailable()&&dnrAreas.some(a=>bboxIntersects(tileBbox(coords.z,coords.x,coords.y),a.bbox))}
-function maskDnrGrid(grid,w,h,coords){
-  const tb=tileBbox(coords.z,coords.x,coords.y);
-  if(dnrAreas.some(a=>a.bbox[0]<=tb[0]&&a.bbox[1]<=tb[1]&&a.bbox[2]>=tb[2]&&a.bbox[3]>=tb[3]))return grid;
-  const out=new Float32Array(grid),n=2**coords.z;
-  for(let r=0;r<h;r++){const lat=Math.atan(Math.sinh(Math.PI*(1-2*(coords.y+(r+.5)/h)/n)))*180/Math.PI;
-    for(let c=0;c<w;c++){const lon=(coords.x+(c+.5)/w)/n*360-180;
-      if(!dnrAreas.some(a=>lon>=a.bbox[0]&&lon<=a.bbox[2]&&lat>=a.bbox[1]&&lat<=a.bbox[3]))out[r*w+c]=NaN}}
-  return out}
+function dnrBboxAllowed(bbox){
+  if(!dnrElevationAvailable()||$("#terSrc").value!=="auto")return false;
+  const cached=dnrStatus?.cachedBounds;
+  // Older engines expose only a file count. Probe their cache-only endpoint
+  // rather than hiding useful data from a device without a download record.
+  if(!Array.isArray(cached)&&dnrStatus?.files!==0)return true;
+  const valid=b=>Array.isArray(b)&&b.length===4&&b.every(Number.isFinite)&&b[0]<b[2]&&b[1]<b[3];
+  return (Array.isArray(cached)?cached:[]).some(b=>valid(b)&&bboxIntersects(bbox,b))||dnrAreas.some(a=>bboxIntersects(bbox,a.bbox));
+}
+function dnrTileAllowed(coords){return dnrBboxAllowed(tileBbox(coords.z,coords.x,coords.y))}
 function elevationSourceOptions(){
   const want=$("#terSrc").value;
-  const dnr=dnrElevationAvailable();
+  const dnr=want==="auto"&&dnrElevationAvailable();
   return {nationalEndpoint:"/api/elev/national",rawEndpoint:want==="3dep"?null:"/api/usgs/elev",
-    dnrEndpoint:dnr?"/api/wadnr/elev":null,dnrAcquire:false,dnrMaskKey:dnr?dnrAreasKey():"",
+    dnrEndpoint:dnr?"/api/wadnr/elev":null,dnrAcquire:false,dnrMaskKey:dnr?"available-v1":"",
     fallback:overviewElevationUrl("{z}","{x}","{y}"),
-    sourceKey:[want,dnr?`dnr:${dnrStatus?.revision||0}:${dnrAreasKey()}`:"",PROXY?API:"public",
+    sourceKey:[want,dnr?`dnr:available-v1:${dnrStatus?.revision||0}:${dnrAreasKey()}`:"",PROXY?API:"public",
       serverHealth?.features?.includes("overview-elevation")?"overview-cache":"overview-direct"].join("|")};
 }
 function dnrAcquisitionText(){

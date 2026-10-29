@@ -536,10 +536,12 @@ async function engineElevationWithFallback(coords,signal,mesh=false){
   const useDnr=dnrTileAllowed(coords);
   if(useDnr)requests.push(request(`/api/wadnr/elev/${coords.z}/${coords.x}/${coords.y}.png?acquire=0&revision=${dnrStatus?.revision||0}`,5,"dnr"));
   requests.push(request(`/api/elev/national/${coords.z}/${coords.x}/${coords.y}.png`,2,"national"));
-  if(!mesh&&coords.z>=13)requests.push(request(`/api/usgs/elev/${coords.z}/${coords.x}/${coords.y}.png?${RAW_COVERAGE_QUERY}`,3,"detail"));
+  const want=$("#terSrc").value;
+  const useRaw=coords.z>=13&&want!=="3dep"&&(!mesh||want==="usgs1m");
+  if(useRaw)requests.push(request(`/api/usgs/elev/${coords.z}/${coords.x}/${coords.y}.png?${RAW_COVERAGE_QUERY}`,3,"detail"));
   requests.push(overviewElevation(coords,requestSignal).then(source=>({source,rank:1})).catch(error=>{if(signal.aborted)throw error;return null;}));
   const progress=new CSPTilePipeline.ProgressiveGrid(256*256);
-  const ranks=mesh?(useDnr?[5,2,1]:[2,1]):coords.z>=13?(useDnr?[5,2,3,1]:[2,3,1]):(useDnr?[5,2,1]:[2,1]);
+  const ranks=[...(useDnr?[5]:[]),2,...(useRaw?[3]:[]),1];
   const pending=new Set(ranks);
   try{
     return await new Promise((resolve,reject)=>{
@@ -553,7 +555,6 @@ async function engineElevationWithFallback(coords,signal,mesh=false){
       requests.forEach((request,i)=>request.then(result=>{
         if(result){const source=result.source;let grid=source.width===256&&source.height===256?source.grid:
           ElevationTileCore.resampleElevation(source.grid,source.width,source.height,null,256,256);
-          if(result.rank===5)grid=maskDnrGrid(grid,256,256,coords);
           progress.accept(grid,result.rank)}
         pending.delete(ranks[i]);finish();
       },reject));
@@ -624,7 +625,6 @@ const ElevLayer = L.GridLayer.extend({
       const crop=scale>1?{x:(coords.x%scale)*source.width/scale,y:(coords.y%scale)*source.height/scale,width:source.width/scale,height:source.height/scale}:null;
       let values=!crop&&source.width===size.x&&source.height===size.y?source.grid:
         ElevationTileCore.resampleElevation(source.grid,source.width,source.height,crop,size.x,size.y,{smooth:true});
-      if(rank===5)values=maskDnrGrid(values,size.x,size.y,coords);
       const sampleMeters=typeof sourceSampleMeters==="function"?sourceSampleMeters({z:native,x,y}):null;
       accept(values,rank,label,sampleMeters,sharper,source.surveys||[]);
     };
@@ -663,7 +663,7 @@ const ElevLayer = L.GridLayer.extend({
   },
   setSourceOptions:function(options){
     if(this.options.sourceKey===options.sourceKey)return;
-    // A changed fetched-area set must drop DNR-derived pixels at once, even
+    // A changed DNR source intent must drop its old pixels at once, even
     // if their replacements later fail; other source changes keep the
     // keep-visible-until-replacement behaviour below.
     const dnrSeg=k=>{const m=/dnr:[^|]*/.exec(k||"");return m?m[0]:""};
