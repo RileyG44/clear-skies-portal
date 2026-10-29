@@ -444,7 +444,7 @@ function gpu3dPreferred(){
 }
 function map3dStructureKey(){
   if(gpu3dPreferred()){
-    const pick=chooseTerrain($("#terStyle").value);
+    const pick=chooseTerrain($("#terStyle").value,false);
     return ["gpu",$("#terSrc").value,PROXY?API:"public",terrainTheme(),pick.src==="wadnr"?pick.ids?.join(","):"analytic"].join("|");
   }
   return [$("#terStyle").value,$("#terSrc").value,elevationActive()?"elev":"-",PROXY?API:"public"].join("|");
@@ -478,7 +478,7 @@ function terrainRasterStyle(){
   /* A styled scene (LiDAR Studio colors or layers) draws through the GPU
      analysis drape, never MapLibre's own hillshade and tint. */
   const styled=gpu&&!!studioStack($("#terStyle").value),plain=(style==="hs"||style==="hsmulti")&&!styled;
-  const light=terrainLighting(),opacity=terrainOpacity()/100,pick=chooseTerrain(style);
+  const light=terrainLighting(),opacity=terrainOpacity()/100,pick=chooseTerrain(style,false);
   const directions=style==="hsmulti"?[light.azimuth,(light.azimuth+90)%360,(light.azimuth+180)%360,(light.azimuth+270)%360]:light.azimuth;
   const altitudes=style==="hsmulti"?[light.altitude,light.altitude,light.altitude,light.altitude]:light.altitude;
   const sources={
@@ -712,6 +712,7 @@ function setTerrainModeUi(on,status){
   $("#terModeNote").textContent=status||(on?(matchMedia("(pointer:coarse)").matches?"Two fingers rotate, pitch, and zoom.":"Orbit with right-drag or Control-drag. Two fingers rotate, pitch, and zoom."):"Drag to pan. Pinch to zoom. North reset is on the map.");
   syncBearingButton();
   syncLocationPin();
+  paintSunNote();paintTerrainLegend($("#terStyle").value);
 }
 /* A real capability probe: MapLibre needs a WebGL2 context it can actually
    allocate. Losing the context immediately keeps this cheap to call. */
@@ -879,7 +880,7 @@ function apply3dLighting(){
   try{
     if(map3d.getTerrain()?.exaggeration!==light.exaggeration)map3d.setTerrain({source:"dem",exaggeration:light.exaggeration});
     if(gpu3d?.enabled){
-      const actual=style==="off"?"hs":style,pick=chooseTerrain(actual),spectrumAlone=style==="off"&&elevationActive();
+      const actual=style==="off"?"hs":style,pick=chooseTerrain(actual,false),spectrumAlone=style==="off"&&elevationActive();
       const plain=(actual==="hs"||actual==="hsmulti")&&!studioStack(style);
       const visible={"terrain-analysis":!plain,"terrain-hillshade":plain,
         "terrain-relief":!spectrumAlone&&(plain||!studioStack(style)&&pick.src==="wadnr"),"elev-spectrum":elevationActive()};

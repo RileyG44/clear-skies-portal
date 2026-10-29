@@ -677,6 +677,58 @@ release is accepted here. Parent may implement/verify exact r1; no custody
 transfer. Only owner records changed, uncommitted for parent; no app edits,
 tests, commit or deployment by this owner. Enforcement remains unverified.
 
+## CR-012 — restore available published DNR hillshade
+
+Status: ACCEPTED 2026-10-29 (America/Los_Angeles), exact r1 only
+Request: change-requests/CR-012-published-hillshade-recovery.md
+Binding: independently reproduced 5,198 UTF-8/LF proposal bytes before its Riley
+approval heading, SHA-256
+2c6e910d82ca77507a95c4610c7cb829b098f13e9cb4ef699f94e8a6368c7172;
+normalize only workflow Status to DRAFT. Later traceability hash, not presented
+to Riley. Proposal otherwise unchanged.
+Owner: dedicated Spec Owner `/root/spec_owner` (Codex), fresh CR-012-only
+session after CR-011 handoff; ends at this handoff.
+Authority: independently read actual user_messages 720/749 and 999/1005/1222,
+plus actual completed/untruncated clarification 1228, in the
+[source thread](t3-thread://v2/25ec7f29-6fda-4160-a0ec-8450030a6239/thread:project:95d7b465-9ac4-4d9b-ad2b-94155aa5a211:23c965b7-44ea-424d-bfea-4b195e8b5ef6).
+Riley requests available DNR by default, completion of the detail repair, and
+confirms the exact patch was sharp in Clear Skies. GOV-002 covers this necessary
+bounded change/review without repeated confirmation. Full record in CR-012;
+owner acceptance does not itself authorize or verify deployment.
+
+Accepted scope: Auto ordinary unmodified 2D hs only, at existing close scales,
+uses existing published WA DNR hillshade between valid cached numeric DNR and
+numeric USGS/national/overview fallbacks, per actual rendered pixel. Preserve
+explicit source choices. Images never become elevation or enter analytical/
+colored/modified Studio styles, measurements, spectrum, analysis or 3D. Existing
+numeric DNR keeps CR-011 priority. Reuse shared numeric processing and existing
+bounded image composition; preserve single opacity, truthful per-pixel source
+contributions and fixed-lighting disclosure. Catalog changes/refinement and
+transient failures recover while stationary with useful pixels retained, bounded
+backoff/cleanup and obsolete-result rejection. No implicit archive acquisition,
+restore or DNR index mutation. Exact r1 and its numbered owner conditions govern.
+
+Consistency evidence: read governing/accepted records and inspected retained
+published-image URL/compositor, numeric/GPU paths, source choice/application,
+coverage refresh, sun and source-information boundaries. Viewed the supplied
+sharp image; request metadata uses existing DNR export/layer 944, 512 px/dpi192.
+Local identify evidence returns value 221 for layer944, NoData for other shown
+layers. Image availability is not numeric elevation or verified native spacing.
+No owner network/device/runtime/scientific tests performed. Parent owns all
+named verification and correction of the overbroad no-data conclusion; precise
+federal nodata versus unavailable legacy-file evidence remains distinct.
+
+Affected: U-03, CAP-04/05/06, DATA-03/05/06, RENDER-01–04, UX-04, D-06
+(this published-hillshade preference only), CR-001/011. Permanent bounded
+supplement; SPEC.md 0.1.0-draft and BASE-001 unchanged/unapproved. Existing
+shared-map/native-chrome architecture remains; using its retained per-tile CPU/
+image path for eligible hs does not authorize another renderer or native math.
+Other CRs, ENGINEERING_REVIEW contracts, broader source/datum/tolerance policy,
+open decisions, proposed PERF/release gates and CR-001 internal-distribution
+scope/expiry remain. Parent may implement/verify r1. Only owner records changed,
+uncommitted for parent; no app code, tests, commit or deployment by owner.
+Enforcement remains unverified; session ends without custody transfer.
+
 ## Open decisions
 
 D-01 and D-03 through D-08 in SPEC.md remain unresolved. D-02 is resolved for
@@ -686,7 +738,8 @@ remains pending and the PERF gates remain proposed. No recommendation, draft PR,
 implementation artifact or agent review resolves them on Riley's behalf.
 CR-002 resolves only the misleading curvature name/description referenced by
 DATA-06. CR-011 resolves only the Best available preference for already cached
-WA DNR elevation; broader D-06 source/datum/tolerance decisions remain open.
+WA DNR elevation. CR-012 adds only the eligible ordinary published-hillshade
+preference; broader D-06 source/datum/tolerance decisions remain open.
 
 ## Version log
 
@@ -751,3 +804,9 @@ WA DNR elevation; broader D-06 source/datum/tolerance decisions remain open.
   Explicit source intent, cache-only browsing, scientific/loading contracts,
   pending baseline and release gates retained; implementation/verification remain
   with parent.
+
+- 2026-10-29: CR-012 r1 accepted after independent authority/digest/source and
+  supplied-image review for eligible published DNR ordinary hillshade recovery.
+  Numeric/image separation, cached DNR priority, explicit source intent, truthful
+  provenance and stationary refinement retained; implementation/verification
+  remain with parent and baseline/release gates stay unchanged.

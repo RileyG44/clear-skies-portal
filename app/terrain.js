@@ -80,7 +80,7 @@ function waLiveIds(){
   return [...waSeen.entries()].sort((a,b)=>b[1]-a[1]).map(([id])=>id);
 }
 
-function chooseTerrain(style){
+function chooseTerrain(style,published=true){
   const want=$("#terSrc").value;
   const closeEnough=map.getZoom()>=13;
   const ids=waIds();
@@ -88,6 +88,10 @@ function chooseTerrain(style){
   const u1OK = closeEnough && PROXY; // coverage is decided per tile, never just at the map centre
   if(want==="3dep")  return {src:"3dep"};
   if(want==="usgs1m") return u1OK ? {src:"usgs1m", cover:usgsCover} : {src:"3dep", forced:true,overview:!closeEnough,reason:!PROXY?"Raw USGS elevation requires a connected terrain engine.":"Raw USGS elevation starts at zoom 13."};
+  // Published DNR still covers ground missing from the federal elevation
+  // archive. Only an ordinary hillshade can use this fixed-light picture;
+  // the composite preserves cached numeric DNR at every valid pixel.
+  if(published&&waOK&&!studioStack(style))return {src:"wadnr",projs:waProjects(),cachedOnly:true};
   // Best available prefers cached WA DNR without starting an archive download.
   if(dnrElevationAvailable())return {src:"wadnr-elevation",cachedOnly:true,overview:!closeEnough};
   if(u1OK) return {src:"usgs1m", cover:usgsCover};
@@ -112,24 +116,21 @@ function terrainLighting(){
 
    1. Slope, aspect, northness and contours are derived from gradient and
       elevation. They have no light source to move.
-   2. "Best available" silently prefers the published WA DNR hillshade once you
-      pass z13 over Washington with the engine connected. That product, and the
-      3DEP export composited beneath it, both arrive as finished images with
-      their shadows already baked in - so the same slider that worked a moment
-      ago at a wider zoom does nothing here, with no explanation. */
+   2. Ordinary hillshade may contain DNR's published image. Those pixels have
+      fixed provider lighting; only the numeric fallback/cached DNR can relight. */
 function sunEffect(){
   const style=$("#terStyle").value;
   const stack=gpuTerrainEnabled?studioStack(style):null;
   if(stack&&stack.layers.some(layer=>layer.style==="hs"||layer.style==="hsmulti"||(layer.style==="tint"||layer.style==="rem")&&layer.param>0))
     return {live:true,why:"Shaded layers in this look relight instantly."};
-  const verdict=CSPTerrain.sunAffectsTerrain(style,style==="off"?null:chooseTerrain(style).src);
+  const verdict=CSPTerrain.sunAffectsTerrain(style,style==="off"?null:chooseTerrain(style,!document.body.classList.contains("terrain-3d")).src);
   if(verdict.reason==="off") return {live:false,why:"Terrain is off, so there is nothing here to light."};
   if(verdict.reason==="derived"){
     const label=$("#terStyle").selectedOptions[0]?.textContent?.trim()||"This style";
     return {live:false,why:`${label} is computed from the terrain\u2019s gradient, not from a light source, so the sun does not change it. The sliders still drive 3D relief.`};
   }
   if(verdict.reason==="prerendered")
-    return {live:false,why:"Published WA DNR LiDAR hillshade arrives already rendered, with its shadows baked in \u2014 the sun cannot be moved here. Set Source to National 3DEP or USGS 3.3 ft to relight from elevation instead."};
+    return {live:false,why:"Published WA DNR hillshade has fixed provider lighting. Sun controls relight numeric elevation pixels only. Choose National 3DEP or USGS 3.3 ft for a fully relightable view."};
   return {live:true,why:"Hillshade and elevation tint relight instantly."};
 }
 function paintSunNote(){
@@ -322,11 +323,11 @@ function paintTerrainStatus(){
   const message=offline?"Offline · reconnect to load missing map and terrain data.":is3d?source3d:terrainSwapMessage||`${requested}${label} · ${coverage}% of loaded tile positions · ${detail}${dnrAcquisitionText()?` · ${dnrAcquisitionText()}`:""}`;
   if(terrainLoadStatus.textContent!==message)terrainLoadStatus.textContent=message;
   const output=$("#terrainSourceSummary");
-  output.innerHTML='<p><b>Currently displayed in 2D</b></p>'+sources.map(source=>`<p><a href="${source.url}" target="_blank" rel="noopener noreferrer">${esc(source.label)}</a> · ${source.percent<1?"<1":Math.round(source.percent)}% of rendered elevation samples<br><span class="terrain-resolution-note">${esc(sourceResolutionText(source))}</span></p>`).join("")+
-    (!sources.length?'<p>No elevation samples displayed yet.</p>':'')+
+  output.innerHTML='<p><b>Currently displayed in 2D</b></p>'+sources.map(source=>`<p><a href="${source.url}" target="_blank" rel="noopener noreferrer">${esc(source.label)}</a> · ${source.percent<1?"<1":Math.round(source.percent)}% of rendered terrain pixels<br><span class="terrain-resolution-note">${esc(sourceResolutionText(source))}</span></p>`).join("")+
+    (!sources.length?'<p>No terrain pixels displayed yet.</p>':'')+
     '<p>Percentages describe the current loaded tile samples, not survey footprint area. USGS 3DEP mixes resolutions; a 3.3 ft service capability does not mean every location has 3.3 ft data. Zooming past a source’s detail does not create new information.</p>'+
     (is3d?'<p><b>3D</b> '+esc(public3dSourceText())+'</p>':'')+
-    (layer instanceof CompositeTerrainLayer?'<p>WA DNR is a published, fixed-light hillshade. Listed nearby projects are coverage candidates; the export does not identify which individual project supplies every pixel.</p>':'');
+    (layer instanceof CompositeTerrainLayer||layer instanceof PublishedHillshadeLayer?'<p>Published WA DNR hillshade has fixed provider lighting. Cached numeric DNR takes priority. Listed nearby projects are coverage candidates; the export does not identify which individual project supplies every pixel.</p>':'');
   renderTerrainSourcePanel(summary,is3d,layer);
 }
 map.on("moveend",scheduleTerrainStatus);
@@ -375,6 +376,7 @@ function installTerrain(nextBase,nextLayer){
       const current=+$("#terOp").value/100;
       if(oldLayer) oldLayer.setOpacity(current); if(oldBase) oldBase.setOpacity(current);
     }
+    if(gpuTerrainEnabled&&oldLayer===gpuTerrainLayer)syncGpuTerrain();
   };
   finish.setOpacity=value=>{
     for(const layer of pending) layer._cspTargetOpacity=value;
@@ -400,7 +402,15 @@ function installTerrain(nextBase,nextLayer){
      unfinished gaps; waiting here makes the replacement viewport-atomic. */
   const onComplete=()=>{ const status=readiness();if(status.complete>0&&status.ratio>=0.9)finish(true); };
   ready.on("tileload",onLoad); ready.on("tilerefine",onLoad); ready.on("tileerror",onError); ready.on("load",onComplete);
-  timer=setTimeout(()=>{ const status=readiness();finish(status.complete>0&&status.ratio>=0.9) },20000);
+  const timeoutCheck=()=>{
+    const status=readiness();
+    if(ready instanceof PublishedHillshadeLayer&&status.ratio<0.9&&
+       Object.values(ready._tiles||{}).some(t=>t.current!==false&&t.el?._cspRefining)){
+      timer=setTimeout(timeoutCheck,20000);return;
+    }
+    finish(status.complete>0&&status.ratio>=0.9);
+  };
+  timer=setTimeout(timeoutCheck,20000);
   terrainSwap=finish;
   finish.displayedLayer=oldLayer||oldBase||null;
   if(nextBase){ nextBase.addTo(map);applyTerrainAppearanceTo(nextBase) }
@@ -420,7 +430,9 @@ function applyTerrain(force){
     terrainSwapMessage="";syncGpuTerrain();terSig=null;
     setCount("terrain",STYLE_NAME[style]||"");paintTerrainInfo(pick);return;
   }
-  if(gpuTerrainEnabled)syncGpuTerrain();
+  // Keep the useful GPU map while published imagery stages invisibly. The
+  // existing atomic transition releases it only after actual pixels are ready.
+  if(gpuTerrainEnabled&&map.hasLayer(gpuTerrainLayer)&&!terLayer)terLayer=gpuTerrainLayer;
   // Rebuilding a tile layer throws away every tile it has already loaded, which
   // is why panning used to blank the map. Only rebuild when the actual choice
   // changes; otherwise leave Leaflet alone and let it reuse its tiles.
@@ -433,10 +445,10 @@ function applyTerrain(force){
   const kind=pick.src==="wadnr"?"wadnr":"elevation";
   const rawOK=PROXY&&$("#terSrc").value!=="3dep";
   const sourceOptions=elevationSourceOptions();
-  const sourceSig=[kind,kind==="elevation"&&rawOK?"raw":"",sourceOptions.sourceKey].join("|");
+  const sourceSig=[kind,kind==="elevation"&&rawOK?"raw":"",sourceOptions.sourceKey,kind==="wadnr"?waLiveIds().join(","):""].join("|");
   const sig=[style,sourceSig].join("|");
   if(!force&&sig===terSig&&terLayer){paintTerrainInfo(pick);return;}
-  if(!terrainSwap&&terLayer instanceof AnalyticTerrainLayer&&kind==="elevation"){
+  if(!terrainSwap&&terLayer instanceof AnalyticTerrainLayer&&!(terLayer instanceof PublishedHillshadeLayer)&&kind==="elevation"){
     terLayer.setSourceOptions(sourceOptions);terLayer._cspSourceSig=sourceSig;
     terrainSwapMessage="";scheduleTerrainStatus();
     terLayer.options.style=style;terLayer._cspStyle=style;
@@ -445,9 +457,11 @@ function applyTerrain(force){
   }
   let nextBase=null, nextLayer=null;
   if(pick.src==="wadnr"){
-    nextLayer=new CompositeTerrainLayer({...TILE_OPTS,opacity:op,maxZoom:VIEW_MAX,maxNativeZoom:18,zIndex:440,className:`terrain-style-${style}`,
-      baseUrl:(c,px)=>depProxyTileUrl(c,style,px),detailUrl:(c,px)=>waTileUrl(c,waLiveIds(),px),
-      sharpPx:()=>({base:EXPORT_PX,detail:waSharpPx()}),attribution:"WA DNR LiDAR + USGS 3DEP fallback"});
+    nextLayer=new PublishedHillshadeLayer({...TILE_OPTS,opacity:op,maxZoom:VIEW_MAX,maxNativeZoom:18,zIndex:440,className:`terrain-style-${style}`,
+      style,sourceLabel:"numeric-elevation",refineOverview:true,...sourceOptions,
+      fallbackNativeZoom:15,nationalNativeZoom:17,rawNativeZoom:18,
+      publishedUrl:(c,px)=>waTileUrl(c,waLiveIds(),px),
+      attribution:"WA DNR published hillshade / cached elevation + USGS elevation fallback"});
   }else if(rawOK){
     nextLayer=new AnalyticTerrainLayer({...TILE_OPTS,opacity:op,maxZoom:VIEW_MAX,maxNativeZoom:TERRAIN_OVERZOOM,rawNativeZoom:18,zIndex:440,
       className:`terrain-style-${style}`,style,sourceLabel:"usgs-1m",refineOverview:true,
@@ -495,8 +509,8 @@ function paintTerrainInfo(pick){
     const yrs=ps.map(p=>p.year).filter(Boolean);
     html += `<div class="row2"><span>Preferred source: <span class="src">WA DNR LiDAR</span></span>`
           + `<span class="yr">${yrs.length ? (Math.min(...yrs)===Math.max(...yrs) ? yrs[0] : Math.min(...yrs)+"\u2013"+Math.max(...yrs)) : ""}</span></div>`
-          + `<div><b>${n} project${n>1?"s":""}</b> composited as one bare-earth image at native resolution. `
-          + `The basemap remains visible through true no-data areas.</div>`;
+          + `<div><b>${n} project${n>1?"s":""}</b> available as published hillshade with fixed provider lighting. `
+          + `Valid cached DNR elevation takes priority; USGS and national elevation fill image gaps. Rendered-source percentages show actual pixels.</div>`;
   }else if(pick.src==="usgs1m"){
     const h=(pick.cover&&pick.cover.hits)||[];
     const yrs=h.map(x=>x.year).filter(Boolean);
@@ -565,7 +579,7 @@ function paintTerrainLegend(style){
     bar="linear-gradient(90deg,#222,#777,#c5c5c5,#fff)";
     ticks="<span>ambient</span><span>relief</span><span>illuminated</span>";
   }else if(style==="hs"){
-    const light=terrainLighting();caption=`Hillshade · ${Math.round(light.azimuth)}° azimuth · ${Math.round(light.altitude)}° sun altitude`;
+    const light=terrainLighting();caption=chooseTerrain(style,!document.body.classList.contains("terrain-3d")).src==="wadnr"?"Hillshade · published DNR uses provider lighting":`Hillshade · ${Math.round(light.azimuth)}° azimuth · ${Math.round(light.altitude)}° sun altitude`;
     bar="linear-gradient(90deg,#1f1f1f,#777,#c5c5c5,#fff)";
     ticks="<span>shadow</span><span>relief</span><span>illuminated</span>";
   }else if(intervals[style]){
@@ -624,7 +638,7 @@ async function refreshTerrainCoverage(force){
 lidarStudio=window.CSPLidarStudio?.mount($("#terStudio"),{
   getStyle:()=>$("#terStyle").value,
   setStyle:style=>{$("#terStyle").value=style;$("#terStyle").dispatchEvent(new Event("change",{bubbles:true}))},
-  onChange:()=>{syncGpuTerrain();schedule3dStyle();paintTerrainInfo();scheduleStudioFit()},
+  onChange:()=>{applyTerrain();schedule3dStyle();paintTerrainInfo();scheduleStudioFit()},
   sample:()=>gpuTerrainEnabled&&gpuTerrainLayer&&map.hasLayer(gpuTerrainLayer)?gpuTerrainLayer.getEngine()?.sampleValues():null,
   gpuAvailable:()=>gpuTerrainDecided?gpuTerrainEnabled:true,
   getOpacity:()=>terrainOpacity(),

@@ -67,11 +67,17 @@ function cursorTileSample(tile,ll){
   return ElevationTileCore.isElevation(value)?value:null;
 }
 function cursorLoadedElevation(ll){
-  if(gpuTerrainEnabled){const sample=gpuTerrainLayer.sampleAt(ll);return sample?{...sample,source:sample.label}:null;}
+  if(gpuTerrainEnabled&&map.hasLayer(gpuTerrainLayer)){const sample=gpuTerrainLayer.sampleAt(ll);return sample?{...sample,source:sample.label}:null;}
   let best=null;
   for(const layer of [elevLayer,terLayer,terBase])for(const tile of layer?._store?.values()||[]){
     const value=cursorTileSample(tile,ll);
-    if(value!==null&&(!best||tile.coords.z>best.z))best={value,z:tile.coords.z,source:tile.cv?.dataset.cspElevationSource||"Loaded terrain"};
+    if(value!==null&&(!best||tile.coords.z>best.z)){
+      const p=map.project(ll,tile.coords.z),world=256*2**tile.coords.z;
+      const dx=((p.x-tile.coords.x*256)%world+world)%world,dy=p.y-tile.coords.y*256;
+      const width=tile.cv?.width||256,height=tile.cv?.height||256;
+      const rank=tile.ranks?.[Math.floor(dy*height/256)*width+Math.floor(dx*width/256)];
+      best={value,z:tile.coords.z,source:rank?CSPPublicTerrain.SOURCES[rank]?.label||"Loaded elevation":tile.cv?.dataset.cspElevationSource||"Loaded terrain"};
+    }
   }
   return best;
 }

@@ -126,13 +126,30 @@ function sourceChoiceChecks(){
   const html=require("./test-fixtures/page-source.js");
   assert(!/<option value="wadnr/.test(html),"WA DNR is selected through Best available rather than a separate source option");
   assert(html.includes('id="dnrSelect"')&&html.includes('id="dnrFetch"'),"terrain panel offers select-and-fetch for WA DNR areas");
-  const fn=html.slice(html.indexOf("function chooseTerrain(style){"),html.indexOf("/* Presentation is independent",html.indexOf("function chooseTerrain(style){")));
+  const fn=html.slice(html.indexOf("function chooseTerrain("),html.indexOf("/* Presentation is independent",html.indexOf("function chooseTerrain(")));
   const context={$:()=>({value:"auto"}),map:{getZoom:()=>15},PROXY:true,waIds:()=>[77],waProjects:()=>[],
-    WADNR_OK:new Set(["hs"]),usgsCover:null,waCoverageState:"ready",dnrElevationAvailable:()=>true};
+    WADNR_OK:new Set(["hs"]),usgsCover:null,waCoverageState:"ready",dnrElevationAvailable:()=>true,studioStack:()=>null};
   vm.createContext(context);vm.runInContext(fn,context);
-  for(const style of ["hs","hsmulti","slope","aspect","northness","tint","c2"])
+  for(const style of ["hsmulti","slope","aspect","northness","tint","c2"])
     assert.equal(context.chooseTerrain(style).src,"wadnr-elevation",`${style} can derive from fetched DNR elevation`);
+  assert.equal(context.chooseTerrain("hs").src,"wadnr","ordinary hillshade restores the published DNR source (with numeric DNR pixel priority)");
+  context.studioStack=()=>({layers:[{style:"hs"}]});
+  assert.equal(context.chooseTerrain("hs").src,"wadnr-elevation","modified Studio hillshade keeps numeric elevation");
+  context.studioStack=()=>null;
   assert.equal(context.chooseTerrain("hs").cachedOnly,true,"browsing alone never fetches DNR");
+  assert.equal(context.chooseTerrain("hs",false).src,"wadnr-elevation","3D uses numeric elevation even for plain hillshade");
+  const autoChoice=context.$;
+  context.$=()=>({value:"3dep"});assert.equal(context.chooseTerrain("hs").src,"3dep","explicit National excludes published DNR");
+  context.$=()=>({value:"usgs1m"});assert.equal(context.chooseTerrain("hs").src,"usgs1m","explicit federal detail excludes published DNR");
+  context.$=autoChoice;
+  let in3d=false;
+  Object.assign(context,{gpuTerrainEnabled:true,CSPTerrain:require('./terrain-core'),document:{body:{classList:{contains:()=>in3d}}}});
+  context.$=id=>({value:id==='#terStyle'?'hs':'auto'});
+  vm.runInContext(html.slice(html.indexOf('function sunEffect('),html.indexOf('function paintSunNote(')),context);
+  assert.match(context.sunEffect().why,/fixed provider lighting/);
+  in3d=true;assert.equal(context.sunEffect().live,true,'3D lighting explains the numeric 3D renderer, not the published 2D image');
+  in3d=false;
+  context.$=autoChoice;
   const options=html.slice(html.indexOf("function elevationSourceOptions(){"),html.indexOf("function dnrAcquisitionText(){"));
   const overview=html.slice(html.indexOf('function overviewElevationUrl('),html.indexOf('async function fetchOverviewResponse('));
   context.API="";context.dnrStatus={revision:2};context.dnrAreasKey=()=>"";context.serverHealth=null;context.api=p=>p;
