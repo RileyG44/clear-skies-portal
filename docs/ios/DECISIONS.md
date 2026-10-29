@@ -628,6 +628,55 @@ Only owner records changed, uncommitted; no app edits, runtime/device/scientific
 checks, commit or deployment. Branch enforcement unverified. No ongoing owner
 or custody transfer at handoff.
 
+## CR-011 — prefer available WA DNR detail and expose download progress
+
+Status: ACCEPTED 2026-10-29 (America/Los_Angeles), exact r1 only
+Request: change-requests/CR-011-available-dnr-detail.md
+Binding: independently reproduced 4,460 UTF-8/LF proposal bytes before its Riley
+approval heading, SHA-256
+2a8f1069619e0478960e732d6460fdc6c5e64c3a7d2ff1e42a7ecee7f9abc723;
+normalize only workflow Status to DRAFT. Later traceability hash, not presented
+to Riley. Proposal otherwise unchanged.
+Owner: dedicated Spec Owner `/root/spec_owner` (Codex), r1 only; ends at handoff.
+Authority: independently read actual completed/untruncated user_messages 720 and
+749 in the [source thread](t3-thread://v2/25ec7f29-6fda-4160-a0ec-8450030a6239/thread:project:95d7b465-9ac4-4d9b-ad2b-94155aa5a211:23c965b7-44ea-424d-bfea-4b195e8b5ef6).
+Riley explicitly requires DNR by default when available or user-downloaded,
+visible download progress, then continuation to completion. GOV-002 authorizes
+necessary bounded changes/review without repeated approval. Independently read
+separate shipping instruction at actual user_message 229; this owner acceptance
+does not itself authorize or verify deployment. Full metadata/quotes in CR-011.
+
+Accepted scope: Best available prefers valid engine-cached WA DNR elevation,
+without requiring a local device download box, through existing GPU/CPU 2D,
+elevation, shared 3D and fabric paths. Expose cached footprint hints, support
+cache-only older-engine probing, preserve per-pixel validity/revision/units/
+provenance, explicit source choices and USGS/overview gap filling. All implicit
+paths stay acquire=0 or equivalent cached sampling: no acquisition or archive
+restore. Keep explicit downloads and their records/outlines. Repair native
+collapsed/expanded on-map download progress safe-area placement and accessibility,
+preserving selections and ordinary web anchoring. Update truthful help/assets.
+The exact proposal and numbered owner conditions govern.
+
+Consistency evidence: governing/accepted-request reads and actual source review
+of client DNR gates/mask/options, chooseTerrain, elevation fallback, mesh/fabric
+consumers, worker cached sampling, DNR status/elevation API and map/native layout.
+No runtime, scientific or device acceptance provided. Parent completes r1's
+live DNR/no-local-area comparison, cached/uncached/revision/failure/explicit-choice
+checks, acquisition invariants, native placement/orientation/control checks,
+Node/static/Python checks, iOS build and matched bundled assets. Engine cache is
+not autonomous on-device offline storage; the full minute delay remains an
+unverified physical-phone observation until supported by evidence.
+
+Affected: U-03/04, CAP-04/05/07/08/11/14, DATA-03/05/06, RENDER-01–04,
+UX-02–05, D-06 (cached DNR preference only), CR-001 parity/shared-client rule.
+Permanent bounded supplement; SPEC.md 0.1.0-draft and BASE-001 remain unchanged
+and unapproved. Broader source/datum/tolerance policy, other CRs, architecture,
+PERF/open decisions/release gates and CR-001 internal-distribution expiry remain
+unchanged. No scientific validation, numerical budget, new provider or paid
+release is accepted here. Parent may implement/verify exact r1; no custody
+transfer. Only owner records changed, uncommitted for parent; no app edits,
+tests, commit or deployment by this owner. Enforcement remains unverified.
+
 ## Open decisions
 
 D-01 and D-03 through D-08 in SPEC.md remain unresolved. D-02 is resolved for
@@ -636,7 +685,8 @@ settings needed for CR-001's internal builds do not resolve D-01. BASE-001
 remains pending and the PERF gates remain proposed. No recommendation, draft PR,
 implementation artifact or agent review resolves them on Riley's behalf.
 CR-002 resolves only the misleading curvature name/description referenced by
-DATA-06; all broader D-06 decisions remain open.
+DATA-06. CR-011 resolves only the Best available preference for already cached
+WA DNR elevation; broader D-06 source/datum/tolerance decisions remain open.
 
 ## Version log
 
@@ -695,3 +745,9 @@ DATA-06; all broader D-06 decisions remain open.
 - 2026-10-28: CR-010 r1 accepted for screenshot-derived fresh western US view,
   Topographic 100%, Rivers and lakes 60%, empty search/no selection, preserving
   share/saved/native recovery precedence. Camera validation remains with parent.
+
+- 2026-10-29: CR-011 r1 accepted after independent user-authority/digest/source
+  review for available cached DNR preference and visible native download progress.
+  Explicit source intent, cache-only browsing, scientific/loading contracts,
+  pending baseline and release gates retained; implementation/verification remain
+  with parent.

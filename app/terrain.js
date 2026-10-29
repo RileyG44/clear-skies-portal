@@ -88,8 +88,7 @@ function chooseTerrain(style){
   const u1OK = closeEnough && PROXY; // coverage is decided per tile, never just at the map centre
   if(want==="3dep")  return {src:"3dep"};
   if(want==="usgs1m") return u1OK ? {src:"usgs1m", cover:usgsCover} : {src:"3dep", forced:true,overview:!closeEnough,reason:!PROXY?"Raw USGS elevation requires a connected terrain engine.":"Raw USGS elevation starts at zoom 13."};
-  // Best available uses WA DNR only inside explicitly fetched areas, and
-  // never starts a DNR download merely because somebody pans over Washington.
+  // Best available prefers cached WA DNR without starting an archive download.
   if(dnrElevationAvailable())return {src:"wadnr-elevation",cachedOnly:true,overview:!closeEnough};
   if(u1OK) return {src:"usgs1m", cover:usgsCover};
   return {src:"3dep"};
@@ -488,8 +487,8 @@ function paintTerrainInfo(pick){
   pick = pick || chooseTerrain(style);
   let html="";
   if(pick.src==="wadnr-elevation"){
-    html+=`<div>Requested source: <b>Best available (USGS, with WA DNR inside fetched areas)</b>. All analytical styles derive from numeric elevation; rendered sources and their percentages are shown above.</div>`;
-    html+=`<div>WA DNR applies only inside areas you fetched with <b>Select WA DNR area</b>; it never downloads from panning. ${dnrAreas.length?`${dnrAreas.length} fetched area${dnrAreas.length>1?"s":""} active.`:"No WA DNR areas fetched yet."}</div>`;
+    html+=`<div>Requested source: <b>Best available (cached WA DNR, then USGS)</b>. All analytical styles derive from numeric elevation; rendered sources and their percentages are shown above.</div>`;
+    html+=`<div>Uses WA DNR already available on the connected engine, including downloaded areas. To fetch missing data, use <b>Select area on map</b> or <b>Download current view</b>. Panning never starts an archive download.</div>`;
     if(dnrAcquisitionText())html+=`<div>${esc(dnrAcquisitionText())}</div>`;
   }else if(pick.src==="wadnr"){
     const ps=pick.projs||[], n=ps.length;

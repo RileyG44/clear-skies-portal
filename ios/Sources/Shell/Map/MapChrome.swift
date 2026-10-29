@@ -265,6 +265,12 @@ struct TerrainStatusCapsule: View {
                     .frame(width: expanded ? tileWidth : MapControlSize.status, alignment: .topLeading)
                     .clipped()
                     .chromeGlass(in: .rect(cornerRadius: expanded ? 18 : 22), interactive: false)
+                    .onGeometryChange(for: CGFloat.self) { $0.size.height.rounded(.up) } action: { height in
+                        // Keep web download progress below the native info tile,
+                        // including its expanded and larger-text layouts.
+                        shell.call("document.documentElement.style.setProperty('--csp-map-info-height', height + 'px')",
+                                   ["height": Double(height)])
+                    }
                     .id(expanded)
                     .transition(reducedMotion ? .identity : .opacity.combined(with: .scale(scale: 0.94, anchor: .topLeading)))
                     .onKeyPress(.escape) {

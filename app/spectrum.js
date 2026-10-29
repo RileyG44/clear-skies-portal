@@ -176,12 +176,10 @@ async function runFabric(){
   let j;
   try{
     const view=[b.getWest(),b.getSouth(),b.getEast(),b.getNorth()];
-    // The DNR fabric sampler masks each sample to fetched areas and fills
-    // the rest from USGS, so a partly-overlapping view is safe to measure.
-    const dnr=dnrElevationAvailable()&&dnrAreas.some(a=>bboxIntersects(view,a.bbox));
+    // The cache-only DNR sampler keeps valid pixels and fills gaps from USGS.
+    const dnr=dnrBboxAllowed(view);
     const path=dnr?"/api/wadnr/fabric":"/api/usgs/fabric";
-    const areas=dnr?`&areas=${encodeURIComponent(JSON.stringify(dnrAreas.map(a=>a.bbox)))}`:"";
-    const r=await fetch(api(`${path}?bbox=${view.map(v=>v.toFixed(5)).join(",")}&lo=${lo}&hi=${hi}&strict=0${areas}`));
+    const r=await fetch(api(`${path}?bbox=${view.map(v=>v.toFixed(5)).join(",")}&lo=${lo}&hi=${hi}&strict=0`));
     j=await r.json();
   }catch(e){ el.innerHTML='<span class="warn">Measurement failed.</span>'; return }
   if(!j.ok){ el.innerHTML=`<span class="warn">${j.reason||"no result"}</span>`; return }

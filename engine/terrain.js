@@ -321,7 +321,7 @@ const routes={
       return send(res,503,"image/png",TRANSPARENT,{"X-Cache":"BUSY","Cache-Control":"no-store","Retry-After":"2"});
     }
     if(out&&out.provisional)        // coverage unknown: the 1 m index is incomplete
-      return send(res,200,"image/png",TRANSPARENT,{"X-Coverage":"none","Cache-Control":"no-store"});
+      return send(res,503,"image/png",TRANSPARENT,{"X-Coverage":"unknown","Cache-Control":"no-store","Retry-After":"10"});
     if(!out){                       // no federal coverage here — caller falls back
       cachePut(ck,204,"image/png",Buffer.alloc(0),NONE_FINAL);
       return send(res,200,"image/png",TRANSPARENT,{"X-Coverage":"none","Cache-Control":"public, max-age=604800, immutable"});
@@ -532,7 +532,7 @@ const routes={
       return send(res,503,"image/png",TRANSPARENT,{"X-Cache":"BUSY","Cache-Control":"no-store","Retry-After":"2"});
     }
     if(out&&out.provisional)
-      return send(res,200,"image/png",TRANSPARENT,{"X-Coverage":"none","Cache-Control":"no-store"});
+      return send(res,503,"image/png",TRANSPARENT,{"X-Coverage":"unknown","Cache-Control":"no-store","Retry-After":"10"});
     if(!out){ cachePut(ck,204,"image/png",Buffer.alloc(0),NONE_FINAL);
               return send(res,200,"image/png",TRANSPARENT,{"X-Coverage":"none","Cache-Control":"public, max-age=604800, immutable"}) }
     cachePut(ck,200,"image/png",out.png,{coverage:out.coverage});
