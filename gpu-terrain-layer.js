@@ -37,6 +37,43 @@
     return {...view,centerMerc:[view.centerMerc[0]+(c*dx+s*dy)/world,view.centerMerc[1]+(-s*dx+c*dy)/world],
       cssSize:[width/scale,height/scale],dpr:scale,liveDpr:view.dpr};
   }
+  /* "Smoother panning" (CR-008): off (default), auto or on. Anything else
+     stored, or no storage, is off. */
+  const PAN_SHADING_KEY="clearskies.panShading.v1";
+  function panShadingMode(storage){
+    try{const value=storage?.getItem(PAN_SHADING_KEY);return value==="on"||value==="auto"?value:"off";}catch{return "off";}
+  }
+  /* One user drag, from its first dragging move through inertia to moveend,
+     may shade on the CSS grid. "on" does so at once. "auto" does once 3 of
+     the last 8 presented drag frames took over 24 ms, and starts the next
+     drag that way while the terrain state, zoom level, viewport and DPR are
+     unchanged (in memory only). A zoom, rotation or resize ends the drag
+     path until moveend; every settled frame is full resolution. */
+  const AUTO_SLOW_MS=24,AUTO_WINDOW=8,AUTO_SLOW_FRAMES=3;
+  class PanShading{
+    constructor(mode){this.mode="off";this.dragging=false;this.coarse=false;this.blocked=false;this.key="";this.remembered="";this.intervals=[];this.setMode(mode);}
+    setMode(mode){
+      mode=mode==="on"||mode==="auto"?mode:"off";const was=this.coarse;
+      this.mode=mode;this.remembered="";this.intervals.length=0;
+      this.coarse=this.dragging&&mode==="on";return was!==this.coarse;
+    }
+    begin(key){
+      if(this.mode==="off"||this.blocked||this.dragging)return false;
+      this.dragging=true;this.key=key;this.intervals.length=0;
+      if(this.remembered!==key)this.remembered="";
+      this.coarse=this.mode==="on"||(this.mode==="auto"&&this.remembered===key);return this.coarse;
+    }
+    /* Presented frame interval while dragging; true when it switches path. */
+    frame(ms){
+      if(!this.dragging||this.mode!=="auto"||this.coarse||!(ms>0))return false;
+      this.intervals.push(ms);if(this.intervals.length>AUTO_WINDOW)this.intervals.shift();
+      if(this.intervals.filter(value=>value>AUTO_SLOW_MS).length<AUTO_SLOW_FRAMES)return false;
+      this.coarse=true;this.remembered=this.key;return true;
+    }
+    get sampling(){return this.dragging&&this.mode==="auto"&&!this.coarse;}
+    /* moveend releases a block; zoom, rotate and resize set one. */
+    end(block){const was=this.coarse;this.dragging=false;this.coarse=false;this.intervals.length=0;this.blocked=!!block;return was;}
+  }
   function install(L){
     if(L.CSPGpuTerrainLayer)return;
     L.CSPGpuTerrainLayer=L.Layer.extend({
@@ -50,6 +87,7 @@
           shaders:root.CSPGpuTerrainShaders,maxTextureBytes:this.options.maxTextureBytes,
           onNeedsFrame:()=>this.redraw()})||null;}catch(error){this._creationError=error;this._engine=null;}
         if(this._engine&&this._state)this._engine.setState(this._state);
+        this._pan=new PanShading(this.options.panShading);
       },
       onAdd:function(map){
         this._map=map;this._geometryCache=new WeakMap();
@@ -72,6 +110,7 @@
         this.redraw();
       },
       onRemove:function(){
+        this._panStop(false);this._engine?.releaseGestureTargets?.();
         if(this._frame)root.cancelAnimationFrame(this._frame);this._frame=0;
         this._resizeObserver?.disconnect();this._visibilityObserver?.disconnect();
         if(this._tile)this.options.store?.off("tile",this._tile);
@@ -79,9 +118,45 @@
         /* remove/add retains resident engine textures; destroy() is final. */
       },
       getEvents:function(){return {move:this._moved,zoom:this._moved,moveend:this._moved,
-        zoomend:this._moved,viewreset:this._moved,resize:this._moved,rotate:this._moved,zoomanim:this._zoomAnim};},
+        zoomend:this._moved,viewreset:this._moved,resize:this._moved,rotate:this._moved,zoomanim:this._zoomAnim,zoomstart:this._zoomStart};},
+      _zoomStart:function(){this._panStop(true);},
+      _panKey:function(){
+        const map=this._map,size=map.getSize();
+        return [this._stateKey,Math.round(map.getZoom()),size.x,size.y,root.devicePixelRatio].join("|");
+      },
+      /* The drag latch and auto's frame sampler. Off, and screens already
+         near CSS resolution (the engine's DPR 1.5 rule), never begin. */
+      _panTrack:function(event){
+        const type=event?.type,map=this._map,pan=this._pan;
+        if(type==="move"){
+          if(pan.mode!=="off"&&!pan.dragging&&root.devicePixelRatio>=1.5&&map.dragging?.moving?.()&&!map._animatingZoom&&!map._cspPaneZoom)
+            pan.begin(this._panKey());
+          if(pan.sampling&&!this._panSampler)this._panSample();
+        }else if(type==="moveend")this._panStop(false);
+        else if(type==="zoom"||type==="zoomend"||type==="viewreset"||type==="resize"||type==="rotate")this._panStop(true);
+      },
+      _panSample:function(){
+        let last=0;
+        const tick=time=>{
+          this._panSampler=0;if(!this._pan.sampling)return;
+          if(last&&this._pan.frame(time-last)){this.redraw();return;}
+          last=time;this._panSampler=root.requestAnimationFrame(tick);
+        };
+        this._panSampler=root.requestAnimationFrame(tick);
+      },
+      _panStop:function(block){
+        if(this._panSampler)root.cancelAnimationFrame(this._panSampler);this._panSampler=0;
+        if(this._pan.end(block))this.redraw();
+      },
+      setPanShading:function(mode){
+        if(this._pan.setMode(mode))this.redraw();
+        if(this._pan.mode==="off")this._engine?.releaseGestureTargets?.();
+        return this;
+      },
+      panShading:function(){const p=this._pan;return {mode:p.mode,dragging:p.dragging,coarse:p.coarse};},
       _moved:function(event){
         if(event?.type==="resize")this._geometryCache=new WeakMap();
+        this._panTrack(event);
         this._painted=null;this.redraw();
         // Drag/rotate handlers already run in Leaflet's painted frame. Keep
         // the screen-sized canvas fixed to the viewport before presentation.
@@ -97,6 +172,7 @@
         }
       },
       _zoomAnim:function(event){
+        this._panStop(true);
         this._painted={center:event.center,zoom:event.zoom};this._dirty=true;
         this._nativeZoom=!event.noUpdate&&!this._map._cspPaneZoom;
         if(event.noUpdate){
@@ -168,7 +244,7 @@
         this._canvas.style.width=view.cssSize[0]+"px";this._canvas.style.height=view.cssSize[1]+"px";
         const w=Math.max(1,Math.round(view.cssSize[0]*view.dpr)),h=Math.max(1,Math.round(view.cssSize[1]*view.dpr));
         if(this._canvas.width!==w)this._canvas.width=w;if(this._canvas.height!==h)this._canvas.height=h;
-        this._coverage=this._engine.render(view);this.fire("render",{view,coverage:this._coverage});
+        this._coverage=this._engine.render(view,this._pan.coarse?COARSE:undefined);this.fire("render",{view,coverage:this._coverage});
         if(this._map._animatingZoom||this._nativeZoom)this.redraw();
       },
       redraw:function(){
@@ -223,5 +299,6 @@
     });
     L.cspGpuTerrainLayer=options=>new L.CSPGpuTerrainLayer(options);
   }
-  return {VERSION:"1",mercator,resolveFlag,buildState,viewFromMap,exportView,install};
+  const COARSE=Object.freeze({coarse:true});
+  return {VERSION:"1",mercator,resolveFlag,buildState,viewFromMap,exportView,install,PAN_SHADING_KEY,panShadingMode,PanShading};
 });

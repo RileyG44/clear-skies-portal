@@ -951,6 +951,12 @@ function renderSettingsView(){
   const accessLabel=document.createElement("div");accessLabel.className="csp-section-label";accessLabel.textContent="Accessibility & data";
   const access=document.createElement("div");access.className="csp-card csp-settings-card";
   access.innerHTML=`
+    <div class="csp-setting-row">
+      <div class="csp-setting-text"><strong>Smoother panning</strong><span>While you drag, terrain is drawn at lower resolution and sharpens when the map stops. Auto does this only when dragging is slow.</span></div>
+      <select data-pan-shading aria-label="Smoother panning">
+        <option value="off">Off</option><option value="auto">Auto</option><option value="on">On</option>
+      </select>
+    </div>
     <label class="csp-setting-row">
       <span class="csp-setting-text"><strong>Reduce motion</strong><span>Calms pop-up and control animations, beyond the system setting.</span></span>
       <span class="csp-switch"><input type="checkbox" data-reduce-motion role="switch"><span></span></span>
@@ -1007,10 +1013,17 @@ function renderSettingsView(){
     document.documentElement.classList.toggle("csp-reduce-motion",motion.checked);
     try{if(motion.checked)localStorage.setItem("clearskies.reduceMotion.v1","1");else localStorage.removeItem("clearskies.reduceMotion.v1")}catch(error){}
   });
+  const panShading=$("[data-pan-shading]",access);
+  try{panShading.value=window.CSPGpuTerrainLayer?.panShadingMode(localStorage)||"off"}catch(error){panShading.value="off"}
+  panShading.addEventListener("change",()=>{
+    const mode=panShading.value;
+    try{if(mode==="off")localStorage.removeItem("clearskies.panShading.v1");else localStorage.setItem("clearskies.panShading.v1",mode)}catch(error){}
+    document.dispatchEvent(new CustomEvent("csp:pan-shading",{detail:{mode}}));
+  });
   $("[data-reset-all]",access).addEventListener("click",()=>{
     /* Preferences and panel layout only; map content choices (overlays,
        terrain and markup state) are data, not preferences, and stay. */
-    const keys=["clearskies.appearance.v1","clearskies.controlAccent.v1","clearskies.snapshot-scale.v1","clearskies.snapshot.readout.v1","clearskies.reduceMotion.v1","clearskies.workspace.v1","clearskies.terrain-sections.v1","clearskies.active-layer-order.v1","clearskies.panes.v1","clearskies.scenePanel.v1","clearskies.mapToolOrder.v2","clearskies.mapTheme.v1"];
+    const keys=["clearskies.appearance.v1","clearskies.controlAccent.v1","clearskies.snapshot-scale.v1","clearskies.snapshot.readout.v1","clearskies.reduceMotion.v1","clearskies.panShading.v1","clearskies.workspace.v1","clearskies.terrain-sections.v1","clearskies.active-layer-order.v1","clearskies.panes.v1","clearskies.scenePanel.v1","clearskies.mapToolOrder.v2","clearskies.mapTheme.v1"];
     try{for(const key of keys) localStorage.removeItem(key);sessionStorage.removeItem("clearskies.panes.session.v1")}catch(error){}
     location.reload();
   });

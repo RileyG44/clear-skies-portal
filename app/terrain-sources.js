@@ -321,7 +321,10 @@ function initGpuTerrain(){
       mask:(grid,w,h,coords,source)=>source.rank===5?maskDnrGrid(grid,w,h,coords):grid,
       maxBytes:(matchMedia("(pointer:coarse)").matches?64:192)*1024*1024});
     gpuTerrainLayer=L.cspGpuTerrainLayer({store:gpuTerrainStore,state:gpuTerrainState(),zIndex:440,
-      maxTextureBytes:(matchMedia("(pointer:coarse)").matches?64:192)*1024*1024});
+      maxTextureBytes:(matchMedia("(pointer:coarse)").matches?64:192)*1024*1024,
+      panShading:window.CSPGpuTerrainLayer.panShadingMode(storage)});
+    /* Settings → Smoother panning (CR-008). */
+    document.addEventListener("csp:pan-shading",event=>gpuTerrainLayer?.setPanShading(event.detail?.mode));
     gpuTerrainEnabled=!!gpuTerrainLayer.getEngine();
     gpuTerrainLayer.on("render",scheduleStudioFit);
     gpuTerrainStore.on("error",scheduleTerrainStatus);
