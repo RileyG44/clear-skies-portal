@@ -46,7 +46,10 @@ Do not touch the Dell's cache directory or its downloaded DNR files.
 
 - This Mac, if it runs the local engine service
   (`launchctl list | grep clear-skies`): run `scripts/install-mac-service.sh`,
-  then check `http://127.0.0.1:8765/api/health`.
+  then check `http://127.0.0.1:<port>/api/health` on the port it prints. The
+  engine normally uses 8765, but Riley's MacBook runs it on 8770 because the TV
+  remote holds 8765, and the installer keeps that port. If the installer stops
+  because its port is taken, report what holds it; do not stop that program.
 - Any other machine on the network running Clear Skies: update it the same way
   as the Dell, and list every machine you updated. Do not guess at machines you
   cannot confirm are running it.
