@@ -1,3 +1,5 @@
+> **RETIRED 2026-10-29 by Riley.** The change-request / Spec Owner process is no longer used. This file is a historical record only — do not follow it. See AGENTS.md.
+
 # Dedicated Spec Owner — role and handoff
 
 Project: Clear Skies Native iOS
