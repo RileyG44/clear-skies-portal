@@ -138,7 +138,7 @@ async function main(){
     }
     const attempts=fs.readFileSync(log,"utf8").split("\n").filter(line=>line==="raw-elevation").length;
     assert(attempts>=1+cases.filter(c=>c.fallback).length*2,"1 m lidar is attempted before every national fallback");
-    console.log("saved elevation: 6 exact offline cases + 3 uncached fallbacks passed (ranges evicted, 1 m tried first)");
+    console.log(`saved elevation: ${cases.filter(c=>!c.fallback).length} exact offline cases + ${cases.filter(c=>c.fallback).length} uncached fallbacks passed (ranges evicted, 1 m tried first)`);
   }finally{
     if(child&&child.exitCode==null){const exited=new Promise(resolve=>child.once("exit",resolve));child.kill();await exited}
     fs.rmSync(dir,{recursive:true,force:true});

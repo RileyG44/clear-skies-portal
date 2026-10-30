@@ -234,7 +234,9 @@ async function httpChecks(fixture,automatic=false){
     assert(measured.sources.every(s=>s.startsWith("WA DNR:")),"strict fabric measures actual DNR elevations");
     const rejected=await fetch(base+"/api/wadnr/warm",{method:"POST",body:JSON.stringify({bbox:[-119,47,-118,48]})});
     assert.equal(rejected.status,400,"unbounded DNR view downloads are rejected");
-    const warm=await fetch(base+"/api/wadnr/warm",{method:"POST",body:JSON.stringify({bbox})});
+    // Keep job orchestration independent of real provider availability. The
+    // numeric fixture covers only part of a z16 acquisition cell.
+    const warm=await fetch(base+"/api/wadnr/warm",{method:"POST",body:JSON.stringify({bbox:[-130,40,-129.999,40.001]})});
     assert.equal(warm.status,200);
     let status;
     for(let i=0;i<30;i++){status=await (await fetch(base+"/api/wadnr/warm/status")).json();if(!status.running)break;await new Promise(r=>setTimeout(r,100));}
