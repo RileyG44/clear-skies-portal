@@ -293,7 +293,7 @@ const api = p => (NATIVE_HOST ? "" : API) + p;
    with failed project listings answered "no 1 m here" for most of Washington
    from 2026-10-21). Those tiles are immutable in the browser cache, so this
    query lets corrected ones in. */
-const RAW_COVERAGE_QUERY="ix=3";
+const RAW_COVERAGE_QUERY="ix=4";
 
 let terLayer=null, terBase=null, PROXY=false, waCover=null, terTimer=null;
 // One engine/store for both analytical terrain and elevation. The published
@@ -405,7 +405,7 @@ let probeToken=0, terrainQueryToken=0, serverHealth=null, serverProbeTimer=null;
 let waCoverageState="unknown",waCoverageError="",dnrStatus=null,dnrStatusTimer=null,dnrLastError="",dnrRenderedRevision=-1;
 const dnrElevationAvailable=()=>PROXY&&serverHealth?.features?.includes("wadnr-elevation");
 /* Prefer WA DNR already held by the engine, including explicit downloads.
-   Browsing only reads cached rasters; it never acquires or restores archives.
+   Tile reads stay cache-only; dnr-auto.js coordinates opt-in gap acquisition.
    Device-local areas record downloads/outlines, not permission to render. */
 const DNR_AREA_KEY="clearskies.wadnrAreas.v1";
 let dnrAreas=(()=>{try{const v=JSON.parse(localStorage.getItem(DNR_AREA_KEY)||"[]");

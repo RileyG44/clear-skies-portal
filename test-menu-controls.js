@@ -56,7 +56,7 @@ function dnrFixture(){
     serverHealth:{features:['wadnr-job-cancel']},PROXY:true,dnrBar:nodes.get('#dnrSelectionBar'),
     dnrMoveBox:nodes.get('.dnr-move-box'),dnrSelRect:{setBounds(){}},dnrSelHandles:[{dragging:{enable(){},disable(){}},setLatLng(){}}],
     dnrAreas:[],dnrBusy:false,dnrSelBbox:[-120,47,-119.999,47.001],
-    dnrDownloadBbox:null,dnrBackground:false,dnrPollNow:null,dnrStartUncertain:false,
+    dnrAutomatic:false,dnrDownloadBbox:null,dnrBackground:false,dnrPollNow:null,dnrStartUncertain:false,
     dnrJobId:null,dnrFetchToken:0,dnrFetchPoll:null,dnrSuccessTimer:null,dnrLargeApproved:false,
     viewport:[-120,47,-119.999,47.001],map3d:null,
     map:{getBounds:()=>bounds(context.viewport),removeLayer:layer=>removed.push(layer)},
@@ -123,6 +123,24 @@ async function dnrChecks(){
   f.context.respond=async()=>reply({id:'job-1',running:false,total:2,done:2,bytes:100});await f.poll();
   assert.equal(f.context.dnrAreas.length,1);assert.equal(f.context.saves,1,'complete jobs persist their selected area');
 }
+async function automaticChecks(){
+  let f=dnrFixture();await f.context.startDnrDownload(f.context.viewport,{automatic:true});
+  assert.equal(f.context.dnrAutomatic,true);assert.match(f.nodes.get('#dnrDownloadSummary').textContent,/Automatic/);
+  f.context.paintDnrAvailability();assert.equal(f.nodes.get('#dnrViewport').disabled,false);
+  await f.currentView();assert.equal(f.postCount(),1);assert.match(f.messages.at(-1).text,/Cancel download/);
+  assert.equal(f.nodes.get('#dnrSelectionDetails').hidden,false);
+  f.context.cancelDnrSelection();assert.deepEqual(f.stops,['job-1']);
+  f=dnrFixture();await f.context.startDnrDownload(f.context.viewport,{automatic:true});
+  f.context.respond=async()=>reply({id:'job-1',running:false,total:2,done:2,bytes:100});await f.poll();
+  assert.equal(f.context.dnrAreas.length,0);assert.equal(f.context.saves,0);
+  assert.match(f.messages.at(-1).text,/not a phone offline/);
+  f=dnrFixture();f.context.respond=async()=>({ok:false,json:async()=>({busy:true})});
+  await f.context.startDnrDownload(f.context.viewport,{automatic:true});
+  assert.equal(f.context.dnrBusy,false);assert.equal(f.messages.at(-1).state,'warning');
+  f=dnrFixture();await f.context.startDnrDownload(f.context.viewport,{automatic:true});
+  f.context.respond=async()=>reply({id:'job-1',running:false,total:2,done:0,error:'Cache budget reached'});await f.poll();
+  assert.match(f.messages.at(-1).text,/Cache budget/);assert.equal(f.nodes.get('#dnrFetch').hidden,true);
+}
 async function backgroundChecks(){
   let f=dnrFixture();await f.currentView();
   assert.equal(f.postCount(),1);assert.deepEqual(f.requests[0].body.bbox,f.context.viewport);
@@ -173,4 +191,4 @@ async function backgroundChecks(){
   assert.equal(f.timers.size,1);await f.currentView();
   assert.equal(f.context.dnrBar.hidden,false);assert.equal(f.timers.size,1,'new work clears the old success-dismiss timer');
 }
-spanChecks();dnrChecks().then(backgroundChecks).then(()=>console.log('menu control checks passed (elevation span, owned jobs, viewport/3D snapshot, background interaction, large-area confirmation, status recovery, uncertain starts and cancellation)')).catch(error=>{console.error(error);process.exitCode=1});
+spanChecks();dnrChecks().then(automaticChecks).then(backgroundChecks).then(()=>console.log('menu control checks passed (elevation span, owned jobs, viewport/3D snapshot, background interaction, large-area confirmation, status recovery, uncertain starts and cancellation)')).catch(error=>{console.error(error);process.exitCode=1});

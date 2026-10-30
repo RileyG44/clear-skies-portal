@@ -92,7 +92,7 @@ function chooseTerrain(style,published=true){
   // archive. Only an ordinary hillshade can use this fixed-light picture;
   // the composite preserves cached numeric DNR at every valid pixel.
   if(published&&waOK&&!studioStack(style))return {src:"wadnr",projs:waProjects(),cachedOnly:true};
-  // Best available prefers cached WA DNR without starting an archive download.
+  // Tile reads stay cache-only. Settled-view acquisition is in dnr-auto.js.
   if(dnrElevationAvailable())return {src:"wadnr-elevation",cachedOnly:true,overview:!closeEnough};
   if(u1OK) return {src:"usgs1m", cover:usgsCover};
   return {src:"3dep"};
@@ -223,8 +223,8 @@ function formatSampleMeters(meters){
 }
 function sourceResolutionText(source){
   const native=source.nativeLabel||"Native spacing not reported";
-  const corrections=[...new Set((source.surveys||[]).map(s=>s.verticalUnitBasis).filter(Boolean))];
-  const surveys=source.surveys||[],projects=surveys.slice(0,3).map(s=>`${s.project} (DTM ${s.datasetId})`).join("; ");
+  const corrections=[...new Set((source.surveys||[]).flatMap(s=>[s.verticalUnitBasis,s.verticalDatum,s.horizontalDatum,s.projectionLimitation]).filter(Boolean))];
+  const surveys=source.surveys||[],projects=surveys.slice(0,3).map(s=>`${s.project}${s.datasetId!=null?` (DTM ${s.datasetId})`:s.product?` (${s.product})`:""}`).join("; ");
   return `Native: ${native} · displayed sampling: ${formatSampleMeters(source.sampleMeters)}${projects?" · Surveys: "+projects+(surveys.length>3?` +${surveys.length-3} more`:""):""}${corrections.length?" · "+corrections.join("; "):""}`;
 }
 function renderTerrainSourcePanel(summaryArg,is3dArg,layerArg){
@@ -304,6 +304,7 @@ function elevationLabel(){
 }
 let terrainStatusFrame=0,terrainSwapMessage="";
 function scheduleTerrainStatus(){
+  scheduleAutomaticDnr();
   if(terrainStatusFrame)return;
   terrainStatusFrame=requestAnimationFrame(()=>{terrainStatusFrame=0;paintTerrainStatus();});
 }
@@ -500,9 +501,12 @@ function paintTerrainInfo(pick){
   }
   pick = pick || chooseTerrain(style);
   let html="";
+  if(PROXY&&$("#terSrc").value!=="3dep")html+=`<div>USGS detail includes standard 1 m projects and the Elwha River original-resolution DEM (2014 survey ID, with 2015 modifications). Elwha OPR fills standard-product holes; missing breaklines prevent standard-product certification. Elevations are meters, NAVD88/GEOID12A. Its TIFF says EPSG:26910; metadata identifies NAD83(2011). The existing UTM approximation is not a realization-aware datum transform or a survey-accuracy guarantee.</div>`;
   if(pick.src==="wadnr-elevation"){
     html+=`<div>Requested source: <b>Best available (cached WA DNR, then USGS)</b>. All analytical styles derive from numeric elevation; rendered sources and their percentages are shown above.</div>`;
-    html+=`<div>Uses WA DNR already available on the connected engine, including downloaded areas. To fetch missing data, use <b>Select area on map</b> or <b>Download current view</b>. Panning never starts an archive download.</div>`;
+    html+=`<div>Uses WA DNR already available on the connected engine, including downloaded areas. ${serverHealth?.features?.includes("wadnr-auto")?
+      "In Best available, settled 2D views at zoom 15 or closer automatically download DNR elevation for gaps. Progress and Cancel appear on the map. Explicit USGS/National choices, 3D and exports do not start downloads.":
+      "This engine does not download automatically. Use <b>Select area on map</b> or <b>Download current view</b> to fetch missing elevation."} Downloads are cached on the engine; they are not phone offline packages.</div>`;
     if(dnrAcquisitionText())html+=`<div>${esc(dnrAcquisitionText())}</div>`;
   }else if(pick.src==="wadnr"){
     const ps=pick.projs||[], n=ps.length;
@@ -529,7 +533,7 @@ function paintTerrainInfo(pick){
     html += usgsCover.hits && usgsCover.hits.length
       ? `<div style="margin-top:7px">USGS <b>3.3 ft DEM</b> covers the map centre`
         + ` (${esc(usgsCover.cell)}) &mdash; pick <i>USGS 3.3 ft</i> for slope, aspect and contours from real elevation.</div>`
-      : `<div style="margin-top:7px">No federal 3.3 ft DEM for this cell (${esc(usgsCover.cell||"")}).</div>`;
+      : `<div style="margin-top:7px">No standard federal 3.3 ft DEM catalogued for this cell (${esc(usgsCover.cell||"")}).</div>`;
   }
   if(waCover && waCover.length){
     html += `<div style="margin-top:7px"><b>LiDAR projects in and around this view</b></div>`

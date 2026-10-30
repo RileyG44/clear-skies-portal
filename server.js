@@ -90,7 +90,8 @@ function health(){
     channel:CHANNEL, previewRef:CHANNEL==="preview"?PREVIEW_REF:undefined,
     /* What the page may ask of this engine. Without "wadnr-dpi" the page
        keeps to the 256 px WA DNR export every engine has handled. */
-    features:["wadnr-dpi","wadnr-elevation","wadnr-job-cancel","markup","overview-elevation"],dnr:dnr.status()
+    features:["wadnr-dpi","wadnr-elevation","wadnr-job-cancel","markup","overview-elevation",
+      ...(process.env.CSP_DNR_AUTO==="1"?["wadnr-auto"]:[])],dnr:dnr.status()
   };
 }
 

@@ -76,7 +76,7 @@ function send(res, status, type, body, extra={}){
   const vary=[];
   if(origin){
     headers["Access-Control-Allow-Origin"]=origin;
-    headers["Access-Control-Expose-Headers"]="X-Coverage, X-Cache, X-CSP-Error, X-Elevation-Source, X-Ground-Res, X-Sources, X-DNR-Status, X-DNR-Revision, X-DNR-Sources, Retry-After";
+    headers["Access-Control-Expose-Headers"]="X-Coverage, X-Cache, X-CSP-Error, X-CSP-Provisional, X-USGS-Sources, X-Elevation-Source, X-Ground-Res, X-Sources, X-DNR-Status, X-DNR-Revision, X-DNR-Sources, Retry-After";
     vary.push("Origin");
   }
   if(COMPRESSIBLE.test(type)) vary.push("Accept-Encoding");

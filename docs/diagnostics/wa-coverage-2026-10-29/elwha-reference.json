@@ -1,0 +1,68 @@
+[
+  {
+    "lat": 47.99898,
+    "lon": -123.58437,
+    "z": 19,
+    "x": 82161,
+    "y": 182252,
+    "coverage": 1,
+    "pixelLocation": {
+      "lon": -123.58436957001688,
+      "lat": 47.99897983809443
+    },
+    "value": 692.95751953125,
+    "sources": [
+      {
+        "project": "Elwha_River_WA_LiDAR OPR 2014",
+        "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10TDU560160.tif",
+        "level": 0,
+        "res": 1,
+        "nativeMeters": 1,
+        "cogTiles": 1,
+        "product": "Original Product Resolution DEM",
+        "horizontalDatum": "NAD83(2011) per metadata/WESM EPSG:6339; TIFF EPSG:26910",
+        "verticalDatum": "NAVD88 / GEOID12A",
+        "verticalUnits": "meters",
+        "acquisition": "2014-11 with 2015-02 modification; metadata dates differ, per-pixel capture unknown",
+        "projectionLimitation": "Existing geographic-to-UTM approximation; no realization-aware datum transformation or accuracy guarantee",
+        "metadataURL": "https://prd-tnm.s3.amazonaws.com/StagedProducts/Elevation/metadata/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/best_use_xml/USGS_ElwhaRiver_Lidar_2014w_Modification_DEM_IMG.xml",
+        "standardProductLimitation": "WESM: does not meet; breaklines not delivered"
+      }
+    ],
+    "rasterioBilinear": 692.9575518020778,
+    "differenceMeters": -3.227082777357282e-05
+  },
+  {
+    "lat": 48.02151,
+    "lon": -123.61508,
+    "z": 19,
+    "x": 82116,
+    "y": 182203,
+    "coverage": 1,
+    "pixelLocation": {
+      "lon": -123.61508086323741,
+      "lat": 48.02151021977969
+    },
+    "value": 594.9620361328125,
+    "sources": [
+      {
+        "project": "Elwha_River_WA_LiDAR OPR 2014",
+        "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10UDU537182.tif",
+        "level": 0,
+        "res": 1,
+        "nativeMeters": 1,
+        "cogTiles": 1,
+        "product": "Original Product Resolution DEM",
+        "horizontalDatum": "NAD83(2011) per metadata/WESM EPSG:6339; TIFF EPSG:26910",
+        "verticalDatum": "NAVD88 / GEOID12A",
+        "verticalUnits": "meters",
+        "acquisition": "2014-11 with 2015-02 modification; metadata dates differ, per-pixel capture unknown",
+        "projectionLimitation": "Existing geographic-to-UTM approximation; no realization-aware datum transformation or accuracy guarantee",
+        "metadataURL": "https://prd-tnm.s3.amazonaws.com/StagedProducts/Elevation/metadata/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/best_use_xml/USGS_ElwhaRiver_Lidar_2014w_Modification_DEM_IMG.xml",
+        "standardProductLimitation": "WESM: does not meet; breaklines not delivered"
+      }
+    ],
+    "rasterioBilinear": 594.9617862029595,
+    "differenceMeters": 0.0002499298529983207
+  }
+]

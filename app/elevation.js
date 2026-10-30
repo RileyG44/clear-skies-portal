@@ -491,7 +491,7 @@ async function fetchElevation(url,signal){
         if(++pendingChecks>60)throw new Error("Elevation processing is still pending");
         await waitElevationRetry(5000,signal);attempt--;continue;
       }
-      if(!response.ok||response.headers.get("X-CSP-Error")){
+      if(!response.ok||response.headers.get("X-CSP-Error")||response.headers.get("X-CSP-Provisional")){
         if(isDnr){try{const value=await response.json();dnrLastError=value.error||`DNR elevation HTTP ${response.status}`;}catch{}scheduleTerrainStatus();}
         throw new Error(`Elevation HTTP ${response.status}`);
       }
@@ -507,7 +507,7 @@ async function fetchElevation(url,signal){
          or zoom brings dozens at once. The drape workers decode it instead. */
       const tile=await drapeWorkers.run({op:"elevation",blob:await response.blob()},signal);
       let surveys=[];
-      if(isDnr)try{surveys=JSON.parse(decodeURIComponent(response.headers.get("X-DNR-Sources")||"[]"));}catch{}
+      try{surveys=JSON.parse(decodeURIComponent(response.headers.get(isDnr?"X-DNR-Sources":"X-USGS-Sources")||"[]"));}catch{}
       return ElevationTileCore.hasElevation(tile.grid)?{grid:tile.grid,width:tile.width,height:tile.height,surveys}:null;
     }catch(error){
       if(signal.aborted) throw new DOMException("Aborted","AbortError");
@@ -608,6 +608,7 @@ const ElevLayer = L.GridLayer.extend({
     }
     const controller=new AbortController(),pending={controller,canvas:cv};this._pending.set(key,pending);
     const progress=this._progressForTile?.(cv)||new CSPTilePipeline.ProgressiveGrid(size.x*size.y);
+    cv._cspNumericCounts=progress.counts;
     let settled=false;
     const accept=(values,rank,label,sampleMeters,sharper=false,surveys=[])=>{
       if(controller.signal.aborted||!progress.accept(values,rank,sharper))return;
@@ -632,7 +633,7 @@ const ElevLayer = L.GridLayer.extend({
       let values=!crop&&source.width===size.x&&source.height===size.y?source.grid:
         ElevationTileCore.resampleElevation(source.grid,source.width,source.height,crop,size.x,size.y,{smooth:true});
       const sampleMeters=typeof sourceSampleMeters==="function"?sourceSampleMeters({z:native,x,y}):null;
-      accept(values,rank,label,sampleMeters,sharper,source.surveys||[]);
+      accept(values,rank,label+(source.surveys?.some(s=>s.product==="Original Product Resolution DEM")?" + Elwha River OPR (1 m)":""),sampleMeters,sharper,source.surveys||[]);
     };
     /* On high-density screens this tile holds the next zoom's data (dz), which
        is four times the tiles - and four times the raw-LiDAR renders on the

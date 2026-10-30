@@ -8,7 +8,7 @@ const https=require("https"),{EventEmitter}=require("events");
 const BASE="StagedProducts/Elevation/1m/Projects/";
 const PROJECTS={WA_A_2020:["USGS_1M_10_x55y525_WA_A_2020.tif"],WA_B_2021:["USGS_1M_10_x56y525_WA_B_2021.tif"],
   WA_C_2019:["USGS_1m_x57y525_WA_C_2019.tif"]};
-let failing=new Set(),listings=[];
+let failing=new Set(),listings=[],failingPrefixes=new Set();
 https.request=(options,callback)=>{
   const req=new EventEmitter();req.setTimeout=()=>req;req.destroy=()=>{};
   req.end=()=>setImmediate(()=>{
@@ -21,8 +21,8 @@ https.request=(options,callback)=>{
       res.statusCode=failing.has(project)?503:200;
       if(res.statusCode===200)body=PROJECTS[project].map(f=>`<Key>${BASE}${project}/TIFF/${f}</Key><Size>100</Size>`).join("");
     }else{
-      res.statusCode=200;
-      body=`<Prefix>${prefix}</Prefix>`+Object.keys(PROJECTS).map(p=>`<Prefix>${BASE}${p}/</Prefix>`).join("");
+      res.statusCode=failingPrefixes.has(prefix)?503:200;
+      body=`<Prefix>${prefix}</Prefix>`+Object.keys(PROJECTS).filter(p=>p.startsWith(prefix.slice(BASE.length))).map(p=>`<Prefix>${BASE}${p}/</Prefix>`).join("");
     }
     callback(res);res.emit("data",Buffer.from(body));res.emit("end");
   });
@@ -71,6 +71,23 @@ const dir=fs.mkdtempSync(path.join(os.tmpdir(),"csp-usgs-index-")),file=path.joi
     assert(!listings.includes(`${BASE}WA_A_2020/TIFF/`),"projects already indexed are not listed again");
     assert.deepEqual(Object.keys((await usgs.getIndex()).projects).sort(),Object.keys(PROJECTS).sort());
     assert.equal(usgs.coverageFinal(),true);
+
+    // A cached WA-only index serves immediately while newly included prefixes
+    // are listed. A failed prefix must not finalize absence or replace it.
+    const narrow={...JSON.parse(fs.readFileSync(file,'utf8')),scope:'WA_'};
+    fs.writeFileSync(file,JSON.stringify(narrow));
+    PROJECTS.OR_Border_2024=['USGS_1M_10_x54y525_OR_Border_2024.tif'];
+    PROJECTS.Elwha_River_2014=['USGS_1M_10_x44y525_Elwha_River_2014.tif'];
+    failingPrefixes=new Set([BASE+'OR_']);usgs=fresh(dir);
+    assert.equal(Object.keys((await usgs.getIndex()).projects).length,3,'cached projects keep serving while the scope widens');
+    await usgs.repairIndex();assert.equal(usgs.coverageFinal(),false);
+    assert.equal(Object.keys((await usgs.getIndex()).projects).length,3,'failed added discovery preserves every old project');
+    failingPrefixes.clear();await usgs.repairIndex();
+    const widened=await usgs.getIndex();assert.equal(Object.keys(widened.projects).length,5);
+    assert.equal(widened.scope,'WA_,OR_,ID_,Elwha_');assert.equal(usgs.coverageFinal(),true);
+    // A failed forced refresh also preserves a serving project's data.
+    failing.add('OR_Border_2024');await usgs.buildIndex(null,true);
+    assert((await usgs.getIndex()).projects.OR_Border_2024);assert.equal(usgs.coverageFinal(),false);
 
     console.log("Incomplete 1 m index: provisional gaps, failed-only repair, and legacy re-list passed");
   }finally{fs.rmSync(dir,{recursive:true,force:true})}

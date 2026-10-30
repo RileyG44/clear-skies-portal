@@ -34,6 +34,7 @@ const routes={
   "/api/wadnr/warm":async(req,res,{u,p,signal})=>{
     const job=await readJson(req,{});
     if(!validBbox(job.bbox)||job.bbox[1]<-85||job.bbox[3]>85)throw new HttpError(400,"bbox=w,s,e,n required");
+    if(dnr.warm.running)return send(res,409,"application/json",jsonBody({busy:true,error:"Another WA DNR download is running"}),{"Cache-Control":"no-store"});
     try{return send(res,200,"application/json",jsonBody(dnr.startWarm(job.bbox)),{"Cache-Control":"no-store"});}
     catch(error){throw new HttpError(400,String(error.message||error));}
   },

@@ -31,8 +31,16 @@ function init(pool,dnrStore){ terrainPool=pool; dnr=dnrStore }
    (usgs.coverageFinal). Answers cached without that mark may come from the
    incomplete index of October 2026, so they are asked again; a genuine gap
    costs one in-memory index lookup and is then stored with the mark. */
-const NONE_FINAL = Object.freeze({final:true});
-const staleNone = hit => !!hit && hit.status===204 && !(hit.sourceMeta && hit.sourceMeta.final);
+const noneFinal = () => ({final:true,scope:usgs.coverageScope()});
+const staleNone = hit => !!hit && hit.status===204 && !(hit.sourceMeta?.final && hit.sourceMeta.scope===usgs.coverageScope());
+// Refresh changed federal bodies too: partial positives can hide newly added
+// pixels. Retain their bytes for an uncached offline fallback if refresh fails.
+const staleFederal = hit => staleNone(hit)||!!hit&&hit.status===200&&hit.sourceMeta?.scope!==usgs.coverageScope();
+const federalMeta = meta => ({coverage:meta?.coverage,groundRes:meta?.groundRes,sources:meta?.sources,...(meta?.final?{final:true}:{}),scope:usgs.coverageScope()});
+const federalHeaders = meta => ({...(meta?.coverage!=null?{"X-Coverage":String(meta.coverage)}:{}),
+  ...(meta?.groundRes!=null?{"X-Ground-Res":String(meta.groundRes)}:{}),
+  "X-USGS-Sources":encodeURIComponent(JSON.stringify(meta?.sources||[]))});
+
 
 /* Analysis frames are cheap to regenerate and tied to the exact uploaded DEM,
    so keep only a short, bounded memory LRU. They do not belong in the long-
@@ -86,11 +94,11 @@ function warmNeighbourTiles(style,z,x,y){
     if(nx<0||ny<0||nx>=limit||ny>=limit) continue;
     const nk=key(`${TERRAIN_RENDER_VERSION}:${style}:${tz}/${nx}/${ny}`);
     const cached=cacheGet(nk,TTL_TILE);
-    if(warmRingSeen.has(nk)||cached&&!staleNone(cached)) continue;
+    if(warmRingSeen.has(nk)||cached&&!staleFederal(cached)) continue;
     warmRingSeen.add(nk); warmRingStarted++;
     terrainTask(`raw-terrain:${nk}`,"raw-terrain",{style,z:tz,x:nx,y:ny,size:256},{priority:-10,timeoutMs:30000})
       .then(out=>{ if(out&&out.provisional) return;
-        if(out) cachePut(nk,200,"image/png",out.png); else cachePut(nk,204,"image/png",Buffer.alloc(0),NONE_FINAL) })
+        if(out) cachePut(nk,200,"image/png",out.png,federalMeta(out.meta)); else cachePut(nk,204,"image/png",Buffer.alloc(0),noneFinal()) })
       .catch(()=>{})
       .finally(()=>warmRingSeen.delete(nk));
   }
@@ -308,9 +316,9 @@ const routes={
        a cold render, and a steady pan walks off the warm edge (measured:
        first pan a 4 ms hit, the next still a 0.9 s miss). Warming here makes
        the ring travel with the user. */
-    if(hit&&!staleNone(hit)){ warmNeighbourTiles(style,z,x,y); return hit.status===204
+    if(hit&&!staleFederal(hit)){ warmNeighbourTiles(style,z,x,y); return hit.status===204
       ? send(res,200,"image/png",TRANSPARENT,{"X-Cache":"hit","X-Coverage":"none","Cache-Control":"public, max-age=604800, immutable"})
-      : send(res,hit.status,hit.type,hit.body,{"X-Cache":"hit","Cache-Control":"public, max-age=604800, immutable"}) }
+      : send(res,hit.status,hit.type,hit.body,{"X-Cache":"hit",...federalHeaders(hit.sourceMeta),"Cache-Control":"public, max-age=604800, immutable"}) }
     let out=null;
     /* Several Leaflet tiles can ask for the same raw-COG render while a
        pan/zoom is settling. Share that expensive range-read/PNG job. */
@@ -318,19 +326,20 @@ const routes={
         {priority:40,timeoutMs:30000},signal) }
     catch(e){
       if(terrainAborted(e)) return;
+      if(hit?.status===200)return send(res,200,hit.type,hit.body,{...federalHeaders(hit.sourceMeta),"X-Cache":"saved-fallback","X-CSP-Provisional":"1","Cache-Control":"no-store"});
       return send(res,503,"image/png",TRANSPARENT,{"X-Cache":"BUSY","Cache-Control":"no-store","Retry-After":"2"});
     }
     if(out&&out.provisional)        // coverage unknown: the 1 m index is incomplete
       return send(res,503,"image/png",TRANSPARENT,{"X-Coverage":"unknown","Cache-Control":"no-store","Retry-After":"10"});
     if(!out){                       // no federal coverage here — caller falls back
-      cachePut(ck,204,"image/png",Buffer.alloc(0),NONE_FINAL);
+      cachePut(ck,204,"image/png",Buffer.alloc(0),noneFinal());
       return send(res,200,"image/png",TRANSPARENT,{"X-Coverage":"none","Cache-Control":"public, max-age=604800, immutable"});
     }
-    cachePut(ck,200,"image/png",out.png);
+    cachePut(ck,200,"image/png",out.png,federalMeta(out.meta));
     warmNeighbourTiles(style,z,x,y);   // hide the next pan's cold start
     return send(res,200,"image/png",out.png,
       {"X-Coverage":String(out.meta.coverage), "X-Ground-Res":String(out.meta.groundRes),
-       "X-Sources":out.meta.sources.map(s2=>s2.project+"@"+s2.res+"m").join(","), "X-Cache":"miss",
+       ...federalHeaders(out.meta), "X-Sources":out.meta.sources.map(s2=>s2.project+"@"+s2.res+"m").join(","), "X-Cache":"miss",
        "Cache-Control":"public, max-age=604800, immutable"});
   },
   /* Cache the existing global Terrarium source verbatim, once for every
@@ -400,9 +409,9 @@ const routes={
     // an incomplete 1 m index said "no coverage" (October 2026).
     const ck=key(`elevation-v5:${z}/${x}/${y}`);
     const hit=cacheGet(ck,TTL_TILE);
-    if(hit) return hit.status===204
+    if(hit&&(z<13||!staleFederal(hit))) return hit.status===204
       ? send(res,200,"image/png",SEA_LEVEL_DEM,{"X-Cache":"hit","X-Coverage":"none","X-Elevation-Source":"none","Cache-Control":"public, max-age=604800, immutable"})
-      : send(res,hit.status,hit.type,hit.body,{"X-Cache":"hit","X-Elevation-Source":"cached","Cache-Control":"public, max-age=604800, immutable"});
+      : send(res,hit.status,hit.type,hit.body,{"X-Cache":"hit",...federalHeaders(hit.sourceMeta),"X-Elevation-Source":"cached","Cache-Control":"public, max-age=604800, immutable"});
     /* Saved areas pin these exact 256 px Terrarium worker products, not
        the underlying COG ranges. Reuse one only where it is exactly what
        this route would compute: the raw 1 m tile, or the national DEM where
@@ -411,15 +420,15 @@ const routes={
        the 2D layer caches national almost everywhere, and caching it here
        would serve coarser ground for 90 days. */
     let rawHit=z>=13?cacheGet(key(`usgselev:${z}/${x}/${y}`),TTL_TILE):null;
-    if(staleNone(rawHit)) rawHit=null;
+    if(staleFederal(rawHit)) rawHit=null;
     const nationalKey=key(`elevation-national-v1:${z}/${x}/${y}`);
     const exactNational=z<13||(rawHit&&rawHit.status===204);
     const saved=rawHit&&rawHit.status===200?rawHit:exactNational?cacheGet(nationalKey,TTL_TILE):null;
     if(saved&&(saved.status===200||saved.status===204)){
-      cachePut(ck,saved.status,saved.type,saved.body,saved.sourceMeta);
+      cachePut(ck,saved.status,saved.type,saved.body,federalMeta(saved.sourceMeta));
       if(saved.status===204)return send(res,200,"image/png",SEA_LEVEL_DEM,
         {"X-Cache":"hit","X-Coverage":"none","X-Elevation-Source":"none","Cache-Control":"public, max-age=604800, immutable"});
-      const headers={"X-Cache":"hit","X-Elevation-Source":saved===rawHit?"usgs-1m":"3dep","Cache-Control":"public, max-age=604800, immutable"};
+      const headers={"X-Cache":"hit",...federalHeaders(saved.sourceMeta),"X-Elevation-Source":saved===rawHit?"usgs-1m":"3dep","Cache-Control":"public, max-age=604800, immutable"};
       // Older saved bodies have no coverage metadata, just like older hits.
       if(saved.sourceMeta&&saved.sourceMeta.coverage!=null)headers["X-Coverage"]=String(saved.sourceMeta.coverage);
       return send(res,saved.status,saved.type,saved.body,headers);
@@ -447,6 +456,9 @@ const routes={
          evicted: the saved national DEM is the best ground available. Serve
          it, but never cache it under this key, so 1 m lidar is fetched again
          once the network returns. */
+      const oldRaw=z>=13?cacheGet(key(`usgselev:${z}/${x}/${y}`),TTL_TILE):null;
+      if(oldRaw?.status===200)return send(res,200,oldRaw.type,oldRaw.body,{...federalHeaders(oldRaw.sourceMeta),
+        "X-Cache":"saved-fallback","X-Elevation-Source":"usgs-1m","Cache-Control":"no-store"});
       const fallback=z>=13?cacheGet(nationalKey,TTL_TILE):null;
       if(fallback&&fallback.status===204)return send(res,200,"image/png",SEA_LEVEL_DEM,
         {"X-Cache":"saved-fallback","X-Coverage":"none","X-Elevation-Source":"none","Cache-Control":"no-store"});
@@ -461,12 +473,12 @@ const routes={
        national stand-in now, but never store it as this tile's answer. */
     const keep=rawFailed?"no-store":"public, max-age=604800, immutable";
     if(!out){
-      if(!rawFailed) cachePut(ck,204,"image/png",Buffer.alloc(0));
+      if(!rawFailed) cachePut(ck,204,"image/png",Buffer.alloc(0),noneFinal());
       // Sea level, not transparent: this tile is terrain geometry.
       return send(res,200,"image/png",SEA_LEVEL_DEM,{"X-Coverage":"none","X-Elevation-Source":"none","Cache-Control":keep});
     }
-    if(!rawFailed) cachePut(ck,200,"image/png",out.png);
-    return send(res,200,"image/png",out.png,{"X-Coverage":String(out.coverage),"X-Elevation-Source":out.source,
+    if(!rawFailed) cachePut(ck,200,"image/png",out.png,federalMeta(out));
+    return send(res,200,"image/png",out.png,{...federalHeaders(out),"X-Coverage":String(out.coverage),"X-Elevation-Source":out.source,
       "X-Cache":rawFailed?"raw-failed":"miss","Cache-Control":keep});
   },
   "/api/usgs/fabric":fabric,
@@ -521,25 +533,26 @@ const routes={
       return send(res,400,"text/plain",Buffer.from("bad tile coordinates"));
     const ck=key(`usgselev:${z}/${x}/${y}`);
     const hit=cacheGet(ck, TTL_TILE);
-    if(hit&&!staleNone(hit)) return hit.status===204
+    if(hit&&!staleFederal(hit)) return hit.status===204
       ? send(res,200,"image/png",TRANSPARENT,{"X-Cache":"hit","X-Coverage":"none","Cache-Control":"public, max-age=604800, immutable"})
-      : send(res,hit.status,hit.type,hit.body,{"X-Cache":"hit","Cache-Control":"public, max-age=604800, immutable"});
+      : send(res,hit.status,hit.type,hit.body,{"X-Cache":"hit",...federalHeaders(hit.sourceMeta),"Cache-Control":"public, max-age=604800, immutable"});
     let out=null;
     try{ out=await terrainTask(`raw-elevation:${ck}`,"raw-elevation",{z,x,y,size:256},
         {priority:55,timeoutMs:30000},signal) }
     catch(e){
       if(terrainAborted(e)) return;
+      if(hit?.status===200)return send(res,200,hit.type,hit.body,{...federalHeaders(hit.sourceMeta),"X-Cache":"saved-fallback","X-CSP-Provisional":"1","Cache-Control":"no-store"});
       return send(res,503,"image/png",TRANSPARENT,{"X-Cache":"BUSY","Cache-Control":"no-store","Retry-After":"2"});
     }
     if(out&&out.provisional)
       return send(res,503,"image/png",TRANSPARENT,{"X-Coverage":"unknown","Cache-Control":"no-store","Retry-After":"10"});
-    if(!out){ cachePut(ck,204,"image/png",Buffer.alloc(0),NONE_FINAL);
+    if(!out){ cachePut(ck,204,"image/png",Buffer.alloc(0),noneFinal());
               return send(res,200,"image/png",TRANSPARENT,{"X-Coverage":"none","Cache-Control":"public, max-age=604800, immutable"}) }
-    cachePut(ck,200,"image/png",out.png,{coverage:out.coverage});
+    cachePut(ck,200,"image/png",out.png,federalMeta(out));
     /* Mirror the tile route: say which project and what ground resolution were
        actually used, so the client can size its zoom ceiling to the source
        rather than to a fixed z. */
-    return send(res,200,"image/png",out.png,{"X-Coverage":String(out.coverage),
+    return send(res,200,"image/png",out.png,{...federalHeaders(out),"X-Coverage":String(out.coverage),
                                                 "X-Ground-Res":out.groundRes==null?"":String(out.groundRes),
                                                 "X-Sources":(out.sources||[]).map(s2=>`${s2.project}@${s2.res}m`).join(","),
                                                 "X-Cache":"miss",

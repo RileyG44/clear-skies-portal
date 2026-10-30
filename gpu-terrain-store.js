@@ -131,7 +131,7 @@
     for(let i=0;i<grid.length;i++){const v=grid[i];if(v>-20000&&v<Infinity)validCount++;else if(v===v)normalized=true;}
     if(normalized){grid=grid.slice();for(let i=0;i<grid.length;i++)if(!valid(grid[i]))grid[i]=NaN;}
     // validCount: finite samples above -20000; every other sample is NaN.
-    return {key,url:job.url,cacheKey:source.cacheKey,sourceId:source.id,rank:source.rank,label:source.label,z:c.z,x:c.x,y:c.y,width,height,grid,
+    return {key,url:job.url,cacheKey:source.cacheKey,sourceId:source.id,rank:source.rank,label:source.label+(data.surveys?.some(s=>s.product==="Original Product Resolution DEM")?" + Elwha River OPR (1 m)":""),z:c.z,x:c.x,y:c.y,width,height,grid,
       sampleMeters:typeof source.sampleMeters==='function'?source.sampleMeters(c):source.sampleMeters??resolution(c,width),
       surveys:data.surveys||[],revision:++this._revision,validCount};
   };
@@ -392,6 +392,12 @@
     }
     return {ranks,labels:[...labels],surveys:[...surveys.values()],sampleMeters};
   };
+  // Numeric pixel winners only. Published hillshade is never in this store.
+  ElevationTileStore.prototype.detailGaps=function(displayTiles){
+    const tiles=displayTiles||this._displays,status=this.settled(tiles);
+    if(!tiles.length||status.refining||status.failed)return null;
+    return tiles.filter(d=>{const s=this._summary(d);return (s.ranks[3]||0)+(s.ranks[5]||0)<s.total;}).map(d=>({...d}));
+  };
   ElevationTileStore.prototype.gridForView=function(request){
     const b=request.bounds;
     const west=b.getWest?b.getWest():b.west??b[0],south=b.getSouth?b.getSouth():b.south??b[1];
@@ -422,18 +428,19 @@
     const nativeW=Math.max(1,ix1-ix0),nativeH=Math.max(1,iy1-iy0),max=Math.max(1,Math.floor(request.maxSide||640));
     if(nativeW*nativeH>(this.options.maxResearchSamples??16777216))throw new Error('Research view has too many native samples; zoom in before analysis.');
     const factor=Math.max(1,Math.ceil(Math.max(nativeW,nativeH)/max)),width=Math.ceil(nativeW/factor),height=Math.ceil(nativeH/factor);
+    const surveys=new Map();
     const grid=new Float32Array(width*height),sums=new Float64Array(grid.length),counts=new Uint32Array(grid.length),labels=new Set();grid.fill(NaN);
     const hitAt=this._sampler(this._sources,displayZ);
     for(let y=0;y<nativeH;y++)for(let x=0;x<nativeW;x++){
       const hit=hitAt((ix0+x+.5)/density,(iy0+y+.5)/density);
-      if(hit){const i=Math.floor(y/factor)*width+Math.floor(x/factor);sums[i]+=hit.value;counts[i]++;labels.add(hit.label);}
+      if(hit){const i=Math.floor(y/factor)*width+Math.floor(x/factor);sums[i]+=hit.value;counts[i]++;labels.add(hit.label);for(const survey of hit.record.surveys)surveys.set(JSON.stringify(survey),survey);}
     }
     for(let i=0;i<grid.length;i++)if(counts[i])grid[i]=sums[i]/counts[i];
     if(!labels.size)throw new Error('No elevation pixels are ready for this view.');
     const outputBounds=[[latitude((iy0+height*factor)/density),ix0/density*360-180],[latitude(iy0/density),(ix0+width*factor)/density*360-180]];
     return {grid,width,height,bounds:outputBounds,z:Math.log2(density/256),factor,
       resolution:EARTH*Math.cos((north+south)/2*Math.PI/180)/density*factor,
-      provenance:[...labels],provisional:this._pending.size>0};
+      provenance:[...labels],surveys:[...surveys.values()],provisional:this._pending.size>0};
   };
   ElevationTileStore.prototype.clear=function(){
     clearTimeout(this._retryTimer);this._retryTimer=0;

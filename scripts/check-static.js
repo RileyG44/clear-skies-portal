@@ -777,7 +777,7 @@ for(const file of engineFiles)
 assert(server.includes('if(z>=13) try{ raw=await terrainTask'),"raw lidar elevation must be reserved for useful close zooms");
 assert(server.includes('const TERRAIN_RENDER_VERSION = "terrain-v3"')&&index.includes("?rv=terrain-v3&${RAW_COVERAGE_QUERY}`"),
        "corrected terrain renders must use a new server-cache namespace");
-assert(read("usgs.js").includes("const INDEX_VERSION = 2;")&&index.includes('const RAW_COVERAGE_QUERY="ix=3";'),
+assert(read("usgs.js").includes("const INDEX_VERSION = 2;")&&index.includes('const RAW_COVERAGE_QUERY="ix=4";'),
        "a corrected 1 m index must also bust the browser's immutable raw-derived tiles");
 /* ix=3: an index with failed listings answered "no 1 m" and was kept. */
 assert(read("usgs.js").includes("function repairIndexSoon()")&&server.includes("out&&out.provisional")&&server.includes("staleNone(hit)"),

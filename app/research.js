@@ -73,8 +73,9 @@ function researchElevationGrid(layer){
   const bounds=L.latLngBounds([lat(maxY+1),lon(minX)],[lat(minY),lon(maxX+1)]);
   const resolution=156543.03392*Math.cos(map.getCenter().lat*Math.PI/180)/Math.pow(2,z)*factor;
   const provenance=[...new Set(tiles.map(tile=>layer._store.get(`${tile.z}/${tile.x}/${tile.y}`)?.cv.dataset.cspElevationSource||"Unknown source"))];
+  const surveys=[...new Map(tiles.flatMap(tile=>Object.entries(layer._store.get(`${tile.z}/${tile.x}/${tile.y}`)?.cv._cspSurveySources||{}).filter(([rank])=>(layer._store.get(`${tile.z}/${tile.x}/${tile.y}`)?.cv._cspNumericCounts?.[rank]||0)>0).flatMap(([,s])=>s)).map(s=>[JSON.stringify(s),s])).values()];
   const provisional=tiles.some(tile=>layer._store.get(`${tile.z}/${tile.x}/${tile.y}`)?.cv._cspRefining);
-  return {grid,width,height,resolution,bounds,z,factor,provenance,provisional};
+  return {grid,width,height,resolution,bounds,z,factor,provenance,surveys,provisional};
 }
 function researchQuantile(data,q){
   const values=[],step=Math.max(1,Math.floor(data.length/60000));

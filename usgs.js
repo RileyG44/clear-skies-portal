@@ -22,6 +22,7 @@ function setCacheWriteGate(gate){cacheWriteGate=gate}
 function onCacheWrite(callback){cacheWrite=callback}
 
 const S3_HOST = "prd-tnm.s3.amazonaws.com";
+const ELWHA_OPR = require("./usgs-elwha-opr.json");
 const S3_BASE = "StagedProducts/Elevation/1m/Projects/";
 /* Three live filename conventions: USGS_1M_<zone>_x..y.., USGS_1m_x..y..
    and USGS_one_meter_x..y... Guessing between them yields a false negative, so
@@ -35,11 +36,11 @@ const INDEX_TTL = 30*24*3600*1000;      // the archive changes on a yearly rhyth
    boundary: ~800 Washington tiles east of the Cascades, served as national 3DEP. */
 const INDEX_VERSION = 2;
 /* Which projects to index. The portal's project-specific source is WA DNR, so
-   raw 1 m DEM discovery defaults to Washington too. This avoids nearly 1,000
+   raw 1 m discovery includes Washington and bordering OR/ID projects. This avoids nearly 1,000
    S3 catalogue round-trips on a fresh install. National rendered 3DEP remains
    available everywhere; set CSP_USGS_STATES=ALL (or a comma-separated regional
-   list such as WA_,OR_,ID_) when raw 1 m coverage outside Washington is needed. */
-const SCOPE = (process.env.CSP_USGS_STATES || "WA_").trim();
+   list such as WA_) to constrain raw coverage discovery. */
+const SCOPE = (process.env.CSP_USGS_STATES || "WA_,OR_,ID_,Elwha_").trim();
 const INDEX_CONCURRENCY = 12;           // S3 listing is latency-bound, not rate-limited
 const CELL_M    = 10000;                // 10 km UTM cells
 const MAX_S3_BODY = 32*1024*1024;
@@ -208,6 +209,10 @@ async function buildIndexNow(states, force){
   for(const st of (states||scopeList())) names.push(...await listProjects(st));
   const uniq=[...new Set(names)].filter(Boolean);
   const failedProjects=await listInto(out, uniq);
+  // Even a forced refresh must retain useful projects if their listing fails.
+  let previous=INDEX;
+  if(!previous){try{previous=JSON.parse(fs.readFileSync(f,"utf8"))}catch{}}
+  if(previous?.v===INDEX_VERSION)for(const p of failedProjects)if(previous.projects[p])out.projects[p]=previous.projects[p];
   out.failed=failedProjects.length; out.failedProjects=failedProjects;
   INDEX=out;
   try{ cacheBudget.writeJsonAtomic(f,out) }catch(e){}   // a cache: rebuilt if missing
@@ -234,7 +239,9 @@ async function listInto(out, names){
    whole scope) in the background every INDEX_RETRY until it is complete. */
 const INDEX_RETRY = 10*60*1000;
 let indexRepairAt = 0, indexRepairing = null;
-const indexComplete = idx => !!idx && !(idx.failed>0);
+const scopeName = () => scopeList().join(",")||"ALL";
+const coversScope = idx => idx?.scope==="ALL" || scopeList().every(s=>(idx?.scope||"").split(",").includes(s));
+const indexComplete = idx => !!idx && !(idx.failed>0) && coversScope(idx);
 function repairIndexSoon(){
   if(indexComplete(INDEX) || indexRepairing || Date.now()-indexRepairAt < INDEX_RETRY) return;
   repairIndexNow();
@@ -251,18 +258,20 @@ async function repairIndex(){
   /* Several terrain workers share this file: adopt another's repair. */
   try{
     const disk=JSON.parse(fs.readFileSync(f,"utf8"));
-    if(disk.v===INDEX_VERSION && disk.scope===base.scope && indexComplete(disk)){ INDEX=disk; return }
+    if(disk.v===INDEX_VERSION && indexComplete(disk)){ INDEX=disk; return }
   }catch(e){}
   const out={...base, projects:{...base.projects}};
-  let names=Array.isArray(base.failedProjects)?base.failedProjects:null;
-  if(!names){
-    names=[];
-    const scope=base.scope==="ALL"?[""]:base.scope.split(",");
-    for(const st of scope) names.push(...await listProjects(st));
+  let names=Array.isArray(base.failedProjects)?base.failedProjects.slice():null;
+  if(!names || !coversScope(base)){
+    const scopes=names?scopeList().filter(s=>!(base.scope||"").split(",").includes(s)):scopeList();
+    names=names||[];
+    // Retain every serving project if any discovery request fails. The old
+    // scope remains provisional until all added prefixes were enumerated.
+    for(const st of scopes) names.push(...await listProjects(st));
     names=[...new Set(names)].filter(p=>p && !out.projects[p]);
   }
   const failedProjects=await listInto(out, names);
-  out.failed=failedProjects.length; out.failedProjects=failedProjects;
+  out.failed=failedProjects.length; out.failedProjects=failedProjects;out.scope=scopeName();
   if(INDEX!==base) return;                // replaced meanwhile (forced rebuild)
   INDEX=out;
   try{ cacheBudget.writeJsonAtomic(f,out) }catch(e){}
@@ -274,6 +283,8 @@ async function getIndex(){
 /* Whether a "no 1 m coverage" answer is final. While listings are missing
    it is provisional and must not be cached as this tile's answer. */
 function coverageFinal(){ return indexComplete(INDEX) }
+// A final empty under another discovery scope must be evaluated again.
+function coverageScope(){return scopeName()+"|elwha-opr-v1"}
 
 /* A project's flight year, for preferring newer data. The name is the only
    place it appears; several carry two (2019_D20 = flown 2019, delivered 2020). */
@@ -574,6 +585,21 @@ function utmGrid(b,n,step,zone,K=LATTICE_STEP){
   return {E,N};
 }
 
+/* CR-014: only verified numeric Elwha OPR rasters, actual header bounds.
+   Stable survey ID retains 2014; this is not a claim about every capture date. */
+function elwhaCandidates(zone,bounds){
+  if(zone!==10)return [];
+  const [w,s,e,n]=bounds;
+  return ELWHA_OPR.files.filter(f=>f.bounds[0]<e&&f.bounds[2]>w&&f.bounds[1]<n&&f.bounds[3]>s);
+}
+function validateElwhaHeader(file,t){
+  const g=t.geo,L=t.levels[0],b=file.bounds;
+  if(g.epsg!==26910||g.scale[0]!==1||g.scale[1]!==1||g.tie[0]!==0||g.tie[1]!==0||
+     g.tie[3]!==b[0]||g.tie[4]!==b[3]||L.w!==file.width||L.h!==file.height||
+     b[2]!==b[0]+L.w||b[1]!==b[3]-L.h||L.spp!==1||L.sf!==3||L.bps!==32)
+    throw new Error("Incompatible Elwha OPR elevation header");
+}
+
 /* Sample a (w+2)x(h+2) elevation grid covering one slippy tile, with a one
    pixel skirt so the hillshade kernel has neighbours at the tile edge — this
    is what stops seams appearing between adjacent tiles. */
@@ -612,7 +638,8 @@ async function sampleGrid(z,x,y,size,options={}){
     const cands=await cellCandidates(idx, cell, zone);
     if(cands.length) srcs.push(cands);              // fallbacks kept, best first
   }
-  if(!srcs.length) return null;
+  const oprFiles=options.includeOPR===false?[]:elwhaCandidates(zone,[minE,minN,maxE,maxN]);
+  if(!srcs.length&&!oprFiles.length) return null;
 
   /* Choose the finest overview that is still no COARSER than what is being
      asked for. Picking a coarser level upsamples, and the floor() quantisation
@@ -651,7 +678,17 @@ async function sampleGrid(z,x,y,size,options={}){
                    ox:t.geo.tie[3], oy:t.geo.tie[4], nodata:t.geo.nodata, tiles:new Map()});
     }
   }
-  if(!opened.length) return null;
+  // This bounded OPR survey fills only holes after every standard candidate.
+  for(const s of oprFiles){
+    try{
+      const t=await openCog(s.key,s.size);validateElwhaHeader(s,t);
+      let lvl=0;
+      for(let i=0;i<t.levels.length;i++)if(Math.pow(2,i)<=groundRes)lvl=i;else break;
+      opened.push({s:{...s,project:ELWHA_OPR.survey,opr:true},key:s.key,t,lvl,res:Math.pow(2,lvl),
+        ox:t.geo.tie[3],oy:t.geo.tie[4],nodata:t.geo.nodata,tiles:new Map()});
+    }catch(error){failed++}
+  }
+  if(!opened.length){if(failed)throw new Error(`1 m source read failed (${failed})`);return null}
 
   /* Prefetch every COG tile the window touches, in parallel, then sample
      synchronously. Per-pixel awaits would serialise ~66k round trips. */
@@ -684,7 +721,7 @@ async function sampleGrid(z,x,y,size,options={}){
     const a=o.blocks[((py/L.th)|0)*o.cols + ((px/L.tw)|0)];
     if(!a) return NaN;
     const v=a[(py%L.th)*L.tw + (px%L.tw)];
-    if(v===undefined || v<-1e5 || (o.nodata!=null && v===o.nodata)) return NaN;
+    if(!Number.isFinite(v) || v<-1e5 || (o.nodata!=null && v===o.nodata)) return NaN;
     return v;
   };
   const bilinear=(o,e,nn)=>{
@@ -706,18 +743,22 @@ async function sampleGrid(z,x,y,size,options={}){
     for(const o of opened){
       const v=bilinear(o,E[k],N[k]);
       if(v!==v) continue;
-      grid[k]=v; filled++;
+      grid[k]=v; filled++; o.contributed=(o.contributed||0)+1;
       break;
     }
   }
   /* A failed read is not missing coverage. Returning the holes would be cached
      as fact (a 90-day "no 1 m here", or national ground standing in for lidar),
      so fail the tile instead and let the caller retry. */
-  if(failed && filled<n*n) throw new Error(`1 m source read failed (${failed})`);
+  if(failed) throw new Error(`1 m source read failed (${failed})`);
   if(!filled) return null;
   return {grid, n, size, groundRes, coverage:filled/(n*n),
-          sources:opened.filter(o=>o.tiles.size).map(o=>({project:o.s.project, cell:o.s.cell,
-                    key:o.key, level:o.lvl, res:+o.res.toFixed(2), cogTiles:o.tiles.size}))};
+          sources:opened.filter(o=>o.contributed).map(o=>({project:o.s.project, cell:o.s.cell,
+                    key:o.key, level:o.lvl, res:+o.res.toFixed(2), nativeMeters:o.t.geo.scale[0], cogTiles:o.tiles.size,
+                    ...(o.s.opr?{product:ELWHA_OPR.product,horizontalDatum:ELWHA_OPR.horizontalDatum,
+                      verticalDatum:ELWHA_OPR.verticalDatum,verticalUnits:ELWHA_OPR.verticalUnits,
+                      acquisition:ELWHA_OPR.acquisition,projectionLimitation:ELWHA_OPR.projectionLimitation,
+                      metadataURL:ELWHA_OPR.metadataURL,standardProductLimitation:ELWHA_OPR.standardProductLimitation}:{})}))};
 }
 
 /* Tiles are styled by terrain-raster.js, the renderer the browser and the 3D
@@ -738,10 +779,13 @@ function render(style,S){
    to national 3DEP. Headers and blocks are memoised, so the retry pays only
    for the extra sources. */
 async function sampleBest(z,x,y,size,sample=sampleGrid){
-  const first=await sample(z,x,y,size,{maxSources:1});
+  const first=await sample(z,x,y,size,{maxSources:1,includeOPR:false});
   if(first && first.coverage>=1) return first;
-  const wider=await sample(z,x,y,size,{maxSources:3});
-  return wider && (!first || wider.coverage>first.coverage) ? wider : first;
+  const wider=await sample(z,x,y,size,{maxSources:3,includeOPR:false});
+  const standard=wider && (!first || wider.coverage>first.coverage) ? wider : first;
+  if(standard?.coverage>=1)return standard;
+  const opr=await sample(z,x,y,size,{maxSources:3,includeOPR:true});
+  return opr && (!standard||opr.coverage>standard.coverage)?opr:standard;
 }
 
 /* Callers cache null as "no federal coverage"; an index with failed listings
@@ -750,6 +794,7 @@ const PROVISIONAL_NONE=Object.freeze({provisional:true});
 async function elevTile(z,x,y,size){
   const S=await sampleBest(z,x,y,size||256);
   if(!S) return coverageFinal()?null:PROVISIONAL_NONE;
+  if(S.coverage<1&&!coverageFinal())return PROVISIONAL_NONE;
   const {grid,n}=S; const w=size||256;
   const out=Buffer.alloc(w*w*4);
   for(let yy=0;yy<w;yy++) for(let xx=0;xx<w;xx++){
@@ -773,6 +818,7 @@ async function elevTile(z,x,y,size){
 async function renderTile(style,z,x,y,size){
   const S=await sampleBest(z,x,y,size||256);
   if(!S) return coverageFinal()?null:PROVISIONAL_NONE;
+  if(S.coverage<1&&!coverageFinal())return PROVISIONAL_NONE;
   return {png:render(style,S), meta:{coverage:+S.coverage.toFixed(3), groundRes:+S.groundRes.toFixed(2),
                                      sources:S.sources}};
 }
@@ -1023,8 +1069,8 @@ async function fabric(bbox, opt){
   };
 }
 
-module.exports = Object.assign(module.exports, { init, buildIndex, getIndex, coverageFinal, repairIndex:repairIndexNow, findCells, cellCandidates, addTileKey, projectCell, sampleBest, cellOf, cellBounds, projectYear, scopeList, fabric, sampleUTMGrid, elevTile,
-                   openCog, cogTile, fetchRange, renderTile, sampleGrid, utmGrid, encodePNG,
+module.exports = Object.assign(module.exports, { init, buildIndex, getIndex, coverageFinal, coverageScope, repairIndex:repairIndexNow, findCells, cellCandidates, addTileKey, projectCell, sampleBest, cellOf, cellBounds, projectYear, scopeList, fabric, sampleUTMGrid, elevTile,
+                   openCog, cogTile, fetchRange, renderTile, sampleGrid, utmGrid, encodePNG, elwhaCandidates, validateElwhaHeader,
                    checkFresh, tileKey, tileUrl, s3head, S3_BASE });
 
 module.exports.onCacheWrite=onCacheWrite;

@@ -1,0 +1,5506 @@
+{
+  "version": 1,
+  "survey": "Elwha_River_WA_LiDAR OPR 2014",
+  "product": "Original Product Resolution DEM",
+  "year": 2014,
+  "horizontalDatum": "NAD83(2011) per metadata/WESM EPSG:6339; TIFF EPSG:26910",
+  "verticalDatum": "NAVD88 / GEOID12A",
+  "verticalUnits": "meters",
+  "nativeMeters": 1,
+  "workunit": 67261,
+  "standardProductLimitation": "WESM: does not meet; breaklines not delivered",
+  "metadataURL": "https://prd-tnm.s3.amazonaws.com/StagedProducts/Elevation/metadata/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/best_use_xml/USGS_ElwhaRiver_Lidar_2014w_Modification_DEM_IMG.xml",
+  "generated": "2026-10-29",
+  "files": [
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10TDU530122.tif",
+      "size": 566412,
+      "bounds": [
+        453264.0,
+        5312435.0,
+        453750.0,
+        5313000.0
+      ],
+      "width": 486,
+      "height": 565,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10TDU530130.tif",
+      "size": 952096,
+      "bounds": [
+        453278.0,
+        5313000.0,
+        453750.0,
+        5313750.0
+      ],
+      "width": 472,
+      "height": 750,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10TDU530137.tif",
+      "size": 840171,
+      "bounds": [
+        453366.0,
+        5313750.0,
+        453750.0,
+        5314500.0
+      ],
+      "width": 384,
+      "height": 750,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10TDU530145.tif",
+      "size": 551487,
+      "bounds": [
+        453454.0,
+        5314500.0,
+        453750.0,
+        5315250.0
+      ],
+      "width": 296,
+      "height": 750,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10TDU530152.tif",
+      "size": 378921,
+      "bounds": [
+        453542.0,
+        5315250.0,
+        453750.0,
+        5316000.0
+      ],
+      "width": 208,
+      "height": 750,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10TDU530160.tif",
+      "size": 203674,
+      "bounds": [
+        453631.0,
+        5316000.0,
+        453750.0,
+        5316750.0
+      ],
+      "width": 119,
+      "height": 750,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10TDU537115.tif",
+      "size": 422390,
+      "bounds": [
+        453952.0,
+        5311749.0,
+        454500.0,
+        5312250.0
+      ],
+      "width": 548,
+      "height": 501,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10TDU537122.tif",
+      "size": 1750445,
+      "bounds": [
+        453750.0,
+        5312250.0,
+        454500.0,
+        5313000.0
+      ],
+      "width": 750,
+      "height": 750,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10TDU537130.tif",
+      "size": 1759956,
+      "bounds": [
+        453750.0,
+        5313000.0,
+        454500.0,
+        5313750.0
+      ],
+      "width": 750,
+      "height": 750,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10TDU537137.tif",
+      "size": 1817013,
+      "bounds": [
+        453750.0,
+        5313750.0,
+        454500.0,
+        5314500.0
+      ],
+      "width": 750,
+      "height": 750,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10TDU537145.tif",
+      "size": 1786019,
+      "bounds": [
+        453750.0,
+        5314500.0,
+        454500.0,
+        5315250.0
+      ],
+      "width": 750,
+      "height": 750,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10TDU537152.tif",
+      "size": 1790908,
+      "bounds": [
+        453750.0,
+        5315250.0,
+        454500.0,
+        5316000.0
+      ],
+      "width": 750,
+      "height": 750,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10TDU537160.tif",
+      "size": 1798361,
+      "bounds": [
+        453750.0,
+        5316000.0,
+        454500.0,
+        5316750.0
+      ],
+      "width": 750,
+      "height": 750,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10TDU545107.tif",
+      "size": 248321,
+      "bounds": [
+        454772.0,
+        5311063.0,
+        455250.0,
+        5311500.0
+      ],
+      "width": 478,
+      "height": 437,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10TDU545115.tif",
+      "size": 1589815,
+      "bounds": [
+        454500.0,
+        5311500.0,
+        455250.0,
+        5312250.0
+      ],
+      "width": 750,
+      "height": 750,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10TDU545122.tif",
+      "size": 1808954,
+      "bounds": [
+        454500.0,
+        5312250.0,
+        455250.0,
+        5313000.0
+      ],
+      "width": 750,
+      "height": 750,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10TDU545130.tif",
+      "size": 1769726,
+      "bounds": [
+        454500.0,
+        5313000.0,
+        455250.0,
+        5313750.0
+      ],
+      "width": 750,
+      "height": 750,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10TDU545137.tif",
+      "size": 1843805,
+      "bounds": [
+        454500.0,
+        5313750.0,
+        455250.0,
+        5314500.0
+      ],
+      "width": 750,
+      "height": 750,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10TDU545145.tif",
+      "size": 1712589,
+      "bounds": [
+        454500.0,
+        5314500.0,
+        455250.0,
+        5315250.0
+      ],
+      "width": 750,
+      "height": 750,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10TDU545152.tif",
+      "size": 1695394,
+      "bounds": [
+        454500.0,
+        5315250.0,
+        455250.0,
+        5316000.0
+      ],
+      "width": 750,
+      "height": 750,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10TDU545160.tif",
+      "size": 1732711,
+      "bounds": [
+        454500.0,
+        5316000.0,
+        455250.0,
+        5316750.0
+      ],
+      "width": 750,
+      "height": 750,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10TDU552100.tif",
+      "size": 169383,
+      "bounds": [
+        455593.0,
+        5310407.0,
+        456000.0,
+        5310750.0
+      ],
+      "width": 407,
+      "height": 343,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10TDU552107.tif",
+      "size": 1580637,
+      "bounds": [
+        455250.0,
+        5310750.0,
+        456000.0,
+        5311500.0
+      ],
+      "width": 750,
+      "height": 750,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10TDU552115.tif",
+      "size": 1779717,
+      "bounds": [
+        455250.0,
+        5311500.0,
+        456000.0,
+        5312250.0
+      ],
+      "width": 750,
+      "height": 750,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10TDU552122.tif",
+      "size": 1807879,
+      "bounds": [
+        455250.0,
+        5312250.0,
+        456000.0,
+        5313000.0
+      ],
+      "width": 750,
+      "height": 750,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10TDU552130.tif",
+      "size": 1857004,
+      "bounds": [
+        455250.0,
+        5313000.0,
+        456000.0,
+        5313750.0
+      ],
+      "width": 750,
+      "height": 750,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10TDU552137.tif",
+      "size": 1770012,
+      "bounds": [
+        455250.0,
+        5313750.0,
+        456000.0,
+        5314500.0
+      ],
+      "width": 750,
+      "height": 750,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10TDU552145.tif",
+      "size": 1798882,
+      "bounds": [
+        455250.0,
+        5314500.0,
+        456000.0,
+        5315250.0
+      ],
+      "width": 750,
+      "height": 750,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10TDU552152.tif",
+      "size": 1813386,
+      "bounds": [
+        455250.0,
+        5315250.0,
+        456000.0,
+        5316000.0
+      ],
+      "width": 750,
+      "height": 750,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10TDU552160.tif",
+      "size": 1838376,
+      "bounds": [
+        455250.0,
+        5316000.0,
+        456000.0,
+        5316750.0
+      ],
+      "width": 750,
+      "height": 750,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10TDU560092.tif",
+      "size": 32808,
+      "bounds": [
+        456567.0,
+        5309868.0,
+        456750.0,
+        5310000.0
+      ],
+      "width": 183,
+      "height": 132,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10TDU560100.tif",
+      "size": 1390912,
+      "bounds": [
+        456000.0,
+        5310000.0,
+        456750.0,
+        5310750.0
+      ],
+      "width": 750,
+      "height": 750,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10TDU560107.tif",
+      "size": 1776971,
+      "bounds": [
+        456000.0,
+        5310750.0,
+        456750.0,
+        5311500.0
+      ],
+      "width": 750,
+      "height": 750,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10TDU560115.tif",
+      "size": 1812175,
+      "bounds": [
+        456000.0,
+        5311500.0,
+        456750.0,
+        5312250.0
+      ],
+      "width": 750,
+      "height": 750,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10TDU560122.tif",
+      "size": 1874315,
+      "bounds": [
+        456000.0,
+        5312250.0,
+        456750.0,
+        5313000.0
+      ],
+      "width": 750,
+      "height": 750,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10TDU560130.tif",
+      "size": 1790895,
+      "bounds": [
+        456000.0,
+        5313000.0,
+        456750.0,
+        5313750.0
+      ],
+      "width": 750,
+      "height": 750,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10TDU560137.tif",
+      "size": 1747235,
+      "bounds": [
+        456000.0,
+        5313750.0,
+        456750.0,
+        5314500.0
+      ],
+      "width": 750,
+      "height": 750,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10TDU560145.tif",
+      "size": 1716654,
+      "bounds": [
+        456000.0,
+        5314500.0,
+        456750.0,
+        5315250.0
+      ],
+      "width": 750,
+      "height": 750,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10TDU560152.tif",
+      "size": 1602256,
+      "bounds": [
+        456000.0,
+        5315250.0,
+        456750.0,
+        5316000.0
+      ],
+      "width": 750,
+      "height": 750,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10TDU560160.tif",
+      "size": 1596501,
+      "bounds": [
+        456000.0,
+        5316000.0,
+        456750.0,
+        5316750.0
+      ],
+      "width": 750,
+      "height": 750,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10TDU567092.tif",
+      "size": 821084,
+      "bounds": [
+        456750.0,
+        5309490.0,
+        457500.0,
+        5310000.0
+      ],
+      "width": 750,
+      "height": 510,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10TDU567100.tif",
+      "size": 1760214,
+      "bounds": [
+        456750.0,
+        5310000.0,
+        457500.0,
+        5310750.0
+      ],
+      "width": 750,
+      "height": 750,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10TDU567107.tif",
+      "size": 1769841,
+      "bounds": [
+        456750.0,
+        5310750.0,
+        457500.0,
+        5311500.0
+      ],
+      "width": 750,
+      "height": 750,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10TDU567115.tif",
+      "size": 1859641,
+      "bounds": [
+        456750.0,
+        5311500.0,
+        457500.0,
+        5312250.0
+      ],
+      "width": 750,
+      "height": 750,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10TDU567122.tif",
+      "size": 1609273,
+      "bounds": [
+        456750.0,
+        5312250.0,
+        457500.0,
+        5313000.0
+      ],
+      "width": 750,
+      "height": 750,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10TDU567130.tif",
+      "size": 852592,
+      "bounds": [
+        456750.0,
+        5313000.0,
+        457246.0,
+        5313750.0
+      ],
+      "width": 496,
+      "height": 750,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10TDU567137.tif",
+      "size": 136271,
+      "bounds": [
+        456750.0,
+        5313750.0,
+        456948.0,
+        5314247.0
+      ],
+      "width": 198,
+      "height": 497,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10TDU567145.tif",
+      "size": 94447,
+      "bounds": [
+        456750.0,
+        5314647.0,
+        456826.0,
+        5315250.0
+      ],
+      "width": 76,
+      "height": 603,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10TDU567152.tif",
+      "size": 287161,
+      "bounds": [
+        456750.0,
+        5315250.0,
+        456919.0,
+        5316000.0
+      ],
+      "width": 169,
+      "height": 750,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10TDU567160.tif",
+      "size": 507156,
+      "bounds": [
+        456750.0,
+        5316000.0,
+        457013.0,
+        5316750.0
+      ],
+      "width": 263,
+      "height": 750,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10TDU575092.tif",
+      "size": 1414238,
+      "bounds": [
+        457500.0,
+        5309287.0,
+        458250.0,
+        5310000.0
+      ],
+      "width": 750,
+      "height": 713,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10TDU575100.tif",
+      "size": 1845039,
+      "bounds": [
+        457500.0,
+        5310000.0,
+        458250.0,
+        5310750.0
+      ],
+      "width": 750,
+      "height": 750,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10TDU575107.tif",
+      "size": 1722187,
+      "bounds": [
+        457500.0,
+        5310750.0,
+        458250.0,
+        5311500.0
+      ],
+      "width": 750,
+      "height": 750,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10TDU575115.tif",
+      "size": 1654005,
+      "bounds": [
+        457500.0,
+        5311500.0,
+        458250.0,
+        5312250.0
+      ],
+      "width": 750,
+      "height": 750,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10TDU575122.tif",
+      "size": 454155,
+      "bounds": [
+        457500.0,
+        5312250.0,
+        458146.0,
+        5312707.0
+      ],
+      "width": 646,
+      "height": 457,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10TDU582085.tif",
+      "size": 170587,
+      "bounds": [
+        458390.0,
+        5309085.0,
+        459000.0,
+        5309250.0
+      ],
+      "width": 610,
+      "height": 165,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10TDU582092.tif",
+      "size": 1817228,
+      "bounds": [
+        458250.0,
+        5309250.0,
+        459000.0,
+        5310000.0
+      ],
+      "width": 750,
+      "height": 750,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10TDU582100.tif",
+      "size": 1739329,
+      "bounds": [
+        458250.0,
+        5310000.0,
+        459000.0,
+        5310750.0
+      ],
+      "width": 750,
+      "height": 750,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10TDU582107.tif",
+      "size": 1686350,
+      "bounds": [
+        458250.0,
+        5310750.0,
+        459000.0,
+        5311500.0
+      ],
+      "width": 750,
+      "height": 750,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10TDU582115.tif",
+      "size": 1152329,
+      "bounds": [
+        458250.0,
+        5311500.0,
+        459000.0,
+        5312184.0
+      ],
+      "width": 750,
+      "height": 684,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10TDU590085.tif",
+      "size": 592156,
+      "bounds": [
+        459000.0,
+        5308883.0,
+        459750.0,
+        5309250.0
+      ],
+      "width": 750,
+      "height": 367,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10TDU590092.tif",
+      "size": 1753489,
+      "bounds": [
+        459000.0,
+        5309250.0,
+        459750.0,
+        5310000.0
+      ],
+      "width": 750,
+      "height": 750,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10TDU590100.tif",
+      "size": 1734209,
+      "bounds": [
+        459000.0,
+        5310000.0,
+        459750.0,
+        5310750.0
+      ],
+      "width": 750,
+      "height": 750,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10TDU590107.tif",
+      "size": 1759246,
+      "bounds": [
+        459000.0,
+        5310750.0,
+        459750.0,
+        5311500.0
+      ],
+      "width": 750,
+      "height": 750,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10TDU590115.tif",
+      "size": 491094,
+      "bounds": [
+        459000.0,
+        5311500.0,
+        459716.0,
+        5311914.0
+      ],
+      "width": 716,
+      "height": 414,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10TDU597085.tif",
+      "size": 243844,
+      "bounds": [
+        459750.0,
+        5308849.0,
+        460115.0,
+        5309250.0
+      ],
+      "width": 365,
+      "height": 401,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10TDU597092.tif",
+      "size": 1444786,
+      "bounds": [
+        459750.0,
+        5309250.0,
+        460500.0,
+        5310000.0
+      ],
+      "width": 750,
+      "height": 750,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10TDU597100.tif",
+      "size": 1772710,
+      "bounds": [
+        459750.0,
+        5310000.0,
+        460500.0,
+        5310750.0
+      ],
+      "width": 750,
+      "height": 750,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10TDU597107.tif",
+      "size": 1144013,
+      "bounds": [
+        459750.0,
+        5310750.0,
+        460500.0,
+        5311477.0
+      ],
+      "width": 750,
+      "height": 727,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10TDU605092.tif",
+      "size": 13552,
+      "bounds": [
+        460500.0,
+        5309896.0,
+        460562.0,
+        5310000.0
+      ],
+      "width": 62,
+      "height": 104,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10TDU605100.tif",
+      "size": 651493,
+      "bounds": [
+        460500.0,
+        5310000.0,
+        460958.0,
+        5310750.0
+      ],
+      "width": 458,
+      "height": 750,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10TDU605107.tif",
+      "size": 99585,
+      "bounds": [
+        460500.0,
+        5310750.0,
+        460828.0,
+        5310971.0
+      ],
+      "width": 328,
+      "height": 221,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10UDU440220.tif",
+      "size": 91623,
+      "bounds": [
+        444418.0,
+        5322571.0,
+        444750.0,
+        5322750.0
+      ],
+      "width": 332,
+      "height": 179,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10UDU440227.tif",
+      "size": 1122927,
+      "bounds": [
+        444179.0,
+        5322750.0,
+        444750.0,
+        5323500.0
+      ],
+      "width": 571,
+      "height": 750,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10UDU440235.tif",
+      "size": 986198,
+      "bounds": [
+        444257.0,
+        5323500.0,
+        444750.0,
+        5324250.0
+      ],
+      "width": 493,
+      "height": 750,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10UDU440242.tif",
+      "size": 767160,
+      "bounds": [
+        444364.0,
+        5324250.0,
+        444750.0,
+        5325000.0
+      ],
+      "width": 386,
+      "height": 750,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10UDU440250.tif",
+      "size": 557685,
+      "bounds": [
+        444465.0,
+        5325000.0,
+        444750.0,
+        5325750.0
+      ],
+      "width": 285,
+      "height": 750,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10UDU440257.tif",
+      "size": 430091,
+      "bounds": [
+        444540.0,
+        5325750.0,
+        444750.0,
+        5326500.0
+      ],
+      "width": 210,
+      "height": 750,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10UDU440265.tif",
+      "size": 131893,
+      "bounds": [
+        444615.0,
+        5326500.0,
+        444750.0,
+        5326989.0
+      ],
+      "width": 135,
+      "height": 489,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10UDU447220.tif",
+      "size": 584861,
+      "bounds": [
+        444750.0,
+        5322421.0,
+        445500.0,
+        5322750.0
+      ],
+      "width": 750,
+      "height": 329,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10UDU447227.tif",
+      "size": 1590992,
+      "bounds": [
+        444750.0,
+        5322750.0,
+        445500.0,
+        5323500.0
+      ],
+      "width": 750,
+      "height": 750,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10UDU447235.tif",
+      "size": 1653452,
+      "bounds": [
+        444750.0,
+        5323500.0,
+        445500.0,
+        5324250.0
+      ],
+      "width": 750,
+      "height": 750,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10UDU447242.tif",
+      "size": 1723404,
+      "bounds": [
+        444750.0,
+        5324250.0,
+        445500.0,
+        5325000.0
+      ],
+      "width": 750,
+      "height": 750,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10UDU447250.tif",
+      "size": 1765044,
+      "bounds": [
+        444750.0,
+        5325000.0,
+        445500.0,
+        5325750.0
+      ],
+      "width": 750,
+      "height": 750,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10UDU447257.tif",
+      "size": 1754076,
+      "bounds": [
+        444750.0,
+        5325750.0,
+        445500.0,
+        5326500.0
+      ],
+      "width": 750,
+      "height": 750,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10UDU447265.tif",
+      "size": 1704030,
+      "bounds": [
+        444750.0,
+        5326500.0,
+        445500.0,
+        5327250.0
+      ],
+      "width": 750,
+      "height": 750,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10UDU447272.tif",
+      "size": 507558,
+      "bounds": [
+        444958.0,
+        5327250.0,
+        445500.0,
+        5327661.0
+      ],
+      "width": 542,
+      "height": 411,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10UDU455220.tif",
+      "size": 767275,
+      "bounds": [
+        445500.0,
+        5322355.0,
+        446250.0,
+        5322750.0
+      ],
+      "width": 750,
+      "height": 395,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10UDU455227.tif",
+      "size": 1680381,
+      "bounds": [
+        445500.0,
+        5322750.0,
+        446250.0,
+        5323500.0
+      ],
+      "width": 750,
+      "height": 750,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10UDU455235.tif",
+      "size": 1621264,
+      "bounds": [
+        445500.0,
+        5323500.0,
+        446250.0,
+        5324250.0
+      ],
+      "width": 750,
+      "height": 750,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10UDU455242.tif",
+      "size": 1698528,
+      "bounds": [
+        445500.0,
+        5324250.0,
+        446250.0,
+        5325000.0
+      ],
+      "width": 750,
+      "height": 750,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10UDU455250.tif",
+      "size": 1695129,
+      "bounds": [
+        445500.0,
+        5325000.0,
+        446250.0,
+        5325750.0
+      ],
+      "width": 750,
+      "height": 750,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10UDU455257.tif",
+      "size": 1761651,
+      "bounds": [
+        445500.0,
+        5325750.0,
+        446250.0,
+        5326500.0
+      ],
+      "width": 750,
+      "height": 750,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10UDU455265.tif",
+      "size": 1766834,
+      "bounds": [
+        445500.0,
+        5326500.0,
+        446250.0,
+        5327250.0
+      ],
+      "width": 750,
+      "height": 750,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10UDU455272.tif",
+      "size": 885953,
+      "bounds": [
+        445500.0,
+        5327250.0,
+        446250.0,
+        5327661.0
+      ],
+      "width": 750,
+      "height": 411,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10UDU462220.tif",
+      "size": 1128686,
+      "bounds": [
+        446250.0,
+        5322017.0,
+        447000.0,
+        5322750.0
+      ],
+      "width": 750,
+      "height": 733,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10UDU462227.tif",
+      "size": 1652892,
+      "bounds": [
+        446250.0,
+        5322750.0,
+        447000.0,
+        5323500.0
+      ],
+      "width": 750,
+      "height": 750,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10UDU462235.tif",
+      "size": 1660790,
+      "bounds": [
+        446250.0,
+        5323500.0,
+        447000.0,
+        5324250.0
+      ],
+      "width": 750,
+      "height": 750,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10UDU462242.tif",
+      "size": 1567547,
+      "bounds": [
+        446250.0,
+        5324250.0,
+        447000.0,
+        5325000.0
+      ],
+      "width": 750,
+      "height": 750,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10UDU462250.tif",
+      "size": 847428,
+      "bounds": [
+        446250.0,
+        5325000.0,
+        447000.0,
+        5325750.0
+      ],
+      "width": 750,
+      "height": 750,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10UDU462257.tif",
+      "size": 1727698,
+      "bounds": [
+        446250.0,
+        5325750.0,
+        447000.0,
+        5326500.0
+      ],
+      "width": 750,
+      "height": 750,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10UDU462265.tif",
+      "size": 1797394,
+      "bounds": [
+        446250.0,
+        5326500.0,
+        447000.0,
+        5327250.0
+      ],
+      "width": 750,
+      "height": 750,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10UDU462272.tif",
+      "size": 629056,
+      "bounds": [
+        446250.0,
+        5327250.0,
+        447000.0,
+        5327595.0
+      ],
+      "width": 750,
+      "height": 345,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10UDU470212.tif",
+      "size": 157972,
+      "bounds": [
+        447223.0,
+        5321793.0,
+        447750.0,
+        5322000.0
+      ],
+      "width": 527,
+      "height": 207,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10UDU470220.tif",
+      "size": 1513527,
+      "bounds": [
+        447000.0,
+        5322000.0,
+        447750.0,
+        5322750.0
+      ],
+      "width": 750,
+      "height": 750,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10UDU470227.tif",
+      "size": 1567222,
+      "bounds": [
+        447000.0,
+        5322750.0,
+        447750.0,
+        5323500.0
+      ],
+      "width": 750,
+      "height": 750,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10UDU470235.tif",
+      "size": 1697426,
+      "bounds": [
+        447000.0,
+        5323500.0,
+        447750.0,
+        5324250.0
+      ],
+      "width": 750,
+      "height": 750,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10UDU470242.tif",
+      "size": 1702996,
+      "bounds": [
+        447000.0,
+        5324250.0,
+        447750.0,
+        5325000.0
+      ],
+      "width": 750,
+      "height": 750,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10UDU470250.tif",
+      "size": 1153169,
+      "bounds": [
+        447000.0,
+        5325000.0,
+        447750.0,
+        5325750.0
+      ],
+      "width": 750,
+      "height": 750,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10UDU470257.tif",
+      "size": 1793582,
+      "bounds": [
+        447000.0,
+        5325750.0,
+        447750.0,
+        5326500.0
+      ],
+      "width": 750,
+      "height": 750,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10UDU470265.tif",
+      "size": 1637343,
+      "bounds": [
+        447000.0,
+        5326500.0,
+        447750.0,
+        5327250.0
+      ],
+      "width": 750,
+      "height": 750,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10UDU470272.tif",
+      "size": 119075,
+      "bounds": [
+        447000.0,
+        5327250.0,
+        447401.0,
+        5327464.0
+      ],
+      "width": 401,
+      "height": 214,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10UDU477212.tif",
+      "size": 710574,
+      "bounds": [
+        447750.0,
+        5321545.0,
+        448500.0,
+        5322000.0
+      ],
+      "width": 750,
+      "height": 455,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10UDU477220.tif",
+      "size": 1462392,
+      "bounds": [
+        447750.0,
+        5322000.0,
+        448500.0,
+        5322750.0
+      ],
+      "width": 750,
+      "height": 750,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10UDU477227.tif",
+      "size": 1639570,
+      "bounds": [
+        447750.0,
+        5322750.0,
+        448500.0,
+        5323500.0
+      ],
+      "width": 750,
+      "height": 750,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10UDU477235.tif",
+      "size": 1702906,
+      "bounds": [
+        447750.0,
+        5323500.0,
+        448500.0,
+        5324250.0
+      ],
+      "width": 750,
+      "height": 750,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10UDU477242.tif",
+      "size": 1263927,
+      "bounds": [
+        447750.0,
+        5324250.0,
+        448500.0,
+        5325000.0
+      ],
+      "width": 750,
+      "height": 750,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10UDU477250.tif",
+      "size": 1591543,
+      "bounds": [
+        447750.0,
+        5325000.0,
+        448500.0,
+        5325750.0
+      ],
+      "width": 750,
+      "height": 750,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10UDU477257.tif",
+      "size": 1754323,
+      "bounds": [
+        447750.0,
+        5325750.0,
+        448500.0,
+        5326500.0
+      ],
+      "width": 750,
+      "height": 750,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10UDU477265.tif",
+      "size": 1308652,
+      "bounds": [
+        447750.0,
+        5326500.0,
+        448500.0,
+        5327234.0
+      ],
+      "width": 750,
+      "height": 734,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10UDU485212.tif",
+      "size": 1186865,
+      "bounds": [
+        448500.0,
+        5321299.0,
+        449250.0,
+        5322000.0
+      ],
+      "width": 750,
+      "height": 701,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10UDU485220.tif",
+      "size": 1548253,
+      "bounds": [
+        448500.0,
+        5322000.0,
+        449250.0,
+        5322750.0
+      ],
+      "width": 750,
+      "height": 750,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10UDU485227.tif",
+      "size": 1598262,
+      "bounds": [
+        448500.0,
+        5322750.0,
+        449250.0,
+        5323500.0
+      ],
+      "width": 750,
+      "height": 750,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10UDU485235.tif",
+      "size": 1641188,
+      "bounds": [
+        448500.0,
+        5323500.0,
+        449250.0,
+        5324250.0
+      ],
+      "width": 750,
+      "height": 750,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10UDU485242.tif",
+      "size": 1601730,
+      "bounds": [
+        448500.0,
+        5324250.0,
+        449250.0,
+        5325000.0
+      ],
+      "width": 750,
+      "height": 750,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10UDU485250.tif",
+      "size": 1776756,
+      "bounds": [
+        448500.0,
+        5325000.0,
+        449250.0,
+        5325750.0
+      ],
+      "width": 750,
+      "height": 750,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10UDU485257.tif",
+      "size": 1728176,
+      "bounds": [
+        448500.0,
+        5325750.0,
+        449250.0,
+        5326500.0
+      ],
+      "width": 750,
+      "height": 750,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10UDU485265.tif",
+      "size": 1536375,
+      "bounds": [
+        448500.0,
+        5326500.0,
+        449250.0,
+        5327250.0
+      ],
+      "width": 750,
+      "height": 750,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10UDU485272.tif",
+      "size": 5866,
+      "bounds": [
+        448535.0,
+        5327250.0,
+        448628.0,
+        5327270.0
+      ],
+      "width": 93,
+      "height": 20,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10UDU492205.tif",
+      "size": 2697,
+      "bounds": [
+        449472.0,
+        5321249.0,
+        449478.0,
+        5321250.0
+      ],
+      "width": 6,
+      "height": 1,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10UDU492212.tif",
+      "size": 1401510,
+      "bounds": [
+        449250.0,
+        5321250.0,
+        450000.0,
+        5322000.0
+      ],
+      "width": 750,
+      "height": 750,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10UDU492220.tif",
+      "size": 1614304,
+      "bounds": [
+        449250.0,
+        5322000.0,
+        450000.0,
+        5322750.0
+      ],
+      "width": 750,
+      "height": 750,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10UDU492227.tif",
+      "size": 1637717,
+      "bounds": [
+        449250.0,
+        5322750.0,
+        450000.0,
+        5323500.0
+      ],
+      "width": 750,
+      "height": 750,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10UDU492235.tif",
+      "size": 1690252,
+      "bounds": [
+        449250.0,
+        5323500.0,
+        450000.0,
+        5324250.0
+      ],
+      "width": 750,
+      "height": 750,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10UDU492242.tif",
+      "size": 1733038,
+      "bounds": [
+        449250.0,
+        5324250.0,
+        450000.0,
+        5325000.0
+      ],
+      "width": 750,
+      "height": 750,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10UDU492250.tif",
+      "size": 1785768,
+      "bounds": [
+        449250.0,
+        5325000.0,
+        450000.0,
+        5325750.0
+      ],
+      "width": 750,
+      "height": 750,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10UDU492257.tif",
+      "size": 1639285,
+      "bounds": [
+        449250.0,
+        5325750.0,
+        450000.0,
+        5326500.0
+      ],
+      "width": 750,
+      "height": 750,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10UDU492265.tif",
+      "size": 893820,
+      "bounds": [
+        449250.0,
+        5326500.0,
+        450000.0,
+        5327014.0
+      ],
+      "width": 750,
+      "height": 514,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10UDU500212.tif",
+      "size": 597844,
+      "bounds": [
+        450000.0,
+        5321572.0,
+        450750.0,
+        5322000.0
+      ],
+      "width": 750,
+      "height": 428,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10UDU500220.tif",
+      "size": 1630393,
+      "bounds": [
+        450000.0,
+        5322000.0,
+        450750.0,
+        5322750.0
+      ],
+      "width": 750,
+      "height": 750,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10UDU500227.tif",
+      "size": 1729483,
+      "bounds": [
+        450000.0,
+        5322750.0,
+        450750.0,
+        5323500.0
+      ],
+      "width": 750,
+      "height": 750,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10UDU500235.tif",
+      "size": 1830747,
+      "bounds": [
+        450000.0,
+        5323500.0,
+        450750.0,
+        5324250.0
+      ],
+      "width": 750,
+      "height": 750,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10UDU500242.tif",
+      "size": 1605781,
+      "bounds": [
+        450000.0,
+        5324250.0,
+        450750.0,
+        5325000.0
+      ],
+      "width": 750,
+      "height": 750,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10UDU500250.tif",
+      "size": 1743784,
+      "bounds": [
+        450000.0,
+        5325000.0,
+        450750.0,
+        5325750.0
+      ],
+      "width": 750,
+      "height": 750,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10UDU500257.tif",
+      "size": 1555543,
+      "bounds": [
+        450000.0,
+        5325750.0,
+        450750.0,
+        5326500.0
+      ],
+      "width": 750,
+      "height": 750,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10UDU500265.tif",
+      "size": 58772,
+      "bounds": [
+        450000.0,
+        5326500.0,
+        450159.0,
+        5326719.0
+      ],
+      "width": 159,
+      "height": 219,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10UDU507212.tif",
+      "size": 487332,
+      "bounds": [
+        450750.0,
+        5321762.0,
+        451500.0,
+        5322000.0
+      ],
+      "width": 750,
+      "height": 238,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10UDU507220.tif",
+      "size": 1580857,
+      "bounds": [
+        450750.0,
+        5322000.0,
+        451500.0,
+        5322750.0
+      ],
+      "width": 750,
+      "height": 750,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10UDU507227.tif",
+      "size": 1652395,
+      "bounds": [
+        450750.0,
+        5322750.0,
+        451500.0,
+        5323500.0
+      ],
+      "width": 750,
+      "height": 750,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10UDU507235.tif",
+      "size": 1759625,
+      "bounds": [
+        450750.0,
+        5323500.0,
+        451500.0,
+        5324250.0
+      ],
+      "width": 750,
+      "height": 750,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10UDU507242.tif",
+      "size": 1598374,
+      "bounds": [
+        450750.0,
+        5324250.0,
+        451500.0,
+        5325000.0
+      ],
+      "width": 750,
+      "height": 750,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10UDU507250.tif",
+      "size": 1717582,
+      "bounds": [
+        450750.0,
+        5325000.0,
+        451500.0,
+        5325750.0
+      ],
+      "width": 750,
+      "height": 750,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10UDU507257.tif",
+      "size": 1528897,
+      "bounds": [
+        450750.0,
+        5325750.0,
+        451500.0,
+        5326425.0
+      ],
+      "width": 750,
+      "height": 675,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10UDU515212.tif",
+      "size": 548038,
+      "bounds": [
+        451500.0,
+        5321719.0,
+        452250.0,
+        5322000.0
+      ],
+      "width": 750,
+      "height": 281,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10UDU515220.tif",
+      "size": 1591999,
+      "bounds": [
+        451500.0,
+        5322000.0,
+        452250.0,
+        5322750.0
+      ],
+      "width": 750,
+      "height": 750,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10UDU515227.tif",
+      "size": 1629945,
+      "bounds": [
+        451500.0,
+        5322750.0,
+        452250.0,
+        5323500.0
+      ],
+      "width": 750,
+      "height": 750,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10UDU515235.tif",
+      "size": 1776883,
+      "bounds": [
+        451500.0,
+        5323500.0,
+        452250.0,
+        5324250.0
+      ],
+      "width": 750,
+      "height": 750,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10UDU515242.tif",
+      "size": 1611760,
+      "bounds": [
+        451500.0,
+        5324250.0,
+        452250.0,
+        5325000.0
+      ],
+      "width": 750,
+      "height": 750,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10UDU515250.tif",
+      "size": 1720961,
+      "bounds": [
+        451500.0,
+        5325000.0,
+        452250.0,
+        5325750.0
+      ],
+      "width": 750,
+      "height": 750,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10UDU515257.tif",
+      "size": 1588426,
+      "bounds": [
+        451500.0,
+        5325750.0,
+        452250.0,
+        5326443.0
+      ],
+      "width": 750,
+      "height": 693,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10UDU515317.tif",
+      "size": 60744,
+      "bounds": [
+        452085.0,
+        5332201.0,
+        452250.0,
+        5332500.0
+      ],
+      "width": 165,
+      "height": 299,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10UDU515325.tif",
+      "size": 529982,
+      "bounds": [
+        451978.0,
+        5332500.0,
+        452250.0,
+        5333250.0
+      ],
+      "width": 272,
+      "height": 750,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10UDU515332.tif",
+      "size": 7050,
+      "bounds": [
+        452199.0,
+        5333250.0,
+        452250.0,
+        5333296.0
+      ],
+      "width": 51,
+      "height": 46,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10UDU522212.tif",
+      "size": 682308,
+      "bounds": [
+        452250.0,
+        5321648.0,
+        453000.0,
+        5322000.0
+      ],
+      "width": 750,
+      "height": 352,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10UDU522220.tif",
+      "size": 1599466,
+      "bounds": [
+        452250.0,
+        5322000.0,
+        453000.0,
+        5322750.0
+      ],
+      "width": 750,
+      "height": 750,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10UDU522227.tif",
+      "size": 1724383,
+      "bounds": [
+        452250.0,
+        5322750.0,
+        453000.0,
+        5323500.0
+      ],
+      "width": 750,
+      "height": 750,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10UDU522235.tif",
+      "size": 1762336,
+      "bounds": [
+        452250.0,
+        5323500.0,
+        453000.0,
+        5324250.0
+      ],
+      "width": 750,
+      "height": 750,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10UDU522242.tif",
+      "size": 1572341,
+      "bounds": [
+        452250.0,
+        5324250.0,
+        453000.0,
+        5325000.0
+      ],
+      "width": 750,
+      "height": 750,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10UDU522250.tif",
+      "size": 1796511,
+      "bounds": [
+        452250.0,
+        5325000.0,
+        453000.0,
+        5325750.0
+      ],
+      "width": 750,
+      "height": 750,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10UDU522257.tif",
+      "size": 1617667,
+      "bounds": [
+        452250.0,
+        5325750.0,
+        453000.0,
+        5326462.0
+      ],
+      "width": 750,
+      "height": 712,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10UDU522310.tif",
+      "size": 7917,
+      "bounds": [
+        452901.0,
+        5331717.0,
+        453000.0,
+        5331750.0
+      ],
+      "width": 99,
+      "height": 33,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10UDU522317.tif",
+      "size": 1352816,
+      "bounds": [
+        452250.0,
+        5331750.0,
+        453000.0,
+        5332500.0
+      ],
+      "width": 750,
+      "height": 750,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10UDU522325.tif",
+      "size": 1294521,
+      "bounds": [
+        452250.0,
+        5332500.0,
+        452877.0,
+        5333250.0
+      ],
+      "width": 627,
+      "height": 750,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10UDU522332.tif",
+      "size": 366485,
+      "bounds": [
+        452250.0,
+        5333250.0,
+        452830.0,
+        5333486.0
+      ],
+      "width": 580,
+      "height": 236,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10UDU530167.tif",
+      "size": 18494,
+      "bounds": [
+        453719.0,
+        5316750.0,
+        453750.0,
+        5317014.0
+      ],
+      "width": 31,
+      "height": 264,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10UDU530212.tif",
+      "size": 176004,
+      "bounds": [
+        453000.0,
+        5321648.0,
+        453330.0,
+        5322000.0
+      ],
+      "width": 330,
+      "height": 352,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10UDU530220.tif",
+      "size": 1392697,
+      "bounds": [
+        453000.0,
+        5322000.0,
+        453750.0,
+        5322750.0
+      ],
+      "width": 750,
+      "height": 750,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10UDU530227.tif",
+      "size": 1780333,
+      "bounds": [
+        453000.0,
+        5322750.0,
+        453750.0,
+        5323500.0
+      ],
+      "width": 750,
+      "height": 750,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10UDU530235.tif",
+      "size": 1677839,
+      "bounds": [
+        453000.0,
+        5323500.0,
+        453750.0,
+        5324250.0
+      ],
+      "width": 750,
+      "height": 750,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10UDU530242.tif",
+      "size": 1579556,
+      "bounds": [
+        453000.0,
+        5324250.0,
+        453750.0,
+        5325000.0
+      ],
+      "width": 750,
+      "height": 750,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10UDU530250.tif",
+      "size": 1775416,
+      "bounds": [
+        453000.0,
+        5325000.0,
+        453750.0,
+        5325750.0
+      ],
+      "width": 750,
+      "height": 750,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10UDU530257.tif",
+      "size": 1648088,
+      "bounds": [
+        453000.0,
+        5325750.0,
+        453750.0,
+        5326468.0
+      ],
+      "width": 750,
+      "height": 718,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10UDU530310.tif",
+      "size": 293697,
+      "bounds": [
+        453000.0,
+        5331569.0,
+        453750.0,
+        5331750.0
+      ],
+      "width": 750,
+      "height": 181,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10UDU530317.tif",
+      "size": 1196879,
+      "bounds": [
+        453000.0,
+        5331750.0,
+        453750.0,
+        5332371.0
+      ],
+      "width": 750,
+      "height": 621,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10UDU537167.tif",
+      "size": 1702588,
+      "bounds": [
+        453750.0,
+        5316750.0,
+        454500.0,
+        5317500.0
+      ],
+      "width": 750,
+      "height": 750,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10UDU537175.tif",
+      "size": 1518676,
+      "bounds": [
+        453807.0,
+        5317500.0,
+        454500.0,
+        5318250.0
+      ],
+      "width": 693,
+      "height": 750,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10UDU537182.tif",
+      "size": 1248435,
+      "bounds": [
+        453895.0,
+        5318250.0,
+        454500.0,
+        5319000.0
+      ],
+      "width": 605,
+      "height": 750,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10UDU537190.tif",
+      "size": 1172555,
+      "bounds": [
+        453983.0,
+        5319000.0,
+        454500.0,
+        5319750.0
+      ],
+      "width": 517,
+      "height": 750,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10UDU537197.tif",
+      "size": 991341,
+      "bounds": [
+        454071.0,
+        5319750.0,
+        454500.0,
+        5320500.0
+      ],
+      "width": 429,
+      "height": 750,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10UDU537205.tif",
+      "size": 752594,
+      "bounds": [
+        454159.0,
+        5320500.0,
+        454500.0,
+        5321250.0
+      ],
+      "width": 341,
+      "height": 750,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10UDU537212.tif",
+      "size": 546366,
+      "bounds": [
+        454247.0,
+        5321250.0,
+        454500.0,
+        5322000.0
+      ],
+      "width": 253,
+      "height": 750,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10UDU537220.tif",
+      "size": 735587,
+      "bounds": [
+        453750.0,
+        5322000.0,
+        454500.0,
+        5322750.0
+      ],
+      "width": 750,
+      "height": 750,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10UDU537227.tif",
+      "size": 1761278,
+      "bounds": [
+        453750.0,
+        5322750.0,
+        454500.0,
+        5323500.0
+      ],
+      "width": 750,
+      "height": 750,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10UDU537235.tif",
+      "size": 1595075,
+      "bounds": [
+        453750.0,
+        5323500.0,
+        454500.0,
+        5324250.0
+      ],
+      "width": 750,
+      "height": 750,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10UDU537242.tif",
+      "size": 1665000,
+      "bounds": [
+        453750.0,
+        5324250.0,
+        454500.0,
+        5325000.0
+      ],
+      "width": 750,
+      "height": 750,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10UDU537250.tif",
+      "size": 1716521,
+      "bounds": [
+        453750.0,
+        5325000.0,
+        454500.0,
+        5325750.0
+      ],
+      "width": 750,
+      "height": 750,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10UDU537257.tif",
+      "size": 1404020,
+      "bounds": [
+        453750.0,
+        5325750.0,
+        454500.0,
+        5326410.0
+      ],
+      "width": 750,
+      "height": 660,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10UDU537310.tif",
+      "size": 501962,
+      "bounds": [
+        453750.0,
+        5331505.0,
+        454500.0,
+        5331750.0
+      ],
+      "width": 750,
+      "height": 245,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10UDU537317.tif",
+      "size": 914191,
+      "bounds": [
+        453750.0,
+        5331750.0,
+        454500.0,
+        5332089.0
+      ],
+      "width": 750,
+      "height": 339,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10UDU545167.tif",
+      "size": 1835375,
+      "bounds": [
+        454500.0,
+        5316750.0,
+        455250.0,
+        5317500.0
+      ],
+      "width": 750,
+      "height": 750,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10UDU545175.tif",
+      "size": 1832398,
+      "bounds": [
+        454500.0,
+        5317500.0,
+        455250.0,
+        5318250.0
+      ],
+      "width": 750,
+      "height": 750,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10UDU545182.tif",
+      "size": 1799984,
+      "bounds": [
+        454500.0,
+        5318250.0,
+        455250.0,
+        5319000.0
+      ],
+      "width": 750,
+      "height": 750,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10UDU545190.tif",
+      "size": 1895270,
+      "bounds": [
+        454500.0,
+        5319000.0,
+        455250.0,
+        5319750.0
+      ],
+      "width": 750,
+      "height": 750,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10UDU545197.tif",
+      "size": 1898923,
+      "bounds": [
+        454500.0,
+        5319750.0,
+        455250.0,
+        5320500.0
+      ],
+      "width": 750,
+      "height": 750,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10UDU545205.tif",
+      "size": 1835903,
+      "bounds": [
+        454500.0,
+        5320500.0,
+        455250.0,
+        5321250.0
+      ],
+      "width": 750,
+      "height": 750,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10UDU545212.tif",
+      "size": 1741653,
+      "bounds": [
+        454500.0,
+        5321250.0,
+        455250.0,
+        5322000.0
+      ],
+      "width": 750,
+      "height": 750,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10UDU545220.tif",
+      "size": 1784829,
+      "bounds": [
+        454500.0,
+        5322000.0,
+        455250.0,
+        5322750.0
+      ],
+      "width": 750,
+      "height": 750,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10UDU545227.tif",
+      "size": 1800572,
+      "bounds": [
+        454500.0,
+        5322750.0,
+        455250.0,
+        5323500.0
+      ],
+      "width": 750,
+      "height": 750,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10UDU545235.tif",
+      "size": 1618145,
+      "bounds": [
+        454500.0,
+        5323500.0,
+        455250.0,
+        5324250.0
+      ],
+      "width": 750,
+      "height": 750,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10UDU545242.tif",
+      "size": 1727495,
+      "bounds": [
+        454500.0,
+        5324250.0,
+        455250.0,
+        5325000.0
+      ],
+      "width": 750,
+      "height": 750,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10UDU545250.tif",
+      "size": 1751166,
+      "bounds": [
+        454500.0,
+        5325000.0,
+        455250.0,
+        5325750.0
+      ],
+      "width": 750,
+      "height": 750,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10UDU545257.tif",
+      "size": 1169919,
+      "bounds": [
+        454500.0,
+        5325750.0,
+        455250.0,
+        5326322.0
+      ],
+      "width": 750,
+      "height": 572,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10UDU545310.tif",
+      "size": 852001,
+      "bounds": [
+        454500.0,
+        5331269.0,
+        455250.0,
+        5331750.0
+      ],
+      "width": 750,
+      "height": 481,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10UDU545317.tif",
+      "size": 741059,
+      "bounds": [
+        454500.0,
+        5331750.0,
+        455250.0,
+        5332061.0
+      ],
+      "width": 750,
+      "height": 311,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10UDU552167.tif",
+      "size": 1809747,
+      "bounds": [
+        455250.0,
+        5316750.0,
+        456000.0,
+        5317500.0
+      ],
+      "width": 750,
+      "height": 750,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10UDU552175.tif",
+      "size": 1770167,
+      "bounds": [
+        455250.0,
+        5317500.0,
+        456000.0,
+        5318250.0
+      ],
+      "width": 750,
+      "height": 750,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10UDU552182.tif",
+      "size": 1767705,
+      "bounds": [
+        455250.0,
+        5318250.0,
+        456000.0,
+        5319000.0
+      ],
+      "width": 750,
+      "height": 750,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10UDU552190.tif",
+      "size": 1752806,
+      "bounds": [
+        455250.0,
+        5319000.0,
+        456000.0,
+        5319750.0
+      ],
+      "width": 750,
+      "height": 750,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10UDU552197.tif",
+      "size": 1790154,
+      "bounds": [
+        455250.0,
+        5319750.0,
+        456000.0,
+        5320500.0
+      ],
+      "width": 750,
+      "height": 750,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10UDU552205.tif",
+      "size": 1709506,
+      "bounds": [
+        455250.0,
+        5320500.0,
+        456000.0,
+        5321250.0
+      ],
+      "width": 750,
+      "height": 750,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10UDU552212.tif",
+      "size": 1729210,
+      "bounds": [
+        455250.0,
+        5321250.0,
+        456000.0,
+        5322000.0
+      ],
+      "width": 750,
+      "height": 750,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10UDU552220.tif",
+      "size": 1654456,
+      "bounds": [
+        455250.0,
+        5322000.0,
+        456000.0,
+        5322750.0
+      ],
+      "width": 750,
+      "height": 750,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10UDU552227.tif",
+      "size": 1482541,
+      "bounds": [
+        455250.0,
+        5322750.0,
+        456000.0,
+        5323500.0
+      ],
+      "width": 750,
+      "height": 750,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10UDU552235.tif",
+      "size": 1670824,
+      "bounds": [
+        455250.0,
+        5323500.0,
+        456000.0,
+        5324250.0
+      ],
+      "width": 750,
+      "height": 750,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10UDU552242.tif",
+      "size": 1719816,
+      "bounds": [
+        455250.0,
+        5324250.0,
+        456000.0,
+        5325000.0
+      ],
+      "width": 750,
+      "height": 750,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10UDU552250.tif",
+      "size": 1813636,
+      "bounds": [
+        455250.0,
+        5325000.0,
+        456000.0,
+        5325750.0
+      ],
+      "width": 750,
+      "height": 750,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10UDU552257.tif",
+      "size": 626114,
+      "bounds": [
+        455250.0,
+        5325750.0,
+        456000.0,
+        5326500.0
+      ],
+      "width": 750,
+      "height": 750,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10UDU552310.tif",
+      "size": 1401018,
+      "bounds": [
+        455250.0,
+        5331147.0,
+        456000.0,
+        5331750.0
+      ],
+      "width": 750,
+      "height": 603,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10UDU552317.tif",
+      "size": 101746,
+      "bounds": [
+        455250.0,
+        5331750.0,
+        455597.0,
+        5331936.0
+      ],
+      "width": 347,
+      "height": 186,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10UDU560167.tif",
+      "size": 1756053,
+      "bounds": [
+        456000.0,
+        5316750.0,
+        456750.0,
+        5317500.0
+      ],
+      "width": 750,
+      "height": 750,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10UDU560175.tif",
+      "size": 1838491,
+      "bounds": [
+        456000.0,
+        5317500.0,
+        456750.0,
+        5318250.0
+      ],
+      "width": 750,
+      "height": 750,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10UDU560182.tif",
+      "size": 1838989,
+      "bounds": [
+        456000.0,
+        5318250.0,
+        456750.0,
+        5319000.0
+      ],
+      "width": 750,
+      "height": 750,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10UDU560190.tif",
+      "size": 1849665,
+      "bounds": [
+        456000.0,
+        5319000.0,
+        456750.0,
+        5319750.0
+      ],
+      "width": 750,
+      "height": 750,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10UDU560197.tif",
+      "size": 1840670,
+      "bounds": [
+        456000.0,
+        5319750.0,
+        456750.0,
+        5320500.0
+      ],
+      "width": 750,
+      "height": 750,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10UDU560205.tif",
+      "size": 1844499,
+      "bounds": [
+        456000.0,
+        5320500.0,
+        456750.0,
+        5321250.0
+      ],
+      "width": 750,
+      "height": 750,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10UDU560212.tif",
+      "size": 1838246,
+      "bounds": [
+        456000.0,
+        5321250.0,
+        456750.0,
+        5322000.0
+      ],
+      "width": 750,
+      "height": 750,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10UDU560220.tif",
+      "size": 1767488,
+      "bounds": [
+        456000.0,
+        5322000.0,
+        456750.0,
+        5322750.0
+      ],
+      "width": 750,
+      "height": 750,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10UDU560227.tif",
+      "size": 1642242,
+      "bounds": [
+        456000.0,
+        5322750.0,
+        456750.0,
+        5323500.0
+      ],
+      "width": 750,
+      "height": 750,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10UDU560235.tif",
+      "size": 1683503,
+      "bounds": [
+        456000.0,
+        5323500.0,
+        456750.0,
+        5324250.0
+      ],
+      "width": 750,
+      "height": 750,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10UDU560242.tif",
+      "size": 1809589,
+      "bounds": [
+        456000.0,
+        5324250.0,
+        456750.0,
+        5325000.0
+      ],
+      "width": 750,
+      "height": 750,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10UDU560250.tif",
+      "size": 1783402,
+      "bounds": [
+        456000.0,
+        5325000.0,
+        456750.0,
+        5325750.0
+      ],
+      "width": 750,
+      "height": 750,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10UDU560257.tif",
+      "size": 644211,
+      "bounds": [
+        456000.0,
+        5325750.0,
+        456750.0,
+        5326500.0
+      ],
+      "width": 750,
+      "height": 750,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10UDU560265.tif",
+      "size": 4148,
+      "bounds": [
+        456734.0,
+        5326500.0,
+        456750.0,
+        5326531.0
+      ],
+      "width": 16,
+      "height": 31,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10UDU560310.tif",
+      "size": 1455159,
+      "bounds": [
+        456000.0,
+        5331121.0,
+        456750.0,
+        5331750.0
+      ],
+      "width": 750,
+      "height": 629,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10UDU560317.tif",
+      "size": 106873,
+      "bounds": [
+        456371.0,
+        5331750.0,
+        456750.0,
+        5331954.0
+      ],
+      "width": 379,
+      "height": 204,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10UDU567167.tif",
+      "size": 704205,
+      "bounds": [
+        456750.0,
+        5316750.0,
+        457106.0,
+        5317500.0
+      ],
+      "width": 356,
+      "height": 750,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10UDU567175.tif",
+      "size": 963488,
+      "bounds": [
+        456750.0,
+        5317500.0,
+        457200.0,
+        5318250.0
+      ],
+      "width": 450,
+      "height": 750,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10UDU567182.tif",
+      "size": 1234173,
+      "bounds": [
+        456750.0,
+        5318250.0,
+        457293.0,
+        5319000.0
+      ],
+      "width": 543,
+      "height": 750,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10UDU567190.tif",
+      "size": 1465903,
+      "bounds": [
+        456750.0,
+        5319000.0,
+        457387.0,
+        5319750.0
+      ],
+      "width": 637,
+      "height": 750,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10UDU567197.tif",
+      "size": 1606355,
+      "bounds": [
+        456750.0,
+        5319750.0,
+        457481.0,
+        5320500.0
+      ],
+      "width": 731,
+      "height": 750,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10UDU567205.tif",
+      "size": 1812034,
+      "bounds": [
+        456750.0,
+        5320500.0,
+        457500.0,
+        5321250.0
+      ],
+      "width": 750,
+      "height": 750,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10UDU567212.tif",
+      "size": 1852936,
+      "bounds": [
+        456750.0,
+        5321250.0,
+        457500.0,
+        5322000.0
+      ],
+      "width": 750,
+      "height": 750,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10UDU567220.tif",
+      "size": 1802866,
+      "bounds": [
+        456750.0,
+        5322000.0,
+        457500.0,
+        5322750.0
+      ],
+      "width": 750,
+      "height": 750,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10UDU567227.tif",
+      "size": 1729261,
+      "bounds": [
+        456750.0,
+        5322750.0,
+        457500.0,
+        5323500.0
+      ],
+      "width": 750,
+      "height": 750,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10UDU567235.tif",
+      "size": 1744275,
+      "bounds": [
+        456750.0,
+        5323500.0,
+        457500.0,
+        5324250.0
+      ],
+      "width": 750,
+      "height": 750,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10UDU567242.tif",
+      "size": 1657004,
+      "bounds": [
+        456750.0,
+        5324250.0,
+        457500.0,
+        5325000.0
+      ],
+      "width": 750,
+      "height": 750,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10UDU567250.tif",
+      "size": 1751877,
+      "bounds": [
+        456750.0,
+        5325000.0,
+        457500.0,
+        5325750.0
+      ],
+      "width": 750,
+      "height": 750,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10UDU567257.tif",
+      "size": 1819506,
+      "bounds": [
+        456750.0,
+        5325750.0,
+        457500.0,
+        5326500.0
+      ],
+      "width": 750,
+      "height": 750,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10UDU567265.tif",
+      "size": 1258323,
+      "bounds": [
+        456750.0,
+        5326500.0,
+        457500.0,
+        5327250.0
+      ],
+      "width": 750,
+      "height": 750,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10UDU567272.tif",
+      "size": 443060,
+      "bounds": [
+        457119.0,
+        5327250.0,
+        457500.0,
+        5328000.0
+      ],
+      "width": 381,
+      "height": 750,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10UDU567280.tif",
+      "size": 66903,
+      "bounds": [
+        457480.0,
+        5328000.0,
+        457500.0,
+        5328750.0
+      ],
+      "width": 20,
+      "height": 750,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10UDU567287.tif",
+      "size": 63352,
+      "bounds": [
+        457483.0,
+        5328750.0,
+        457500.0,
+        5329500.0
+      ],
+      "width": 17,
+      "height": 750,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10UDU567295.tif",
+      "size": 55426,
+      "bounds": [
+        457485.0,
+        5329500.0,
+        457500.0,
+        5330250.0
+      ],
+      "width": 15,
+      "height": 750,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10UDU567302.tif",
+      "size": 49244,
+      "bounds": [
+        457488.0,
+        5330250.0,
+        457500.0,
+        5331000.0
+      ],
+      "width": 12,
+      "height": 750,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10UDU567310.tif",
+      "size": 861334,
+      "bounds": [
+        456750.0,
+        5331000.0,
+        457500.0,
+        5331750.0
+      ],
+      "width": 750,
+      "height": 750,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10UDU567317.tif",
+      "size": 1511268,
+      "bounds": [
+        456750.0,
+        5331750.0,
+        457500.0,
+        5332500.0
+      ],
+      "width": 750,
+      "height": 750,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10UDU567325.tif",
+      "size": 242911,
+      "bounds": [
+        457197.0,
+        5332500.0,
+        457500.0,
+        5333012.0
+      ],
+      "width": 303,
+      "height": 512,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10UDU575205.tif",
+      "size": 94833,
+      "bounds": [
+        457500.0,
+        5320659.0,
+        457574.0,
+        5321250.0
+      ],
+      "width": 74,
+      "height": 591,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10UDU575212.tif",
+      "size": 334324,
+      "bounds": [
+        457500.0,
+        5321250.0,
+        457668.0,
+        5322000.0
+      ],
+      "width": 168,
+      "height": 750,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10UDU575220.tif",
+      "size": 874195,
+      "bounds": [
+        457500.0,
+        5322000.0,
+        458250.0,
+        5322750.0
+      ],
+      "width": 750,
+      "height": 750,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10UDU575227.tif",
+      "size": 1715305,
+      "bounds": [
+        457500.0,
+        5322750.0,
+        458250.0,
+        5323500.0
+      ],
+      "width": 750,
+      "height": 750,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10UDU575235.tif",
+      "size": 1766927,
+      "bounds": [
+        457500.0,
+        5323500.0,
+        458250.0,
+        5324250.0
+      ],
+      "width": 750,
+      "height": 750,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10UDU575242.tif",
+      "size": 1779431,
+      "bounds": [
+        457500.0,
+        5324250.0,
+        458250.0,
+        5325000.0
+      ],
+      "width": 750,
+      "height": 750,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10UDU575250.tif",
+      "size": 1749157,
+      "bounds": [
+        457500.0,
+        5325000.0,
+        458250.0,
+        5325750.0
+      ],
+      "width": 750,
+      "height": 750,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10UDU575257.tif",
+      "size": 1759941,
+      "bounds": [
+        457500.0,
+        5325750.0,
+        458250.0,
+        5326500.0
+      ],
+      "width": 750,
+      "height": 750,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10UDU575265.tif",
+      "size": 1704591,
+      "bounds": [
+        457500.0,
+        5326500.0,
+        458250.0,
+        5327250.0
+      ],
+      "width": 750,
+      "height": 750,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10UDU575272.tif",
+      "size": 1587600,
+      "bounds": [
+        457500.0,
+        5327250.0,
+        458250.0,
+        5328000.0
+      ],
+      "width": 750,
+      "height": 750,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10UDU575280.tif",
+      "size": 1573718,
+      "bounds": [
+        457500.0,
+        5328000.0,
+        458250.0,
+        5328750.0
+      ],
+      "width": 750,
+      "height": 750,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10UDU575287.tif",
+      "size": 1623563,
+      "bounds": [
+        457500.0,
+        5328750.0,
+        458250.0,
+        5329500.0
+      ],
+      "width": 750,
+      "height": 750,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10UDU575295.tif",
+      "size": 1627291,
+      "bounds": [
+        457500.0,
+        5329500.0,
+        458250.0,
+        5330250.0
+      ],
+      "width": 750,
+      "height": 750,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10UDU575302.tif",
+      "size": 1582062,
+      "bounds": [
+        457500.0,
+        5330250.0,
+        458250.0,
+        5331000.0
+      ],
+      "width": 750,
+      "height": 750,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10UDU575310.tif",
+      "size": 1603360,
+      "bounds": [
+        457500.0,
+        5331000.0,
+        458250.0,
+        5331750.0
+      ],
+      "width": 750,
+      "height": 750,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10UDU575317.tif",
+      "size": 1743233,
+      "bounds": [
+        457500.0,
+        5331750.0,
+        458250.0,
+        5332500.0
+      ],
+      "width": 750,
+      "height": 750,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10UDU575325.tif",
+      "size": 1914003,
+      "bounds": [
+        457500.0,
+        5332500.0,
+        458250.0,
+        5333250.0
+      ],
+      "width": 750,
+      "height": 750,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10UDU575332.tif",
+      "size": 39254,
+      "bounds": [
+        457922.0,
+        5333250.0,
+        458250.0,
+        5333323.0
+      ],
+      "width": 328,
+      "height": 73,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10UDU582220.tif",
+      "size": 331139,
+      "bounds": [
+        458250.0,
+        5322569.0,
+        459000.0,
+        5322750.0
+      ],
+      "width": 750,
+      "height": 181,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10UDU582227.tif",
+      "size": 1781536,
+      "bounds": [
+        458250.0,
+        5322750.0,
+        459000.0,
+        5323500.0
+      ],
+      "width": 750,
+      "height": 750,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10UDU582235.tif",
+      "size": 1636932,
+      "bounds": [
+        458250.0,
+        5323500.0,
+        459000.0,
+        5324250.0
+      ],
+      "width": 750,
+      "height": 750,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10UDU582242.tif",
+      "size": 1736950,
+      "bounds": [
+        458250.0,
+        5324250.0,
+        459000.0,
+        5325000.0
+      ],
+      "width": 750,
+      "height": 750,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10UDU582250.tif",
+      "size": 1817937,
+      "bounds": [
+        458250.0,
+        5325000.0,
+        459000.0,
+        5325750.0
+      ],
+      "width": 750,
+      "height": 750,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10UDU582257.tif",
+      "size": 1785450,
+      "bounds": [
+        458250.0,
+        5325750.0,
+        459000.0,
+        5326500.0
+      ],
+      "width": 750,
+      "height": 750,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10UDU582265.tif",
+      "size": 1769465,
+      "bounds": [
+        458250.0,
+        5326500.0,
+        459000.0,
+        5327250.0
+      ],
+      "width": 750,
+      "height": 750,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10UDU582272.tif",
+      "size": 1710062,
+      "bounds": [
+        458250.0,
+        5327250.0,
+        459000.0,
+        5328000.0
+      ],
+      "width": 750,
+      "height": 750,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10UDU582280.tif",
+      "size": 1648816,
+      "bounds": [
+        458250.0,
+        5328000.0,
+        459000.0,
+        5328750.0
+      ],
+      "width": 750,
+      "height": 750,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10UDU582287.tif",
+      "size": 1695298,
+      "bounds": [
+        458250.0,
+        5328750.0,
+        459000.0,
+        5329500.0
+      ],
+      "width": 750,
+      "height": 750,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10UDU582295.tif",
+      "size": 1692280,
+      "bounds": [
+        458250.0,
+        5329500.0,
+        459000.0,
+        5330250.0
+      ],
+      "width": 750,
+      "height": 750,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10UDU582302.tif",
+      "size": 1741004,
+      "bounds": [
+        458250.0,
+        5330250.0,
+        459000.0,
+        5331000.0
+      ],
+      "width": 750,
+      "height": 750,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10UDU582310.tif",
+      "size": 1759489,
+      "bounds": [
+        458250.0,
+        5331000.0,
+        459000.0,
+        5331750.0
+      ],
+      "width": 750,
+      "height": 750,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10UDU582317.tif",
+      "size": 1868475,
+      "bounds": [
+        458250.0,
+        5331750.0,
+        459000.0,
+        5332500.0
+      ],
+      "width": 750,
+      "height": 750,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10UDU582325.tif",
+      "size": 1899102,
+      "bounds": [
+        458250.0,
+        5332500.0,
+        459000.0,
+        5333250.0
+      ],
+      "width": 750,
+      "height": 750,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10UDU582332.tif",
+      "size": 386903,
+      "bounds": [
+        458250.0,
+        5333250.0,
+        459000.0,
+        5333440.0
+      ],
+      "width": 750,
+      "height": 190,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10UDU590220.tif",
+      "size": 580656,
+      "bounds": [
+        459000.0,
+        5322466.0,
+        459750.0,
+        5322750.0
+      ],
+      "width": 750,
+      "height": 284,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10UDU590227.tif",
+      "size": 1788213,
+      "bounds": [
+        459000.0,
+        5322750.0,
+        459750.0,
+        5323500.0
+      ],
+      "width": 750,
+      "height": 750,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10UDU590235.tif",
+      "size": 1102318,
+      "bounds": [
+        459000.0,
+        5323500.0,
+        459750.0,
+        5324021.0
+      ],
+      "width": 750,
+      "height": 521,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10UDU590242.tif",
+      "size": 188531,
+      "bounds": [
+        459000.0,
+        5324536.0,
+        459332.0,
+        5325000.0
+      ],
+      "width": 332,
+      "height": 464,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10UDU590250.tif",
+      "size": 1416228,
+      "bounds": [
+        459000.0,
+        5325000.0,
+        459750.0,
+        5325750.0
+      ],
+      "width": 750,
+      "height": 750,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10UDU590257.tif",
+      "size": 1814131,
+      "bounds": [
+        459000.0,
+        5325750.0,
+        459750.0,
+        5326500.0
+      ],
+      "width": 750,
+      "height": 750,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10UDU590265.tif",
+      "size": 1628009,
+      "bounds": [
+        459000.0,
+        5326500.0,
+        459750.0,
+        5327250.0
+      ],
+      "width": 750,
+      "height": 750,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10UDU590272.tif",
+      "size": 1510176,
+      "bounds": [
+        459000.0,
+        5327250.0,
+        459750.0,
+        5328000.0
+      ],
+      "width": 750,
+      "height": 750,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10UDU590280.tif",
+      "size": 1579662,
+      "bounds": [
+        459000.0,
+        5328000.0,
+        459750.0,
+        5328750.0
+      ],
+      "width": 750,
+      "height": 750,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10UDU590287.tif",
+      "size": 1640958,
+      "bounds": [
+        459000.0,
+        5328750.0,
+        459750.0,
+        5329500.0
+      ],
+      "width": 750,
+      "height": 750,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10UDU590295.tif",
+      "size": 1652750,
+      "bounds": [
+        459000.0,
+        5329500.0,
+        459750.0,
+        5330250.0
+      ],
+      "width": 750,
+      "height": 750,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10UDU590302.tif",
+      "size": 1715252,
+      "bounds": [
+        459000.0,
+        5330250.0,
+        459750.0,
+        5331000.0
+      ],
+      "width": 750,
+      "height": 750,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10UDU590310.tif",
+      "size": 1718518,
+      "bounds": [
+        459000.0,
+        5331000.0,
+        459750.0,
+        5331750.0
+      ],
+      "width": 750,
+      "height": 750,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10UDU590317.tif",
+      "size": 1731545,
+      "bounds": [
+        459000.0,
+        5331750.0,
+        459750.0,
+        5332500.0
+      ],
+      "width": 750,
+      "height": 750,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10UDU590325.tif",
+      "size": 1875079,
+      "bounds": [
+        459000.0,
+        5332500.0,
+        459750.0,
+        5333250.0
+      ],
+      "width": 750,
+      "height": 750,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10UDU590332.tif",
+      "size": 205513,
+      "bounds": [
+        459000.0,
+        5333250.0,
+        459533.0,
+        5333428.0
+      ],
+      "width": 533,
+      "height": 178,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10UDU597220.tif",
+      "size": 821232,
+      "bounds": [
+        459750.0,
+        5322364.0,
+        460500.0,
+        5322750.0
+      ],
+      "width": 750,
+      "height": 386,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10UDU597227.tif",
+      "size": 1775112,
+      "bounds": [
+        459750.0,
+        5322750.0,
+        460500.0,
+        5323500.0
+      ],
+      "width": 750,
+      "height": 750,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10UDU597235.tif",
+      "size": 749287,
+      "bounds": [
+        459750.0,
+        5323500.0,
+        460500.0,
+        5323875.0
+      ],
+      "width": 750,
+      "height": 375,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10UDU597250.tif",
+      "size": 13442,
+      "bounds": [
+        459750.0,
+        5325642.0,
+        459810.0,
+        5325750.0
+      ],
+      "width": 60,
+      "height": 108,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10UDU597257.tif",
+      "size": 662844,
+      "bounds": [
+        459750.0,
+        5325750.0,
+        460222.0,
+        5326500.0
+      ],
+      "width": 472,
+      "height": 750,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10UDU597265.tif",
+      "size": 1359548,
+      "bounds": [
+        459750.0,
+        5326500.0,
+        460383.0,
+        5327250.0
+      ],
+      "width": 633,
+      "height": 750,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10UDU597272.tif",
+      "size": 1338637,
+      "bounds": [
+        459750.0,
+        5327250.0,
+        460413.0,
+        5328000.0
+      ],
+      "width": 663,
+      "height": 750,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10UDU597280.tif",
+      "size": 1234838,
+      "bounds": [
+        459750.0,
+        5328000.0,
+        460412.0,
+        5328750.0
+      ],
+      "width": 662,
+      "height": 750,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10UDU597287.tif",
+      "size": 1291826,
+      "bounds": [
+        459750.0,
+        5328750.0,
+        460412.0,
+        5329500.0
+      ],
+      "width": 662,
+      "height": 750,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10UDU597295.tif",
+      "size": 1372314,
+      "bounds": [
+        459750.0,
+        5329500.0,
+        460412.0,
+        5330250.0
+      ],
+      "width": 662,
+      "height": 750,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10UDU597302.tif",
+      "size": 1458905,
+      "bounds": [
+        459750.0,
+        5330250.0,
+        460500.0,
+        5331000.0
+      ],
+      "width": 750,
+      "height": 750,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10UDU597310.tif",
+      "size": 1548748,
+      "bounds": [
+        459750.0,
+        5331000.0,
+        460500.0,
+        5331750.0
+      ],
+      "width": 750,
+      "height": 750,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10UDU597317.tif",
+      "size": 1620628,
+      "bounds": [
+        459750.0,
+        5331750.0,
+        460500.0,
+        5332500.0
+      ],
+      "width": 750,
+      "height": 750,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10UDU597325.tif",
+      "size": 1030186,
+      "bounds": [
+        459750.0,
+        5332500.0,
+        460500.0,
+        5333136.0
+      ],
+      "width": 750,
+      "height": 636,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10UDU605220.tif",
+      "size": 1087529,
+      "bounds": [
+        460500.0,
+        5322193.0,
+        461250.0,
+        5322750.0
+      ],
+      "width": 750,
+      "height": 557,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10UDU605227.tif",
+      "size": 1787851,
+      "bounds": [
+        460500.0,
+        5322750.0,
+        461250.0,
+        5323500.0
+      ],
+      "width": 750,
+      "height": 750,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10UDU605235.tif",
+      "size": 398878,
+      "bounds": [
+        460500.0,
+        5323500.0,
+        461250.0,
+        5323729.0
+      ],
+      "width": 750,
+      "height": 229,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10UDU605302.tif",
+      "size": 156643,
+      "bounds": [
+        460500.0,
+        5330820.0,
+        461250.0,
+        5331000.0
+      ],
+      "width": 750,
+      "height": 180,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10UDU605310.tif",
+      "size": 1673089,
+      "bounds": [
+        460500.0,
+        5331000.0,
+        461250.0,
+        5331750.0
+      ],
+      "width": 750,
+      "height": 750,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10UDU605317.tif",
+      "size": 928817,
+      "bounds": [
+        460500.0,
+        5331750.0,
+        461164.0,
+        5332500.0
+      ],
+      "width": 664,
+      "height": 750,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10UDU605325.tif",
+      "size": 3493,
+      "bounds": [
+        460500.0,
+        5332500.0,
+        460512.0,
+        5332515.0
+      ],
+      "width": 12,
+      "height": 15,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10UDU612212.tif",
+      "size": 93865,
+      "bounds": [
+        461628.0,
+        5321810.0,
+        462000.0,
+        5322000.0
+      ],
+      "width": 372,
+      "height": 190,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10UDU612220.tif",
+      "size": 1657195,
+      "bounds": [
+        461250.0,
+        5322000.0,
+        462000.0,
+        5322750.0
+      ],
+      "width": 750,
+      "height": 750,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10UDU612227.tif",
+      "size": 1735807,
+      "bounds": [
+        461250.0,
+        5322750.0,
+        462000.0,
+        5323500.0
+      ],
+      "width": 750,
+      "height": 750,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10UDU612235.tif",
+      "size": 49531,
+      "bounds": [
+        461250.0,
+        5323500.0,
+        461678.0,
+        5323584.0
+      ],
+      "width": 428,
+      "height": 84,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10UDU612302.tif",
+      "size": 236825,
+      "bounds": [
+        461250.0,
+        5330854.0,
+        462000.0,
+        5331000.0
+      ],
+      "width": 750,
+      "height": 146,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10UDU612310.tif",
+      "size": 1158658,
+      "bounds": [
+        461250.0,
+        5331000.0,
+        462000.0,
+        5331654.0
+      ],
+      "width": 750,
+      "height": 654,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10UDU620212.tif",
+      "size": 868349,
+      "bounds": [
+        462000.0,
+        5321550.0,
+        462750.0,
+        5322000.0
+      ],
+      "width": 750,
+      "height": 450,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10UDU620220.tif",
+      "size": 1767539,
+      "bounds": [
+        462000.0,
+        5322000.0,
+        462750.0,
+        5322750.0
+      ],
+      "width": 750,
+      "height": 750,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10UDU620227.tif",
+      "size": 1411521,
+      "bounds": [
+        462000.0,
+        5322750.0,
+        462750.0,
+        5323438.0
+      ],
+      "width": 750,
+      "height": 688,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10UDU620302.tif",
+      "size": 350029,
+      "bounds": [
+        462000.0,
+        5330829.0,
+        462750.0,
+        5331000.0
+      ],
+      "width": 750,
+      "height": 171,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10UDU620310.tif",
+      "size": 818251,
+      "bounds": [
+        462000.0,
+        5331000.0,
+        462750.0,
+        5331339.0
+      ],
+      "width": 750,
+      "height": 339,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10UDU627212.tif",
+      "size": 1270341,
+      "bounds": [
+        462750.0,
+        5321393.0,
+        463500.0,
+        5322000.0
+      ],
+      "width": 750,
+      "height": 607,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10UDU627220.tif",
+      "size": 1816681,
+      "bounds": [
+        462750.0,
+        5322000.0,
+        463500.0,
+        5322750.0
+      ],
+      "width": 750,
+      "height": 750,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10UDU627227.tif",
+      "size": 742110,
+      "bounds": [
+        462750.0,
+        5322750.0,
+        463500.0,
+        5323241.0
+      ],
+      "width": 750,
+      "height": 491,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10UDU627302.tif",
+      "size": 272751,
+      "bounds": [
+        462750.0,
+        5330846.0,
+        463500.0,
+        5331000.0
+      ],
+      "width": 750,
+      "height": 154,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10UDU627310.tif",
+      "size": 769719,
+      "bounds": [
+        462750.0,
+        5331000.0,
+        463500.0,
+        5331316.0
+      ],
+      "width": 750,
+      "height": 316,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10UDU635205.tif",
+      "size": 4005,
+      "bounds": [
+        464190.0,
+        5321237.0,
+        464250.0,
+        5321250.0
+      ],
+      "width": 60,
+      "height": 13,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10UDU635212.tif",
+      "size": 1604458,
+      "bounds": [
+        463500.0,
+        5321250.0,
+        464250.0,
+        5322000.0
+      ],
+      "width": 750,
+      "height": 750,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10UDU635220.tif",
+      "size": 1483551,
+      "bounds": [
+        463500.0,
+        5322000.0,
+        464250.0,
+        5322750.0
+      ],
+      "width": 750,
+      "height": 750,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10UDU635227.tif",
+      "size": 41532,
+      "bounds": [
+        463500.0,
+        5322750.0,
+        463743.0,
+        5322870.0
+      ],
+      "width": 243,
+      "height": 120,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10UDU635302.tif",
+      "size": 186341,
+      "bounds": [
+        463500.0,
+        5330890.0,
+        464250.0,
+        5331000.0
+      ],
+      "width": 750,
+      "height": 110,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10UDU635310.tif",
+      "size": 923256,
+      "bounds": [
+        463500.0,
+        5331000.0,
+        464250.0,
+        5331385.0
+      ],
+      "width": 750,
+      "height": 385,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10UDU642205.tif",
+      "size": 207536,
+      "bounds": [
+        464250.0,
+        5321081.0,
+        465000.0,
+        5321250.0
+      ],
+      "width": 750,
+      "height": 169,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10UDU642212.tif",
+      "size": 1651753,
+      "bounds": [
+        464250.0,
+        5321250.0,
+        465000.0,
+        5322000.0
+      ],
+      "width": 750,
+      "height": 750,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10UDU642220.tif",
+      "size": 884356,
+      "bounds": [
+        464250.0,
+        5322000.0,
+        465000.0,
+        5322500.0
+      ],
+      "width": 750,
+      "height": 500,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10UDU642302.tif",
+      "size": 24313,
+      "bounds": [
+        464250.0,
+        5330946.0,
+        464620.0,
+        5331000.0
+      ],
+      "width": 370,
+      "height": 54,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10UDU642310.tif",
+      "size": 1131858,
+      "bounds": [
+        464250.0,
+        5331000.0,
+        465000.0,
+        5331552.0
+      ],
+      "width": 750,
+      "height": 552,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10UDU650205.tif",
+      "size": 552979,
+      "bounds": [
+        465000.0,
+        5320925.0,
+        465750.0,
+        5321250.0
+      ],
+      "width": 750,
+      "height": 325,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10UDU650212.tif",
+      "size": 1650855,
+      "bounds": [
+        465000.0,
+        5321250.0,
+        465750.0,
+        5322000.0
+      ],
+      "width": 750,
+      "height": 750,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10UDU650220.tif",
+      "size": 539602,
+      "bounds": [
+        465000.0,
+        5322000.0,
+        465750.0,
+        5322750.0
+      ],
+      "width": 750,
+      "height": 750,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10UDU650310.tif",
+      "size": 1429410,
+      "bounds": [
+        465000.0,
+        5331000.0,
+        465750.0,
+        5331750.0
+      ],
+      "width": 750,
+      "height": 750,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10UDU650317.tif",
+      "size": 117301,
+      "bounds": [
+        465373.0,
+        5331750.0,
+        465750.0,
+        5331935.0
+      ],
+      "width": 377,
+      "height": 185,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10UDU657205.tif",
+      "size": 881934,
+      "bounds": [
+        465750.0,
+        5320768.0,
+        466500.0,
+        5321250.0
+      ],
+      "width": 750,
+      "height": 482,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10UDU657212.tif",
+      "size": 1598904,
+      "bounds": [
+        465750.0,
+        5321250.0,
+        466500.0,
+        5322000.0
+      ],
+      "width": 750,
+      "height": 750,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10UDU657220.tif",
+      "size": 167734,
+      "bounds": [
+        465750.0,
+        5322000.0,
+        466440.0,
+        5322154.0
+      ],
+      "width": 690,
+      "height": 154,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10UDU657310.tif",
+      "size": 480742,
+      "bounds": [
+        465750.0,
+        5331288.0,
+        466468.0,
+        5331750.0
+      ],
+      "width": 718,
+      "height": 462,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10UDU657317.tif",
+      "size": 943919,
+      "bounds": [
+        465750.0,
+        5331750.0,
+        466500.0,
+        5332172.0
+      ],
+      "width": 750,
+      "height": 422,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10UDU665205.tif",
+      "size": 1155637,
+      "bounds": [
+        466500.0,
+        5320612.0,
+        467250.0,
+        5321250.0
+      ],
+      "width": 750,
+      "height": 638,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10UDU665212.tif",
+      "size": 1350017,
+      "bounds": [
+        466500.0,
+        5321250.0,
+        467250.0,
+        5321987.0
+      ],
+      "width": 750,
+      "height": 737,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10UDU665317.tif",
+      "size": 1218031,
+      "bounds": [
+        466500.0,
+        5331757.0,
+        467250.0,
+        5332302.0
+      ],
+      "width": 750,
+      "height": 545,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10UDU672197.tif",
+      "size": 14350,
+      "bounds": [
+        467789.0,
+        5320456.0,
+        468000.0,
+        5320500.0
+      ],
+      "width": 211,
+      "height": 44,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10UDU672205.tif",
+      "size": 1436167,
+      "bounds": [
+        467250.0,
+        5320500.0,
+        468000.0,
+        5321250.0
+      ],
+      "width": 750,
+      "height": 750,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10UDU672212.tif",
+      "size": 830212,
+      "bounds": [
+        467250.0,
+        5321250.0,
+        468000.0,
+        5321767.0
+      ],
+      "width": 750,
+      "height": 517,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10UDU672317.tif",
+      "size": 1135512,
+      "bounds": [
+        467250.0,
+        5331908.0,
+        468000.0,
+        5332366.0
+      ],
+      "width": 750,
+      "height": 458,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10UDU680197.tif",
+      "size": 15148,
+      "bounds": [
+        468000.0,
+        5320439.0,
+        468098.0,
+        5320500.0
+      ],
+      "width": 98,
+      "height": 61,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10UDU680205.tif",
+      "size": 464623,
+      "bounds": [
+        468000.0,
+        5320500.0,
+        468307.0,
+        5321250.0
+      ],
+      "width": 307,
+      "height": 750,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10UDU680212.tif",
+      "size": 64296,
+      "bounds": [
+        468000.0,
+        5321250.0,
+        468283.0,
+        5321431.0
+      ],
+      "width": 283,
+      "height": 181,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10UDU680317.tif",
+      "size": 1257836,
+      "bounds": [
+        468000.0,
+        5331852.0,
+        468750.0,
+        5332359.0
+      ],
+      "width": 750,
+      "height": 507,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10UDU687310.tif",
+      "size": 3615,
+      "bounds": [
+        469455.0,
+        5331741.0,
+        469500.0,
+        5331750.0
+      ],
+      "width": 45,
+      "height": 9,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10UDU687317.tif",
+      "size": 1418082,
+      "bounds": [
+        468750.0,
+        5331750.0,
+        469500.0,
+        5332343.0
+      ],
+      "width": 750,
+      "height": 593,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10UDU695310.tif",
+      "size": 194069,
+      "bounds": [
+        469500.0,
+        5331638.0,
+        470250.0,
+        5331750.0
+      ],
+      "width": 750,
+      "height": 112,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10UDU695317.tif",
+      "size": 1313970,
+      "bounds": [
+        469500.0,
+        5331750.0,
+        470250.0,
+        5332294.0
+      ],
+      "width": 750,
+      "height": 544,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10UDU702310.tif",
+      "size": 3768,
+      "bounds": [
+        470250.0,
+        5331735.0,
+        470276.0,
+        5331750.0
+      ],
+      "width": 26,
+      "height": 15,
+      "epsg": 26910,
+      "nativeMeters": 1
+    },
+    {
+      "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10UDU702317.tif",
+      "size": 99976,
+      "bounds": [
+        470250.0,
+        5331750.0,
+        470353.0,
+        5332113.0
+      ],
+      "width": 103,
+      "height": 363,
+      "epsg": 26910,
+      "nativeMeters": 1
+    }
+  ],
+  "acquisition": "2014-11 with 2015-02 modification; metadata dates differ, per-pixel capture unknown",
+  "projectionLimitation": "Existing geographic-to-UTM approximation; no realization-aware datum transformation or accuracy guarantee"
+}
