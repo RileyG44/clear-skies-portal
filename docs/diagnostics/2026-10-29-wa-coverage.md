@@ -132,7 +132,25 @@ by default. Roll back automatic acquisition by unsetting CSP_DNR_AUTO.
 - Static checks and all 13 iOS Python checks passed.
 - Live all-header validation: 392 files, 487,350,073 source bytes.
 - Independent rasterio/engine samples: both Elwha gaps plus outside control.
-- Actual simulator and deployment evidence is recorded below after completion.
+- Actual iPhone 17 Pro simulator: settled Gorge gap started one automatic job;
+  progress sat at CSS y=126 with Cancel accessible. It fetched/ingested one
+  817,366,653-byte raster. A later provider metadata request timed out; the
+  error stayed visible and the attempt did not restart. A stationary cached
+  view then used 100% numeric DNR from Gorge East Wali 2022 (DTM 1699), with
+  zero new POSTs. No explicit offline-area record was created.
+- npm run verify passed all checks and found zero vulnerabilities. The HTTP
+  warm-job fixture was corrected to avoid accidental live metadata requests.
+- Release archive build 29888771: all 145 site files match the separately
+  assembled/minified artifact, visible build 2026-10-29f.
+- Final bundled simulator: the Elwha view reached 100% federal numeric
+  detail, reported the OPR survey and reference limitations, and issued zero
+  download POSTs. The reservation control issued zero POSTs and retained
+  national/overview ground, but lower-source retries were still active, so
+  this does not independently establish the no-survey trigger behavior. The
+  deterministic no-survey/cap/reserve controls pass. Physical provider errors
+  and the partial live warm-job failure above remain disclosed limitations.
+- Internal-only TestFlight upload of 29888771 succeeded; Apple reported the
+  package processing. Dell deployment and Pages results are in PR #48.
 
 Physical iPhone timing, statewide source completeness and provider throughput
 are not established by unit or simulator checks. Existing baseline/performance,
