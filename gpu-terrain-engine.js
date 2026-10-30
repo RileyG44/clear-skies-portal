@@ -440,21 +440,39 @@
       // Finer records (left from a closer view) stand in only until their own
       // source covers the tile from its level or above; drawn afterwards they
       // would alias, keep old detail on screen and multiply draws.
-      var b = coverageBounds(view, 0, boundsScratch), n = b.n, residents = [];
+      var b = coverageBounds(view, 0, boundsScratch), n = b.n, residents = [], coverageRecords = [];
       planBounds.z = b.z; planBounds.x0 = b.x0; planBounds.x1 = b.x1; planBounds.y0 = b.y0; planBounds.y1 = b.y1;
-      lru.entries.forEach(function (e) { if (e.hasData && !e.obsolete && (!activeSources || activeSources.has(e.record.sourceId))) residents.push(e); });
+      function include(e) {
+        if (e.obsolete || (activeSources && !activeSources.has(e.record.sourceId))) return;
+        if (e.hasData) residents.push(e);
+        var spec = sources.get(e.record.sourceId);
+        // Empty responses establish coverage too. Use GPU residents rather
+        // than the independently evicted CPU cache, including export detail.
+        if (spec && spec.authoritativeCoverage) coverageRecords.push(e.record);
+      }
+      lru.entries.forEach(include);
       // Export-only detail records (see exportTiles); a key already resident is drawn once.
       if (extra) for (var xi = 0; xi < extra.length; xi++) {
         var resident = lru.peek(extra[xi].key);
-        if (extra[xi].hasData && (!resident || resident.obsolete)) residents.push(extra[xi]);
+        if (!resident || resident.obsolete) include(extra[xi]);
       }
       residents.sort(function (a, b) { return a.record.rank - b.record.rank || a.record.z - b.record.z || a.key.localeCompare(b.key); });
       var total = 0, covered = 0;
       for (var y = b.y0; y <= b.y1; y++) for (var wx = b.x0; wx <= b.x1; wx++) {
         var x = mod(wx, n), tile = {z: b.z, x: x, y: y}, has = false, tileStart = plan.length, complete = null;
+        var coverageLevels = {};
+        for (var ci = 0; ci < coverageRecords.length; ci++) {
+          var cr = coverageRecords[ci], scale = Math.pow(2, b.z - cr.z);
+          if (cr.z <= b.z && Math.floor(x / scale) === cr.x && Math.floor(y / scale) === cr.y)
+            coverageLevels[cr.sourceId] = Math.max(coverageLevels[cr.sourceId] || 0, cr.z);
+        }
         for (var j = 0; j < residents.length; j++) {
           var e = residents[j], r = e.record, spec = sources.get(r.sourceId);
           if (spec && spec.allowed && !spec.allowed(tile)) continue;
+          // Sparse DNR coverage is authoritative at the finest answered
+          // level. Its nodata reveals lower-ranked terrain, rather than a
+          // magnified sample left over from a much wider view.
+          if (coverageLevels[r.sourceId] !== undefined && r.z < coverageLevels[r.sourceId]) continue;
           // Sorted by z within a rank, a source's own coverage precedes its finer records.
           if (r.z > b.z && complete && complete[r.sourceId]) continue;
           var factor = Math.pow(2, b.z - r.z), rx0 = mod(r.x, Math.pow(2, r.z)) * factor, ry0 = r.y * factor;

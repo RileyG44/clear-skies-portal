@@ -355,7 +355,7 @@ function gpuElevationSources(){
   // grids stay native; no resampling or masking occurs on the display path.
   const sources=[],add=(id,rank,label,max,url,allowed,kind)=>sources.push({id,rank,label,
     nativeZoom:z=>Math.min(z,max),url,allowed,kind,group:rank===5?"dnr":rank===3?"detail":rank===2?"national":"overview",sharper:true});
-  if(PROXY&&options.dnrEndpoint)add("dnr",5,"WA DNR elevation",18,(z,x,y)=>api(`${options.dnrEndpoint}/${z}/${x}/${y}.png?acquire=0&revision=${env.dnrRevision}`),dnrTileAllowed);
+  if(PROXY&&options.dnrEndpoint){add("dnr",5,"WA DNR elevation",18,(z,x,y)=>api(`${options.dnrEndpoint}/${z}/${x}/${y}.png?acquire=0&revision=${env.dnrRevision}`),dnrTileAllowed);sources[sources.length-1].authoritativeCoverage=true;}
   if(PROXY&&options.rawEndpoint)add("raw",3,"USGS 3.3 ft",18,(z,x,y)=>api(`${options.rawEndpoint}/${z}/${x}/${y}.png?${RAW_COVERAGE_QUERY}`),c=>c.z-env.dz>=13);
   if(PROXY&&options.nationalEndpoint)add("national",2,"National elevation",17,(z,x,y)=>api(`${options.nationalEndpoint}/${z}/${x}/${y}.png`),()=>true);
   if(!PROXY)add("national",2,"USGS 3DEP elevation",18,(z,x,y)=>CSPPublicTerrain.nationalUrl({z,x,y}),()=>true,"lerc");

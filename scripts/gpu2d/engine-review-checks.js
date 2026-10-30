@@ -10,6 +10,49 @@ const fs = require('node:fs');
 const path = require('node:path');
 
 async function additionalChecks({ check, assert, engines, source, record, FakeStore, shaders, view, smooth, makeEngine, settle, compareHeight }) {
+  await check('dnr-finer-coverage-retires-magnified-startup-sample', () => {
+    const base = record('base', 1, 3, 3, 2, 32, 32, smooth);
+    const coarse = record('dnr', 5, 0, 0, 0, 32, 32, (x, y) => x === 15 && y === 11 ? 900 : NaN);
+    const fine = record('dnr', 5, 4, 7, 5, 32, 32, (x, y) => x > 10 && x < 21 && y > 10 && y < 21 ? smooth(x, y) + 100 : NaN);
+    const specs = [source('base', 1, 3), { ...source('dnr', 5, 4), authoritativeCoverage: true }];
+    const item = makeEngine(specs, [base, coarse, fine]);
+    return compareHeight(item, [base, fine], view({ cssSize: [192, 192] }));
+  });
+
+  await check('dnr-confirmed-empty-reveals-lower-source-but-unanswered-keeps-fallback', () => {
+    const base = record('base', 1, 3, 3, 2, 32, 32, () => 100);
+    const coarse = record('dnr', 5, 3, 3, 2, 32, 32, () => 300);
+    const empty = record('dnr', 5, 4, 7, 5, 1, 1, () => NaN);
+    const specs = [source('base', 1, 3), { ...source('dnr', 5, 4), authoritativeCoverage: true }];
+    const frame = view({ cssSize: [128, 128] });
+    const item = makeEngine(specs, [base, coarse]);
+    compareHeight(item, [base, coarse], frame);
+    item.store.emit(empty);
+    return compareHeight(item, [base], frame);
+  });
+
+  await check('dnr-coverage-survives-independent-cpu-eviction', () => {
+    const base = record('base', 1, 3, 3, 2, 32, 32, () => 100);
+    const coarse = record('dnr', 5, 0, 0, 0, 32, 32, () => 900);
+    const empty = record('dnr', 5, 4, 7, 5, 1, 1, () => NaN);
+    const item = makeEngine([source('base', 1, 3), { ...source('dnr', 5, 4), authoritativeCoverage: true }], [base, coarse, empty]);
+    compareHeight(item, [base], view());
+    item.store.records.delete(empty.key);
+    return compareHeight(item, [base], view({ centerMerc: [7.51 / 16, 5.5 / 16] }));
+  });
+
+  await check('dnr-export-only-empty-coverage-retires-live-ancestor', async () => {
+    const base = record('base', 1, 3, 3, 2, 32, 32, () => 100);
+    const coarse = record('dnr', 5, 0, 0, 0, 32, 32, () => 900);
+    const item = makeEngine([source('base', 1, 3), { ...source('dnr', 5, 6), authoritativeCoverage: true }], [base, coarse]);
+    item.store.loadDetail = async tiles => tiles.map(d => record('dnr', 5, d.z, d.x, d.y, 1, 1, () => NaN));
+    const frame = view({ cssSize: [128, 128] }); settle(item, frame);
+    const exported = await item.engine.renderToCanvas(frame, 512, 512);
+    const pixels = exported.getContext('2d').getImageData(0, 0, 512, 512).data;
+    for (let i = 1; i < pixels.length; i += 4) assert(pixels[i] === 51, `export retained DNR rank at pixel ${(i-1)/4}`);
+    return { pixels: 512 * 512, rank: 1 };
+  });
+
   await check('review-preexisting-cpu-ancestor-fills-finer-holes', () => {
     const tiles = [record('raw', 3, 3, 3, 2, 32, 32, smooth),
       record('raw', 3, 4, 7, 5, 32, 32, (x, y) => x > 10 && x < 21 && y > 10 && y < 21 ? NaN : smooth(x, y) + 200)];

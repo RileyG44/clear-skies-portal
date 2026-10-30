@@ -170,7 +170,9 @@
         const got=await fetchOne(source,coords(d,native(source,d.z)));
         if(!got)continue;
         const hasData=got.reused?got.hasData:got.validCount>0,full=got.reused?got.allValid:got.validCount===got.grid.length;
-        if(hasData)out.set(got.key,got);
+        // A successful empty DNR answer must also reach the GPU export plan
+        // so it can retire a coarse DNR ancestor without hiding lower sources.
+        if(hasData||source.authoritativeCoverage)out.set(got.key,got);
         if(full)break;
       }
       if(options.onTile)options.onTile(d);
@@ -309,8 +311,13 @@
         if(s.allowed&&!s.allowed(c))continue;
         for(const z of levels){
           const nz=2**z,r=this._tiles.get(tileKey(s.id,z,Math.floor(mx*nz),Math.min(nz-1,Math.floor(my*nz))));
-          if(!r||!r.validCount)continue;
-          const value=sample(r,mx,my);if(!valid(value))continue;
+          if(!r)continue;
+          const value=r.validCount?sample(r,mx,my):NaN;
+          // A finer cached DNR response establishes this survey's coverage,
+          // including its holes. Falling through to a startup-scale DNR
+          // sample stretches that sample into terrain outside the survey.
+          // Failed reads have no record and may still use a useful ancestor.
+          if(!valid(value)){if(s.authoritativeCoverage)break;continue;}
           if(!best||r.rank>best.rank||(r.rank===best.rank&&r.z>best.z))best={value,rank:r.rank,label:r.label,z:r.z,sourceId:r.sourceId,record:r};
           break;
         }
@@ -330,8 +337,11 @@
   ElevationTileStore.prototype._summary=function(d){
     const key=tileKey('',d.z,mod(d.x,2**d.z),d.y),cached=this._summaries.get(key);if(cached)return cached;
     const sources=this._sources.filter(s=>!s.allowed||s.allowed(d)),ids=new Set(sources.map(s=>s.id)),records=[];
+    // finestFor touches the LRU: resolve it before iterating the live Map.
+    const coverageLevels=new Map(sources.filter(s=>s.authoritativeCoverage).map(s=>[s.id,this.finestFor(s.id,d)?.z]));
     for(const r of this._tiles.values()){
       if(!ids.has(r.sourceId)||!r.validCount)continue;
+      if(r.z<(coverageLevels.get(r.sourceId)??r.z))continue;
       const z=Math.min(d.z,r.z),a=coords(d,z),b=coords(r,z);if(a.x===b.x&&a.y===b.y)records.push(r);
     }
     records.sort((a,b)=>b.rank-a.rank||b.z-a.z||b.key.localeCompare(a.key));
@@ -452,7 +462,7 @@
   function buildSources(o,e){
     const out=[],dz=e.dz||0,add=(id,rank,label,max,url,allowed,kind)=>out.push({id,rank,label,dz,
       nativeZoom:z=>Math.min(z,max),url,allowed,kind,sharper:true,group:rank===5?'dnr':rank===3?'detail':rank===2?'national':'overview',sampleMeters:e.sourceSampleMeters});
-    if(e.proxy&&o.dnrEndpoint){add('dnr',5,'WA DNR elevation',18,(z,x,y)=>e.api(`${o.dnrEndpoint}/${z}/${x}/${y}.png?acquire=0&revision=${e.dnrRevision||0}`),e.dnrTileAllowed);out[out.length-1].cacheKey=o.dnrMaskKey;}
+    if(e.proxy&&o.dnrEndpoint){add('dnr',5,'WA DNR elevation',18,(z,x,y)=>e.api(`${o.dnrEndpoint}/${z}/${x}/${y}.png?acquire=0&revision=${e.dnrRevision||0}`),e.dnrTileAllowed);out[out.length-1].cacheKey=o.dnrMaskKey;out[out.length-1].authoritativeCoverage=true;}
     if(e.proxy&&o.rawEndpoint)add('raw',3,'USGS 3.3 ft',o.rawNativeZoom??28,(z,x,y)=>e.api(`${o.rawEndpoint}/${z}/${x}/${y}.png?${e.rawCoverageQuery||''}`),c=>c.z-dz>=13);
     if(e.proxy&&o.nationalEndpoint)add('national',2,'National elevation',o.nationalNativeZoom??28,(z,x,y)=>e.api(`${o.nationalEndpoint}/${z}/${x}/${y}.png`),c=>c.z-dz>=13||o.refineOverview);
     if(!e.proxy&&o.fallback)add('national',2,'USGS 3DEP elevation',18,(z,x,y)=>e.nationalUrl({z,x,y}),()=>true,'lerc');
