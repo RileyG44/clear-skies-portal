@@ -40,7 +40,7 @@ async function main(){
     refreshTiles(id,tiles){refreshes.push([id,Array.from(tiles,t=>`${t.z}/${t.x}/${t.y}`).sort()]);}
   };
   const context={
-    ...clock,AbortController,DOMException,CSPTilePipeline:require('./tile-pipeline'),waitElevationRetry:async()=>{},performance:{now:()=>now},console,
+    ...clock,AbortController,DOMException,CSPTilePipeline:require('./tile-pipeline'),CSPPublicTerrain:{NATIONAL_MIN_ZOOM:8},waitElevationRetry:async()=>{},performance:{now:()=>now},console,
     $:()=>({value:'auto'}),PROXY:true,API:'engine',api:path=>'engine'+path,serverHealth:null,dnrStatus:{revision:1},dnrElevationAvailable:()=>false,
     fetch:fetchStub,public3dSources:new Map(),public3dDrapeSources:new Map(),scheduleTerrainStatus:()=>{},elevCacheClear:()=>{},
     map3dBuiltKey:'x',elevSpectrumRevision:0,map3d,maplibreProtocolReady:false
@@ -94,9 +94,9 @@ async function main(){
   const none=request(tileUrl(demUrl,14,12,20));await clock.advance(300);await none;
   fine.get(national(14,12,20))(null);await clock.advance(1300);
   assert.equal(refreshes.length,0,'no 3DEP coverage means no refresh');
-  const wrapped=request(tileUrl(demUrl,3,9,2));await clock.advance(300);await wrapped;
-  fine.get(national(3,1,2))(new Uint8Array([2]));await clock.advance(1300);
-  assert.deepEqual(refreshes,[['dem',['3/1/2']]],'x wraps to the canonical tile');
+  const wrapped=request(tileUrl(demUrl,8,257,2));await clock.advance(300);await wrapped;
+  fine.get(national(8,1,2))(new Uint8Array([2]));await clock.advance(1300);
+  assert.deepEqual(refreshes,[['dem',['8/1/2']]],'x wraps to the canonical tile');
   refreshes.length=0;
 
   /* A genuine reset still changes the URL and forgets pending refreshes. */

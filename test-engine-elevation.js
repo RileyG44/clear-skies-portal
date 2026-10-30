@@ -9,7 +9,7 @@ function fixture(dnrAllowed=true,preference='auto'){
   const request=(url,signal)=>new Promise((resolve,reject)=>{
     pending.set(url,resolve);signal.addEventListener('abort',()=>{aborts.push(url);reject(new DOMException('Aborted','AbortError'))},{once:true});
   });
-  const context={AbortController,DOMException,CSPTilePipeline:require('./tile-pipeline'),ElevationTileCore:require('./elevation-tile-core'),
+  const context={AbortController,DOMException,CSPTilePipeline:require('./tile-pipeline'),CSPPublicTerrain:{NATIONAL_MIN_ZOOM:8},ElevationTileCore:require('./elevation-tile-core'),
     $:()=>({value:preference}),api:x=>x,RAW_COVERAGE_QUERY:'ix=3',dnrStatus:{revision:0},dnrTileAllowed:()=>dnrAllowed,
     elevationRequests:{request:(url,loader,{signal})=>request(url,signal)},fetchElevation:()=>{},
     overviewElevation:(coords,signal)=>request('overview',signal)};

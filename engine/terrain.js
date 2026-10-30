@@ -12,6 +12,8 @@ const {TerrainPoolError} = require("../terrain-pool.js");
 const {tileBounds:dnrTileBounds} = require("../wadnr.js");
 const {HttpError,readBody,send,jsonBody} = require("./http.js");
 const {TRANSPARENT,SEA_LEVEL_DEM,isPng,isTiff} = require("./images.js");
+/* Tile zoom: on a high-density screen, on-screen z8 draws z9 tiles. */
+const NATIONAL_MIN_TILE_ZOOM=9;
 const {DEP_HOST,upstream,slot,release,limitedUpstream,terrainAborted} = require("./upstream.js");
 const {TTL_TILE,key,cacheGet,cachePut} = require("./tile-cache.js");
 const {validBbox} = require("./params.js");
@@ -372,6 +374,9 @@ const routes={
     const z=+m[1], x=+m[2], y=+m[3], limit=Math.pow(2,z);
     if(z<0||z>22||x<0||y<0||x>=limit||y>=limit)
       return send(res,400,"text/plain",Buffer.from("bad tile coordinates"));
+    /* 3DEP reads ocean as 0 m, which flattens the overview's seafloor in whole
+       tiles. Keep it out of low zooms for every client, whatever its build. */
+    if(z<NATIONAL_MIN_TILE_ZOOM)return send(res,200,"image/png",TRANSPARENT,{"X-Coverage":"none","X-Elevation-Source":"none","Cache-Control":"public, max-age=604800, immutable"});
     const ck=key(`elevation-national-v1:${z}/${x}/${y}`);
     const hit=cacheGet(ck,TTL_TILE);
     if(hit) return hit.status===204
