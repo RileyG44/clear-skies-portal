@@ -1,3 +1,5 @@
+> **RETIRED 2026-10-29 by Riley.** The change-request / Spec Owner process is no longer used. This file is a historical record only — do not follow it. See AGENTS.md.
+
 # Specification governance
 
 Status: effective under Riley's 2026-09-06 instruction establishing the Spec Owner.

@@ -1,3 +1,5 @@
+> **RETIRED 2026-10-29 by Riley.** The change-request / Spec Owner process is no longer used. This file is a historical record only — do not follow it. See AGENTS.md.
+
 # Decision and approval register
 
 ## GOV-001 — authority established
