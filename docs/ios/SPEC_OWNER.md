@@ -3,22 +3,32 @@
 Project: Clear Skies Native iOS
 Appointed by: Riley Grant, current 2026-09-06 user request
 Initial agent: /root/spec_owner (session handle, not a permanent service)
-Current owner session: none after this handoff. Dedicated Spec Owner sub-agent
-`/root/spec_owner` (Codex) accepted exact CR-012 r1 on 2026-10-29 in a fresh
-bounded session after CR-011 handoff, under independently verified DNR/repair/
-exact-patch instructions and GOV-002. Session ends; implementer gains no custody.
+Current owner session: none after this handoff. A dedicated Spec Owner (Claude
+subagent) accepted exact CR-013 r1, with conditions, on 2026-10-29, in a fresh
+bounded session after the CR-012 handoff. Authority: independently verified
+user_message 1923 and GOV-002. The session ends; the implementer gains no
+custody.
 Current baseline: SPEC.md 0.1.0-draft (commit 142fdf47), unapproved; BASE-001 pending.
-Accepted requests: CR-001–012 r1, CR-004 placement addendum r1-a1; exact requests
-and DECISIONS.md govern scopes/conditions. Current authority: GOV-002.
-Current task: parent implements/verifies CR-012 on isolated branch. Restore
-published DNR only for Auto ordinary unmodified 2D hs, retaining cached numeric
-DNR above it and numeric fallbacks beneath true transparency. Published pixels
-never become elevation, measurements, modified/analytical styles, spectrum or
-3D; explain fixed provider lighting. Preserve explicit source intent, cache-only
-numeric browsing, truthful pixel provenance and stationary retry/refinement.
-CR-011 and all other scientific/loading/UI/restore contracts remain. Parent owns
-verification and separate shipping authority; owner acceptance supplies no
-runtime/scientific/release acceptance. Full conditions in CR-012/DECISIONS.md.
+Accepted requests: CR-001–013 r1 and the CR-004 placement addendum r1-a1. The
+exact requests and DECISIONS.md govern scopes and conditions. Current
+authority: GOV-002.
+Current task: the parent implements and verifies CR-013 on
+`feat/usgs-scope-dnr-auto`.
+- Only engines with CSP_DNR_AUTO=1 (`wadnr-auto`) start one existing DNR warm
+  job at a time. They do so for settled Best available 2D views at zoom 15 or
+  closer, where valid numeric USGS 1 m or cached DNR pixels are missing.
+- Existing budgets apply, with no explicit-area records, and explicit choices,
+  3D, captures and exports are excluded.
+- An automatic job must never strand an explicit download behind "already
+  running".
+- USGS 1 m discovery is widened to `WA_,OR_,ID_,Elwha_` without poisoning the
+  index.
+- The Dell setting is a deployment action under separate shipping authority.
+- Disclose to Riley that the original-resolution DEMs from decision 1 were not
+  added.
+CR-011 (except item 3 for opt-in engines), CR-012 and all other contracts
+remain. The parent owns verification. Full conditions are in CR-013 and
+DECISIONS.md.
 
 ## Start here
 
@@ -546,3 +556,53 @@ request does not establish approval for this one.
   Only CR-012, DECISIONS and this handoff changed, uncommitted for parent. No app
   edits, tests, commit or deployment by owner. Enforcement unverified. Session
   ends here; no perpetual owner or custody transfer to the implementer.
+
+## Handoff — 2026-10-29 (CR-013 r1 only)
+
+- Exact CR-013 r1 ACCEPTED with conditions, in a fresh one-request owner
+  session after the CR-012 handoff. Owner: dedicated Spec Owner (Claude
+  subagent).
+- Binding: independently reproduced the stated 4,618 proposal bytes, SHA-256
+  2e63f71a1158e77f665a286b79e3310543bf8a297ec30ef7e6469b53ea737c33, which
+  match committed blob 17d5c05. Set only workflow Status back to DRAFT to
+  reproduce. The binding excludes the blank separator before the heading,
+  which CR-011 and CR-012 included; the variant is recorded in the request.
+  This is a later traceability binding, not one presented to Riley.
+- Authority: independently read actual completed, untruncated user_message
+  1923 (mobile, 74c815a2-802f-4de9-95ea-9f5b9fe59b7f,
+  2026-10-30T00:51:18.793Z) in the
+  [source thread](t3-thread://v2/25ec7f29-6fda-4160-a0ec-8450030a6239/thread:project:95d7b465-9ac4-4d9b-ad2b-94155aa5a211:23c965b7-44ea-424d-bfea-4b195e8b5ef6).
+  It matches the quote byte for byte. Riley answers both decisions in message
+  1921: add the missed USGS data, and download DNR automatically for viewed
+  gaps. GOV-002 covers both parts of r1 and this review. Also read shipping
+  user_message 229 (mobile, 8e0f7630-d76c-40ac-9697-a0279025379d,
+  2026-10-29T18:49:55.488Z). It predates 1923; this acceptance authorizes no
+  deployment.
+- Static review covered the governing documents, CR-011, CR-012, the affected
+  SPEC IDs, and the warm, status and stop routes. In DnrStore it covered the
+  single job, cell, archive, cache and reserve limits, pause messages,
+  iCloud archival and restore, and the time limit. It also covered explicit
+  start/failure handling in app/areas.js and usgs.js scope parsing. No owner
+  network, runtime, device or scientific test was performed.
+- Conditions in CR-013:
+  - exact gating on valid numeric pixels; published hillshade is not coverage;
+  - existing bounds and no retry loop;
+  - explicit downloads must not be stranded by an automatic job;
+  - unchanged provenance and units, and an honest automatic chip and Cancel;
+  - non-poisoning index widening, with the Oregon/Idaho added-data effect
+    disclosed;
+  - disclosure that the original-resolution DEMs from decision 1 were not
+    added, with the narrowing neither accepted nor approved by the owner;
+  - the Dell setting within scope: only the Dell, archive status recorded,
+    300 GB of 414 GB free disk disclosed, under separate shipping authority;
+  - truthful help text and the full verification plan, plus the added cases.
+- SPEC.md and BASE-001 remain unchanged and unapproved. Unchanged: CR-011
+  apart from item 3 and owner condition 3 for opt-in engines, CR-012, the
+  other CRs, D-05, the broader D-06, the open decisions, the PERF and release
+  gates, and CR-001's distribution scope and expiry.
+- Records: only CR-013, DECISIONS.md and this handoff changed, committed on
+  the parent's branch at its request. No app edits, tests, push, merge,
+  deployment or delegation by this owner. Enforcement remains unverified.
+- Continuity: this CR-013-r1-only session ended at this handoff. No ongoing
+  owner remains, and no approval custody transfers to the coordinating
+  implementer.

@@ -729,6 +729,78 @@ scope/expiry remain. Parent may implement/verify r1. Only owner records changed,
 uncommitted for parent; no app code, tests, commit or deployment by owner.
 Enforcement remains unverified; session ends without custody transfer.
 
+## CR-013 — automatic WA DNR downloads for viewed USGS gaps
+
+Status: ACCEPTED 2026-10-29 (America/Los_Angeles), exact r1 only, with
+conditions.
+Request: change-requests/CR-013-automatic-dnr-for-usgs-gaps.md
+Binding: independently reproduced the stated 4,618 UTF-8/LF proposal bytes,
+SHA-256 2e63f71a1158e77f665a286b79e3310543bf8a297ec30ef7e6469b53ea737c33;
+they match committed blob 17d5c05. Set only workflow Status back to DRAFT to
+reproduce. Unlike CR-011 and CR-012, this binding excludes the blank separator
+before the approval heading; the variant that includes it is recorded in the
+request. This is a later traceability hash, not one presented to Riley. The
+proposal is otherwise unchanged.
+Owner: dedicated Spec Owner (Claude subagent), fresh CR-013-r1-only session;
+it ends at this handoff.
+Authority: independently read the actual completed, untruncated user_message
+at position 1923 in the [source thread](t3-thread://v2/25ec7f29-6fda-4160-a0ec-8450030a6239/thread:project:95d7b465-9ac4-4d9b-ad2b-94155aa5a211:23c965b7-44ea-424d-bfea-4b195e8b5ef6)
+(mobile, messageId 74c815a2-802f-4de9-95ea-9f5b9fe59b7f, updatedAt
+2026-10-30T00:51:18.793Z). It matches the request's quote byte for byte. Riley
+answers both decisions in assistant message 1921: "Add the missed USGS data",
+and automatic gap-area DNR download that "reverses the current rule that
+panning never starts a download". GOV-002 covers both parts of r1 and this
+review without reconfirmation. Also read shipping user_message 229 (mobile,
+messageId 8e0f7630-d76c-40ac-9697-a0279025379d, updatedAt
+2026-10-29T18:49:55.488Z). It predates 1923, and owner acceptance itself
+authorizes no deployment.
+
+Accepted scope:
+- Engines that set CSP_DNR_AUTO=1 advertise `wadnr-auto`; the default is off.
+- With it, settled Best available 2D terrain or elevation views at zoom 15 or
+  closer start one existing /api/wadnr/warm job at a time. The job covers
+  display tiles without valid numeric USGS 1 m or cached DNR pixels.
+- Jobs keep the existing survey choice and the existing cell, archive, cache,
+  free-disk-reserve and time limits. Attempted or cached boxes are not
+  restarted.
+- Explicit National/USGS choices, 3D, captures and exports never start a job.
+- Progress is shown in an "automatic" chip with Cancel. Jobs create no
+  download-area records or outlines.
+- USGS 1 m discovery defaults to `WA_,OR_,ID_,Elwha_`. Background listing
+  never poisons the index, and scope-tagged negatives are checked again once.
+- The Dell sets CSP_DNR_AUTO=1 and CSP_DNR_CACHE_GB=300. This is within the
+  task's scope but is a deployment action under separate shipping authority.
+  Its archive status, and the 300 GB of 414 GB free disk, must be recorded
+  and disclosed.
+- Help text is updated truthfully.
+The exact proposal and the numbered owner conditions in CR-013 govern.
+
+Limits and open items:
+- An automatic job must not leave an explicit download failing with only
+  "already running". Published DNR hillshade is not numeric coverage.
+  Provenance, units and coverage stay unchanged (DATA-03/06, RENDER-03).
+- R1 adds only the Oregon/Idaho/Elwha 1 m part of decision 1 in message
+  1921. The original-resolution DEMs Riley was offered are not added; the
+  coordinator's 10-point recheck (positions 1976 and 1979) judged them mostly
+  a scan error. The owner neither accepts nor approves that narrowing. It must
+  be disclosed to Riley in the PR and task report. If Riley still wants the
+  DEMs, they need their own bounded request as a new source under the same
+  instruction.
+- No owner network, runtime, device or scientific test was performed. The
+  parent owns all of r1's verification and the added owner checks.
+
+Affected: U-03, CAP-04, DATA-03/05/06, RENDER-01/03, UX-02/03, D-06 (this
+acquisition policy and discovery default only), CR-011 item 3 and owner
+condition 3 (only for opt-in engines), and CR-001 parity. This is a permanent
+bounded supplement. SPEC.md 0.1.0-draft and BASE-001 remain unchanged and
+unapproved. Unchanged: the rest of CR-011, CR-012 and the other CRs; D-05
+offline packages; the broader source, datum and tolerance policy; the open
+decisions; the PERF and release gates; and CR-001's internal distribution
+scope and expiry. The parent may implement and verify r1. This owner changed
+only the owner records, committed on the parent's branch, with no app code,
+tests, push or deployment. Enforcement remains unverified. The session ends
+without any custody transfer.
+
 ## Open decisions
 
 D-01 and D-03 through D-08 in SPEC.md remain unresolved. D-02 is resolved for
@@ -739,7 +811,9 @@ implementation artifact or agent review resolves them on Riley's behalf.
 CR-002 resolves only the misleading curvature name/description referenced by
 DATA-06. CR-011 resolves only the Best available preference for already cached
 WA DNR elevation. CR-012 adds only the eligible ordinary published-hillshade
-preference; broader D-06 source/datum/tolerance decisions remain open.
+preference. CR-013 adds only opt-in automatic DNR acquisition for viewed USGS
+gaps and the widened USGS 1 m discovery default. Broader D-06 source, datum
+and tolerance decisions remain open, as does D-05.
 
 ## Version log
 
@@ -810,3 +884,11 @@ preference; broader D-06 source/datum/tolerance decisions remain open.
   Numeric/image separation, cached DNR priority, explicit source intent, truthful
   provenance and stationary refinement retained; implementation/verification
   remain with parent and baseline/release gates stay unchanged.
+
+- 2026-10-29: CR-013 r1 accepted with conditions after independent review of
+  authority, the digest and the warm-job and discovery source. It adds opt-in
+  automatic WA DNR downloads for viewed USGS gaps, amending CR-011 item 3 only
+  for opt-in engines, plus Oregon/Idaho/Elwha 1 m discovery and the Dell
+  setting under separate shipping authority. The narrowing that leaves out the
+  original-resolution DEMs must be disclosed to Riley. Baseline and release
+  gates are unchanged; implementation and verification remain with the parent.
