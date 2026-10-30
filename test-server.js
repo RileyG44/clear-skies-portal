@@ -415,11 +415,13 @@ async function main(){
       const r=raw[1],g=raw[2],b=raw[3];
       assert.equal((r*256+g+b/256)-32768,0,"no-coverage DEM tile must decode to 0 m");
     }
-    const national=await request(port,"/api/elev/national/5/4/15.png");
+    const lowZoom=await request(port,"/api/elev/national/5/4/15.png");
+    assert.equal(lowZoom.headers["x-coverage"],"none","low zooms keep the overview's seafloor");
+    const national=await request(port,"/api/elev/national/9/136/495.png");
     assert.equal(national.status,200);
     assert.equal(national.headers["x-elevation-source"],"3dep");
     assert.equal(national.headers["x-coverage"],"1");
-    const nationalCached=await request(port,"/api/elev/national/5/4/15.png");
+    const nationalCached=await request(port,"/api/elev/national/9/136/495.png");
     assert.equal(nationalCached.headers["x-cache"],"hit");
     assert.deepEqual(nationalCached.body,national.body);
     assert.equal((await request(port,"/api/usgs/tile/notastyle/1/0/0.png")).status,400);

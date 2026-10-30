@@ -39,7 +39,7 @@ function harness({bounds=null,inView={},source='auto',ignoreAbort=false}={}){
       getTileByID:key=>{const value=view.inView[id]?.[Number(key.split(':').at(-1))];if(!value)return;
         const [z,x,y]=value.split('/').map(Number);return {tileID:{canonical:{z,x,y}}};}}]))}
   };
-  const context={...clock,AbortController,DOMException,AggregateError,CSPTilePipeline:require(path.join(ROOT,'tile-pipeline.js')),
+  const context={...clock,AbortController,DOMException,AggregateError,CSPTilePipeline:require(path.join(ROOT,'tile-pipeline.js')),CSPPublicTerrain:{NATIONAL_MIN_ZOOM:8},
     performance:{now:()=>now},console,
     $:()=>({value:source}),PROXY:true,API:'engine',api:p=>'engine'+p,serverHealth:null,dnrStatus:{revision:1},dnrElevationAvailable:()=>false,
     fetch:fetchStub,public3dSources:new Map(),public3dDrapeSources:new Map(),scheduleTerrainStatus:()=>{},elevCacheClear:()=>{},

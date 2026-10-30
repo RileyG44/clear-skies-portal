@@ -4,7 +4,7 @@ const html=require("./test-fixtures/page-source.js");
 const code=html.slice(html.indexOf('function terrainDemTiles('),html.indexOf('function terrainTheme('));
 const flush=async()=>{for(let i=0;i<12;i++)await new Promise(resolve=>setImmediate(resolve));};
 function fixture(){
-  const pending=[],ctx={AbortController,DOMException,CSPTilePipeline:require('./tile-pipeline'),console,
+  const pending=[],ctx={AbortController,DOMException,CSPTilePipeline:require('./tile-pipeline'),CSPPublicTerrain:{NATIONAL_MIN_ZOOM:8},console,
     setTimeout,clearTimeout,performance,$:()=>({value:'auto'}),PROXY:true,API:'test',api:x=>x,serverHealth:null,
     dnrStatus:{revision:0},dnrElevationAvailable:()=>false,waitElevationRetry:async()=>{},
     public3dSources:new Map(),public3dDrapeSources:new Map(),scheduleTerrainStatus(){},elevCacheClear(){},
@@ -22,7 +22,12 @@ function fixture(){
 }
 async function main(){
   let f=fixture(),controller=new AbortController();
-  let tile=f.request(500,controller.signal);await flush();
+  let tile=f.ctx.meshTile(4,5,7,controller.signal,'dem');await flush();
+  assert(!f.pending.some(p=>p.url.includes('/national/')),'low zooms never read 3DEP, which flattens the ocean');
+  f.pending.find(p=>p.url.endsWith('/4/5/7.png')).resolve(1);assert.equal(new Uint8Array(await tile)[0],1);
+
+  f=fixture();controller=new AbortController();
+  tile=f.request(500,controller.signal);await flush();
   assert(f.overview(500),'overview starts immediately alongside fine work');
   f.national(500).resolve(2);assert.equal(new Uint8Array(await tile)[0],2);
   assert(f.overview(500).signal.aborted,'fine arrival cancels its slow overview');

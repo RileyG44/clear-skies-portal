@@ -440,6 +440,7 @@ async function fetchPublicElevation(url,signal){
   }finally{clearTimeout(timeout);signal?.removeEventListener("abort",abort)}
 }
 async function publicElevationWithFallback(coords,signal){
+  if(coords.z<CSPPublicTerrain.NATIONAL_MIN_ZOOM)return overviewElevation(coords,signal);
   const native=Math.min(coords.z,18),scale=2**(coords.z-native),parent={z:native,x:Math.floor(coords.x/scale),y:Math.floor(coords.y/scale)};
   try{
     const url=CSPPublicTerrain.nationalUrl(parent);
@@ -541,13 +542,14 @@ async function engineElevationWithFallback(coords,signal,mesh=false){
     .then(source=>source?{source,rank}:null).catch(error=>{if(signal.aborted)throw error;return null;});
   const useDnr=dnrTileAllowed(coords);
   if(useDnr)requests.push(request(`/api/wadnr/elev/${coords.z}/${coords.x}/${coords.y}.png?acquire=0&revision=${dnrStatus?.revision||0}`,5,"dnr"));
-  requests.push(request(`/api/elev/national/${coords.z}/${coords.x}/${coords.y}.png`,2,"national"));
+  const useNational=coords.z>=CSPPublicTerrain.NATIONAL_MIN_ZOOM;
+  if(useNational)requests.push(request(`/api/elev/national/${coords.z}/${coords.x}/${coords.y}.png`,2,"national"));
   const want=$("#terSrc").value;
   const useRaw=coords.z>=13&&want!=="3dep"&&(!mesh||want==="usgs1m");
   if(useRaw)requests.push(request(`/api/usgs/elev/${coords.z}/${coords.x}/${coords.y}.png?${RAW_COVERAGE_QUERY}`,3,"detail"));
   requests.push(overviewElevation(coords,requestSignal).then(source=>({source,rank:1})).catch(error=>{if(signal.aborted)throw error;return null;}));
   const progress=new CSPTilePipeline.ProgressiveGrid(256*256);
-  const ranks=[...(useDnr?[5]:[]),2,...(useRaw?[3]:[]),1];
+  const ranks=[...(useDnr?[5]:[]),...(useNational?[2]:[]),...(useRaw?[3]:[]),1];
   const pending=new Set(ranks);
   try{
     return await new Promise((resolve,reject)=>{

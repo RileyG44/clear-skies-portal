@@ -109,6 +109,7 @@ function meshFineTile(z,x,y){
         meshRanks.set(key,source.ranks);
         return terrariumPng(source.grid);
       }
+      if(z<CSPPublicTerrain.NATIONAL_MIN_ZOOM)return null;
       for(let attempt=0;attempt<3;attempt++){
         const response=await fetch(api(`/api/elev/national/${z}/${x}/${y}.png`),{signal});
         if(response.ok){
@@ -120,6 +121,7 @@ function meshFineTile(z,x,y){
       }
       return null;
     }
+    if(z<CSPPublicTerrain.NATIONAL_MIN_ZOOM)return null;
     const url=CSPPublicTerrain.nationalUrl({z,x,y});
     const tile=await elevationRequests.request(url,signal=>fetchPublicElevation(url,signal),{signal,priority:2,group:"national"});
     if(!tile) return null;
@@ -613,6 +615,7 @@ async function drapeElevation(z,x,y,signal){
     if(!PROXY)return publicElevationWithFallback({z,x:wx,y},signal);
     if(dnrElevationAvailable())
       return engineElevationWithFallback({z,x:wx,y},signal,false);
+    if(z<CSPPublicTerrain.NATIONAL_MIN_ZOOM)return overviewElevation({z,x:wx,y},signal);
     /* 503 is a briefly saturated terrain pool. Honor Retry-After and keep
        retries abortable so abandoned viewports leave no work behind. */
     for(let attempt=0;;attempt++){
