@@ -387,11 +387,10 @@ function loadTerrainPrefs(){
    tiles. A bounded queue prevents three layers from saturating the engine. */
 /* The engine runs a render per core (two per worker while they wait on S3),
    so the page keeps it fed: six raw 1 m renders in flight instead of two. */
-// Sharp work uses at most six slots, leaving twelve for newly exposed terrain.
-// A slow primary request must not keep every free slot idle indefinitely.
-// The engine groups together take at most fourteen, so the fast overview and
-// its backdrop always have slots while slow renders are in flight.
-const elevationRequests=new CSPTilePipeline.RequestPool({concurrency:18,groupLimits:{detail:6,national:6,overview:6,sharp:6,dnr:2,backdrop:3}});
+// LiDAR takes most of the engine's slots: tiles it has cached come straight
+// back, and it queues the rest cheaply. The engine groups together take at most
+// eighteen, so the fast overview always has slots while renders are in flight.
+const elevationRequests=new CSPTilePipeline.RequestPool({concurrency:20,groupLimits:{detail:10,national:6,overview:6,sharp:6,dnr:2,backdrop:3}});
 function sourceSampleMeters(coords){
   const count=2**coords.z,latitude=Math.atan(Math.sinh(Math.PI*(1-2*(coords.y+.5)/count)));
   return 156543.03392804097*Math.cos(latitude)/count;
@@ -482,7 +481,8 @@ async function fetchElevation(url,signal){
     if(signal.aborted) throw new DOMException("Aborted","AbortError");
     const controller=new AbortController(),abort=()=>controller.abort();
     signal.addEventListener("abort",abort,{once:true});
-    const timeout=setTimeout(abort,10000);
+    // A raw tile can wait its turn on the engine; abandoning it wastes the render.
+    const timeout=setTimeout(abort,url.includes("/api/usgs/elev/")?30000:10000);
     try{
       const response=await fetchOverviewResponse(url,controller.signal);
       if(isDnr&&response.status===202){
@@ -545,7 +545,7 @@ async function engineElevationWithFallback(coords,signal,mesh=false){
   const useNational=coords.z>=CSPPublicTerrain.NATIONAL_MIN_ZOOM;
   if(useNational)requests.push(request(`/api/elev/national/${coords.z}/${coords.x}/${coords.y}.png`,2,"national"));
   const want=$("#terSrc").value;
-  const useRaw=coords.z>=13&&want!=="3dep"&&(!mesh||want==="usgs1m");
+  const useRaw=coords.z>=13&&want!=="3dep";
   if(useRaw)requests.push(request(`/api/usgs/elev/${coords.z}/${coords.x}/${coords.y}.png?${RAW_COVERAGE_QUERY}`,3,"detail"));
   requests.push(overviewElevation(coords,requestSignal).then(source=>({source,rank:1})).catch(error=>{if(signal.aborted)throw error;return null;}));
   const progress=new CSPTilePipeline.ProgressiveGrid(256*256);

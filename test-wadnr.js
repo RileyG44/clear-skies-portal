@@ -128,11 +128,14 @@ function sourceChoiceChecks(){
   assert(html.includes('id="dnrSelect"')&&html.includes('id="dnrFetch"'),"terrain panel offers select-and-fetch for WA DNR areas");
   const fn=html.slice(html.indexOf("function chooseTerrain("),html.indexOf("/* Presentation is independent",html.indexOf("function chooseTerrain(")));
   const context={$:()=>({value:"auto"}),map:{getZoom:()=>15},PROXY:true,waIds:()=>[77],waProjects:()=>[],
-    WADNR_OK:new Set(["hs"]),usgsCover:null,waCoverageState:"ready",dnrElevationAvailable:()=>true,studioStack:()=>null};
+    WADNR_OK:new Set(["hs"]),usgsCover:null,waCoverageState:"ready",dnrElevationAvailable:()=>true,studioStack:()=>null,gpuTerrainEnabled:false};
   vm.createContext(context);vm.runInContext(fn,context);
   for(const style of ["hsmulti","slope","aspect","northness","tint","c2"])
     assert.equal(context.chooseTerrain(style).src,"wadnr-elevation",`${style} can derive from fetched DNR elevation`);
-  assert.equal(context.chooseTerrain("hs").src,"wadnr","ordinary hillshade restores the published DNR source (with numeric DNR pixel priority)");
+  assert.equal(context.chooseTerrain("hs").src,"wadnr","without the GPU path, ordinary hillshade uses the published DNR composite");
+  context.gpuTerrainEnabled=true;
+  assert.equal(context.chooseTerrain("hs").src,"wadnr-elevation","on the GPU a picture never replaces numeric LiDAR");
+  context.gpuTerrainEnabled=false;
   context.studioStack=()=>({layers:[{style:"hs"}]});
   assert.equal(context.chooseTerrain("hs").src,"wadnr-elevation","modified Studio hillshade keeps numeric elevation");
   context.studioStack=()=>null;

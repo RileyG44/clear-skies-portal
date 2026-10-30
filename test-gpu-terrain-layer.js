@@ -1,6 +1,6 @@
 'use strict';
 const assert=require('node:assert/strict');
-const {mercator,resolveFlag,buildState,viewFromMap,exportView}=require('./gpu-terrain-layer.js');
+const {mercator,resolveFlag,buildState,levelOffset,viewFromMap,exportView}=require('./gpu-terrain-layer.js');
 let checks=0;
 function near(a,b,epsilon=1e-10){assert(Math.abs(a-b)<epsilon,`${a} != ${b}`);checks++;}
 near(mercator({lat:0,lng:0})[0],.5);near(mercator({lat:0,lng:0})[1],.5);
@@ -13,6 +13,11 @@ const map={getSize:()=>({x:1000,y:600}),getZoom:()=>14,getBearing:()=>37,getCent
 const view=viewFromMap(map,null,2);
 assert.deepEqual(view,{centerMerc:mercator(map.getCenter()),zoom:14,bearing:37,cssSize:[1000,600],dpr:2,dz:1});
 assert.equal(viewFromMap(map,null,1.49).dz,0);assert.equal(viewFromMap(map,null,1.5).dz,1);
+// A 3x screen gets 0.7 to 1.4 elevation samples per physical pixel at every zoom.
+for(let zoom=10;zoom<20;zoom+=.03){
+  const level=Math.round(zoom)+levelOffset(zoom,3),density=2**level/2**zoom/3;
+  assert.ok(density>=.7&&density<=1.42,`zoom ${zoom}: ${density} samples per pixel`);
+}
 const painted=viewFromMap(map,{center:{lat:0,lng:0},zoom:14.375},1);
 near(painted.zoom,14.375);near(painted.centerMerc[0],.5);checks+=3;
 const settings={style:'aspect',opacity:.63,look:{contrast:115,saturation:82,brightness:106},

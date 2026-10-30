@@ -179,15 +179,14 @@
     })).then(()=>[...out.values()]);
   };
   ElevationTileStore.prototype._load=function(job){
-    const {key,source,c,sharp,backdrop}=job;
+    const {key,source,c,backdrop,priority=source.rank}=job;
     if(this._tiles.has(key))return Promise.resolve(this._tiles.get(key));
-    if(this._pending.has(key))return this._pending.get(key).promise;
+    if(this._pending.has(key)){this.options.prioritize?.(job.url,priority);return this._pending.get(key).promise;}
     if((this._failed.get(key)||0)>Date.now())return Promise.resolve(null);
     const controller=new AbortController(),epoch=this._epoch;
     const pending={controller,promise:null,job};this._pending.set(key,pending);
     pending.promise=Promise.resolve().then(()=>{if(controller.signal.aborted)return null;return this.options.request(job.url,{
-      signal:controller.signal,priority:backdrop?.5:sharp?0:source.rank===5?2:source.rank,
-      group:backdrop?'backdrop':sharp?'sharp':source.group||'overview',kind:source.kind
+      signal:controller.signal,priority,group:backdrop?'backdrop':source.group||'overview',kind:source.kind
     });}).then(data=>{
       if(controller.signal.aborted||epoch!==this._epoch||this._destroyed)return null;
       const r=this._record(job,data);
@@ -206,6 +205,12 @@
     });
     return pending.promise;
   };
+  /* One rule for every view: each display tile asks for the finest level there
+     is, once, from the view's centre out. LiDAR sources start together, and a
+     lower source is fetched only for what they left empty or failed to deliver.
+     Two things keep the map covered while that loads: the overview, and a
+     stand-in from the best source two levels coarser - one request per sixteen
+     tiles, so the whole screen is LiDAR almost at once. */
   ElevationTileStore.prototype.want=function(displayTiles,options){
     if(this._destroyed)return;
     const sources=(typeof this.options.sources==='function'?this.options.sources():this.options.sources||[]).slice();
@@ -224,43 +229,49 @@
     }
     const displayKeys=new Set(displayTiles.map(d=>tileKey('',d.z,mod(d.x,2**d.z),d.y)));
     for(const key of this._summaries.keys())if(!displayKeys.has(key))this._summaries.delete(key);
-    const wanted=new Map(),groups=[];
-    for(const d of displayTiles){
-      const jobs=[];
-      for(const source of this._sources){
+    const bounds=this._bounds||boundsOf(displayTiles);
+    const cx=bounds?(bounds.x0+bounds.x1+1)/2:0,cy=bounds?(bounds.y0+bounds.y1+1)/2:0;
+    const distance=d=>bounds?Math.hypot(d.x+.5-cx,d.y+.5-cy):0;
+    const order=displayTiles.slice().sort((a,b)=>distance(a)-distance(b));
+    const ranked=sources.filter(s=>!s.backdrop).sort((a,b)=>b.rank-a.rank),LIDAR=3;
+    const wanted=new Map(),chains=[],cover=[];
+    const job=(source,c,priority,list)=>{
+      const key=tileKey(source.id,c.z,c.x,c.y);
+      if(wanted.has(key))return wanted.get(key);
+      const made={key,source,c,url:sourceUrl(source,c),priority};
+      wanted.set(key,made);list?.push(made);return made;
+    };
+    order.forEach((d,index)=>{
+      const near=1-index/order.length,chain={lidar:[],rest:[]};
+      for(const source of ranked){
         if(source.allowed&&!source.allowed(d))continue;
-        const shown=Math.max(0,d.z-(source.dz??this.options.dz??0));
-        for(const sharp of [false,true]){
-          if(sharp&&source.sharper===false)continue;
-          const z=native(source,sharp?d.z:shown),c=coords(d,z),key=tileKey(source.id,z,c.x,c.y);
-          const url=sourceUrl(source,c);
-          const job={key,source,c,url,sharp};
-          if(!wanted.has(key)||!sharp)wanted.set(key,job);
-          jobs.push(job);
-          if(shown===d.z)break;
-        }
+        const c=coords(d,native(source,d.z));
+        (source.rank>=LIDAR?chain.lidar:chain.rest).push(job(source,c,Math.min(source.rank,LIDAR)+near));
+        if(!source.standIn||c.z<source.standIn||this._tiles.has(tileKey(source.id,c.z,c.x,c.y)))continue;
+        const coarse=coords(d,c.z-source.standIn);
+        if(!source.allowed||source.allowed(coarse))job(source,coarse,6,cover);
       }
-      groups.push(jobs);
-    }
-    const backdrop=[],bounds=this._bounds||boundsOf(displayTiles);
-    if(bounds)for(const source of this._sources){
+      chains.push(chain);
+      for(const source of sources)if(source.backdrop&&(!source.allowed||source.allowed(d)))
+        job(source,coords(d,native(source,d.z)),source.rank,cover);
+    });
+    const backdrop=[];
+    if(bounds)for(const source of sources){
       if(!source.backdrop)continue;
       for(const t of backdropTiles(bounds,source.dz??this.options.dz??0)){
         if(source.allowed&&!source.allowed(t))continue;
         const c=coords(t,native(source,t.z)),key=tileKey(source.id,c.z,c.x,c.y);
         if(wanted.has(key))continue;
-        const job={key,source,c,url:sourceUrl(source,c),sharp:false,backdrop:true};
-        wanted.set(key,job);backdrop.push(job);
+        const made={key,source,c,url:sourceUrl(source,c),priority:.5,backdrop:true};
+        wanted.set(key,made);backdrop.push(made);
       }
     }
     /* Coarser backdrop tiles still on their way are fallback for this view: a
        fast zoom in must not cancel them just because it passed their level.
-       Only the backdrop's, which are cheap. Kept 1 m, national and DNR tiles
-       for the levels a pinch passed through are slow renders; they held every
-       detail slot, so the view the zoom ended on waited seconds behind levels
-       it no longer shows (measured 4 s on a 17.4 pinch, 2026-10-29). */
+       Only the backdrop's, which are cheap; slow renders for levels a pinch
+       passed through are cancelled so the view it ended on goes first. */
     const fallback=new Set();
-    for(const d of displayTiles)for(const source of this._sources){
+    for(const d of displayTiles)for(const source of sources){
       if(!source.backdrop||source.allowed&&!source.allowed(d))continue;
       const z=native(source,Math.max(0,d.z-(source.dz??this.options.dz??0)));
       for(let k=1;k<=FALLBACK_LEVELS&&z-k>=0;k++){const c=coords(d,z-k);fallback.add(tileKey(source.id,c.z,c.x,c.y));}
@@ -268,35 +279,19 @@
     this._wanted=wanted;
     for(const [key,until] of this._failed)if(!wanted.has(key)||until<=Date.now())this._failed.delete(key);
     for(const [key,p] of this._pending)if(!wanted.has(key)&&!fallback.has(key)){p.controller.abort();this._pending.delete(key);}
-    // Every primary source is dispatched together; refinement cannot starve it.
-    const primary=new Map(),dependents=new Map();
-    for(const jobs of groups)for(const j of jobs)if(!j.sharp){
-      primary.set(j.key,j);
-      if(!dependents.has(j.key))dependents.set(j.key,[]);
-      dependents.get(j.key).push(jobs);
-    }
-    const epoch=this._epoch;
-    // Refine each available region independently. One slow/missing primary
-    // must not hold every ready region behind a viewport-wide barrier.
-    const refine=key=>{
-      if(epoch!==this._epoch||demand!==this._demand||this._destroyed)return;
-      for(const jobs of dependents.get(key)||[]){
-        if(!jobs.length)continue;
-        const available=jobs.filter(j=>!j.sharp&&this._tiles.has(j.key)&&this._tiles.get(j.key).validCount>0);
-        available.sort((a,b)=>b.source.rank-a.source.rank);
-        for(const best of available){
-          const sharp=jobs.find(j=>j.sharp&&j.source.id===best.source.id&&j.c.z>best.c.z);
-          if(sharp&&this._wanted.has(sharp.key))this._load(sharp);
-          // Partial surveys still expose lower-rank fallback pixels. Those
-          // pixels need their native detail too; full coverage can hide them.
-          if(this._tiles.get(best.key).validCount===this._tiles.get(best.key).grid.length)break;
-        }
+    const epoch=this._epoch,stale=()=>epoch!==this._epoch||demand!==this._demand||this._destroyed;
+    const full=record=>record&&record.validCount===record.grid.length;
+    const walk=async chain=>{
+      if((await Promise.all(chain.lidar.map(link=>this._load(link)))).some(full))return;
+      for(const link of chain.rest){
+        if(stale())return;
+        if(full(await this._load(link)))return;
       }
-      this._evict();
     };
-    const first=Promise.all([...primary.values()].map(j=>this._load(j).then(record=>{refine(j.key);return record;})));
-    // The backdrop queues behind the view's own tiles (see _load priority).
-    for(const job of backdrop)this._load(job);
+    for(const made of cover)this._load(made);
+    const first=Promise.all(chains.map(walk)).then(()=>{if(!stale())this._evict();});
+    // The backdrop queues behind the view's own tiles (see its priority).
+    for(const made of backdrop)this._load(made);
     this._scheduleRetry();
     return first;
   };
@@ -461,9 +456,11 @@
   ElevationTileStore.prototype.stats=function(){return {tiles:this._tiles.size,bytes:this._bytes,pending:this._pending.size,maxBytes:this.maxBytes};};
   function buildSources(o,e){
     const out=[],dz=e.dz||0,add=(id,rank,label,max,url,allowed,kind)=>out.push({id,rank,label,dz,
-      nativeZoom:z=>Math.min(z,max),url,allowed,kind,sharper:true,group:rank===5?'dnr':rank===3?'detail':rank===2?'national':'overview',sampleMeters:e.sourceSampleMeters});
+      nativeZoom:z=>Math.min(z,max),url,allowed,kind,group:rank===5?'dnr':rank===3?'detail':rank===2?'national':'overview',sampleMeters:e.sourceSampleMeters});
     if(e.proxy&&o.dnrEndpoint){add('dnr',5,'WA DNR elevation',18,(z,x,y)=>e.api(`${o.dnrEndpoint}/${z}/${x}/${y}.png?acquire=0&revision=${e.dnrRevision||0}`),e.dnrTileAllowed);out[out.length-1].cacheKey=o.dnrMaskKey;out[out.length-1].authoritativeCoverage=true;}
-    if(e.proxy&&o.rawEndpoint)add('raw',3,'USGS 3.3 ft',o.rawNativeZoom??28,(z,x,y)=>e.api(`${o.rawEndpoint}/${z}/${x}/${y}.png?${e.rawCoverageQuery||''}`),c=>c.z-dz>=13);
+    // Below tile z13 one raw tile opens dozens of surveys (5-30 s and 503s on the
+    // engine, measured) for pixels over 13 m wide. National shows the same there.
+    if(e.proxy&&o.rawEndpoint){add('raw',3,'USGS 3.3 ft',o.rawNativeZoom??28,(z,x,y)=>e.api(`${o.rawEndpoint}/${z}/${x}/${y}.png?${e.rawCoverageQuery||''}`),c=>c.z>=13);out[out.length-1].standIn=2;}
     const nationalMin=e.nationalMinZoom||0;
     if(e.proxy&&o.nationalEndpoint)add('national',2,'National elevation',o.nationalNativeZoom??28,(z,x,y)=>e.api(`${o.nationalEndpoint}/${z}/${x}/${y}.png`),c=>c.z-dz>=13||o.refineOverview&&c.z-dz>=nationalMin);
     if(!e.proxy&&o.fallback)add('national',2,'USGS 3DEP elevation',18,(z,x,y)=>e.nationalUrl({z,x,y}),c=>c.z-dz>=nationalMin,'lerc');

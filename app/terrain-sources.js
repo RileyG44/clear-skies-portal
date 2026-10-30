@@ -318,15 +318,17 @@ function initGpuTerrain(){
   if(window.CSPGpuTerrainLayer?.resolveFlag(location.search,storage)&&window.CSPGpuTerrainStore&&L.cspGpuTerrainLayer){
     gpuTerrainStore=new CSPGpuTerrainStore.ElevationTileStore({
       sources:gpuElevationSources,request:gpuElevationRequest,
-      maxBytes:(matchMedia("(pointer:coarse)").matches?64:192)*1024*1024});
+      prioritize:(url,priority)=>elevationRequests.prioritize(url,priority),
+      maxBytes:(matchMedia("(pointer:coarse)").matches?128:192)*1024*1024});
     gpuTerrainLayer=L.cspGpuTerrainLayer({store:gpuTerrainStore,state:gpuTerrainState(),zIndex:440,
-      maxTextureBytes:(matchMedia("(pointer:coarse)").matches?64:192)*1024*1024,
+      maxTextureBytes:(matchMedia("(pointer:coarse)").matches?128:192)*1024*1024,
       panShading:window.CSPGpuTerrainLayer.panShadingMode(storage)});
     /* Settings → Smoother panning (CR-008). */
     document.addEventListener("csp:pan-shading",event=>gpuTerrainLayer?.setPanShading(event.detail?.mode));
     gpuTerrainEnabled=!!gpuTerrainLayer.getEngine();
     gpuTerrainLayer.on("render",scheduleStudioFit);
     gpuTerrainStore.on("error",scheduleTerrainStatus);
+    gpuTerrainStore.on("settled",scheduleGapPictures);
     if(!gpuTerrainEnabled){gpuTerrainLayer.destroy();gpuTerrainLayer=null;
       try{gpuTerrainStore.destroy()}catch{}gpuTerrainStore=null;}
   }
@@ -347,21 +349,9 @@ function gpuElevationSources(){
   const key=options.sourceKey+":"+(HIDPI?1:0);
   if(gpuSourceSpecs&&gpuSourceSpecsKey===key)return gpuSourceSpecs;
   gpuSourceSpecsKey=key;
-  // buildSources' environment is the only adapter seam with Workstream D.
   const env={proxy:PROXY,api,dz:HIDPI?1:0,nationalMinZoom:CSPPublicTerrain.NATIONAL_MIN_ZOOM,dnrTileAllowed,dnrRevision:dnrStatus?.revision||0,
     rawCoverageQuery:RAW_COVERAGE_QUERY,nationalUrl:CSPPublicTerrain.nationalUrl,sourceSampleMeters};
-  if(CSPGpuTerrainStore.buildSources)return gpuSourceSpecs=CSPGpuTerrainStore.buildSources(options,env);
-  // Contract-only fallback for stores without the optional builder. Native
-  // grids stay native; no resampling or masking occurs on the display path.
-  const sources=[],add=(id,rank,label,max,url,allowed,kind)=>sources.push({id,rank,label,
-    nativeZoom:z=>Math.min(z,max),url,allowed,kind,group:rank===5?"dnr":rank===3?"detail":rank===2?"national":"overview",sharper:true});
-  if(PROXY&&options.dnrEndpoint){add("dnr",5,"WA DNR elevation",18,(z,x,y)=>api(`${options.dnrEndpoint}/${z}/${x}/${y}.png?acquire=0&revision=${env.dnrRevision}`),dnrTileAllowed);sources[sources.length-1].authoritativeCoverage=true;}
-  if(PROXY&&options.rawEndpoint)add("raw",3,"USGS 3.3 ft",18,(z,x,y)=>api(`${options.rawEndpoint}/${z}/${x}/${y}.png?${RAW_COVERAGE_QUERY}`),c=>c.z-env.dz>=13);
-  const nationalShown=c=>c.z-env.dz>=env.nationalMinZoom;
-  if(PROXY&&options.nationalEndpoint)add("national",2,"National elevation",17,(z,x,y)=>api(`${options.nationalEndpoint}/${z}/${x}/${y}.png`),nationalShown);
-  if(!PROXY)add("national",2,"USGS 3DEP elevation",18,(z,x,y)=>CSPPublicTerrain.nationalUrl({z,x,y}),nationalShown,"lerc");
-  add("overview",1,"Overview elevation",15,(z,x,y)=>options.fallback.replace("{z}",z).replace("{x}",x).replace("{y}",y),()=>true);
-  return gpuSourceSpecs=sources;
+  return gpuSourceSpecs=CSPGpuTerrainStore.buildSources(options,env);
 }
 function gpuTerrainState(){
   const style=$("#terStyle").value;

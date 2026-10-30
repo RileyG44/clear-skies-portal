@@ -88,10 +88,11 @@ function chooseTerrain(style,published=true){
   const u1OK = closeEnough && PROXY; // coverage is decided per tile, never just at the map centre
   if(want==="3dep")  return {src:"3dep"};
   if(want==="usgs1m") return u1OK ? {src:"usgs1m", cover:usgsCover} : {src:"3dep", forced:true,overview:!closeEnough,reason:!PROXY?"Raw USGS elevation requires a connected terrain engine.":"Raw USGS elevation starts at zoom 13."};
-  // Published DNR still covers ground missing from the federal elevation
-  // archive. Only an ordinary hillshade can use this fixed-light picture;
-  // the composite preserves cached numeric DNR at every valid pixel.
-  if(published&&waOK&&!studioStack(style))return {src:"wadnr",projs:waProjects(),cachedOnly:true};
+  // Numeric LiDAR on the GPU is the map: shaded per screen pixel, sharp at any
+  // zoom. A published picture over it stopped at z18 and hid the 1 m data, so
+  // it now fills only ground with no numeric LiDAR (see syncGapPictures). This
+  // whole-layer composite is for devices the GPU path cannot run on.
+  if(published&&waOK&&!gpuTerrainEnabled&&!studioStack(style))return {src:"wadnr",projs:waProjects(),cachedOnly:true};
   // Tile reads stay cache-only. Settled-view acquisition is in dnr-auto.js.
   if(dnrElevationAvailable())return {src:"wadnr-elevation",cachedOnly:true,overview:!closeEnough};
   if(u1OK) return {src:"usgs1m", cover:usgsCover};
