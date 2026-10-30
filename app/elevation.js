@@ -647,9 +647,10 @@ const ElevLayer = L.GridLayer.extend({
       sources.push([api(`${this.options.dnrEndpoint}/{z}/{x}/{y}.png?acquire=0&revision=${dnrStatus?.revision||0}`),18,5,"WA DNR elevation"]);
     if(PROXY&&this.options.rawEndpoint&&shown>=13)
       sources.push([api(`${this.options.rawEndpoint}/{z}/{x}/{y}.png?${RAW_COVERAGE_QUERY}`),this.options.rawNativeZoom??coords.z,3,"USGS 3.3 ft"]);
-    if(PROXY&&this.options.nationalEndpoint&&(shown>=13||this.options.refineOverview))
+    const nationalShown=shown>=CSPPublicTerrain.NATIONAL_MIN_ZOOM;
+    if(PROXY&&this.options.nationalEndpoint&&(shown>=13||this.options.refineOverview&&nationalShown))
       sources.push([api(`${this.options.nationalEndpoint}/{z}/{x}/{y}.png`),this.options.nationalNativeZoom??coords.z,2,"National elevation"]);
-    if(!PROXY&&this.options.fallback)
+    if(!PROXY&&this.options.fallback&&nationalShown)
       sources.push([CSPPublicTerrain.nationalUrl,18,2,"USGS 3DEP elevation"]);
     if(this.options.fallback)
       sources.push([this.options.fallback,this.options.fallbackNativeZoom??coords.z,1,"Overview elevation"]);

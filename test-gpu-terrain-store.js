@@ -278,5 +278,14 @@ const data=values=>({width:2,height:2,grid:new Float32Array(values)});
   assert.equal(sources.find(s=>s.id==='raw').allowed({z:14}),true);
   assert.match(sources[0].url(2,1,1),/acquire=0&revision=7/);
   assert.equal(sources.find(s=>s.id==='overview').nativeZoom(22),15);
+  assert.equal(sources.find(s=>s.id==='national').allowed({z:3}),true,'without a minimum the national source keeps every zoom');
+  // 3DEP reports open ocean as 0 m; at continental zoom it must not replace
+  // the overview's seafloor. The minimum is in on-screen zoom (data z - dz).
+  const nationalAt=env=>buildSources({rawEndpoint:'/raw',nationalEndpoint:'/national',fallback:'/base/{z}/{x}/{y}',refineOverview:true},
+    {api:x=>x,dz:1,nationalMinZoom:8,nationalUrl:c=>`3dep/${c.z}`,...env}).find(s=>s.id==='national');
+  assert.equal(nationalAt({proxy:true}).allowed({z:8}),false,'on-screen z7 skips engine national');
+  assert.equal(nationalAt({proxy:true}).allowed({z:9}),true,'on-screen z8 refines with engine national');
+  assert.equal(nationalAt({proxy:false}).allowed({z:4}),false,'globe zoom skips browser-direct 3DEP');
+  assert.equal(nationalAt({proxy:false}).allowed({z:9}),true,'on-screen z8 uses browser-direct 3DEP');
   console.log('gpu terrain store checks passed');
 })().catch(e=>{console.error(e);process.exitCode=1;});

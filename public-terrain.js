@@ -13,6 +13,11 @@
     4:{label:'WA DNR published LiDAR hillshade',url:'https://lidarportal.dnr.wa.gov/',nativeLabel:'Published hillshade; native spacing not established'},
     5:{label:'WA DNR bare-earth elevation',url:'https://lidarportal.dnr.wa.gov/',nativeLabel:'Numeric DTM; survey spacing varies'}
   });
+  /* Lowest on-screen zoom that asks for national 3DEP. Coarser than this both
+     sources are resampled to hundreds of metres a pixel, so 3DEP adds nothing
+     over the global overview - and 3DEP reports open ocean as valid 0 m, which
+     would flatten the overview's seafloor tile by tile as requests land. */
+  const NATIONAL_MIN_ZOOM=8;
   function nationalUrl(coords,size=256){
     const {z,x,y}=coords,n=2**z,r=20037508.342789244;
     if(!Number.isInteger(z)||z<0||z>18||!Number.isInteger(x)||!Number.isInteger(y)||y<0||y>=n) throw new RangeError('Invalid elevation tile');
@@ -69,5 +74,5 @@
       renderingRule:JSON.stringify({rasterFunction:'None'}),returnCatalogItems:'true',returnGeometry:'false',maxItemCount:'12'
     });
   }
-  return {SERVICE,SOURCES,nationalUrl,decode,summarize,identifyUrl};
+  return {SERVICE,SOURCES,NATIONAL_MIN_ZOOM,nationalUrl,decode,summarize,identifyUrl};
 });
