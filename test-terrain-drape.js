@@ -112,7 +112,7 @@ async function poolTests(){
 async function integrationTests(){
   const index=require("./test-fixtures/page-source.js"),start=index.indexOf("const ELEV_CACHE_BYTES="),end=index.indexOf("\nasync function encodeTileRgba",start);
   let loads=0,rendered=0,gpuClears=0,mode="auto";const statuses=new Map();
-  const sandbox={CSPTilePipeline:{RequestPool},CSPTerrainDrapePool:{Pool},navigator:{hardwareConcurrency:8},AbortController,DOMException,gpu3d:{clear(){gpuClears++;}},
+  const sandbox={CSPTilePipeline:{RequestPool},CSPPublicTerrain:{NATIONAL_MIN_ZOOM:8},CSPTerrainDrapePool:{Pool},navigator:{hardwareConcurrency:8},AbortController,DOMException,gpu3d:{clear(){gpuClears++;}},
     meshKey:(z,x,y)=>`${mode}:${z}/${x}/${y}`,PROXY:false,public3dDrapeSources:statuses,scheduleTerrainStatus(){},
     publicElevationWithFallback:async(coords,signal)=>{loads++;await tick();if(signal.aborted)throw new DOMException("aborted","AbortError");return {grid:new Float32Array(256*256).fill(coords.x+.00031),rank:2}},
     reliefResolution:r=>r,tileGroundResolution:()=>1,terrainLighting:()=>({}),CSPTerrainDrape:{render:job=>{rendered++;return job.tiles[0]}},encodeTileRgba:async rgba=>rgba,
@@ -168,11 +168,13 @@ async function integrationTests(){
   sandbox.imageBitmapFromBlob=async()=>({close(){}});
   sandbox.scratch=()=>({getContext:()=>({clearRect(){},drawImage(){},getImageData:()=>({data:[]})})});
   sandbox.ElevationTileCore={decodeTerrarium:()=>centre};
-  assert.equal((await sandbox.source(4,3,4,c2.signal))[0],centre[0]);
-  assert.equal(attempts,3);assert.deepEqual(delays,[1000,2000]);assert.equal(statuses.get("4/3/4").rank,3);
+  sandbox.overviewElevation=async()=>({grid:"overview",rank:1});
+  assert.equal(await sandbox.source(4,3,4,c2.signal),"overview","low zooms keep the overview seafloor");assert.equal(attempts,0);
+  assert.equal((await sandbox.source(8,3,4,c2.signal))[0],centre[0]);
+  assert.equal(attempts,3);assert.deepEqual(delays,[1000,2000]);assert.equal(statuses.get("8/3/4").rank,3);
   sandbox.clear();attempts=0;const retryAbort=new AbortController();
   sandbox.waitElevationRetry=async()=>{retryAbort.abort();throw new DOMException("aborted","AbortError")};
-  await assert.rejects(sandbox.source(4,3,4,retryAbort.signal),{name:"AbortError"});assert.equal(attempts,1);
+  await assert.rejects(sandbox.source(8,3,4,retryAbort.signal),{name:"AbortError"});assert.equal(attempts,1);
 
   // The vendored getImage path returns bitmap protocols unchanged rather than
   // treating them as PNG bytes (minified identifiers are deliberately ignored).
