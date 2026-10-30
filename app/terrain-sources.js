@@ -291,9 +291,10 @@ const api = p => (NATIVE_HOST ? "" : API) + p;
 /* Bumped when the engine's 1 m coverage changes under an unchanged tile URL
    (2: projects crossing a UTM zone boundary were half-indexed; 3: an index
    with failed project listings answered "no 1 m here" for most of Washington
-   from 2026-10-21). Those tiles are immutable in the browser cache, so this
-   query lets corrected ones in. */
-const RAW_COVERAGE_QUERY="ix=4";
+   from 2026-10-21; 5: the Dell widened 1 m discovery from WA/OR/ID to the
+   whole archive on 2026-10-30). Those tiles are immutable in the browser cache,
+   so this query lets corrected ones in. */
+const RAW_COVERAGE_QUERY="ix=5";
 
 let terLayer=null, terBase=null, PROXY=false, waCover=null, terTimer=null;
 // One engine/store for both analytical terrain and elevation. The published
