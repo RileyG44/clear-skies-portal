@@ -30,6 +30,28 @@ if [[ -z "$NODE_BIN" ]]; then
   exit 78
 fi
 
+# A reinstall must not undo settings added to this Mac's service by hand, such
+# as another port when something else holds 8765, health timing or
+# CSP_MAINTAIN_TAILSCALE. The template still owns every key it sets.
+kept=()
+if [[ -f "$AGENT_FILE" ]]; then
+  kept=(${(f)"$("$NODE_BIN" -e '
+    const [installed,template]=process.argv.slice(1).map(json=>JSON.parse(json).EnvironmentVariables||{});
+    for(const [key,value] of Object.entries(installed)) if(!(key in template)) console.log(`${key}=${value}`);
+  ' "$(plutil -convert json -o - "$AGENT_FILE")" "$(plutil -convert json -o - "$SCRIPT_DIR/$LABEL.plist")")"})
+fi
+ENGINE_PORT=${CSP_ENGINE_PORT:-$(plutil -extract EnvironmentVariables.CSP_ENGINE_PORT raw "$AGENT_FILE" 2>/dev/null || print 8765)}
+# Only a Clear Skies server may already hold the port. Anything else leaves the
+# engine unable to bind behind a launch agent that still looks loaded.
+for pid in $(lsof -nP -t -iTCP:"$ENGINE_PORT" -sTCP:LISTEN 2>/dev/null || true); do
+  holder=$(ps -ww -o args= -p "$pid" 2>/dev/null || true)
+  if [[ $holder != (*[\ /]|)server.js(\ *|) ]]; then
+    print -u2 "Port $ENGINE_PORT is in use by pid $pid: $holder"
+    print -u2 "Rerun with a free port, e.g. CSP_ENGINE_PORT=8770 $0. Later reinstalls keep it."
+    exit 78
+  fi
+done
+
 install -d -m 700 "$AGENT_DIR" "$DATA_DIR" "$RUNTIME_DIR" "$LOG_DIR" "$CACHE_DIR"
 # site.json lists the app; the engine also needs its own Node modules.
 for asset in $("$NODE_BIN" -e 'const s=require(process.argv[1]);console.log([...s.web,...s.app,...s.engine].filter(f=>!f.startsWith("vendor/")).join("\n"))' "$REPO_ROOT/site.json"); do
@@ -71,10 +93,14 @@ plutil -replace EnvironmentVariables.CSP_NODE_BIN -string "$NODE_BIN" "$AGENT_FI
 plutil -replace EnvironmentVariables.CSP_CACHE_DIR -string "$CACHE_DIR" "$AGENT_FILE"
 plutil -replace StandardOutPath -string "$LOG_DIR/terrain-engine.log" "$AGENT_FILE"
 plutil -replace StandardErrorPath -string "$LOG_DIR/terrain-engine.error.log" "$AGENT_FILE"
+for setting in $kept; do
+  plutil -replace "EnvironmentVariables.${setting%%=*}" -string "${setting#*=}" "$AGENT_FILE"
+done
+plutil -replace EnvironmentVariables.CSP_ENGINE_PORT -string "$ENGINE_PORT" "$AGENT_FILE"
 plutil -lint "$AGENT_FILE"
 
 launchctl bootout "gui/$USER_ID" "$AGENT_FILE" 2>/dev/null || true
 launchctl bootstrap "gui/$USER_ID" "$AGENT_FILE"
 launchctl kickstart -k "gui/$USER_ID/$LABEL"
 print "Installed $LABEL with Node $NODE_BIN"
-print "It listens only on 127.0.0.1:8765; Tailscale Serve is the secure remote bridge."
+print "It listens only on 127.0.0.1:$ENGINE_PORT; Tailscale Serve is the secure remote bridge."

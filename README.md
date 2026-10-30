@@ -192,6 +192,12 @@ ClearSkiesPortal`, and binds it only to `127.0.0.1`. Tailscale Serve is therefor
 the sole network bridge and remains tailnet-authenticated; do not use Funnel for
 this private analysis service. Check the bridge with `tailscale serve status`.
 
+The engine listens on port 8765. If another program already holds that port, the
+installer stops and names it; rerun it as `CSP_ENGINE_PORT=8770
+scripts/install-mac-service.sh` (any free port) and pass the same variable to
+`share-terrain-engine.sh`. Reinstalls keep that port and any other settings added
+to the service by hand.
+
 The sharing script adds only Clear Skies API routes on HTTPS port 443. It
 preserves the root page and other services, so T3 Code can share the same Mac
 address. Replacing the root Serve target previously made Clear Skies health
