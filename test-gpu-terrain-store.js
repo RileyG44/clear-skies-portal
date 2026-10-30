@@ -24,6 +24,32 @@ const data=values=>({width:2,height:2,grid:new Float32Array(values)});
   assert.ok(grid.width<=16&&grid.height<=16);assert.ok(grid.grid.some(Number.isFinite));
   store.destroy();assert.equal(store.stats().bytes,0);
 
+  // An old DNR sample from a wide view must not fill confirmed holes in a
+  // sharper DNR tile. Unknown/failed finer reads still retain that fallback.
+  let dnrReply='coarse';
+  const dnrSpecs=[source('base',1,1),source('dnr',5,2,{authoritativeCoverage:true})];
+  const sparse=new ElevationTileStore({sources:()=>dnrSpecs,request:async url=>{
+    if(url.startsWith('base'))return data([10,10,10,10]);
+    if(url.startsWith('dnr/1/'))return data([30,30,30,30]);
+    if(dnrReply==='fail')throw new Error('temporary DNR read failure');
+    return data(dnrReply==='empty'?[NaN,NaN,NaN,NaN]:[NaN,NaN,40,40]);
+  },retryDelayMs:60000});
+  await sparse.want([{z:1,x:1,y:1}]);
+  assert.equal(sparse.sampleAt(22.5,topLat).value,30);
+  dnrReply='fail';await sparse.want([{z:2,x:2,y:2}]);
+  assert.equal(sparse.sampleAt(22.5,topLat).value,30,'a failed finer request preserves coarse DNR');
+  sparse._failed.clear();dnrReply='partial';await sparse.want([{z:2,x:2,y:2}]);
+  assert.equal(sparse.sampleAt(22.5,topLat).value,10,'confirmed DNR holes reveal the lower source');
+  assert.equal(sparse.sampleAt(22.5,bottomLat).value,40,'valid finer DNR still wins');
+  assert.equal(sparse.provenance().ranks[5],49152,'provenance counts only finer DNR support, including its bilinear edge');
+  assert.equal(sparse.provenance().ranks[1],16384,'the confirmed hole is attributed to the lower source');
+  dnrReply='empty';await sparse.want([{z:2,x:3,y:2}]);
+  assert.equal(sparse.sampleAt(112.5,topLat).value,10,'a completely empty finer DNR tile retires its ancestor');
+  const exportRecords=await sparse.loadDetail([{z:2,x:3,y:2}]);
+  assert.ok(exportRecords.some(r=>r.sourceId==='dnr'&&r.validCount===0),'exports retain confirmed empty coverage');
+  assert.ok(exportRecords.some(r=>r.sourceId==='base'&&r.validCount===4),'empty coverage still loads export fallback');
+  sparse.destroy();
+
   let resolveOld,oldSignal;
   const moving=new ElevationTileStore({sources:()=>[source('s',1)],request:(url,o)=>{
     oldSignal=o.signal;return new Promise(r=>{resolveOld=r;});}});
