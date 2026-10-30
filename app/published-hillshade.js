@@ -119,3 +119,56 @@ const PublishedHillshadeLayer=AnalyticTerrainLayer.extend({
     const tile=this._store.get(this._k(coords));if(tile)tile.ranks=ranks;
   }
 });
+
+/* Ground with no numeric LiDAR yet can still have WA DNR's published hillshade,
+   the sharpest thing available there until dnr-auto.js has its elevation. When
+   a settled view is missing LiDAR on a real share of its ground, the picture
+   covers all of it: a survey's edge is a visible seam, so per-tile patches read
+   as a sharp/blurry boundary. Small holes leave the numeric map alone. A failed
+   or empty answer is retried while the view stays, never left blank. */
+const GAP_PICTURE_SHARE=.05,GAP_PICTURE_MAX=64,GAP_PICTURE_MAX_ZOOM=18,GAP_PICTURE_RETRY_MS=3000,gapPictures=new Map();
+let gapPictureTimer=0;
+function scheduleGapPictures(){if(!gapPictureTimer)gapPictureTimer=setTimeout(syncGapPictures,400)}
+function dropGapPicture(key){
+  const held=gapPictures.get(key);gapPictures.delete(key);
+  held?.controller.abort();
+  if(held?.image){map.removeLayer(held.image);URL.revokeObjectURL(held.image.getElement()?.src||held.image._url)}
+}
+function dropGapPictures(keep){for(const key of [...gapPictures.keys()])if(!keep?.has(key))dropGapPicture(key)}
+async function fetchGapPicture(url,signal){
+  const response=await fetch(url,{signal});
+  if(response.status!==200||response.headers.get("X-CSP-Error"))throw new Error("Published DNR hillshade unavailable");
+  return response.blob();
+}
+async function addGapPicture(key,url,box){
+  const held={controller:new AbortController(),image:null};gapPictures.set(key,held);
+  try{
+    const blob=await publishedHillshadeRequests.request(url,signal=>fetchGapPicture(url,signal),{signal:held.controller.signal,priority:4});
+    if(gapPictures.get(key)!==held)return;
+    held.image=L.imageOverlay(URL.createObjectURL(blob),box,{opacity:terrainOpacity()/100,interactive:false}).addTo(map);
+  }catch{
+    if(gapPictures.get(key)!==held)return;
+    gapPictures.delete(key);setTimeout(scheduleGapPictures,GAP_PICTURE_RETRY_MS);
+  }
+}
+function syncGapPictures(){
+  gapPictureTimer=0;
+  const style=$("#terStyle").value,ids=waLiveIds();
+  if(!gpuTerrainEnabled||!map.hasLayer(gpuTerrainLayer)||!PROXY||style!=="hs"||studioStack(style)||$("#terSrc").value!=="auto"||
+     map.getZoom()<13||!ids.length||document.body.classList.contains("terrain-3d")){dropGapPictures();return}
+  const needed=gpuTerrainLayer._tilesNeeded();
+  if(!gpuTerrainStore.detailGaps(needed))return;   // still loading: the map may yet fill in
+  const ranks=gpuTerrainLayer.provenance().ranks,total=Object.values(ranks).reduce((sum,n)=>sum+n,0);
+  if(!total||1-((ranks[3]||0)+(ranks[5]||0))/total<GAP_PICTURE_SHARE){dropGapPictures();return}
+  const center=map.getCenter(),z=Math.min(GAP_PICTURE_MAX_ZOOM,needed[0].z-1),tiles=new Map();
+  for(const tile of needed){
+    const scale=2**(tile.z-z),c={z,x:Math.floor(tile.x/scale),y:Math.floor(tile.y/scale)};
+    tiles.set(`${c.z}/${c.x}/${c.y}`,c);
+  }
+  const box=c=>{const b=tileBbox(c.z,c.x,c.y);return [[b[1],b[0]],[b[3],b[2]]]};
+  const nearest=[...tiles].map(([key,c])=>({key,c,bounds:box(c)}))
+    .sort((a,b)=>L.latLngBounds(a.bounds).getCenter().distanceTo(center)-L.latLngBounds(b.bounds).getCenter().distanceTo(center))
+    .slice(0,GAP_PICTURE_MAX);
+  dropGapPictures(new Set(nearest.map(item=>item.key)));
+  for(const {key,c,bounds} of nearest)if(!gapPictures.has(key))addGapPicture(key,waTileUrl(c,ids,waSharpPx()),bounds);
+}

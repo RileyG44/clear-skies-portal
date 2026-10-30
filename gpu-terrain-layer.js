@@ -22,10 +22,14 @@
       look:{...settings.look},lighting:{...settings.lighting}},
       spectrum:settings.spectrum,spectrumOpacity:settings.spectrumOpacity??1};
   }
+  /* Elevation level above the on-screen zoom: the one whose samples land on
+     physical pixels, 0.7 to 1.4 per pixel at every zoom. A fixed +1 left a 3x
+     screen with as few as 0.47, a soft picture nothing could ever refine. */
+  function levelOffset(zoom,dpr){return dpr>=1.5?Math.round(zoom+Math.log2(dpr))-Math.round(zoom):0;}
   function viewFromMap(map,painted,dpr){
-    const size=map.getSize();dpr=Number(dpr)||1;
-    return {centerMerc:mercator(painted?.center||map.getCenter()),zoom:painted?.zoom??map.getZoom(),
-      bearing:map.getBearing?.()||0,cssSize:[size.x,size.y],dpr,dz:dpr>=1.5?1:0};
+    const size=map.getSize(),zoom=painted?.zoom??map.getZoom();dpr=Number(dpr)||1;
+    return {centerMerc:mercator(painted?.center||map.getCenter()),zoom,
+      bearing:map.getBearing?.()||0,cssSize:[size.x,size.y],dpr,dz:levelOffset(zoom,dpr)};
   }
   /* Crop in screen axes, then rotate the crop's centre back into Mercator.
      Rendering this view directly also handles streamed export blocks. */
@@ -234,6 +238,7 @@
         }
         const world=256*2**zoom;
         view.centerMerc=[(origin.x+point.x)/world,(origin.y+point.y)/world];
+        view.dz=levelOffset(view.zoom,view.dpr);
         return view;
       },
       _draw:function(){
@@ -300,5 +305,5 @@
     L.cspGpuTerrainLayer=options=>new L.CSPGpuTerrainLayer(options);
   }
   const COARSE=Object.freeze({coarse:true});
-  return {VERSION:"1",mercator,resolveFlag,buildState,viewFromMap,exportView,install,PAN_SHADING_KEY,panShadingMode,PanShading};
+  return {VERSION:"1",mercator,resolveFlag,buildState,levelOffset,viewFromMap,exportView,install,PAN_SHADING_KEY,panShadingMode,PanShading};
 });

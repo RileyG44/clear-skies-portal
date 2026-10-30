@@ -40,4 +40,4 @@ function checkAutomaticDnr(){
   startDnrDownload(bbox,{automatic:true});
 }
 map.on("movestart zoomstart rotatestart",()=>{dnrAutoMotion=true;clearTimeout(dnrAutoTimer)});
-map.on("moveend zoomend rotateend",()=>{dnrAutoMotion=false;scheduleAutomaticDnr()});
+map.on("moveend zoomend rotateend",()=>{dnrAutoMotion=false;scheduleAutomaticDnr();scheduleGapPictures()});

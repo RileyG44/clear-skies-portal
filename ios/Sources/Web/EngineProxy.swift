@@ -33,16 +33,17 @@ final class EngineProxy: NSObject {
 
     private lazy var session: URLSession = {
         let configuration = URLSessionConfiguration.default
-        // The client's own request pool allows eight engine requests at a time.
-        configuration.httpMaximumConnectionsPerHost = 8
+        // Matches the web client's own limit on engine requests.
+        configuration.httpMaximumConnectionsPerHost = 16
         // Raw lidar rendering can keep the engine busy for a while; the page
         // cancels its own requests when it no longer needs them.
         configuration.timeoutIntervalForRequest = 120
         configuration.timeoutIntervalForResource = 30 * 60
         configuration.httpShouldSetCookies = false
         configuration.httpCookieAcceptPolicy = .never
-        // The system's shared URL cache, at its default size. A larger cache
-        // for engine tiles would be a new device budget (D-07), not a default.
+        // Engine tiles are immutable. Keeping them on the phone means ground
+        // already seen comes back at once, with no trip home over cellular.
+        configuration.urlCache = URLCache(memoryCapacity: 64 * 1024 * 1024, diskCapacity: 1024 * 1024 * 1024)
         return URLSession(configuration: configuration, delegate: self, delegateQueue: .main)
     }()
 

@@ -75,11 +75,49 @@ const data=values=>({width:2,height:2,grid:new Float32Array(values)});
   await lru.want([{z:2,x:0,y:0}]);await lru.want([{z:2,x:1,y:0}]);
   assert.equal(lru.stats().bytes,16);assert.equal(lru.get('s/2/0/0'),undefined);lru.destroy();
 
-  const phases=[];
-  const retina=new ElevationTileStore({sources:()=>[source('s',1,8,{dz:1,sharper:true})],request:async(url,o)=>{phases.push({url,...o});return data([1,1,1,1]);}});
-  await retina.want([{z:3,x:4,y:4},{z:3,x:5,y:4}]);await tick();await tick();
-  assert.equal(phases.length,3);assert.equal(phases[0].url,'s/2/2/2');
-  assert.ok(phases.slice(1).every(p=>p.priority===0&&p.group==='sharp'));retina.destroy();
+  // Every display tile asks once, for the finest level the source has.
+  const once=[];
+  const single=new ElevationTileStore({sources:()=>[source('s',1,8)],request:async(url,o)=>{once.push({url,...o});return data([1,1,1,1]);}});
+  await single.want([{z:3,x:4,y:4},{z:3,x:5,y:4}]);await tick();await tick();
+  assert.deepEqual(once.map(p=>p.url).sort(),['s/3/4/4','s/3/5/4'],'no coarser first pass');single.destroy();
+
+  // Best source first: a lower one is fetched only for what it left unfilled.
+  const chained=[];let surveyAnswer;
+  const chain=new ElevationTileStore({sources:()=>[source('base',1,8),source('lidar',3,8)],request:async url=>{
+    chained.push(url);return url.startsWith('lidar')?new Promise(resolve=>{surveyAnswer=resolve;}):data([2,2,2,2]);}});
+  const walked=chain.want([{z:3,x:0,y:0}]);await tick();
+  assert.deepEqual(chained,['lidar/3/0/0'],'the lower source waits for the better one');
+  surveyAnswer(data([1,1,1,1]));await walked;await tick();
+  assert.deepEqual(chained,['lidar/3/0/0'],'complete LiDAR costs no second source');chain.destroy();
+  const filled=[];
+  const fill=new ElevationTileStore({sources:()=>[source('base',1,8),source('lidar',3,8)],request:async url=>{
+    filled.push(url);if(url.startsWith('lidar'))throw Error('outage');return data([2,2,2,2]);}});
+  await fill.want([{z:3,x:0,y:0}]);await tick();
+  assert.deepEqual(filled,['lidar/3/0/0','base/3/0/0'],'a failed best source never leaves the tile empty');fill.destroy();
+
+  // The centre of the view loads first, and a queued tile follows it after a pan.
+  const queued=[],moved=[];
+  const centred=new ElevationTileStore({sources:()=>[source('s',1,8)],prioritize:(url,priority)=>moved.push([url,priority]),
+    request:(url,o)=>{queued.push({url,priority:o.priority});return new Promise(()=>{});}});
+  const row=[0,1,2,3,4].map(x=>({z:3,x,y:0}));
+  centred.want(row);await tick();
+  assert.equal(queued[0].url,'s/3/2/0','centre tile first');
+  assert.ok(queued[0].priority>queued[4].priority,'centre outranks the edge');
+  centred.want(row.slice(2).concat([5,6].map(x=>({z:3,x,y:0}))));await tick();
+  assert.ok(moved.find(([url])=>url==='s/3/4/0')[1]>queued.find(p=>p.url==='s/3/4/0').priority,'a pan re-centres queued tiles');
+  centred.destroy();
+
+  // A stand-in two levels coarser covers the screen; it stops once detail is held.
+  const standing=[];
+  const standIn=new ElevationTileStore({sources:()=>[source('raw',3,8,{standIn:2,allowed:c=>c.z>=2})],request:async url=>{standing.push(url);return data([1,1,1,1]);}});
+  await standIn.want([{z:4,x:0,y:0},{z:4,x:1,y:0}]);await tick();
+  assert.deepEqual(standing.filter(url=>url.startsWith('raw/2/')),['raw/2/0/0'],'one stand-in for the tiles beneath it');
+  standing.length=0;await standIn.want([{z:4,x:0,y:0},{z:4,x:1,y:0}]);await tick();
+  assert.deepEqual(standing,[]);standIn.destroy();
+  const floored=[];
+  const floor=new ElevationTileStore({sources:()=>[source('raw',3,8,{standIn:2,allowed:c=>c.z>=4})],request:async url=>{floored.push(url);return data([1,1,1,1]);}});
+  await floor.want([{z:4,x:0,y:0}]);await tick();
+  assert.deepEqual(floored,['raw/4/0/0'],'a stand-in below the source floor is never requested');floor.destroy();
 
   // Invalid opaque Terrarium sentinels must never reach the GPU or mutate
   // a shared decoder cache. The native mask also receives an owned grid.
@@ -145,7 +183,7 @@ const data=values=>({width:2,height:2,grid:new Float32Array(values)});
   // A survey/mask refresh must keep compatible national/overview grids while
   // rejecting obsolete high-rank data, including a response already in flight.
   let maskKey='a',nextSurvey,refreshJobs=[];
-  const baseSpec=source('base',1,0),surveySpec=()=>source('survey',5,0,{cacheKey:maskKey});
+  const baseSpec=source('base',1,0,{backdrop:true}),surveySpec=()=>source('survey',5,0,{cacheKey:maskKey});
   let refreshSpecs=[baseSpec,surveySpec()];
   const refresh=new ElevationTileStore({sources:()=>refreshSpecs,mask:(grid,w,h,c,s)=>s.id==='survey'&&s.cacheKey==='c'?grid.fill(NaN):grid,
     request:(url,o)=>url.startsWith('base')?Promise.resolve(data([2,2,2,2])):
@@ -173,33 +211,8 @@ const data=values=>({width:2,height:2,grid:new Float32Array(values)});
   const cancelledBeforeStart=preflight.want([{z:2,x:0,y:0}]);const currentBeforeStart=preflight.want([{z:2,x:1,y:0}]);
   await Promise.all([cancelledBeforeStart,currentBeforeStart]);assert.deepEqual(cancelCalls,['s/2/1/0'],'cancel before dispatch avoids an obsolete network request');preflight.destroy();
 
-  const phaseRequests=[];
-  const phasesStore=new ElevationTileStore({sources:[source('detail',5,8,{dz:1,sharper:true}),source('base',1,8,{dz:1,sharper:true})],
-    request:(url,o)=>new Promise(resolve=>phaseRequests.push({url,o,resolve}))});
-  const phaseA=phasesStore.want([{z:3,x:4,y:4}]);await tick();
-  const phaseB=phasesStore.want([{z:3,x:6,y:4}]);await tick();
-  const phaseA2=phasesStore.want([{z:3,x:4,y:4}]);await tick();
-  phaseRequests[4].resolve(data([1,1,1,1]));await tick();
-  phaseRequests.slice(0,4).forEach(p=>p.resolve(data([1,1,1,1])));await Promise.all([phaseA,phaseB]);await tick();
-  assert.equal(phaseRequests.length,7,'current detail can sharpen while its lower-ranked primary is still pending');
-  assert.equal(phaseRequests[6].url,'detail/3/4/4','obsolete A/B completion does not launch unrelated refinement');
-  phaseRequests[5].resolve(data([1,1,1,1]));await phaseA2;await tick();
-  assert.equal(phaseRequests.length,7);assert.equal(phaseRequests[6].o.group,'sharp');
-  phaseRequests[6].resolve(data([1,1,1,1]));await tick();phasesStore.destroy();
-
-  const independentJobs=new Map(),independentCalls=[];
-  const independent=new ElevationTileStore({sources:[source('s',2,8,{dz:1,sharper:true})],request:url=>{
-    independentCalls.push(url);return new Promise(resolve=>independentJobs.set(url,resolve));}});
-  const independentDone=independent.want([{z:3,x:0,y:0},{z:3,x:4,y:0}]);await tick();
-  independentJobs.get('s/2/0/0')(data([2,2,2,2]));await tick();
-  assert.ok(independentCalls.includes('s/3/0/0'),'ready region sharpens before unrelated slow primary completes');
-  independentJobs.get('s/3/0/0')(data([3,3,3,3]));await tick();
-  assert.equal(independent.finestFor('s',{z:3,x:0,y:0}).z,3);
-  independentJobs.get('s/2/2/0')(data([2,2,2,2]));await independentDone;await tick();
-  independentJobs.get('s/3/4/0')(data([3,3,3,3]));await tick();independent.destroy();
-
   const partialCalls=[];
-  const partialSharp=new ElevationTileStore({sources:[source('survey',5,8,{dz:1,sharper:true}),source('fallback',2,8,{dz:1,sharper:true})],request:async url=>{
+  const partialSharp=new ElevationTileStore({sources:[source('survey',5,8),source('fallback',2,8)],request:async url=>{
     partialCalls.push(url);return data(url.startsWith('survey')?[NaN,NaN,10,NaN]:[3,3,3,3]);}});
   await partialSharp.want([{z:3,x:0,y:0}]);await tick();
   assert.ok(partialCalls.includes('survey/3/0/0'));assert.ok(partialCalls.includes('fallback/3/0/0'),'partial survey cannot strand exposed fallback at coarse resolution');
@@ -207,11 +220,11 @@ const data=values=>({width:2,height:2,grid:new Float32Array(values)});
 
   for(const failure of ['reject','empty']){
     let attempts=0;
-    const recovered=new ElevationTileStore({retryDelayMs:10,sources:[source('s',2,8,{dz:1,sharper:true})],request:async url=>{
+    const recovered=new ElevationTileStore({retryDelayMs:10,sources:[source('s',2,8)],request:async url=>{
       if(url==='s/3/0/0'&&++attempts===1){if(failure==='empty')return null;throw Error('temporary outage');}
       return data([3,3,3,3]);}});
     await recovered.want([{z:3,x:0,y:0}]);await tick();
-    assert.equal(recovered.finestFor('s',{z:3,x:0,y:0}).z,2);
+    assert.equal(recovered.finestFor('s',{z:3,x:0,y:0}),undefined);
     assert.equal(recovered.settled().refining,true,'cooldown retains visible refinement demand');
     await new Promise(resolve=>setTimeout(resolve,35));await tick();
     assert.equal(attempts,2,'stationary view retries detail without another pan');
@@ -274,8 +287,8 @@ const data=values=>({width:2,height:2,grid:new Float32Array(values)});
 
   const sources=buildSources({dnrEndpoint:'/dnr',rawEndpoint:'/raw',nationalEndpoint:'/national',fallback:'/base/{z}/{x}/{y}',fallbackNativeZoom:15,refineOverview:true},
     {proxy:true,api:x=>x,dz:1,dnrRevision:7,dnrTileAllowed:()=>true,rawCoverageQuery:'r=1'});
-  assert.equal(sources.find(s=>s.id==='raw').allowed({z:13}),false);
-  assert.equal(sources.find(s=>s.id==='raw').allowed({z:14}),true);
+  assert.equal(sources.find(s=>s.id==='raw').allowed({z:12}),false,'below z13 raw LiDAR is too slow to serve');
+  assert.equal(sources.find(s=>s.id==='raw').allowed({z:13}),true);
   assert.match(sources[0].url(2,1,1),/acquire=0&revision=7/);
   assert.equal(sources.find(s=>s.id==='overview').nativeZoom(22),15);
   assert.equal(sources.find(s=>s.id==='national').allowed({z:3}),true,'without a minimum the national source keeps every zoom');

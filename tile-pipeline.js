@@ -41,6 +41,8 @@
       });
       this._drain();return promise;
     }
+    /* A tile still queued can move: after a pan it may be the view's centre. */
+    prioritize(key,priority){const job=this.jobs.get(key);if(job&&!job.started)job.priority=priority;}
     _drain(){
       this.queue.sort((a,b)=>b.priority-a.priority);
       while(this.active<this.concurrency&&this.queue.length){
