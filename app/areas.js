@@ -66,19 +66,19 @@ function warmPreview(){
 /* ---- WA DNR fetched areas: explicit, map-anchored selection ------------- */
 let dnrSelRect=null,dnrSelHandles=[],dnrSelBbox=null,dnrAreaLayer=null,dnrFetchPoll=null,dnrFetchToken=0;
 let dnrBusy=false,dnrLargeApproved=false,dnrSuccessTimer=null,dnrJobId=null,dnrPositionFrame=0;
-let dnrDownloadBbox=null,dnrBackground=false,dnrPollNow=null,dnrStartUncertain=false;
+let dnrDownloadBbox=null,dnrBackground=false,dnrPollNow=null,dnrStartUncertain=false,dnrAutomatic=false;
 const dnrBar=$("#dnrSelectionBar"),dnrMoveBox=document.createElement("div");
 dnrMoveBox.className="dnr-move-box";dnrMoveBox.hidden=true;dnrMoveBox.tabIndex=0;
 dnrMoveBox.setAttribute("role","group");
 dnrMoveBox.setAttribute("aria-label","WA DNR selected area. Drag to move, drag corners to resize. Arrow keys move; Escape cancels.");
 map.getContainer().append(dnrMoveBox);
 function dnrMsg(text,state="selecting",announce=true,shortText){
-  const summary=state==="ready"?`WA DNR ready in ${dnrAreas.length} area${dnrAreas.length===1?"":"s"}`:
+  const summary=state==="ready"&&!dnrAutomatic?`WA DNR ready in ${dnrAreas.length} area${dnrAreas.length===1?"":"s"}`:
     !dnrBackground&&state==="selecting"?"Area selected on map":text;
   if($("#dnrAreaMsg").textContent!==summary)$("#dnrAreaMsg").textContent=summary;
   $("#dnrSelectionMsg").textContent=text;dnrBar.dataset.state=state;
   const labels={loading:"WA DNR · downloading…",warning:"WA DNR · confirm area",error:"WA DNR · needs attention",ready:"WA DNR · ready",cancelled:"WA DNR · cancelled"};
-  $("#dnrDownloadSummary").textContent=shortText||labels[state]||"WA DNR download";
+  $("#dnrDownloadSummary").textContent=(dnrAutomatic?"Automatic · ":"")+(shortText||labels[state]||"WA DNR download");
   $("#dnrDownloadToggle").title=text;
   if(announce&&$("#dnrAnnouncement").textContent!==text)$("#dnrAnnouncement").textContent=text;
   scheduleDnrPosition();
@@ -101,9 +101,10 @@ function scheduleDnrPosition(){
 }
 function paintDnrAvailability(){
   const select=$("#dnrSelect");if(!select)return;
-  select.disabled=!PROXY||dnrBusy;
-  $("#dnrViewport").disabled=!PROXY||dnrBusy;
-  $("#dnrEngineHint").textContent=!PROXY?"Connect the local terrain engine to download WA DNR LiDAR.":"";
+  select.disabled=!PROXY||dnrBusy&&!dnrAutomatic;
+  $("#dnrViewport").disabled=!PROXY||dnrBusy&&!dnrAutomatic;
+  $("#dnrEngineHint").textContent=!PROXY?"Connect the terrain engine to download WA DNR LiDAR.":dnrBusy&&dnrAutomatic?
+    "An automatic download is running. Open its progress chip and Cancel to start your selected download.":"";
 }
 function paintDnrAreas(){
   if(dnrAreaLayer)map.removeLayer(dnrAreaLayer);
@@ -238,6 +239,7 @@ document.addEventListener("keydown",event=>{
 });
 $("#dnrSelect").onclick=event=>{
   event.stopPropagation();
+  if(dnrBusy&&dnrAutomatic){explainAutomaticDnrBusy();return}
   if(!PROXY||dnrBusy){paintDnrAvailability();return}
   dnrFetchToken++; // A fresh selection also fences late cancellation messages.
   if(document.body.classList.contains("terrain-3d"))exitTerrain3d();
@@ -270,8 +272,14 @@ function dnrViewportBbox(){
   const view=map3d&&document.body.classList.contains("terrain-3d")?map3d:map,b=view.getBounds();
   return [b.getWest(),b.getSouth(),b.getEast(),b.getNorth()];
 }
-async function startDnrDownload(bbox){
-  if(dnrBusy||!bbox)return;
+function explainAutomaticDnrBusy(){
+  showDnrDownload(true);
+  dnrMsg("An automatic download is running. Choose Cancel download here, then start your selected area. A file already being ingested may finish caching.","loading");
+  $("#dnrCancel").focus({preventScroll:true});
+}
+async function startDnrDownload(bbox,{automatic=false}={}){
+  if(dnrBusy){if(dnrAutomatic&&!automatic)explainAutomaticDnrBusy();return}
+  if(!bbox)return;
   if(!PROXY){dnrMsg("Connect the terrain engine, then retry this download.","error");return}
   bbox=[...bbox];
   if(bbox.length!==4||!bbox.every(Number.isFinite)||bbox[0]>=bbox[2]||bbox[1]>=bbox[3]||bbox[0]<-180||bbox[2]>180||bbox[1]<-85||bbox[3]>85){
@@ -282,29 +290,35 @@ async function startDnrDownload(bbox){
   dnrDownloadBbox=bbox;
   const zn=65536,tx=lon=>Math.floor((lon+180)/360*zn),ty=lat=>Math.floor((1-Math.asinh(Math.tan(lat*Math.PI/180))/Math.PI)/2*zn);
   const cells=Math.max(1,(tx(bbox[2])-tx(bbox[0])+1)*(ty(bbox[1])-ty(bbox[3])+1));
-  if(cells>512&&!dnrLargeApproved){
+  if(cells>512&&!dnrLargeApproved&&!automatic){
     dnrLargeApproved=true;$("#dnrFetch").textContent="Download anyway";$("#dnrFetch").hidden=false;$("#dnrFetch").disabled=false;
     if(!dnrSelBbox)showDnrDownload(true);
     dnrMsg(`Large area: about ${cells.toLocaleString()} acquisition cells. Several large surveys may be downloaded. Zoom in or choose a smaller area, or download anyway.`,"warning");return;
   }
-  const token=++dnrFetchToken;dnrJobId=null;dnrPollNow=null;dnrStartUncertain=false;clearTimeout(dnrSuccessTimer);
+  const token=++dnrFetchToken;dnrJobId=null;dnrPollNow=null;dnrStartUncertain=false;dnrAutomatic=automatic;clearTimeout(dnrSuccessTimer);
   clearDnrSelection();showDnrDownload();setDnrBusy(true);
   document.dispatchEvent(new CustomEvent("csp:dnr-download"));
-  $("#dnrDownloadToggle").focus({preventScroll:true});
+  if(!automatic)$("#dnrDownloadToggle").focus({preventScroll:true});
   $("#dnrFetch").hidden=true;$("#dnrCancel").textContent="Cancel download";
   $("#dnrDownloadProgress").hidden=false;$("#dnrDownloadProgress").removeAttribute("value");
-  dnrMsg("Starting WA DNR download. You can keep using the map.","loading",true,"WA DNR · starting…");
+  dnrMsg(automatic?"Automatically downloading DNR elevation for this gap to the terrain engine. You can keep using the map.":"Starting WA DNR download. You can keep using the map.","loading",true,"WA DNR · starting…");
   const failed=text=>{
     if(token!==dnrFetchToken)return;
     setDnrBusy(false);dnrJobId=null;dnrPollNow=null;clearTimeout(dnrFetchPoll);dnrFetchPoll=null;
-    $("#dnrDownloadProgress").hidden=true;$("#dnrFetch").hidden=false;$("#dnrFetch").textContent="Retry download";
+    $("#dnrDownloadProgress").hidden=true;$("#dnrFetch").hidden=automatic;$("#dnrFetch").textContent="Retry download";
     $("#dnrCancel").textContent="Dismiss";dnrMsg(text,"error");
   };
   let jobId=null,startRejected=false;
   try{
     const r=await fetch(api("/api/wadnr/warm"),{method:"POST",body:JSON.stringify({bbox}),signal:AbortSignal.timeout(20000)});
     startRejected=!r.ok;
-    const value=await r.json();if(!r.ok)throw new Error(value.error||`HTTP ${r.status}`);
+    const value=await r.json();
+    if(!r.ok&&value.busy){
+      if(token===dnrFetchToken){setDnrBusy(false);$("#dnrFetch").hidden=true;$("#dnrDownloadProgress").hidden=true;$("#dnrCancel").textContent="Dismiss";
+        dnrMsg("The terrain engine is busy with another download. This request did not start. You can try an explicit download when it finishes.","warning",true,"WA DNR · engine busy");}
+      return;
+    }
+    if(!r.ok)throw new Error(value.error||`HTTP ${r.status}`);
     if(typeof value.id!=="string"||!value.id)throw new Error("The engine did not return a download ID");
     jobId=value.id;
   }catch(error){
@@ -341,10 +355,12 @@ async function startDnrDownload(bbox){
       }
       if(!complete){failed(s.error?`Download could not complete: ${s.error}`:"Download stopped before the area finished. Retry to complete it.");return}
       setDnrBusy(false);dnrJobId=null;dnrPollNow=null;
-      if(!dnrAreas.some(a=>a.bbox.every((v,i)=>v===bbox[i])))dnrAreas.push({bbox,at:Date.now()});
-      saveDnrAreas();paintDnrAreas();
+      if(!automatic){
+        if(!dnrAreas.some(a=>a.bbox.every((v,i)=>v===bbox[i])))dnrAreas.push({bbox,at:Date.now()});
+        saveDnrAreas();paintDnrAreas();
+      }
       $("#dnrDownloadProgress").hidden=true;$("#dnrFetch").hidden=true;$("#dnrCancel").textContent="Done";
-      dnrMsg(`WA DNR ready in this area · ${fmtMB(s.bytes)} added.`,"ready");
+      dnrMsg(`WA DNR ready in the engine cache · ${fmtMB(s.bytes)} added.${automatic?" This is not a phone offline download.":""}`,"ready");
       resetMeshSources();applyTerrain(true);if(elevationActive())applyElev();schedule3dStyle();scheduleDnrStatus();
       dnrSuccessTimer=setTimeout(()=>{dnrBar.hidden=true},5000);
     }catch(error){
@@ -360,6 +376,7 @@ async function startDnrDownload(bbox){
 }
 $("#dnrFetch").onclick=()=>dnrBusy?dnrPollNow?.():startDnrDownload(dnrDownloadBbox||dnrSelBbox);
 $("#dnrViewport").onclick=()=>{
+  if(dnrBusy&&dnrAutomatic){explainAutomaticDnrBusy();return}
   if(!PROXY||dnrBusy){paintDnrAvailability();return}
   // Freeze the active camera before clearing any selection or moving the map.
   const bbox=dnrViewportBbox();dnrFetchToken++;clearTimeout(dnrSuccessTimer);clearDnrSelection();

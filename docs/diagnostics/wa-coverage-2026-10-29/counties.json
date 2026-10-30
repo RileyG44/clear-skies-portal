@@ -1,0 +1,197 @@
+[
+  {
+    "county": "Yakima County",
+    "landKm2": 11163.87,
+    "standardGapKm2": 5095.25
+  },
+  {
+    "county": "Ferry County",
+    "landKm2": 5846.63,
+    "standardGapKm2": 2717.56
+  },
+  {
+    "county": "Okanogan County",
+    "landKm2": 13759.8,
+    "standardGapKm2": 2597.55
+  },
+  {
+    "county": "Whatcom County",
+    "landKm2": 5616.83,
+    "standardGapKm2": 2593.6
+  },
+  {
+    "county": "Pierce County",
+    "landKm2": 4395.72,
+    "standardGapKm2": 2333.25
+  },
+  {
+    "county": "Jefferson County",
+    "landKm2": 4728.89,
+    "standardGapKm2": 2112.44
+  },
+  {
+    "county": "Lewis County",
+    "landKm2": 6310.2,
+    "standardGapKm2": 2079.49
+  },
+  {
+    "county": "Klickitat County",
+    "landKm2": 4931.95,
+    "standardGapKm2": 1767.36
+  },
+  {
+    "county": "Snohomish County",
+    "landKm2": 5465.75,
+    "standardGapKm2": 1674.07
+  },
+  {
+    "county": "Clallam County",
+    "landKm2": 4578.6,
+    "standardGapKm2": 1622.1
+  },
+  {
+    "county": "Skagit County",
+    "landKm2": 4547.7,
+    "standardGapKm2": 1451.54
+  },
+  {
+    "county": "Asotin County",
+    "landKm2": 1658.0,
+    "standardGapKm2": 1306.41
+  },
+  {
+    "county": "Skamania County",
+    "landKm2": 4367.53,
+    "standardGapKm2": 825.39
+  },
+  {
+    "county": "Grays Harbor County",
+    "landKm2": 5013.27,
+    "standardGapKm2": 739.91
+  },
+  {
+    "county": "Stevens County",
+    "landKm2": 6578.01,
+    "standardGapKm2": 667.98
+  },
+  {
+    "county": "Island County",
+    "landKm2": 549.17,
+    "standardGapKm2": 549.17
+  },
+  {
+    "county": "San Juan County",
+    "landKm2": 497.74,
+    "standardGapKm2": 497.74
+  },
+  {
+    "county": "Clark County",
+    "landKm2": 1697.81,
+    "standardGapKm2": 272.23
+  },
+  {
+    "county": "Kitsap County",
+    "landKm2": 1062.62,
+    "standardGapKm2": 116.94
+  },
+  {
+    "county": "Cowlitz County",
+    "landKm2": 3020.83,
+    "standardGapKm2": 61.86
+  },
+  {
+    "county": "Lincoln County",
+    "landKm2": 6059.73,
+    "standardGapKm2": 37.93
+  },
+  {
+    "county": "Thurston County",
+    "landKm2": 1967.72,
+    "standardGapKm2": 34.86
+  },
+  {
+    "county": "Chelan County",
+    "landKm2": 7755.21,
+    "standardGapKm2": 2.11
+  },
+  {
+    "county": "Mason County",
+    "landKm2": 2586.69,
+    "standardGapKm2": 1.68
+  },
+  {
+    "county": "Spokane County",
+    "landKm2": 4611.96,
+    "standardGapKm2": 0.76
+  },
+  {
+    "county": "Wahkiakum County",
+    "landKm2": 716.22,
+    "standardGapKm2": 0.15
+  },
+  {
+    "county": "King County",
+    "landKm2": 5676.53,
+    "standardGapKm2": 0.0
+  },
+  {
+    "county": "Kittitas County",
+    "landKm2": 6042.53,
+    "standardGapKm2": 0.0
+  },
+  {
+    "county": "Pend Oreille County",
+    "landKm2": 3691.66,
+    "standardGapKm2": 0.0
+  },
+  {
+    "county": "Pacific County",
+    "landKm2": 2443.43,
+    "standardGapKm2": 0.0
+  },
+  {
+    "county": "Garfield County",
+    "landKm2": 1860.14,
+    "standardGapKm2": 0.0
+  },
+  {
+    "county": "Benton County",
+    "landKm2": 4557.54,
+    "standardGapKm2": 0.0
+  },
+  {
+    "county": "Adams County",
+    "landKm2": 4998.18,
+    "standardGapKm2": 0.0
+  },
+  {
+    "county": "Douglas County",
+    "landKm2": 4788.62,
+    "standardGapKm2": 0.0
+  },
+  {
+    "county": "Grant County",
+    "landKm2": 7229.87,
+    "standardGapKm2": 0.0
+  },
+  {
+    "county": "Franklin County",
+    "landKm2": 3275.9,
+    "standardGapKm2": 0.0
+  },
+  {
+    "county": "Columbia County",
+    "landKm2": 2261.86,
+    "standardGapKm2": 0.0
+  },
+  {
+    "county": "Walla Walla County",
+    "landKm2": 3364.31,
+    "standardGapKm2": 0.0
+  },
+  {
+    "county": "Whitman County",
+    "landKm2": 5640.48,
+    "standardGapKm2": 0.0
+  }
+]

@@ -60,7 +60,7 @@ async function main(){
       {raw:204,national:204,source:"none",coverage:"none"},
       {national:204,source:"none",coverage:"none",fallback:true},
       {z:12,raw:200,national:200,source:"3dep",coverage:"1"},
-      {raw:200,national:200,source:"usgs-1m",legacy:true},
+      {raw:200,national:200,source:"usgs-1m",legacy:true,fallback:true},
       /* A raw gap saved without the final mark may come from an incomplete
          1 m index, so it is not this route's exact answer: 1 m is tried first. */
       {raw:204,national:200,source:"3dep",coverage:"1",fallback:true,unmarked:true}
@@ -68,7 +68,7 @@ async function main(){
     const put=(key,status,body,coverage,final)=>{
       const target=path.join(dir,key);
       fs.writeFileSync(target,status===204?Buffer.alloc(0):body);
-      fs.writeFileSync(target+".meta",JSON.stringify({status,type:"image/png",...(coverage==null?{}:{sourceMeta:{coverage,...(final?{final:true}:{})}})}));
+      fs.writeFileSync(target+".meta",JSON.stringify({status,type:"image/png",...(coverage==null?{}:{sourceMeta:{scope:usgs.coverageScope(),coverage,...(final?{final:true,scope:usgs.coverageScope()}:{})}})}));
       fs.utimesSync(target,old,old);fs.utimesSync(target+".meta",old,old);
     };
     for(let i=0;i<cases.length;i++){
@@ -132,13 +132,13 @@ async function main(){
         assert.equal(res.headers["x-elevation-source"],c.source);assert.equal(res.headers["x-coverage"],c.coverage);
         assert.equal(res.headers["cache-control"],"no-store","a fallback must not be cached by the browser");
         if(c.source==="none"){const {rgba}=pixels(res.body);assert.deepEqual([...rgba.subarray(0,4)],[128,0,0,255])}
-        else assert.deepEqual(res.body,national);
+        else assert.deepEqual(res.body,c.source==="usgs-1m"?raw:national);
       }
       assert(!fs.existsSync(path.join(dir,key)),"a fallback never persists under elevation-v5, so 1 m is fetched again online");
     }
     const attempts=fs.readFileSync(log,"utf8").split("\n").filter(line=>line==="raw-elevation").length;
     assert(attempts>=1+cases.filter(c=>c.fallback).length*2,"1 m lidar is attempted before every national fallback");
-    console.log("saved elevation: 6 exact offline cases + 3 uncached fallbacks passed (ranges evicted, 1 m tried first)");
+    console.log(`saved elevation: ${cases.filter(c=>!c.fallback).length} exact offline cases + ${cases.filter(c=>c.fallback).length} uncached fallbacks passed (ranges evicted, 1 m tried first)`);
   }finally{
     if(child&&child.exitCode==null){const exited=new Promise(resolve=>child.once("exit",resolve));child.kill();await exited}
     fs.rmSync(dir,{recursive:true,force:true});

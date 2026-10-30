@@ -192,7 +192,7 @@ function sourceChoiceChecks(){
   assert.equal(hctx.dnrTileAllowed(hit),true,"explicit downloads remain eligible before status catches up");
   assert.equal(hctx.dnrAreas.length,1,"candidate lookup does not manufacture download records");
 }
-async function httpChecks(fixture){
+async function httpChecks(fixture,automatic=false){
   const dir=path.join(fixture.cacheDir,"wadnr");
   fs.writeFileSync(path.join(dir,"index.json"),JSON.stringify({version:1,revision:1,files:[fixture.record],regions:[]}));
   fs.writeFileSync(path.join(dir,"catalog.json"),JSON.stringify({at:Date.now(),projects:[{
@@ -200,7 +200,7 @@ async function httpChecks(fixture){
   const listener=net.createServer();await new Promise(r=>listener.listen(0,"127.0.0.1",r));
   const port=listener.address().port;await new Promise(r=>listener.close(r));
   const child=spawn(process.execPath,[path.join(__dirname,"server.js")],{env:{...process.env,
-    HOST:"127.0.0.1",PORT:String(port),CSP_CACHE_DIR:fixture.cacheDir,CSP_TERRAIN_WORKERS:"1"},stdio:["ignore","pipe","pipe"]});
+    HOST:"127.0.0.1",PORT:String(port),CSP_CACHE_DIR:fixture.cacheDir,CSP_TERRAIN_WORKERS:"1",CSP_DNR_AUTO:automatic?"1":"0",CSP_DNR_ARCHIVE_DIR:"off"},stdio:["ignore","pipe","pipe"]});
   let logs="";child.stdout.on("data",b=>{logs+=b;});child.stderr.on("data",b=>{logs+=b;});
   const base=`http://127.0.0.1:${port}`;
   try{
@@ -209,6 +209,9 @@ async function httpChecks(fixture){
       if(attempt===99)throw new Error("DNR HTTP fixture did not start: "+logs);
       await new Promise(r=>setTimeout(r,50));
     }
+    const health=await (await fetch(base+"/api/health")).json();
+    assert.equal(health.features.includes("wadnr-auto"),automatic,"engine auto acquisition is opt-in only");
+    if(automatic)return;
     const cachedStatus=await (await fetch(base+"/api/wadnr/status")).json();
     assert.deepEqual(cachedStatus.cachedBounds,[fixture.record.bounds],"status exposes cached raster request hints");
     assert.equal(cachedStatus.queued,0);assert.equal(cachedStatus.active,null);
@@ -231,7 +234,9 @@ async function httpChecks(fixture){
     assert(measured.sources.every(s=>s.startsWith("WA DNR:")),"strict fabric measures actual DNR elevations");
     const rejected=await fetch(base+"/api/wadnr/warm",{method:"POST",body:JSON.stringify({bbox:[-119,47,-118,48]})});
     assert.equal(rejected.status,400,"unbounded DNR view downloads are rejected");
-    const warm=await fetch(base+"/api/wadnr/warm",{method:"POST",body:JSON.stringify({bbox})});
+    // Keep job orchestration independent of real provider availability. The
+    // numeric fixture covers only part of a z16 acquisition cell.
+    const warm=await fetch(base+"/api/wadnr/warm",{method:"POST",body:JSON.stringify({bbox:[-130,40,-129.999,40.001]})});
     assert.equal(warm.status,200);
     let status;
     for(let i=0;i<30;i++){status=await (await fetch(base+"/api/wadnr/warm/status")).json();if(!status.running)break;await new Promise(r=>setTimeout(r,100));}
@@ -263,7 +268,7 @@ async function seamDownloadChecks(){
   assert.deepEqual(acquired[0],bodies[0],"the ZIP download uses the same clipped geometry");
 }
 async function main(){
-  try{uncoveredChecks();await seamDownloadChecks();await catalogueChecks();await acquisitionChecks();await warmAreaChecks();const fixture=await rasterChecks();sourceChoiceChecks();await httpChecks(fixture);
+  try{uncoveredChecks();await seamDownloadChecks();await catalogueChecks();await acquisitionChecks();await warmAreaChecks();const fixture=await rasterChecks();sourceChoiceChecks();await httpChecks(fixture);await httpChecks(fixture,true);
     console.log("DNR checks passed (catalogue, bounded acquisition, GeoTIFF, units, no-data, overviews, styles, HTTP provenance, strict fabric and DNR view downloads)");
   }finally{await runtime.close();fs.rmSync(root,{recursive:true,force:true});}
 }

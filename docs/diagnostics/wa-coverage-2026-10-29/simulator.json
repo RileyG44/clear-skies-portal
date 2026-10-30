@@ -1,0 +1,243 @@
+{
+  "build": "2026-10-29f",
+  "views": [
+    {
+      "name": "no-DNR-survey",
+      "posts": 0,
+      "last": {
+        "s": 31,
+        "summary": "Currently displayed in 2DUSGS 3DEP elevation \u00b7 60% of rendered terrain pixelsNative: Provider mosaic varies; 3.3 ft where available \u00b7 displayed sampling: ~2.7 ft/pixelAWS global terrain (overview) \u00b7 40% of rendered terrain pixelsNative: ~98 ft source spacing (1 arc-second overview) \u00b7 displayed sampling: ~10.8 ft/pixelPercentages describe the current loaded tile samples, not survey footprint area. USGS 3DEP mixes resolutions; a 3.3 ft service capability does not mean every location has 3.3 ft data. Zooming past a source\u2019s detail does not create new information.",
+        "gpu": {
+          "ranks": {
+            "1": 1572864,
+            "2": 2359296
+          },
+          "labels": [
+            "National elevation",
+            "Overview elevation"
+          ],
+          "surveys": [],
+          "sampleMeters": {
+            "1": 3.2961311936014703,
+            "2": 0.8239899085351683
+          }
+        },
+        "settled": {
+          "complete": 60,
+          "total": 60,
+          "ratio": 1,
+          "coveredPixels": 3932160,
+          "totalPixels": 3932160,
+          "refining": true,
+          "failed": true
+        }
+      }
+    },
+    {
+      "name": "Elwha-OPR",
+      "posts": 0,
+      "last": {
+        "s": 31,
+        "summary": "Currently displayed in 2DUSGS 3.3 ft DEM \u00b7 100% of rendered terrain pixelsNative: 3.3 ft where the selected survey covers this point \u00b7 displayed sampling: ~1.3 ft/pixel \u00b7 Surveys: Elwha_River_WA_LiDAR OPR 2014 (Original Product Resolution DEM); Elwha_River_WA_LiDAR OPR 2014 (Original Product Resolution DEM); Elwha_River_WA_LiDAR OPR 2014 (Original Product Resolution DEM) +8 more \u00b7 NAVD88 / GEOID12A; NAD83(2011) per metadata/WESM EPSG:6339; TIFF EPSG:26910; Existing geographic-to-UTM approximation; no realization-aware datum transformation or accuracy guaranteePercentages describe the current loaded tile samples, not survey footprint area. USGS 3DEP mixes resolutions; a 3.3 ft service capability does not mean every location has 3.3 ft data. Zooming past a source\u2019s detail does not create new information.",
+        "gpu": {
+          "ranks": {
+            "3": 3932160
+          },
+          "labels": [
+            "USGS 3.3 ft + Elwha River OPR (1 m)"
+          ],
+          "surveys": [
+            {
+              "project": "Elwha_River_WA_LiDAR OPR 2014",
+              "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10UDU560167.tif",
+              "level": 0,
+              "res": 1,
+              "nativeMeters": 1,
+              "cogTiles": 1,
+              "product": "Original Product Resolution DEM",
+              "horizontalDatum": "NAD83(2011) per metadata/WESM EPSG:6339; TIFF EPSG:26910",
+              "verticalDatum": "NAVD88 / GEOID12A",
+              "verticalUnits": "meters",
+              "acquisition": "2014-11 with 2015-02 modification; metadata dates differ, per-pixel capture unknown",
+              "projectionLimitation": "Existing geographic-to-UTM approximation; no realization-aware datum transformation or accuracy guarantee",
+              "metadataURL": "https://prd-tnm.s3.amazonaws.com/StagedProducts/Elevation/metadata/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/best_use_xml/USGS_ElwhaRiver_Lidar_2014w_Modification_DEM_IMG.xml",
+              "standardProductLimitation": "WESM: does not meet; breaklines not delivered"
+            },
+            {
+              "project": "Elwha_River_WA_LiDAR OPR 2014",
+              "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10UDU560167.tif",
+              "level": 0,
+              "res": 1,
+              "nativeMeters": 1,
+              "cogTiles": 2,
+              "product": "Original Product Resolution DEM",
+              "horizontalDatum": "NAD83(2011) per metadata/WESM EPSG:6339; TIFF EPSG:26910",
+              "verticalDatum": "NAVD88 / GEOID12A",
+              "verticalUnits": "meters",
+              "acquisition": "2014-11 with 2015-02 modification; metadata dates differ, per-pixel capture unknown",
+              "projectionLimitation": "Existing geographic-to-UTM approximation; no realization-aware datum transformation or accuracy guarantee",
+              "metadataURL": "https://prd-tnm.s3.amazonaws.com/StagedProducts/Elevation/metadata/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/best_use_xml/USGS_ElwhaRiver_Lidar_2014w_Modification_DEM_IMG.xml",
+              "standardProductLimitation": "WESM: does not meet; breaklines not delivered"
+            },
+            {
+              "project": "Elwha_River_WA_LiDAR OPR 2014",
+              "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10UDU567167.tif",
+              "level": 0,
+              "res": 1,
+              "nativeMeters": 1,
+              "cogTiles": 1,
+              "product": "Original Product Resolution DEM",
+              "horizontalDatum": "NAD83(2011) per metadata/WESM EPSG:6339; TIFF EPSG:26910",
+              "verticalDatum": "NAVD88 / GEOID12A",
+              "verticalUnits": "meters",
+              "acquisition": "2014-11 with 2015-02 modification; metadata dates differ, per-pixel capture unknown",
+              "projectionLimitation": "Existing geographic-to-UTM approximation; no realization-aware datum transformation or accuracy guarantee",
+              "metadataURL": "https://prd-tnm.s3.amazonaws.com/StagedProducts/Elevation/metadata/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/best_use_xml/USGS_ElwhaRiver_Lidar_2014w_Modification_DEM_IMG.xml",
+              "standardProductLimitation": "WESM: does not meet; breaklines not delivered"
+            },
+            {
+              "project": "Elwha_River_WA_LiDAR OPR 2014",
+              "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10TDU560160.tif",
+              "level": 0,
+              "res": 1,
+              "nativeMeters": 1,
+              "cogTiles": 1,
+              "product": "Original Product Resolution DEM",
+              "horizontalDatum": "NAD83(2011) per metadata/WESM EPSG:6339; TIFF EPSG:26910",
+              "verticalDatum": "NAVD88 / GEOID12A",
+              "verticalUnits": "meters",
+              "acquisition": "2014-11 with 2015-02 modification; metadata dates differ, per-pixel capture unknown",
+              "projectionLimitation": "Existing geographic-to-UTM approximation; no realization-aware datum transformation or accuracy guarantee",
+              "metadataURL": "https://prd-tnm.s3.amazonaws.com/StagedProducts/Elevation/metadata/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/best_use_xml/USGS_ElwhaRiver_Lidar_2014w_Modification_DEM_IMG.xml",
+              "standardProductLimitation": "WESM: does not meet; breaklines not delivered"
+            },
+            {
+              "project": "Elwha_River_WA_LiDAR OPR 2014",
+              "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10TDU560160.tif",
+              "level": 0,
+              "res": 1,
+              "nativeMeters": 1,
+              "cogTiles": 2,
+              "product": "Original Product Resolution DEM",
+              "horizontalDatum": "NAD83(2011) per metadata/WESM EPSG:6339; TIFF EPSG:26910",
+              "verticalDatum": "NAVD88 / GEOID12A",
+              "verticalUnits": "meters",
+              "acquisition": "2014-11 with 2015-02 modification; metadata dates differ, per-pixel capture unknown",
+              "projectionLimitation": "Existing geographic-to-UTM approximation; no realization-aware datum transformation or accuracy guarantee",
+              "metadataURL": "https://prd-tnm.s3.amazonaws.com/StagedProducts/Elevation/metadata/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/best_use_xml/USGS_ElwhaRiver_Lidar_2014w_Modification_DEM_IMG.xml",
+              "standardProductLimitation": "WESM: does not meet; breaklines not delivered"
+            },
+            {
+              "project": "Elwha_River_WA_LiDAR OPR 2014",
+              "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10TDU567160.tif",
+              "level": 0,
+              "res": 1,
+              "nativeMeters": 1,
+              "cogTiles": 1,
+              "product": "Original Product Resolution DEM",
+              "horizontalDatum": "NAD83(2011) per metadata/WESM EPSG:6339; TIFF EPSG:26910",
+              "verticalDatum": "NAVD88 / GEOID12A",
+              "verticalUnits": "meters",
+              "acquisition": "2014-11 with 2015-02 modification; metadata dates differ, per-pixel capture unknown",
+              "projectionLimitation": "Existing geographic-to-UTM approximation; no realization-aware datum transformation or accuracy guarantee",
+              "metadataURL": "https://prd-tnm.s3.amazonaws.com/StagedProducts/Elevation/metadata/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/best_use_xml/USGS_ElwhaRiver_Lidar_2014w_Modification_DEM_IMG.xml",
+              "standardProductLimitation": "WESM: does not meet; breaklines not delivered"
+            },
+            {
+              "project": "Elwha_River_WA_LiDAR OPR 2014",
+              "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10TDU560160.tif",
+              "level": 0,
+              "res": 1,
+              "nativeMeters": 1,
+              "cogTiles": 4,
+              "product": "Original Product Resolution DEM",
+              "horizontalDatum": "NAD83(2011) per metadata/WESM EPSG:6339; TIFF EPSG:26910",
+              "verticalDatum": "NAVD88 / GEOID12A",
+              "verticalUnits": "meters",
+              "acquisition": "2014-11 with 2015-02 modification; metadata dates differ, per-pixel capture unknown",
+              "projectionLimitation": "Existing geographic-to-UTM approximation; no realization-aware datum transformation or accuracy guarantee",
+              "metadataURL": "https://prd-tnm.s3.amazonaws.com/StagedProducts/Elevation/metadata/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/best_use_xml/USGS_ElwhaRiver_Lidar_2014w_Modification_DEM_IMG.xml",
+              "standardProductLimitation": "WESM: does not meet; breaklines not delivered"
+            },
+            {
+              "project": "Elwha_River_WA_LiDAR OPR 2014",
+              "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10TDU567160.tif",
+              "level": 0,
+              "res": 1,
+              "nativeMeters": 1,
+              "cogTiles": 2,
+              "product": "Original Product Resolution DEM",
+              "horizontalDatum": "NAD83(2011) per metadata/WESM EPSG:6339; TIFF EPSG:26910",
+              "verticalDatum": "NAVD88 / GEOID12A",
+              "verticalUnits": "meters",
+              "acquisition": "2014-11 with 2015-02 modification; metadata dates differ, per-pixel capture unknown",
+              "projectionLimitation": "Existing geographic-to-UTM approximation; no realization-aware datum transformation or accuracy guarantee",
+              "metadataURL": "https://prd-tnm.s3.amazonaws.com/StagedProducts/Elevation/metadata/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/best_use_xml/USGS_ElwhaRiver_Lidar_2014w_Modification_DEM_IMG.xml",
+              "standardProductLimitation": "WESM: does not meet; breaklines not delivered"
+            },
+            {
+              "project": "Elwha_River_WA_LiDAR OPR 2014",
+              "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10TDU560152.tif",
+              "level": 0,
+              "res": 1,
+              "nativeMeters": 1,
+              "cogTiles": 1,
+              "product": "Original Product Resolution DEM",
+              "horizontalDatum": "NAD83(2011) per metadata/WESM EPSG:6339; TIFF EPSG:26910",
+              "verticalDatum": "NAVD88 / GEOID12A",
+              "verticalUnits": "meters",
+              "acquisition": "2014-11 with 2015-02 modification; metadata dates differ, per-pixel capture unknown",
+              "projectionLimitation": "Existing geographic-to-UTM approximation; no realization-aware datum transformation or accuracy guarantee",
+              "metadataURL": "https://prd-tnm.s3.amazonaws.com/StagedProducts/Elevation/metadata/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/best_use_xml/USGS_ElwhaRiver_Lidar_2014w_Modification_DEM_IMG.xml",
+              "standardProductLimitation": "WESM: does not meet; breaklines not delivered"
+            },
+            {
+              "project": "Elwha_River_WA_LiDAR OPR 2014",
+              "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10TDU560152.tif",
+              "level": 0,
+              "res": 1,
+              "nativeMeters": 1,
+              "cogTiles": 2,
+              "product": "Original Product Resolution DEM",
+              "horizontalDatum": "NAD83(2011) per metadata/WESM EPSG:6339; TIFF EPSG:26910",
+              "verticalDatum": "NAVD88 / GEOID12A",
+              "verticalUnits": "meters",
+              "acquisition": "2014-11 with 2015-02 modification; metadata dates differ, per-pixel capture unknown",
+              "projectionLimitation": "Existing geographic-to-UTM approximation; no realization-aware datum transformation or accuracy guarantee",
+              "metadataURL": "https://prd-tnm.s3.amazonaws.com/StagedProducts/Elevation/metadata/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/best_use_xml/USGS_ElwhaRiver_Lidar_2014w_Modification_DEM_IMG.xml",
+              "standardProductLimitation": "WESM: does not meet; breaklines not delivered"
+            },
+            {
+              "project": "Elwha_River_WA_LiDAR OPR 2014",
+              "key": "StagedProducts/Elevation/OPR/Projects/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/TIFF/USGS_OPR_Elwha_River_WA_LiDAR_10TDU567152.tif",
+              "level": 0,
+              "res": 1,
+              "nativeMeters": 1,
+              "cogTiles": 1,
+              "product": "Original Product Resolution DEM",
+              "horizontalDatum": "NAD83(2011) per metadata/WESM EPSG:6339; TIFF EPSG:26910",
+              "verticalDatum": "NAVD88 / GEOID12A",
+              "verticalUnits": "meters",
+              "acquisition": "2014-11 with 2015-02 modification; metadata dates differ, per-pixel capture unknown",
+              "projectionLimitation": "Existing geographic-to-UTM approximation; no realization-aware datum transformation or accuracy guarantee",
+              "metadataURL": "https://prd-tnm.s3.amazonaws.com/StagedProducts/Elevation/metadata/Elwha_River_WA_LiDAR/WA_ElwhaRiver_2014/best_use_xml/USGS_ElwhaRiver_Lidar_2014w_Modification_DEM_IMG.xml",
+              "standardProductLimitation": "WESM: does not meet; breaklines not delivered"
+            }
+          ],
+          "sampleMeters": {
+            "3": 0.3995557509588906
+          }
+        },
+        "settled": {
+          "complete": 60,
+          "total": 60,
+          "ratio": 1,
+          "coveredPixels": 3932160,
+          "totalPixels": 3932160,
+          "refining": true,
+          "failed": true
+        }
+      }
+    }
+  ]
+}
