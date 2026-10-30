@@ -149,7 +149,10 @@ function sourceChoiceChecks(){
   Object.assign(context,{gpuTerrainEnabled:true,CSPTerrain:require('./terrain-core'),document:{body:{classList:{contains:()=>in3d}}}});
   context.$=id=>({value:id==='#terStyle'?'hs':'auto'});
   vm.runInContext(html.slice(html.indexOf('function sunEffect('),html.indexOf('function paintSunNote(')),context);
+  assert.equal(context.sunEffect().live,true,'numeric hillshade on the GPU relights');
+  context.gpuTerrainEnabled=false;
   assert.match(context.sunEffect().why,/fixed provider lighting/);
+  context.gpuTerrainEnabled=true;
   in3d=true;assert.equal(context.sunEffect().live,true,'3D lighting explains the numeric 3D renderer, not the published 2D image');
   in3d=false;
   context.$=autoChoice;
