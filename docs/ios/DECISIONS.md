@@ -801,6 +801,78 @@ only the owner records, committed on the parent's branch, with no app code,
 tests, push or deployment. Enforcement remains unverified. The session ends
 without any custody transfer.
 
+## CR-014 — verified Elwha original-resolution elevation fallback
+
+Status: ACCEPTED 2026-10-29 (America/Los_Angeles), exact r1 only, with conditions.
+Request: change-requests/CR-014-elwha-original-resolution-gap.md
+Binding: independently reproduced 4,322 UTF-8/LF proposal bytes before the
+Riley approval heading, including its blank separator, SHA-256
+e439f179c8698844b7e3bfcf1c3576c8aaa663ba1e37bee7258150ae6d885e35.
+Normalize only workflow Status to DRAFT; proposal otherwise unchanged. This
+is a later traceability binding, not a digest represented as presented to Riley.
+Owner: dedicated Spec Owner `/root/spec_owner_cr014` (Codex), fresh exact-r1
+session after the CR-013 handoff; session ends at handoff.
+Authority: independently read actual completed, untruncated user_message 1923
+in the [source thread](t3-thread://v2/25ec7f29-6fda-4160-a0ec-8450030a6239/thread:project:95d7b465-9ac4-4d9b-ad2b-94155aa5a211:23c965b7-44ea-424d-bfea-4b195e8b5ef6),
+createdBy user, mobile, messageId 74c815a2-802f-4de9-95ea-9f5b9fe59b7f,
+updatedAt 2026-10-30T00:51:18.793Z. The exact text matches the request. Read
+preceding offer 1921 too: original-resolution DEMs were included. This Elwha
+addition is within Riley's direct instruction and CR-013 condition 6. GOV-002
+covers the necessary bounded review without repeated confirmation.
+
+Accepted scope: only 392 numeric Elwha OPR TIFFs under the exact r1 prefix,
+indexed by reproducible actual-header manifest and sampled through the existing
+bounded federal range/UTM pipeline. Valid cached DNR retains Best available
+priority; standard federal 1 m precedes OPR; OPR fills remaining numeric holes.
+Explicit USGS may include it; explicit National excludes it. No new source
+archive acquisition, universal OPR adapter or broader source policy is accepted.
+CR-012's published-image/numeric separation remains unchanged. Exact proposal
+and numbered owner conditions in CR-014 govern this summary.
+
+Independent evidence: official DEM metadata verifies horizontal and elevation
+meters, UTM 10N NAD83(2011), NAVD88/GEOID12A and stated no access/use
+restrictions, with limitations. Live range/rasterio reads confirm both gap
+points: OPR 692.77001953125 m and 594.8099975585938 m, each with 1,089/1,089
+valid neighboring samples, while standard Elwha_MOD2 has zero valid samples
+in both neighborhoods. Both sampled TIFFs are Float32, 1 m area pixels,
+EPSG:26910. Supplied listing is complete with 392 TIFFs totaling 487,350,073
+bytes. The full manifest's header validation remains implementation work.
+WESM excludes the survey from the standard product because breaklines were
+not delivered. Keep OPR identity and that limitation; native spacing is not
+measurement accuracy. TIFF EPSG:26910 versus metadata/WESM EPSG:6339 is a
+documented realization discrepancy, not a performed transformation. FGDC
+includes a 2015-02-23 modification flight despite WESM's 2015-02-01 end;
+`2014` in the identifier is not every pixel's capture date. Metadata/source
+hashes, exact sample keys and owner scratch evidence are in CR-014.
+
+Conditions: all 392 headers/bounds must be validated; no vertical scaling or
+invented datum transform; disclose the retained UTM approximation; provenance
+counts actual contributors only and carries original keys, native/display
+spacing and reference/date limits. Invalidate old negative and partial/coarse
+cache bodies that can now refine. Failed standard reads must remain retryable
+even when OPR fills the output. Preserve useful pixels, bounded stationary
+recovery, cancellation and stale-result rejection. Complete r1's independent
+engine comparison, controls, priority/provenance/failure tests, Node/static/iOS
+checks, matching assets and actual simulator refinement before VERIFIED.
+
+CR-013 condition 6's disclosure is supplemented only for this actual Elwha
+addition. Report one verified OPR survey, corrected broad-benefit estimate and
+ten-point recheck limits; never claim statewide OPR completeness or all missed
+USGS data added. ~31,161 km² remains an approximate standard-product gap
+estimate, not universal proof of absence. Other OPR sources require bounded
+scientific validation and owner records within existing task authority.
+
+Affected: U-03, CAP-04, DATA-01/03/04/05/06, RENDER-01/03, D-06 (this source
+only), CR-013 condition 6 and CR-001 source-selection constraint. Permanent
+bounded supplement; SPEC.md 0.1.0-draft and BASE-001 stay unchanged/unapproved.
+Other CRs/CR-013 conditions, broader D-06, D-05, open decisions, PERF/release
+gates and CR-001 distribution/expiry are unchanged. Parent may implement and
+verify exact r1 now. Owner provider reads are two-source spot checks, not full
+engine/scientific/device/release acceptance. Only three governance files changed,
+committed on the parent's branch; no app edits, app tests, push, deployment or
+delegation. Shipping authority remains separate. Enforcement is unverified.
+No ongoing owner remains and no approval custody transfers at handoff.
+
 ## Open decisions
 
 D-01 and D-03 through D-08 in SPEC.md remain unresolved. D-02 is resolved for
@@ -813,7 +885,8 @@ DATA-06. CR-011 resolves only the Best available preference for already cached
 WA DNR elevation. CR-012 adds only the eligible ordinary published-hillshade
 preference. CR-013 adds only opt-in automatic DNR acquisition for viewed USGS
 gaps and the widened USGS 1 m discovery default. Broader D-06 source, datum
-and tolerance decisions remain open, as does D-05.
+and tolerance decisions remain open, as does D-05. CR-014 adds only the verified
+Elwha OPR numeric fallback, with its documented reference and source limitations.
 
 ## Version log
 
@@ -892,3 +965,12 @@ and tolerance decisions remain open, as does D-05.
   setting under separate shipping authority. The narrowing that leaves out the
   original-resolution DEMs must be disclosed to Riley. Baseline and release
   gates are unchanged; implementation and verification remain with the parent.
+
+- 2026-10-29: CR-014 r1 accepted with conditions after independent actual-user
+  authority/digest checks, source inspection and live official metadata/raster
+  reads at two Elwha gaps. Adds only the exact 392-file Elwha OPR fallback,
+  preserving standard priority, known units/reference limitations, contributing
+  provenance and retryable refinement. Supplements CR-013 condition 6's report
+  for this actual source addition; statewide completeness and broader datum
+  policy remain unresolved. Baseline/release gates unchanged; full manifest,
+  engine/simulator and regression verification remain with parent.

@@ -3,16 +3,16 @@
 Project: Clear Skies Native iOS
 Appointed by: Riley Grant, current 2026-09-06 user request
 Initial agent: /root/spec_owner (session handle, not a permanent service)
-Current owner session: none after this handoff. A dedicated Spec Owner (Claude
-subagent) accepted exact CR-013 r1, with conditions, on 2026-10-29, in a fresh
-bounded session after the CR-012 handoff. Authority: independently verified
-user_message 1923 and GOV-002. The session ends; the implementer gains no
-custody.
+Current owner session: none after this handoff. Dedicated Spec Owner
+`/root/spec_owner_cr014` (Codex) accepted exact CR-014 r1, with conditions, on
+2026-10-29, in a fresh bounded session after the CR-013 handoff. Authority:
+independently verified user_message 1923 and GOV-002. The session ends; the
+implementer gains no custody.
 Current baseline: SPEC.md 0.1.0-draft (commit 142fdf47), unapproved; BASE-001 pending.
-Accepted requests: CR-001–013 r1 and the CR-004 placement addendum r1-a1. The
+Accepted requests: CR-001–014 r1 and the CR-004 placement addendum r1-a1. The
 exact requests and DECISIONS.md govern scopes and conditions. Current
 authority: GOV-002.
-Current task: the parent implements and verifies CR-013 on
+Current task: the parent implements and verifies CR-013/014 on
 `feat/usgs-scope-dnr-auto`.
 - Only engines with CSP_DNR_AUTO=1 (`wadnr-auto`) start one existing DNR warm
   job at a time. They do so for settled Best available 2D views at zoom 15 or
@@ -24,10 +24,16 @@ Current task: the parent implements and verifies CR-013 on
 - USGS 1 m discovery is widened to `WA_,OR_,ID_,Elwha_` without poisoning the
   index.
 - The Dell setting is a deployment action under separate shipping authority.
-- Disclose to Riley that the original-resolution DEMs from decision 1 were not
-  added.
+- CR-014 adds only the exact 392-file verified Elwha OPR survey as numeric
+  fallback after standard 1 m, with cached DNR priority and National exclusion.
+  Manifest bounds come from every actual header. Meter elevations are not
+  scaled; disclose NAD83 realization/date discrepancies and OPR limitations.
+  Only contributing pixels have Elwha OPR provenance. Preserve retryable reads
+  and invalidate changed coverage caches, including partial bodies.
+- Disclose the exact Elwha OPR addition, the corrected broad-benefit estimate
+  and the limited ten-point recheck; do not claim all OPR/missed USGS coverage.
 CR-011 (except item 3 for opt-in engines), CR-012 and all other contracts
-remain. The parent owns verification. Full conditions are in CR-013 and
+remain. The parent owns verification. Full conditions are in CR-013, CR-014 and
 DECISIONS.md.
 
 ## Start here
@@ -606,3 +612,56 @@ request does not establish approval for this one.
 - Continuity: this CR-013-r1-only session ended at this handoff. No ongoing
   owner remains, and no approval custody transfers to the coordinating
   implementer.
+
+## Handoff — 2026-10-29 (CR-014 r1 only)
+
+- Exact CR-014 r1 ACCEPTED with seven owner conditions in a fresh one-request
+  session after CR-013. Owner: `/root/spec_owner_cr014` (Codex). Binding:
+  4,322 UTF-8/LF bytes before the Riley approval heading, including the blank
+  separator, SHA-256 e439f179c8698844b7e3bfcf1c3576c8aaa663ba1e37bee7258150ae6d885e35;
+  normalize only workflow Status to DRAFT. Independently reproduced before
+  edits. Later traceability binding, not represented as presented to Riley.
+- Independently read actual completed, untruncated user_message 1923 in the
+  [source thread](t3-thread://v2/25ec7f29-6fda-4160-a0ec-8450030a6239/thread:project:95d7b465-9ac4-4d9b-ad2b-94155aa5a211:23c965b7-44ea-424d-bfea-4b195e8b5ef6):
+  createdBy user, mobile, messageId 74c815a2-802f-4de9-95ea-9f5b9fe59b7f,
+  updatedAt 2026-10-30T00:51:18.793Z. It exactly matches the request quote.
+  Read preceding offer 1921, which includes original-resolution DEMs. This
+  verified Elwha source is within the direct instruction, GOV-002 and CR-013
+  condition 6; no repeat Riley confirmation needed.
+- Read governing and accepted-request scopes, affected SPEC IDs and actual
+  federal range/header/block caches, UTM sampler, ranking/nodata/provenance,
+  engine routes and browser coverage/source path. Independently fetched
+  official DEM metadata and sampled both live OPR gap files and standard
+  Elwha_MOD2 with rasterio. OPR returns 692.77001953125 m and
+  594.8099975585938 m, both with fully valid 33 x 33 neighborhoods; the
+  standard file has zero valid samples in both neighborhoods. Both sampled
+  OPR files are Float32, EPSG:26910, 1 m area pixels, nodata -999999.
+- Official metadata explicitly confirms meter coordinates/elevations and
+  NAVD88/GEOID12A, NAD83(2011)/UTM 10N. WESM says missing breaklines prevent
+  standard-product compliance. Preserve the EPSG:26910/6339 discrepancy,
+  existing approximate projection and acquisition-date discrepancy/modification
+  through 2015-02-23. These are neither a datum transform nor an accuracy claim.
+  Exact evidence/hashes and scratch output are recorded in CR-014.
+- Parent may implement exact r1: only the 392-file exact-prefix Elwha OPR
+  manifest, header-derived bounds/native spacing, after standard numeric 1 m,
+  cached DNR priority, explicit National exclusion, contributing-only OPR
+  provenance and honest source help. No archive acquisition/universal OPR.
+  Preserve CR-012's image/numeric separation and CR-013's other conditions.
+- Completion checks remain with parent: every manifest header, independent
+  engine/reference comparison with aligned interpolation/pixel conventions,
+  nodata/outside/clipped-edge controls, priority/provenance, failed standard
+  and OPR reads, bounded stationary recovery, coverage-cache invalidation of
+  negatives and partial/coarse bodies, Node/static/iOS checks, matching assets
+  and actual simulator refinement. An OPR-filled output after standard failure
+  must not prevent the standard retry. The owner performed only source spot
+  checks, no engine/runtime/device/performance or full scientific acceptance.
+- Disclose exactly one OPR addition and corrected broad-benefit estimate, with
+  ten-point recheck limits. Do not claim all missed USGS/OPR data added or
+  universal absence. ~31,161 km² is an approximate standard-product gap.
+- SPEC.md 0.1.0-draft and BASE-001 remain unchanged/unapproved. Broader D-06,
+  D-05, other open decisions, PERF/release gates, other CRs/CR-013 conditions
+  and CR-001 distribution/expiry remain. Shipping authority is separate.
+  Only CR-014, DECISIONS.md and this handoff changed and are committed on
+  the parent's branch; no app edits, app tests, push, deployment or delegation.
+  Enforcement remains unverified. This exact-r1 owner session ends here;
+  no ongoing owner or approval custody transfers to the implementer.
