@@ -1,5 +1,5 @@
 'use strict';
-const assert=require('node:assert/strict'),fs=require('node:fs'),vm=require('node:vm');
+const assert=require('node:assert/strict'),fs=require('node:fs'),vm=require('node:vm'),path=require('node:path'),os=require('node:os');
 const main=fs.readFileSync('electron/main.js','utf8');
 const code=main.slice(0,main.indexOf('app.isQuittingCsp = false;'));
 
@@ -29,7 +29,7 @@ function fixture({env={},platform='darwin',installed=true,saved='8770\n',error=n
   assert.deepEqual(f.calls.probes,[8770]);assert.deepEqual(f.calls.starts,[],'no second engine or older bundled client');
   assert.equal(f.calls.reads[0].file,'/usr/bin/plutil');
   assert.deepEqual(Array.from(f.calls.reads[0].args.slice(0,5)),['-extract','EnvironmentVariables.CSP_ENGINE_PORT','raw','-o','-']);
-  assert.match(f.calls.reads[0].args[5],/Library\/LaunchAgents\/com\.rileyg44\.clear-skies-portal\.plist$/);
+  assert.equal(f.calls.reads[0].args[5],path.join(os.homedir(),'Library','LaunchAgents','com.rileyg44.clear-skies-portal.plist'));
   assert.equal(f.calls.reads[0].options.timeout,2000);
 
   f=fixture({healthy:false,kickstart:true});
