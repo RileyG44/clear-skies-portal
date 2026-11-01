@@ -1,0 +1,49 @@
+{
+  "workload": "terrain-source-queue",
+  "baselineRef": "ab4f769",
+  "notes": "Real TIFF parsing, block decoding and disk cache; controlled HTTPS at 20 ms/read with one S3 slot. Warmer uses one simulated worker, 400 ms speculative and 10 ms visible costs, demand arriving 160 ms after a cache hit. These are deterministic workload comparisons, not device or live-provider latency claims.",
+  "before": {
+    "sharedProcessing": {
+      "overlappingRenders": 2,
+      "headerParses": 2,
+      "blockDecodes": 2,
+      "sourceRequests": 2
+    },
+    "sourceCancellation": {
+      "abandonedHeaders": 24,
+      "queuedAfterDeparture": 24,
+      "obsoleteSourceRequests": 24,
+      "sourceRequests": 26,
+      "currentViewReadyMs": 520,
+      "maxActive": 1
+    },
+    "warming": {
+      "speculativeJobs": 12,
+      "queuedAtArrival": 11,
+      "currentViewReadyMs": 250,
+      "cancelledSpeculativeJobs": 0
+    }
+  },
+  "after": {
+    "sharedProcessing": {
+      "overlappingRenders": 2,
+      "headerParses": 1,
+      "blockDecodes": 1,
+      "sourceRequests": 2
+    },
+    "sourceCancellation": {
+      "abandonedHeaders": 24,
+      "queuedAfterDeparture": 0,
+      "obsoleteSourceRequests": 0,
+      "sourceRequests": 2,
+      "currentViewReadyMs": 40,
+      "maxActive": 1
+    },
+    "warming": {
+      "speculativeJobs": 1,
+      "queuedAtArrival": 0,
+      "currentViewReadyMs": 10,
+      "cancelledSpeculativeJobs": 1
+    }
+  }
+}

@@ -55,14 +55,75 @@ const S3_AGENT = new https.Agent({keepAlive:true,maxSockets:S3_MAX_INFLIGHT+2,
                                   maxFreeSockets:S3_MAX_INFLIGHT,timeout:30000});
 let s3Inflight=0;
 const s3Queue=[];
-function takeS3Slot(){
-  if(s3Inflight<S3_MAX_INFLIGHT){ s3Inflight++; return Promise.resolve() }
-  return new Promise(resolve=>s3Queue.push(resolve)).then(()=>{ s3Inflight++ });
+function takeS3Slot(signal){
+  if(signal?.aborted)return Promise.reject(signal.reason);
+  return new Promise((resolve,reject)=>{
+    const waiter={grant:()=>{cleanup();s3Inflight++;resolve();}};
+    const abort=()=>{
+      const index=s3Queue.indexOf(waiter);if(index>=0)s3Queue.splice(index,1);
+      cleanup();reject(signal.reason);
+    };
+    const cleanup=()=>signal?.removeEventListener('abort',abort);
+    signal?.addEventListener('abort',abort,{once:true});
+    if(s3Inflight<S3_MAX_INFLIGHT)waiter.grant();else s3Queue.push(waiter);
+  });
 }
 function releaseS3Slot(){
   s3Inflight--;
   const next=s3Queue.shift();
-  if(next) next();
+  if(next) next.grant(); // reserve the slot before another request can take it
+}
+
+/* One listener per render signal, even when its window touches many blocks.
+   Shared work has its own signal: leaving one render releases its ownership,
+   and only the last departure may cancel work another render could reuse. */
+const readAbortObservers=new WeakMap();
+function observeReadAbort(signal,callback){
+  if(!signal)return ()=>{};
+  let entry=readAbortObservers.get(signal);
+  if(!entry){
+    entry={callbacks:new Set(),abort:()=>{
+      readAbortObservers.delete(signal);
+      for(const fn of [...entry.callbacks])fn();
+      entry.callbacks.clear();
+    }};
+    readAbortObservers.set(signal,entry);
+    signal.addEventListener('abort',entry.abort,{once:true});
+  }
+  entry.callbacks.add(callback);
+  return ()=>{
+    entry.callbacks.delete(callback);
+    if(!entry.callbacks.size){
+      signal.removeEventListener('abort',entry.abort);
+      if(readAbortObservers.get(signal)===entry)readAbortObservers.delete(signal);
+    }
+  };
+}
+function sharedRead(pending,key,signal,load){
+  if(signal?.aborted)return Promise.reject(signal.reason);
+  let entry=pending.get(key);
+  if(!entry){
+    entry={controller:new AbortController(),users:0,retained:false,promise:null};
+    pending.set(key,entry);
+    entry.promise=Promise.resolve().then(()=>{
+      entry.controller.signal.throwIfAborted();return load(entry);
+    }).finally(()=>{if(pending.get(key)===entry)pending.delete(key);});
+  }
+  entry.users++;
+  return new Promise((resolve,reject)=>{
+    let settled=false,unobserve=()=>{};
+    const finish=(fn,value)=>{
+      if(settled)return;settled=true;entry.users--;unobserve();fn(value);
+    };
+    unobserve=observeReadAbort(signal,()=>{
+      finish(reject,signal.reason);
+      if(!entry.users&&!entry.retained){
+        if(pending.get(key)===entry)pending.delete(key);
+        entry.controller.abort();
+      }
+    });
+    entry.promise.then(value=>finish(resolve,value),error=>finish(reject,error));
+  });
 }
 
 let CACHE_DIR = null;
@@ -96,9 +157,12 @@ function s3Request(pathname, headers){
     req.end();
   });
 }
-async function s3(pathname,headers){
-  await takeS3Slot();
-  try{ return await s3Request(pathname,headers) }finally{ releaseS3Slot() }
+async function s3(pathname,headers,signal,onStart=()=>{}){
+  await takeS3Slot(signal);
+  try{
+    signal?.throwIfAborted();onStart();
+    return await s3Request(pathname,headers);
+  }finally{ releaseS3Slot() }
 }
 function s3HeadRequest(pathname){ return new Promise((res,rej)=>{
   const req=https.request({host:S3_HOST,path:pathname,method:"HEAD",agent:S3_AGENT},r=>{
@@ -325,11 +389,11 @@ function saveZones(){
   try{ cacheBudget.writeJsonAtomic(zonesPath(),Object.fromEntries(ZONES)) }catch(e){}
 }
 
-async function resolveCellZone(proj, file, size){
+async function resolveCellZone(proj, file, size, signal){
   try{
-    const t=await openCog(`${S3_BASE}${proj}/TIFF/${file}`, size);
+    const t=await openCog(`${S3_BASE}${proj}/TIFF/${file}`, size, signal);
     return zoneOfEpsg(t.geo && t.geo.epsg);
-  }catch(e){ return null }
+  }catch(e){ if(signal?.aborted)throw e;return null }
 }
 function cellBounds(cell){
   const m=cell.match(/x(\d+)y(\d+)/);
@@ -339,7 +403,8 @@ function cellBounds(cell){
 
 /* Projects holding this cell in this zone, newest first. The point lookup and
    the renderer both go through here, so they cannot disagree about coverage. */
-async function cellCandidates(idx, cell, zone){
+async function cellCandidates(idx, cell, zone, signal){
+  signal?.throwIfAborted();
   loadZones();
   const out=[]; let dirty=false;
   for(const p in idx.projects){
@@ -350,7 +415,7 @@ async function cellCandidates(idx, cell, zone){
     if(z==null){
       const k=`${p}/${cell}`;
       if(ZONES.has(k)) z=ZONES.get(k);
-      else { z=await resolveCellZone(p,c.f,c.size); ZONES.set(k,z); dirty=true; }
+      else { z=await resolveCellZone(p,c.f,c.size,signal); ZONES.set(k,z); dirty=true; }
       if(z!=null && z!==zone) continue;              // same cell name, different zone
     }
     out.push({project:p, cell, zone:z||zone, file:c.f, size:c.size, year:projectYear(p)});
@@ -361,12 +426,13 @@ async function cellCandidates(idx, cell, zone){
 }
 
 /* Which projects hold the cell containing this point, newest first. */
-async function findCells(lon, lat){
-  const idx=await getIndex();
+async function findCells(lon, lat, signal){
+  signal?.throwIfAborted();
+  const idx=await tileWait(getIndex(),signal);
   const zone=cog.utmZone(lon);
   const u=cog.lonLatToUTM(lon,lat,zone);
   const cell=cellOf(u.e,u.n);
-  const hits=await cellCandidates(idx, cell, zone);
+  const hits=await cellCandidates(idx, cell, zone, signal);
   return {zone, easting:u.e, northing:u.n, cell, hits};
 }
 
@@ -381,15 +447,17 @@ function rangePath(key, a, b){
   return path.join(CACHE_DIR,"usgs",h);
 }
 const RANGE_PENDING = new Map();
-async function fetchRange(key, a, b){
+async function fetchRange(key, a, b, signal){
+  signal?.throwIfAborted();
   const f=rangePath(key,a,b);
   try{
     const st=fs.statSync(f),buf=fs.readFileSync(f);
     if(buf.length===b-a+1){cacheBudget.touchAccess(f,st);return {buf,cached:true}}
   }catch(e){}
-  if(RANGE_PENDING.has(f)) return RANGE_PENDING.get(f);
-  const work=(async()=>{
-    const r=await s3("/"+key,{Range:`bytes=${a}-${b}`});
+  return sharedRead(RANGE_PENDING,f,signal,async entry=>{
+    // Once a read is on the wire, let it populate the cache and accept new
+    // viewers. An orphan still waiting for a slot never reaches the network.
+    const r=await s3("/"+key,{Range:`bytes=${a}-${b}`},entry.controller.signal,()=>{entry.retained=true;});
     if(r.status!==206 && r.status!==200) throw new Error("range "+r.status);
     if(cacheWritable(r.body.length+4096)){
       const tmp=`${f}.${process.pid}.${Date.now()}.tmp`;
@@ -397,9 +465,7 @@ async function fetchRange(key, a, b){
       catch(e){ try{ fs.unlinkSync(tmp) }catch(_){} }
     }
     return {buf:r.body, cached:false};
-  })();
-  RANGE_PENDING.set(f,work);
-  try{ return await work } finally { RANGE_PENDING.delete(f) }
+  });
 }
 
 /* -------------------------------------------------------------- COG access */
@@ -408,6 +474,7 @@ const PROBE_BYTES = 1<<16;                // first look: most directories fit in
 const TAIL_BYTES = 1<<20;                 // when the directory is at the end instead
 const headers = new Map();                // key -> parsed tiff
 const decoded = new Map();                // key|lvl|idx -> Float32Array (LRU)
+const headerPending=new Map(),decodedPending=new Map();
 const DECODE_MAX = 48;
 
 /* A COG writes its directory first, so the head of the file is enough. Many
@@ -416,8 +483,12 @@ const DECODE_MAX = 48;
    reading only the head found nothing, so the project silently had no data.
    Read the head, and if the directory is somewhere else, go and get it. The
    tail holding the directory and its offset tables is small: ~14 KB there. */
-async function openCog(key, size){
+async function openCog(key, size, signal){
+  signal?.throwIfAborted();
   if(headers.has(key)) return headers.get(key);
+  return sharedRead(headerPending,key,signal,entry=>readCogHeader(key,size,entry.controller.signal));
+}
+async function readCogHeader(key,size,signal){
   /* Probe small first: probing 256 KB per candidate was 71% of all cached bytes
      (5,248 files of exactly HDR_BYTES against 825 of real pixels). A short head
      is enough whenever the directory really does sit at the front - which is the
@@ -426,11 +497,11 @@ async function openCog(key, size){
      no readable directory. Anything not proven complete escalates to the full
      head below, which is exactly the old behaviour. */
   const probeBytes=Math.min(PROBE_BYTES, HDR_BYTES);
-  let {buf}=await fetchRange(key, 0, probeBytes-1);
+  let {buf}=await fetchRange(key, 0, probeBytes-1, signal);
   let t=null;
   try{ t=cog.parseTiff(buf) }catch(e){ t=null }
   if(t && t.levels.length && t.complete===false && probeBytes<HDR_BYTES){
-    ({buf}=await fetchRange(key, 0, HDR_BYTES-1));
+    ({buf}=await fetchRange(key, 0, HDR_BYTES-1, signal));
     try{ t=cog.parseTiff(buf) }catch(e){ t=null }
   }
   if(!t || !t.levels.length){
@@ -440,7 +511,7 @@ async function openCog(key, size){
                          : (le?buf.readUInt32LE(4):buf.readUInt32BE(4));
     if(!(ifd>=HDR_BYTES)) throw new Error("no readable IFD found");
     const end = size ? size-1 : ifd + TAIL_BYTES - 1;
-    const {buf:tail}=await fetchRange(key, ifd, end);
+    const {buf:tail}=await fetchRange(key, ifd, end, signal);
     t=cog.parseTiff(tail, ifd, buf.slice(0, 64));
     if(!t.levels.length) throw new Error("no readable IFD found at "+ifd);
   }
@@ -451,7 +522,8 @@ function lru(k,v){
   decoded.set(k,v);
   if(decoded.size>DECODE_MAX) decoded.delete(decoded.keys().next().value);
 }
-async function cogTile(key, t, lvl, tx, ty){
+async function cogTile(key, t, lvl, tx, ty, signal){
+  signal?.throwIfAborted();
   const ck=`${key}|${lvl}|${tx},${ty}`;
   if(decoded.has(ck)){ const v=decoded.get(ck); decoded.delete(ck); decoded.set(ck,v); return v }
   const L=t.levels[lvl];
@@ -460,10 +532,12 @@ async function cogTile(key, t, lvl, tx, ty){
   if(idx<0 || idx>=L.offsets.length) return null;
   const off=L.offsets[idx], cnt=L.counts[idx];
   if(!cnt) return null;
-  const {buf}=await fetchRange(key, off, off+cnt-1);
-  const px=cog.decodeTile(buf,L);
-  lru(ck,px);
-  return px;
+  return sharedRead(decodedPending,ck,signal,async entry=>{
+    const {buf}=await fetchRange(key, off, off+cnt-1, entry.controller.signal);
+    const px=cog.decodeTile(buf,L);
+    lru(ck,px);
+    return px;
+  });
 }
 
 /* ------------------------------------------------------------ PNG encoder */
@@ -609,11 +683,12 @@ function validateElwhaHeader(file,t){
 function tileWait(promise,signal){
   if(!signal)return promise;
   return new Promise((resolve,reject)=>{
-    const abort=()=>{signal.removeEventListener('abort',abort);reject(signal.reason);};
+    let unobserve=()=>{};
+    const abort=()=>{unobserve();reject(signal.reason);};
     if(signal.aborted){Promise.resolve(promise).catch(()=>{});abort();return;}
-    signal.addEventListener('abort',abort,{once:true});
-    Promise.resolve(promise).then(value=>{signal.removeEventListener('abort',abort);resolve(value);},
-      error=>{signal.removeEventListener('abort',abort);reject(error);});
+    unobserve=observeReadAbort(signal,abort);
+    Promise.resolve(promise).then(value=>{unobserve();resolve(value);},
+      error=>{unobserve();reject(error);});
   });
 }
 async function sampleGrid(z,x,y,size,options={}){
@@ -649,7 +724,7 @@ async function sampleGrid(z,x,y,size,options={}){
   const idx=await tileWait(getIndex(),signal);
   const srcs=[];
   for(const cell of cells){
-    const cands=await tileWait(cellCandidates(idx, cell, zone),signal);
+    const cands=await tileWait(cellCandidates(idx, cell, zone, signal),signal);
     if(cands.length) srcs.push(cands);              // fallbacks kept, best first
   }
   const oprFiles=options.includeOPR===false?[]:elwhaCandidates(zone,[minE,minN,maxE,maxN]);
@@ -673,7 +748,7 @@ async function sampleGrid(z,x,y,size,options={}){
        candidate. openCog memoises per worker, so this is paid once per worker
        per product - measured, the 256 KB header probe dominates the cache. */
     const probed=await tileWait(Promise.all(group.slice(0,8).map(async s=>{
-      try{ return {s,key:tileKey(s),t:await openCog(tileKey(s), s.size)} }catch(e){ failed++; return null }
+      try{ return {s,key:tileKey(s),t:await openCog(tileKey(s), s.size, signal)} }catch(e){ failed++; return null }
     })),signal);
     const available=[];
     for(const hit of probed){
@@ -695,7 +770,7 @@ async function sampleGrid(z,x,y,size,options={}){
   // This bounded OPR survey fills only holes after every standard candidate.
   for(const s of oprFiles){
     try{
-      const t=await tileWait(openCog(s.key,s.size),signal);validateElwhaHeader(s,t);
+      const t=await tileWait(openCog(s.key,s.size,signal),signal);validateElwhaHeader(s,t);
       let lvl=0;
       for(let i=0;i<t.levels.length;i++)if(Math.pow(2,i)<=groundRes)lvl=i;else break;
       opened.push({s:{...s,project:ELWHA_OPR.survey,opr:true},key:s.key,t,lvl,res:Math.pow(2,lvl),
@@ -714,7 +789,7 @@ async function sampleGrid(z,x,y,size,options={}){
     const ty0=Math.max(0,Math.floor(py0/L.th)), ty1=Math.min(Math.ceil(L.h/L.th)-1,Math.floor(py1/L.th));
     const jobs=[];
     for(let ty=ty0; ty<=ty1; ty++) for(let tx=tx0; tx<=tx1; tx++)
-      jobs.push(cogTile(o.key,o.t,o.lvl,tx,ty)
+      jobs.push(cogTile(o.key,o.t,o.lvl,tx,ty,signal)
         .then(a=>{ if(a) o.tiles.set(tx+","+ty,a) }).catch(()=>{ failed++ }));
     await tileWait(Promise.all(jobs),signal);
   }

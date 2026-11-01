@@ -14,9 +14,9 @@ scheduling, USGS sampling, published hillshade and 3D mesh scheduling.
 | 1 | Give every settled viewport an explicit demand refresh, and stop expensive GPU requests at passing zooms. This addresses the refresh trigger and prevents intermediate levels from building a backlog. | Implemented |
 | 2 | Batch queue admission, prioritize visible tiles before the prefetch ring, and run background work only after foreground work. This spends engine capacity on pixels the user can see. | Implemented |
 | 3 | Cancel abandoned raw renders cooperatively. Free the worker promptly while retaining reusable shared COG reads and decoded caches. | Implemented |
-| 4 | Make server-side styled-tile neighbour warming yield to new demand. The existing idle check happens before a batch of up to 12 speculative jobs starts; subsequently arriving demand cannot reclaim already running warm jobs. Lower value for the default numeric GPU path, which does not invoke this warmer. | Follow-up |
+| 4 | Make server-side styled-tile neighbour warming yield to new demand. The existing idle check happens before a batch of up to 12 speculative jobs starts; subsequently arriving demand cannot reclaim already running warm jobs. Lower value for the default numeric GPU path, which does not invoke this warmer. | Implemented in [cycle 2](2026-11-01-source-queue.md) |
 | 5 | Add live queue-age, per-source latency and visible-detail completion telemetry, then tune concurrency to the engine and connection. Current fixed browser limits can overfeed a small engine or underfeed a large one; measurements should drive the limit. | Follow-up |
-| 6 | Coalesce pending COG header parsing and decoded block work, beyond the existing shared range reads, and retire unused queued ranges when their final render leaves. This can save cold-start work, but needs source-read ownership to avoid cancelling another viewer. | Follow-up |
+| 6 | Coalesce pending COG header parsing and decoded block work, beyond the existing shared range reads, and retire unused queued ranges when their final render leaves. This can save cold-start work, but needs source-read ownership to avoid cancelling another viewer. | Implemented in [cycle 2](2026-11-01-source-queue.md) |
 
 ## Findings and implementation
 
