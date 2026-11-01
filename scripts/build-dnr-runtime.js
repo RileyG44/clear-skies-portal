@@ -29,6 +29,11 @@ for(const [name,dir] of [...packages].sort(([a],[b])=>a.localeCompare(b))){
     notices.push(name+"\nCopyright 2017-2021 Esri\n"+fs.readFileSync(path.join(__dirname,"..","vendor","dnr-lerc-LICENSE.txt"),"utf8"));
     continue;
   }
+  if(name.startsWith("geotiff-geokeys-to-proj4@")&&!files.length){
+    // The npm package omits the license file; retain the upstream tag's text.
+    notices.push(name+"\n"+fs.readFileSync(path.join(__dirname,"..","vendor","dnr-geokeys-LICENSE.txt"),"utf8"));
+    continue;
+  }
   if(!files.length)throw new Error(`Missing bundled dependency license: ${name}`);
   notices.push(name+"\n"+files.map(f=>fs.readFileSync(path.join(dir,f),"utf8")).join("\n"));
 }

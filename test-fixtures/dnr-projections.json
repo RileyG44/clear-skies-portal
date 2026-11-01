@@ -1,0 +1,59 @@
+{
+  "basis": "PROJ 9.8.1 via pyproj 3.8.0, always_xy, WGS84 point (-119.45, 47.35). Datum grid transformations are outside this reader.",
+  "point": [
+    -119.45,
+    47.35
+  ],
+  "projected": {
+    "6596": [
+      604519.4186737831,
+      39853.44205662822
+    ],
+    "6597": [
+      1983327.4597655693,
+      130752.50114745443
+    ],
+    "6598": [
+      579333.7643964697,
+      224691.00922750996
+    ],
+    "6599": [
+      1900697.5256907507,
+      737173.7527739224
+    ],
+    "2285": [
+      1983327.4597655693,
+      130752.50114745443
+    ],
+    "32148": [
+      604519.4186737831,
+      39853.44205662822
+    ],
+    "6339": [
+      768109.3577687817,
+      5250172.359210681
+    ],
+    "6340": [
+      314961.7332404853,
+      5246970.177330364
+    ],
+    "26910": [
+      768109.3577687817,
+      5250172.359210681
+    ],
+    "26911": [
+      314961.7332404853,
+      5246970.177330364
+    ],
+    "32610": [
+      768109.3577663961,
+      5250172.359332236
+    ],
+    "3857": [
+      -13297113.175256528,
+      5999391.278141544
+    ]
+  },
+  "wkt1": "PROJCS[\"NAD83(2011) / Washington North (ftUS)\",GEOGCS[\"NAD83(2011)\",DATUM[\"NAD83_National_Spatial_Reference_System_2011\",SPHEROID[\"GRS 1980\",6378137,298.257222101,AUTHORITY[\"EPSG\",\"7019\"]],AUTHORITY[\"EPSG\",\"1116\"]],PRIMEM[\"Greenwich\",0,AUTHORITY[\"EPSG\",\"8901\"]],UNIT[\"degree\",0.0174532925199433,AUTHORITY[\"EPSG\",\"9122\"]],AUTHORITY[\"EPSG\",\"6318\"]],PROJECTION[\"Lambert_Conformal_Conic_2SP\"],PARAMETER[\"latitude_of_origin\",47],PARAMETER[\"central_meridian\",-120.833333333333],PARAMETER[\"standard_parallel_1\",48.7333333333333],PARAMETER[\"standard_parallel_2\",47.5],PARAMETER[\"false_easting\",1640416.667],PARAMETER[\"false_northing\",0],UNIT[\"US survey foot\",0.304800609601219,AUTHORITY[\"EPSG\",\"9003\"]],AXIS[\"Easting\",EAST],AXIS[\"Northing\",NORTH],AUTHORITY[\"EPSG\",\"6597\"]]",
+  "wkt2": "PROJCRS[\"NAD83(2011) / Washington North (ftUS)\",BASEGEOGCRS[\"NAD83(2011)\",DATUM[\"NAD83 (National Spatial Reference System 2011)\",ELLIPSOID[\"GRS 1980\",6378137,298.257222101,LENGTHUNIT[\"metre\",1]],ANCHOREPOCH[2010]],PRIMEM[\"Greenwich\",0,ANGLEUNIT[\"degree\",0.0174532925199433]],ID[\"EPSG\",6318]],CONVERSION[\"SPCS83 Washington North zone (US survey foot)\",METHOD[\"Lambert Conic Conformal (2SP)\",ID[\"EPSG\",9802]],PARAMETER[\"Latitude of false origin\",47,ANGLEUNIT[\"degree\",0.0174532925199433],ID[\"EPSG\",8821]],PARAMETER[\"Longitude of false origin\",-120.833333333333,ANGLEUNIT[\"degree\",0.0174532925199433],ID[\"EPSG\",8822]],PARAMETER[\"Latitude of 1st standard parallel\",48.7333333333333,ANGLEUNIT[\"degree\",0.0174532925199433],ID[\"EPSG\",8823]],PARAMETER[\"Latitude of 2nd standard parallel\",47.5,ANGLEUNIT[\"degree\",0.0174532925199433],ID[\"EPSG\",8824]],PARAMETER[\"Easting at false origin\",1640416.667,LENGTHUNIT[\"US survey foot\",0.304800609601219],ID[\"EPSG\",8826]],PARAMETER[\"Northing at false origin\",0,LENGTHUNIT[\"US survey foot\",0.304800609601219],ID[\"EPSG\",8827]]],CS[Cartesian,2],AXIS[\"easting (X)\",east,ORDER[1],LENGTHUNIT[\"US survey foot\",0.304800609601219]],AXIS[\"northing (Y)\",north,ORDER[2],LENGTHUNIT[\"US survey foot\",0.304800609601219]],USAGE[SCOPE[\"Engineering survey, topographic mapping.\"],AREA[\"United States (USA) - Washington - counties of Chelan; Clallam; Douglas; Ferry; Grant north of approximately 47\u00b030'N; Island; Jefferson; King; Kitsap; Lincoln; Okanogan; Pend Oreille; San Juan; Skagit; Snohomish; Spokane; Stevens; Whatcom.\"],BBOX[47.08,-124.79,49.05,-117.02]],ID[\"EPSG\",6597]]"
+}
