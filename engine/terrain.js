@@ -28,7 +28,7 @@ const TERRAIN_STYLES = new Set(["hs","hsmulti","tint","slope","aspect","c2","c5"
 const TERRAIN_DOWNLOAD_STYLES = new Set([...TERRAIN_STYLES,"northness"]);
 
 let terrainPool = null, dnr = null;
-function init(pool,dnrStore){ terrainPool=pool; dnr=dnrStore }
+function init(pool,dnrStore){ pauseWarmNeighbours();terrainPool=pool; dnr=dnrStore }
 /* "No 1 m coverage" is final only when the index that said so was complete
    (usgs.coverageFinal). Answers cached without that mark may come from the
    incomplete index of October 2026, so they are asked again; a genuine gap
@@ -70,13 +70,42 @@ function analysisCachePut(cacheKey,body){
    about to make, and turns the next screenful into cache hits.
 
    Deliberately conservative, because extra load is the thing we are trying to
-   remove: only when the pool has nothing else to do, only the eight surrounding
-   tiles, and rate-limited per window. Already-cached neighbours are skipped, so
-   a busy pool is always left alone and a settled viewport costs nothing. */
+   remove: one neighbour at a time after an idle pause, bounded per window.
+   Any new foreground terrain demand discards the pending ring and cancels the
+   active warm render unless the viewer is joining that very same render. */
 const WARM_RING_WINDOW_MS=5000;
 const WARM_RING_MAX=12;                 // prefetches started per window
-const warmRingSeen=new Set();           // jobKeys queued or running right now
+const WARM_IDLE_MS=160;
+const warmRingQueue=new Map();
+let warmActive=null,warmTimer=null;
 let warmRingStarted=0, warmRingSince=0;
+function pauseWarmNeighbours(jobKey){
+  clearTimeout(warmTimer);warmTimer=null;warmRingQueue.clear();
+  if(warmActive&&warmActive.jobKey!==jobKey)warmActive.controller.abort();
+}
+function scheduleWarmNeighbour(){
+  if(warmTimer||warmActive||!warmRingQueue.size)return;
+  warmTimer=setTimeout(runWarmNeighbour,WARM_IDLE_MS);warmTimer.unref?.();
+}
+function runWarmNeighbour(){
+  warmTimer=null;
+  const stats=terrainPool.stats();
+  if(stats.active||stats.queued){warmRingQueue.clear();return;}
+  if(Date.now()-warmRingSince>WARM_RING_WINDOW_MS){warmRingSince=Date.now();warmRingStarted=0;}
+  while(warmRingQueue.size&&warmRingStarted<WARM_RING_MAX){
+    const [nk,args]=warmRingQueue.entries().next().value;warmRingQueue.delete(nk);
+    const cached=cacheGet(nk,TTL_TILE);if(cached&&!staleFederal(cached))continue;
+    const active={jobKey:`raw-terrain:${nk}`,controller:new AbortController()};
+    warmActive=active;warmRingStarted++;
+    terrainTask(active.jobKey,"raw-terrain",args,{priority:-10,timeoutMs:30000},active.controller.signal)
+      .then(out=>{ if(out&&out.provisional) return;
+        if(out) cachePut(nk,200,"image/png",out.png,federalMeta(out.meta)); else cachePut(nk,204,"image/png",Buffer.alloc(0),noneFinal()) })
+      .catch(()=>{})
+      .finally(()=>{if(warmActive===active){warmActive=null;scheduleWarmNeighbour();}});
+    return;
+  }
+  warmRingQueue.clear();
+}
 function warmNeighbourTiles(style,z,x,y){
   if(z<11||z>19) return;                // outside the 1 m layers worth warming
   const stats=terrainPool.stats();
@@ -91,19 +120,15 @@ function warmNeighbourTiles(style,z,x,y){
   if(z<19) targets.push({z:z+1,x:x*2,y:y*2},{z:z+1,x:x*2+1,y:y*2},
                         {z:z+1,x:x*2,y:y*2+1},{z:z+1,x:x*2+1,y:y*2+1});
   for(const target of targets){
-    if(warmRingStarted>=WARM_RING_MAX) return;
+    if(warmRingStarted+warmRingQueue.size>=WARM_RING_MAX) break;
     const tz=target.z, nx=target.x, ny=target.y, limit=Math.pow(2,tz);
     if(nx<0||ny<0||nx>=limit||ny>=limit) continue;
     const nk=key(`${TERRAIN_RENDER_VERSION}:${style}:${tz}/${nx}/${ny}`);
     const cached=cacheGet(nk,TTL_TILE);
-    if(warmRingSeen.has(nk)||cached&&!staleFederal(cached)) continue;
-    warmRingSeen.add(nk); warmRingStarted++;
-    terrainTask(`raw-terrain:${nk}`,"raw-terrain",{style,z:tz,x:nx,y:ny,size:256},{priority:-10,timeoutMs:30000})
-      .then(out=>{ if(out&&out.provisional) return;
-        if(out) cachePut(nk,200,"image/png",out.png,federalMeta(out.meta)); else cachePut(nk,204,"image/png",Buffer.alloc(0),noneFinal()) })
-      .catch(()=>{})
-      .finally(()=>warmRingSeen.delete(nk));
+    if(warmActive?.jobKey===`raw-terrain:${nk}`||cached&&!staleFederal(cached)) continue;
+    warmRingQueue.set(nk,{style,z:tz,x:nx,y:ny,size:256});
   }
+  scheduleWarmNeighbour();
 }
 
 /* Coalesce identical terrain jobs while letting extra viewers cancel their
@@ -112,6 +137,7 @@ function warmNeighbourTiles(style,z,x,y){
 const terrainPending=new Map();
 function terrainTask(jobKey,action,args,options,signal){
   if(signal&&signal.aborted) return Promise.reject(new TerrainPoolError("terrain request cancelled","ABORT_ERR"));
+  if((options?.priority??0)>=0)pauseWarmNeighbours(jobKey);
   let entry=terrainPending.get(jobKey);
   if(!entry){
     const finishOnAbort=options?.finishOnAbort??!(action==="raw-elevation"||action==="raw-terrain");
@@ -280,7 +306,9 @@ const routes={
     // parameter would otherwise be answered for a point in the Gulf of Guinea.
     if(latS===null||lonS===null||!isFinite(lat)||!isFinite(lon)||Math.abs(lat)>90||Math.abs(lon)>180)
       return send(res,400,"application/json",Buffer.from(JSON.stringify({error:"lat and lon required"})));
-    const r=await usgs.findCells(lon,lat);
+    let r;
+    try{r=await usgs.findCells(lon,lat,signal);}
+    catch(error){if(signal?.aborted)return;throw error;}
     return send(res,200,"application/json",Buffer.from(JSON.stringify(r)),
                 {"Cache-Control":"max-age=3600"});
   },
