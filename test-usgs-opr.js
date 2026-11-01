@@ -16,16 +16,17 @@ for(const mutate of [t=>t.geo.epsg=null,t=>t.geo.scale[0]=2,t=>t.levels[0].spp=3
   const h=header(file);mutate(h);assert.throws(()=>usgs.validateElwhaHeader(file,h),/Incompatible/);
 }
 async function sampling(){
-  let standardValue=222,oprValue=111,failStandard=false,failOPR=false;
+  let standardValue=222,oprValue=111,failStandard=false,failOPR=false,heldHeader=null,headerReads=0,tileReads=0;
   const standard={file:'fixture',project:'Standard',cell:'fixture',year:2024,size:1};
   const ll={lon:-123.58437,lat:47.99898},u=cog.lonLatToUTM(ll.lon,ll.lat,10);
   const standardFile={width:4000,height:4000,bounds:[u.e-2000,u.n-2000,u.e+2000,u.n+2000]};
   const context={require,module:{exports:{}},exports:{},__dirname,Buffer,process,console,setTimeout,clearTimeout,
     fixtureIndex:async()=>({projects:{}}),fixtureCandidates:async()=>[standard],
     fixtureOpen:async(key)=>{
+      headerReads++;if(heldHeader)await heldHeader;
       if(key.endsWith('/fixture')){if(failStandard)throw Error('standard offline');return header(standardFile)}
       if(failOPR)throw Error('OPR offline');return header(manifest.files.find(f=>f.key===key));
-    },fixtureTile:async(key)=>new Float32Array(256*256).fill(key.endsWith('/fixture')?standardValue:oprValue)};
+    },fixtureTile:async(key)=>{tileReads++;return new Float32Array(256*256).fill(key.endsWith('/fixture')?standardValue:oprValue)}};
   vm.createContext(context);
   vm.runInContext(fs.readFileSync(path.join(__dirname,'usgs.js'),'utf8')+'\ngetIndex=fixtureIndex;cellCandidates=fixtureCandidates;openCog=fixtureOpen;cogTile=fixtureTile;',context);
   const test=context.module.exports,n=2**20,x=Math.floor((ll.lon+180)/360*n),y=Math.floor((1-Math.asinh(Math.tan(ll.lat*Math.PI/180))/Math.PI)/2*n);
@@ -39,5 +40,15 @@ async function sampling(){
   failStandard=false;failOPR=true;await assert.rejects(test.sampleBest(20,x,y,16),/read failed/);
   failOPR=false;result=await test.sampleBest(20,x,y,16);assert.equal(result.coverage,1,'stationary retry recovers');
   standardValue=222;const direct=await test.sampleGrid(20,x,y,16);assert(direct.sources.every(s=>s.project==='Standard'),'opened noncontributing OPR must not be reported');
+  let releaseHeader;heldHeader=new Promise(resolve=>{releaseHeader=resolve;});headerReads=0;tileReads=0;
+  const controller=new AbortController();
+  const obsolete=test.sampleGrid(20,x,y,16,{signal:controller.signal,includeOPR:false,maxSources:1});
+  const rejected=assert.rejects(obsolete,{name:'AbortError'});
+  await new Promise(resolve=>setImmediate(resolve));assert(headerReads>0,'raw sampling reached its shared header wait');
+  controller.abort();await rejected;assert.equal(tileReads,0,'an obsolete render stops before requesting terrain blocks');
+  const replacement=test.sampleGrid(20,x,y,16,{includeOPR:false,maxSources:1});
+  releaseHeader();heldHeader=null;
+  assert.equal((await replacement).coverage,1,'cancelling one wait preserves the header read needed by a replacement');
+  assert(tileReads>0);
 }
 sampling().then(()=>console.log('Elwha OPR bounds, numeric validation, standard priority, nodata, transient failure, recovery and contributing-only provenance passed')).catch(error=>{console.error(error);process.exitCode=1});

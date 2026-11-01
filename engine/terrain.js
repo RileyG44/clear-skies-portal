@@ -107,19 +107,18 @@ function warmNeighbourTiles(style,z,x,y){
 }
 
 /* Coalesce identical terrain jobs while letting extra viewers cancel their
-   own waits. If the final viewer leaves, queued work is discarded but an
-   already-running render finishes and is cached instead of killing a warm
-   M2 worker and repeating the same COG reads after the next pan. */
+   own waits. Raw renderers cancel cooperatively when the last viewer leaves;
+   shared COG reads and decoded caches survive in the warm worker. */
 const terrainPending=new Map();
 function terrainTask(jobKey,action,args,options,signal){
   if(signal&&signal.aborted) return Promise.reject(new TerrainPoolError("terrain request cancelled","ABORT_ERR"));
   let entry=terrainPending.get(jobKey);
   if(!entry){
-    const finishOnAbort=!options||options.finishOnAbort!==false;
-    entry={controller:new AbortController(),waiters:new Set(),promise:null};
+    const finishOnAbort=options?.finishOnAbort??!(action==="raw-elevation"||action==="raw-terrain");
+    entry={controller:new AbortController(),waiters:new Set(),promise:null,finishOnAbort};
     terrainPending.set(jobKey,entry);
     entry.promise=terrainPool.run(action,args,{...options,signal:entry.controller.signal,finishOnAbort})
-      .finally(()=>terrainPending.delete(jobKey));
+      .finally(()=>{if(terrainPending.get(jobKey)===entry)terrainPending.delete(jobKey);});
   }
   const waiter={}; entry.waiters.add(waiter);
   return new Promise((resolve,reject)=>{
@@ -130,10 +129,14 @@ function terrainTask(jobKey,action,args,options,signal){
       if(signal) signal.removeEventListener("abort",onAbort);
     };
     const onAbort=()=>{
-      /* If another viewer is waiting, only this response can leave. For the
-         final viewer, signal the pool: queued work is discarded, while an
-         active render is allowed to finish so this route can cache it. */
-      if(entry.waiters.size>1){ cleanup();reject(new TerrainPoolError("terrain request cancelled","ABORT_ERR"));return }
+      if(entry.waiters.size>1||!entry.finishOnAbort){
+        cleanup();reject(new TerrainPoolError("terrain request cancelled","ABORT_ERR"));
+        if(!entry.waiters.size){
+          if(terrainPending.get(jobKey)===entry)terrainPending.delete(jobKey);
+          entry.controller.abort();
+        }
+        return;
+      }
       if(signal) signal.removeEventListener("abort",onAbort);
       entry.controller.abort();
     };

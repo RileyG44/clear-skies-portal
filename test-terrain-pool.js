@@ -80,6 +80,25 @@ async function main(){
     assert.equal(await neighbour,"neighbour","a job sharing a timed-out worker is re-run, not failed");
     assert(shared.stats().requeued>=1);
   }finally{ await shared.close() }
+
+  const responsive=new TerrainPool({cacheDir:__dirname,size:1,workerFile,jobsPerWorker:2,shareable:['cooperative-delay']});
+  try{
+    const departing=new AbortController();
+    const obsolete=responsive.run('cooperative-delay',{ms:5000,value:'obsolete'},
+      {signal:departing.signal,cooperativeCancel:true});
+    const rejected=rejectsCode(obsolete,'ABORT_ERR');
+    const neighbour=responsive.run('cooperative-delay',{ms:80,value:'neighbour'},{cooperativeCancel:true});
+    // A non-shareable foreground job needs the same worker completely free.
+    const visible=responsive.run('echo',{visible:true},{priority:100,timeoutMs:1000});
+    departing.abort();await rejected;
+    assert.equal(await neighbour,'neighbour','one cancelled tile cannot cancel a shared worker neighbour');
+    const bounded=Promise.race([visible,new Promise((_,reject)=>{
+      const timer=setTimeout(()=>reject(Error('obsolete render held the worker')),1000);timer.unref();
+    })]);
+    assert.deepEqual(await bounded,{visible:true},'new foreground demand does not wait for an obsolete five-second render');
+    assert.equal(responsive.stats().restarted,0,'cooperative cancellation preserves the warm worker');
+    assert.equal(responsive.stats().requeued,0,'a healthy neighbour never needs to repeat its work');
+  }finally{await responsive.close();}
   console.log("terrain worker pool checks passed");
 }
 

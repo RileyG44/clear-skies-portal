@@ -603,7 +603,21 @@ function validateElwhaHeader(file,t){
 /* Sample a (w+2)x(h+2) elevation grid covering one slippy tile, with a one
    pixel skirt so the hillshade kernel has neighbours at the tile edge — this
    is what stops seams appearing between adjacent tiles. */
+/* Cancel only this render's wait. Header and block promises are shared with
+   other renders; their reads may finish into the cache without continuing an
+   obsolete render through more surveys, sampling passes and PNG encoding. */
+function tileWait(promise,signal){
+  if(!signal)return promise;
+  return new Promise((resolve,reject)=>{
+    const abort=()=>{signal.removeEventListener('abort',abort);reject(signal.reason);};
+    if(signal.aborted){Promise.resolve(promise).catch(()=>{});abort();return;}
+    signal.addEventListener('abort',abort,{once:true});
+    Promise.resolve(promise).then(value=>{signal.removeEventListener('abort',abort);resolve(value);},
+      error=>{signal.removeEventListener('abort',abort);reject(error);});
+  });
+}
 async function sampleGrid(z,x,y,size,options={}){
+  const signal=options.signal;signal?.throwIfAborted();
   const b=cog.tileBoundsMerc(z,x,y);
   const n=size+2;
   const grid=new Float32Array(n*n).fill(NODATA);
@@ -632,10 +646,10 @@ async function sampleGrid(z,x,y,size,options={}){
   minE-=pad; maxE+=pad; minN-=pad; maxN+=pad;
   for(const c of [[minE,minN],[maxE,minN],[minE,maxN],[maxE,maxN]]) cells.add(cellOf(c[0],c[1]));
 
-  const idx=await getIndex();
+  const idx=await tileWait(getIndex(),signal);
   const srcs=[];
   for(const cell of cells){
-    const cands=await cellCandidates(idx, cell, zone);
+    const cands=await tileWait(cellCandidates(idx, cell, zone),signal);
     if(cands.length) srcs.push(cands);              // fallbacks kept, best first
   }
   const oprFiles=options.includeOPR===false?[]:elwhaCandidates(zone,[minE,minN,maxE,maxN]);
@@ -658,9 +672,9 @@ async function sampleGrid(z,x,y,size,options={}){
        and identical ranking, but one round trip's latency instead of one per
        candidate. openCog memoises per worker, so this is paid once per worker
        per product - measured, the 256 KB header probe dominates the cache. */
-    const probed=await Promise.all(group.slice(0,8).map(async s=>{
+    const probed=await tileWait(Promise.all(group.slice(0,8).map(async s=>{
       try{ return {s,key:tileKey(s),t:await openCog(tileKey(s), s.size)} }catch(e){ failed++; return null }
-    }));
+    })),signal);
     const available=[];
     for(const hit of probed){
       if(!hit) continue;
@@ -681,12 +695,12 @@ async function sampleGrid(z,x,y,size,options={}){
   // This bounded OPR survey fills only holes after every standard candidate.
   for(const s of oprFiles){
     try{
-      const t=await openCog(s.key,s.size);validateElwhaHeader(s,t);
+      const t=await tileWait(openCog(s.key,s.size),signal);validateElwhaHeader(s,t);
       let lvl=0;
       for(let i=0;i<t.levels.length;i++)if(Math.pow(2,i)<=groundRes)lvl=i;else break;
       opened.push({s:{...s,project:ELWHA_OPR.survey,opr:true},key:s.key,t,lvl,res:Math.pow(2,lvl),
         ox:t.geo.tie[3],oy:t.geo.tie[4],nodata:t.geo.nodata,tiles:new Map()});
-    }catch(error){failed++}
+    }catch(error){if(signal?.aborted)throw error;failed++}
   }
   if(!opened.length){if(failed)throw new Error(`1 m source read failed (${failed})`);return null}
 
@@ -702,7 +716,7 @@ async function sampleGrid(z,x,y,size,options={}){
     for(let ty=ty0; ty<=ty1; ty++) for(let tx=tx0; tx<=tx1; tx++)
       jobs.push(cogTile(o.key,o.t,o.lvl,tx,ty)
         .then(a=>{ if(a) o.tiles.set(tx+","+ty,a) }).catch(()=>{ failed++ }));
-    await Promise.all(jobs);
+    await tileWait(Promise.all(jobs),signal);
   }
 
   /* Bilinear, so a half-pixel offset does not read as a terrace. This runs
@@ -778,21 +792,25 @@ function render(style,S){
    incomplete is re-sampled from up to three, instead of dropping those pixels
    to national 3DEP. Headers and blocks are memoised, so the retry pays only
    for the extra sources. */
-async function sampleBest(z,x,y,size,sample=sampleGrid){
-  const first=await sample(z,x,y,size,{maxSources:1,includeOPR:false});
+async function sampleBest(z,x,y,size,sample=sampleGrid,options={}){
+  const read=plan=>{
+    options.signal?.throwIfAborted();
+    return tileWait(sample(z,x,y,size,{...plan,signal:options.signal}),options.signal);
+  };
+  const first=await read({maxSources:1,includeOPR:false});
   if(first && first.coverage>=1) return first;
-  const wider=await sample(z,x,y,size,{maxSources:3,includeOPR:false});
+  const wider=await read({maxSources:3,includeOPR:false});
   const standard=wider && (!first || wider.coverage>first.coverage) ? wider : first;
   if(standard?.coverage>=1)return standard;
-  const opr=await sample(z,x,y,size,{maxSources:3,includeOPR:true});
+  const opr=await read({maxSources:3,includeOPR:true});
   return opr && (!standard||opr.coverage>standard.coverage)?opr:standard;
 }
 
 /* Callers cache null as "no federal coverage"; an index with failed listings
    cannot know that, so it says so instead (see coverageFinal). */
 const PROVISIONAL_NONE=Object.freeze({provisional:true});
-async function elevTile(z,x,y,size){
-  const S=await sampleBest(z,x,y,size||256);
+async function elevTile(z,x,y,size,options={}){
+  const S=await sampleBest(z,x,y,size||256,sampleGrid,options);
   if(!S) return coverageFinal()?null:PROVISIONAL_NONE;
   if(S.coverage<1&&!coverageFinal())return PROVISIONAL_NONE;
   const {grid,n}=S; const w=size||256;
@@ -815,8 +833,8 @@ async function elevTile(z,x,y,size){
           sources:S.sources||[]};
 }
 
-async function renderTile(style,z,x,y,size){
-  const S=await sampleBest(z,x,y,size||256);
+async function renderTile(style,z,x,y,size,options={}){
+  const S=await sampleBest(z,x,y,size||256,sampleGrid,options);
   if(!S) return coverageFinal()?null:PROVISIONAL_NONE;
   if(S.coverage<1&&!coverageFinal())return PROVISIONAL_NONE;
   return {png:render(style,S), meta:{coverage:+S.coverage.toFixed(3), groundRes:+S.groundRes.toFixed(2),

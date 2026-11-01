@@ -1,0 +1,266 @@
+{
+  "benchmark": {
+    "workload": "tile-scheduling",
+    "baselineRef": "ed16560",
+    "notes": "Scheduling times use a virtual clock and fixed source costs. Cancellation uses a real fixture worker; these are not provider or device latency claims.",
+    "before": {
+      "scheduling": {
+        "visibleTiles": 36,
+        "firstVisibleDetailMs": 280,
+        "allVisibleDetailMs": 780,
+        "requestsBeforeVisibleDetail": 177,
+        "prefetchBeforeVisibleDetail": 29,
+        "totalRequests": 208,
+        "maxActive": 19
+      },
+      "cancellation": {
+        "abandonedRenderMs": 400,
+        "currentRenderMs": 10,
+        "currentViewReadyMs": 412.7,
+        "workerRestarts": 0
+      }
+    },
+    "after": {
+      "scheduling": {
+        "visibleTiles": 36,
+        "firstVisibleDetailMs": 100,
+        "allVisibleDetailMs": 480,
+        "requestsBeforeVisibleDetail": 51,
+        "prefetchBeforeVisibleDetail": 0,
+        "totalRequests": 201,
+        "maxActive": 16
+      },
+      "cancellation": {
+        "abandonedRenderMs": 400,
+        "currentRenderMs": 10,
+        "currentViewReadyMs": 11.6,
+        "workerRestarts": 0
+      }
+    }
+  },
+  "gpu": {
+    "chrome": {
+      "status": "pass",
+      "metadata": {
+        "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/156.0.0.0 Safari/537.36",
+        "renderer": "ANGLE (Apple, ANGLE Metal Renderer: Apple M2, Unspecified Version)",
+        "vendor": "Google Inc. (Apple)",
+        "version": "WebGL 2.0 (OpenGL ES 3.0 Chromium)",
+        "floatTargets": true,
+        "gpuTimer": true
+      },
+      "checks": [
+        {
+          "name": "integer-zoom-bicubic",
+          "status": "pass"
+        },
+        {
+          "name": "fractional-zoom-and-center",
+          "status": "pass"
+        },
+        {
+          "name": "deep-ancestor-zoom-offset",
+          "status": "pass"
+        },
+        {
+          "name": "hidpi-dz",
+          "status": "pass"
+        },
+        {
+          "name": "downsample-bilinear",
+          "status": "pass"
+        },
+        {
+          "name": "downsample-coordinate-x",
+          "status": "pass"
+        },
+        {
+          "name": "downsample-coordinate-y",
+          "status": "pass"
+        },
+        {
+          "name": "nonfinite-and-finite-sentinel-nodata",
+          "status": "pass"
+        },
+        {
+          "name": "zoom-28-native-level-22-cap",
+          "status": "pass"
+        },
+        {
+          "name": "idle-and-uniform-only-draws",
+          "status": "pass"
+        },
+        {
+          "name": "settled-intermediate-zooms-refresh-without-preview-requests",
+          "status": "pass"
+        },
+        {
+          "name": "partial-nodata-preserves-lower-rank",
+          "status": "pass"
+        },
+        {
+          "name": "same-rank-finer-tile-holes-retain-ancestor",
+          "status": "pass"
+        },
+        {
+          "name": "no-data-is-transparent-rank-zero",
+          "status": "pass"
+        },
+        {
+          "name": "rotation-0",
+          "status": "pass"
+        },
+        {
+          "name": "rotation-37",
+          "status": "pass"
+        },
+        {
+          "name": "rotation-90",
+          "status": "pass"
+        },
+        {
+          "name": "rotation-180",
+          "status": "pass"
+        },
+        {
+          "name": "async-provenance-counts-rendered-ranks",
+          "status": "pass"
+        },
+        {
+          "name": "forced-tiled-export-seams",
+          "status": "pass"
+        },
+        {
+          "name": "context-loss-and-restore",
+          "status": "pass"
+        },
+        {
+          "name": "resident-texture-budget-and-eviction",
+          "status": "pass"
+        },
+        {
+          "name": "benchmark-300-changing-pan-frames",
+          "status": "pass"
+        }
+      ],
+      "failures": [],
+      "pageErrors": []
+    },
+    "webkit": {
+      "status": "pass",
+      "metadata": {
+        "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/27.2 Safari/605.1.15",
+        "renderer": "Apple GPU",
+        "vendor": "Apple Inc.",
+        "version": "WebGL 2.0",
+        "floatTargets": true,
+        "gpuTimer": false
+      },
+      "checks": [
+        {
+          "name": "integer-zoom-bicubic",
+          "status": "pass"
+        },
+        {
+          "name": "fractional-zoom-and-center",
+          "status": "pass"
+        },
+        {
+          "name": "deep-ancestor-zoom-offset",
+          "status": "pass"
+        },
+        {
+          "name": "hidpi-dz",
+          "status": "pass"
+        },
+        {
+          "name": "downsample-bilinear",
+          "status": "pass"
+        },
+        {
+          "name": "downsample-coordinate-x",
+          "status": "pass"
+        },
+        {
+          "name": "downsample-coordinate-y",
+          "status": "pass"
+        },
+        {
+          "name": "nonfinite-and-finite-sentinel-nodata",
+          "status": "pass"
+        },
+        {
+          "name": "zoom-28-native-level-22-cap",
+          "status": "pass"
+        },
+        {
+          "name": "idle-and-uniform-only-draws",
+          "status": "pass"
+        },
+        {
+          "name": "settled-intermediate-zooms-refresh-without-preview-requests",
+          "status": "pass"
+        },
+        {
+          "name": "partial-nodata-preserves-lower-rank",
+          "status": "pass"
+        },
+        {
+          "name": "same-rank-finer-tile-holes-retain-ancestor",
+          "status": "pass"
+        },
+        {
+          "name": "no-data-is-transparent-rank-zero",
+          "status": "pass"
+        },
+        {
+          "name": "rotation-0",
+          "status": "pass"
+        },
+        {
+          "name": "rotation-37",
+          "status": "pass"
+        },
+        {
+          "name": "rotation-90",
+          "status": "pass"
+        },
+        {
+          "name": "rotation-180",
+          "status": "pass"
+        },
+        {
+          "name": "async-provenance-counts-rendered-ranks",
+          "status": "pass"
+        },
+        {
+          "name": "forced-tiled-export-seams",
+          "status": "pass"
+        },
+        {
+          "name": "context-loss-and-restore",
+          "status": "pass"
+        },
+        {
+          "name": "resident-texture-budget-and-eviction",
+          "status": "pass"
+        },
+        {
+          "name": "benchmark-300-changing-pan-frames",
+          "status": "pass"
+        }
+      ],
+      "failures": [],
+      "pageErrors": []
+    }
+  },
+  "baselineRegressions": {
+    "revision": "ed16560",
+    "expectedFailures": 3,
+    "files": [
+      "test-terrain-task-cancellation.js",
+      "test-tile-pipeline.js",
+      "test-viewport-tile-scheduling.js"
+    ]
+  }
+}

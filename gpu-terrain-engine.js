@@ -208,7 +208,7 @@
     var now = function () { return root.performance ? root.performance.now() : Date.now(); };
     var requestFrame = typeof options.onNeedsFrame === 'function' ? options.onNeedsFrame : function () {};
     var destroyed = false, ready = false, lost = false, error = null, dirty = true, heightDirty = true;
-    var boundsScratch = {}, activeSources = null, sourceRefs = [], sourcesDirty = true, planBounds = {}, requestBounds = {}, shadeField, provenanceField;
+    var boundsScratch = {}, activeSources = null, sourceRefs = [], sourcesDirty = true, planBounds = {}, requestBounds = {}, demandDirty = false, shadeField, provenanceField;
     var generation = 0, frames = 0, drawCalls = 0, lastFrameMs = 0, uploads = 0, evictions = 0;
     var queue = new Map(), known = new Map(), sources = new Map(), sourceList = [], plan = [], planDirty = true;
     var wanted = [], coverageKey = '', viewScalars = new Float64Array(8), lastResult = {coverage: 0, missing: 0};
@@ -407,10 +407,13 @@
       }
       return changed;
     }
-    function want(view) {
+    function want(view, deferRequests, force) {
       var b = coverageBounds(view, 1, boundsScratch);
       if (!coverageKey || b.z !== requestBounds.z || b.x0 !== requestBounds.x0 || b.x1 !== requestBounds.x1 || b.y0 !== requestBounds.y0 || b.y1 !== requestBounds.y1) {
-        coverageKey = true; requestBounds.z = b.z; requestBounds.x0 = b.x0; requestBounds.x1 = b.x1; requestBounds.y0 = b.y0; requestBounds.y1 = b.y1; wanted = coverageTiles(view); generation++; planDirty = heightDirty = true;
+        coverageKey = true; requestBounds.z = b.z; requestBounds.x0 = b.x0; requestBounds.x1 = b.x1; requestBounds.y0 = b.y0; requestBounds.y1 = b.y1; wanted = coverageTiles(view); demandDirty = true; planDirty = heightDirty = true;
+      }
+      if (!deferRequests && (demandDirty || force)) {
+        demandDirty = false; generation++;
         // The visible extent (no margin) sizes the store's coarse backdrop.
         refreshSources(); store.want(wanted, {generation: generation, bounds: coverageBounds(view, 0, {})});
       }
@@ -696,7 +699,7 @@
           var visible = coverageBounds(view, 0, boundsScratch);
           if (visible.z !== planBounds.z || visible.x0 !== planBounds.x0 || visible.x1 !== planBounds.x1 || visible.y0 !== planBounds.y0 || visible.y1 !== planBounds.y1) planDirty = true;
         }
-        want(view);
+        want(view, options && options.deferRequests, options && options.refreshRequests);
         t = now(); phaseMs.want = t - mark; mark = t;
         if (planDirty) { refreshSources(); seed(); }
         t = now(); phaseMs.seed = t - mark; mark = t;
@@ -1027,7 +1030,7 @@
       setState: function (next) { state = next || {}; dirty = true; if (refreshSources()) heightDirty = planDirty = true; needsFrame(); },
       invalidate: invalidate, render: render, createSnapshot: createSnapshot,
       releaseGestureTargets: function () { if (!lost) releaseGesture(); },
-      releaseExport: releaseExport, exportDetail: exportDetail, neededTiles: function (view) { if (refreshSources()) heightDirty = dirty = planDirty = true; return want(view); }, renderToCanvas: renderToCanvas, readProvenance: readProvenance, sampleValues: sampleValues,
+      releaseExport: releaseExport, exportDetail: exportDetail, neededTiles: function (view) { return coverageTiles(view, 0); }, renderToCanvas: renderToCanvas, readProvenance: readProvenance, sampleValues: sampleValues,
       stats: function () { return {textures: lru.size, textureBytes: lru.bytes, frames: frames, drawCalls: drawCalls, lastFrameMs: lastFrameMs,
         ready: ready, queuedUploads: queue.size,
         exportTextures: Array.from(snapshots).reduce(function (n, capture) { return n + capture.tiles.size; }, 0),

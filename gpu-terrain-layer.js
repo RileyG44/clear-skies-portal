@@ -94,7 +94,7 @@
         this._pan=new PanShading(this.options.panShading);
       },
       onAdd:function(map){
-        this._map=map;this._geometryCache=new WeakMap();
+        this._map=map;this._geometryCache=new WeakMap();this._refreshRequests=true;this._deferRequests=false;
         if(!this._engine)return;
         /* Keeping the container IN tilePane preserves stacking against every
            raster and overlay. Its inverse ancestor matrix makes it a genuinely
@@ -114,6 +114,8 @@
         this.redraw();
       },
       onRemove:function(){
+        root.clearTimeout(this._requestTimer);this._requestTimer=0;
+        this.options.store?.want([]);
         this._panStop(false);this._engine?.releaseGestureTargets?.();
         if(this._frame)root.cancelAnimationFrame(this._frame);this._frame=0;
         this._resizeObserver?.disconnect();this._visibilityObserver?.disconnect();
@@ -123,7 +125,19 @@
       },
       getEvents:function(){return {move:this._moved,zoom:this._moved,moveend:this._moved,
         zoomend:this._moved,viewreset:this._moved,resize:this._moved,rotate:this._moved,zoomanim:this._zoomAnim,zoomstart:this._zoomStart};},
-      _zoomStart:function(){this._panStop(true);},
+      _zoomStart:function(){this._panStop(true);this._queueSettledView(true);},
+      /* Shading follows every painted zoom frame; expensive source demand waits
+         for the camera to rest. A final refresh is required even when rounded
+         tile bounds match the preview or a small pan stayed in the same tiles. */
+      _queueSettledView:function(defer){
+        if(defer)this._deferRequests=true;
+        root.clearTimeout(this._requestTimer);
+        this._requestTimer=root.setTimeout(()=>{
+          this._requestTimer=0;if(!this._container)return;
+          if(this._map._cspPaneZoom||this._map._animatingZoom){this._queueSettledView(true);return;}
+          this._deferRequests=false;this._refreshRequests=true;this.redraw();
+        },160);
+      },
       _panKey:function(){
         const map=this._map,size=map.getSize();
         return [this._stateKey,Math.round(map.getZoom()),size.x,size.y,root.devicePixelRatio].join("|");
@@ -159,6 +173,7 @@
       },
       panShading:function(){const p=this._pan;return {mode:p.mode,dragging:p.dragging,coarse:p.coarse};},
       _moved:function(event){
+        this._queueSettledView(event?.type==="zoom"||event?.type==="zoomend"||event?.type==="viewreset");
         if(event?.type==="resize")this._geometryCache=new WeakMap();
         this._panTrack(event);
         this._painted=null;this.redraw();
@@ -176,6 +191,7 @@
         }
       },
       _zoomAnim:function(event){
+        this._queueSettledView(true);
         this._panStop(true);
         this._painted={center:event.center,zoom:event.zoom};this._dirty=true;
         this._nativeZoom=!event.noUpdate&&!this._map._cspPaneZoom;
@@ -249,7 +265,8 @@
         this._canvas.style.width=view.cssSize[0]+"px";this._canvas.style.height=view.cssSize[1]+"px";
         const w=Math.max(1,Math.round(view.cssSize[0]*view.dpr)),h=Math.max(1,Math.round(view.cssSize[1]*view.dpr));
         if(this._canvas.width!==w)this._canvas.width=w;if(this._canvas.height!==h)this._canvas.height=h;
-        this._coverage=this._engine.render(view,this._pan.coarse?COARSE:undefined);this.fire("render",{view,coverage:this._coverage});
+        this._coverage=this._engine.render(view,{coarse:this._pan.coarse,deferRequests:!!this._deferRequests,
+          refreshRequests:!!this._refreshRequests});this._refreshRequests=false;this.fire("render",{view,coverage:this._coverage});
         if(this._map._animatingZoom||this._nativeZoom)this.redraw();
       },
       redraw:function(){
@@ -304,6 +321,5 @@
     });
     L.cspGpuTerrainLayer=options=>new L.CSPGpuTerrainLayer(options);
   }
-  const COARSE=Object.freeze({coarse:true});
   return {VERSION:"1",mercator,resolveFlag,buildState,levelOffset,viewFromMap,exportView,install,PAN_SHADING_KEY,panShadingMode,PanShading};
 });
