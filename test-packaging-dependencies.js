@@ -14,7 +14,9 @@ const directory=fs.mkdtempSync(path.join(os.tmpdir(),'csp-packaging-'));
     await asar.createPackageWithOptions(source,archive,{unpack:'*.node'});
     assert.equal(asar.extractFile(archive,'main.js').toString(),'module.exports = 42;');
     assert.equal(fs.readFileSync(path.join(archive+'.unpacked','native.node'),'utf8'),'native fixture');
-    assert(new FileList(path.join(source,'*.js').replaceAll('\\','/')).toArray().some(file=>path.basename(file)==='main.js'));
+    const pattern=path.join(source,'*.js');
+    for(const glob of [pattern.replaceAll('\\','/'),pattern.replaceAll('/','\\')])
+      assert(new FileList(glob).toArray().some(file=>path.basename(file)==='main.js'),'template patterns accept either path separator');
 
     temp.track();
     const sync=temp.mkdirSync({dir:directory,prefix:'installer-sync-'});
