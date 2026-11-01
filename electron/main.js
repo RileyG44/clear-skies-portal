@@ -1,6 +1,6 @@
 /* Clear Skies Portal — Electron shell.
    Prefers the terrain engine this Mac already runs (the LaunchAgent on
-   127.0.0.1:8765): the page and every /api call then come straight from that
+   its configured loopback port): the page and every /api call come from that
    one local server, sharing its warm tile cache. Only when no engine answers
    does it boot its own server.js on a free loopback port. The web app is
    untouched: every request it makes is relative, so it simply follows
@@ -21,13 +21,28 @@ const SERVER = app.isPackaged
   : path.join(__dirname,"..","server.js");
 const HOST   = "127.0.0.1";
 // Where scripts/install-mac-service.sh puts the always-on engine.
-const ENGINE_PORT  = Number(process.env.CSP_ENGINE_PORT) || 8765;
 const ENGINE_AGENT = "com.rileyg44.clear-skies-portal";
 const ENGINE_PLIST = path.join(os.homedir(), "Library", "LaunchAgents", `${ENGINE_AGENT}.plist`);
 
 let child = null;
 let win   = null;
 let port  = 0;
+
+/* Finder launches do not inherit a terminal's CSP_ENGINE_PORT. Read the same
+   saved port the service installer keeps, or a healthy updated engine on 8770
+   is missed and the app quietly starts its older bundled engine instead. */
+async function enginePort(){
+  const valid = value => {
+    const p = Number(value);
+    return Number.isInteger(p) && p > 0 && p <= 65535 ? p : null;
+  };
+  const override = valid(process.env.CSP_ENGINE_PORT);
+  if (override) return override;
+  if (process.platform !== "darwin" || !fs.existsSync(ENGINE_PLIST)) return 8765;
+  return new Promise(resolve => execFile("/usr/bin/plutil", [
+    "-extract", "EnvironmentVariables.CSP_ENGINE_PORT", "raw", "-o", "-", ENGINE_PLIST,
+  ], {timeout:2000}, (error, stdout) => resolve((!error && valid(stdout)) || 8765)));
+}
 
 /* Ask the OS for a port nobody is using, so we never collide with a
    copy of the portal the user is already running from a terminal. */
@@ -93,9 +108,10 @@ function kickstartAgent(){
 /* Use the Mac's engine if it is up or can be woken; otherwise our own copy. */
 async function pickServer(){
   if (process.env.CSP_ELECTRON_OWN_SERVER !== "1"){
-    if (await engineUp(ENGINE_PORT)) return ENGINE_PORT;
+    const engine = await enginePort();
+    if (await engineUp(engine)) return engine;
     if (await kickstartAgent()){
-      try{ await waitForServer(ENGINE_PORT, 15000); return ENGINE_PORT }
+      try{ await waitForServer(engine, 15000); return engine }
       catch(e){ /* fall through to a bundled server */ }
     }
   }
