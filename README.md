@@ -196,7 +196,8 @@ The engine listens on port 8765. If another program already holds that port, the
 installer stops and names it; rerun it as `CSP_ENGINE_PORT=8770
 scripts/install-mac-service.sh` (any free port) and pass the same variable to
 `share-terrain-engine.sh`. Reinstalls keep that port and any other settings added
-to the service by hand.
+to the service by hand. The desktop app reads the saved service port automatically,
+including when opened from Finder; `CSP_ENGINE_PORT` can override it.
 
 The sharing script adds only Clear Skies API routes on HTTPS port 443. It
 preserves the root page and other services, so T3 Code can share the same Mac
