@@ -190,8 +190,10 @@ coordinates.
 const engine = CSPGpuTerrainEngine.create({canvas, store, shaders, maxTextureBytes, onNeedsFrame});
    // returns null when WebGL2/EXT_color_buffer_float/self-test is unavailable -> app falls back
 engine.setState(state)              // §4.1 state; marks dirty
-engine.render(view)                 // synchronous draw of one frame; returns {coverage:0..1, missing:n}
-engine.neededTiles(view) -> [{z,x,y}]   // display tiles incl. rotation margin (also calls store.want)
+engine.render(view, options)        // synchronous draw; returns {coverage:0..1, missing:n}
+                                    // deferRequests: shade previews without new source demand
+                                    // refreshRequests: re-evaluate the settled view even within the same tile bounds
+engine.neededTiles(view) -> [{z,x,y}]   // visible rotated bounds; read-only, excludes prefetch margin
 engine.renderToCanvas(view, width, height) -> Promise<HTMLCanvasElement>  // export; tiles the render
                                     // when width/height exceed MAX_RENDERBUFFER_SIZE
 engine.readProvenance(view) -> Promise<{ranks:{...}}>  // async (fenceSync + getBufferSubData), never stalls

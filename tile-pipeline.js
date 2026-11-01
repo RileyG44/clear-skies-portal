@@ -10,12 +10,13 @@
     /* idleGroups start only while nothing from any other group is queued or
        running: work that improves what is already on screen must not hold a
        slot that a tile still showing nothing is waiting for. */
-    constructor({concurrency=6,maxBytes=48*1024*1024,ttl=5*60*1000,groupLimits={},idleGroups=[]}={}){
+    constructor({concurrency=6,maxBytes=48*1024*1024,ttl=5*60*1000,groupLimits={},idleGroups=[],backgroundConcurrency=2}={}){
       this.groupLimits=groupLimits;this.groupActive=new Map();this.idleGroups=new Set(idleGroups);
       this.concurrency=concurrency;this.maxBytes=maxBytes;this.ttl=ttl;
       this.cache=new Map();this.jobs=new Map();this.queue=[];this.active=0;this.bytes=0;
+      this.backgroundConcurrency=backgroundConcurrency;this.backgroundActive=0;this.foregroundActive=0;this._drainScheduled=false;
     }
-    request(key,loader,{signal,priority=0,group="default"}={}){
+    request(key,loader,{signal,priority=0,group="default",background=false}={}){
       if(signal?.aborted) return Promise.reject(aborted());
       const hit=this.cache.get(key);
       if(hit&&Date.now()-hit.at<this.ttl){
@@ -24,9 +25,12 @@
       if(hit){this.cache.delete(key);this.bytes-=hit.bytes;}
       let job=this.jobs.get(key);
       if(!job){
-        job={key,loader,priority,group,controller:new AbortController(),waiters:new Set(),started:false};
+        job={key,loader,priority,group,background,controller:new AbortController(),waiters:new Set(),started:false};
         this.jobs.set(key,job);this.queue.push(job);
-      }else job.priority=Math.max(job.priority,priority);
+      }else{
+        job.priority=Math.max(job.priority,priority);
+        if(!background)this.prioritize(key,job.priority,{background:false,group});
+      }
       const promise=new Promise((resolve,reject)=>{
         const waiter={resolve,reject,signal,onAbort:null};
         waiter.onAbort=()=>{
@@ -35,26 +39,52 @@
             job.controller.abort();
             if(this.jobs.get(key)===job)this.jobs.delete(key);
             this.queue=this.queue.filter(value=>value!==job);
+            this._scheduleDrain();
           }
         };
         job.waiters.add(waiter);signal?.addEventListener('abort',waiter.onAbort,{once:true});
       });
-      this._drain();return promise;
+      this._scheduleDrain();return promise;
     }
     /* A tile still queued can move: after a pan it may be the view's centre. */
-    prioritize(key,priority){const job=this.jobs.get(key);if(job&&!job.started)job.priority=priority;}
+    prioritize(key,priority,options={}){
+      const job=this.jobs.get(key);if(!job)return;
+      job.priority=priority;
+      if(options.background!==undefined)job.background=options.background;
+      if(options.group!==undefined&&options.group!==job.group){
+        if(job.started){
+          this.groupActive.set(job.group,this.groupActive.get(job.group)-1);
+          this.groupActive.set(options.group,(this.groupActive.get(options.group)||0)+1);
+        }
+        job.group=options.group;
+      }
+      if(job.started){
+        const idle=job.background||this.idleGroups.has(job.group);
+        if(idle!==job.idle){
+          this.backgroundActive+=idle?1:-1;this.foregroundActive+=idle?-1:1;job.idle=idle;
+        }
+      }
+      this._scheduleDrain();
+    }
+    /* Collect a frame's demand before choosing slots. Starting inside request()
+       let the first low-priority caller beat every visible tile queued after it. */
+    _scheduleDrain(){
+      if(this._drainScheduled)return;this._drainScheduled=true;
+      queueMicrotask(()=>{this._drainScheduled=false;this._drain();});
+    }
     _drain(){
       this.queue.sort((a,b)=>b.priority-a.priority);
+      const idle=job=>job.background||this.idleGroups.has(job.group);
       while(this.active<this.concurrency&&this.queue.length){
-        let idleActive=0;for(const group of this.idleGroups)idleActive+=this.groupActive.get(group)||0;
-        const busy=this.active>idleActive||this.queue.some(job=>job.waiters.size&&!this.idleGroups.has(job.group));
+        const busy=this.foregroundActive>0||this.queue.some(job=>job.waiters.size&&!idle(job));
         const index=this.queue.findIndex(job=>(this.groupActive.get(job.group)||0)<(this.groupLimits[job.group]??this.concurrency)&&
-          !(busy&&this.idleGroups.has(job.group)));
+          !(idle(job)&&(busy||this.backgroundActive>=this.backgroundConcurrency)));
         if(index<0)break;
         const [job]=this.queue.splice(index,1);if(!job.waiters.size)continue;
         this.groupActive.set(job.group,(this.groupActive.get(job.group)||0)+1);
-        job.started=true;this.active++;
-        Promise.resolve().then(()=>job.loader(job.controller.signal)).then(value=>{
+        job.started=true;job.idle=idle(job);this.active++;
+        if(job.idle)this.backgroundActive++;else this.foregroundActive++;
+        Promise.resolve().then(()=>{if(job.controller.signal.aborted)throw aborted();return job.loader(job.controller.signal);}).then(value=>{
           if(!job.controller.signal.aborted&&value){
             const bytes=value.grid?.byteLength??value.byteLength??0;
             if(bytes>0&&bytes<=this.maxBytes){
@@ -65,7 +95,8 @@
           }
           this._settle(job,null,value);
         },error=>this._settle(job,error)).finally(()=>{
-          this.active--;this.groupActive.set(job.group,this.groupActive.get(job.group)-1);if(this.jobs.get(job.key)===job)this.jobs.delete(job.key);this._drain();
+          this.active--;if(job.idle)this.backgroundActive--;else this.foregroundActive--;
+          this.groupActive.set(job.group,this.groupActive.get(job.group)-1);if(this.jobs.get(job.key)===job)this.jobs.delete(job.key);this._scheduleDrain();
         });
       }
     }

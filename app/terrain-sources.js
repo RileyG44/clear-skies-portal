@@ -319,7 +319,7 @@ function initGpuTerrain(){
   if(window.CSPGpuTerrainLayer?.resolveFlag(location.search,storage)&&window.CSPGpuTerrainStore&&L.cspGpuTerrainLayer){
     gpuTerrainStore=new CSPGpuTerrainStore.ElevationTileStore({
       sources:gpuElevationSources,request:gpuElevationRequest,
-      prioritize:(url,priority)=>elevationRequests.prioritize(url,priority),
+      prioritize:(url,priority,options)=>elevationRequests.prioritize(url,priority,options),
       maxBytes:(matchMedia("(pointer:coarse)").matches?128:192)*1024*1024});
     gpuTerrainLayer=L.cspGpuTerrainLayer({store:gpuTerrainStore,state:gpuTerrainState(),zIndex:440,
       maxTextureBytes:(matchMedia("(pointer:coarse)").matches?128:192)*1024*1024,

@@ -655,6 +655,7 @@ L.GridLayer.prototype.options.updateWhenIdle=false;
   };
   proto._resetView=function(event){
     if(deferring(this)){ this._cspDeferred=true;return this._setView(this._map.getCenter(),this._map.getZoom(),true,true) }
+    this._cspDeferred=false;
     return resetView.call(this,event);
   };
   proto._update=function(center){
@@ -667,6 +668,9 @@ L.GridLayer.prototype.options.updateWhenIdle=false;
     if(!this._cspDeferred||!this._map) return;
     this._cspDeferred=false;resetView.call(this);
   };
+  map.on("moveend",()=>{
+    if(!map._cspDeferExpensive)map.eachLayer(layer=>layer._cspEndDeferral?.());
+  });
 }
 /* Photographic tiles on a 2x/3x screen: a 256 px tile drawn over 256 CSS px
    is stretched over 512-768 physical pixels, which is the soft look of

@@ -58,7 +58,7 @@
   }
   function ElevationTileStore(options){
     this.options=options||{};this._listeners={};this._tiles=new Map();this._pending=new Map();
-    this._failed=new Map();this._wanted=new Map();this._displays=[];this._sources=[];
+    this._failed=new Map();this._wanted=new Map();this._displays=[];this._visibleDisplays=[];this._sources=[];
     this._bytes=0;this._revision=0;this._epoch=0;this._demand=0;this._destroyed=false;
     this._levels=new Map();this._summaries=new Map();this._retryTimer=0;
     this.retryDelayMs=Math.max(1,this.options.retryDelayMs??10000);
@@ -106,7 +106,7 @@
     clearTimeout(this._retryTimer);this._retryTimer=0;
     if(this._destroyed)return;
     let next=Infinity;
-    for(const [key,until] of this._failed)if(this._wanted.has(key)&&!this._tiles.has(key))next=Math.min(next,until);
+    for(const [key,until] of this._failed)if(this._wanted.has(key)&&!this._wanted.get(key).background&&!this._tiles.has(key))next=Math.min(next,until);
     if(!Number.isFinite(next))return;
     this._retryTimer=setTimeout(()=>{
       this._retryTimer=0;
@@ -179,15 +179,22 @@
     })).then(()=>[...out.values()]);
   };
   ElevationTileStore.prototype._load=function(job){
-    const {key,source,c,backdrop,priority=source.rank}=job;
+    const {key,source,c,backdrop,background=false,priority=source.rank}=job;
     if(this._tiles.has(key))return Promise.resolve(this._tiles.get(key));
-    if(this._pending.has(key)){this.options.prioritize?.(job.url,priority);return this._pending.get(key).promise;}
+    const group=backdrop?'backdrop':source.group||'overview';
+    if(this._pending.has(key)){
+      const pending=this._pending.get(key);pending.job=job;
+      this.options.prioritize?.(job.url,priority,{background,group});return pending.promise;
+    }
     if((this._failed.get(key)||0)>Date.now())return Promise.resolve(null);
     const controller=new AbortController(),epoch=this._epoch;
     const pending={controller,promise:null,job};this._pending.set(key,pending);
-    pending.promise=Promise.resolve().then(()=>{if(controller.signal.aborted)return null;return this.options.request(job.url,{
-      signal:controller.signal,priority,group:backdrop?'backdrop':source.group||'overview',kind:source.kind
-    });}).then(data=>{
+    pending.promise=Promise.resolve().then(()=>{
+      if(controller.signal.aborted)return null;
+      const current=pending.job;
+      return this.options.request(current.url,{signal:controller.signal,priority:current.priority??current.source.rank,
+        background:!!current.background,group:current.backdrop?'backdrop':current.source.group||'overview',kind:current.source.kind});
+    }).then(data=>{
       if(controller.signal.aborted||epoch!==this._epoch||this._destroyed)return null;
       const r=this._record(job,data);
       if(r.grid.byteLength>this.maxBytes){this._failed.set(key,Date.now()+30000);return null;}
@@ -231,29 +238,34 @@
     for(const key of this._summaries.keys())if(!displayKeys.has(key))this._summaries.delete(key);
     const bounds=this._bounds||boundsOf(displayTiles);
     const cx=bounds?(bounds.x0+bounds.x1+1)/2:0,cy=bounds?(bounds.y0+bounds.y1+1)/2:0;
-    const distance=d=>bounds?Math.hypot(d.x+.5-cx,d.y+.5-cy):0;
-    const order=displayTiles.slice().sort((a,b)=>distance(a)-distance(b));
+    const offset=d=>mod(d.x+.5-cx+2**(d.z-1),2**d.z)-2**(d.z-1);
+    const distance=d=>bounds?Math.hypot(offset(d),d.y+.5-cy):0;
+    const visible=d=>!bounds||d.z!==bounds.z||cx+offset(d)>=bounds.x0&&cx+offset(d)<=bounds.x1+1&&d.y>=bounds.y0&&d.y<=bounds.y1;
+    const order=displayTiles.slice().sort((a,b)=>Number(visible(b))-Number(visible(a))||distance(a)-distance(b));
+    this._visibleDisplays=order.filter(visible);
     const ranked=sources.filter(s=>!s.backdrop).sort((a,b)=>b.rank-a.rank),LIDAR=3;
     const wanted=new Map(),chains=[],cover=[];
-    const job=(source,c,priority,list)=>{
+    const job=(source,c,priority,list,background=false)=>{
       const key=tileKey(source.id,c.z,c.x,c.y);
-      if(wanted.has(key))return wanted.get(key);
-      const made={key,source,c,url:sourceUrl(source,c),priority};
+      if(wanted.has(key)){
+        const made=wanted.get(key);made.priority=Math.max(made.priority,priority);made.background=made.background&&background;return made;
+      }
+      const made={key,source,c,url:sourceUrl(source,c),priority,background};
       wanted.set(key,made);list?.push(made);return made;
     };
     order.forEach((d,index)=>{
-      const near=1-index/order.length,chain={lidar:[],rest:[]};
+      const near=1-index/order.length,chain={lidar:[],rest:[]},background=!visible(d);
       for(const source of ranked){
         if(source.allowed&&!source.allowed(d))continue;
         const c=coords(d,native(source,d.z));
-        (source.rank>=LIDAR?chain.lidar:chain.rest).push(job(source,c,Math.min(source.rank,LIDAR)+near));
-        if(!source.standIn||c.z<source.standIn||this._tiles.has(tileKey(source.id,c.z,c.x,c.y)))continue;
+        (source.rank>=LIDAR?chain.lidar:chain.rest).push(job(source,c,Math.min(source.rank,LIDAR)+near,null,background));
+        if(background||!source.standIn||c.z<source.standIn||this._tiles.has(tileKey(source.id,c.z,c.x,c.y)))continue;
         const coarse=coords(d,c.z-source.standIn);
         if(!source.allowed||source.allowed(coarse))job(source,coarse,6,cover);
       }
       chains.push(chain);
       for(const source of sources)if(source.backdrop&&(!source.allowed||source.allowed(d)))
-        job(source,coords(d,native(source,d.z)),source.rank,cover);
+        job(source,coords(d,native(source,d.z)),source.rank,cover,background);
     });
     const backdrop=[];
     if(bounds)for(const source of sources){
@@ -262,7 +274,7 @@
         if(source.allowed&&!source.allowed(t))continue;
         const c=coords(t,native(source,t.z)),key=tileKey(source.id,c.z,c.x,c.y);
         if(wanted.has(key))continue;
-        const made={key,source,c,url:sourceUrl(source,c),priority:.5,backdrop:true};
+        const made={key,source,c,url:sourceUrl(source,c),priority:.5,backdrop:true,background:true};
         wanted.set(key,made);backdrop.push(made);
       }
     }
@@ -278,7 +290,16 @@
     }
     this._wanted=wanted;
     for(const [key,until] of this._failed)if(!wanted.has(key)||until<=Date.now())this._failed.delete(key);
-    for(const [key,p] of this._pending)if(!wanted.has(key)&&!fallback.has(key)){p.controller.abort();this._pending.delete(key);}
+    for(const [key,p] of this._pending){
+      const next=wanted.get(key);
+      // A render that left the screen must release its foreground slot. If it
+      // is still in the margin, requeue it as idle work behind the new view.
+      if(next?.background&&!p.job.background){p.controller.abort();this._pending.delete(key);}
+      else if(!next){
+        if(fallback.has(key))this.options.prioritize?.(p.job.url,.25,{background:true,group:'backdrop'});
+        else{p.controller.abort();this._pending.delete(key);}
+      }
+    }
     const epoch=this._epoch,stale=()=>epoch!==this._epoch||demand!==this._demand||this._destroyed;
     const full=record=>record&&record.validCount===record.grid.length;
     const walk=async chain=>{
@@ -376,18 +397,18 @@
     this._summaries.set(key,entry);return entry;
   };
   ElevationTileStore.prototype.settled=function(displayTiles){
-    const tiles=displayTiles||this._displays;let complete=0,coveredPixels=0,totalPixels=0;
+    const tiles=displayTiles||this._visibleDisplays;let complete=0,coveredPixels=0,totalPixels=0;
     for(const d of tiles){const s=this._summary(d);if(s.covered===s.total)complete++;coveredPixels+=s.covered;totalPixels+=s.total;}
     // The backdrop is transitional cover, not the view's data: it never holds
     // readiness, refinement or failure status.
-    const own=key=>this._wanted.has(key)&&!this._wanted.get(key).backdrop;
+    const own=key=>this._wanted.has(key)&&!this._wanted.get(key).background;
     return {complete,total:tiles.length,ratio:totalPixels?coveredPixels/totalPixels:0,coveredPixels,totalPixels,
       refining:[...this._pending.keys()].some(own)||[...this._failed.keys()].some(own)&&!!this._retryTimer,
       failed:[...this._failed.keys()].some(own)};
   };
   ElevationTileStore.prototype.provenance=function(displayTiles){
     const ranks={},labels=new Set(),surveys=new Map(),sampleMeters={};
-    for(const d of displayTiles||this._displays){
+    for(const d of displayTiles||this._visibleDisplays){
       const summary=this._summary(d);
       for(const [rank,count] of Object.entries(summary.ranks))ranks[rank]=(ranks[rank]||0)+count;
       for(const r of summary.records){
@@ -399,7 +420,7 @@
   };
   // Numeric pixel winners only. Published hillshade is never in this store.
   ElevationTileStore.prototype.detailGaps=function(displayTiles){
-    const tiles=displayTiles||this._displays,status=this.settled(tiles);
+    const tiles=displayTiles||this._visibleDisplays,status=this.settled(tiles);
     if(!tiles.length||status.refining||status.failed)return null;
     return tiles.filter(d=>{const s=this._summary(d);return (s.ranks[3]||0)+(s.ranks[5]||0)<s.total;}).map(d=>({...d}));
   };
@@ -450,7 +471,7 @@
   ElevationTileStore.prototype.clear=function(){
     clearTimeout(this._retryTimer);this._retryTimer=0;
     this._epoch++;this._demand++;for(const p of this._pending.values())p.controller.abort();this._pending.clear();
-    this._tiles.clear();this._failed.clear();this._wanted.clear();this._displays=[];this._bytes=0;this._levels.clear();this._summaries.clear();this._emit('clear');
+    this._tiles.clear();this._failed.clear();this._wanted.clear();this._displays=[];this._visibleDisplays=[];this._bytes=0;this._levels.clear();this._summaries.clear();this._emit('clear');
   };
   ElevationTileStore.prototype.destroy=function(){this._destroyed=true;this.clear();this._listeners={};};
   ElevationTileStore.prototype.stats=function(){return {tiles:this._tiles.size,bytes:this._bytes,pending:this._pending.size,maxBytes:this.maxBytes};};

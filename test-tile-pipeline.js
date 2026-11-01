@@ -48,3 +48,44 @@ main().catch(error=>{console.error(error);process.exitCode=1;});
   assert.equal(await pool.request('empty',()=>null),null);
   assert.equal(await pool.request('empty',()=>null),null);
 })().catch(error=>{console.error(error);process.exitCode=1;});
+
+(async()=>{
+  const pool=new RequestPool({concurrency:2,groupLimits:{detail:1},backgroundConcurrency:1});
+  const order=[],finish=new Map();
+  const loader=key=>signal=>new Promise((resolve,reject)=>{
+    order.push(key);finish.set(key,resolve);
+    signal.addEventListener('abort',()=>reject(Object.assign(Error('aborted'),{name:'AbortError'})),{once:true});
+  });
+  const background=pool.request('prefetch',loader('prefetch'),{background:true,priority:99});
+  const edge=pool.request('edge',loader('edge'),{group:'detail',priority:1});
+  const centre=pool.request('centre',loader('centre'),{group:'detail',priority:5});
+  await tick();assert.deepEqual(order,['centre'],'the complete batch is prioritized before any slot opens');
+  assert.equal(pool.active,1,'prefetch stays idle even when a visible source is at its group cap');
+  finish.get('centre')(null);await centre;await tick();assert.deepEqual(order,['centre','edge']);
+  finish.get('edge')(null);await edge;await tick();assert.deepEqual(order,['centre','edge','prefetch']);
+  finish.get('prefetch')(null);await background;await tick();
+  assert.equal(pool.active,0);assert.equal(pool.foregroundActive,0);assert.equal(pool.backgroundActive,0);
+
+  const blocked=pool.request('block',loader('block'),{group:'detail'});await tick();
+  const promoted=pool.request('promoted',loader('promoted'),{group:'backdrop',background:true});
+  pool.prioritize('promoted',10,{background:false,group:'detail'});
+  await tick();assert.equal(finish.has('promoted'),false,'promoted work still obeys its real source limit');
+  finish.get('block')(null);await blocked;await tick();assert.equal(finish.has('promoted'),true);
+  finish.get('promoted')(null);await promoted;await tick();
+
+  const controller=new AbortController();let dispatched=false;
+  const obsolete=pool.request('before-dispatch',()=>{dispatched=true;},{signal:controller.signal});
+  const rejected=assert.rejects(obsolete,{name:'AbortError'});controller.abort();await rejected;await tick();
+  assert.equal(dispatched,false,'a cancelled same-frame request never reaches the engine');
+  const runningBackground=pool.request('moving-background',loader('moving-background'),{background:true,group:'backdrop'});
+  await tick();assert.equal(pool.backgroundActive,1);
+  const waitingBackground=pool.request('waiting-background',loader('waiting-background'),{background:true,group:'backdrop'});
+  pool.prioritize('moving-background',5,{background:false,group:'detail'});await tick();
+  assert.equal(pool.foregroundActive,1);assert.equal(pool.backgroundActive,0);
+  assert.equal(pool.groupActive.get('backdrop'),0);assert.equal(pool.groupActive.get('detail'),1);
+  assert.equal(finish.has('waiting-background'),false,'an already-running prefetch promoted into view blocks further background work');
+  finish.get('moving-background')(null);await runningBackground;await tick();
+  finish.get('waiting-background')(null);await waitingBackground;await tick();
+  assert.equal(pool.foregroundActive,0);assert.equal(pool.backgroundActive,0);
+  console.log('tile scheduling checks passed (batched priority, idle prefetch, source limits, promotion, preflight cancellation)');
+})().catch(error=>{console.error(error);process.exitCode=1;});

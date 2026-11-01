@@ -192,6 +192,28 @@ void main(){ivec2 p=min(ivec2(v_screenUv*vec2(csp_size())),csp_size()-1);if(!csp
     return { idleDrawCalls: 0, settingDrawCalls: item.engine.stats().drawCalls, extraWantCalls: item.store.wantCalls - wanted };
   });
 
+  await check('settled-intermediate-zooms-refresh-without-preview-requests', () => {
+    const item = makeEngine([source('raw', 3, 18)], []);
+    let expectedCalls = 0;
+    for (const zoom of [13.25, 14.37, 15.67, 16.2, 17.25, 18.1, 22]) {
+      const frame = view({ zoom });
+      item.engine.render(frame, { deferRequests: true });
+      item.engine.neededTiles(frame);
+      assert(item.store.wantCalls === expectedCalls, 'preview/status query issued source demand');
+      item.engine.render(frame, { refreshRequests: true });
+      assert(item.store.wantCalls === ++expectedCalls, `no settled refresh at zoom ${zoom}`);
+      assert(item.store.wanted.every(tile => tile.z === Math.min(22, Math.round(zoom))), 'settled demand used an old tile level');
+      const visible = CSPGpuTerrainEngine._test.coverageTiles(frame, 0);
+      assert(item.engine.neededTiles(frame).length === visible.length, 'readiness includes offscreen prefetch');
+      item.engine.render(frame, { refreshRequests: true });
+      assert(item.store.wantCalls === ++expectedCalls, 'same-bounds settled view was not re-evaluated');
+      item.engine.render(frame);
+      assert(item.store.wantCalls === expectedCalls, 'stationary draw duplicated source demand');
+      assert(item.engine.stats().ready, 'engine failed while changing request demand');
+    }
+    return { intermediateViews: 7, previewDemandCalls: 0, settledRefreshes: expectedCalls };
+  });
+
   await check('partial-nodata-preserves-lower-rank', () => {
     const tiles = [record('base', 1, 3, 3, 2, 32, 32, smooth),
       record('raw', 3, 4, 7, 5, 32, 32, (x, y) => x < 15 || y > 24 ? NaN : smooth(x, y) + 160),

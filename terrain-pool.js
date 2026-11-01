@@ -71,13 +71,13 @@ class TerrainPool {
     if(first) this._retire(slot,first,new TerrainPoolError(String(error&&error.message||error),"WORKER_ERROR"),"failed");
   }
 
-  run(action,args,{priority=0,timeoutMs=30000,signal,finishOnAbort=false,transferList=[]}={}){
+  run(action,args,{priority=0,timeoutMs=30000,signal,finishOnAbort=false,cooperativeCancel=SHAREABLE.has(action),transferList=[]}={}){
     if(this.closed) return Promise.reject(new TerrainPoolError("terrain pool is closed","CLOSED"));
     if(signal&&signal.aborted) return Promise.reject(abortError());
     if(this.queue.length>=this.maxQueue) return Promise.reject(new TerrainPoolError("terrain queue is full","QUEUE_FULL"));
     return new Promise((resolve,reject)=>{
       if(!Array.isArray(transferList)) return reject(new TypeError("transferList must be an array"));
-      const job={id:this.nextId++,sequence:this.sequence++,action,args,priority,timeoutMs,finishOnAbort,transferList,
+      const job={id:this.nextId++,sequence:this.sequence++,action,args,priority,timeoutMs,finishOnAbort,cooperativeCancel,transferList,
         signal,resolve,reject,started:0,timer:null,onAbort:null,settled:false,shareable:this.shareable.has(action)};
       job.onAbort=()=>this._cancel(job);
       if(signal) signal.addEventListener("abort",job.onAbort,{once:true});
@@ -165,6 +165,9 @@ class TerrainPool {
          is terminated; rapid pan/zoom no longer recreates every worker. */
       job.abandoned=true;
       this._rejectJob(job,abortError(),"cancelled");
+      // Raw renderers stop their own waits without discarding shared COG
+      // headers/blocks or restarting a worker that also serves another tile.
+      if(job.cooperativeCancel)slot.worker.postMessage({id:job.id,cancel:true});
       job.timer=setTimeout(()=>this._terminateAbandoned(slot,job),this.cancelGraceMs);
     }
   }

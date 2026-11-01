@@ -89,7 +89,7 @@ function terrariumFromTiff(value){
   return covered ? {png:usgs.encodePNG(out,L.w,L.h),coverage:+(covered/(L.w*L.h)).toFixed(3)} : null;
 }
 
-async function execute(action,args){
+async function execute(action,args,signal){
   if(action==="dnr-elevation"){
     const files=loadDnrIndex();if(!files.length)return null;
     dnrRuntime ||= require("./vendor/dnr-runtime.cjs");
@@ -103,8 +103,8 @@ async function execute(action,args){
     }
     return {png:usgs.encodePNG(rgba,args.size||256,args.size||256),coverage:out.coverage,groundRes:out.groundRes,sources:out.sources};
   }
-  if(action==="raw-elevation") return usgs.elevTile(args.z,args.x,args.y,args.size||256);
-  if(action==="raw-terrain") return usgs.renderTile(args.style,args.z,args.x,args.y,args.size||256);
+  if(action==="raw-elevation") return usgs.elevTile(args.z,args.x,args.y,args.size||256,{signal});
+  if(action==="raw-terrain") return usgs.renderTile(args.style,args.z,args.x,args.y,args.size||256,{signal});
   if(action==="fabric") return usgs.fabric(args.bbox,args.options||{});
   if(action==="dnr-fabric")return usgs.fabric(args.bbox,{...args.options,
     sample:(e,n,res,size,zone)=>dnrFabricGrid(e,n,res,size,zone,args.options?.strict,args.options?.areas)});
@@ -113,12 +113,15 @@ async function execute(action,args){
   throw new Error(`unknown terrain action: ${action}`);
 }
 
+const controllers=new Map();
 parentPort.on("message",async message=>{
   const {id,action,args}=message;
+  if(message.cancel){controllers.get(id)?.abort();return;}
+  const controller=new AbortController();controllers.set(id,controller);
   try{
-    const result=await execute(action,args||{});
+    const result=await execute(action,args||{},controller.signal);
     parentPort.postMessage({id,ok:true,result},result instanceof ArrayBuffer?[result]:[]);
   }catch(error){
     parentPort.postMessage({id,ok:false,error:String(error&&error.message||error)});
-  }
+  }finally{controllers.delete(id);}
 });

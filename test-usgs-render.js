@@ -104,5 +104,13 @@ for(const [lon,lat] of [[-122.3,47.6],[-149.9,61.2],[-80.2,25.8],[-114.01,48.7]]
   assert.equal(await usgs.sampleBest(15,1,2,256,fake({})),null,"no source anywhere is still no coverage");
   await assert.rejects(usgs.sampleBest(15,1,2,256,async()=>{throw Error("1 m source read failed (1)")}),/read failed/,
     "a failed read propagates instead of becoming a cached gap");
+  const departing=new AbortController();let completeRead,passes=0,readCached=false;
+  const sharedRead=new Promise(resolve=>{completeRead=()=>{readCached=true;resolve({coverage:.5});};});
+  const obsolete=usgs.sampleBest(15,1,2,256,async()=>{passes++;return sharedRead;},{signal:departing.signal});
+  const cancelled=assert.rejects(obsolete,{name:'AbortError'});departing.abort();await cancelled;
+  assert.equal(passes,1,'cancellation never opens fallback surveys or starts another sampling pass');
+  completeRead();await sharedRead;assert.equal(readCached,true,'already shared reads may complete into the cache');
+  assert.equal(passes,1);
+  await assert.rejects(usgs.sampleGrid(15,1,2,256,{signal:departing.signal}),{name:'AbortError'},'preflight cancellation does not touch the index or upstream');
   console.log("USGS terrain render checks passed");
 })().catch(error=>{console.error(error);process.exit(1)});
