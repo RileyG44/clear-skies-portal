@@ -3,6 +3,7 @@
    Downloads and overview construction run in a dedicated background worker. */
 import {fromFile} from "geotiff";
 import proj4 from "proj4";
+import {toProj4} from "geotiff-geokeys-to-proj4";
 import yauzl from "yauzl";
 import fs from "node:fs";
 import path from "node:path";
@@ -48,20 +49,40 @@ function unitMeters(code){
 }
 export function projection(keys){
   const epsg=keys.ProjectedCSTypeGeoKey;
+  const fail=reason=>{throw new Error(`DNR raster coordinate system could not be decoded (${reason}); no elevation was substituted`)};
   const citation=[keys.PCSCitationGeoKey,keys.GTCitationGeoKey].filter(Boolean).join("|");
-  const wkt=wktPart(citation,"PROJCS");
-  if(wkt)return {definition:wkt,unitMeters:unitMeters(keys.ProjLinearUnitsGeoKey)||(/Foot_US/i.test(wkt)?US_FOOT:/UNIT\["(?:Foot|feet)",/i.test(wkt)?.3048:1)};
-  if((epsg>=26901&&epsg<=26923)||(epsg>=32601&&epsg<=32660))
-    return {definition:`+proj=utm +zone=${epsg%100} +datum=${epsg<30000?"NAD83":"WGS84"} +units=m +no_defs`,unitMeters:1};
-  if(epsg===3857)return {definition:"EPSG:3857",unitMeters:1};
-  const north=[2285,2926,32148].includes(epsg),south=[2286,2927,32149].includes(epsg);
-  if(north||south){
-    const feet=[2285,2286,2926,2927].includes(epsg);
-    return {definition:`+proj=lcc +lat_1=${north?48.73333333333333:47.33333333333333} +lat_2=${north?47.5:45.83333333333333} +lat_0=${north?47:45.33333333333333} +lon_0=${north?-120.83333333333333:-120.5} +x_0=500000 +y_0=0 +datum=NAD83 +units=${feet?"us-ft":"m"} +no_defs`,unitMeters:feet?US_FOOT:1};
+  const wkt=wktPart(citation,"PROJCS")||wktPart(citation,"PROJCRS");
+  let definition;
+  if(wkt)definition=wkt;
+  else if(epsg&&epsg!==32767){
+    // A projected TIFF often declares its base geographic CRS too. Decode
+    // the projected authority code alone so it cannot become lat/lon.
+    const decoded=toProj4({ProjectedCSTypeGeoKey:epsg});
+    if(Object.keys(decoded.errors).length||decoded.isGCS)fail(`EPSG:${epsg}`);
+    definition=decoded.proj4;
+  }else{
+    const projected=epsg===32767||keys.GTModelTypeGeoKey===1;
+    if(projected&&!(keys.ProjCoordTransGeoKey||keys.ProjectionGeoKey))fail("missing projected CRS parameters");
+    if(!projected&&!keys.GeographicTypeGeoKey)fail("missing horizontal CRS");
+    // Vertical metadata has its own validation and must not change heights.
+    const horizontal=Object.fromEntries(Object.entries(keys).filter(([key])=>!key.startsWith("Vertical")&&key!=="ProjectedCSTypeGeoKey"));
+    const decoded=toProj4(horizontal);
+    if(Object.keys(decoded.errors).length)fail(JSON.stringify(decoded.errors));
+    if(!/\+(?:ellps|a)=/.test(decoded.proj4))fail("missing ellipsoid");
+    if(projected&&decoded.isGCS)fail("missing projection method");
+    const {x,y}=decoded.conversionParameters;
+    if(!(x>0)||x!==y)fail("unsupported coordinate units");
+    if(decoded.isGCS&&x!==1)fail("geographic coordinates must be degrees");
+    // Custom parameters are decoded in metres. Persist the source scale in
+    // proj4 so forward and inverse sampling convert coordinates exactly once.
+    definition=decoded.proj4.replace(/\s\+(?:units|to_meter)=\S+/g,"")+(decoded.isGCS?"":` +to_meter=${x}`);
   }
-  if(keys.GeographicTypeGeoKey===4326||keys.GeographicTypeGeoKey===4269)
-    return {definition:"EPSG:4326",unitMeters:null};
-  throw new Error("DNR raster coordinate system is not supported; no elevation was substituted");
+  try{
+    const parsed=proj4(definition).oProj;
+    const unit=parsed.projName==="longlat"?null:(parsed.to_meter||1);
+    if(unit!==null&&!(Number.isFinite(unit)&&unit>0))fail("invalid linear units");
+    return {definition,unitMeters:unit};
+  }catch(error){fail(`EPSG:${epsg||"custom"}: ${error.message||error}`)}
 }
 export function verticalMeters(keys){
   const explicit=unitMeters(keys.VerticalUnitsGeoKey);if(explicit)return explicit;
@@ -213,7 +234,10 @@ export async function acquire({cacheDir,datasetId,project,bbox,geometry:shape,ma
       }});
       await pipeline(stream,budget,fs.createWriteStream(file,{flags:"wx"}));
       if((crc>>>0)!==entry.crc32)throw new Error("DNR elevation archive checksum failed");
-      const info=surveyInfo(await inspect(file),datasetId),overviewDir=path.join(tmp,key);
+      let info;
+      try{info=surveyInfo(await inspect(file),datasetId)}
+      catch(error){throw new Error(`DNR dataset ${datasetId}, ${archivePath}: ${error.message||error}`)}
+      const overviewDir=path.join(tmp,key);
       const overviewBytes=FACTORS.reduce((sum,f)=>sum+Math.ceil(info.width/f)*Math.ceil(info.height/f)*4,0);
       if(written+overviewBytes>maxBytes)throw new Error("DNR numeric overviews exceed the acquisition budget");
       const levels=await buildOverviews(file,info,overviewDir,fraction=>onProgress({state:"preparing",bytes:received,project,fraction}));
