@@ -26,4 +26,7 @@ assert.deepEqual(summary.sources.map(s=>[s.rank,s.percent]),[[2,75],[1,25]],'nev
 assert.equal(summary.sources.find(s=>s.rank===2).sampleMeters,.75,'report the weighted displayed sample spacing');
 assert.match(summary.sources.find(s=>s.rank===1).nativeLabel,/98 ft/,'keep provider-native resolution alongside display sampling');
 assert.equal(terrain.summarize([]).sources.length,0);
+assert(terrain.oregonTileAllowed({z:18,x:42287,y:94982}));
+assert(!terrain.oregonTileAllowed({z:12,x:660,y:1484}),'coarse views never request Oregon detail');
+assert(!terrain.oregonTileAllowed({z:18,x:41080,y:91126}),'Washington views never request Oregon detail');
 console.log('public terrain checks passed (raw elevation URL, masks, nodata, mixed sources, hidden tiles)');

@@ -64,7 +64,8 @@ usgs.onCacheWrite(bytes=>{cacheWritten+=bytes;
   else if(!cacheWriteTimer){cacheWriteTimer=setTimeout(flushCacheWrites,1000);cacheWriteTimer.unref()}
 });
 
-function terrariumFromTiff(value){
+function terrariumFromTiff(value,verticalScale=1){
+  if(![1,0.3048].includes(verticalScale))throw new Error('unsupported elevation units');
   const body=Buffer.from(value);
   const t=cog.parseTiff(body), L=t.levels&&t.levels[0];
   if(!L||!L.w||!L.h||!L.tw||!L.th||!L.offsets.length) return null;
@@ -78,7 +79,9 @@ function terrariumFromTiff(value){
     const tx=i%cols, ty=Math.floor(i/cols), x0=tx*L.tw, y0=ty*L.th;
     const xmax=Math.min(L.w,x0+L.tw), ymax=Math.min(L.h,y0+L.th);
     for(let y=y0;y<ymax;y++) for(let x=x0;x<xmax;x++){
-      const v=tile[(y-y0)*L.tw+(x-x0)];
+      const raw=tile[(y-y0)*L.tw+(x-x0)];
+      if(!Number.isFinite(raw)||raw===t.geo.nodata)continue;
+      const v=raw*verticalScale;
       if(!Number.isFinite(v)||v<-2000||v>10000) continue;
       const packed=Math.max(0,Math.min(65535.996,v+32768));
       const whole=Math.floor(packed), o=(y*L.w+x)*4;
@@ -108,7 +111,7 @@ async function execute(action,args,signal){
   if(action==="fabric") return usgs.fabric(args.bbox,args.options||{});
   if(action==="dnr-fabric")return usgs.fabric(args.bbox,{...args.options,
     sample:(e,n,res,size,zone)=>dnrFabricGrid(e,n,res,size,zone,args.options?.strict,args.options?.areas)});
-  if(action==="terrarium-tiff") return terrariumFromTiff(args.body);
+  if(action==="terrarium-tiff") return terrariumFromTiff(args.body,args.verticalScale);
   if(action==="research-analysis") return researchAnalysis.encodeResult(researchAnalysis.run(args));
   throw new Error(`unknown terrain action: ${action}`);
 }

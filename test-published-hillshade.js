@@ -52,7 +52,7 @@ async function main(){
   images.get('published/1').resolve(response(pixels([255,255,255,0])));await tick();
   assert.deepEqual([...cv.data.slice(0,4)],[...numericPixel],'valid cached numeric DNR remains above the published image');
   assert.deepEqual([...cv.data.slice(4,8)],[12,22,32,255],'published DNR replaces coarse federal fallback at its valid pixels');
-  assert.deepEqual({...cv._cspSourceCounts},{1:0,2:0,3:1,4:2,5:1},'counts reflect actual source contributions, including transparent image holes');
+  assert.deepEqual({...cv._cspSourceCounts},{1:0,2:0,3:1,4:2,5:1,6:0},'counts reflect actual source contributions, including transparent image holes');
   assert.deepEqual([...first._store.get('17/1/2').elev],[50,30,30,30],'published RGB never enters the measurement grid');
   assert.equal(first._store.get('17/1/2').ranks[1],3,'numeric provenance remains independent of displayed image provenance');
   const fetched=calls.length,oldImage=cv.data.slice(4,12);lighting.azimuth=135;
@@ -60,6 +60,13 @@ async function main(){
   assert.equal(calls.length,fetched,'lighting reuses cached elevation and published pixels');
   assert.deepEqual([...cv.data.slice(4,12)],[...oldImage],'published lighting stays fixed');
   assert.equal(cv._cspRefining,false);assert.equal(done,1);
+
+  const publishedJob=first._published.get('17/1/2');
+  publishedJob.progress.accept(new Float32Array([NaN,1212,NaN,NaN]),6);
+  first._paint(cv,publishedJob.progress.grid,coord(1));
+  assert.equal(cv._cspSourceCounts[6],1,'Oregon numeric terrain retains its own attribution in a published composite');
+  assert.equal(cv._cspSourceCounts[4],1,'published pixels cannot cover valid Oregon numeric terrain');
+  assert.match(cv.dataset.cspElevationSource,/Oregon DOGAMI/);
 
   // A successful transparent image is absence, and must not trigger a retry.
   const transparent=new context.Layer(options),empty=transparent.createTile(coord(2),()=>{});await tick();

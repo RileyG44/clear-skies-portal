@@ -504,7 +504,7 @@ function paintTerrainInfo(pick){
   let html="";
   if(PROXY&&$("#terSrc").value!=="3dep")html+=`<div>USGS detail includes standard 1 m projects and the Elwha River original-resolution DEM (2014 survey ID, with 2015 modifications). Elwha OPR fills standard-product holes; missing breaklines prevent standard-product certification. Elevations are meters, NAVD88/GEOID12A. Its TIFF says EPSG:26910; metadata identifies NAD83(2011). The existing UTM approximation is not a realization-aware datum transform or a survey-accuracy guarantee.</div>`;
   if(pick.src==="wadnr-elevation"){
-    html+=`<div>Requested source: <b>Best available (cached WA DNR, then USGS)</b>. All analytical styles derive from numeric elevation; rendered sources and their percentages are shown above.</div>`;
+    html+=`<div>Requested source: <b>Best available numeric terrain</b>. All analytical styles derive from numeric elevation; rendered sources and their percentages are shown above.</div>`;
     html+=`<div>Uses WA DNR already available on the connected engine, including downloaded areas. ${serverHealth?.features?.includes("wadnr-auto")?
       "In Best available, settled 2D views at zoom 15 or closer automatically download DNR elevation for gaps. Progress and Cancel appear on the map. Explicit USGS/National choices, 3D and exports do not start downloads.":
       "This engine does not download automatically. Use <b>Select area on map</b> or <b>Download current view</b> to fetch missing elevation."} Downloads are cached on the engine; they are not phone offline packages.</div>`;
@@ -519,9 +519,12 @@ function paintTerrainInfo(pick){
   }else if(pick.src==="usgs1m"){
     const h=(pick.cover&&pick.cover.hits)||[];
     const yrs=h.map(x=>x.year).filter(Boolean);
-    html += `<div class="row2"><span>Preferred source: <span class="src">USGS 3.3 ft LiDAR</span></span>`
-          + `<span class="yr">${yrs.length?Math.max(...yrs):""}</span></div>`
+    const automatic=$("#terSrc").value==="auto";
+    html += `<div class="row2"><span>Requested source: <span class="src">${automatic?"Best available numeric terrain":"USGS 3.3 ft LiDAR"}</span></span>`
+          + `<span class="yr">${!automatic&&yrs.length?Math.max(...yrs):""}</span></div>`
           + `<div>Detailed elevation loads where available. National terrain fills survey gaps; the loading status above identifies the data actually displayed.</div>`
+          + (automatic&&serverHealth?.features?.includes("oregon-elevation")?`<div>In Oregon, verified DOGAMI OLC bare-earth surveys provide 3 ft terrain where available, including gaps in the USGS archive.</div>`:"")
+          + (h.length?`<div>USGS catalogue candidates; valid pixels may be missing within a tile:</div>`:"")
           + h.slice(0,3).map(x=>`<div class="row2"><span>${esc(x.project)}</span>`
               + `<span class="yr">${(x.size/1048576).toFixed(0)} MiB</span></div>`).join("");
   }else{
@@ -532,7 +535,7 @@ function paintTerrainInfo(pick){
   }
   if(PROXY && usgsCover && pick.src!=="usgs1m"){
     html += usgsCover.hits && usgsCover.hits.length
-      ? `<div style="margin-top:7px">USGS <b>3.3 ft DEM</b> covers the map centre`
+      ? `<div style="margin-top:7px">USGS catalogues a <b>3.3 ft DEM candidate tile</b> at the map centre; valid pixels may be missing`
         + ` (${esc(usgsCover.cell)}) &mdash; pick <i>USGS 3.3 ft</i> for slope, aspect and contours from real elevation.</div>`
       : `<div style="margin-top:7px">No standard federal 3.3 ft DEM catalogued for this cell (${esc(usgsCover.cell||"")}).</div>`;
   }

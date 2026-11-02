@@ -422,7 +422,7 @@
   ElevationTileStore.prototype.detailGaps=function(displayTiles){
     const tiles=displayTiles||this._visibleDisplays,status=this.settled(tiles);
     if(!tiles.length||status.refining||status.failed)return null;
-    return tiles.filter(d=>{const s=this._summary(d);return (s.ranks[3]||0)+(s.ranks[5]||0)<s.total;}).map(d=>({...d}));
+    return tiles.filter(d=>{const s=this._summary(d);return (s.ranks[3]||0)+(s.ranks[5]||0)+(s.ranks[6]||0)<s.total;}).map(d=>({...d}));
   };
   ElevationTileStore.prototype.gridForView=function(request){
     const b=request.bounds;
@@ -477,7 +477,8 @@
   ElevationTileStore.prototype.stats=function(){return {tiles:this._tiles.size,bytes:this._bytes,pending:this._pending.size,maxBytes:this.maxBytes};};
   function buildSources(o,e){
     const out=[],dz=e.dz||0,add=(id,rank,label,max,url,allowed,kind)=>out.push({id,rank,label,dz,
-      nativeZoom:z=>Math.min(z,max),url,allowed,kind,group:rank===5?'dnr':rank===3?'detail':rank===2?'national':'overview',sampleMeters:e.sourceSampleMeters});
+      nativeZoom:z=>Math.min(z,max),url,allowed,kind,group:rank===6?'oregon':rank===5?'dnr':rank===3?'detail':rank===2?'national':'overview',sampleMeters:e.sourceSampleMeters});
+    if(e.proxy&&o.oregonEndpoint)add('oregon',6,'Oregon DOGAMI elevation',18,(z,x,y)=>e.api(`${o.oregonEndpoint}/${z}/${x}/${y}.png`),c=>e.oregonTileAllowed(c)&&!(o.dnrEndpoint&&e.dnrTileAllowed?.(c)));
     if(e.proxy&&o.dnrEndpoint){add('dnr',5,'WA DNR elevation',18,(z,x,y)=>e.api(`${o.dnrEndpoint}/${z}/${x}/${y}.png?acquire=0&revision=${e.dnrRevision||0}`),e.dnrTileAllowed);out[out.length-1].cacheKey=o.dnrMaskKey;out[out.length-1].authoritativeCoverage=true;}
     // Below tile z13 one raw tile opens dozens of surveys (5-30 s and 503s on the
     // engine, measured) for pixels over 13 m wide. National shows the same there.

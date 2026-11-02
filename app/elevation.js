@@ -390,7 +390,7 @@ function loadTerrainPrefs(){
 // LiDAR takes most of the engine's slots: tiles it has cached come straight
 // back, and it queues the rest cheaply. The engine groups together take at most
 // eighteen, so the fast overview always has slots while renders are in flight.
-const elevationRequests=new CSPTilePipeline.RequestPool({concurrency:20,groupLimits:{detail:10,national:6,overview:6,sharp:6,dnr:2,backdrop:3}});
+const elevationRequests=new CSPTilePipeline.RequestPool({concurrency:20,groupLimits:{detail:10,national:6,overview:6,sharp:6,dnr:2,oregon:2,backdrop:3}});
 function sourceSampleMeters(coords){
   const count=2**coords.z,latitude=Math.atan(Math.sinh(Math.PI*(1-2*(coords.y+.5)/count)));
   return 156543.03392804097*Math.cos(latitude)/count;
@@ -508,7 +508,7 @@ async function fetchElevation(url,signal){
          or zoom brings dozens at once. The drape workers decode it instead. */
       const tile=await drapeWorkers.run({op:"elevation",blob:await response.blob()},signal);
       let surveys=[];
-      try{surveys=JSON.parse(decodeURIComponent(response.headers.get(isDnr?"X-DNR-Sources":"X-USGS-Sources")||"[]"));}catch{}
+      try{surveys=JSON.parse(decodeURIComponent(response.headers.get(isDnr?"X-DNR-Sources":url.includes("/api/oregon/elev/")?"X-Oregon-Sources":"X-USGS-Sources")||"[]"));}catch{}
       return ElevationTileCore.hasElevation(tile.grid)?{grid:tile.grid,width:tile.width,height:tile.height,surveys}:null;
     }catch(error){
       if(signal.aborted) throw new DOMException("Aborted","AbortError");
@@ -546,16 +546,18 @@ async function engineElevationWithFallback(coords,signal,mesh=false){
   if(useNational)requests.push(request(`/api/elev/national/${coords.z}/${coords.x}/${coords.y}.png`,2,"national"));
   const want=$("#terSrc").value;
   const useRaw=coords.z>=13&&want!=="3dep";
+  const useOregon=!useDnr&&want==="auto"&&typeof serverHealth!=="undefined"&&serverHealth?.features?.includes("oregon-elevation")&&CSPPublicTerrain.oregonTileAllowed(coords);
+  if(useOregon)requests.push(request(`/api/oregon/elev/${coords.z}/${coords.x}/${coords.y}.png`,6,"oregon"));
   if(useRaw)requests.push(request(`/api/usgs/elev/${coords.z}/${coords.x}/${coords.y}.png?${RAW_COVERAGE_QUERY}`,3,"detail"));
   requests.push(overviewElevation(coords,requestSignal).then(source=>({source,rank:1})).catch(error=>{if(signal.aborted)throw error;return null;}));
   const progress=new CSPTilePipeline.ProgressiveGrid(256*256);
-  const ranks=[...(useDnr?[5]:[]),...(useNational?[2]:[]),...(useRaw?[3]:[]),1];
+  const ranks=[...(useDnr?[5]:[]),...(useNational?[2]:[]),...(useOregon?[6]:[]),...(useRaw?[3]:[]),1];
   const pending=new Set(ranks);
   try{
     return await new Promise((resolve,reject)=>{
       const finish=()=>{
         if(signal.aborted){reject(new DOMException("Aborted","AbortError"));return}
-        const used=[5,3,2,1].filter(rank=>progress.counts[rank]>0);
+        const used=[6,5,3,2,1].filter(rank=>progress.counts[rank]>0);
         // Complete coverage cannot benefit from remaining lower-ranked sources.
         if(pending.size&&!(progress.valid===progress.grid.length&&Math.max(...pending)<Math.min(...used)))return;
         resolve(!progress.valid?null:{grid:progress.grid,ranks:used});
@@ -616,10 +618,10 @@ const ElevLayer = L.GridLayer.extend({
       if(controller.signal.aborted||!progress.accept(values,rank,sharper))return;
       cv._cspHasContent=true;
       cv.dataset.cspQuality=String(Math.max(+cv.dataset.cspQuality||0,rank));
-      cv._cspSourceCounts={1:progress.counts[1],2:progress.counts[2],3:progress.counts[3],5:progress.counts[5]};
+      cv._cspSourceCounts={1:progress.counts[1],2:progress.counts[2],3:progress.counts[3],5:progress.counts[5],6:progress.counts[6]};
       if(surveys.length){cv._cspSurveySources||={};cv._cspSurveySources[rank]=surveys;}
       cv._cspSourceResolution=cv._cspSourceResolution||{};if(Number.isFinite(sampleMeters))cv._cspSourceResolution[rank]=sampleMeters;
-      cv.dataset.cspElevationSource=[5,3,2,1].filter(rank=>progress.counts[rank]>0).map(rank=>CSPPublicTerrain.SOURCES[rank].label).join(" + ");
+      cv.dataset.cspElevationSource=[6,5,3,2,1].filter(rank=>progress.counts[rank]>0).map(rank=>CSPPublicTerrain.SOURCES[rank].label).join(" + ");
       this._store.set(key,{cv,elev:progress.grid,coords:{...coords}});
       this._paint(cv,progress.grid,coords);
       if(!settled){settled=true;done(null,cv);}
@@ -629,7 +631,7 @@ const ElevLayer = L.GridLayer.extend({
       const scale=2**(coords.z-native),x=Math.floor(coords.x/scale),y=Math.floor(coords.y/scale);
       const url=typeof template==="function"?template({z:native,x,y}):template.replace("{z}",native).replace("{x}",x).replace("{y}",y);
       const source=await elevationRequests.request(url,signal=>typeof template==="function"?fetchPublicElevation(url,signal):fetchElevation(url,signal),
-        {signal:controller.signal,priority:sharper?0:rank===5?2:rank,group:sharper?"sharp":rank===5?"dnr":rank===3?"detail":rank===2?"national":"overview"});
+        {signal:controller.signal,priority:sharper?0:rank===5?2:rank,group:sharper?"sharp":rank===6?"oregon":rank===5?"dnr":rank===3?"detail":rank===2?"national":"overview"});
       if(!source||controller.signal.aborted)return;
       const crop=scale>1?{x:(coords.x%scale)*source.width/scale,y:(coords.y%scale)*source.height/scale,width:source.width/scale,height:source.height/scale}:null;
       let values=!crop&&source.width===size.x&&source.height===size.y?source.grid:
@@ -645,6 +647,8 @@ const ElevLayer = L.GridLayer.extend({
        and the next zoom's data follows at low priority, replacing it in
        place. Raw 1 m LiDAR starts at on-screen z13, as it always has. */
     const shown=coords.z-dz,sources=[];
+    if(PROXY&&this.options.oregonEndpoint&&shown>=13&&CSPPublicTerrain.oregonTileAllowed(coords)&&!(this.options.dnrEndpoint&&dnrTileAllowed(coords)))
+      sources.push([api(`${this.options.oregonEndpoint}/{z}/{x}/{y}.png`),18,6,"Oregon DOGAMI elevation"]);
     if(PROXY&&this.options.dnrEndpoint&&dnrTileAllowed(coords))
       sources.push([api(`${this.options.dnrEndpoint}/{z}/{x}/{y}.png?acquire=0&revision=${dnrStatus?.revision||0}`),18,5,"WA DNR elevation"]);
     if(PROXY&&this.options.rawEndpoint&&shown>=13)
