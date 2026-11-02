@@ -184,7 +184,7 @@
     const group=backdrop?'backdrop':source.group||'overview';
     if(this._pending.has(key)){
       const pending=this._pending.get(key);pending.job=job;
-      this.options.prioritize?.(job.url,priority,{background,group});return pending.promise;
+      this.options.prioritize?.(job.url,priority,{background,group,signal:pending.controller.signal});return pending.promise;
     }
     if((this._failed.get(key)||0)>Date.now())return Promise.resolve(null);
     const controller=new AbortController(),epoch=this._epoch;
@@ -244,7 +244,7 @@
     const order=displayTiles.slice().sort((a,b)=>Number(visible(b))-Number(visible(a))||distance(a)-distance(b));
     this._visibleDisplays=order.filter(visible);
     const ranked=sources.filter(s=>!s.backdrop).sort((a,b)=>b.rank-a.rank),LIDAR=3;
-    const wanted=new Map(),chains=[],cover=[];
+    const wanted=new Map(),chains=[],cover=[],standInKeys=new Set();
     const job=(source,c,priority,list,background=false)=>{
       const key=tileKey(source.id,c.z,c.x,c.y);
       if(wanted.has(key)){
@@ -254,14 +254,16 @@
       wanted.set(key,made);list?.push(made);return made;
     };
     order.forEach((d,index)=>{
-      const near=1-index/order.length,chain={lidar:[],rest:[],needs:new Set(),releases:new Map()},background=!visible(d);
+      const near=1-index/order.length,chain={lidar:[],rest:[],standIns:[],needs:new Set(),coverNeeds:new Set(),releases:new Map()},background=!visible(d);
       for(const source of ranked){
         if(source.allowed&&!source.allowed(d))continue;
         const c=coords(d,native(source,d.z));
         (source.rank>=LIDAR?chain.lidar:chain.rest).push(job(source,c,Math.min(source.rank,LIDAR)+near,null,background));
         if(background||!source.standIn||c.z<source.standIn||this._tiles.has(tileKey(source.id,c.z,c.x,c.y)))continue;
         const coarse=coords(d,c.z-source.standIn);
-        if(!source.allowed||source.allowed(coarse))job(source,coarse,6,cover);
+        if(!source.allowed||source.allowed(coarse)){
+          const made=job(source,coarse,6,cover);chain.standIns.push(made);chain.coverNeeds.add(made.key);standInKeys.add(made.key);
+        }
       }
       for(const link of [...chain.lidar,...chain.rest])chain.needs.add(link.key);
       chains.push(chain);
@@ -297,7 +299,7 @@
       // is still in the margin, requeue it as idle work behind the new view.
       if(next?.background&&!p.job.background){p.controller.abort();this._pending.delete(key);}
       else if(!next){
-        if(fallback.has(key))this.options.prioritize?.(p.job.url,.25,{background:true,group:'backdrop'});
+        if(fallback.has(key))this.options.prioritize?.(p.job.url,.25,{background:true,group:'backdrop',signal:p.controller.signal});
         else{p.controller.abort();this._pending.delete(key);}
       }
     }
@@ -305,23 +307,30 @@
     const full=record=>record&&record.validCount===record.grid.length;
     // A native parent can serve several display tiles. Retire a lower source
     // only after every child that needs it has its own complete better target.
-    // Cover/backdrop work keeps its separate purpose during pans and zooms.
-    const owners=new Map(),retained=new Set([...cover,...backdrop].map(link=>link.key));
-    for(const chain of chains)for(const key of chain.needs){
+    // A coarse stand-in has the same ownership rule. Once every child has
+    // complete requested data at its rank or better, the stand-in is obsolete.
+    // Overview/backdrop work keeps its separate purpose during pans and zooms.
+    const owners=new Map(),retained=new Set([...cover,...backdrop].filter(link=>!standInKeys.has(link.key)).map(link=>link.key));
+    for(const chain of chains)for(const key of [...chain.needs,...chain.coverNeeds]){
       if(!owners.has(key))owners.set(key,new Set());owners.get(key).add(chain);
     }
-    const releaseLower=(chain,rank)=>{
+    const releaseLower=(chain,record)=>{
       if(stale())return;
       let changed=false;
-      for(const link of [...chain.lidar,...chain.rest]){
-        if(link.source.rank>=rank||!chain.needs.delete(link.key))continue;
+      const release=link=>{
+        if(chain.needs.has(link.key)||chain.coverNeeds.has(link.key))return;
         chain.releases.get(link.key)?.();chain.releases.delete(link.key);
         const users=owners.get(link.key);users.delete(chain);
-        if(users.size||retained.has(link.key))continue;
+        if(users.size||retained.has(link.key))return;
         wanted.delete(link.key);this._failed.delete(link.key);changed=true;
         const pending=this._pending.get(link.key);
         if(pending){pending.controller.abort();this._pending.delete(link.key);}
+      };
+      for(const link of [...chain.lidar,...chain.rest]){
+        if(link.source.rank<record.rank&&chain.needs.delete(link.key))release(link);
       }
+      for(const link of chain.standIns)
+        if(link.source.rank<=record.rank&&link.c.z<=record.z&&chain.coverNeeds.delete(link.key))release(link);
       if(changed)this._scheduleRetry();
     };
     const waitFor=(chain,link)=>{
@@ -329,14 +338,14 @@
       const retired=new Promise(resolve=>chain.releases.set(link.key,()=>resolve(null)));
       return Promise.race([this._load(link),retired]).then(record=>{
         chain.releases.delete(link.key);
-        if(full(record))releaseLower(chain,link.source.rank);
+        if(full(record))releaseLower(chain,record);
         return record;
       });
     };
     // Only exact requested targets establish redundancy. A cached ancestor
     // must never stop an intermediate settled viewport from gaining detail.
     for(const chain of chains)for(const link of chain.lidar)
-      if(full(this._tiles.get(link.key)))releaseLower(chain,link.source.rank);
+      if(full(this._tiles.get(link.key)))releaseLower(chain,this._tiles.get(link.key));
     const walk=async chain=>{
       if((await Promise.all(chain.lidar.map(link=>waitFor(chain,link)))).some(full))return;
       for(const link of chain.rest){
@@ -344,7 +353,7 @@
         if(full(await waitFor(chain,link)))return;
       }
     };
-    for(const made of cover)this._load(made);
+    for(const made of cover)if(wanted.has(made.key))this._load(made);
     const first=Promise.all(chains.map(walk)).then(()=>{if(!stale())this._evict();});
     // The backdrop queues behind the view's own tiles (see its priority).
     for(const made of backdrop)this._load(made);

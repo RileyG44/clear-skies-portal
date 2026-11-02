@@ -27,12 +27,9 @@
       if(!job){
         job={key,loader,priority,group,background,controller:new AbortController(),waiters:new Set(),started:false};
         this.jobs.set(key,job);this.queue.push(job);
-      }else{
-        job.priority=Math.max(job.priority,priority);
-        if(!background)this.prioritize(key,job.priority,{background:false,group});
       }
       const promise=new Promise((resolve,reject)=>{
-        const waiter={resolve,reject,signal,onAbort:null};
+        const waiter={resolve,reject,signal,priority,group,background,onAbort:null};
         waiter.onAbort=()=>{
           job.waiters.delete(waiter);signal?.removeEventListener('abort',waiter.onAbort);reject(aborted());
           if(!job.waiters.size){
@@ -40,31 +37,47 @@
             if(this.jobs.get(key)===job)this.jobs.delete(key);
             this.queue=this.queue.filter(value=>value!==job);
             this._scheduleDrain();
-          }
+          }else{this._demand(job);this._scheduleDrain();}
         };
         job.waiters.add(waiter);signal?.addEventListener('abort',waiter.onAbort,{once:true});
       });
+      this._demand(job);
       this._scheduleDrain();return promise;
     }
     /* A tile still queued can move: after a pan it may be the view's centre. */
     prioritize(key,priority,options={}){
       const job=this.jobs.get(key);if(!job)return;
-      job.priority=priority;
-      if(options.background!==undefined)job.background=options.background;
-      if(options.group!==undefined&&options.group!==job.group){
+      for(const waiter of job.waiters){
+        if(options.signal!==undefined&&waiter.signal!==options.signal)continue;
+        waiter.priority=priority;
+        if(options.background!==undefined)waiter.background=options.background;
+        if(options.group!==undefined)waiter.group=options.group;
+      }
+      this._demand(job);this._scheduleDrain();
+    }
+    /* Each consumer keeps its own intent. A background pan cannot demote a
+       different layer's visible tile, and a departed foreground owner must
+       not leave background work holding foreground capacity indefinitely. */
+    _demand(job){
+      let best=null,bestIdle=true;
+      for(const waiter of job.waiters){
+        const idle=waiter.background||this.idleGroups.has(waiter.group);
+        if(!best||bestIdle&&!idle||bestIdle===idle&&waiter.priority>best.priority){best=waiter;bestIdle=idle;}
+      }
+      if(!best)return;
+      if(best.group!==job.group){
         if(job.started){
           this.groupActive.set(job.group,this.groupActive.get(job.group)-1);
-          this.groupActive.set(options.group,(this.groupActive.get(options.group)||0)+1);
+          this.groupActive.set(best.group,(this.groupActive.get(best.group)||0)+1);
         }
-        job.group=options.group;
+        job.group=best.group;
       }
+      job.priority=best.priority;job.background=best.background;
       if(job.started){
-        const idle=job.background||this.idleGroups.has(job.group);
-        if(idle!==job.idle){
-          this.backgroundActive+=idle?1:-1;this.foregroundActive+=idle?-1:1;job.idle=idle;
+        if(bestIdle!==job.idle){
+          this.backgroundActive+=bestIdle?1:-1;this.foregroundActive+=bestIdle?-1:1;job.idle=bestIdle;
         }
       }
-      this._scheduleDrain();
     }
     /* Collect a frame's demand before choosing slots. Starting inside request()
        let the first low-priority caller beat every visible tile queued after it. */
