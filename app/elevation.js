@@ -627,12 +627,13 @@ const ElevLayer = L.GridLayer.extend({
       if(!settled){settled=true;done(null,cv);}
       this.fire("tilerefine",{tile:cv,coords});
     };
-    const load=async(template,native,rank,label,sharper=false)=>{
+    const load=async(state,native,sharper=false)=>{
+      const {template,rank,label}=state;
       const scale=2**(coords.z-native),x=Math.floor(coords.x/scale),y=Math.floor(coords.y/scale);
       const url=typeof template==="function"?template({z:native,x,y}):template.replace("{z}",native).replace("{x}",x).replace("{y}",y);
       const source=await elevationRequests.request(url,signal=>typeof template==="function"?fetchPublicElevation(url,signal):fetchElevation(url,signal),
-        {signal:controller.signal,priority:sharper?0:rank===5?2:rank,group:sharper?"sharp":rank===6?"oregon":rank===5?"dnr":rank===3?"detail":rank===2?"national":"overview"});
-      if(!source||controller.signal.aborted)return;
+        {signal:state.controller.signal,priority:sharper?0:rank===5?2:rank,group:sharper?"sharp":rank===6?"oregon":rank===5?"dnr":rank===3?"detail":rank===2?"national":"overview"});
+      if(!source||controller.signal.aborted||state.controller.signal.aborted)return;
       const crop=scale>1?{x:(coords.x%scale)*source.width/scale,y:(coords.y%scale)*source.height/scale,width:source.width/scale,height:source.height/scale}:null;
       let values=!crop&&source.width===size.x&&source.height===size.y?source.grid:
         ElevationTileCore.resampleElevation(source.grid,source.width,source.height,crop,size.x,size.y,{smooth:true});
@@ -660,20 +661,48 @@ const ElevLayer = L.GridLayer.extend({
       sources.push([CSPPublicTerrain.nationalUrl,18,2,"USGS 3DEP elevation"]);
     if(this.options.fallback)
       sources.push([this.options.fallback,this.options.fallbackNativeZoom??coords.z,1,"Overview elevation"]);
-    // Dispatch preferred sources immediately. A stalled overview cannot hold
-    // higher-resolution terrain hostage; response order never reduces quality.
-    const jobs=sources.map(([template,max,rank,label])=>load(template,Math.min(shown,max),rank,label));
+    const states=sources.map(([template,max,rank,label])=>{
+      const state={template,max,rank,label,controller:new AbortController(),baseDone:false,obsolete:false,sharp:null};
+      state.abort=()=>state.controller.abort();controller.signal.addEventListener("abort",state.abort,{once:true});
+      return state;
+    });
+    const releaseLower=()=>{
+      if(progress.valid!==progress.grid.length)return;
+      const lowest=Math.min(...states.filter(s=>progress.counts[s.rank]>0).map(s=>s.rank));
+      // Only release this tile's consumer. Another layer or sibling may still
+      // need the same native request; RequestPool retains those owners.
+      for(const state of states)if(state.rank<lowest){state.obsolete=true;state.controller.abort();}
+    };
+    const sharpenBest=()=>{
+      if(controller.signal.aborted)return;
+      const best=states.find(s=>!s.obsolete&&progress.counts[s.rank]>0);
+      if(!best?.baseDone||best.sharp||Math.min(coords.z,best.max)<=Math.min(shown,best.max))return;
+      // Refine as soon as useful data arrives. Waiting for every base source
+      // let a stalled overview postpone available HiDPI detail indefinitely.
+      best.sharp=load(best,Math.min(coords.z,best.max),true).then(value=>{
+        releaseLower();return {status:"fulfilled",value};
+      },reason=>({status:"rejected",reason}));
+    };
+    // Sources start independently, then refine the best available data. A
+    // later better source can also sharpen; per-pixel ranks retain its detail.
+    const jobs=states.map(state=>load(state,Math.min(shown,state.max)).finally(()=>{
+      state.baseDone=true;releaseLower();sharpenBest();
+    }));
     return Promise.allSettled(jobs).then(async results=>{
       if(controller.signal.aborted)return;
       if(!settled){settled=true;done(new Error("Elevation unavailable"),cv);}
-      const best=sources.find(([,,rank])=>progress.counts[rank]>0);
-      if(best&&Math.min(coords.z,best[1])>Math.min(shown,best[1]))
-        await load(best[0],Math.min(coords.z,best[1]),best[2],best[3],true).catch(reason=>results.push({status:"rejected",reason}));
+      const sharp=await Promise.all(states.map(state=>state.sharp));
       if(controller.signal.aborted)return;
+      // Retired fallback failures/aborts cannot keep a fully covered tile in
+      // failed refinement or make the published composite retry useless work.
+      results=results.map((result,i)=>states[i].obsolete?{status:"fulfilled",value:undefined}:result);
+      sharp.forEach((result,i)=>{if(result&&!states[i].obsolete)results.push(result);});
       cv._cspRefining=false;cv._cspRefineFailed=results.some(result=>result.status==="rejected");
       if(this._pending.get(key)===pending)this._pending.delete(key);
       this.fire("tilerefine",{tile:cv,coords});
       return results;
+    }).finally(()=>{
+      for(const state of states)controller.signal.removeEventListener("abort",state.abort);
     });
   },
   setSourceOptions:function(options){

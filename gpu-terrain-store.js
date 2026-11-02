@@ -254,7 +254,7 @@
       wanted.set(key,made);list?.push(made);return made;
     };
     order.forEach((d,index)=>{
-      const near=1-index/order.length,chain={lidar:[],rest:[]},background=!visible(d);
+      const near=1-index/order.length,chain={lidar:[],rest:[],needs:new Set(),releases:new Map()},background=!visible(d);
       for(const source of ranked){
         if(source.allowed&&!source.allowed(d))continue;
         const c=coords(d,native(source,d.z));
@@ -263,6 +263,7 @@
         const coarse=coords(d,c.z-source.standIn);
         if(!source.allowed||source.allowed(coarse))job(source,coarse,6,cover);
       }
+      for(const link of [...chain.lidar,...chain.rest])chain.needs.add(link.key);
       chains.push(chain);
       for(const source of sources)if(source.backdrop&&(!source.allowed||source.allowed(d)))
         job(source,coords(d,native(source,d.z)),source.rank,cover,background);
@@ -302,11 +303,45 @@
     }
     const epoch=this._epoch,stale=()=>epoch!==this._epoch||demand!==this._demand||this._destroyed;
     const full=record=>record&&record.validCount===record.grid.length;
+    // A native parent can serve several display tiles. Retire a lower source
+    // only after every child that needs it has its own complete better target.
+    // Cover/backdrop work keeps its separate purpose during pans and zooms.
+    const owners=new Map(),retained=new Set([...cover,...backdrop].map(link=>link.key));
+    for(const chain of chains)for(const key of chain.needs){
+      if(!owners.has(key))owners.set(key,new Set());owners.get(key).add(chain);
+    }
+    const releaseLower=(chain,rank)=>{
+      if(stale())return;
+      let changed=false;
+      for(const link of [...chain.lidar,...chain.rest]){
+        if(link.source.rank>=rank||!chain.needs.delete(link.key))continue;
+        chain.releases.get(link.key)?.();chain.releases.delete(link.key);
+        const users=owners.get(link.key);users.delete(chain);
+        if(users.size||retained.has(link.key))continue;
+        wanted.delete(link.key);this._failed.delete(link.key);changed=true;
+        const pending=this._pending.get(link.key);
+        if(pending){pending.controller.abort();this._pending.delete(link.key);}
+      }
+      if(changed)this._scheduleRetry();
+    };
+    const waitFor=(chain,link)=>{
+      if(stale()||!chain.needs.has(link.key))return Promise.resolve(null);
+      const retired=new Promise(resolve=>chain.releases.set(link.key,()=>resolve(null)));
+      return Promise.race([this._load(link),retired]).then(record=>{
+        chain.releases.delete(link.key);
+        if(full(record))releaseLower(chain,link.source.rank);
+        return record;
+      });
+    };
+    // Only exact requested targets establish redundancy. A cached ancestor
+    // must never stop an intermediate settled viewport from gaining detail.
+    for(const chain of chains)for(const link of chain.lidar)
+      if(full(this._tiles.get(link.key)))releaseLower(chain,link.source.rank);
     const walk=async chain=>{
-      if((await Promise.all(chain.lidar.map(link=>this._load(link)))).some(full))return;
+      if((await Promise.all(chain.lidar.map(link=>waitFor(chain,link)))).some(full))return;
       for(const link of chain.rest){
         if(stale())return;
-        if(full(await this._load(link)))return;
+        if(full(await waitFor(chain,link)))return;
       }
     };
     for(const made of cover)this._load(made);
