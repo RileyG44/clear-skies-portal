@@ -144,7 +144,7 @@ function limitedUpstream(id,opts,body,signal){
       await slot(entry.controller.signal,opts.host);
       try{ return await upstream({...opts,signal:entry.controller.signal},body) }
       finally{ release(opts.host) }
-    })().finally(()=>limitedPending.delete(taskKey));
+    })().finally(()=>{if(limitedPending.get(taskKey)===entry)limitedPending.delete(taskKey);});
   }
   const waiter={}; entry.waiters.add(waiter);
   return new Promise((resolve,reject)=>{

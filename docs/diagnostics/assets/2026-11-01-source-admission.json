@@ -1,0 +1,65 @@
+{
+  "workload": "source-admission",
+  "baselineRef": "ff6c74e",
+  "notes": "Actual broker and upstream code, fixed 100 ms range costs and a virtual clock. 24 range slots and six borrower workers. HTTPS sharing uses controlled transport. Not live/device speed.",
+  "before": {
+    "contendedReader": {
+      "globalSlots": 24,
+      "readMs": 100,
+      "broadRanges": 192,
+      "smallRanges": 2,
+      "firstSmallStartedMs": 799,
+      "allSmallReadyMs": 899,
+      "allBroadReadyMs": 800,
+      "allWorkMs": 900,
+      "networkReads": 194,
+      "uniqueBorrowers": 6
+    },
+    "singleReaderControl": {
+      "globalSlots": 24,
+      "readMs": 100,
+      "broadRanges": 192,
+      "smallRanges": 0,
+      "firstSmallStartedMs": null,
+      "allSmallReadyMs": null,
+      "allBroadReadyMs": 800,
+      "allWorkMs": 800,
+      "networkReads": 192,
+      "uniqueBorrowers": 6
+    },
+    "rapidRevisit": {
+      "targetRequests": 2,
+      "queuedRevisitRequests": 2
+    }
+  },
+  "after": {
+    "contendedReader": {
+      "globalSlots": 24,
+      "readMs": 100,
+      "broadRanges": 192,
+      "smallRanges": 2,
+      "firstSmallStartedMs": 99,
+      "allSmallReadyMs": 199,
+      "allBroadReadyMs": 900,
+      "allWorkMs": 900,
+      "networkReads": 194,
+      "uniqueBorrowers": 6
+    },
+    "singleReaderControl": {
+      "globalSlots": 24,
+      "readMs": 100,
+      "broadRanges": 192,
+      "smallRanges": 0,
+      "firstSmallStartedMs": null,
+      "allSmallReadyMs": null,
+      "allBroadReadyMs": 800,
+      "allWorkMs": 800,
+      "networkReads": 192,
+      "uniqueBorrowers": 6
+    },
+    "rapidRevisit": {
+      "targetRequests": 1,
+      "queuedRevisitRequests": 1
+    }
+  }
+}

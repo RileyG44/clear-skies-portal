@@ -23,7 +23,7 @@ function fixture({ref,concurrency=1,latency=20}={}){
   const counters={parses:0,decodes:0,maxActive:0};let now=0;
   const cog=sourceRequire('./cog.js');
   const fakeHttps={Agent:class{},request:(options,callback)=>{
-    const req=new EventEmitter();req.setTimeout=()=>req;
+    const req=new EventEmitter();req.setTimeout=(ms,handler)=>{req.timeout={ms,handler};return req;};
     req.destroy=error=>{if(error)queueMicrotask(()=>req.emit('error',error));};
     req.end=()=>{
       const [,a,b]=options.headers.Range.match(/bytes=(\d+)-(\d+)/);
@@ -43,7 +43,8 @@ function fixture({ref,concurrency=1,latency=20}={}){
   function complete(request,{status=206,body}={}){
     if(!request?.active)throw Error('no active fixture request');
     request.active=false;
-    const response=new EventEmitter();response.statusCode=status;response.headers={};request.callback(response);
+    const response=new EventEmitter();response.destroy=error=>response.emit('error',error);
+    response.statusCode=status;response.headers={};request.callback(response);
     response.emit('data',body??bytes.subarray(request.a,request.b+1));response.emit('end');
   }
   async function advance(){

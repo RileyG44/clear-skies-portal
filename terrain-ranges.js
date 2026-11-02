@@ -14,6 +14,7 @@ class TerrainRangeBroker{
     // independently of that worker's render. Losing the borrower reassigns
     // surviving waiters, while losing one viewer never cancels its neighbours.
     this.workers=new Map();this.pending=new Map();this.loads=new Map();this.queue=[];this.nextId=1;this.closed=false;
+    this.lastReader=null;this.failureCodes=Object.create(null);this.lastFailure=null;
     this.metrics={requests:0,shared:0,networkReads:0,diskHits:0,bytes:0,failed:0,rejected:0,cancelled:0,dropped:0,workerRetries:0,
       queueMs:0,queueSamples:0,maxQueueMs:0,networkMs:0};
   }
@@ -73,21 +74,37 @@ class TerrainRangeBroker{
       // Borrow the least-loaded source worker. Always using the first viewer
       // can fill the global budget with reads queued behind that one worker's
       // local S3 gate while every other worker still has free network slots.
-      const counts=new Map([...this.workers.keys()].map(worker=>[worker,0]));
-      for(const load of this.loads.values())counts.set(load.owner,(counts.get(load.owner)||0)+1);
-      let entry,owner;
-      for(const candidate of this.queue){
-        const viewer=candidate.waiters.values().next().value?.worker;
-        const viewers=new Set([...candidate.waiters].map(waiter=>waiter.worker));
-        for(const [worker,state] of this.workers){
-          // A worker doing CPU work can still read for its own fabric job,
-          // but cannot borrow more I/O from another render while it is busy.
-          if(counts.get(worker)>=this.perWorkerLimit||!viewers.has(worker)&&!state.available())continue;
-          if(!owner||counts.get(worker)<counts.get(owner)||counts.get(worker)===counts.get(owner)&&worker===viewer)owner=worker;
+      const workers=[...this.workers.keys()],counts=new Map(workers.map(worker=>[worker,0])),readers=new Map(counts);
+      const next=(workers.indexOf(this.lastReader)+1)%workers.length;
+      const turn=new Map(workers.slice(next).concat(workers.slice(0,next)).map((worker,i)=>[worker,i]));
+      for(const load of this.loads.values()){
+        counts.set(load.owner,(counts.get(load.owner)||0)+1);
+        for(const reader of new Set([...load.waiters].map(waiter=>waiter.worker)))readers.set(reader,(readers.get(reader)||0)+1);
+      }
+      // A broad raster window must not put every block ahead of a different
+      // render's small read. Balance active reads by consumer, rotating ties;
+      // FIFO remains the rule within one reader. Borrowing stays independent.
+      let entry,owner,reader;
+      for(const candidateReader of workers.sort((a,b)=>readers.get(a)-readers.get(b)||turn.get(a)-turn.get(b))){
+        // Find this reader's first eligible pending range, rather than scoring
+        // every block in a large window each time a source slot opens.
+        for(const waiter of this.workers.get(candidateReader).requests.values()){
+          const candidate=waiter.entry;if(candidate.owner)continue;
+          const viewer=candidate.waiters.values().next().value?.worker;
+          const viewers=new Set([...candidate.waiters].map(waiter=>waiter.worker));
+          let borrower;
+          for(const [worker,state] of this.workers){
+            // A CPU worker may read for itself, but cannot borrow more I/O
+            // from another render while it is busy.
+            if(counts.get(worker)>=this.perWorkerLimit||!viewers.has(worker)&&!state.available())continue;
+            if(!borrower||counts.get(worker)<counts.get(borrower)||counts.get(worker)===counts.get(borrower)&&worker===viewer)borrower=worker;
+          }
+          if(borrower){entry=candidate;owner=borrower;reader=candidateReader;break;}
         }
-        if(owner){entry=candidate;break;}
+        if(entry)break;
       }
       if(!entry)return;
+      this.lastReader=reader;
       this.queue.splice(this.queue.indexOf(entry),1);
       entry.owner=owner;entry.id=this.nextId++;entry.started=0;entry.cancelRequested=false;
       this.loads.set(entry.id,entry);
@@ -101,7 +118,16 @@ class TerrainRangeBroker{
       entry.owner=null;entry.enqueued=Date.now();this.queue.unshift(entry);this.drain();return;
     }
     if(this.pending.get(entry.cacheKey)===entry)this.pending.delete(entry.cacheKey);
-    if(message.error)this.metrics.failed+=message.code==='ABORT_ERR'?0:1;
+    if(message.error){
+      if(message.code!=='ABORT_ERR'){
+        this.metrics.failed++;
+        const code=String(message.code||'SOURCE_ERROR').slice(0,64);
+        const bucket=Object.hasOwn(this.failureCodes,code)||Object.keys(this.failureCodes).length<15?code:'OTHER';
+        this.failureCodes[bucket]=(this.failureCodes[bucket]||0)+1;
+        const now=Date.now();this.lastFailure={at:now,code,message:String(message.error).slice(0,160),
+          phase:entry.started?'read':'before-read',queueMs:(entry.started||now)-entry.enqueued,readMs:entry.started?now-entry.started:0};
+      }
+    }
     else if(message.cached)this.metrics.diskHits++;
     else{
       this.metrics.networkReads++;this.metrics.bytes+=message.bytes?.byteLength||0;
@@ -132,6 +158,7 @@ class TerrainRangeBroker{
       avgQueueMs:m.queueSamples?Math.round(m.queueMs/m.queueSamples):0,maxQueueMs:m.maxQueueMs,
       avgReadMs:m.networkReads?Math.round(m.networkMs/m.networkReads):0,
       requests:m.requests,shared:m.shared,networkReads:m.networkReads,diskHits:m.diskHits,bytes:m.bytes,failed:m.failed,rejected:m.rejected,
+      failureCodes:{...this.failureCodes},lastFailure:this.lastFailure?{...this.lastFailure}:null,
       cancelled:m.cancelled,dropped:m.dropped,workerRetries:m.workerRetries,
       workers:[...this.workers].map(([worker,s])=>({index:s.index,consumers:s.requests.size,reads:s.reads,
         active:[...this.loads.values()].filter(e=>e.owner===worker&&e.started).length}))};
