@@ -409,7 +409,7 @@ assert(index.includes('World_Light_Gray_Base/MapServer/tile/{z}/{y}/{x}", attr:E
 assert(index.includes('/api/wadnr/export?bbox=${b.join(",")}&size=${px},${px}&dpi=${Math.round(96*px/256)}')&&
        index.includes('const waSharpPx=()=>serverHealth?.features?.includes("wadnr-dpi")?EXPORT_PX:256;'),
        "WA DNR exports must keep the scale of its tile cache (dpi grows with size), or tiles come back 'Map data not yet available'");
-assert(index.includes('const shown=coords.z-dz,sources=[];')&&index.includes('load(template,Math.min(shown,max),rank,label)')&&
+assert(index.includes('const shown=coords.z-dz,sources=[];')&&index.includes('load(state,Math.min(shown,state.max))')&&
        index.includes('compositeSharpen(controller.signal,'),
        "terrain must paint first from the on-screen zoom and sharpen afterwards, not wait on four times the requests");
 assert(index.includes('if(this._map&&this._map._committingRotatePan) return invalidateAll.call(this);'),

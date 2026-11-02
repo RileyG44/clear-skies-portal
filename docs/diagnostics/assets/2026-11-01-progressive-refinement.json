@@ -1,0 +1,87 @@
+{
+  "workload": "progressive-refinement",
+  "baselineRef": "d24815f",
+  "notes": "Virtual clock, actual production schedulers, fixed 100 ms preferred / 2–5 s fallback costs. These measure scheduling and eliminated work, not live provider/device speed.",
+  "before": {
+    "cpuSharpening": {
+      "finestDetailMs": 5080,
+      "settledMs": 5080,
+      "started": 4,
+      "completed": 4,
+      "cancelled": 0,
+      "sourceWorkMs": 7180
+    },
+    "cpuRedundantFallback": {
+      "settledMs": 5000,
+      "started": 3,
+      "completed": 3,
+      "cancelled": 0,
+      "sourceWorkMs": 7100
+    },
+    "gpuRedundantLidar": {
+      "settledMs": 5000,
+      "started": 2,
+      "completed": 2,
+      "cancelled": 0,
+      "sourceWorkMs": 5100
+    },
+    "gpuPartialControl": {
+      "settledMs": 5000,
+      "started": 2,
+      "completed": 2,
+      "cancelled": 0,
+      "sourceWorkMs": 5100
+    },
+    "constrainedViewport": {
+      "visibleTiles": 36,
+      "sourceSlots": 6,
+      "allPreferredDetailMs": 25900,
+      "settledMs": 30900,
+      "started": 72,
+      "completed": 72,
+      "cancelled": 0,
+      "sourceWorkMs": 183600
+    }
+  },
+  "after": {
+    "cpuSharpening": {
+      "finestDetailMs": 180,
+      "settledMs": 2000,
+      "started": 4,
+      "completed": 3,
+      "cancelled": 1,
+      "sourceWorkMs": 4180
+    },
+    "cpuRedundantFallback": {
+      "settledMs": 100,
+      "started": 3,
+      "completed": 1,
+      "cancelled": 2,
+      "sourceWorkMs": 300
+    },
+    "gpuRedundantLidar": {
+      "settledMs": 100,
+      "started": 2,
+      "completed": 1,
+      "cancelled": 1,
+      "sourceWorkMs": 200
+    },
+    "gpuPartialControl": {
+      "settledMs": 5000,
+      "started": 2,
+      "completed": 2,
+      "cancelled": 0,
+      "sourceWorkMs": 5100
+    },
+    "constrainedViewport": {
+      "visibleTiles": 36,
+      "sourceSlots": 6,
+      "allPreferredDetailMs": 1200,
+      "settledMs": 1200,
+      "started": 72,
+      "completed": 36,
+      "cancelled": 36,
+      "sourceWorkMs": 7200
+    }
+  }
+}
