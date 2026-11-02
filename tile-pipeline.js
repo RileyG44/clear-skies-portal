@@ -16,7 +16,7 @@
       this.cache=new Map();this.jobs=new Map();this.queue=[];this.active=0;this.bytes=0;
       this.backgroundConcurrency=backgroundConcurrency;this.backgroundActive=0;this.foregroundActive=0;this._drainScheduled=false;
     }
-    request(key,loader,{signal,priority=0,group="default",background=false}={}){
+    request(key,loader,{signal,priority=0,group="default",limitGroup=null,background=false}={}){
       if(signal?.aborted) return Promise.reject(aborted());
       const hit=this.cache.get(key);
       if(hit&&Date.now()-hit.at<this.ttl){
@@ -29,7 +29,7 @@
         this.jobs.set(key,job);this.queue.push(job);
       }
       const promise=new Promise((resolve,reject)=>{
-        const waiter={resolve,reject,signal,priority,group,background,onAbort:null};
+        const waiter={resolve,reject,signal,priority,group,limitGroup,background,onAbort:null};
         waiter.onAbort=()=>{
           job.waiters.delete(waiter);signal?.removeEventListener('abort',waiter.onAbort);reject(aborted());
           if(!job.waiters.size){
@@ -52,6 +52,7 @@
         waiter.priority=priority;
         if(options.background!==undefined)waiter.background=options.background;
         if(options.group!==undefined)waiter.group=options.group;
+        if(options.limitGroup!==undefined)waiter.limitGroup=options.limitGroup;
       }
       this._demand(job);this._scheduleDrain();
     }
@@ -65,12 +66,10 @@
         if(!best||bestIdle&&!idle||bestIdle===idle&&waiter.priority>best.priority){best=waiter;bestIdle=idle;}
       }
       if(!best)return;
-      if(best.group!==job.group){
-        if(job.started){
-          this.groupActive.set(job.group,this.groupActive.get(job.group)-1);
-          this.groupActive.set(best.group,(this.groupActive.get(best.group)||0)+1);
-        }
-        job.group=best.group;
+      if(best.group!==job.group||best.limitGroup!==job.limitGroup){
+        if(job.started)this._countGroups(job,-1);
+        job.group=best.group;job.limitGroup=best.limitGroup;
+        if(job.started)this._countGroups(job,1);
       }
       job.priority=best.priority;job.background=best.background;
       if(job.started){
@@ -79,6 +78,10 @@
         }
       }
     }
+    // A refinement uses both its provider's capacity and the shared sharpening
+    // budget. Sharing a transport still counts once, under its effective owner.
+    _groups(job){return job.limitGroup&&job.limitGroup!==job.group?[job.group,job.limitGroup]:[job.group];}
+    _countGroups(job,delta){for(const group of this._groups(job))this.groupActive.set(group,(this.groupActive.get(group)||0)+delta);}
     /* Collect a frame's demand before choosing slots. Starting inside request()
        let the first low-priority caller beat every visible tile queued after it. */
     _scheduleDrain(){
@@ -90,11 +93,11 @@
       const idle=job=>job.background||this.idleGroups.has(job.group);
       while(this.active<this.concurrency&&this.queue.length){
         const busy=this.foregroundActive>0||this.queue.some(job=>job.waiters.size&&!idle(job));
-        const index=this.queue.findIndex(job=>(this.groupActive.get(job.group)||0)<(this.groupLimits[job.group]??this.concurrency)&&
+        const index=this.queue.findIndex(job=>this._groups(job).every(group=>(this.groupActive.get(group)||0)<(this.groupLimits[group]??this.concurrency))&&
           !(idle(job)&&(busy||this.backgroundActive>=this.backgroundConcurrency)));
         if(index<0)break;
         const [job]=this.queue.splice(index,1);if(!job.waiters.size)continue;
-        this.groupActive.set(job.group,(this.groupActive.get(job.group)||0)+1);
+        this._countGroups(job,1);
         job.started=true;job.idle=idle(job);this.active++;
         if(job.idle)this.backgroundActive++;else this.foregroundActive++;
         Promise.resolve().then(()=>{if(job.controller.signal.aborted)throw aborted();return job.loader(job.controller.signal);}).then(value=>{
@@ -109,7 +112,7 @@
           this._settle(job,null,value);
         },error=>this._settle(job,error)).finally(()=>{
           this.active--;if(job.idle)this.backgroundActive--;else this.foregroundActive--;
-          this.groupActive.set(job.group,this.groupActive.get(job.group)-1);if(this.jobs.get(job.key)===job)this.jobs.delete(job.key);this._scheduleDrain();
+          this._countGroups(job,-1);if(this.jobs.get(job.key)===job)this.jobs.delete(job.key);this._scheduleDrain();
         });
       }
     }
