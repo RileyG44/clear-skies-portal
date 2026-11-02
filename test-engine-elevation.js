@@ -4,7 +4,7 @@ const html=require("./test-fixtures/page-source.js");
 const code=html.slice(html.indexOf('async function engineElevationWithFallback('),html.indexOf('\nconst ElevLayer'));
 const tick=()=>new Promise(resolve=>setImmediate(resolve));
 const tile=(value,gap=false)=>{const grid=new Float32Array(256*256).fill(value);if(gap)grid[0]=NaN;return {grid,width:256,height:256}};
-function fixture(dnrAllowed=true,preference='auto'){
+function fixture(dnrAllowed=true,preference='auto',oregon=false){
   const pending=new Map(),aborts=[];
   const request=(url,signal)=>new Promise((resolve,reject)=>{
     pending.set(url,resolve);signal.addEventListener('abort',()=>{aborts.push(url);reject(new DOMException('Aborted','AbortError'))},{once:true});
@@ -13,6 +13,7 @@ function fixture(dnrAllowed=true,preference='auto'){
     $:()=>({value:preference}),api:x=>x,RAW_COVERAGE_QUERY:'ix=3',dnrStatus:{revision:0},dnrTileAllowed:()=>dnrAllowed,
     elevationRequests:{request:(url,loader,{signal})=>request(url,signal)},fetchElevation:()=>{},
     overviewElevation:(coords,signal)=>request('overview',signal)};
+  if(oregon){context.serverHealth={features:['oregon-elevation']};context.CSPPublicTerrain.oregonTileAllowed=()=>true;}
   vm.runInNewContext(code,context);
   return {pending,aborts,run:(signal,mesh=true,z=12)=>context.engineElevationWithFallback({z,x:1,y:1},signal,mesh)};
 }
@@ -52,6 +53,18 @@ async function main(){
   assert.equal(returned,false,'explicit raw preference allows the finer mesh source to finish');
   f.pending.get('/api/usgs/elev/14/1/1.png?ix=3')(tile(50));
   assert.deepEqual(Array.from((await rawMesh).ranks),[3],'explicit raw USGS preference supplies 3D too');
+
+  f=fixture(false,'auto',true);controller=new AbortController();
+  const oregon=f.run(controller.signal,true,14);
+  f.pending.get('/api/oregon/elev/14/1/1.png')(tile(1212));
+  assert.deepEqual(Array.from((await oregon).ranks),[6],'complete Oregon terrain supplies the mesh and cancels lower-quality waits');
+  assert(f.aborts.includes('/api/usgs/elev/14/1/1.png?ix=3'));
+
+  f=fixture(true,'auto',true);controller=new AbortController();
+  const overlapping=f.run(controller.signal,true,14);
+  assert(!f.pending.has('/api/oregon/elev/14/1/1.png'),'available DNR retains priority in overlapping regions for 3D');
+  f.pending.get('/api/wadnr/elev/14/1/1.png?acquire=0&revision=0')(tile(50));
+  assert.deepEqual(Array.from((await overlapping).ranks),[5]);
 
   f=fixture();controller=new AbortController();
   const cancelled=assert.rejects(f.run(controller.signal),{name:'AbortError'});controller.abort();await cancelled;

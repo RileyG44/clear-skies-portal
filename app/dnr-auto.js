@@ -14,7 +14,7 @@ function automaticDnrGaps(layer,view){
   if(!tiles.length||tiles.some(cv=>cv._cspRefining||cv._cspRefineFailed))return null;
   return tiles.filter(cv=>{
     const c=cv._cspNumericCounts;
-    return !c||(c[3]||0)+(c[5]||0)<cv.width*cv.height;
+    return !c||(c[3]||0)+(c[5]||0)+(c[6]||0)<cv.width*cv.height;
   }).map(cv=>cv._cspCoords);
 }
 function checkAutomaticDnr(){

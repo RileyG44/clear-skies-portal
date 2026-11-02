@@ -20,6 +20,7 @@ const {upstreamLoad}=require("./engine/upstream.js");
 const snapshot=require("./engine/snapshot.js");
 const markup=require("./engine/markup-store.js");
 const terrain=require("./engine/terrain.js");
+const oregon=require("./engine/oregon.js");
 const downloads=require("./engine/downloads.js");
 const dnrRoutes=require("./engine/dnr-routes.js");
 const proxies=require("./engine/proxies.js");
@@ -90,14 +91,14 @@ function health(){
     channel:CHANNEL, previewRef:CHANNEL==="preview"?PREVIEW_REF:undefined,
     /* What the page may ask of this engine. Without "wadnr-dpi" the page
        keeps to the 256 px WA DNR export every engine has handled. */
-    features:["wadnr-dpi","wadnr-elevation","wadnr-job-cancel","markup","overview-elevation",
+    features:["wadnr-dpi","wadnr-elevation","wadnr-job-cancel","markup","overview-elevation","oregon-elevation",
       ...(process.env.CSP_DNR_AUTO==="1"?["wadnr-auto"]:[])],dnr:dnr.status()
   };
 }
 
 /* Exact paths first, then path prefixes (keys ending in "/"), longest first.
    A handler that returns false passes the request on to the static files. */
-const ROUTES=Object.assign({},terrain.routes,dnrRoutes.routes,downloads.routes,proxies.routes,snapshot.routes,markup.routes,{
+const ROUTES=Object.assign({},terrain.routes,oregon.routes,dnrRoutes.routes,downloads.routes,proxies.routes,snapshot.routes,markup.routes,{
   "/api/health":(req,res)=>send(res,200,"application/json",jsonBody(health()),{"Cache-Control":"no-store"})
 });
 const PREFIXES=Object.keys(ROUTES).filter(route=>route.endsWith("/")).sort((a,b)=>b.length-a.length);

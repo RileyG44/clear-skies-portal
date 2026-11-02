@@ -351,7 +351,7 @@ function gpuElevationSources(){
   if(gpuSourceSpecs&&gpuSourceSpecsKey===key)return gpuSourceSpecs;
   gpuSourceSpecsKey=key;
   const env={proxy:PROXY,api,dz:HIDPI?1:0,nationalMinZoom:CSPPublicTerrain.NATIONAL_MIN_ZOOM,dnrTileAllowed,dnrRevision:dnrStatus?.revision||0,
-    rawCoverageQuery:RAW_COVERAGE_QUERY,nationalUrl:CSPPublicTerrain.nationalUrl,sourceSampleMeters};
+    rawCoverageQuery:RAW_COVERAGE_QUERY,nationalUrl:CSPPublicTerrain.nationalUrl,sourceSampleMeters,oregonTileAllowed:CSPPublicTerrain.oregonTileAllowed};
   return gpuSourceSpecs=CSPGpuTerrainStore.buildSources(options,env);
 }
 function gpuTerrainState(){
@@ -421,10 +421,12 @@ function dnrTileAllowed(coords){return dnrBboxAllowed(tileBbox(coords.z,coords.x
 function elevationSourceOptions(){
   const want=$("#terSrc").value;
   const dnr=want==="auto"&&dnrElevationAvailable();
+  const oregon=want==="auto"&&PROXY&&serverHealth?.features?.includes("oregon-elevation");
   return {nationalEndpoint:"/api/elev/national",rawEndpoint:want==="3dep"?null:"/api/usgs/elev",
+    oregonEndpoint:oregon?"/api/oregon/elev":null,
     dnrEndpoint:dnr?"/api/wadnr/elev":null,dnrAcquire:false,dnrMaskKey:dnr?"available-v1":"",
     fallback:overviewElevationUrl("{z}","{x}","{y}"),
-    sourceKey:[want,dnr?`dnr:available-v1:${dnrStatus?.revision||0}:${dnrAreasKey()}`:"",PROXY?API:"public",
+    sourceKey:[want,oregon?"oregon-olc-v1":"",dnr?`dnr:available-v1:${dnrStatus?.revision||0}:${dnrAreasKey()}`:"",PROXY?API:"public",
       serverHealth?.features?.includes("overview-elevation")?"overview-cache":"overview-direct"].join("|")};
 }
 function dnrAcquisitionText(){

@@ -1,0 +1,498 @@
+{
+  "coordinate": {
+    "latitude": 44.333599,
+    "longitude": -121.926842
+  },
+  "usgs": {
+    "project": "OR_McKenzieRiver_2021_B21",
+    "nodata": -999999,
+    "independentReader": "geotiff",
+    "pointWindowValidPixels": 0,
+    "pointWindowTotalPixels": 36,
+    "oneMeterBlockValidPixels": 0,
+    "oneMeterBlockTotalPixels": 262144
+  },
+  "dogamiIdentify": {
+    "datasetId": 96,
+    "project": "Lane County 2014",
+    "elevationFeet": 3977.22,
+    "sourceSpacingFeet": 3,
+    "acquisition": "September 7 2013 - June 8 2015"
+  },
+  "notes": "Live provider validation, one run; timings include rendering and network variability and are not a performance benchmark. Source lists describe selected mosaic candidates rather than per-pixel contribution.",
+  "tiles": [
+    {
+      "z": 14,
+      "x": 2642,
+      "y": 5936,
+      "status": 200,
+      "coverage": "1",
+      "bytes": 106138,
+      "ms": 1164,
+      "sources": [
+        {
+          "datasetId": 96,
+          "project": "Lane County 2014",
+          "provider": "Oregon DOGAMI",
+          "nativeMeters": 0.9144000000000001,
+          "acquisition": "September 7 2013 - June 8 2015",
+          "verticalDatum": "NAVD88 (GEOID 12A)",
+          "horizontalDatum": "NAD 1983 (2011)",
+          "sourceVerticalUnits": "Feet",
+          "verticalUnits": "meters",
+          "verticalUnitBasis": "DOGAMI completed OLC project metadata",
+          "metadataDatasetId": 96,
+          "metadataURL": "https://pubs.oregon.gov/dogami/ldq/reports/OLC_Lane_County_2015.pdf",
+          "order": 2014,
+          "contribution": "Selected primary mosaic raster; per-pixel contributor is not exposed by the service"
+        },
+        {
+          "datasetId": 46,
+          "project": "Willamette Valley 2009",
+          "provider": "Oregon DOGAMI",
+          "nativeMeters": 0.9144000000000001,
+          "acquisition": "August 31 2008 - July 1 2009",
+          "verticalDatum": "NAVD88 (GEOID 03)",
+          "horizontalDatum": "NAD 1983 (HARN)",
+          "sourceVerticalUnits": "Feet",
+          "verticalUnits": "meters",
+          "verticalUnitBasis": "DOGAMI completed OLC project metadata",
+          "metadataDatasetId": 0,
+          "metadataURL": "https://pubs.oregon.gov/dogami/ldq/reports/Willamette_Valley_Lidar_Report_2009.pdf",
+          "order": 2009,
+          "contribution": "Selected primary mosaic raster; per-pixel contributor is not exposed by the service"
+        }
+      ]
+    },
+    {
+      "z": 18,
+      "x": 42287,
+      "y": 94982,
+      "status": 200,
+      "coverage": "1",
+      "bytes": 55548,
+      "ms": 280,
+      "sources": [
+        {
+          "datasetId": 96,
+          "project": "Lane County 2014",
+          "provider": "Oregon DOGAMI",
+          "nativeMeters": 0.9144000000000001,
+          "acquisition": "September 7 2013 - June 8 2015",
+          "verticalDatum": "NAVD88 (GEOID 12A)",
+          "horizontalDatum": "NAD 1983 (2011)",
+          "sourceVerticalUnits": "Feet",
+          "verticalUnits": "meters",
+          "verticalUnitBasis": "DOGAMI completed OLC project metadata",
+          "metadataDatasetId": 96,
+          "metadataURL": "https://pubs.oregon.gov/dogami/ldq/reports/OLC_Lane_County_2015.pdf",
+          "order": 2014,
+          "contribution": "Selected primary mosaic raster; per-pixel contributor is not exposed by the service"
+        },
+        {
+          "datasetId": 46,
+          "project": "Willamette Valley 2009",
+          "provider": "Oregon DOGAMI",
+          "nativeMeters": 0.9144000000000001,
+          "acquisition": "August 31 2008 - July 1 2009",
+          "verticalDatum": "NAVD88 (GEOID 03)",
+          "horizontalDatum": "NAD 1983 (HARN)",
+          "sourceVerticalUnits": "Feet",
+          "verticalUnits": "meters",
+          "verticalUnitBasis": "DOGAMI completed OLC project metadata",
+          "metadataDatasetId": 0,
+          "metadataURL": "https://pubs.oregon.gov/dogami/ldq/reports/Willamette_Valley_Lidar_Report_2009.pdf",
+          "order": 2009,
+          "contribution": "Selected primary mosaic raster; per-pixel contributor is not exposed by the service"
+        }
+      ]
+    },
+    {
+      "z": 16,
+      "x": 10570,
+      "y": 23744,
+      "status": 200,
+      "coverage": "1",
+      "bytes": 92519,
+      "ms": 398,
+      "sources": [
+        {
+          "datasetId": 96,
+          "project": "Lane County 2014",
+          "provider": "Oregon DOGAMI",
+          "nativeMeters": 0.9144000000000001,
+          "acquisition": "September 7 2013 - June 8 2015",
+          "verticalDatum": "NAVD88 (GEOID 12A)",
+          "horizontalDatum": "NAD 1983 (2011)",
+          "sourceVerticalUnits": "Feet",
+          "verticalUnits": "meters",
+          "verticalUnitBasis": "DOGAMI completed OLC project metadata",
+          "metadataDatasetId": 96,
+          "metadataURL": "https://pubs.oregon.gov/dogami/ldq/reports/OLC_Lane_County_2015.pdf",
+          "order": 2014,
+          "contribution": "Selected primary mosaic raster; per-pixel contributor is not exposed by the service"
+        },
+        {
+          "datasetId": 46,
+          "project": "Willamette Valley 2009",
+          "provider": "Oregon DOGAMI",
+          "nativeMeters": 0.9144000000000001,
+          "acquisition": "August 31 2008 - July 1 2009",
+          "verticalDatum": "NAVD88 (GEOID 03)",
+          "horizontalDatum": "NAD 1983 (HARN)",
+          "sourceVerticalUnits": "Feet",
+          "verticalUnits": "meters",
+          "verticalUnitBasis": "DOGAMI completed OLC project metadata",
+          "metadataDatasetId": 0,
+          "metadataURL": "https://pubs.oregon.gov/dogami/ldq/reports/Willamette_Valley_Lidar_Report_2009.pdf",
+          "order": 2009,
+          "contribution": "Selected primary mosaic raster; per-pixel contributor is not exposed by the service"
+        }
+      ]
+    },
+    {
+      "z": 16,
+      "x": 10571,
+      "y": 23744,
+      "status": 200,
+      "coverage": "1",
+      "bytes": 87168,
+      "ms": 258,
+      "sources": [
+        {
+          "datasetId": 96,
+          "project": "Lane County 2014",
+          "provider": "Oregon DOGAMI",
+          "nativeMeters": 0.9144000000000001,
+          "acquisition": "September 7 2013 - June 8 2015",
+          "verticalDatum": "NAVD88 (GEOID 12A)",
+          "horizontalDatum": "NAD 1983 (2011)",
+          "sourceVerticalUnits": "Feet",
+          "verticalUnits": "meters",
+          "verticalUnitBasis": "DOGAMI completed OLC project metadata",
+          "metadataDatasetId": 96,
+          "metadataURL": "https://pubs.oregon.gov/dogami/ldq/reports/OLC_Lane_County_2015.pdf",
+          "order": 2014,
+          "contribution": "Selected primary mosaic raster; per-pixel contributor is not exposed by the service"
+        },
+        {
+          "datasetId": 46,
+          "project": "Willamette Valley 2009",
+          "provider": "Oregon DOGAMI",
+          "nativeMeters": 0.9144000000000001,
+          "acquisition": "August 31 2008 - July 1 2009",
+          "verticalDatum": "NAVD88 (GEOID 03)",
+          "horizontalDatum": "NAD 1983 (HARN)",
+          "sourceVerticalUnits": "Feet",
+          "verticalUnits": "meters",
+          "verticalUnitBasis": "DOGAMI completed OLC project metadata",
+          "metadataDatasetId": 0,
+          "metadataURL": "https://pubs.oregon.gov/dogami/ldq/reports/Willamette_Valley_Lidar_Report_2009.pdf",
+          "order": 2009,
+          "contribution": "Selected primary mosaic raster; per-pixel contributor is not exposed by the service"
+        }
+      ]
+    },
+    {
+      "z": 16,
+      "x": 10572,
+      "y": 23744,
+      "status": 200,
+      "coverage": "1",
+      "bytes": 81086,
+      "ms": 336,
+      "sources": [
+        {
+          "datasetId": 96,
+          "project": "Lane County 2014",
+          "provider": "Oregon DOGAMI",
+          "nativeMeters": 0.9144000000000001,
+          "acquisition": "September 7 2013 - June 8 2015",
+          "verticalDatum": "NAVD88 (GEOID 12A)",
+          "horizontalDatum": "NAD 1983 (2011)",
+          "sourceVerticalUnits": "Feet",
+          "verticalUnits": "meters",
+          "verticalUnitBasis": "DOGAMI completed OLC project metadata",
+          "metadataDatasetId": 96,
+          "metadataURL": "https://pubs.oregon.gov/dogami/ldq/reports/OLC_Lane_County_2015.pdf",
+          "order": 2014,
+          "contribution": "Selected primary mosaic raster; per-pixel contributor is not exposed by the service"
+        },
+        {
+          "datasetId": 46,
+          "project": "Willamette Valley 2009",
+          "provider": "Oregon DOGAMI",
+          "nativeMeters": 0.9144000000000001,
+          "acquisition": "August 31 2008 - July 1 2009",
+          "verticalDatum": "NAVD88 (GEOID 03)",
+          "horizontalDatum": "NAD 1983 (HARN)",
+          "sourceVerticalUnits": "Feet",
+          "verticalUnits": "meters",
+          "verticalUnitBasis": "DOGAMI completed OLC project metadata",
+          "metadataDatasetId": 0,
+          "metadataURL": "https://pubs.oregon.gov/dogami/ldq/reports/Willamette_Valley_Lidar_Report_2009.pdf",
+          "order": 2009,
+          "contribution": "Selected primary mosaic raster; per-pixel contributor is not exposed by the service"
+        }
+      ]
+    },
+    {
+      "z": 16,
+      "x": 10570,
+      "y": 23745,
+      "status": 200,
+      "coverage": "1",
+      "bytes": 91841,
+      "ms": 360,
+      "sources": [
+        {
+          "datasetId": 96,
+          "project": "Lane County 2014",
+          "provider": "Oregon DOGAMI",
+          "nativeMeters": 0.9144000000000001,
+          "acquisition": "September 7 2013 - June 8 2015",
+          "verticalDatum": "NAVD88 (GEOID 12A)",
+          "horizontalDatum": "NAD 1983 (2011)",
+          "sourceVerticalUnits": "Feet",
+          "verticalUnits": "meters",
+          "verticalUnitBasis": "DOGAMI completed OLC project metadata",
+          "metadataDatasetId": 96,
+          "metadataURL": "https://pubs.oregon.gov/dogami/ldq/reports/OLC_Lane_County_2015.pdf",
+          "order": 2014,
+          "contribution": "Selected primary mosaic raster; per-pixel contributor is not exposed by the service"
+        },
+        {
+          "datasetId": 46,
+          "project": "Willamette Valley 2009",
+          "provider": "Oregon DOGAMI",
+          "nativeMeters": 0.9144000000000001,
+          "acquisition": "August 31 2008 - July 1 2009",
+          "verticalDatum": "NAVD88 (GEOID 03)",
+          "horizontalDatum": "NAD 1983 (HARN)",
+          "sourceVerticalUnits": "Feet",
+          "verticalUnits": "meters",
+          "verticalUnitBasis": "DOGAMI completed OLC project metadata",
+          "metadataDatasetId": 0,
+          "metadataURL": "https://pubs.oregon.gov/dogami/ldq/reports/Willamette_Valley_Lidar_Report_2009.pdf",
+          "order": 2009,
+          "contribution": "Selected primary mosaic raster; per-pixel contributor is not exposed by the service"
+        }
+      ]
+    },
+    {
+      "z": 16,
+      "x": 10571,
+      "y": 23745,
+      "status": 200,
+      "coverage": "1",
+      "bytes": 92483,
+      "ms": 229,
+      "sources": [
+        {
+          "datasetId": 96,
+          "project": "Lane County 2014",
+          "provider": "Oregon DOGAMI",
+          "nativeMeters": 0.9144000000000001,
+          "acquisition": "September 7 2013 - June 8 2015",
+          "verticalDatum": "NAVD88 (GEOID 12A)",
+          "horizontalDatum": "NAD 1983 (2011)",
+          "sourceVerticalUnits": "Feet",
+          "verticalUnits": "meters",
+          "verticalUnitBasis": "DOGAMI completed OLC project metadata",
+          "metadataDatasetId": 96,
+          "metadataURL": "https://pubs.oregon.gov/dogami/ldq/reports/OLC_Lane_County_2015.pdf",
+          "order": 2014,
+          "contribution": "Selected primary mosaic raster; per-pixel contributor is not exposed by the service"
+        },
+        {
+          "datasetId": 46,
+          "project": "Willamette Valley 2009",
+          "provider": "Oregon DOGAMI",
+          "nativeMeters": 0.9144000000000001,
+          "acquisition": "August 31 2008 - July 1 2009",
+          "verticalDatum": "NAVD88 (GEOID 03)",
+          "horizontalDatum": "NAD 1983 (HARN)",
+          "sourceVerticalUnits": "Feet",
+          "verticalUnits": "meters",
+          "verticalUnitBasis": "DOGAMI completed OLC project metadata",
+          "metadataDatasetId": 0,
+          "metadataURL": "https://pubs.oregon.gov/dogami/ldq/reports/Willamette_Valley_Lidar_Report_2009.pdf",
+          "order": 2009,
+          "contribution": "Selected primary mosaic raster; per-pixel contributor is not exposed by the service"
+        }
+      ]
+    },
+    {
+      "z": 16,
+      "x": 10572,
+      "y": 23745,
+      "status": 200,
+      "coverage": "1",
+      "bytes": 92782,
+      "ms": 218,
+      "sources": [
+        {
+          "datasetId": 96,
+          "project": "Lane County 2014",
+          "provider": "Oregon DOGAMI",
+          "nativeMeters": 0.9144000000000001,
+          "acquisition": "September 7 2013 - June 8 2015",
+          "verticalDatum": "NAVD88 (GEOID 12A)",
+          "horizontalDatum": "NAD 1983 (2011)",
+          "sourceVerticalUnits": "Feet",
+          "verticalUnits": "meters",
+          "verticalUnitBasis": "DOGAMI completed OLC project metadata",
+          "metadataDatasetId": 96,
+          "metadataURL": "https://pubs.oregon.gov/dogami/ldq/reports/OLC_Lane_County_2015.pdf",
+          "order": 2014,
+          "contribution": "Selected primary mosaic raster; per-pixel contributor is not exposed by the service"
+        },
+        {
+          "datasetId": 46,
+          "project": "Willamette Valley 2009",
+          "provider": "Oregon DOGAMI",
+          "nativeMeters": 0.9144000000000001,
+          "acquisition": "August 31 2008 - July 1 2009",
+          "verticalDatum": "NAVD88 (GEOID 03)",
+          "horizontalDatum": "NAD 1983 (HARN)",
+          "sourceVerticalUnits": "Feet",
+          "verticalUnits": "meters",
+          "verticalUnitBasis": "DOGAMI completed OLC project metadata",
+          "metadataDatasetId": 0,
+          "metadataURL": "https://pubs.oregon.gov/dogami/ldq/reports/Willamette_Valley_Lidar_Report_2009.pdf",
+          "order": 2009,
+          "contribution": "Selected primary mosaic raster; per-pixel contributor is not exposed by the service"
+        }
+      ]
+    },
+    {
+      "z": 16,
+      "x": 10570,
+      "y": 23746,
+      "status": 200,
+      "coverage": "1",
+      "bytes": 96696,
+      "ms": 339,
+      "sources": [
+        {
+          "datasetId": 96,
+          "project": "Lane County 2014",
+          "provider": "Oregon DOGAMI",
+          "nativeMeters": 0.9144000000000001,
+          "acquisition": "September 7 2013 - June 8 2015",
+          "verticalDatum": "NAVD88 (GEOID 12A)",
+          "horizontalDatum": "NAD 1983 (2011)",
+          "sourceVerticalUnits": "Feet",
+          "verticalUnits": "meters",
+          "verticalUnitBasis": "DOGAMI completed OLC project metadata",
+          "metadataDatasetId": 96,
+          "metadataURL": "https://pubs.oregon.gov/dogami/ldq/reports/OLC_Lane_County_2015.pdf",
+          "order": 2014,
+          "contribution": "Selected primary mosaic raster; per-pixel contributor is not exposed by the service"
+        },
+        {
+          "datasetId": 46,
+          "project": "Willamette Valley 2009",
+          "provider": "Oregon DOGAMI",
+          "nativeMeters": 0.9144000000000001,
+          "acquisition": "August 31 2008 - July 1 2009",
+          "verticalDatum": "NAVD88 (GEOID 03)",
+          "horizontalDatum": "NAD 1983 (HARN)",
+          "sourceVerticalUnits": "Feet",
+          "verticalUnits": "meters",
+          "verticalUnitBasis": "DOGAMI completed OLC project metadata",
+          "metadataDatasetId": 0,
+          "metadataURL": "https://pubs.oregon.gov/dogami/ldq/reports/Willamette_Valley_Lidar_Report_2009.pdf",
+          "order": 2009,
+          "contribution": "Selected primary mosaic raster; per-pixel contributor is not exposed by the service"
+        }
+      ]
+    },
+    {
+      "z": 16,
+      "x": 10571,
+      "y": 23746,
+      "status": 200,
+      "coverage": "1",
+      "bytes": 92731,
+      "ms": 276,
+      "sources": [
+        {
+          "datasetId": 96,
+          "project": "Lane County 2014",
+          "provider": "Oregon DOGAMI",
+          "nativeMeters": 0.9144000000000001,
+          "acquisition": "September 7 2013 - June 8 2015",
+          "verticalDatum": "NAVD88 (GEOID 12A)",
+          "horizontalDatum": "NAD 1983 (2011)",
+          "sourceVerticalUnits": "Feet",
+          "verticalUnits": "meters",
+          "verticalUnitBasis": "DOGAMI completed OLC project metadata",
+          "metadataDatasetId": 96,
+          "metadataURL": "https://pubs.oregon.gov/dogami/ldq/reports/OLC_Lane_County_2015.pdf",
+          "order": 2014,
+          "contribution": "Selected primary mosaic raster; per-pixel contributor is not exposed by the service"
+        },
+        {
+          "datasetId": 46,
+          "project": "Willamette Valley 2009",
+          "provider": "Oregon DOGAMI",
+          "nativeMeters": 0.9144000000000001,
+          "acquisition": "August 31 2008 - July 1 2009",
+          "verticalDatum": "NAVD88 (GEOID 03)",
+          "horizontalDatum": "NAD 1983 (HARN)",
+          "sourceVerticalUnits": "Feet",
+          "verticalUnits": "meters",
+          "verticalUnitBasis": "DOGAMI completed OLC project metadata",
+          "metadataDatasetId": 0,
+          "metadataURL": "https://pubs.oregon.gov/dogami/ldq/reports/Willamette_Valley_Lidar_Report_2009.pdf",
+          "order": 2009,
+          "contribution": "Selected primary mosaic raster; per-pixel contributor is not exposed by the service"
+        }
+      ]
+    },
+    {
+      "z": 16,
+      "x": 10572,
+      "y": 23746,
+      "status": 200,
+      "coverage": "1",
+      "bytes": 88581,
+      "ms": 328,
+      "sources": [
+        {
+          "datasetId": 96,
+          "project": "Lane County 2014",
+          "provider": "Oregon DOGAMI",
+          "nativeMeters": 0.9144000000000001,
+          "acquisition": "September 7 2013 - June 8 2015",
+          "verticalDatum": "NAVD88 (GEOID 12A)",
+          "horizontalDatum": "NAD 1983 (2011)",
+          "sourceVerticalUnits": "Feet",
+          "verticalUnits": "meters",
+          "verticalUnitBasis": "DOGAMI completed OLC project metadata",
+          "metadataDatasetId": 96,
+          "metadataURL": "https://pubs.oregon.gov/dogami/ldq/reports/OLC_Lane_County_2015.pdf",
+          "order": 2014,
+          "contribution": "Selected primary mosaic raster; per-pixel contributor is not exposed by the service"
+        },
+        {
+          "datasetId": 46,
+          "project": "Willamette Valley 2009",
+          "provider": "Oregon DOGAMI",
+          "nativeMeters": 0.9144000000000001,
+          "acquisition": "August 31 2008 - July 1 2009",
+          "verticalDatum": "NAVD88 (GEOID 03)",
+          "horizontalDatum": "NAD 1983 (HARN)",
+          "sourceVerticalUnits": "Feet",
+          "verticalUnits": "meters",
+          "verticalUnitBasis": "DOGAMI completed OLC project metadata",
+          "metadataDatasetId": 0,
+          "metadataURL": "https://pubs.oregon.gov/dogami/ldq/reports/Willamette_Valley_Lidar_Report_2009.pdf",
+          "order": 2009,
+          "contribution": "Selected primary mosaic raster; per-pixel contributor is not exposed by the service"
+        }
+      ]
+    }
+  ]
+}

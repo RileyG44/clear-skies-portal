@@ -97,11 +97,11 @@ const PublishedHillshadeLayer=AnalyticTerrainLayer.extend({
     AnalyticTerrainLayer.prototype._paint.call(this,canvas,elevation,coords);
     const job=this._published.get(this._k(coords));if(!job)return;
     const context=canvas.getContext("2d"),image=context.getImageData(0,0,canvas.width,canvas.height),rgba=image.data;
-    const counts={1:0,2:0,3:0,4:0,5:0},ranks=job.progress.ranks,published=job.pixels;
+    const counts={1:0,2:0,3:0,4:0,5:0,6:0},ranks=job.progress.ranks,published=job.pixels;
     for(let i=0;i<ranks.length;i++){
       const offset=i*4,rank=ranks[i],baseAlpha=rgba[offset+3]/255;
-      // Numeric DNR always wins. Image gray values never enter progress.grid.
-      const alpha=rank===5?0:(published?.[offset+3]||0)/255;
+      // Numeric state lidar always wins. Image gray values never enter progress.grid.
+      const alpha=rank===5||rank===6?0:(published?.[offset+3]||0)/255;
       const outAlpha=alpha+baseAlpha*(1-alpha);
       if(alpha){
         for(let c=0;c<3;c++)rgba[offset+c]=(published[offset+c]*alpha+rgba[offset+c]*baseAlpha*(1-alpha))/outAlpha;
@@ -114,7 +114,7 @@ const PublishedHillshadeLayer=AnalyticTerrainLayer.extend({
     canvas._cspHasContent=Object.values(counts).some(n=>n>0);
     canvas._cspSourceResolution||={};canvas._cspSourceResolution[4]=sourceSampleMeters(coords);
     canvas.dataset.cspRenderer="published-composite";
-    canvas.dataset.cspElevationSource=[5,4,3,2,1].filter(rank=>counts[rank]>0).map(rank=>CSPPublicTerrain.SOURCES[rank].label).join(" + ");
+    canvas.dataset.cspElevationSource=[6,5,4,3,2,1].filter(rank=>counts[rank]>0).map(rank=>CSPPublicTerrain.SOURCES[rank].label).join(" + ");
     // Keep readout/analysis data numeric and label it from its own pixel rank.
     const tile=this._store.get(this._k(coords));if(tile)tile.ranks=ranks;
   }
@@ -159,7 +159,7 @@ function syncGapPictures(){
   const needed=gpuTerrainLayer._tilesNeeded();
   if(!gpuTerrainStore.detailGaps(needed))return;   // still loading: the map may yet fill in
   const ranks=gpuTerrainLayer.provenance().ranks,total=Object.values(ranks).reduce((sum,n)=>sum+n,0);
-  if(!total||1-((ranks[3]||0)+(ranks[5]||0))/total<GAP_PICTURE_SHARE){dropGapPictures();return}
+  if(!total||1-((ranks[3]||0)+(ranks[5]||0)+(ranks[6]||0))/total<GAP_PICTURE_SHARE){dropGapPictures();return}
   const center=map.getCenter(),z=Math.min(GAP_PICTURE_MAX_ZOOM,needed[0].z-1),tiles=new Map();
   for(const tile of needed){
     const scale=2**(tile.z-z),c={z,x:Math.floor(tile.x/scale),y:Math.floor(tile.y/scale)};

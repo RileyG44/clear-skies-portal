@@ -111,6 +111,16 @@ async function main(){
   deferred.get('engine/api/wadnr/elev/15/41/42.png?acquire=0&revision=2')({
     grid:new Float32Array([51,NaN,51,NaN]),width:2,height:2});await tick();
   assert.deepEqual([...dnr._store.get('15/41/42').elev],[51,NaN,51,NaN],'new DNR revision bypasses stale request-cache pixels and strict gaps stay empty');
-  console.log('elevation loading checks passed (actual layer, out-of-order responses, shared requests, pan cancellation, revisit, high density, sharpening)');
+  const oregon=new context.Layer({...opts,oregonEndpoint:'/api/oregon/elev'});oregon._paint=()=>{};
+  const oc={z:18,x:42287,y:94982},ocanvas=oregon.createTile(oc,()=>{});await tick();
+  deferred.get('engine/api/oregon/elev/18/42287/94982.png')({grid:new Float32Array([1212,NaN,1214,NaN]),width:2,height:2,
+    surveys:[{project:'Lane County 2014',nativeMeters:.9144}]});await tick();
+  deferred.get('engine/raw/18/42287/94982.png?ix=3')({grid:new Float32Array([10,20,10,20]),width:2,height:2});
+  deferred.get('engine/national/17/21143/47491.png')({grid:new Float32Array([1,1,1,1]),width:2,height:2});
+  deferred.get('fallback/17/21143/47491')({grid:new Float32Array([0,0,0,0]),width:2,height:2});await tick();await tick();
+  assert.deepEqual([...oregon._store.get('18/42287/94982').elev],[1212,20,1214,20],'late USGS fills Oregon holes without replacing numeric detail');
+  assert.equal(ocanvas._cspSourceCounts[6],2);assert.equal(ocanvas._cspSourceCounts[3],2);
+  assert.match(ocanvas.dataset.cspElevationSource,/Oregon DOGAMI/);assert.equal(ocanvas._cspSurveySources[6][0].project,'Lane County 2014');
+  console.log('elevation loading checks passed (actual layer, out-of-order responses, shared requests, pan cancellation, revisit, high density, sharpening, Oregon detail)');
 }
 main().catch(error=>{console.error(error);process.exitCode=1;});

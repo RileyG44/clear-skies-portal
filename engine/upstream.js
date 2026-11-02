@@ -70,7 +70,7 @@ function upstream(opts, postBody){
    so one slow WA composite held up every USGS tile behind it. Each host now
    has its own line: WA DNR keeps four, USGS gets twelve. */
 const MAX_INFLIGHT = 4;
-const LANE_LIMITS = {[WADNR_HOST]:MAX_INFLIGHT, [DEP_HOST]:Math.max(1,Math.min(32,Number(process.env.CSP_USGS_INFLIGHT)||12))};
+const LANE_LIMITS = {[WADNR_HOST]:MAX_INFLIGHT, [DEP_HOST]:Math.max(1,Math.min(32,Number(process.env.CSP_USGS_INFLIGHT)||12)),'gis.dogami.oregon.gov':2};
 const lanes = new Map();
 const lane = host => {
   const name = host||"";

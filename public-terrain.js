@@ -11,7 +11,8 @@
     2:{label:'USGS 3DEP elevation',url:SERVICE,nativeLabel:'Provider mosaic varies; 3.3 ft where available'},
     3:{label:'USGS 3.3 ft DEM',url:'https://www.usgs.gov/3d-elevation-program',nativeLabel:'3.3 ft where the selected survey covers this point'},
     4:{label:'WA DNR published LiDAR hillshade',url:'https://lidarportal.dnr.wa.gov/',nativeLabel:'Published hillshade; native spacing not established'},
-    5:{label:'WA DNR bare-earth elevation',url:'https://lidarportal.dnr.wa.gov/',nativeLabel:'Numeric DTM; survey spacing varies'}
+    5:{label:'WA DNR bare-earth elevation',url:'https://lidarportal.dnr.wa.gov/',nativeLabel:'Numeric DTM; survey spacing varies'},
+    6:{label:'Oregon DOGAMI bare-earth elevation',url:'https://gis.dogami.oregon.gov/arcgis/rest/services/lidar/DIGITAL_TERRAIN_MODEL_MOSAIC/ImageServer',nativeLabel:'Verified OLC surveys at 3 ft spacing'}
   });
   /* Lowest on-screen zoom that asks for national 3DEP. Coarser than this both
      sources are resampled to hundreds of metres a pixel, so 3DEP adds nothing
@@ -74,5 +75,11 @@
       renderingRule:JSON.stringify({rasterFunction:'None'}),returnCatalogItems:'true',returnGeometry:'false',maxItemCount:'12'
     });
   }
-  return {SERVICE,SOURCES,NATIONAL_MIN_ZOOM,nationalUrl,decode,summarize,identifyUrl};
+  function oregonTileAllowed({z,x,y}){
+    if(!Number.isInteger(z)||z<13||z>28||!Number.isInteger(x)||!Number.isInteger(y)||y<0||y>=2**z)return false;
+    const n=2**z,wx=((x%n)+n)%n,west=wx/n*360-180,east=(wx+1)/n*360-180;
+    const latitude=v=>Math.atan(Math.sinh(Math.PI*(1-2*v/n)))*180/Math.PI;
+    return west<-116.4&&east>-124.8&&latitude(y)>41.9&&latitude(y+1)<46.4;
+  }
+  return {SERVICE,SOURCES,NATIONAL_MIN_ZOOM,nationalUrl,decode,summarize,identifyUrl,oregonTileAllowed};
 });
