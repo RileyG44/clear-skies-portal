@@ -68,8 +68,11 @@ async function cpu(ref,partial=true,sourceSlots){
     return fetch(url,signal,raw?100:url.startsWith('/national/')?2000:5000,
       raw?(partial?(sharp?[60,NaN,60,NaN]:Array.from({length:64},(_,i)=>i%4===0?50:NaN)):new Array(sharp?4:64).fill(sharp?60:50)):[20,20,20,20]);
   }}),layer=new c.Layer({tileSize:2,rawEndpoint:'/raw',nationalEndpoint:'/national',fallback:'/base/{z}/{x}/{y}'});
-  const seen=new Set();let firstSharp=null,lastSharp=null,firstPaint=null,settledAt=null;
-  layer._paint=(cv,grid,coords)=>{if(grid[0]===60){seen.add(`${coords.x}/${coords.y}`);firstSharp??=clock.now;if(seen.size===36)lastSharp??=clock.now;}};
+  const seen=new Set();let firstSharp=null,lastSharp=null,firstPaint=null,allCovered=null,settledAt=null;
+  layer._paint=(cv,grid,coords)=>{
+    if(grid[0]===60){seen.add(`${coords.x}/${coords.y}`);firstSharp??=clock.now;if(seen.size===36)lastSharp??=clock.now;}
+    if(layer._store.size===36&&[...layer._store.values()].every(t=>[...t.elev].every(Number.isFinite)))allCovered??=clock.now;
+  };
   const jobs=Array.from({length:36},(_,i)=>layer._loadTile({z:17,x:100+i%6,y:100+Math.floor(i/6)},{width:2,height:2,dataset:{}},()=>{firstPaint??=clock.now;}));
   const loaded=Promise.all(jobs).then(()=>{settledAt=clock.now;});await clock.drain();await loaded;
   assert.equal(seen.size,36);assert.equal(pool.active,0);assert.equal(pool.queue.length,0);
@@ -77,7 +80,7 @@ async function cpu(ref,partial=true,sourceSlots){
     assert.deepEqual([...tile.elev],partial?[60,20,60,20]:[60,60,60,60]);
     assert.equal(tile.cv._cspRefining,false);assert.equal(tile.cv._cspRefineFailed,false);
   }
-  return {visibleTiles:36,sourceSlots:pool.concurrency,firstPaintMs:firstPaint,firstSharpMs:firstSharp,allSharpMs:lastSharp,settledMs:settledAt,...stats};
+  return {visibleTiles:36,sourceSlots:pool.concurrency,firstPaintMs:firstPaint,allCoveredMs:allCovered,firstSharpMs:firstSharp,allSharpMs:lastSharp,settledMs:settledAt,...stats};
 }
 const guard=setTimeout(()=>{throw Error('terrain-demand workload did not finish');},10000);
 (async()=>{
@@ -89,8 +92,12 @@ const guard=setTimeout(()=>{throw Error('terrain-demand workload did not finish'
     assert(report.after.obsoleteStandIn.sourceWorkMs<report.before.obsoleteStandIn.sourceWorkMs);
     assert(report.after.constrainedCpuView.allSharpMs<report.before.constrainedCpuView.allSharpMs,JSON.stringify(report));
     assert.equal(report.after.constrainedCpuView.firstPaintMs,report.before.constrainedCpuView.firstPaintMs);
-    assert(report.after.constrainedCpuView.settledMs<=report.before.constrainedCpuView.settledMs,'sharpening must not delay necessary gap filling');
-    assert.deepEqual(report.after.partialCpuControl,report.before.partialCpuControl);
+    // Contributor refinement now adds needed national sharp requests after the
+    // first-pass gaps fill. Measure that cover separately from final refinement.
+    assert(report.after.constrainedCpuView.allCoveredMs<=report.before.constrainedCpuView.allCoveredMs,'sharpening must not delay necessary gap filling');
+    for(const name of ['firstPaintMs','allCoveredMs','firstSharpMs','allSharpMs'])
+      assert.equal(report.after.partialCpuControl[name],report.before.partialCpuControl[name]);
+    assert.equal(report.after.partialCpuControl.started,report.before.partialCpuControl.started+36,'only contributing national refinement is additional');
     assert.deepEqual(report.after.fullCpuControl,report.before.fullCpuControl);
   }
   const json=JSON.stringify(report,null,2)+'\n';if(output)fs.writeFileSync(path.resolve(root,output),json);process.stdout.write(json);

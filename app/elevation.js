@@ -592,6 +592,10 @@ const ElevLayer = L.GridLayer.extend({
       if(this._store.get(key)?.cv===event.tile)this._store.delete(key);
       releaseCanvas(event.tile);
     });
+    this.on("remove",()=>{
+      for(const pending of this._pending.values())pending.controller.abort();
+      this._pending.clear();
+    });
   },
   _k:function(c){return c.z+"/"+c.x+"/"+c.y;},
   _source:function(c){return {z:c.z+(this._cspDz||0),x:c.x,y:c.y}},
@@ -634,7 +638,8 @@ const ElevLayer = L.GridLayer.extend({
       const source=await elevationRequests.request(url,signal=>typeof template==="function"?fetchPublicElevation(url,signal):fetchElevation(url,signal),
         // Keep numeric first-pass cover ahead of refinement, but available
         // detail must not queue behind slower overview fallback.
-        {signal:state.controller.signal,priority:sharper?Math.min(rank,2)-.5:rank===5?2:rank,group:sharper?"sharp":rank===6?"oregon":rank===5?"dnr":rank===3?"detail":rank===2?"national":"overview"});
+        {signal:state.controller.signal,priority:sharper?Math.min(rank,2)-.5:rank===5?2:rank,
+          group:rank===6?"oregon":rank===5?"dnr":rank===3?"detail":rank===2?"national":"overview",limitGroup:sharper?"sharp":null});
       if(!source||controller.signal.aborted||state.controller.signal.aborted)return;
       const crop=scale>1?{x:(coords.x%scale)*source.width/scale,y:(coords.y%scale)*source.height/scale,width:source.width/scale,height:source.height/scale}:null;
       let values=!crop&&source.width===size.x&&source.height===size.y?source.grid:
@@ -644,7 +649,7 @@ const ElevLayer = L.GridLayer.extend({
       // Admit refinement before the request pool refills the released slot.
       // Deferring to the base promise's finally let a slow fallback start first
       // even when the sharper request had a higher queue priority.
-      if(!sharper){state.baseDone=true;releaseLower();sharpenBest();}
+      if(!sharper){state.baseDone=true;releaseLower();sharpenContributors();}
     };
     /* On high-density screens this tile holds the next zoom's data (dz), which
        is four times the tiles - and four times the raw-LiDAR renders on the
@@ -679,36 +684,71 @@ const ElevLayer = L.GridLayer.extend({
       // need the same native request; RequestPool retains those owners.
       for(const state of states)if(state.rank<lowest){state.obsolete=true;state.controller.abort();}
     };
-    const sharpenBest=()=>{
+    const sharpenContributors=()=>{
       if(controller.signal.aborted)return;
-      const best=states.find(s=>!s.obsolete&&progress.counts[s.rank]>0);
-      if(!best?.baseDone||best.sharp||Math.min(coords.z,best.max)<=Math.min(shown,best.max))return;
-      // Refine as soon as useful data arrives. Waiting for every base source
-      // let a stalled overview postpone available HiDPI detail indefinitely.
-      best.sharp=load(best,Math.min(coords.z,best.max),true).then(value=>{
-        releaseLower();return {status:"fulfilled",value};
-      },reason=>({status:"rejected",reason}));
+      for(const state of states){
+        if(state.obsolete||!state.baseDone||state.sharp||!progress.counts[state.rank]||
+           Math.min(coords.z,state.max)<=Math.min(shown,state.max))continue;
+        // Survey gaps can still contain national/raw/overview pixels. Sharpen
+        // every contributing tier, within provider and refinement capacities.
+        state.sharp=load(state,Math.min(coords.z,state.max),true).then(value=>{
+          releaseLower();return {status:"fulfilled",value};
+        },reason=>({status:"rejected",reason})).then(result=>state.sharpResult=result);
+      }
     };
-    // Sources start independently, then refine the best available data. A
-    // later better source can also sharpen; per-pixel ranks retain its detail.
-    const jobs=states.map(state=>load(state,Math.min(shown,state.max)).finally(()=>{
-      state.baseDone=true;releaseLower();sharpenBest();
-    }));
-    return Promise.allSettled(jobs).then(async results=>{
-      if(controller.signal.aborted)return;
-      if(!settled){settled=true;done(new Error("Elevation unavailable"),cv);}
-      const sharp=await Promise.all(states.map(state=>state.sharp));
+    const base=state=>{
+      state.baseDone=false;state.baseResult=null;
+      return load(state,Math.min(shown,state.max)).finally(()=>{
+        state.baseDone=true;releaseLower();sharpenContributors();
+      }).then(value=>({status:"fulfilled",value}),reason=>({status:"rejected",reason}))
+        .then(result=>state.baseResult=result);
+    };
+    const cleanup=()=>{
+      clearTimeout(pending.retryTimer);
+      controller.signal.removeEventListener("abort",cleanup);
+      for(const state of states)controller.signal.removeEventListener("abort",state.abort);
+    };
+    controller.signal.addEventListener("abort",cleanup,{once:true});
+    let retries=0;
+    const finish=()=>{
       if(controller.signal.aborted)return;
       // Retired fallback failures/aborts cannot keep a fully covered tile in
       // failed refinement or make the published composite retry useless work.
-      results=results.map((result,i)=>states[i].obsolete?{status:"fulfilled",value:undefined}:result);
-      sharp.forEach((result,i)=>{if(result&&!states[i].obsolete)results.push(result);});
-      cv._cspRefining=false;cv._cspRefineFailed=results.some(result=>result.status==="rejected");
-      if(this._pending.get(key)===pending)this._pending.delete(key);
+      const results=states.map(state=>state.obsolete?{status:"fulfilled",value:undefined}:state.baseResult);
+      for(const state of states)if(state.sharpResult&&!state.obsolete)results.push(state.sharpResult);
+      cv._cspRefineFailed=results.some(result=>result.status==="rejected");
+      // Published composites own their numeric/image recovery. Ordinary CPU
+      // layers also need recovery after fetchElevation's short retries run out.
+      const retry=cv._cspRefineFailed&&!this._progressForTile;
+      cv._cspRefining=retry;
+      // Leaflet keeps an errored tile hidden. While automatic recovery is
+      // possible, complete it exactly once when useful pixels arrive instead.
+      if(!settled&&!retry){settled=true;done(new Error("Elevation unavailable"),cv);}
+      if(retry){
+        const delay=Math.min(30000,1000*2**Math.min(5,retries++));
+        pending.retryTimer=setTimeout(async()=>{
+          pending.retryTimer=null;
+          if(controller.signal.aborted)return;
+          for(const state of states)if(!state.obsolete&&state.sharpResult?.status==="rejected"){
+            state.sharp=null;state.sharpResult=null;
+          }
+          // Keep the same progressive grid and retry only failed operations.
+          // Successful absence stays final; useful lower pixels stay visible.
+          await Promise.all(states.filter(state=>!state.obsolete&&state.baseResult?.status==="rejected").map(base));
+          sharpenContributors();await Promise.all(states.map(state=>state.sharp));finish();
+        },delay);
+        pending.retryTimer?.unref?.();
+      }else{
+        if(this._pending.get(key)===pending)this._pending.delete(key);
+        cleanup();
+      }
       this.fire("tilerefine",{tile:cv,coords});
       return results;
-    }).finally(()=>{
-      for(const state of states)controller.signal.removeEventListener("abort",state.abort);
+    };
+    // Base requests start independently. Every dynamically admitted refinement
+    // must settle before publishing completion or scheduling a recovery pass.
+    return Promise.all(states.map(base)).then(async()=>{
+      await Promise.all(states.map(state=>state.sharp));return finish();
     });
   },
   setSourceOptions:function(options){

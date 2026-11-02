@@ -76,3 +76,38 @@ test('shared work still observes source limits after its highest-priority owner 
   fg.abort();await rejected;await tick();assert.equal(started,false);
   first.finish(null);await Promise.all([first.promise,remaining]);await tick();assert.equal(pool.active,0);
 });
+test('refinement observes both provider and sharpening capacities',async()=>{
+  const pool=new RequestPool({concurrency:4,groupLimits:{dnr:1,sharp:1}}),order=[];
+  const first=held(pool,'dnr-sharp',{group:'dnr',limitGroup:'sharp'});await tick();
+  const base=pool.request('dnr-base',()=>{order.push('base');return null;},{group:'dnr',priority:3});
+  const sharp=pool.request('raw-sharp',()=>{order.push('sharp');return null;},{group:'detail',limitGroup:'sharp',priority:2});
+  await tick();assert.deepEqual(order,[]);
+  assert.equal(pool.groupActive.get('dnr'),1);assert.equal(pool.groupActive.get('sharp'),1);
+  first.finish(null);await Promise.all([first.promise,base,sharp]);await tick();
+  assert.deepEqual(order,['base','sharp']);
+  assert([...pool.groupActive.values()].every(n=>n===0));
+});
+test('a shared visible owner can release the refinement gate without releasing provider ownership',async()=>{
+  const pool=new RequestPool({concurrency:3,groupLimits:{dnr:1,sharp:1}}),owner=new AbortController();
+  const first=held(pool,'shared',{group:'dnr',limitGroup:'sharp',priority:1,signal:owner.signal});
+  await tick();
+  const visible=pool.request('shared',()=>{throw Error('duplicate');},{group:'dnr',priority:5});
+  let started=false;
+  const other=pool.request('other-sharp',()=>{started=true;return null;},{group:'detail',limitGroup:'sharp'});
+  await other;await tick();assert.equal(started,true);assert.equal(pool.groupActive.get('dnr'),1);
+  assert.equal(pool.groupActive.get('sharp'),0);
+  first.finish(null);await Promise.all([first.promise,visible]);await tick();
+  assert([...pool.groupActive.values()].every(n=>n===0));
+});
+test('departing foreground owners restore the surviving refinement gate',async()=>{
+  const pool=new RequestPool({concurrency:3,groupLimits:{sharp:1}}),fg=new AbortController();
+  const first=held(pool,'shared',{signal:fg.signal,group:'detail',priority:5});
+  const rejected=assert.rejects(first.promise,{name:'AbortError'});
+  const remaining=pool.request('shared',()=>{throw Error('duplicate');},{group:'detail',limitGroup:'sharp',priority:1});
+  await tick();fg.abort();await rejected;
+  assert.equal(pool.groupActive.get('detail'),1);assert.equal(pool.groupActive.get('sharp'),1);
+  let started=false;const waiting=pool.request('other',()=>{started=true;return null;},{group:'national',limitGroup:'sharp'});
+  await tick();assert.equal(started,false);
+  first.finish(null);await Promise.all([remaining,waiting]);await tick();
+  assert([...pool.groupActive.values()].every(n=>n===0));
+});

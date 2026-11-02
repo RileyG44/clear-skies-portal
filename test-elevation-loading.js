@@ -17,7 +17,7 @@ async function main(){
   const calls=new Map(),deferred=new Map();
   const context={L:{GridLayer:Grid,setOptions:(self,opts)=>{self.options=opts;},point:(x,y)=>({x,y})},HIDPI:false,
     releaseCanvas:canvas=>{ if(canvas&&canvas.width){ canvas.width=0;canvas.height=0 } },
-    document:{createElement:()=>({dataset:{}})},AbortController,DOMException,Float32Array,Promise,
+    document:{createElement:()=>({dataset:{}})},AbortController,DOMException,Float32Array,Promise,setTimeout,clearTimeout,
     PROXY:true,RAW_COVERAGE_QUERY:'ix=3',dnrStatus:{revision:1},dnrTileAllowed:()=>true,maskDnrGrid:grid=>grid,api:value=>'engine'+value,CSPTilePipeline:pipeline,ElevationTileCore:core,CSPPublicTerrain:require('./public-terrain'),
     elevationRequests:new RequestPool(),fetchElevation:(url,signal)=>{
       calls.set(url,(calls.get(url)||0)+1);

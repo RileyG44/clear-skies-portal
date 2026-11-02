@@ -22,8 +22,10 @@ test('CPU starts HiDPI refinement while slower baseline sources are pending',asy
   calls.get('/raw/17/4/4.png?ix=3').resolve([60,NaN,60,NaN]);await tick();
   assert.deepEqual([...layer._store.get('17/4/4').elev],[60,NaN,60,NaN]);
   calls.get('/national/16/2/2.png').resolve([20,20,20,20]);
-  calls.get('/base/16/2/2').resolve([10,10,10,10]);await loaded;
-  assert.deepEqual([...layer._store.get('17/4/4').elev],[60,20,60,20]);
+  calls.get('/base/16/2/2').resolve([10,10,10,10]);await tick();
+  assert.ok(calls.has('/national/17/4/4.png'),'late gap-filling data also sharpens');
+  calls.get('/national/17/4/4.png').resolve([25,25,25,25]);await loaded;
+  assert.deepEqual([...layer._store.get('17/4/4').elev],[60,25,60,25]);
   assert.equal(canvas._cspRefining,false);assert.equal(canvas._cspRefineFailed,false);
 });
 test('CPU full detail releases redundant sources without failing refinement',async()=>{
@@ -102,6 +104,38 @@ test('CPU available detail sharpens before queued overview when numeric fallback
   calls.get('/raw/17/4/4.png?ix=3').resolve([60,NaN,60,NaN]);await tick();
   finishNational(null);await occupied;await tick();
   assert.ok(calls.has('/national/16/2/2.png'),'needed numeric fallback keeps its source capacity');
-  calls.get('/national/16/2/2.png').resolve([20,20,20,20]);await loaded;
+  calls.get('/national/16/2/2.png').resolve([20,20,20,20]);await tick();
+  calls.get('/national/17/4/4.png').resolve([25,25,25,25]);await loaded;
+  assert.deepEqual([...layer._store.get('17/4/4').elev],[60,25,60,25]);
+});
+test('CPU refines all contributing tiers and waits for the final sharp operation',async()=>{
+  const {context,calls}=harness(true),layer=new context.Layer({...options,dnrEndpoint:'/dnr'}),canvas={width:2,height:2,dataset:{}};
+  const base=values=>Array.from({length:64},(_,i)=>{
+    const x=i%8,y=Math.floor(i/8);return x<4&&y<4?values[Math.floor(y/2)*2+Math.floor(x/2)]:NaN;
+  });
+  let finished=false;
+  const loaded=layer._loadTile({z:17,x:4,y:4},canvas,()=>{}).then(result=>{finished=true;return result;});await tick();
+  calls.get('/dnr/16/2/2.png?acquire=0&revision=1').resolve(base([50,NaN,NaN,NaN]));await tick();
+  calls.get('/raw/16/2/2.png?ix=3').resolve(base([30,30,NaN,NaN]));await tick();
+  calls.get('/national/16/2/2.png').resolve(base([20,20,20,NaN]));await tick();
+  calls.get('/base/16/2/2').resolve(base([10,10,10,10]));await tick();
+  assert.deepEqual([...layer._store.get('17/4/4').elev],[50,30,20,10]);
+  for(const url of ['/dnr/17/4/4.png?acquire=0&revision=1','/raw/17/4/4.png?ix=3','/national/17/4/4.png','/base/17/4/4'])assert.ok(calls.has(url),url);
+  calls.get('/base/17/4/4').resolve([11,11,11,11]);
+  calls.get('/raw/17/4/4.png?ix=3').resolve([40,40,NaN,NaN]);
+  calls.get('/national/17/4/4.png').resolve([25,25,25,25]);await tick();
+  assert.equal(finished,false);assert.equal(canvas._cspRefining,true);
+  calls.get('/dnr/17/4/4.png?acquire=0&revision=1').resolve([60,NaN,NaN,NaN]);await loaded;
+  assert.deepEqual([...layer._store.get('17/4/4').elev],[60,40,25,25]);
+  assert.equal(canvas._cspSourceCounts[5],1);assert.equal(canvas._cspSourceCounts[3],1);assert.equal(canvas._cspSourceCounts[2],2);
+  assert.equal(canvas._cspRefining,false);
+});
+test('CPU contributing fallback at its native limit does not request fake extra detail',async()=>{
+  const {context,calls}=harness(true),layer=new context.Layer({...options,nationalNativeZoom:16,fallbackNativeZoom:15}),canvas={width:2,height:2,dataset:{}};
+  const loaded=layer._loadTile({z:17,x:4,y:4},canvas,()=>{});await tick();
+  calls.get('/raw/16/2/2.png?ix=3').resolve(Array.from({length:16},(_,i)=>i%4===0?50:NaN));await tick();
+  calls.get('/national/16/2/2.png').resolve([20,20,20,20]);await tick();
+  calls.get('/raw/17/4/4.png?ix=3').resolve([60,NaN,60,NaN]);await loaded;
+  assert.equal(calls.has('/national/17/4/4.png'),false);assert.equal(calls.has('/base/16/2/2'),false);
   assert.deepEqual([...layer._store.get('17/4/4').elev],[60,20,60,20]);
 });
