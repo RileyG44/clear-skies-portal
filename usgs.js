@@ -147,14 +147,14 @@ function s3Request(pathname, headers){
         r.on("data",d=>{
           if(failed) return;
           n+=d.length;
-          if(n>MAX_S3_BODY){ failed=true; r.destroy(new Error("S3 response too large")); return }
+          if(n>MAX_S3_BODY){ failed=true; r.destroy(Object.assign(new Error("S3 response too large"),{code:"S3_BODY_TOO_LARGE"})); return }
           b.push(d);
         });
         r.on("error",rej);
         r.on("end",()=>res({status:r.statusCode, headers:r.headers, body:Buffer.concat(b)}));
       });
     req.on("error",rej);
-    req.setTimeout(30000,()=>{ req.destroy(new Error("s3 timeout")) });
+    req.setTimeout(30000,()=>{ req.destroy(Object.assign(new Error("s3 timeout"),{code:"S3_TIMEOUT"})) });
     req.end();
   });
 }
@@ -459,7 +459,7 @@ function cachedRange(key,a,b){
 async function readRangeLocal(key,a,b,signal,onStart=()=>{}){
   signal?.throwIfAborted();const hit=cachedRange(key,a,b);if(hit)return hit;
   const f=rangePath(key,a,b),r=await s3('/'+key,{Range:`bytes=${a}-${b}`},signal,onStart);
-  if(r.status!==206 && r.status!==200)throw new Error('range '+r.status);
+  if(r.status!==206 && r.status!==200)throw Object.assign(new Error('range '+r.status),{code:'S3_HTTP_'+r.status});
   if(cacheWritable(r.body.length+4096)){
     const tmp=`${f}.${process.pid}.${Date.now()}.tmp`;
     try{cacheBudget.guardedWrite(cacheWriteGate,()=>{fs.writeFileSync(tmp,r.body);fs.renameSync(tmp,f);cacheWrite(r.body.length)})}

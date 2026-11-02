@@ -56,8 +56,9 @@ function fixture({limit=1,perWorkerLimit=4,maxQueue=64,workers=2}={}){
     assert.equal(f.calls.length,1,'the configured limit applies across workers');
     assert.equal(f.broker.stats().rejected,1);
     f.calls[0].resolve();await first;await until(()=>f.calls.length===2);
-    f.calls[1].resolve();await one;await until(()=>f.calls.length===3);
-    f.calls[2].resolve({cached:true});await two;
+    assert.equal(f.calls[1].key,'two','the independent reader gets a turn before the broad reader queues more work');
+    f.calls[1].resolve();await two;await until(()=>f.calls.length===3);
+    f.calls[2].resolve({cached:true});await one;
     assert.equal(f.broker.stats().diskHits,1,'a range cached during queueing is reused');
   }finally{f.close();}
 
