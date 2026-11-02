@@ -1,0 +1,858 @@
+{
+  "workload": "cross-worker-cold-ranges",
+  "baselineRef": "752077d",
+  "notes": "Six real workers parse and decode numeric TIFFs. HTTPS is redirected to a local provider with 50 ms/read: two slots for six shared/independent readers; eight slots for a single reader opening six files. Three runs per case. The baseline loads the historical worker pool with broker support absent; both use the same reader and TIFF fixture. These are controlled source-workload measurements, not phone or live-provider latency claims.",
+  "before": {
+    "shared": [
+      {
+        "workers": 6,
+        "readers": 6,
+        "keysPerReader": 1,
+        "providerSlots": 2,
+        "latencyMs": 50,
+        "coldRequests": 12,
+        "downloadedBytes": 399480,
+        "revisitRequests": 0,
+        "elapsedMs": 353,
+        "revisitMs": 7,
+        "maxActive": 2,
+        "uniqueWorkers": 6,
+        "valid": true,
+        "failedJobs": 0,
+        "restarts": 0
+      },
+      {
+        "workers": 6,
+        "readers": 6,
+        "keysPerReader": 1,
+        "providerSlots": 2,
+        "latencyMs": 50,
+        "coldRequests": 12,
+        "downloadedBytes": 399480,
+        "revisitRequests": 0,
+        "elapsedMs": 332,
+        "revisitMs": 7,
+        "maxActive": 2,
+        "uniqueWorkers": 6,
+        "valid": true,
+        "failedJobs": 0,
+        "restarts": 0
+      },
+      {
+        "workers": 6,
+        "readers": 6,
+        "keysPerReader": 1,
+        "providerSlots": 2,
+        "latencyMs": 50,
+        "coldRequests": 12,
+        "downloadedBytes": 399480,
+        "revisitRequests": 0,
+        "elapsedMs": 329,
+        "revisitMs": 8,
+        "maxActive": 2,
+        "uniqueWorkers": 6,
+        "valid": true,
+        "failedJobs": 0,
+        "restarts": 0
+      }
+    ],
+    "independent": [
+      {
+        "workers": 6,
+        "readers": 6,
+        "keysPerReader": 1,
+        "providerSlots": 2,
+        "latencyMs": 50,
+        "coldRequests": 12,
+        "downloadedBytes": 399480,
+        "revisitRequests": 0,
+        "elapsedMs": 331,
+        "revisitMs": 5,
+        "maxActive": 2,
+        "uniqueWorkers": 6,
+        "valid": true,
+        "failedJobs": 0,
+        "restarts": 0
+      },
+      {
+        "workers": 6,
+        "readers": 6,
+        "keysPerReader": 1,
+        "providerSlots": 2,
+        "latencyMs": 50,
+        "coldRequests": 12,
+        "downloadedBytes": 399480,
+        "revisitRequests": 0,
+        "elapsedMs": 325,
+        "revisitMs": 7,
+        "maxActive": 2,
+        "uniqueWorkers": 6,
+        "valid": true,
+        "failedJobs": 0,
+        "restarts": 0
+      },
+      {
+        "workers": 6,
+        "readers": 6,
+        "keysPerReader": 1,
+        "providerSlots": 2,
+        "latencyMs": 50,
+        "coldRequests": 12,
+        "downloadedBytes": 399480,
+        "revisitRequests": 0,
+        "elapsedMs": 329,
+        "revisitMs": 8,
+        "maxActive": 2,
+        "uniqueWorkers": 6,
+        "valid": true,
+        "failedJobs": 0,
+        "restarts": 0
+      }
+    ],
+    "singleReader": [
+      {
+        "workers": 6,
+        "readers": 1,
+        "keysPerReader": 6,
+        "providerSlots": 8,
+        "latencyMs": 50,
+        "coldRequests": 12,
+        "downloadedBytes": 399480,
+        "revisitRequests": 0,
+        "elapsedMs": 180,
+        "revisitMs": 14,
+        "maxActive": 4,
+        "uniqueWorkers": 1,
+        "valid": true,
+        "failedJobs": 0,
+        "restarts": 0
+      },
+      {
+        "workers": 6,
+        "readers": 1,
+        "keysPerReader": 6,
+        "providerSlots": 8,
+        "latencyMs": 50,
+        "coldRequests": 12,
+        "downloadedBytes": 399480,
+        "revisitRequests": 0,
+        "elapsedMs": 177,
+        "revisitMs": 12,
+        "maxActive": 4,
+        "uniqueWorkers": 1,
+        "valid": true,
+        "failedJobs": 0,
+        "restarts": 0
+      },
+      {
+        "workers": 6,
+        "readers": 1,
+        "keysPerReader": 6,
+        "providerSlots": 8,
+        "latencyMs": 50,
+        "coldRequests": 12,
+        "downloadedBytes": 399480,
+        "revisitRequests": 0,
+        "elapsedMs": 179,
+        "revisitMs": 14,
+        "maxActive": 4,
+        "uniqueWorkers": 1,
+        "valid": true,
+        "failedJobs": 0,
+        "restarts": 0
+      }
+    ]
+  },
+  "after": {
+    "shared": [
+      {
+        "workers": 6,
+        "readers": 6,
+        "keysPerReader": 1,
+        "providerSlots": 2,
+        "latencyMs": 50,
+        "coldRequests": 2,
+        "downloadedBytes": 66580,
+        "revisitRequests": 0,
+        "elapsedMs": 121,
+        "revisitMs": 4,
+        "maxActive": 1,
+        "uniqueWorkers": 6,
+        "valid": true,
+        "failedJobs": 0,
+        "restarts": 0,
+        "sourceRanges": {
+          "limit": 24,
+          "perWorkerLimit": 4,
+          "active": 0,
+          "onWire": 0,
+          "queued": 0,
+          "oldestQueuedMs": 0,
+          "avgQueueMs": 0,
+          "maxQueueMs": 0,
+          "avgReadMs": 55,
+          "requests": 12,
+          "shared": 10,
+          "networkReads": 2,
+          "diskHits": 0,
+          "bytes": 66580,
+          "failed": 0,
+          "rejected": 0,
+          "cancelled": 0,
+          "dropped": 0,
+          "workerRetries": 0,
+          "workers": [
+            {
+              "index": 0,
+              "consumers": 0,
+              "reads": 2,
+              "active": 0
+            },
+            {
+              "index": 1,
+              "consumers": 0,
+              "reads": 0,
+              "active": 0
+            },
+            {
+              "index": 2,
+              "consumers": 0,
+              "reads": 0,
+              "active": 0
+            },
+            {
+              "index": 3,
+              "consumers": 0,
+              "reads": 0,
+              "active": 0
+            },
+            {
+              "index": 4,
+              "consumers": 0,
+              "reads": 0,
+              "active": 0
+            },
+            {
+              "index": 5,
+              "consumers": 0,
+              "reads": 0,
+              "active": 0
+            }
+          ]
+        }
+      },
+      {
+        "workers": 6,
+        "readers": 6,
+        "keysPerReader": 1,
+        "providerSlots": 2,
+        "latencyMs": 50,
+        "coldRequests": 2,
+        "downloadedBytes": 66580,
+        "revisitRequests": 0,
+        "elapsedMs": 121,
+        "revisitMs": 4,
+        "maxActive": 1,
+        "uniqueWorkers": 6,
+        "valid": true,
+        "failedJobs": 0,
+        "restarts": 0,
+        "sourceRanges": {
+          "limit": 24,
+          "perWorkerLimit": 4,
+          "active": 0,
+          "onWire": 0,
+          "queued": 0,
+          "oldestQueuedMs": 0,
+          "avgQueueMs": 1,
+          "maxQueueMs": 1,
+          "avgReadMs": 55,
+          "requests": 12,
+          "shared": 10,
+          "networkReads": 2,
+          "diskHits": 0,
+          "bytes": 66580,
+          "failed": 0,
+          "rejected": 0,
+          "cancelled": 0,
+          "dropped": 0,
+          "workerRetries": 0,
+          "workers": [
+            {
+              "index": 0,
+              "consumers": 0,
+              "reads": 2,
+              "active": 0
+            },
+            {
+              "index": 1,
+              "consumers": 0,
+              "reads": 0,
+              "active": 0
+            },
+            {
+              "index": 2,
+              "consumers": 0,
+              "reads": 0,
+              "active": 0
+            },
+            {
+              "index": 3,
+              "consumers": 0,
+              "reads": 0,
+              "active": 0
+            },
+            {
+              "index": 4,
+              "consumers": 0,
+              "reads": 0,
+              "active": 0
+            },
+            {
+              "index": 5,
+              "consumers": 0,
+              "reads": 0,
+              "active": 0
+            }
+          ]
+        }
+      },
+      {
+        "workers": 6,
+        "readers": 6,
+        "keysPerReader": 1,
+        "providerSlots": 2,
+        "latencyMs": 50,
+        "coldRequests": 2,
+        "downloadedBytes": 66580,
+        "revisitRequests": 0,
+        "elapsedMs": 118,
+        "revisitMs": 4,
+        "maxActive": 1,
+        "uniqueWorkers": 6,
+        "valid": true,
+        "failedJobs": 0,
+        "restarts": 0,
+        "sourceRanges": {
+          "limit": 24,
+          "perWorkerLimit": 4,
+          "active": 0,
+          "onWire": 0,
+          "queued": 0,
+          "oldestQueuedMs": 0,
+          "avgQueueMs": 0,
+          "maxQueueMs": 0,
+          "avgReadMs": 55,
+          "requests": 12,
+          "shared": 10,
+          "networkReads": 2,
+          "diskHits": 0,
+          "bytes": 66580,
+          "failed": 0,
+          "rejected": 0,
+          "cancelled": 0,
+          "dropped": 0,
+          "workerRetries": 0,
+          "workers": [
+            {
+              "index": 0,
+              "consumers": 0,
+              "reads": 2,
+              "active": 0
+            },
+            {
+              "index": 1,
+              "consumers": 0,
+              "reads": 0,
+              "active": 0
+            },
+            {
+              "index": 2,
+              "consumers": 0,
+              "reads": 0,
+              "active": 0
+            },
+            {
+              "index": 3,
+              "consumers": 0,
+              "reads": 0,
+              "active": 0
+            },
+            {
+              "index": 4,
+              "consumers": 0,
+              "reads": 0,
+              "active": 0
+            },
+            {
+              "index": 5,
+              "consumers": 0,
+              "reads": 0,
+              "active": 0
+            }
+          ]
+        }
+      }
+    ],
+    "independent": [
+      {
+        "workers": 6,
+        "readers": 6,
+        "keysPerReader": 1,
+        "providerSlots": 2,
+        "latencyMs": 50,
+        "coldRequests": 12,
+        "downloadedBytes": 399480,
+        "revisitRequests": 0,
+        "elapsedMs": 330,
+        "revisitMs": 8,
+        "maxActive": 2,
+        "uniqueWorkers": 6,
+        "valid": true,
+        "failedJobs": 0,
+        "restarts": 0,
+        "sourceRanges": {
+          "limit": 24,
+          "perWorkerLimit": 4,
+          "active": 0,
+          "onWire": 0,
+          "queued": 0,
+          "oldestQueuedMs": 0,
+          "avgQueueMs": 0,
+          "maxQueueMs": 1,
+          "avgReadMs": 133,
+          "requests": 12,
+          "shared": 0,
+          "networkReads": 12,
+          "diskHits": 0,
+          "bytes": 399480,
+          "failed": 0,
+          "rejected": 0,
+          "cancelled": 0,
+          "dropped": 0,
+          "workerRetries": 0,
+          "workers": [
+            {
+              "index": 0,
+              "consumers": 0,
+              "reads": 2,
+              "active": 0
+            },
+            {
+              "index": 1,
+              "consumers": 0,
+              "reads": 2,
+              "active": 0
+            },
+            {
+              "index": 2,
+              "consumers": 0,
+              "reads": 2,
+              "active": 0
+            },
+            {
+              "index": 3,
+              "consumers": 0,
+              "reads": 2,
+              "active": 0
+            },
+            {
+              "index": 4,
+              "consumers": 0,
+              "reads": 2,
+              "active": 0
+            },
+            {
+              "index": 5,
+              "consumers": 0,
+              "reads": 2,
+              "active": 0
+            }
+          ]
+        }
+      },
+      {
+        "workers": 6,
+        "readers": 6,
+        "keysPerReader": 1,
+        "providerSlots": 2,
+        "latencyMs": 50,
+        "coldRequests": 12,
+        "downloadedBytes": 399480,
+        "revisitRequests": 0,
+        "elapsedMs": 329,
+        "revisitMs": 9,
+        "maxActive": 2,
+        "uniqueWorkers": 6,
+        "valid": true,
+        "failedJobs": 0,
+        "restarts": 0,
+        "sourceRanges": {
+          "limit": 24,
+          "perWorkerLimit": 4,
+          "active": 0,
+          "onWire": 0,
+          "queued": 0,
+          "oldestQueuedMs": 0,
+          "avgQueueMs": 0,
+          "maxQueueMs": 1,
+          "avgReadMs": 133,
+          "requests": 12,
+          "shared": 0,
+          "networkReads": 12,
+          "diskHits": 0,
+          "bytes": 399480,
+          "failed": 0,
+          "rejected": 0,
+          "cancelled": 0,
+          "dropped": 0,
+          "workerRetries": 0,
+          "workers": [
+            {
+              "index": 0,
+              "consumers": 0,
+              "reads": 2,
+              "active": 0
+            },
+            {
+              "index": 1,
+              "consumers": 0,
+              "reads": 2,
+              "active": 0
+            },
+            {
+              "index": 2,
+              "consumers": 0,
+              "reads": 2,
+              "active": 0
+            },
+            {
+              "index": 3,
+              "consumers": 0,
+              "reads": 2,
+              "active": 0
+            },
+            {
+              "index": 4,
+              "consumers": 0,
+              "reads": 2,
+              "active": 0
+            },
+            {
+              "index": 5,
+              "consumers": 0,
+              "reads": 2,
+              "active": 0
+            }
+          ]
+        }
+      },
+      {
+        "workers": 6,
+        "readers": 6,
+        "keysPerReader": 1,
+        "providerSlots": 2,
+        "latencyMs": 50,
+        "coldRequests": 12,
+        "downloadedBytes": 399480,
+        "revisitRequests": 0,
+        "elapsedMs": 325,
+        "revisitMs": 6,
+        "maxActive": 2,
+        "uniqueWorkers": 6,
+        "valid": true,
+        "failedJobs": 0,
+        "restarts": 0,
+        "sourceRanges": {
+          "limit": 24,
+          "perWorkerLimit": 4,
+          "active": 0,
+          "onWire": 0,
+          "queued": 0,
+          "oldestQueuedMs": 0,
+          "avgQueueMs": 0,
+          "maxQueueMs": 1,
+          "avgReadMs": 132,
+          "requests": 12,
+          "shared": 0,
+          "networkReads": 12,
+          "diskHits": 0,
+          "bytes": 399480,
+          "failed": 0,
+          "rejected": 0,
+          "cancelled": 0,
+          "dropped": 0,
+          "workerRetries": 0,
+          "workers": [
+            {
+              "index": 0,
+              "consumers": 0,
+              "reads": 2,
+              "active": 0
+            },
+            {
+              "index": 1,
+              "consumers": 0,
+              "reads": 2,
+              "active": 0
+            },
+            {
+              "index": 2,
+              "consumers": 0,
+              "reads": 2,
+              "active": 0
+            },
+            {
+              "index": 3,
+              "consumers": 0,
+              "reads": 2,
+              "active": 0
+            },
+            {
+              "index": 4,
+              "consumers": 0,
+              "reads": 2,
+              "active": 0
+            },
+            {
+              "index": 5,
+              "consumers": 0,
+              "reads": 2,
+              "active": 0
+            }
+          ]
+        }
+      }
+    ],
+    "singleReader": [
+      {
+        "workers": 6,
+        "readers": 1,
+        "keysPerReader": 6,
+        "providerSlots": 8,
+        "latencyMs": 50,
+        "coldRequests": 12,
+        "downloadedBytes": 399480,
+        "revisitRequests": 0,
+        "elapsedMs": 136,
+        "revisitMs": 14,
+        "maxActive": 6,
+        "uniqueWorkers": 1,
+        "valid": true,
+        "failedJobs": 0,
+        "restarts": 0,
+        "sourceRanges": {
+          "limit": 24,
+          "perWorkerLimit": 4,
+          "active": 0,
+          "onWire": 0,
+          "queued": 0,
+          "oldestQueuedMs": 0,
+          "avgQueueMs": 1,
+          "maxQueueMs": 2,
+          "avgReadMs": 55,
+          "requests": 12,
+          "shared": 0,
+          "networkReads": 12,
+          "diskHits": 0,
+          "bytes": 399480,
+          "failed": 0,
+          "rejected": 0,
+          "cancelled": 0,
+          "dropped": 0,
+          "workerRetries": 0,
+          "workers": [
+            {
+              "index": 0,
+              "consumers": 0,
+              "reads": 2,
+              "active": 0
+            },
+            {
+              "index": 1,
+              "consumers": 0,
+              "reads": 2,
+              "active": 0
+            },
+            {
+              "index": 2,
+              "consumers": 0,
+              "reads": 2,
+              "active": 0
+            },
+            {
+              "index": 3,
+              "consumers": 0,
+              "reads": 2,
+              "active": 0
+            },
+            {
+              "index": 4,
+              "consumers": 0,
+              "reads": 2,
+              "active": 0
+            },
+            {
+              "index": 5,
+              "consumers": 0,
+              "reads": 2,
+              "active": 0
+            }
+          ]
+        }
+      },
+      {
+        "workers": 6,
+        "readers": 1,
+        "keysPerReader": 6,
+        "providerSlots": 8,
+        "latencyMs": 50,
+        "coldRequests": 12,
+        "downloadedBytes": 399480,
+        "revisitRequests": 0,
+        "elapsedMs": 130,
+        "revisitMs": 11,
+        "maxActive": 6,
+        "uniqueWorkers": 1,
+        "valid": true,
+        "failedJobs": 0,
+        "restarts": 0,
+        "sourceRanges": {
+          "limit": 24,
+          "perWorkerLimit": 4,
+          "active": 0,
+          "onWire": 0,
+          "queued": 0,
+          "oldestQueuedMs": 0,
+          "avgQueueMs": 1,
+          "maxQueueMs": 2,
+          "avgReadMs": 55,
+          "requests": 12,
+          "shared": 0,
+          "networkReads": 12,
+          "diskHits": 0,
+          "bytes": 399480,
+          "failed": 0,
+          "rejected": 0,
+          "cancelled": 0,
+          "dropped": 0,
+          "workerRetries": 0,
+          "workers": [
+            {
+              "index": 0,
+              "consumers": 0,
+              "reads": 2,
+              "active": 0
+            },
+            {
+              "index": 1,
+              "consumers": 0,
+              "reads": 2,
+              "active": 0
+            },
+            {
+              "index": 2,
+              "consumers": 0,
+              "reads": 2,
+              "active": 0
+            },
+            {
+              "index": 3,
+              "consumers": 0,
+              "reads": 2,
+              "active": 0
+            },
+            {
+              "index": 4,
+              "consumers": 0,
+              "reads": 2,
+              "active": 0
+            },
+            {
+              "index": 5,
+              "consumers": 0,
+              "reads": 2,
+              "active": 0
+            }
+          ]
+        }
+      },
+      {
+        "workers": 6,
+        "readers": 1,
+        "keysPerReader": 6,
+        "providerSlots": 8,
+        "latencyMs": 50,
+        "coldRequests": 12,
+        "downloadedBytes": 399480,
+        "revisitRequests": 0,
+        "elapsedMs": 135,
+        "revisitMs": 13,
+        "maxActive": 6,
+        "uniqueWorkers": 1,
+        "valid": true,
+        "failedJobs": 0,
+        "restarts": 0,
+        "sourceRanges": {
+          "limit": 24,
+          "perWorkerLimit": 4,
+          "active": 0,
+          "onWire": 0,
+          "queued": 0,
+          "oldestQueuedMs": 0,
+          "avgQueueMs": 2,
+          "maxQueueMs": 3,
+          "avgReadMs": 55,
+          "requests": 12,
+          "shared": 0,
+          "networkReads": 12,
+          "diskHits": 0,
+          "bytes": 399480,
+          "failed": 0,
+          "rejected": 0,
+          "cancelled": 0,
+          "dropped": 0,
+          "workerRetries": 0,
+          "workers": [
+            {
+              "index": 0,
+              "consumers": 0,
+              "reads": 2,
+              "active": 0
+            },
+            {
+              "index": 1,
+              "consumers": 0,
+              "reads": 2,
+              "active": 0
+            },
+            {
+              "index": 2,
+              "consumers": 0,
+              "reads": 2,
+              "active": 0
+            },
+            {
+              "index": 3,
+              "consumers": 0,
+              "reads": 2,
+              "active": 0
+            },
+            {
+              "index": 4,
+              "consumers": 0,
+              "reads": 2,
+              "active": 0
+            },
+            {
+              "index": 5,
+              "consumers": 0,
+              "reads": 2,
+              "active": 0
+            }
+          ]
+        }
+      }
+    ]
+  }
+}

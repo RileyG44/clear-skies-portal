@@ -3,6 +3,7 @@
 const os = require("os");
 const path = require("path");
 const {Worker} = require("worker_threads");
+const {TerrainRangeBroker}=require('./terrain-ranges.js');
 
 class TerrainPoolError extends Error {
   constructor(message,code="TERRAIN_ERROR"){
@@ -21,7 +22,7 @@ const abortError=()=>new TerrainPoolError("terrain request cancelled","ABORT_ERR
 const SHAREABLE=new Set(["raw-terrain","raw-elevation"]);
 
 class TerrainPool {
-  constructor({cacheDir,size,maxQueue=40,workerFile=path.join(__dirname,"terrain-worker.js"),jobsPerWorker,shareable=SHAREABLE,onCacheWrite=()=>{},cacheWriteGate}={}){
+  constructor({cacheDir,size,maxQueue=40,workerFile=path.join(__dirname,"terrain-worker.js"),jobsPerWorker,shareable=SHAREABLE,onCacheWrite=()=>{},cacheWriteGate,rangeLimit,rangeMaxQueue}={}){
     const available=typeof os.availableParallelism==="function" ? os.availableParallelism() : os.cpus().length;
     const configured=Number(process.env.CSP_TERRAIN_WORKERS||size||0);
     /* Default: every core but one (up to 8). Each render is mostly waiting on
@@ -41,20 +42,25 @@ class TerrainPool {
     this.closed=false;
     this.metrics={completed:0,failed:0,cancelled:0,timedOut:0,restarted:0,requeued:0,totalMs:0};
     this.cancelGraceMs=2000;
+    const perWorkerReads=Math.max(1,Math.min(12,Number(process.env.CSP_S3_INFLIGHT)||4));
+    this.ranges=new TerrainRangeBroker({limit:rangeLimit??this.size*perWorkerReads,perWorkerLimit:perWorkerReads,maxQueue:rangeMaxQueue});
     for(let i=0;i<this.size;i++) this._spawn({index:i,worker:null,jobs:new Set(),replacing:false});
   }
 
   _spawn(slot){
     if(this.closed) return;
-    const worker=new Worker(this.workerFile,{workerData:{cacheDir:this.cacheDir,cacheWriteGate:this.cacheWriteGate},resourceLimits:{maxOldGenerationSizeMb:512}});
+    const worker=new Worker(this.workerFile,{workerData:{cacheDir:this.cacheDir,cacheWriteGate:this.cacheWriteGate,sharedRanges:true},resourceLimits:{maxOldGenerationSizeMb:512}});
+    this.ranges.attach(worker,slot.index,()=>[...slot.jobs].every(job=>job.shareable));
     slot.worker=worker; slot.jobs=new Set(); slot.replacing=false;
     if(!this.slots.includes(slot)) this.slots.push(slot);
     worker.on("message",message=>{
+      if(this.ranges.handle(worker,message))return;
       if(Number.isFinite(message.cacheBytesWritten)&&message.cacheBytesWritten>0){this.onCacheWrite(message.cacheBytesWritten);return}
       this._finish(slot,message);
     });
-    worker.on("error",error=>this._workerFailed(slot,error));
+    worker.on("error",error=>{if(slot.worker===worker)this._workerFailed(slot,error)});
     worker.on("exit",code=>{
+      this.ranges.detach(worker);
       if(this.closed) return;
       if(slot.worker!==worker) return;
       const jobs=[...slot.jobs];
@@ -146,6 +152,7 @@ class TerrainPool {
       else { this.metrics.failed++; job.reject(new TerrainPoolError(message.error||"terrain worker failed","WORKER_TASK")) }
     }
     this._drain();
+    this.ranges.drain();
   }
 
   _cancel(job){
@@ -193,6 +200,7 @@ class TerrainPool {
     slot.jobs=new Set(); slot.replacing=true;
     for(const job of bystanders){ job.started=0; job.timer=null; this.metrics.requeued++; this._enqueue(job) }
     const worker=slot.worker; slot.worker=null;
+    if(worker)this.ranges.detach(worker);
     if(worker) worker.terminate().finally(()=>{ if(!this.closed){ this.metrics.restarted++; this._spawn(slot); this._drain() } });
     this._drain();
   }
@@ -209,11 +217,12 @@ class TerrainPool {
   stats(){
     const active=this.slots.reduce((sum,slot)=>sum+slot.jobs.size,0);
     const avgMs=this.metrics.completed ? Math.round(this.metrics.totalMs/this.metrics.completed) : 0;
-    return {workers:this.size,jobsPerWorker:this.jobsPerWorker,active,queued:this.queue.length,avgMs,...this.metrics};
+    return {workers:this.size,jobsPerWorker:this.jobsPerWorker,active,queued:this.queue.length,avgMs,...this.metrics,sourceRanges:this.ranges.stats()};
   }
 
   async close(){
     this.closed=true;
+    this.ranges.close();
     const error=new TerrainPoolError("terrain pool closed","CLOSED");
     for(const job of this.queue.splice(0)) this._rejectJob(job,error,"cancelled");
     const workers=this.slots.map(slot=>slot.worker).filter(Boolean);

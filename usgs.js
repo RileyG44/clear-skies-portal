@@ -17,7 +17,8 @@ const zlib  = require("zlib");
 const cog   = require("./cog.js");
 const raster = require("./terrain-raster.js");
 const cacheBudget=require("./cache-budget.js");
-let cacheWrite=()=>{},cacheWriteGate=cacheBudget.writeGate;
+let cacheWrite=()=>{},cacheWriteGate=cacheBudget.writeGate,rangeTransport=null;
+function setRangeTransport(read){rangeTransport=read}
 function setCacheWriteGate(gate){cacheWriteGate=gate}
 function onCacheWrite(callback){cacheWrite=callback}
 
@@ -47,9 +48,9 @@ const MAX_S3_BODY = 32*1024*1024;
 /* Range reads are latency-bound. Reusing TLS sockets avoids a handshake per
    COG block, while the shared gate prevents a rapid pan from overwhelming S3
    or saturating the browser-facing Node event loop. */
-/* This module is loaded once per terrain worker. The dedicated M2 service uses
-   six workers and four range reads each: enough parallel network work to keep
-   the CPU fed without producing an unbounded request storm. */
+/* This module is loaded once per terrain worker. The pool coordinates duplicate
+   cold ranges and preserves the aggregate budget: the dedicated service has
+   six workers and four reads each. Standalone/catalog reads use this local gate. */
 const S3_MAX_INFLIGHT = Math.max(1,Math.min(12,Number(process.env.CSP_S3_INFLIGHT)||4));
 const S3_AGENT = new https.Agent({keepAlive:true,maxSockets:S3_MAX_INFLIGHT+2,
                                   maxFreeSockets:S3_MAX_INFLIGHT,timeout:30000});
@@ -447,24 +448,33 @@ function rangePath(key, a, b){
   return path.join(CACHE_DIR,"usgs",h);
 }
 const RANGE_PENDING = new Map();
-async function fetchRange(key, a, b, signal){
-  signal?.throwIfAborted();
+function cachedRange(key,a,b){
   const f=rangePath(key,a,b);
   try{
     const st=fs.statSync(f),buf=fs.readFileSync(f);
     if(buf.length===b-a+1){cacheBudget.touchAccess(f,st);return {buf,cached:true}}
   }catch(e){}
+  return null;
+}
+async function readRangeLocal(key,a,b,signal,onStart=()=>{}){
+  signal?.throwIfAborted();const hit=cachedRange(key,a,b);if(hit)return hit;
+  const f=rangePath(key,a,b),r=await s3('/'+key,{Range:`bytes=${a}-${b}`},signal,onStart);
+  if(r.status!==206 && r.status!==200)throw new Error('range '+r.status);
+  if(cacheWritable(r.body.length+4096)){
+    const tmp=`${f}.${process.pid}.${Date.now()}.tmp`;
+    try{cacheBudget.guardedWrite(cacheWriteGate,()=>{fs.writeFileSync(tmp,r.body);fs.renameSync(tmp,f);cacheWrite(r.body.length)})}
+    catch(e){try{fs.unlinkSync(tmp)}catch(_){} }
+  }
+  return {buf:r.body,cached:false};
+}
+async function fetchRange(key, a, b, signal){
+  signal?.throwIfAborted();const hit=cachedRange(key,a,b);if(hit)return hit;
+  const f=rangePath(key,a,b);
   return sharedRead(RANGE_PENDING,f,signal,async entry=>{
+    if(rangeTransport)return rangeTransport(key,a,b,entry.controller.signal);
     // Once a read is on the wire, let it populate the cache and accept new
     // viewers. An orphan still waiting for a slot never reaches the network.
-    const r=await s3("/"+key,{Range:`bytes=${a}-${b}`},entry.controller.signal,()=>{entry.retained=true;});
-    if(r.status!==206 && r.status!==200) throw new Error("range "+r.status);
-    if(cacheWritable(r.body.length+4096)){
-      const tmp=`${f}.${process.pid}.${Date.now()}.tmp`;
-      try{ cacheBudget.guardedWrite(cacheWriteGate,()=>{fs.writeFileSync(tmp,r.body);fs.renameSync(tmp,f);cacheWrite(r.body.length)}) }
-      catch(e){ try{ fs.unlinkSync(tmp) }catch(_){} }
-    }
-    return {buf:r.body, cached:false};
+    return readRangeLocal(key,a,b,entry.controller.signal,()=>{entry.retained=true;});
   });
 }
 
@@ -1167,4 +1177,6 @@ module.exports = Object.assign(module.exports, { init, buildIndex, getIndex, cov
                    checkFresh, tileKey, tileUrl, s3head, S3_BASE });
 
 module.exports.onCacheWrite=onCacheWrite;
+module.exports.setRangeTransport=setRangeTransport;
+module.exports.readRangeLocal=readRangeLocal;
 module.exports.setCacheWriteGate=setCacheWriteGate;

@@ -1,8 +1,8 @@
 "use strict";
 
 /* CPU-heavy terrain work lives here, away from the HTTP event loop. Each
-   worker owns its TIFF decoder and a small decoded-block LRU; the range cache
-   on disk is shared safely through atomic renames in usgs.js. */
+   worker owns its TIFF decoder and a small decoded-block LRU. The pool shares
+   pending byte ranges; one worker downloads and atomically caches each read. */
 const {parentPort, workerData} = require("worker_threads");
 const cog = require("./cog.js");
 const usgs = require("./usgs.js");
@@ -54,6 +54,10 @@ async function dnrFabricGrid(minE,minN,res,n,zone,strict,areas){
 
 usgs.init(workerData.cacheDir);
 if(workerData.cacheWriteGate)usgs.setCacheWriteGate(workerData.cacheWriteGate);
+if(workerData.sharedRanges){
+  const {connectRangeClient}=require('./terrain-ranges.js');
+  usgs.setRangeTransport(connectRangeClient(parentPort,usgs.readRangeLocal).read);
+}
 /* Batch range-write accounting rather than one IPC per COG block. The timer
    flushes small jobs too, including aborted jobs whose ranges remain cached. */
 let cacheWritten=0,cacheWriteTimer=null;
@@ -118,6 +122,7 @@ async function execute(action,args,signal){
 
 const controllers=new Map();
 parentPort.on("message",async message=>{
+  if(message.kind==='terrain-range')return;
   const {id,action,args}=message;
   if(message.cancel){controllers.get(id)?.abort();return;}
   const controller=new AbortController();controllers.set(id,controller);

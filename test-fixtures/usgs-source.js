@@ -54,4 +54,4 @@ function fixture({ref,concurrency=1,latency=20}={}){
   return {source,requests,counters,bytes,complete,advance,drain,tick,get now(){return now;},
     close:()=>fs.rmSync(dir,{recursive:true,force:true})};
 }
-module.exports={fixture,sourceCode,tick,root};
+module.exports={fixture,sourceCode,tick,root,tiff};

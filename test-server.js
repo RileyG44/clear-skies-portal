@@ -196,6 +196,11 @@ async function main(){
     assert(Number.isInteger(healthBody.renderQueued)&&healthBody.renderQueued>=0,"health must report queued terrain renders");
     assert.equal(healthBody.terrain.workers,1,"health must report the configured terrain worker pool");
     assert.equal(healthBody.terrain.active,0,"fresh terrain workers must be idle");
+    assert.equal(healthBody.terrain.sourceRanges.active,0,'fresh source-range coordination is idle');
+    assert.equal(healthBody.terrain.sourceRanges.queued,0,'health reports the source backlog separately from render jobs');
+    assert.equal(healthBody.terrain.sourceRanges.workers.length,1,'source telemetry includes the configured worker');
+    for(const field of ['oldestQueuedMs','avgQueueMs','maxQueueMs','avgReadMs','shared','networkReads','bytes','failed','rejected'])
+      assert(Number.isFinite(healthBody.terrain.sourceRanges[field]),'source health includes '+field);
     assert(Number.isFinite(healthBody.cacheDisk.freeGiB),"health must report free cache-disk capacity");
     assert.equal(typeof healthBody.cacheDisk.writable,"boolean","health must report whether persistent caching is safe");
     assert(Number.isInteger(healthBody.memoryCache.entries)&&healthBody.memoryCache.entries>=0,
