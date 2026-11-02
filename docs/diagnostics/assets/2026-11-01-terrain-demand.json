@@ -1,0 +1,115 @@
+{
+  "workload": "terrain-demand",
+  "baselineRef": "7cfbad5",
+  "notes": "Actual schedulers, virtual clock and fixed source costs. Controlled ownership/queue measurements; not provider or device latency.",
+  "before": {
+    "sharedOwnership": {
+      "visibleSharedMs": 5100,
+      "started": 2,
+      "completed": 2,
+      "cancelled": 0,
+      "sourceWorkMs": 5100
+    },
+    "obsoleteStandIn": {
+      "visibleTiles": 16,
+      "allDetailMs": 200,
+      "refinementDoneMs": 5000,
+      "revisitRequests": 0,
+      "started": 17,
+      "completed": 17,
+      "cancelled": 0,
+      "sourceWorkMs": 6600
+    },
+    "constrainedCpuView": {
+      "visibleTiles": 36,
+      "sourceSlots": 8,
+      "firstPaintMs": 100,
+      "firstSharpMs": 2200,
+      "allSharpMs": 3900,
+      "settledMs": 4100,
+      "started": 63,
+      "completed": 54,
+      "cancelled": 9,
+      "sourceWorkMs": 32400
+    },
+    "partialCpuControl": {
+      "visibleTiles": 36,
+      "sourceSlots": 20,
+      "firstPaintMs": 100,
+      "firstSharpMs": 200,
+      "allSharpMs": 700,
+      "settledMs": 4000,
+      "started": 63,
+      "completed": 54,
+      "cancelled": 9,
+      "sourceWorkMs": 40400
+    },
+    "fullCpuControl": {
+      "visibleTiles": 36,
+      "sourceSlots": 20,
+      "firstPaintMs": 100,
+      "firstSharpMs": 200,
+      "allSharpMs": 700,
+      "settledMs": 700,
+      "started": 63,
+      "completed": 45,
+      "cancelled": 18,
+      "sourceWorkMs": 5600
+    }
+  },
+  "after": {
+    "sharedOwnership": {
+      "visibleSharedMs": 100,
+      "started": 2,
+      "completed": 2,
+      "cancelled": 0,
+      "sourceWorkMs": 5100
+    },
+    "obsoleteStandIn": {
+      "visibleTiles": 16,
+      "allDetailMs": 200,
+      "refinementDoneMs": 200,
+      "revisitRequests": 0,
+      "started": 17,
+      "completed": 16,
+      "cancelled": 1,
+      "sourceWorkMs": 1800
+    },
+    "constrainedCpuView": {
+      "visibleTiles": 36,
+      "sourceSlots": 8,
+      "firstPaintMs": 100,
+      "firstSharpMs": 200,
+      "allSharpMs": 2000,
+      "settledMs": 4100,
+      "started": 63,
+      "completed": 54,
+      "cancelled": 9,
+      "sourceWorkMs": 28800
+    },
+    "partialCpuControl": {
+      "visibleTiles": 36,
+      "sourceSlots": 20,
+      "firstPaintMs": 100,
+      "firstSharpMs": 200,
+      "allSharpMs": 700,
+      "settledMs": 4000,
+      "started": 63,
+      "completed": 54,
+      "cancelled": 9,
+      "sourceWorkMs": 40400
+    },
+    "fullCpuControl": {
+      "visibleTiles": 36,
+      "sourceSlots": 20,
+      "firstPaintMs": 100,
+      "firstSharpMs": 200,
+      "allSharpMs": 700,
+      "settledMs": 700,
+      "started": 63,
+      "completed": 45,
+      "cancelled": 18,
+      "sourceWorkMs": 5600
+    }
+  }
+}

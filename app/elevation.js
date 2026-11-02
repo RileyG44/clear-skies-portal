@@ -632,13 +632,19 @@ const ElevLayer = L.GridLayer.extend({
       const scale=2**(coords.z-native),x=Math.floor(coords.x/scale),y=Math.floor(coords.y/scale);
       const url=typeof template==="function"?template({z:native,x,y}):template.replace("{z}",native).replace("{x}",x).replace("{y}",y);
       const source=await elevationRequests.request(url,signal=>typeof template==="function"?fetchPublicElevation(url,signal):fetchElevation(url,signal),
-        {signal:state.controller.signal,priority:sharper?0:rank===5?2:rank,group:sharper?"sharp":rank===6?"oregon":rank===5?"dnr":rank===3?"detail":rank===2?"national":"overview"});
+        // Keep numeric first-pass cover ahead of refinement, but available
+        // detail must not queue behind slower overview fallback.
+        {signal:state.controller.signal,priority:sharper?Math.min(rank,2)-.5:rank===5?2:rank,group:sharper?"sharp":rank===6?"oregon":rank===5?"dnr":rank===3?"detail":rank===2?"national":"overview"});
       if(!source||controller.signal.aborted||state.controller.signal.aborted)return;
       const crop=scale>1?{x:(coords.x%scale)*source.width/scale,y:(coords.y%scale)*source.height/scale,width:source.width/scale,height:source.height/scale}:null;
       let values=!crop&&source.width===size.x&&source.height===size.y?source.grid:
         ElevationTileCore.resampleElevation(source.grid,source.width,source.height,crop,size.x,size.y,{smooth:true});
       const sampleMeters=typeof sourceSampleMeters==="function"?sourceSampleMeters({z:native,x,y}):null;
       accept(values,rank,label+(source.surveys?.some(s=>s.product==="Original Product Resolution DEM")?" + Elwha River OPR (1 m)":""),sampleMeters,sharper,source.surveys||[]);
+      // Admit refinement before the request pool refills the released slot.
+      // Deferring to the base promise's finally let a slow fallback start first
+      // even when the sharper request had a higher queue priority.
+      if(!sharper){state.baseDone=true;releaseLower();sharpenBest();}
     };
     /* On high-density screens this tile holds the next zoom's data (dz), which
        is four times the tiles - and four times the raw-LiDAR renders on the

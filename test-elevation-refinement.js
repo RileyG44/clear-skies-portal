@@ -90,3 +90,18 @@ test('CPU unloading during early sharpening cancels every remaining consumer',as
   assert.equal(calls.get('/raw/17/4/4.png?ix=3').signal.aborted,true);
   assert.equal(layer._store.size,0);assert.equal(layer._pending.size,0);assert.equal(canvas.width,0);
 });
+test('CPU available detail sharpens before queued overview when numeric fallback is at capacity',async()=>{
+  const pool=new RequestPool({concurrency:2,groupLimits:{national:1}});
+  let finishNational;
+  const occupied=pool.request('other-national',()=>new Promise(resolve=>{finishNational=resolve;}),{priority:2,group:'national'});
+  const {layer,canvas,calls}=harness(true,pool);
+  const loaded=layer._loadTile({z:17,x:4,y:4},canvas,()=>{});await tick();
+  calls.get('/raw/16/2/2.png?ix=3').resolve(Array.from({length:16},(_,i)=>i%4===0?50:NaN));await tick();
+  assert.ok(calls.has('/raw/17/4/4.png?ix=3'),'queued detail must not wait behind overview');
+  assert.equal(calls.has('/national/16/2/2.png'),false);
+  calls.get('/raw/17/4/4.png?ix=3').resolve([60,NaN,60,NaN]);await tick();
+  finishNational(null);await occupied;await tick();
+  assert.ok(calls.has('/national/16/2/2.png'),'needed numeric fallback keeps its source capacity');
+  calls.get('/national/16/2/2.png').resolve([20,20,20,20]);await loaded;
+  assert.deepEqual([...layer._store.get('17/4/4').elev],[60,20,60,20]);
+});
