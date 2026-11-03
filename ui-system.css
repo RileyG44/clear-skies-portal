@@ -2006,6 +2006,7 @@ body.csp-redesign:not([data-csp-route="satellite"]) #status[data-kind="scenes"]{
 .mk-slider{flex:none;display:flex;align-items:center;gap:7px;font-size:12px;color:var(--ui-text-muted);white-space:nowrap}
 .mk-slider input{width:96px;margin:0}
 .mk-slider output{min-width:38px;font-size:12px;font-variant-numeric:tabular-nums;color:var(--ui-text)}
+.mk-done:disabled{opacity:.45;cursor:default}
 .mk-done{flex:none;height:32px;padding:0 16px;border:0;border-radius:999px;background:var(--ui-accent);color:var(--ui-on-accent);
   font:inherit;font-size:13px;font-weight:600;cursor:pointer;margin-left:4px;white-space:nowrap}
 .mk-text-btn{flex:none;height:30px;padding:0 10px;border:0;border-radius:9px;background:var(--ui-surface);

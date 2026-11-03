@@ -72,6 +72,10 @@ struct ItemOption: Decodable, Hashable, Identifiable {
     let src: String?
     let remove: String?
     let stops: [GradientStop]?
+    /// A listed mark's kind, shape and place in drawing order.
+    var kind: String? = nil
+    var shape: String? = nil
+    var order: Int? = nil
 
     var id: String { ref ?? value ?? title ?? "" }
     var label: String { title ?? value ?? "" }
@@ -223,6 +227,20 @@ struct SearchState: Decodable, Hashable {
     var canClear = false
 }
 
+/// Markup drawing with its tools hidden: what a map touch does, and the
+/// web's Done button (absent while a freeform shape is unfinished).
+struct MarkupStatus: Decodable, Hashable {
+    var tool: String
+    var title: String
+    /// While a freeform shape is unfinished: "Panning · shape in progress".
+    var mode: String?
+    var layer: String?
+    var done: String?
+    var pending: Bool?
+    var points: Int?
+    var cancel: String?
+}
+
 struct MapState: Decodable, Hashable {
     var mode = "2d"
     var theme = ""
@@ -230,6 +248,7 @@ struct MapState: Decodable, Hashable {
     var terrain3d = false
     var selecting = false
     var drawing = false
+    var markup: MarkupStatus?
     var bearing: Double = 0
 }
 
@@ -388,7 +407,7 @@ extension SearchState {
 
 extension MapState {
     enum Key: String, CodingKey {
-        case mode, theme, pointCloud, terrain3d, selecting, drawing, bearing
+        case mode, theme, pointCloud, terrain3d, selecting, drawing, markup, bearing
     }
 
     init(from decoder: Decoder) throws {
@@ -399,6 +418,7 @@ extension MapState {
         terrain3d = try container.decodeIfPresent(Bool.self, forKey: .terrain3d) ?? false
         selecting = try container.decodeIfPresent(Bool.self, forKey: .selecting) ?? false
         drawing = try container.decodeIfPresent(Bool.self, forKey: .drawing) ?? false
+        markup = try container.decodeIfPresent(MarkupStatus.self, forKey: .markup)
         bearing = try container.decodeIfPresent(Double.self, forKey: .bearing) ?? 0
     }
 }

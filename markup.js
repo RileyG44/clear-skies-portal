@@ -628,7 +628,7 @@ function setToolsOpen(open,restoreFocus=false){
 }
 function startEditing(layer){
   if(layer.shared){B.announceToolPopover?.("Shared annotations are view-only.");return}
-  if(editing&&editing!==layer) stopEditing();
+  if(editing&&editing!==layer){ stopEditing();markListLimit=100 }
   B.ensureMap?.();
   const newLayer=lastLayerId!==layer.doc.markup.id;
   editing=layer;layer.visible=true;applyView(layer);writeView();
@@ -662,7 +662,10 @@ mapEl.addEventListener("pointerdown",event=>{
 function setTool(next){
   finishLayerDetails(true,false);finishGroundEdit();
   const switched=next!==tool;
-  cancelDraft();closePop();
+  // A freeform shape survives panning the map between its points.
+  const keepShape=draft?.kind==="area"&&(next==="pan"||next==="shape"&&shapeById(styles.shape).id==="freeform");
+  if(!keepShape)cancelDraft();
+  closePop();
   if(next!=="select") deselect();
   tool=next;mapEl.classList.remove("mk-hover");
   const isLine=["pen","highlight"].includes(tool)||(tool==="shape"&&shapeById(styles.shape).line);
@@ -742,7 +745,7 @@ function applyGroundValue(key,value,final){
   }
 }
 /* A colour chip, a slider and the like, as small HTML pieces. */
-const chip=(act,color,label,none=false)=>`<div class="mk-color-option"><span>${label}</span><button type="button" class="mk-chip${none?" mk-none":""}" data-pop="${act}" style="--c:${color||"transparent"}" aria-label="${label}" title="${label}"><span></span></button></div>`;
+const chip=(act,color,label,none=false,mode="")=>`<div class="mk-color-option"><span>${label}</span><button type="button" class="mk-chip${none?" mk-none":""}" data-pop="${act}"${mode?` data-mode="${mode}"`:""} style="--c:${color||"transparent"}" aria-label="${label}" title="${label}"><span></span></button></div>`;
 const slider=(key,label,value,min,max,step,unit)=>`<label class="mk-slider" title="${label}"><span>${label}</span><input type="range" data-style="${key}" min="${min}" max="${max}" step="${step}" value="${value}" aria-label="${label}"><output>${value}${unit}</output></label>`;
 const sep=`<span class="mk-sep" aria-hidden="true"></span>`;
 function selectedFeature(){ return selected&&selected.layer===editing?editing.items.get(selected.fid)?.feature||null:null }
@@ -778,7 +781,7 @@ const valueRow=(key,label,value)=>`<div class="mk-slider mk-value-row" data-feet
 const TOOL_LABELS={select:"Select",pan:"Pan",pen:"Pen",highlight:"Highlight",eraser:"Eraser",shape:"Shapes",text:"Text",pin:"Pin"};
 function toolButtons(){
   const shape=shapeById(styles.shape);
-  return TOOLS.map(t=>t?`<button type="button" class="mk-tool" data-tool="${t[0]}" aria-pressed="${tool===t[0]}" title="${t[2]}" aria-label="${t[2].replace(/ \(.\)$/,"")}">${
+  return TOOLS.map(t=>t?`<button type="button" class="mk-tool" data-tool="${t[0]}"${t[0]==="shape"?` data-current-shape="${shape.id}"`:""} aria-pressed="${tool===t[0]}" title="${t[2]}" aria-label="${t[2].replace(/ \(.\)$/,"")}">${
     t[0]==="shape"?`<span class="mk-shape-icons"><span class="mk-shape-glyph">${shapePreview(shape)}</span><img class="mk-caret" src="${icon("chevron-down")}" alt=""></span>`:`<img src="${icon(t[1])}" alt="">`}<span class="mk-tool-label">${TOOL_LABELS[t[0]]}</span></button>`:sep).join("");
 }
 /* The options row for the selected mark, or for the tool in hand. */
@@ -788,7 +791,7 @@ function styleOptions(f,s){
   if(fam==="eraser") opts=slider("eraser","Size",s.eraser,8,120,1,"px")+`<span class="mk-hint">Drag across marks to erase them</span>`;
   else if(fam==="line"||fam==="highlight") opts=chip("color",s.color,"Colour")+groundControl("width","Width",s.width,f,s)+opacity();
   else if(fam==="shape") opts=chip("color",s.color,s.width?"Outline colour":"Outline colour (no outline)")+groundControl("width","Outline",s.width,f,s)+opacity()+sep+
-    chip("fill",s.fillColor==="auto"?s.color:s.fillColor,s.fillColor===null?"Fill: none":"Fill colour",s.fillColor===null)+(s.fillColor===null?"":slider("fillOpacity","Fill",s.fillOpacity,0,100,1,"%"));
+    chip("fill",s.fillColor==="auto"?s.color:s.fillColor,s.fillColor===null?"Fill: none":"Fill colour",s.fillColor===null,s.fillColor===null?"none":s.fillColor==="auto"?"auto":"colour")+(s.fillColor===null?"":slider("fillOpacity","Fill",s.fillOpacity,0,100,1,"%"));
   else if(fam==="text") opts=chip("color",s.color,"Colour")+((f?.properties.kind||tool)==="pin"?groundControl("size","Size",s.size,f,s):slider("size","Font size",s.size,8,160,1,"px"))+opacity();
   else opts=`<span class="mk-hint">${tool==="select"?`${coarse()?"Tap":"Click"} a mark to select it · drag to move · handles resize and rotate`:"Drag to move around the map"}</span>`;
   if(view3d()&&fam&&fam!=="eraser"){
@@ -805,24 +808,37 @@ function selectionActions(f){
   return actions+`<button type="button" class="mk-icon-btn" data-act="duplicate" title="Duplicate (Ctrl+D)" aria-label="Duplicate"><img src="${icon("copy")}" alt=""></button>
       <button type="button" class="mk-icon-btn mk-danger" data-act="delete" title="Delete (Delete key)" aria-label="Delete selected"><img src="${icon("trash-2")}" alt=""></button>`;
 }
+/* The layer's marks as a list, in the app only: a way to choose a mark
+   without a precise tap on the map, read by VoiceOver. Newest first. */
+const MARK_NAMES={pen:"Pen stroke",highlight:"Highlight",line:"Line",arrow:"Arrow",arrow2:"Double arrow",area:"Shape",rect:"Rectangle",shape:"Shape",circle:"Oval",text:"Text",pin:"Pin"};
+let markListLimit=100;
+function markList(){
+  const all=editing.doc.features,shown=all.slice(-markListLimit).reverse(),first=all.length-shown.length;
+  const name=p=>{const base=p.kind==="shape"&&p.shape?shapeById(p.shape).label:MARK_NAMES[p.kind]||"Mark";return p.text?`${base} · ${p.text.slice(0,60)}`:base};
+  /* Each mark keeps its place in drawing order, its shape and its colour,
+     so two rectangles can be told apart. Older marks load on request. */
+  return `<div class="mk-marks" data-count="${all.length}">${shown.map((f,i)=>{const p=f.properties;
+    return `<button type="button" data-select-mark="${esc(p.fid)}" data-index="${all.length-i}" data-kind="${esc(p.kind||"")}" data-shape="${esc(p.shape||"")}" data-color="${esc(p.color||editing.doc.markup.color)}" aria-pressed="${selected?.fid===p.fid}">${esc(name(p))}</button>`}).join("")}${first>0?`<button type="button" data-act="more-marks">Show ${Math.min(100,first)} older marks</button>`:""}</div>`;
+}
 function paintBar(){
   placeSelBar();
   if(!editing||!toolsOpen){ bar.hidden=true;return }
   // Background source/view refreshes must not replace the field being typed in.
   if(layerDetailsDraft?.layer===editing&&bar.contains(document.activeElement)&&document.activeElement.matches("[data-layer-detail]"))return;
   bar.hidden=false;
-  const f=selectedFeature(),actions=f?selectionActions(f):"",pending=draft&&draft.kind==="area";
+  const f=selectedFeature(),actions=f?selectionActions(f):"",pending=draft&&draft.kind==="area",points=pending?draft.points.length:0;
   const undoCount=stackFor(undoStacks,editing).length,redoCount=stackFor(redoStacks,editing).length;
   bar.innerHTML=`
     <div class="tool-popover-head"><div class="tool-popover-title" id="mkBarTitle">Markup</div><button type="button" class="tool-close" data-act="close" aria-label="Close markup tools">&times;</button></div>
     <div class="mk-context">${layerContextHtml()}</div>
     <div class="mk-tools" role="toolbar" aria-label="Markup tools">${toolButtons()}</div>
-    <div class="mk-opts">${styleOptions(f,currentStyle())}${actions?`<div class="mk-selection-actions">${actions}</div>`:""}</div>
+    <div class="mk-opts">${styleOptions(f,currentStyle())}${actions?`<div class="mk-selection-actions" data-kind="${esc(f.properties.kind||"")}" data-shape="${esc(f.properties.shape||"")}" data-fid="${esc(f.properties.fid||"")}">${actions}</div>`:""}</div>
+    ${window.CSPNativeHost?markList():""}
     <div class="mk-footer"><div class="mk-history">
       <button type="button" class="mk-icon-btn" data-act="undo" title="Undo (Ctrl+Z)" aria-label="Undo" ${undoCount?"":"disabled"}><img src="${icon("undo-2")}" alt=""></button>
       <button type="button" class="mk-icon-btn" data-act="redo" title="Redo (Ctrl+Shift+Z)" aria-label="Redo" ${redoCount?"":"disabled"}><img src="${icon("redo-2")}" alt=""></button>
     </div>
-    <div class="mk-finish"><button type="button" class="mk-done" data-act="${pending?"finish":"done"}">${pending?"Finish shape":"Done"}</button></div></div>`;
+    <div class="mk-finish">${pending?`${tool==="pan"?`<button type="button" class="mk-text-btn" data-act="resume-shape">Add points</button>`:""}<button type="button" class="mk-text-btn" data-act="cancel-shape">Cancel</button><button type="button" class="mk-text-btn" data-act="undo-point" ${points>1?"":"disabled"}>Undo point</button>`:""}<button type="button" class="mk-done" data-act="${pending?"finish":"done"}" data-points="${points}" ${pending&&points<3?"disabled title=\"A shape needs at least three points\"":""}>${pending?"Finish shape":"Done"}</button></div></div>`;
   placeBar();
 }
 /* Use the same dock anchor and safe-area positioning as Layers and the
@@ -956,6 +972,7 @@ bar.addEventListener("change",event=>{
 });
 bar.addEventListener("click",event=>{
   const button=event.target.closest("button");if(!button||!editing) return;
+  if(button.dataset.selectMark){ if(tool!=="select")setTool("select");select(button.dataset.selectMark);return }
   if(button.dataset.editDetail){beginLayerDetails(button.dataset.editDetail);return}
   if(button.dataset.act==="edit-layer-details"){beginLayerDetails();return}
   if(button.dataset.act==="save-layer-details"||button.dataset.act==="cancel-layer-details"){
@@ -983,6 +1000,10 @@ bar.addEventListener("click",event=>{
   else if(act==="edit-text") editSelectedText();
   else if(act==="points"){ pointsMode=!pointsMode;drawFrame();paintBar() }
   else if(act==="finish") finishArea();
+  else if(act==="cancel-shape"){ cancelDraft();paintBar() }
+  else if(act==="more-marks"){ markListLimit+=100;paintBar() }
+  else if(act==="resume-shape"){ styles.shape="freeform";setTool("shape") }
+  else if(act==="undo-point") removeLastPoint();
   else if(act==="close") setToolsOpen(false,true);
   else if(act==="done") stopEditing(true);
 });
@@ -1079,8 +1100,10 @@ function openPop(kind,anchor){
 pop.addEventListener("click",event=>{
   const b=event.target.closest("button");if(!b) return;
   if(b.dataset.shape){
+    /* Choosing Freeform again resumes a freeform shape in progress. */
+    const resume=draft?.kind==="area"&&b.dataset.shape==="freeform";
     styles.shape=b.dataset.shape;saveStyles();closePop();
-    if(tool!=="shape") setTool("shape");else{ cancelDraft();paintBar() }
+    if(tool!=="shape") setTool("shape");else{ if(!resume)cancelDraft();paintBar() }
     return;
   }
   if(b.dataset.pick){
@@ -1115,6 +1138,7 @@ document.addEventListener("keydown",event=>{
   else if(mod&&k==="z"){ event.preventDefault();undoRedo(event.shiftKey) }
   else if(mod&&k==="y"){ event.preventDefault();undoRedo(true) }
   else if(mod&&k==="d"&&selected){ event.preventDefault();duplicateSelected() }
+  else if(event.key==="Backspace"&&draft?.kind==="area"){ event.preventDefault();removeLastPoint() }
   else if((event.key==="Delete"||event.key==="Backspace")&&selected){ event.preventDefault();deleteSelected() }
   else if(event.key==="Enter"&&draft?.kind==="area") finishArea();
   else if(!mod&&!event.altKey&&KEYS[k]){ setTool(KEYS[k]) }
@@ -1181,8 +1205,9 @@ capture.addEventListener("pointerdown",event=>{
   if(shape?.id==="freeform"){
     if(!draft){ draft={kind:"area",space3d:space,points:[ll],px:[px],preview:[L.polyline([ll],previewStyle("shape")).addTo(map)]};paintBar() }
     else{
-      if(draft.px.length>=3&&px.distanceTo(draft.px[0])<14){ finishArea();return }
-      draft.points.push(ll);draft.px.push(px);draft.preview[0].setLatLngs(draft.points);redrawDraft();
+      // The first point where it is drawn now: the map may have moved since.
+      if(draft.px.length>=3&&px.distanceTo(llPx(draft.points[0],draft.space3d))<14){ finishArea();return }
+      draft.points.push(ll);draft.px.push(px);draft.preview[0].setLatLngs(draft.points);redrawDraft();paintBar();
     }
     return;
   }
@@ -1236,11 +1261,17 @@ const endStroke=event=>{
 capture.addEventListener("pointerup",endStroke);capture.addEventListener("pointercancel",()=>{ if(draft&&draft.kind!=="area") cancelDraft();if(erasing) endErase() });
 capture.addEventListener("dblclick",event=>{ event.preventDefault();if(draft?.kind==="area") finishArea() });
 function finishArea(){
-  if(!draft||draft.kind!=="area") return;
+  if(!draft||draft.kind!=="area"||draft.points.length<3) return;
   const d=draft;cancelDraft();
   const space=d.space3d,placement=space?{space3d:space}:{};
   if(d.points.length>=3){ const ring=d.points.map(toC);ring.push(ring[0]);addFeature("area",{type:"Polygon",coordinates:[ring]},{...inkProps("ink",space),...fillProps(),...placement}) }
   paintBar();
+}
+/* A freeform shape's last tapped point, taken back; the first one ends it. */
+function removeLastPoint(){
+  if(draft?.kind!=="area") return;
+  if(draft.points.length<=1){ cancelDraft();paintBar();return }
+  draft.points.pop();draft.px.pop();draft.preview[0].setLatLngs(draft.points);redrawDraft();paintBar();
 }
 /* Drop points closer than ~1 screen px to the line through their neighbours
    (Ramer–Douglas–Peucker on the screen trace). */
@@ -1419,6 +1450,30 @@ function mapCoords(f,fn){
   if(g.type==="Point") g.coordinates=fn(g.coordinates);
   else if(g.type==="LineString") g.coordinates=g.coordinates.map(fn);
   else g.coordinates=[g.coordinates[0].map(fn)];
+}
+/* Brings the selected mark into the part of the map the app leaves visible
+   above its sheet, moving the camera and never the mark. Zooms out only. */
+function revealSelected(bottom=0){
+  const f=selectedFeature();if(!f) return false;
+  const points=[],v=view3d();
+  if(f.properties.space3d){ const a=f.properties.space3d.anchor;points.push(L.latLng(a[1],a[0])) }
+  else mapCoords(JSON.parse(JSON.stringify(f)),c=>{points.push(toLL(c));return c});
+  if(!points.length) return false;
+  const b=L.latLngBounds(points),edge=Math.max(40,+bottom+24);
+  /* The mark as drawn, not only its anchor: a pin's head and label, text,
+     a circle's radius and a stroke's width are inside these boxes. A mark
+     off screen has none, and its geometry alone is enough to find it. */
+  if(!v){
+    const m=mapEl.getBoundingClientRect();
+    for(const layer of editing.items.get(f.properties.fid)?.layers||[]){
+      const r=layer.getElement?.()?.getBoundingClientRect?.();
+      if(!r||r.width+r.height<=0||r.right<m.left||r.left>m.right||r.bottom<m.top||r.top>m.bottom) continue;
+      for(const [x,y] of [[r.left-8,r.top-8],[r.right+8,r.bottom+8]]) b.extend(map.containerPointToLatLng([x-m.left,y-m.top]));
+    }
+  }
+  if(v) v.fitBounds([[b.getWest(),b.getSouth()],[b.getEast(),b.getNorth()]],{padding:{top:70,left:40,right:80,bottom:edge},maxZoom:v.getZoom(),duration:300});
+  else map.fitBounds(b,{paddingTopLeft:[40,70],paddingBottomRight:[80,edge],maxZoom:map.getZoom(),animate:true});
+  return true;
 }
 /* An old-style circle becomes an oval the first time it is reshaped. */
 function circleToShape(f){
@@ -1860,7 +1915,7 @@ function restoreDisplay(entries){
 window.CSPMarkup={displayState,restoreDisplay,prepare3d,attach3d,snapshotEntries,drawSnapshotLayer,renderPanel,activeEntries,setVisible,setOpacity,setOrder,quickDraw,
   isEditing:()=>!!editing,
   resetLayer:id=>setOpacity(id,100),count:()=>[...layers.values()].filter(l=>l.visible).length,
-  sync:syncAll,_layers:layers,_select:fid=>{ if(editing){ setTool("select");select(fid) } }};
+  sync:syncAll,revealSelected,_layers:layers,_select:fid=>{ if(editing){ setTool("select");select(fid) } }};
 
 /* ------------------------------------------------------------------- start */
 sizeEraser();

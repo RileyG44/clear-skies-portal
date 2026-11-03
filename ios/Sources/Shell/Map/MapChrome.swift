@@ -27,12 +27,16 @@ struct MapChrome: View {
                             if shell.map.pointCloud && shell.hasLocation { LocationShareButton() }
                         }
                         Spacer(minLength: 0)
+                        // The markup pane has its own tools and a Hide button;
+                        // the dock steps aside so the map has room to draw on.
+                        let dockHidden = shell.presentedPanel == "mkBar" ? 1 : toolbarHideProgress
                         MapTools(maxHeight: geometry.size.height - MapControlSize.search - (locationActionsExpanded ? 324 : 0) - 20)
-                            .opacity(1 - toolbarHideProgress)
-                            .scaleEffect(reducedMotion ? 1 : 1 - 0.04 * toolbarHideProgress, anchor: .topTrailing)
-                            .offset(x: reducedMotion ? 0 : 12 * toolbarHideProgress)
-                            .allowsHitTesting(toolbarHideProgress < 0.99)
-                            .accessibilityHidden(toolbarHideProgress >= 0.99)
+                            .opacity(1 - dockHidden)
+                            .scaleEffect(reducedMotion ? 1 : 1 - 0.04 * dockHidden, anchor: .topTrailing)
+                            .offset(x: reducedMotion ? 0 : 12 * dockHidden)
+                            .allowsHitTesting(dockHidden < 0.99)
+                            .accessibilityHidden(dockHidden >= 0.99)
+                            .animation(reducedMotion ? nil : .snappy(duration: 0.25), value: shell.presentedPanel == "mkBar")
                     }
                     .padding(.horizontal, 12)
                     .padding(.top, 6)
@@ -40,7 +44,13 @@ struct MapChrome: View {
                 }
                 VStack {
                     Spacer()
-                    if shell.activeSheet == nil, !shell.mapBusy {
+                    if shell.activeSheet == nil, let markup = shell.map.markup {
+                        // Drawing continues with the markup tools hidden.
+                        MarkupActiveCapsule(status: markup)
+                            .padding(.horizontal, 14)
+                            .padding(.bottom, 6)
+                            .transition(.move(edge: .bottom).combined(with: .opacity))
+                    } else if shell.activeSheet == nil, !shell.mapBusy {
                         SearchCapsule(actionsExpanded: $locationActionsExpanded, maxActionHeight: max(44, geometry.size.height - MapControlSize.search - 22))
                             .padding(.horizontal, 14)
                             .padding(.bottom, 6)
@@ -50,6 +60,7 @@ struct MapChrome: View {
                 Toasts()
             }
             .animation(.spring(duration: 0.4, bounce: 0.18), value: shell.activeSheet == nil && !shell.mapBusy)
+            .animation(.spring(duration: 0.4, bounce: 0.18), value: shell.map.markup == nil)
         }
     }
 }

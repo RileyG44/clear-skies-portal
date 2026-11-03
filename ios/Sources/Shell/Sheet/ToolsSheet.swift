@@ -290,14 +290,17 @@ struct CoordinateActions: View {
 /// Interactive swipe-to-dismiss remains available without a crowded grabber.
 struct CloseSheetButton: View {
     @Environment(ShellModel.self) private var shell
+    var label = "Close menu"
+    var hint = "Return to the map"
+
     var body: some View {
         Button { shell.activeSheet = nil } label: {
             Image(systemName: "chevron.down").fontWeight(.semibold)
                 // The navigation bar adds its standard padding and 44-point target.
                 .frame(width: 28, height: 28)
         }
-        .accessibilityLabel("Close menu")
-        .accessibilityHint("Return to the map")
+        .accessibilityLabel(label)
+        .accessibilityHint(hint)
     }
 }
 
@@ -413,7 +416,9 @@ struct PanelSheet: View {
         let panel = shell.panel?.id == id ? shell.panel : nil
         NavigationStack {
             Group {
-                if let panel {
+                if let panel, panel.id == "mkBar" {
+                    MarkupPanelContent(panel: panel)
+                } else if let panel {
                     ToolbarPanelContent(panel: panel)
                 } else {
                     ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -435,8 +440,30 @@ struct PanelSheet: View {
                         }
                     }
                 }
+                // Markup separates the two ways out: Done ends drawing, while
+                // hiding the tools leaves the pen active on the map.
+                if id == "mkBar", let done = panel?.items.first(where: { $0.kind == "markupFinish" && $0.id == "done" }) {
+                    ToolbarItem(placement: .topBarLeading) {
+                        Button("Done") { shell.act(done.ref) }
+                            .fontWeight(.semibold)
+                            .accessibilityHint("Stop drawing on this layer")
+                    }
+                }
                 ToolbarItem(placement: .topBarTrailing) {
-                    CloseSheetButton()
+                    if id == "mkBar" {
+                        // Hiding is not stopping: say so on the button itself.
+                        Button { shell.activeSheet = nil } label: {
+                            HStack(spacing: 4) {
+                                Text("Hide").fontWeight(.medium)
+                                Image(systemName: "chevron.down").fontWeight(.semibold)
+                            }
+                            .padding(.horizontal, 4)
+                        }
+                        .accessibilityLabel("Hide markup tools")
+                        .accessibilityHint("Keep drawing on the map. The bar at the bottom of the map shows the tools again.")
+                    } else {
+                        CloseSheetButton()
+                    }
                 }
             }
         }

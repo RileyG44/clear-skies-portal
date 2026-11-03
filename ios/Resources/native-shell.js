@@ -719,7 +719,15 @@
   /* Pop-ups the app presents natively. Each keeps its web element as the
      source of truth; closing the native sheet closes the web pop-up. */
   const PANELS = {
-    mkBar: { close: "#mkBar [data-act=close]", title: "Markup", stateless: true, items: markupItems },
+    mkBar: { close: "#mkBar [data-act=close]", title: "Markup", items: markupItems,
+      // What the pane is acting on stays in view however far its settings scroll.
+      state: el => {
+      const layer = clean($("[data-layer-select]", el)?.selectedOptions[0]?.textContent);
+        if (!layer) return "";
+        const selection = $(".mk-selection-actions", el), tool = $(".mk-tools [aria-pressed=true]", el)?.dataset.tool;
+        if ($(".mk-done", el)?.dataset.act === "finish") return `${tool === "pan" ? "Panning" : "Adding points"} · unfinished shape`;
+        return selection ? `Editing ${markupKind(selection).toLowerCase()} · ${layer}` : "Drawing on " + layer;
+      } },
     snapshotPanel: { title: "Export image", body: ".snapshot-export-body", close: "#snapshotClose", items: snapshotItems },
     serverPanel: { body: "#srvBox", close: "#srvClose", title: "Terrain engine", items: serverItems },
     terrainSourcePanel: { body: "#terrainSourcePanelBody", close: "#terrainSourceClose", stateless: true, items: terrainSourceItems },
@@ -730,24 +738,126 @@
   };
   const openPanel = () => Object.keys(PANELS).find(id => { const el = document.getElementById(id); return el && !el.hidden; }) || null;
 
+  /* Markup is a task-shaped pane in the app (MarkupPanel.swift): tools and
+     history stay on top, and the shape, colour and exact-size choices open
+     beside the control that asked for them rather than above everything.
+     The markup DOM, state and handlers remain the owner: every part keeps
+     the live control it came from, including choices rebuilt on each action. */
+  const MARKUP_KINDS = { pen: "Pen stroke", highlight: "Highlight", line: "Line", arrow: "Arrow", arrow2: "Double arrow",
+    area: "Shape", rect: "Shape", shape: "Shape", circle: "Shape", text: "Text", pin: "Pin" };
+  const MARKUP_HINTS = { pen: "Drag on the map to draw", highlight: "Drag on the map to highlight", eraser: "Drag across marks to erase them",
+    text: "Tap the map to add text", pin: "Tap the map to place a pin", pan: "Drag to move the map", select: "Tap a mark to select it" };
+  const MARKUP_STYLES = { pen: "Pen", highlight: "Highlighter", eraser: "Eraser", text: "Text", pin: "Pin" };
+  /* Who a style change belongs to: the layer, the tool and the selected mark
+     ("new" for the tool's own default). A native draft carries it, and the
+     web value is set only while it is still the same. */
+  const markupOwner = body => {
+    const tool = $(".mk-tools button[data-tool][aria-pressed=true]", body)?.dataset.tool || "";
+    return `${$(".mk-context [data-layer-select]", body)?.value || ""}:${tool}:${$(".mk-selection-actions", body)?.dataset.fid || "new"}`;
+  };
+  /* A selected mark's name: its shape where it has one ("Rectangle"). */
+  const markupKind = el => {
+    const shape = el?.dataset.shape ? $(`#mkPop [data-shape="${CSS.escape(el.dataset.shape)}"]`) : null;
+    return clean(shape?.getAttribute("aria-label")) || MARKUP_SHAPES[el?.dataset.shape] || MARKUP_KINDS[el?.dataset.kind] || "Mark";
+  };
+  const MARKUP_SHAPES = { rect: "Rectangle", roundrect: "Rounded rectangle", ellipse: "Oval", triangle: "Triangle", rtriangle: "Right triangle",
+    diamond: "Diamond", pentagon: "Pentagon", hexagon: "Hexagon", octagon: "Octagon", star: "Star", star4: "Four-point star",
+    blockarrow: "Block arrow", heart: "Heart", lightning: "Lightning" };
+  // A shape's web labels are short beside their icons; as rows they need the noun.
+  const MARKUP_LABELS = { Outline: "Outline width", Fill: "Fill opacity" };
   function markupItems(items, body) {
-    // Keep the actual markup DOM/state/handlers as the owner, including the
-    // auxiliary shape, colour and exact-value choices rebuilt on each action.
-    for (const [selector, title] of [[".mk-tools", "Tools"], [".mk-context", "Markup layer"],
-      [".mk-opts", "Style and selection"], [".mk-footer", "History and editing"]]) {
-      const root = $(selector, body), controls = [];
-      if (root && selector === ".mk-tools") {
-        controls.push({kind:"choices", title:"Tools", options: $$("button[data-tool]", root).map(button => ({
-          ref:refOf(button), title:clean($(".mk-tool-label", button)?.textContent || button.textContent || button.getAttribute("aria-label")),
-          icon:iconOf(button), selected:button.getAttribute("aria-pressed") === "true", disabled:button.disabled || undefined
-        }))});
-      } else if (root) walk(root, controls);
-      if (controls.length) items.push(panelGroup("markup:" + selector, title, controls));
+    const pop = $("#mkPop"), popKind = pop && !pop.hidden ? pop.dataset.kind : "";
+    const pressed = el => el?.getAttribute("aria-pressed") === "true";
+    const opened = el => !!popKind && el?.getAttribute("aria-expanded") === "true";
+    const action = el => ({ ...controlItem(el), id: el.dataset.act });
+
+    const tools = $$(".mk-tools button[data-tool]", body), current = tools.find(pressed)?.dataset.tool || "";
+    const shapeTool = tools.find(el => el.dataset.tool === "shape"), shape = shapeTool?.dataset.currentShape || "";
+    const gallery = opened(shapeTool) && popKind === "shape" ? $$(".mk-shape-grid", pop).map(grid => ({ kind: "shapes",
+      title: clean(grid.previousElementSibling?.textContent), options: $$(".mk-shape-btn", grid).map(el => ({ ref: refOf(el),
+        value: el.dataset.shape, title: clean(el.getAttribute("aria-label")), selected: pressed(el) })) })) : undefined;
+    items.push({ kind: "markupTools", title: "Tools", value: shape || undefined, expanded: gallery ? true : undefined, items: gallery,
+      options: tools.map(el => ({ ref: refOf(el), value: el.dataset.tool, title: clean($(".mk-tool-label", el)?.textContent) || labelFor(el),
+        selected: pressed(el), disabled: el.disabled || undefined })) });
+
+    // What a touch on the map does now, beside undo and redo. A freeform
+    // shape in progress counts its points: it needs three to finish.
+    const finish = $(".mk-done", body), pending = finish?.dataset.act === "finish", points = Number(finish?.dataset.points) || 0;
+    const line = ["line", "arrow", "arrow2"].includes(shape);
+    const needed = Math.max(0, 3 - points);
+    const hint = pending && current === "pan" ? `${points} ${points === 1 ? "point" : "points"} placed · move the map, then tap Add points`
+      : pending ? (needed ? `${points} of 3 points · tap ${needed} more to make a shape` : `${points} points · tap Finish shape or the first point`)
+      : current === "select" && $(".mk-selection-actions", body) ? "Drag to move · handles resize and rotate"
+      : current === "shape" ? (shape === "freeform" ? "Tap points on the map, then finish the shape" : line ? "Drag on the map to draw a line" : "Drag on the map to draw a shape")
+      : MARKUP_HINTS[current] || clean($(".mk-opts .mk-hint", body)?.textContent);
+    items.push({ kind: "markupHistory", title: hint || undefined,
+      buttons: ["undo", "redo"].map(act => $(`.mk-history [data-act=${act}]`, body)).filter(Boolean).map(action) });
+    if (finish) items.push({ ...action(finish), kind: "markupFinish", role: pending ? "primary" : undefined, value: pending ? points : undefined,
+      buttons: pending ? ["resume-shape", "undo-point", "cancel-shape"].map(act => $(`.mk-finish [data-act=${act}]`, body)).filter(Boolean).map(action) : undefined });
+
+    const selection = $(".mk-selection-actions", body), target = selection?.dataset.fid || "new";
+    if (selection) items.push({ kind: "markupSelection", title: markupKind(selection),
+      buttons: $$("button", selection).map(action) });
+
+    // One row per setting: its label, its control and its value, once.
+    const style = [];
+    for (const el of $$(".mk-opts > *", body)) {
+      if (el.matches(".mk-sep,.mk-hint,.mk-selection-actions") || !shown(el)) continue;
+      if (el.matches(".mk-color-option")) {
+        const chip = $("[data-pop]", el), open = opened(chip) && popKind === chip.dataset.pop, custom = open && $("input[type=color]", pop);
+        style.push({ kind: "markupColor", ref: refOf(chip), id: chip.dataset.pop, title: clean($("span", el)?.textContent), value: chip.dataset.mode,
+          color: chip.classList.contains("mk-none") ? undefined : colorOf(chip), expanded: open || undefined,
+          options: open ? $$(".mk-swatch", pop).map(swatch => ({ ref: refOf(swatch), value: swatch.dataset.pick, color: colorOf(swatch),
+            title: clean(swatch.getAttribute("aria-label")), selected: pressed(swatch) })) : undefined,
+          buttons: open ? $$(".mk-pop-row button", pop).map(button => controlItem(button)) : undefined,
+          custom: custom ? { ref: refOf(custom), value: custom.value, title: "Custom colour" } : undefined });
+      } else if (el.matches(".mk-ground,.mk-value-row")) {
+        const range = $("input[type=range]", el), value = $(".mk-value", el), open = opened(value) && popKind === "value", field = open && $("#mkValueInput", pop);
+        // The id names the setting and the mark it belongs to, so a value
+        // typed for one mark is never applied to the next selection.
+        const title = clean($(":scope > span", el)?.textContent);
+        style.push({ kind: "markupSize", ref: range ? refOf(range) : undefined, title: MARKUP_LABELS[title] || title,
+          id: `${el.dataset.ground || $("[data-edit-placement]", el)?.dataset.editPlacement || "value"}:${target}`,
+          accessibility: clean(range?.getAttribute("aria-valuetext")) || undefined, entry: field ? { ref: refOf(field), value: field.value } : undefined,
+          value: range ? Number(range.value) : undefined, min: range ? Number(range.min) : undefined, max: range ? Number(range.max) : undefined,
+          step: range ? Number(range.step || 1) : undefined, display: clean(value?.textContent) || undefined,
+          edit: value ? { ref: refOf(value), value: Number(el.dataset.feet), unit: "ft" } : undefined, expanded: open || undefined,
+          detail: open ? clean($(".mk-value-error:not([hidden])", pop)?.textContent) || undefined : undefined });
+      } else if (el.matches("label.mk-slider")) {
+        const range = $("input[type=range]", el);
+        const title = clean($("span", el)?.textContent);
+        if (range) style.push(controlItem(range, { title: MARKUP_LABELS[title] || title, output: $("output", el) }));
+      } else if (!handle(el, style)) walk(el, style);
     }
-    const pop = $("#mkPop");
-    if (pop && !pop.hidden) {
-      const controls = []; walk(pop, controls);
-      items.unshift(panelGroup("markup:choices", pop.getAttribute("aria-label") || "Choices", controls));
+    const styleTitle = selection ? `${markupKind(selection)} style`
+      : current === "shape" ? (line ? "Line style" : "Shape style") : `${MARKUP_STYLES[current] || "Tool"} style`;
+    // The style rows' owner: a native draft (a typed size, an open palette)
+    // belongs to this layer, tool and mark, and closes when any changes.
+    const owner = markupOwner(body);
+    if (style.length) items.push({ kind: "group", ref: "markup:style", id: owner, title: styleTitle,
+      detail: selection ? "Selected mark only" : "For new marks", items: style });
+
+    // The layer's marks, to choose one without a precise tap on the map.
+    const marks = $(".mk-marks", body);
+    if (marks) {
+      const more = $("[data-act=more-marks]", marks);
+      items.push({ kind: "markupMarks", title: "Marks on this layer", value: Number(marks.dataset.count) || 0,
+        edit: more ? { ref: refOf(more), title: clean(more.textContent) } : undefined,
+        options: $$("button[data-select-mark]", marks).map(el => ({ ref: refOf(el), value: el.dataset.selectMark, kind: el.dataset.kind,
+          shape: el.dataset.shape || undefined, order: Number(el.dataset.index) || undefined, color: toHex(el.dataset.color),
+          title: clean(el.textContent), selected: pressed(el) })) });
+    }
+
+    const context = $(".mk-context", body), select = context && $("[data-layer-select]", context);
+    if (context && select) {
+      const name = $("[data-layer-detail=name]", context), description = $("[data-layer-detail=description]", context);
+      const edit = $("[data-act=edit-layer-details]", context), about = $("button.mk-layer-description:not(.mk-placeholder)", context);
+      items.push({ kind: "markupLayer", ref: refOf(select), value: select.value, color: colorOf($(".mk-dot", context)),
+        title: clean(select.selectedOptions[0]?.textContent), detail: clean(about?.textContent) || undefined,
+        options: [...select.options].map(option => ({ value: option.value, title: clean(option.textContent) })),
+        edit: edit ? { ref: refOf(edit) } : undefined,
+        items: name ? [controlItem(name, { title: "Name" }), description ? controlItem(description, { title: "Description" }) : null].filter(Boolean) : undefined,
+        buttons: name ? ["cancel-layer-details", "save-layer-details"].map(act => $(`[data-act=${act}]`, context)).filter(Boolean).map(action) : undefined });
     }
   }
 
@@ -858,7 +968,7 @@
     const items = [];
     (spec.items || walkBody)(items, spec.body ? $(spec.body, el) : el);
     return { id, title: spec.title || clean($(".tool-popover-title", el)?.textContent),
-      state: spec.stateless ? undefined : clean($(".tool-popover-state", el)?.textContent) || undefined, items };
+      state: (spec.state ? spec.state(el) : spec.stateless ? undefined : clean($(".tool-popover-state", el)?.textContent)) || undefined, items };
   }
 
   /* ------------------------------------------------------------- state */
@@ -898,8 +1008,20 @@
       terrain3d: body.classList.contains("terrain-3d"),
       selecting: body.classList.contains("dnr-selecting") || visible("snapSel") || visible("dnrSelectionBar"),
       drawing: visible("mkBar"),
+      // Markup stays active with its tools hidden: the map shows what a
+      // touch does and a way back to the tools or out of drawing.
+      markup: body.classList.contains("csp-markup-editing") && !visible("mkBar") ? markupStatus() : undefined,
       bearing: Math.round(bearing * 10) / 10
     };
+  }
+
+  function markupStatus() {
+    const tool = $("#mkBar .mk-tools [data-tool][aria-pressed=true]"), done = $("#mkBar .mk-done"), cancel = $("#mkBar [data-act=cancel-shape]");
+    return { tool: tool?.dataset.tool || "", title: clean($(".mk-tool-label", tool)?.textContent) || "Markup",
+      mode: done?.dataset.act === "finish" ? (tool?.dataset.tool === "pan" ? "Panning · shape in progress" : "Adding points · shape in progress") : undefined,
+      layer: clean($("#mkBar [data-layer-select]")?.selectedOptions[0]?.textContent) || undefined,
+      done: done?.dataset.act === "done" ? refOf(done) : undefined, pending: done?.dataset.act === "finish" || undefined,
+      points: Number(done?.dataset.points) || 0, cancel: cancel ? refOf(cancel) : undefined };
   }
 
   function appearanceState() {
@@ -1050,6 +1172,22 @@
       case "submit":
         if (el.form) el.form.requestSubmit(); else el.closest("form")?.requestSubmit();
         break;
+      case "pick": {
+        /* A colour chosen in the app's palette: open that colour's own web
+           palette if needed and press the swatch there. */
+        if (el.getAttribute("aria-expanded") !== "true") el.click();
+        $(`#mkPop [data-pick="${CSS.escape(String(value ?? ""))}"]`)?.click();
+        break;
+      }
+      case "enter": {
+        /* A number typed in the app for a markup size: open that value's own
+           web field if it is not open, then type and submit it there, so the
+           web validates and applies it exactly as it does a typed value. */
+        if (el.getAttribute("aria-expanded") !== "true") el.click();
+        const field = $("#mkValueInput");
+        if (field) { field.value = String(value ?? ""); fire(field, "input"); field.form?.requestSubmit(); }
+        break;
+      }
       case "click":
       default:
         el.click();
@@ -1086,6 +1224,32 @@
       return opened;
     },
     refresh() { forceNext = true; flush(); },
+    /* A markup size typed in the app, with the web's verdict: the web keeps
+       its field open with a message when it rejects the value. The key finds
+       the size's control again if the toolbar was rebuilt meanwhile. */
+    /* Selects a mark from the app's list, then brings it into view above the
+       sheet, only once the web has actually selected that mark. */
+    selectMark(ref, fid, inset) {
+      act(ref, "click");
+      const selected = $("#mkBar .mk-selection-actions")?.dataset.fid === String(fid);
+      if (selected) window.CSPMarkup?.revealSelected?.(Number(inset) || 0);
+      flush();
+      return { selected };
+    },
+    enterValue(ref, value, key, owner) {
+      const bar = $("#mkBar");
+      if (!bar || bar.hidden || markupOwner(bar) !== owner)
+        return { accepted: false, message: "The layer, tool or selected mark changed, so this size was not set." };
+      const find = () => $(`#mkBar [data-edit-ground="${CSS.escape(String(key))}"],#mkBar [data-edit-placement="${CSS.escape(String(key))}"]`);
+      const button = elementFor(ref)?.isConnected ? elementFor(ref) : find();
+      if (!button || !act(refOf(button), "enter", value)) return { accepted: false, message: "This size is no longer available." };
+      const pop = $("#mkPop"), open = !!pop && !pop.hidden && pop.dataset.kind === "value";
+      // Accepted means the web now holds this value, not only that its field closed.
+      const held = Number(find()?.closest(".mk-slider")?.dataset.feet);
+      const accepted = !open && Math.abs(held - Number(value)) < 1e-6;
+      flush();
+      return { accepted, message: open ? clean($(".mk-value-error:not([hidden])", pop)?.textContent) : accepted ? "" : "The size was not set. Try again." };
+    },
     describe: () => describePage(),
     describePanel,
     act,

@@ -87,6 +87,11 @@ struct PortalSlider: UIViewRepresentable {
     let range: ClosedRange<Double>
     let title: String
     let onEditingChanged: (Bool) -> Void
+    /// What VoiceOver reads as the value ("2.5 feet", "80%"), when the
+    /// slider's own position is not the value a person set.
+    var spoken: String? = nil
+    /// The filled track's colour, where a pane sets its own.
+    var tint: Color? = nil
 
     final class TouchSlider: UISlider {
         override var intrinsicContentSize: CGSize {
@@ -113,9 +118,10 @@ struct PortalSlider: UIViewRepresentable {
         view.minimumValue = Float(range.lowerBound)
         view.maximumValue = Float(range.upperBound)
         if abs(Double(view.value) - value) > 0.000001 { view.value = Float(value) }
-        view.minimumTrackTintColor = appearance.toggle.flatMap { Color(hex: $0) }.map { UIColor($0) } ?? .systemGreen
+        view.minimumTrackTintColor = appearance.toggle.flatMap { Color(hex: $0) }.map { UIColor($0) } ?? tint.map { UIColor($0) } ?? .systemGreen
         view.maximumTrackTintColor = appearance.track.flatMap { Color(hex: $0) }.map { UIColor($0) }
         view.accessibilityLabel = title
+        view.accessibilityValue = spoken
         view.isEnabled = context.environment.isEnabled
     }
 

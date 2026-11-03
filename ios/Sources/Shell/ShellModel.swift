@@ -18,11 +18,21 @@ final class ShellModel {
     var dock: [DockTool] = []
     var status = StatusState()
     var panelOpen: String?
+    /// The sheet's medium height: how much of the map it covers there.
+    var mediumSheetHeight: CGFloat = 0
     var page: ShellPage?
     var panel: ShellPanel?
     var connected = false
     var images: [String: String] = [:]
     var appearance = NativeAppearance()
+    /// A dock action that would end a hidden freeform draft waits for an
+    /// explicit discard, just like changing tools inside the markup pane.
+    struct MarkupExit: Identifiable {
+        let id = UUID()
+        let points: Int
+        let perform: () -> Void
+    }
+    var markupExit: MarkupExit?
 
     // Native presentation. One sheet at a time: the tool sheet, or a map
     // tool's pop-up. Changing it swaps one sheet for the other.
@@ -125,6 +135,10 @@ final class ShellModel {
             // Draw from a layer page and the dock share the same native pane.
             if panelOpen == "mkBar", presentedPanel != "mkBar" {
                 detent = .medium
+                #if DEBUG
+                // `-cspDebugDetent large` also applies to a scripted Draw.
+                if UserDefaults.standard.string(forKey: "cspDebugDetent") == "large" { detent = .expanded }
+                #endif
                 activeSheet = .panel("mkBar")
             }
         }
@@ -251,7 +265,7 @@ final class ShellModel {
     // MARK: - Acting on web controls
 
     enum Op: String {
-        case click, toggle, input, commit, select, open, focus, rampAdd, rampMove, key, submit
+        case click, toggle, input, commit, select, open, focus, rampAdd, rampMove, key, submit, enter, pick
     }
 
     func act(_ ref: String?, _ op: Op = .click, _ value: Any? = nil) {
@@ -268,6 +282,11 @@ final class ShellModel {
     /// Opens a map tool's pop-up natively (Export, Layers, the engine, the
     /// displayed scene), or presses a tool that has no pop-up.
     func tool(_ tool: DockTool) {
+        guard tool.tool == "draw" || allowMarkupExit({ self.performTool(tool) }) else { return }
+        performTool(tool)
+    }
+
+    private func performTool(_ tool: DockTool) {
         feedback += 1
         if let panel = Self.toolPanels[tool.tool] {
             if presentedPanel == panel { activeSheet = nil; return }
@@ -282,9 +301,56 @@ final class ShellModel {
         }
     }
 
+    /// Types a markup size into the web's own field and reports the web's
+    /// verdict, so the app's field stays open until the value is accepted.
+    func enterValue(_ ref: String, _ value: String, key: String, owner: String) async -> (accepted: Bool, message: String) {
+        let result = await evaluate("return CSPNativeShell.enterValue(ref, value, key, owner)",
+                                    ["ref": ref, "value": value, "key": key, "owner": owner]) as? [String: Any]
+        guard let result else { return (false, "The size could not be set. Try again.") }
+        return (result["accepted"] as? Bool == true, result["message"] as? String ?? "")
+    }
+
+    /// Selects a listed mark and, once the web confirms it is the selected
+    /// mark, lowers the sheet and brings the mark into view above it.
+    func selectMark(_ ref: String, fid: String) async -> Bool {
+        let result = await evaluate("return CSPNativeShell.selectMark(ref, fid, inset)",
+                                    ["ref": ref, "fid": fid, "inset": Double(mediumSheetHeight)]) as? [String: Any]
+        let selected = result?["selected"] as? Bool == true
+        if selected { detent = .medium }
+        return selected
+    }
+
+    /// Lowers the sheet to its medium height and moves the map so the
+    /// selected mark shows above it. The mark itself never moves.
+    func revealSelectedMark() {
+        detent = .medium
+        call("window.CSPMarkup?.revealSelected?.(inset)", ["inset": Double(mediumSheetHeight)])
+    }
+
+    /// Shows the markup tools again while drawing continues on the map.
+    func showMarkupTools() {
+        if let draw = dock.first(where: { $0.tool == "draw" }) { tool(draw) }
+    }
+
     func setMode(_ mode: String) {
-        feedback += 1
-        call("CSPNativeShell.setMode(mode)", ["mode": mode])
+        guard mode != map.mode else { return }
+        let change = {
+            self.feedback += 1
+            self.call("CSPNativeShell.setMode(mode)", ["mode": mode])
+        }
+        if allowMarkupExit(change) { change() }
+    }
+
+    /// Called before the dock or a map-mode change can cancel an unfinished
+    /// shape. No web command is sent when the person chooses Keep drawing.
+    private func allowMarkupExit(_ perform: @escaping () -> Void) -> Bool {
+        guard let status = map.markup, status.pending == true, (status.points ?? 0) >= 2 else { return true }
+        markupExit = MarkupExit(points: status.points ?? 0) {
+            // WebKit receives Cancel first, then the requested navigation.
+            self.act(status.cancel)
+            perform()
+        }
+        return false
     }
 
     /// Reuse the web dock's order and persistence, including hidden tools.
