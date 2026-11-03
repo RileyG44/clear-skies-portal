@@ -6,7 +6,7 @@ async function verify(){
   for(const file of [...site.web,...site.app,...site.engine,...site.vendor])
     assert(fs.existsSync(path.join(root,"app",file)),`Packaged engine/client file missing: ${file}`);
   for(const file of ["electron/main.js","electron/preload.js","electron/window-chrome.js","electron/engine-storage.js","electron/setup/index.html","electron/setup/setup.js","electron/setup/setup.css","electron/setup/icon.png"])
-    assert(extractFile(path.join(root,"app.asar"),file).length,`Shell asset missing: ${file}`);
+    assert(extractFile(path.join(root,"app.asar"),path.normalize(file)).length,`Shell asset missing: ${file}`);
   const ico=fs.readFileSync(path.join(root,"ClearSkies.ico"));
   assert.equal(ico.readUInt16LE(2),1);assert.equal(ico.readUInt16LE(4),1);
   const version=require("../package.json").version;
