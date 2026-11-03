@@ -11,9 +11,10 @@ const fs = require("fs"), zlib = require("zlib"), path = require("path");
 const IOS_OUT = process.argv.includes("--ios") ? process.argv[process.argv.indexOf("--ios") + 1] : null;
 if (process.argv.includes("--ios") && !IOS_OUT) throw new Error("--ios needs an output path");
 
-const S = 1024;                      // master size
+const WINDOWS = process.argv.includes("--windows");
+const S = WINDOWS ? 256 : 1024;      // output size; geometry stays in master coordinates
 const MARGIN = 100, R = 180;         // macOS icons sit inset in their canvas
-const X0 = MARGIN, X1 = S - MARGIN, Y0 = MARGIN, Y1 = S - MARGIN;
+const X0 = MARGIN, X1 = 1024 - MARGIN, Y0 = MARGIN, Y1 = 1024 - MARGIN;
 
 const clamp = (v,a,b) => v < a ? a : v > b ? b : v;
 const mix = (a,b,t) => a + (b-a)*clamp(t,0,1);
@@ -45,13 +46,13 @@ for (let y = 0; y < S; y++){
   for (let x = 0; x < S; x++){
     const i = (y*S + x)*4;
     // Pixel centre in the macOS master; for iOS, the inset square scaled to fill.
-    const cx = IOS_OUT ? X0 + (x+0.5)*(X1-X0)/S : x+0.5;
-    const cy = IOS_OUT ? Y0 + (y+0.5)*(Y1-Y0)/S : y+0.5;
-    const inside = IOS_OUT ? 1 : clamp(0.5 - sdRoundRect(x+0.5, y+0.5), 0, 1);
+    const cx = IOS_OUT ? X0 + (x+0.5)*(X1-X0)/S : (x+0.5)*1024/S;
+    const cy = IOS_OUT ? Y0 + (y+0.5)*(Y1-Y0)/S : (y+0.5)*1024/S;
+    const inside = IOS_OUT ? 1 : clamp(0.5 - sdRoundRect(cx, cy)*S/1024, 0, 1);
     if (inside <= 0) continue;
 
     // night sky, deep at the top easing to a lit horizon
-    const t = ((IOS_OUT ? cy-0.5 : y) - Y0) / (Y1 - Y0);
+    const t = (cy-0.5 - Y0) / (Y1 - Y0);
     over(i, mix(9,26,t*1.15), mix(20,63,t*1.15), mix(38,104,t*1.15), inside);
 
     // stars, fixed so the icon is byte-identical every build
@@ -113,6 +114,27 @@ const png = Buffer.concat([
   chunk("IDAT", zlib.deflateSync(raw, {level:9})),
   chunk("IEND", Buffer.alloc(0)),
 ]);
-const out = IOS_OUT ? path.resolve(IOS_OUT) : path.join(__dirname, "icon-1024.png");
-fs.writeFileSync(out, png);
+const out = WINDOWS ? path.join(__dirname,"icon.ico") : IOS_OUT ? path.resolve(IOS_OUT) : path.join(__dirname, "icon-1024.png");
+if(WINDOWS){
+  // ICO supports an embedded PNG at 256px. No platform-specific tools needed.
+  const header=Buffer.alloc(22);header.writeUInt16LE(1,2);header.writeUInt16LE(1,4);
+  header.writeUInt16LE(1,10);header.writeUInt16LE(32,12);
+  header.writeUInt32LE(png.length,14);header.writeUInt32LE(22,18);
+  fs.writeFileSync(out,Buffer.concat([header,png]));
+  // Branded NSIS welcome/finish artwork, 24-bit BMP at its native 164 x 314.
+  const w=164,h=314,stride=Math.ceil(w*3/4)*4,bmp=Buffer.alloc(54+stride*h);
+  bmp.write("BM");bmp.writeUInt32LE(bmp.length,2);bmp.writeUInt32LE(54,10);
+  bmp.writeUInt32LE(40,14);bmp.writeInt32LE(w,18);bmp.writeInt32LE(h,22);
+  bmp.writeUInt16LE(1,26);bmp.writeUInt16LE(24,28);
+  for(let y=0;y<h;y++)for(let x=0;x<w;x++){
+    let rgb=[mix(11,23,y/h),mix(22,52,y/h),mix(38,80,y/h)];
+    if(x>=18&&x<146&&y>=36&&y<164){
+      const i=((y-36)*2*S+(x-18)*2)*4,a=px[i+3]/255;
+      rgb=rgb.map((v,c)=>mix(v,px[i+c],a));
+    }
+    const j=54+(h-1-y)*stride+x*3;
+    bmp[j]=rgb[2];bmp[j+1]=rgb[1];bmp[j+2]=rgb[0];
+  }
+  fs.writeFileSync(path.join(__dirname,"installerSidebar.bmp"),bmp);
+}else fs.writeFileSync(out, png);
 console.log(`wrote ${out} (${(png.length/1024).toFixed(1)} KB)`);

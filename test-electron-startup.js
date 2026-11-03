@@ -9,6 +9,8 @@ function fixture({env={},platform='darwin',installed=true,saved='8770\n',error=n
     require(name){
       if(name==='electron')return {app:{isPackaged:false}};
       if(name==='fs')return {existsSync:()=>installed};
+      if(name==='./window-chrome')return require('./electron/window-chrome');
+      if(name==='./engine-storage')return require('./electron/engine-storage');
       if(name==='child_process')return {execFile:(file,args,options,callback)=>{
         calls.reads.push({file,args,options});callback(error,saved);
       }};
