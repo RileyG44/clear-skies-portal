@@ -113,7 +113,7 @@ async function main(){
   assert.deepEqual([...dnr._store.get('15/41/42').elev],[51,NaN,51,NaN],'new DNR revision bypasses stale request-cache pixels and strict gaps stay empty');
   const oregon=new context.Layer({...opts,oregonEndpoint:'/api/oregon/elev'});oregon._paint=()=>{};
   const oc={z:18,x:42287,y:94982},ocanvas=oregon.createTile(oc,()=>{});await tick();
-  deferred.get('engine/api/oregon/elev/18/42287/94982.png')({grid:new Float32Array([1212,NaN,1214,NaN]),width:2,height:2,
+  deferred.get('engine/api/oregon/elev/18/42287/94982.png?rv=olc-v2')({grid:new Float32Array([1212,NaN,1214,NaN]),width:2,height:2,
     surveys:[{project:'Lane County 2014',nativeMeters:.9144}]});await tick();
   deferred.get('engine/raw/18/42287/94982.png?ix=3')({grid:new Float32Array([10,20,10,20]),width:2,height:2});
   deferred.get('engine/national/17/21143/47491.png')({grid:new Float32Array([1,1,1,1]),width:2,height:2});
