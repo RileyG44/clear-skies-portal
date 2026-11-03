@@ -59,6 +59,7 @@ struct RowLabel: View {
 /// and the release sends change, as a person's drag on the web slider would.
 struct SliderRow: View {
     @Environment(ShellModel.self) private var shell
+    @Environment(\.dynamicTypeSize) private var typeSize
     let ref: String?
     let title: String
     let value: Double
@@ -69,13 +70,27 @@ struct SliderRow: View {
     var disabled = false
     /// The number field the web shows beside this slider.
     var entry: SubControl?
+    /// A control in place of the value, such as a markup size's exact entry.
+    var trailing: AnyView?
+    /// Title, slider and value on one line, for compact tool panes, when
+    /// the row has room for a usable track beside them.
+    var inline = false
+    var spoken: String?
+    /// The filled track's colour when the person has not chosen one.
+    var tint: Color?
+    @State private var rowWidth: CGFloat = 0
+    @State private var labelsWidth: CGFloat = 0
 
     @State private var local: Double?
     @State private var editing = false
     @State private var lastSent = Date.distantPast
     @State private var flush: Task<Void, Never>?
 
-    init(item: ShellItem) {
+    init(item: ShellItem, trailing: AnyView? = nil, inline: Bool = false, tint: Color? = nil) {
+        self.trailing = trailing
+        self.inline = inline
+        self.tint = tint
+        spoken = item.accessibility ?? item.display
         ref = item.ref
         title = item.text
         let min = item.min?.number ?? 0
@@ -102,17 +117,73 @@ struct SliderRow: View {
     }
 
     var body: some View {
+        Group {
+            if inline && !typeSize.isAccessibilitySize && (rowWidth == 0 || rowWidth - labelsWidth >= 140) {
+                HStack(spacing: 12) {
+                    Text(title).lineLimit(1).fixedSize()
+                    slider.layoutPriority(-1)
+                    valueLabel(trailingWidth: 40)
+                }
+                .disabled(disabled)
+                .onChange(of: value) { if !editing { local = nil } }
+            } else {
+                stacked
+            }
+        }
+        .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { rowWidth = $0 }
+        // The title and value's own widths decide whether a track still fits.
+        .background {
+            HStack(spacing: 12) {
+                Text(title).lineLimit(1).fixedSize()
+                valueLabel(trailingWidth: 40)
+            }
+            .fixedSize()
+            .hidden()
+            .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { labelsWidth = $0 + 12 }
+            .accessibilityHidden(true)
+        }
+    }
+
+    @ViewBuilder private func valueLabel(trailingWidth: CGFloat) -> some View {
+        if let trailing {
+            trailing
+        } else if let display, !display.isEmpty {
+            Text(display)
+                .portalFont(.footnote, digits: true)
+                .foregroundStyle(MenuSecondary())
+                .contentTransition(.numericText())
+                .frame(minWidth: trailingWidth, alignment: .trailing)
+        }
+    }
+
+    private var stacked: some View {
         VStack(alignment: .leading, spacing: 10) {
-            HStack(alignment: .firstTextBaseline) {
-                Text(title)
-                Spacer(minLength: 8)
-                if let entry {
-                    NumberEntry(control: entry)
-                } else if let display, !display.isEmpty {
-                    Text(display)
-                        .portalFont(.footnote, digits: true)
-                        .foregroundStyle(MenuSecondary())
-                        .contentTransition(.numericText())
+            if let trailing {
+                // A wide value control moves under its title rather than
+                // squeezing it (a number field keeps one stable place).
+                ViewThatFits(in: .horizontal) {
+                    HStack(alignment: .firstTextBaseline) {
+                        Text(title).fixedSize()
+                        Spacer(minLength: 8)
+                        trailing
+                    }
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text(title).fixedSize(horizontal: false, vertical: true)
+                        trailing
+                    }
+                }
+            } else {
+                HStack(alignment: .firstTextBaseline) {
+                    Text(title)
+                    Spacer(minLength: 8)
+                    if let entry {
+                        NumberEntry(control: entry)
+                    } else if let display, !display.isEmpty {
+                        Text(display)
+                            .portalFont(.footnote, digits: true)
+                            .foregroundStyle(MenuSecondary())
+                            .contentTransition(.numericText())
+                    }
                 }
             }
             slider
@@ -129,7 +200,7 @@ struct SliderRow: View {
     /// tick for every step, which reads as a dotted line on fine ranges.
     private var slider: some View {
         PortalSlider(value: Binding(get: { local ?? value }, set: { send(snapped($0)) }),
-                     range: range, title: title, onEditingChanged: editingChanged)
+                     range: range, title: title, onEditingChanged: editingChanged, spoken: spoken, tint: tint)
             .frame(height: 44)
     }
 
@@ -143,7 +214,7 @@ struct SliderRow: View {
     private func send(_ next: Double) {
         local = next
         // VoiceOver/keyboard adjustments need a committed value too.
-        if !editing { shell.act(ref, .commit, next); return }
+        if !editing { shell.act(ref, .commit, next); settle(); return }
         let now = Date()
         if now.timeIntervalSince(lastSent) >= 1.0 / 60 {
             lastSent = now
@@ -164,6 +235,16 @@ struct SliderRow: View {
         if !isEditing {
             flush?.cancel()
             if let latest = local { shell.act(ref, .commit, latest) }
+            settle()
+        }
+    }
+
+    /// After a commit the web's value is the truth again, even when the web
+    /// kept its old value and so sent no change to reset the thumb.
+    private func settle() {
+        flush = Task {
+            do { try await Task.sleep(for: .seconds(1)) } catch { return }
+            if !editing { local = nil }
         }
     }
 }

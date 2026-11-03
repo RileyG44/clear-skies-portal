@@ -54,6 +54,15 @@ struct RootView: View {
         .onChange(of: portal.shell.activeSheet) {
             if portal.shell.activeSheet == nil { portal.host.webView.window?.endEditing(true) }
         }
+        .confirmationDialog("Discard the unfinished shape?", isPresented: Binding(
+            get: { portal.shell.markupExit != nil },
+            set: { if !$0 { portal.shell.markupExit = nil } }
+        ), titleVisibility: .visible, presenting: portal.shell.markupExit) { request in
+            Button("Discard shape", role: .destructive) { request.perform() }
+            Button("Keep drawing", role: .cancel) {}
+        } message: { request in
+            Text("Switching tools or map views removes its \(request.points) points.")
+        }
         .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillChangeFrameNotification)) { notification in
             guard let frame = notification.userInfo?[UIResponder.keyboardFrameEndUserInfoKey] as? CGRect,
                   let window = portal.host.webView.window else { return }
@@ -155,6 +164,7 @@ private struct FloatingToolsSheet: View {
             }
         }
         .frame(height: contentHeight)
+        .onChange(of: mediumHeight, initial: true) { shell.mediumSheetHeight = mediumHeight }
         .background { SheetGlass() }
         .background {
             HeaderPanSurface(enabled: sheet == .tools && shell.path.isEmpty,
