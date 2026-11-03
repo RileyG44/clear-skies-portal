@@ -104,9 +104,6 @@ struct HomeView: View {
         .onChange(of: searchFocused) {
             if searchFocused, shell.detent != .expanded { shell.detent = .expanded }
         }
-        .onAppear {
-            if shell.searchRequested { searchFocused = true; shell.searchRequested = false }
-        }
         .onChange(of: shell.query) { shell.queryChanged() }
     }
 }

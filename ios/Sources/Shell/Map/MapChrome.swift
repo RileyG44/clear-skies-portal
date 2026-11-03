@@ -231,8 +231,16 @@ struct TerrainStatusCapsule: View {
     @Environment(\.accessibilityReduceMotion) private var reducedMotion
     @State private var expanded = false
     @State private var contentHeight: CGFloat = 180
+    @State private var originY: CGFloat = 0
     var maxHeight: CGFloat = 420
     var tileWidth: CGFloat = 260
+
+    /// The tile's tallest size. With a menu open it ends 8 points above the
+    /// menu's top edge, so the menu never covers it; its details scroll.
+    private var heightLimit: CGFloat {
+        guard shell.activeSheet != nil, let sheetTop = shell.sheetTop else { return maxHeight }
+        return min(maxHeight, max(MapControlSize.status, sheetTop - originY - 8))
+    }
 
     var body: some View {
         if let info = shell.status.mapInfo {
@@ -240,6 +248,7 @@ struct TerrainStatusCapsule: View {
             // prevents the dock's layout and system glass from recentering it.
             Color.clear
                 .frame(width: MapControlSize.status, height: MapControlSize.status)
+                .onGeometryChange(for: CGFloat.self) { $0.frame(in: .named("portal-map")).minY } action: { originY = $0 }
                 .overlay(alignment: .topLeading) {
                     VStack(alignment: .leading, spacing: 0) {
                         Button {
@@ -269,8 +278,9 @@ struct TerrainStatusCapsule: View {
                                     .frame(width: tileWidth, alignment: .leading)
                                     .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { contentHeight = $0 }
                             }
-                            .frame(width: tileWidth, height: min(contentHeight, max(44, maxHeight - MapControlSize.status)), alignment: .top)
+                            .frame(width: tileWidth, height: min(contentHeight, max(0, heightLimit - MapControlSize.status)), alignment: .top)
                             .scrollBounceBehavior(.basedOnSize)
+                            .animation(reducedMotion ? nil : .snappy(duration: 0.3), value: heightLimit)
                         }
                     }
                     .frame(width: expanded ? tileWidth : MapControlSize.status, alignment: .topLeading)

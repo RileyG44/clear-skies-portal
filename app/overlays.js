@@ -873,6 +873,8 @@ function initAlerts(){
       if(Object.prototype.hasOwnProperty.call(ovOn,id)) alertPrefs[key]=!!ovOn[id];
     alertPrefs.fires=$("#fire").checked;
   }
+  // The launch view shows only its own layers; filters and severities persist.
+  if(cspFreshView) Object.assign(alertPrefs,{nws:false,quakes:false,volcanoes:false,fires:false});
   if(!["all","watch","warning"].includes(alertPrefs.nwsSeverity)) alertPrefs.nwsSeverity="all";
   if(!["hour","day","week","month"].includes(alertPrefs.quakeAge)) alertPrefs.quakeAge="week";
   if(![-1,1,2.5,4,5.5].includes(+alertPrefs.quakeMag)) alertPrefs.quakeMag=-1;
@@ -1016,7 +1018,7 @@ setInterval(()=>{
 },60000);
 
 ovLoad();
-if (cspFreshView) { ovOn = {water:true}; ovOpacities = {water:60}; }
+if (cspFreshView) { ovOn = {water:true}; ovOpacities = {...ovOpacities, water:10}; }
 ovRender(); ovApply();
 ovThemedReady=true;      // from here a theme switch may rebuild themed overlays
 

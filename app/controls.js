@@ -132,7 +132,7 @@ function saveSearchPrefs(){
     mosaic:$("#mosaic").checked,fire:$("#fire").checked,opacity:+$("#op").value
   })) }catch(error){}
 }
-loadSearchPrefs();MOSAIC_ON=$("#mosaic").checked;syncChecks();
+loadSearchPrefs();if(cspFreshView) $("#fire").checked=false;MOSAIC_ON=$("#mosaic").checked;syncChecks();
 initAlerts();
 syncDateUI();
 $("#cloud").onchange=()=>LOC&&run();

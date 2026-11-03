@@ -165,6 +165,8 @@ private struct FloatingToolsSheet: View {
         }
         .frame(height: contentHeight)
         .onChange(of: mediumHeight, initial: true) { shell.mediumSheetHeight = mediumHeight }
+        // Map info fits itself above the sheet's top edge (portal-map space).
+        .onChange(of: top, initial: true) { shell.sheetTop = top }
         .background { SheetGlass() }
         .background {
             HeaderPanSurface(enabled: sheet == .tools && shell.path.isEmpty,
@@ -185,7 +187,10 @@ private struct FloatingToolsSheet: View {
                 }
             }
         }
-        .clipShape(.rect(cornerRadius: 32))
+        // The sheet sits 4 points from the screen's bottom edge. Bottom
+        // corners follow the display's own rounded corners (never tighter
+        // than the top's 32 points), so the screen does not clip them.
+        .clipShape(.rect(uniformTopCorners: .fixed(32), uniformBottomCorners: .concentric(minimum: .fixed(32))))
         .environment(\.portalSheetSurface, true)
         .scrollDisabled(resizing)
         .onPreferenceChange(SheetScrollTopKey.self) { listAtTop = $0 }

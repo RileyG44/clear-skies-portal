@@ -1017,7 +1017,7 @@ function renderSettingsView(){
   try{panShading.value=window.CSPGpuTerrainLayer?.panShadingMode(localStorage)||"off"}catch(error){panShading.value="off"}
   panShading.addEventListener("change",()=>{
     const mode=panShading.value;
-    try{if(mode==="off")localStorage.removeItem("clearskies.panShading.v1");else localStorage.setItem("clearskies.panShading.v1",mode)}catch(error){}
+    try{localStorage.setItem("clearskies.panShading.v1",mode)}catch(error){}
     document.dispatchEvent(new CustomEvent("csp:pan-shading",{detail:{mode}}));
   });
   $("[data-reset-all]",access).addEventListener("click",()=>{

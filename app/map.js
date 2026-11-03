@@ -4,18 +4,25 @@
    height creates a black band below Leaflet. The map intentionally paints into
    the covered area and only controls opt into safe-area insets. */
 // Decide before hydration writes preferences. Any share payload (including an
-// invalid one), native recovery or existing map/layer preferences owns startup.
-function cspFreshStartup(storage, hash, resume) {
+// invalid one) or native recovery owns startup. The iPhone app opens each new
+// session (a cold launch, not a reload after iOS ended the page) on the launch
+// view; elsewhere only a first visit without map/layer preferences does.
+function cspFreshStartup(storage, hash, resume, sessionStart) {
   if (resume || new URLSearchParams(hash.slice(1)).has("csp")) return false;
+  if (sessionStart) return true;
   try {
     return !["clearskies.terrain.v2", "clearskies.lidarStudio.v1", "clearskies.overlays.v1",
       "clearskies.alerts.v1", "clearskies.search.v1"].some(key => storage.getItem(key) !== null);
   } catch (_) { return false; }
 }
-const cspFreshView = cspFreshStartup(localStorage, location.hash, window.CSPNativeHost?.resume);
-// CR-010: camera reconstructed from Riley's 430x932-point reference. Fit the
-// same geographic rectangle on other aspect ratios, without selecting a place.
-const CSP_STARTUP_VIEW = Object.freeze({center: [41.637234, -112.985268], zoom: 4.5, width: 430, height: 932});
+const cspFreshView = cspFreshStartup(localStorage, location.hash, window.CSPNativeHost?.resume,
+  window.CSPNativeHost?.sessionStart === true);
+// Launch camera reconstructed from Riley's 430x932-point Missoula reference
+// (Medical Lake scablands, z10.04). Fit the same geographic rectangle on other
+// aspect ratios, without selecting a place.
+const CSP_STARTUP_VIEW = Object.freeze({center: [47.559373, -117.699455], zoom: 10.04, width: 430, height: 932});
+// Launch layer stack, top first: elevation band, Rivers & lakes, LiDAR.
+const CSP_STARTUP_LAYER_ORDER = Object.freeze(["elevation-bands", "overlay:water", "terrain"]);
 function cspStartupZoom(width, height) {
   return CSP_STARTUP_VIEW.zoom + Math.log2(Math.min(width / CSP_STARTUP_VIEW.width, height / CSP_STARTUP_VIEW.height));
 }
