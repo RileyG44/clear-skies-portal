@@ -216,7 +216,7 @@ updateCoordinateActions();
    a missing feature from a cached old page, which is exactly the confusion a
    service worker with no invalidation produced. */
 const CSP_BUILD=window.CSP_BUILD||"development";
-console.log("Clear Skies Portal build "+CSP_BUILD);
+console.log("ClearSkies build "+CSP_BUILD);
 /* Tap the build stamp for the numbers that describe this device's viewport.
    A layout bug that only appears on a real phone cannot be reasoned about from
    a desktop; what settles it is whether the page fills the window and whether

@@ -79,7 +79,7 @@ class RunnerTests(unittest.TestCase):
                 launch = calls[-1]
                 self.assertIn("--terminate-existing", launch)
                 self.assertEqual("--no-activate" in launch, bool(arguments))
-                self.assertIn("Installed Clear Skies on physical iPhone real.", result.stdout)
+                self.assertIn("Installed ClearSkies on physical iPhone real.", result.stdout)
 
     def test_no_physical_phone_exits_before_build_or_install(self):
         result, calls = self.run_script([phone("sim", reality="simulated"), phone(state="unavailable")],

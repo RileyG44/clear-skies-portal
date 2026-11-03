@@ -5,7 +5,7 @@ async function verify(){
   const root=path.resolve("dist/win-unpacked/resources"),site=require("../site.json");
   for(const file of [...site.web,...site.app,...site.engine,...site.vendor])
     assert(fs.existsSync(path.join(root,"app",file)),`Packaged engine/client file missing: ${file}`);
-  for(const file of ["electron/main.js","electron/preload.js","electron/window-chrome.js","electron/engine-storage.js","electron/setup/index.html","electron/setup/setup.js","electron/setup/setup.css","electron/setup/icon.png"])
+  for(const file of ["electron/main.js","electron/preload.js","electron/window-chrome.js","electron/engine-storage.js","electron/setup/index.html","electron/setup/guide.html","electron/setup/setup.js","electron/setup/setup.css","electron/setup/icon.png","electron/setup/terrain-welcome.webp","electron/setup/fonts/Pacifico.ttf","electron/setup/fonts/Inter.woff2"])
     assert(extractFile(path.join(root,"app.asar"),path.normalize(file)).length,`Shell asset missing: ${file}`);
   const ico=fs.readFileSync(path.join(root,"ClearSkies.ico"));
   assert.equal(ico.readUInt16LE(2),1);assert.equal(ico.readUInt16LE(4),1);
@@ -41,7 +41,7 @@ async function verify(){
       }
       assert(healthy,`Packaged engine did not become healthy: ${output}`);
       const page=await fetch(`http://127.0.0.1:${port}/`);assert.equal(page.status,200);
-      assert.match(await page.text(),/Clear Skies/);
+      assert.match(await page.text(),/ClearSkies/);
       console.log("Packaged Electron runtime started the bundled engine: health and client HTTP 200.");
     }finally{
       if(child.exitCode===null){child.kill();await once(child,"exit");}

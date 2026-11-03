@@ -49,4 +49,4 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           RELEASE_TAG: ${{ github.ref_name }}
         run: |
-          gh release create "$RELEASE_TAG" dist/* --verify-tag --title "Clear Skies for Windows ${RELEASE_TAG#desktop-v}" --notes-file docs/WINDOWS_RELEASE.md
+          gh release create "$RELEASE_TAG" dist/* --verify-tag --title "ClearSkies for Windows ${RELEASE_TAG#desktop-v}" --notes-file docs/WINDOWS_RELEASE.md

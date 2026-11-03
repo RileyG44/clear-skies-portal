@@ -2,28 +2,24 @@
 <html lang="en">
 <head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'self'; img-src 'self'; script-src 'self'">
-<title>Welcome to Clear Skies</title><link rel="stylesheet" href="setup.css"><script src="setup.js" defer></script>
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'self'; img-src 'self'; font-src 'self'; script-src 'self'">
+<title>Welcome to ClearSkies</title><link rel="stylesheet" href="setup.css"><script src="setup.js" defer></script>
 </head>
-<body>
-<aside><div class="brand"><img src="icon.png" alt=""><span>Clear Skies</span></div>
-<div class="intro"><span class="eyebrow">A LITTLE CLOSER TO EARTH</span><h1>Your terrain.<br>Your devices.</h1><p>A personal terrain engine, installed with your map.</p></div>
-<div class="included"><span class="status"></span>Local engine included<br><small>No separate Node.js installation.</small></div></aside>
-<main>
-<header><span class="eyebrow">WELCOME / SETUP GUIDE</span><h2>Ready for a closer look.</h2><p>Clear Skies and its terrain engine are installed on this computer. Open the app to start the engine automatically. Tailscale is optional for connecting your other devices.</p></header>
-<section aria-labelledby="engine-title"><div class="section-label">01 / THE TERRAIN ENGINE</div><h3 id="engine-title">More detail. A shared place to process it.</h3>
-<div class="table-wrap"><table><thead><tr><th scope="col">What you can do</th><th scope="col">Browser, without an engine</th><th scope="col">With your terrain engine</th></tr></thead><tbody>
-<tr><th scope="row">Explore imagery &amp; maps</th><td>Public satellite imagery, basemaps and browser-accessible national 3DEP.</td><td>The same maps, plus access to providers that require a server.</td></tr>
-<tr><th scope="row">Inspect detailed elevation</th><td>Rendered national terrain, with overview fallback.</td><td>Raw USGS 1 m DEM rendering and WA DNR bare-earth elevation where surveys are available.</td></tr>
-<tr><th scope="row">Prepare areas for later</th><td>Browser caching depends on the device and browser.</td><td>Resumable offline-area downloads and persistent server-side terrain caches.</td></tr>
-<tr><th scope="row">Use specialist layers</th><td>Layers whose providers allow direct browser access.</td><td>Engine-backed providers such as WA DNR, Macrostrat and SNODAS.</td></tr>
-<tr><th scope="row">Connect another device</th><td>Each device fetches and processes its own supported data.</td><td>Authorized devices can use the same computer's processing and cached data through a personal engine link.</td></tr>
-</tbody></table></div>
-<p class="note">Detail depends on real survey coverage and provider availability. A terrain engine can unlock finer elevation sources; it does not create higher-resolution satellite imagery. Overview data stays labeled as overview.</p></section>
-<section aria-labelledby="tailscale-title"><div class="section-label">02 / OPTIONAL REMOTE ACCESS</div><h3 id="tailscale-title">Take your engine with you.</h3><p>Tailscale creates an encrypted private network, called a <strong>tailnet</strong>, between your devices. It lets you reach your own computer securely from elsewhere without opening a public port on your router.</p>
-<div class="steps"><div><b>1</b><h4>Install &amp; sign in</h4><p>Install Tailscale on this computer and your other desktops, phones or tablets. Sign them into the same tailnet, or have its owner authorize access.</p></div><div><b>2</b><h4>Share your engine</h4><p>Once private sharing is configured on the engine computer, its personal HTTPS engine link can be used by any device on your tailnet permitted by its access rules.</p></div><div><b>3</b><h4>Connect in Clear Skies</h4><p>Open Settings → Secure terrain engine on the other device, enter your engine link and choose Connect. This works on desktops and mobile devices.</p></div></div>
-<nav aria-label="Official Tailscale downloads" class="links"><a class="primary" href="https://pkgs.tailscale.com/stable/tailscale-setup-latest.exe">Download Tailscale for Windows ↗</a><a href="https://tailscale.com/">Official Tailscale website ↗</a><a href="https://tailscale.com/download">Downloads for other devices ↗</a></nav>
-<p class="note">The Windows button uses Tailscale's version-independent latest stable installer URL. You can install Tailscale during setup or come back later. Tailscale is installed separately and sign-in stays with Tailscale.</p>
-<div class="callout"><strong>What happens now</strong><p>Your local engine works immediately while Clear Skies is running. Keep its computer powered on, awake and online for remote use. Installing Tailscale alone does not publish an engine link. Private sharing must currently be configured manually; automatic Tailscale engine-server setup and link generation are planned for the next app update.</p></div></section>
-<footer><div><strong>Everything starts locally.</strong><p>Reopen this guide with F1 or “Clear Skies Setup and Tailscale” in Start.</p><p>To keep the app on your taskbar, right-click Clear Skies Portal in Start and choose Pin to taskbar.</p></div><button id="finish" type="button">Open Clear Skies <span aria-hidden="true">→</span></button><p id="error" role="alert" hidden>Could not open the map. Please try again.</p></footer>
-</main></body></html>
+<body class="welcome-page">
+<img class="welcome-terrain" src="terrain-welcome.webp" alt="LiDAR terrain captured in ClearSkies, with luminous blue and green river valleys.">
+<div class="welcome-shade" aria-hidden="true"></div>
+<header class="welcome-status"><span class="status" aria-hidden="true"></span>APP &amp; TERRAIN ENGINE INSTALLED</header>
+<main class="welcome-content">
+  <p class="welcome-kicker">Welcome to</p>
+  <h1 class="wordmark">ClearSkies</h1>
+  <h2>A new perspective on the land.</h2>
+  <p class="welcome-description">Explore satellite imagery and detailed terrain.<br>Your personal terrain engine is ready. See what you discover.</p>
+  <p class="welcome-tailscale">Use Tailscale to reach your terrain engine from your other devices.</p>
+  <div class="welcome-actions">
+    <button id="finish" type="button">Open ClearSkies <span aria-hidden="true">→</span></button>
+    <a class="welcome-learn" href="guide.html">Learn about Tailscale <span aria-hidden="true">↗</span></a>
+  </div>
+  <p id="error" role="alert" hidden>Could not open the map. Please try again.</p>
+</main>
+<footer class="welcome-caption">A terrain capture from ClearSkies<span>01 / WELCOME</span></footer>
+</body></html>

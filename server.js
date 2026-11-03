@@ -1,4 +1,4 @@
-/* Clear Skies Portal — local server
+/* ClearSkies — local server
    Serves the app and proxies the few upstreams that refuse CORS
    (WA DNR lidar portal, NASA FIRMS), with an on-disk cache so repeat
    tiles are instant. Node >= 22.12; the DNR reader is bundled locally.
@@ -172,7 +172,7 @@ if(require.main===module){
   };
   process.once("SIGTERM",shutdown);process.once("SIGINT",shutdown);
   server.listen(PORT,HOST,()=>{
-    console.log(`Clear Skies Portal  ->  http://localhost:${PORT}`);
+    console.log(`ClearSkies  ->  http://localhost:${PORT}`);
     console.log(`  serving ${ROOT}`);
     console.log(`  cache   ${CACHE}`);
   });

@@ -120,7 +120,7 @@ struct Wordmark: View {
             .foregroundStyle(PortalPrimary())
             .lineLimit(1)
             .minimumScaleFactor(0.7)
-            .accessibilityLabel("Clear Skies")
+            .accessibilityLabel("ClearSkies")
             .accessibilityAddTraits(.isHeader)
     }
 }

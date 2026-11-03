@@ -30,7 +30,7 @@ if [[ -z "$NODE_BIN" ]] || ! valid_node "$NODE_BIN"; then
   done
 fi
 if [[ -z "$NODE_BIN" ]]; then
-  print -u2 "Clear Skies Portal needs Node 22.12 or newer."
+  print -u2 "ClearSkies needs Node 22.12 or newer."
   exit 78
 fi
 
