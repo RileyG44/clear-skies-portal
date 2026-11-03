@@ -21,8 +21,8 @@ const cspFreshView = cspFreshStartup(localStorage, location.hash, window.CSPNati
 // (Medical Lake scablands, z10.04). Fit the same geographic rectangle on other
 // aspect ratios, without selecting a place.
 const CSP_STARTUP_VIEW = Object.freeze({center: [47.559373, -117.699455], zoom: 10.04, width: 430, height: 932});
-// Launch layer stack, top first: elevation band, Rivers & lakes, LiDAR.
-const CSP_STARTUP_LAYER_ORDER = Object.freeze(["elevation-bands", "overlay:water", "terrain"]);
+// Launch layer stack, top first: Rivers & lakes, elevation band, LiDAR.
+const CSP_STARTUP_LAYER_ORDER = Object.freeze(["overlay:water", "elevation-bands", "terrain"]);
 function cspStartupZoom(width, height) {
   return CSP_STARTUP_VIEW.zoom + Math.log2(Math.min(width / CSP_STARTUP_VIEW.width, height / CSP_STARTUP_VIEW.height));
 }

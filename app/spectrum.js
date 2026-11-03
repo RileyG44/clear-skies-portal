@@ -238,9 +238,9 @@ loadTerrainPrefs();
 if (cspFreshView && lidarStudio) {
   // Hydrate the existing model before the normal csp:ready renderer starts;
   // do not synthesize a user change or start a second startup rendering path.
-  // The launch view is the Missoula preset: the Missoula look, ground below
-  // 2,320 ft shaded water blue at 35%, then Rivers & lakes at 10% between it
-  // and the LiDAR terrain (overlays.js), in CSP_STARTUP_LAYER_ORDER.
+  // The launch view is the Missoula preset: Rivers & lakes at 10% on top
+  // (overlays.js), ground below 2,320 ft shaded water blue at 35%, then the
+  // Missoula LiDAR look, in CSP_STARTUP_LAYER_ORDER.
   const look = CSPLidarRender.LOOKS.find(look => look.id === "missoula");
   const result = CSPLidarRender.applyScene(lidarStudio.state(), look.scene, look.id);
   $("#terStyle").value = result.style;

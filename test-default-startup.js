@@ -42,8 +42,8 @@ assert.equal(state.base.rem.palette,'ember');
 assert.equal(fields['#elevBelowOn'].checked,true);assert.equal(fields['#elevBelowVal'].value,2320);
 assert.equal(fields['#elevBelowColor'].value,'#006981');assert.equal(fields['#elevBandAlpha'].value,35);
 assert.equal(fields['#elevSh'].checked,false);assert.equal(fields['#elevAboveOn'].checked,false);
-// Elevation on top, Rivers & lakes between, LiDAR terrain below.
-assert.deepEqual(JSON.parse(stored['clearskies.active-layer-order.v1']),['elevation-bands','overlay:water','terrain']);
+// Rivers & lakes on top, then the elevation band, LiDAR terrain below.
+assert.deepEqual(JSON.parse(stored['clearskies.active-layer-order.v1']),['overlay:water','elevation-bands','terrain']);
 const overlays=fs.readFileSync('app/overlays.js','utf8');
 assert(overlays.includes('if (cspFreshView) { ovOn = {water:true}; ovOpacities = {...ovOpacities, water:10}; }'),'Rivers & lakes at 10%');
 assert(/if\(cspFreshView\) Object\.assign\(alertPrefs,\{nws:false,quakes:false,volcanoes:false,fires:false\}\)/.test(overlays),'live alert layers start off');
