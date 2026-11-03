@@ -472,7 +472,7 @@
         for (var j = 0; j < residents.length; j++) {
           var e = residents[j], r = e.record, spec = sources.get(r.sourceId);
           if (spec && spec.allowed && !spec.allowed(tile)) continue;
-          // Sparse DNR coverage is authoritative at the finest answered
+          // Sparse survey coverage is authoritative at the finest answered
           // level. Its nodata reveals lower-ranked terrain, rather than a
           // magnified sample left over from a much wider view.
           if (coverageLevels[r.sourceId] !== undefined && r.z < coverageLevels[r.sourceId]) continue;

@@ -29,7 +29,7 @@ function rgba(png){
 const primary={OBJECTID:96,Name:'OLC_LANE_COUNTY_2014_BARE_EARTH_OGIC_2011',Category:1,LowPS:3,ZOrder:2014};
 const project={OBJECTID:600,Project:'Lane County 2014',CELL_SIZE:'3 FOOT',Vert_Units:'Feet',Vert_Datum:'NAVD88',ACQ_DATES:'2013-2015'};
 function fixture(){
-  const memory=new Map(),calls=[];let fail=false,overviewOnly=false,values=Array(16).fill(3977.22);values[0]=-999999;values[1]=12000;
+  const memory=new Map(),calls=[];let fail=false,overviewOnly=false;
   const context={module:{exports:{}},process,Buffer,console,URLSearchParams,require:name=>name==='./tile-cache.js'?{
     TTL_TILE:Infinity,key:x=>x,cacheGet:k=>memory.get(k),cachePut:(k,status,type,body,sourceMeta)=>memory.set(k,{status,type,body,sourceMeta})
   }:name==='./upstream.js'?{limitedUpstream:async(id,options,body,signal)=>{
@@ -40,9 +40,10 @@ function fixture(){
       const items=u.pathname.includes('DOGAMI_Lidar_Project_Status')?[project]:[{...primary,Category:overviewOnly?2:1}];
       return {status:200,body:Buffer.from(JSON.stringify({features:items.map(attributes=>({attributes}))}))};
     }
-    assert.equal(u.searchParams.get('format'),'tiff');assert.deepEqual(JSON.parse(u.searchParams.get('renderingRule')),{rasterFunction:'None'});
+    assert.equal(u.searchParams.get('format'),'lerc');assert.equal(u.searchParams.get('lercVersion'),'2');
+    assert.equal(u.searchParams.get('pixelType'),'F32');assert.deepEqual(JSON.parse(u.searchParams.get('renderingRule')),{rasterFunction:'None'});
     assert.deepEqual(JSON.parse(u.searchParams.get('mosaicRule')).lockRasterIds,[96]);
-    return {status:200,body:tiff(values)};
+    return {status:200,body:fs.readFileSync(path.join(root,'test-fixtures/oregon/hood-survey-edge.lerc'))};
   }}:localRequire(name)};
   vm.runInNewContext(fs.readFileSync(path.join(root,'engine/oregon.js'),'utf8'),context,{filename:'engine/oregon.js'});
   const module=context.module.exports;
@@ -61,11 +62,20 @@ function fixture(){
   assert.equal(f.module.selectSources([primary],[{...project,Project:'Lane County 2015'}]).length,0,'matching place names cannot substitute for the survey year');
   for(const p of [{...project,Vert_Units:'Unknown'},{...project,CELL_SIZE:'30 FOOT'}])assert.equal(f.module.selectSources([primary],[p]).length,0);
   assert.equal(f.module.selectSources([{...primary,Category:2}],[project]).length,0,'overviews are never numeric lidar');
-  const first=await f.request();assert.equal(first.status,200);assert.equal(+first.headers['X-Coverage'],.938);
-  const px=rgba(first.body),height=p=>p[0]*256+p[1]+p[2]/256-32768;
+  const values=Array(16).fill(3977.22);values[0]=-999999;values[1]=12000;
+  const converted=await terrain.terrainTask('oregon-unit-test','terrarium-tiff',{body:tiff(values),verticalScale:.3048});
+  const px=rgba(converted.png),height=p=>p[0]*256+p[1]+p[2]/256-32768;
   assert.equal(px[0][3],0,'nodata stays transparent');
   assert(Math.abs(height(px[1])-3657.6)<.004,'a 12000-foot summit converts before the elevation validity range check');
   assert(Math.abs(height(px[2])-3977.22*.3048)<.004,'feet convert to meters exactly once');
+  f.memory.set('oregon-olc-v1:18/42287/94982',{status:200,type:'image/png',body:Buffer.from('corrupt cached tile')});
+  const first=await f.request();assert.equal(first.status,200);assert.equal(+first.headers['X-Coverage'],.308);
+  const masked=rgba(first.body),valid=masked.filter(p=>p[3]);
+  assert.equal(valid.length,20178,'only the LERC mask establishes coverage');
+  assert.equal(masked.length-valid.length,45358,'unmarked TIFF zeroes remain transparent through LERC');
+  assert(valid.every(p=>height(p)>982&&height(p)<1400),'no false sea-level plateaus survive packing');
+  assert(f.memory.has('oregon-olc-v2:18/42287/94982'),'old corrupted server tiles cannot be reused');
+  await assert.rejects(terrain.terrainTask('oregon-corrupt-test','terrarium-lerc',{body:Buffer.from('invalid raster'),verticalScale:.3048}));
   const sources=JSON.parse(decodeURIComponent(first.headers['X-Oregon-Sources']));
   assert.equal(sources[0].provider,'Oregon DOGAMI');assert.equal(sources[0].verticalUnits,'meters');assert.equal(sources[0].sourceVerticalUnits,'Feet');
   assert.match(first.headers['Access-Control-Expose-Headers'],/X-Oregon-Sources/);
@@ -88,6 +98,8 @@ function fixture(){
 
   const sourcesSpec=buildSources({oregonEndpoint:'/api/oregon/elev'},{proxy:true,api:x=>x,oregonTileAllowed:publicTerrain.oregonTileAllowed});
   assert.equal(sourcesSpec[0].rank,6);assert.equal(sourcesSpec[0].group,'oregon');
+  assert.equal(sourcesSpec[0].authoritativeCoverage,true,'finer masked Oregon coverage supersedes magnified ancestors');
+  assert.match(sourcesSpec[0].url(18,42287,94982),/\?rv=olc-v2$/,'new clients bypass old immutable HTTP tiles');
   assert(sourcesSpec[0].allowed({z:18,x:42287,y:94982}));assert(!sourcesSpec[0].allowed({z:18,x:50000,y:50000}));
   const overlapping=buildSources({oregonEndpoint:'/api/oregon/elev',dnrEndpoint:'/api/wadnr/elev'},
     {proxy:true,api:x=>x,oregonTileAllowed:publicTerrain.oregonTileAllowed,dnrTileAllowed:c=>c.x===42287});

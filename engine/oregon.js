@@ -3,7 +3,7 @@
    and spacing before a raster can contribute; feet become metres once. */
 'use strict';
 const {limitedUpstream}=require('./upstream.js');
-const {send}=require('./http.js'),{TRANSPARENT,isTiff}=require('./images.js');
+const {send}=require('./http.js'),{TRANSPARENT}=require('./images.js');
 const {TTL_TILE,key,cacheGet,cachePut}=require('./tile-cache.js');
 const {terrainTask}=require('./terrain.js');
 const {mercBbox}=require('../cache-budget.js');
@@ -11,7 +11,7 @@ const {oregonTileAllowed}=require('../public-terrain.js');
 const HOST='gis.dogami.oregon.gov',ROOT='/arcgis/rest/services/lidar/';
 const SERVICE=ROOT+'DIGITAL_TERRAIN_MODEL_MOSAIC/ImageServer';
 const PROJECTS=ROOT+'DOGAMI_Lidar_Project_Status/MapServer/1';
-const VERSION='oregon-olc-v1',CATALOG_TTL=10*60*1000;
+const VERSION='oregon-olc-v2',CATALOG_TTL=10*60*1000;
 const normalize=name=>String(name||'').toUpperCase().replace(/[^A-Z0-9]/g,'');
 function selectSources(items,projects){
   return items.filter(item=>item.Category===1&&Number.isInteger(item.OBJECTID)&&item.LowPS>0&&item.LowPS*0.3048<=1.001)
@@ -66,12 +66,12 @@ async function elevation(req,res,{p,signal}){
     const sources=await catalog(z,x,y,signal);signal?.throwIfAborted();
     if(!sources.length){cachePut(ck,204,'image/png',Buffer.alloc(0));return send(res,200,'image/png',TRANSPARENT,headers([],'none','miss'));}
     const params=new URLSearchParams({bbox:mercBbox(z,x,y),bboxSR:'3857',imageSR:'3857',size:'256,256',
-      format:'tiff',pixelType:'F32',f:'image',interpolation:'RSP_BilinearInterpolation',
+      format:'lerc',lercVersion:'2',compressionTolerance:'0.001',pixelType:'F32',f:'image',interpolation:'RSP_BilinearInterpolation',
       renderingRule:JSON.stringify({rasterFunction:'None'}),
       mosaicRule:JSON.stringify({mosaicMethod:'esriMosaicLockRaster',lockRasterIds:sources.map(s=>s.datasetId),mosaicOperation:'MT_FIRST'})});
     const result=await limitedUpstream(ck,{host:HOST,path:SERVICE+'/exportImage?'+params,__timeout:25000},null,signal);
-    if(result.status!==200||!isTiff(result.body))throw Error('DOGAMI numeric raster unavailable');
-    const out=await terrainTask('oregon:'+ck,'terrarium-tiff',{body:result.body,verticalScale:0.3048},
+    if(result.status!==200)throw Error('DOGAMI numeric raster unavailable');
+    const out=await terrainTask('oregon:'+ck,'terrarium-lerc',{body:result.body,verticalScale:0.3048},
       {priority:50,timeoutMs:15000},signal);
     const coverage=out?.coverage||0;
     cachePut(ck,out?200:204,'image/png',out?.png||Buffer.alloc(0),{coverage,sources:out?sources:[]});

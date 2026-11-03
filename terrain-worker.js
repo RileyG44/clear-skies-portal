@@ -97,6 +97,25 @@ function terrariumFromTiff(value,verticalScale=1){
 }
 
 async function execute(action,args,signal){
+  if(action==="terrarium-lerc"){
+    // TIFF exports can replace missing ArcGIS pixels with unmarked zeroes.
+    // LERC carries the provider's validity mask, including at survey edges.
+    const lerc=require("./vendor/lerc/LercDecode.js");
+    await lerc.load();
+    const body=Buffer.from(args.body),block=lerc.decode(new Uint8Array(body.buffer,body.byteOffset,body.byteLength));
+    const tile=require("./public-terrain.js").decode(block);
+    if(!tile)return null;
+    const scale=args.verticalScale??1;
+    if(![1,0.3048].includes(scale))throw new Error('unsupported elevation units');
+    const rgba=Buffer.alloc(tile.grid.length*4);let covered=0;
+    for(let i=0;i<tile.grid.length;i++){
+      const v=tile.grid[i]*scale;
+      if(!Number.isFinite(v)||v<-2000||v>10000)continue;
+      const packed=v+32768,whole=Math.floor(packed),o=i*4;
+      rgba[o]=whole>>8;rgba[o+1]=whole&255;rgba[o+2]=Math.floor((packed-whole)*256);rgba[o+3]=255;covered++;
+    }
+    return covered?{png:usgs.encodePNG(rgba,tile.width,tile.height),coverage:+(covered/tile.grid.length).toFixed(3)}:null;
+  }
   if(action==="dnr-elevation"){
     const files=loadDnrIndex();if(!files.length)return null;
     dnrRuntime ||= require("./vendor/dnr-runtime.cjs");

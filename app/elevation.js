@@ -547,7 +547,7 @@ async function engineElevationWithFallback(coords,signal,mesh=false){
   const want=$("#terSrc").value;
   const useRaw=coords.z>=13&&want!=="3dep";
   const useOregon=!useDnr&&want==="auto"&&typeof serverHealth!=="undefined"&&serverHealth?.features?.includes("oregon-elevation")&&CSPPublicTerrain.oregonTileAllowed(coords);
-  if(useOregon)requests.push(request(`/api/oregon/elev/${coords.z}/${coords.x}/${coords.y}.png`,6,"oregon"));
+  if(useOregon)requests.push(request(`/api/oregon/elev/${coords.z}/${coords.x}/${coords.y}.png?rv=olc-v2`,6,"oregon"));
   if(useRaw)requests.push(request(`/api/usgs/elev/${coords.z}/${coords.x}/${coords.y}.png?${RAW_COVERAGE_QUERY}`,3,"detail"));
   requests.push(overviewElevation(coords,requestSignal).then(source=>({source,rank:1})).catch(error=>{if(signal.aborted)throw error;return null;}));
   const progress=new CSPTilePipeline.ProgressiveGrid(256*256);
@@ -660,7 +660,7 @@ const ElevLayer = L.GridLayer.extend({
        place. Raw 1 m LiDAR starts at on-screen z13, as it always has. */
     const shown=coords.z-dz,sources=[];
     if(PROXY&&this.options.oregonEndpoint&&shown>=13&&CSPPublicTerrain.oregonTileAllowed(coords)&&!(this.options.dnrEndpoint&&dnrTileAllowed(coords)))
-      sources.push([api(`${this.options.oregonEndpoint}/{z}/{x}/{y}.png`),18,6,"Oregon DOGAMI elevation"]);
+      sources.push([api(`${this.options.oregonEndpoint}/{z}/{x}/{y}.png?rv=olc-v2`),18,6,"Oregon DOGAMI elevation"]);
     if(PROXY&&this.options.dnrEndpoint&&dnrTileAllowed(coords))
       sources.push([api(`${this.options.dnrEndpoint}/{z}/{x}/{y}.png?acquire=0&revision=${dnrStatus?.revision||0}`),18,5,"WA DNR elevation"]);
     if(PROXY&&this.options.rawEndpoint&&shown>=13)
