@@ -56,13 +56,13 @@ async function main(){
 
   f=fixture(false,'auto',true);controller=new AbortController();
   const oregon=f.run(controller.signal,true,14);
-  f.pending.get('/api/oregon/elev/14/1/1.png')(tile(1212));
+  f.pending.get('/api/oregon/elev/14/1/1.png?rv=olc-v2')(tile(1212));
   assert.deepEqual(Array.from((await oregon).ranks),[6],'complete Oregon terrain supplies the mesh and cancels lower-quality waits');
   assert(f.aborts.includes('/api/usgs/elev/14/1/1.png?ix=3'));
 
   f=fixture(true,'auto',true);controller=new AbortController();
   const overlapping=f.run(controller.signal,true,14);
-  assert(!f.pending.has('/api/oregon/elev/14/1/1.png'),'available DNR retains priority in overlapping regions for 3D');
+  assert(!f.pending.has('/api/oregon/elev/14/1/1.png?rv=olc-v2'),'available DNR retains priority in overlapping regions for 3D');
   f.pending.get('/api/wadnr/elev/14/1/1.png?acquire=0&revision=0')(tile(50));
   assert.deepEqual(Array.from((await overlapping).ranks),[5]);
 

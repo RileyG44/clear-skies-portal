@@ -373,7 +373,7 @@
           const nz=2**z,r=this._tiles.get(tileKey(s.id,z,Math.floor(mx*nz),Math.min(nz-1,Math.floor(my*nz))));
           if(!r)continue;
           const value=r.validCount?sample(r,mx,my):NaN;
-          // A finer cached DNR response establishes this survey's coverage,
+          // A finer cached authoritative response establishes survey coverage,
           // including its holes. Falling through to a startup-scale DNR
           // sample stretches that sample into terrain outside the survey.
           // Failed reads have no record and may still use a useful ancestor.
@@ -522,7 +522,7 @@
   function buildSources(o,e){
     const out=[],dz=e.dz||0,add=(id,rank,label,max,url,allowed,kind)=>out.push({id,rank,label,dz,
       nativeZoom:z=>Math.min(z,max),url,allowed,kind,group:rank===6?'oregon':rank===5?'dnr':rank===3?'detail':rank===2?'national':'overview',sampleMeters:e.sourceSampleMeters});
-    if(e.proxy&&o.oregonEndpoint)add('oregon',6,'Oregon DOGAMI elevation',18,(z,x,y)=>e.api(`${o.oregonEndpoint}/${z}/${x}/${y}.png`),c=>e.oregonTileAllowed(c)&&!(o.dnrEndpoint&&e.dnrTileAllowed?.(c)));
+    if(e.proxy&&o.oregonEndpoint){add('oregon',6,'Oregon DOGAMI elevation',18,(z,x,y)=>e.api(`${o.oregonEndpoint}/${z}/${x}/${y}.png?rv=olc-v2`),c=>e.oregonTileAllowed(c)&&!(o.dnrEndpoint&&e.dnrTileAllowed?.(c)));out[out.length-1].authoritativeCoverage=true;}
     if(e.proxy&&o.dnrEndpoint){add('dnr',5,'WA DNR elevation',18,(z,x,y)=>e.api(`${o.dnrEndpoint}/${z}/${x}/${y}.png?acquire=0&revision=${e.dnrRevision||0}`),e.dnrTileAllowed);out[out.length-1].cacheKey=o.dnrMaskKey;out[out.length-1].authoritativeCoverage=true;}
     // Below tile z13 one raw tile opens dozens of surveys (5-30 s and 503s on the
     // engine, measured) for pixels over 13 m wide. National shows the same there.

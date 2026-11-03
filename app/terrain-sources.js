@@ -426,7 +426,7 @@ function elevationSourceOptions(){
     oregonEndpoint:oregon?"/api/oregon/elev":null,
     dnrEndpoint:dnr?"/api/wadnr/elev":null,dnrAcquire:false,dnrMaskKey:dnr?"available-v1":"",
     fallback:overviewElevationUrl("{z}","{x}","{y}"),
-    sourceKey:[want,oregon?"oregon-olc-v1":"",dnr?`dnr:available-v1:${dnrStatus?.revision||0}:${dnrAreasKey()}`:"",PROXY?API:"public",
+    sourceKey:[want,oregon?"oregon-olc-v2":"",dnr?`dnr:available-v1:${dnrStatus?.revision||0}:${dnrAreasKey()}`:"",PROXY?API:"public",
       serverHealth?.features?.includes("overview-elevation")?"overview-cache":"overview-direct"].join("|")};
 }
 function dnrAcquisitionText(){

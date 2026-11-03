@@ -1,0 +1,210 @@
+{
+  "issue": "Oregon survey holes encoded as sea-level ground",
+  "tile": "13/1325/2937",
+  "provider": "DOGAMI DTM primary raster 49 (Wasco 2015)",
+  "tiff": {
+    "nodataTag": null,
+    "zeroPixelsWithoutMask": 45358
+  },
+  "lerc": {
+    "validPixels": 20178,
+    "maskedPixels": 45358
+  },
+  "liveFixedEndpoint": {
+    "validPixels": 20178,
+    "transparentPixels": 45358,
+    "validZeroPixels": 0,
+    "minimumMeters": 982.0234375,
+    "maximumMeters": 1399.1171875
+  },
+  "gpu": {
+    "chrome": {
+      "status": "pass",
+      "renderer": "ANGLE (Apple, ANGLE Metal Renderer: Apple M2, Unspecified Version)",
+      "checks": 35,
+      "surveyEdge": {
+        "name": "oregon-masked-survey-edge-reveals-fallback-after-zoom-and-revisit",
+        "status": "pass",
+        "before": {
+          "topLeft": {
+            "actual": 565.58837890625,
+            "expected": 565.58837890625
+          },
+          "pixels": 27648,
+          "valid": 27648,
+          "maxHeightErrorMetres": 0.0001831,
+          "meanHeightErrorMetres": 3.02e-05,
+          "stats": {
+            "textures": 3,
+            "textureBytes": 12288,
+            "frames": 2,
+            "drawCalls": 0,
+            "lastFrameMs": 0,
+            "ready": true,
+            "queuedUploads": 0,
+            "exportTextures": 0,
+            "exportTextureBytes": 0,
+            "uploads": 3,
+            "evictions": 0,
+            "generation": 1,
+            "error": null,
+            "heightFieldBytes": 221184,
+            "gestureBytes": 0,
+            "gesturePeakBytes": 0,
+            "trackedTiles": 3,
+            "phaseMs": {
+              "shade": 0,
+              "aux": 0,
+              "height": 0,
+              "draw": 0,
+              "plan": 0,
+              "upload": 0,
+              "seed": 0,
+              "want": 0
+            },
+            "planEntries": 2,
+            "coverageKind": "resident tile overlap estimate; readProvenance returns sampled pixel coverage",
+            "fallback": "CPU when float targets or self-test unavailable"
+          }
+        },
+        "revisit": {
+          "topLeft": {
+            "actual": 565.58837890625,
+            "expected": 565.58837890625
+          },
+          "pixels": 27648,
+          "valid": 27648,
+          "maxHeightErrorMetres": 0.0001831,
+          "meanHeightErrorMetres": 3.02e-05,
+          "stats": {
+            "textures": 3,
+            "textureBytes": 12288,
+            "frames": 4,
+            "drawCalls": 0,
+            "lastFrameMs": 0,
+            "ready": true,
+            "queuedUploads": 0,
+            "exportTextures": 0,
+            "exportTextureBytes": 0,
+            "uploads": 3,
+            "evictions": 0,
+            "generation": 3,
+            "error": null,
+            "heightFieldBytes": 221184,
+            "gestureBytes": 0,
+            "gesturePeakBytes": 0,
+            "trackedTiles": 3,
+            "phaseMs": {
+              "shade": 0,
+              "aux": 0,
+              "height": 0,
+              "draw": 0,
+              "plan": 0,
+              "upload": 0,
+              "seed": 0,
+              "want": 0
+            },
+            "planEntries": 2,
+            "coverageKind": "resident tile overlap estimate; readProvenance returns sampled pixel coverage",
+            "fallback": "CPU when float targets or self-test unavailable"
+          }
+        },
+        "milliseconds": 70.6
+      }
+    },
+    "webkit": {
+      "status": "pass",
+      "renderer": "Apple GPU",
+      "checks": 35,
+      "surveyEdge": {
+        "name": "oregon-masked-survey-edge-reveals-fallback-after-zoom-and-revisit",
+        "status": "pass",
+        "before": {
+          "topLeft": {
+            "actual": 565.58837890625,
+            "expected": 565.58837890625
+          },
+          "pixels": 27648,
+          "valid": 27648,
+          "maxHeightErrorMetres": 0.0001831,
+          "meanHeightErrorMetres": 3.17e-05,
+          "stats": {
+            "textures": 3,
+            "textureBytes": 12288,
+            "frames": 2,
+            "drawCalls": 0,
+            "lastFrameMs": 0,
+            "ready": true,
+            "queuedUploads": 0,
+            "exportTextures": 0,
+            "exportTextureBytes": 0,
+            "uploads": 3,
+            "evictions": 0,
+            "generation": 1,
+            "error": null,
+            "heightFieldBytes": 221184,
+            "gestureBytes": 0,
+            "gesturePeakBytes": 0,
+            "trackedTiles": 3,
+            "phaseMs": {
+              "shade": 0,
+              "aux": 0,
+              "height": 0,
+              "draw": 0,
+              "plan": 0,
+              "upload": 0,
+              "seed": 0,
+              "want": 0
+            },
+            "planEntries": 2,
+            "coverageKind": "resident tile overlap estimate; readProvenance returns sampled pixel coverage",
+            "fallback": "CPU when float targets or self-test unavailable"
+          }
+        },
+        "revisit": {
+          "topLeft": {
+            "actual": 565.58837890625,
+            "expected": 565.58837890625
+          },
+          "pixels": 27648,
+          "valid": 27648,
+          "maxHeightErrorMetres": 0.0001831,
+          "meanHeightErrorMetres": 3.17e-05,
+          "stats": {
+            "textures": 3,
+            "textureBytes": 12288,
+            "frames": 4,
+            "drawCalls": 0,
+            "lastFrameMs": 0,
+            "ready": true,
+            "queuedUploads": 0,
+            "exportTextures": 0,
+            "exportTextureBytes": 0,
+            "uploads": 3,
+            "evictions": 0,
+            "generation": 3,
+            "error": null,
+            "heightFieldBytes": 221184,
+            "gestureBytes": 0,
+            "gesturePeakBytes": 0,
+            "trackedTiles": 3,
+            "phaseMs": {
+              "shade": 0,
+              "aux": 0,
+              "height": 0,
+              "draw": 0,
+              "plan": 0,
+              "upload": 0,
+              "seed": 0,
+              "want": 0
+            },
+            "planEntries": 2,
+            "coverageKind": "resident tile overlap estimate; readProvenance returns sampled pixel coverage",
+            "fallback": "CPU when float targets or self-test unavailable"
+          }
+        },
+        "milliseconds": 55
+      }
+    }
+  }
+}

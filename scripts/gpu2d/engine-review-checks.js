@@ -10,6 +10,19 @@ const fs = require('node:fs');
 const path = require('node:path');
 
 async function additionalChecks({ check, assert, engines, source, record, FakeStore, shaders, view, smooth, makeEngine, settle, compareHeight }) {
+  await check('oregon-masked-survey-edge-reveals-fallback-after-zoom-and-revisit', () => {
+    const base = record('base', 1, 3, 3, 2, 32, 32, smooth);
+    const coarse = record('oregon', 6, 3, 3, 2, 32, 32, () => 0);
+    const fine = record('oregon', 6, 4, 7, 5, 32, 32, (x, y) => x > 15 ? smooth(x, y) + 100 : NaN);
+    const specs = [source('base', 1, 3), { ...source('oregon', 6, 4), authoritativeCoverage: true }];
+    const item = makeEngine(specs, [base, coarse]);
+    settle(item, view());
+    item.store.emit(fine);
+    const before = compareHeight(item, [base, fine], view());
+    settle(item, view({ centerMerc: [.2, .2], zoom: 5 }));
+    const revisit = compareHeight(item, [base, fine], view());
+    return { before, revisit };
+  });
   await check('dnr-finer-coverage-retires-magnified-startup-sample', () => {
     const base = record('base', 1, 3, 3, 2, 32, 32, smooth);
     const coarse = record('dnr', 5, 0, 0, 0, 32, 32, (x, y) => x === 15 && y === 11 ? 900 : NaN);
