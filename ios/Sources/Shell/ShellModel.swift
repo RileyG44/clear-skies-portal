@@ -256,6 +256,9 @@ final class ShellModel {
 
     func act(_ ref: String?, _ op: Op = .click, _ value: Any? = nil) {
         guard let ref else { return }
+        if visibleRoute == "export", ref == "#snapshotCapture" || ref == "#snapshotSelect" {
+            activeSheet = nil
+        }
         call("CSPNativeShell.act(ref, op, value)", ["ref": ref, "op": op.rawValue, "value": value ?? NSNull()])
     }
 

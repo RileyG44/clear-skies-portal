@@ -32,7 +32,7 @@ struct HomeView: View {
                             Text(message.text).portalFont(.footnote)
                         } icon: {
                             Image(systemName: message.error == true ? "exclamationmark.triangle" : "info.circle")
-                                .foregroundStyle(message.error == true ? AnyShapeStyle(.orange) : AnyShapeStyle(.secondary))
+                                .foregroundStyle(message.error == true ? AnyShapeStyle(.orange) : AnyShapeStyle(MenuSecondary()))
                         }
                         .listRowBackground(SheetRowBackground())
                     }
@@ -44,6 +44,7 @@ struct HomeView: View {
                                 RouteRow(route: route, count: shell.counts[route.key])
                             }
                             .listRowBackground(SheetRowBackground())
+                            .listRowInsets(MenuMetrics.rowInsets)
                         }
                     } header: {
                         if !group.label.isEmpty { SectionTitle(text: group.label) }
@@ -54,7 +55,8 @@ struct HomeView: View {
             }
         }
         .listStyle(.insetGrouped)
-        .listSectionSpacing(.compact)
+        .contentMargins(.horizontal, MenuMetrics.pageInset, for: .scrollContent)
+        .listSectionSpacing(MenuMetrics.sectionSpacing)
         .scrollContentBackground(.hidden)
         .contentMargins(.bottom, 8, for: .scrollContent)
         .onSheetGlass()
@@ -139,10 +141,11 @@ struct SearchBar: View {
             HStack(spacing: 6) {
                 Image(systemName: "magnifyingglass")
                     .portalFont(.footnote, weight: .medium)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(MenuSecondary())
                 TextField("Search places or layers", text: $shell.query,
                           prompt: Text(shell.search.label.isEmpty ? "Search places, layers…" : shell.search.label)
-                            .foregroundStyle(.primary.opacity(0.65)))
+                            .foregroundStyle(MenuSecondary()))
+                    .accessibilityLabel("Search places or layers")
                     .focused($focused)
                     .tint(Color(hex: appearance.fontColor) ?? .primary)
                     .submitLabel(.search)
@@ -213,12 +216,18 @@ struct RouteRow: View {
     var body: some View {
         HStack(spacing: 12) {
             RouteGlyph(key: route.key)
-            Text(route.title)
+            VStack(alignment: .leading, spacing: MenuMetrics.labelSpacing) {
+                Text(route.title).fontWeight(.medium)
+                Text(route.description)
+                    .portalFont(.caption)
+                    .foregroundStyle(MenuSecondary())
+                    .fixedSize(horizontal: false, vertical: true)
+            }
             Spacer(minLength: 8)
             if let count, !count.isEmpty {
                 Text(count)
                     .portalFont(.footnote, digits: true)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(MenuSecondary())
                     .contentTransition(.numericText())
             }
         }
@@ -237,7 +246,7 @@ struct RouteGlyph: View {
             .scaledToFit()
             .frame(width: 18, height: 16)
             .frame(width: 22)
-            .foregroundStyle(.secondary)
+            .foregroundStyle(MenuSecondary())
             .accessibilityHidden(true)
     }
 }
@@ -284,7 +293,8 @@ struct CloseSheetButton: View {
     var body: some View {
         Button { shell.activeSheet = nil } label: {
             Image(systemName: "chevron.down").fontWeight(.semibold)
-                .frame(minWidth: 28, minHeight: 28)
+                // The navigation bar adds its standard padding and 44-point target.
+                .frame(width: 28, height: 28)
         }
         .accessibilityLabel("Close menu")
         .accessibilityHint("Return to the map")
@@ -312,7 +322,7 @@ struct SuggestionSections: View {
                             RouteGlyph(key: match.route)
                             VStack(alignment: .leading, spacing: 1) {
                                 Text(shell.title(for: match.route)).foregroundStyle(PortalPrimary())
-                                Text(match.keyword.capitalized).portalFont(.caption).foregroundStyle(.secondary)
+                                Text(match.keyword.capitalized).portalFont(.caption).foregroundStyle(MenuSecondary())
                             }
                         }
                     }
@@ -332,18 +342,18 @@ struct SuggestionSections: View {
             if shell.searching && shell.suggestions.isEmpty {
                 HStack(spacing: 10) {
                     ProgressView().controlSize(.small)
-                    Text("Searching places…").foregroundStyle(.secondary)
+                    Text("Searching places…").foregroundStyle(MenuSecondary())
                 }
             }
             if let note = shell.suggestionNote {
-                Text(note).portalFont(.footnote).foregroundStyle(.secondary)
+                Text(note).portalFont(.footnote).foregroundStyle(MenuSecondary())
             }
             Button {
                 focus.wrappedValue = false
                 shell.submit()
             } label: {
                 Label { Text("Search “\(text)”").foregroundStyle(PortalPrimary()) } icon: {
-                    Image(systemName: "magnifyingglass").foregroundStyle(.secondary)
+                    Image(systemName: "magnifyingglass").foregroundStyle(MenuSecondary())
                 }
             }
             Button {
@@ -351,7 +361,7 @@ struct SuggestionSections: View {
                 shell.searchMapCenter()
             } label: {
                 Label { Text("Search at the map centre").foregroundStyle(PortalPrimary()) } icon: {
-                    Image(systemName: "scope").foregroundStyle(.secondary)
+                    Image(systemName: "scope").foregroundStyle(MenuSecondary())
                 }
             }
         } header: {
@@ -363,12 +373,17 @@ struct SuggestionSections: View {
 
 struct RoutePageView: View {
     @Environment(ShellModel.self) private var shell
+    @Environment(\.colorScheme) private var scheme
     let route: String
 
     var body: some View {
         Group {
             if let page = shell.page, page.route == route {
-                ItemList(items: page.items, description: page.description, route: route)
+                if route == "export" {
+                    ToolbarPanelContent(panel: ShellPanel(id: "export", title: page.title, state: nil, items: page.items))
+                } else {
+                    ItemList(items: page.items, description: page.description, route: route)
+                }
             } else {
                 ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity)
                     .onSheetGlass()
@@ -380,6 +395,7 @@ struct RoutePageView: View {
         .toolbar {
             ToolbarItem(placement: .principal) {
                 Text(shell.title(for: route)).portalFont(.subheadline, weight: .semibold)
+                    .foregroundStyle(Color(hex: shell.appearance.fontColor) ?? (scheme == .dark ? .white : .black))
             }
             ToolbarItem(placement: .topBarTrailing) { CloseSheetButton() }
         }
@@ -390,6 +406,7 @@ struct RoutePageView: View {
 /// toolbar panels get their own layout rather than desktop-shaped form rows.
 struct PanelSheet: View {
     @Environment(ShellModel.self) private var shell
+    @Environment(\.colorScheme) private var scheme
     let id: String
 
     var body: some View {
@@ -409,10 +426,11 @@ struct PanelSheet: View {
                 ToolbarItem(placement: .principal) {
                     VStack(spacing: 2) {
                         Text(panel?.title ?? "").portalFont(.subheadline, weight: .semibold)
+                            .foregroundStyle(Color(hex: shell.appearance.fontColor) ?? (scheme == .dark ? .white : .black))
                         if let state = panel?.state, !state.isEmpty {
                             Text(state)
                                 .portalFont(.caption2)
-                                .foregroundStyle(.secondary)
+                                .foregroundStyle((scheme == .dark ? Color.white : Color.black).opacity(0.75))
                                 .lineLimit(1)
                         }
                     }

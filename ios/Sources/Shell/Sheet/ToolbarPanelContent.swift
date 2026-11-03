@@ -11,10 +11,10 @@ struct ToolbarPanelContent: View {
     var body: some View {
         VStack(spacing: 0) {
           ScrollView {
-            VStack(alignment: .leading, spacing: 18) {
+            VStack(alignment: .leading, spacing: MenuMetrics.sectionSpacing) {
                 PanelItems(items: content, prefix: panel.id)
             }
-            .padding(.horizontal, 18)
+            .padding(.horizontal, MenuMetrics.pageInset)
             .padding(.top, 12)
             .padding(.bottom, 16)
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -26,7 +26,7 @@ struct ToolbarPanelContent: View {
         .scrollEdgeEffectStyle(.soft, for: .bottom)
             if !actions.isEmpty {
                 PanelActions(items: actions)
-                    .padding(.horizontal, 18)
+                    .padding(.horizontal, MenuMetrics.pageInset)
                     .padding(.vertical, 12)
             }
         }
@@ -58,7 +58,7 @@ private struct PanelItems: View {
                     FieldRow(item: item, liveInput: true)
                         .textFieldStyle(.roundedBorder)
                     if let detail = item.detail, !detail.isEmpty {
-                        Text(detail).portalFont(.caption).foregroundStyle(.secondary)
+                        Text(detail).portalFont(.caption).foregroundStyle(MenuSecondary())
                     }
                 }
             case "button":
@@ -80,7 +80,7 @@ private struct PanelSection: View {
             if !item.text.isEmpty {
                 Text(item.text)
                     .portalFont(.footnote, weight: .semibold)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(MenuSecondary())
                     .accessibilityAddTraits(.isHeader)
                     .padding(.horizontal, 4)
             }
@@ -133,7 +133,7 @@ private struct SourcePanelCard: View {
             // Dates are useful at a glance; longer scientific/source metadata
             // stays intact behind the explicit disclosure below.
             if item.id == "scene", let detail = item.detail, !detail.isEmpty {
-                Text(detail).portalFont(.caption).foregroundStyle(.secondary)
+                Text(detail).portalFont(.caption).foregroundStyle(MenuSecondary())
                     .fixedSize(horizontal: false, vertical: true)
             }
             AnyView(PanelItems(items: item.items ?? [], prefix: key))
@@ -141,13 +141,13 @@ private struct SourcePanelCard: View {
                 DisclosureGroup(isExpanded: $showingSource) {
                     Text(detail)
                         .portalFont(.caption)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(MenuSecondary())
                         .textSelection(.enabled)
                         .fixedSize(horizontal: false, vertical: true)
                         .padding(.top, 8)
                 } label: {
-                    Text("Source details").portalFont(.footnote)
-                        .foregroundStyle(.secondary)
+                    Text("Sources & scale").portalFont(.footnote)
+                        .foregroundStyle(MenuSecondary())
                         .frame(minHeight: 44, alignment: .leading)
                 }
             }
@@ -161,7 +161,7 @@ private struct SourcePanelCard: View {
                 .foregroundStyle(PortalPrimary())
                 .fixedSize(horizontal: false, vertical: true)
         } icon: {
-            Image(systemName: symbol).foregroundStyle(.secondary)
+            Image(systemName: symbol).foregroundStyle(MenuSecondary())
         }
     }
 }
@@ -178,7 +178,7 @@ private struct PanelDisclosure: View {
             .padding(.top, 10)
         } label: {
             Text(item.text).portalFont(.footnote)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(MenuSecondary())
                 .frame(minHeight: 44, alignment: .leading)
         }
         .panelCard()
@@ -187,6 +187,7 @@ private struct PanelDisclosure: View {
 
 private struct PanelPicker: View {
     @Environment(ShellModel.self) private var shell
+    @Environment(\.dynamicTypeSize) private var typeSize
     let item: ShellItem
     @State private var pending: String?
 
@@ -196,9 +197,12 @@ private struct PanelPicker: View {
             pending = value
             shell.act(item.ref, .select, value)
         })
-        HStack(spacing: 12) {
+        let layout = typeSize.isAccessibilitySize
+            ? AnyLayout(VStackLayout(alignment: .leading, spacing: 8))
+            : AnyLayout(HStackLayout(spacing: 12))
+        layout {
             Text(item.text).foregroundStyle(PortalPrimary())
-            Spacer(minLength: 8)
+            if !typeSize.isAccessibilitySize { Spacer(minLength: 8) }
             Menu {
                 Picker(item.text, selection: selection) {
                     ForEach(options) { option in
@@ -266,7 +270,7 @@ private struct PanelActionMenu: View {
                 Image(systemName: "ellipsis.circle")
             }
             .portalFont(.footnote)
-            .foregroundStyle(.secondary)
+            .foregroundStyle(MenuSecondary())
             .frame(minHeight: 44)
             .contentShape(.rect)
         }
@@ -308,7 +312,7 @@ private struct PanelAction: View {
                     Text(item.text).fontWeight(item.role == "primary" ? .semibold : .medium)
                         .fixedSize(horizontal: false, vertical: true)
                     if let detail = item.detail, item.role != "primary", item.role != "action" {
-                        Text(detail).portalFont(.caption).foregroundStyle(.secondary)
+                        Text(detail).portalFont(.caption).foregroundStyle(MenuSecondary())
                             .fixedSize(horizontal: false, vertical: true)
                     }
                 }
@@ -325,7 +329,7 @@ private struct PanelAction: View {
 private struct PanelCard: ViewModifier {
     func body(content: Content) -> some View {
         content
-            .padding(16)
+            .padding(MenuMetrics.rowInset)
             .frame(maxWidth: .infinity, alignment: .leading)
             .background { SheetRowBackground() }
             .clipShape(.rect(cornerRadius: 22))

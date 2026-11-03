@@ -71,6 +71,14 @@ struct PortalPrimary: ShapeStyle {
     }
 }
 
+/// Secondary menu text needs stable contrast on translucent sheet backgrounds.
+/// Keep it semantic so the same hierarchy works in light and dark appearances.
+struct MenuSecondary: ShapeStyle {
+    func resolve(in environment: EnvironmentValues) -> some ShapeStyle {
+        Color.primary.opacity(environment.colorScheme == .dark ? 0.78 : 0.72)
+    }
+}
+
 /// UIKit exposes both track colors. The callbacks preserve the existing web
 /// slider's input/change lifecycle, including VoiceOver value changes.
 struct PortalSlider: UIViewRepresentable {

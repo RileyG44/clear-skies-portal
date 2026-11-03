@@ -35,19 +35,20 @@ struct RowLabel: View {
     var badge: String?
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 2) {
-            HStack(spacing: 6) {
-                Text(title)
+        VStack(alignment: .leading, spacing: MenuMetrics.labelSpacing) {
+            HStack(alignment: .firstTextBaseline, spacing: 6) {
+                Text(title).fixedSize(horizontal: false, vertical: true)
                 if let badge, !badge.isEmpty {
                     Text(badge)
                         .portalFont(.caption2, weight: .medium, digits: true)
                         .padding(.horizontal, 5).padding(.vertical, 1)
                         .background(.fill.tertiary, in: .capsule)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(MenuSecondary())
                 }
             }
             if let detail, !detail.isEmpty {
-                Text(detail).portalFont(.caption).foregroundStyle(.secondary)
+                Text(detail).portalFont(.caption).foregroundStyle(MenuSecondary())
+                    .fixedSize(horizontal: false, vertical: true)
             }
         }
     }
@@ -110,13 +111,13 @@ struct SliderRow: View {
                 } else if let display, !display.isEmpty {
                     Text(display)
                         .portalFont(.footnote, digits: true)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(MenuSecondary())
                         .contentTransition(.numericText())
                 }
             }
             slider
             if let detail, !detail.isEmpty {
-                Text(detail).portalFont(.caption).foregroundStyle(.secondary)
+                Text(detail).portalFont(.caption).foregroundStyle(MenuSecondary())
             }
         }
         .padding(.vertical, 6)
@@ -169,6 +170,7 @@ struct SliderRow: View {
 
 struct PickerRow: View {
     @Environment(ShellModel.self) private var shell
+    @Environment(\.dynamicTypeSize) private var typeSize
     let item: ShellItem
     @State private var pending: String?
 
@@ -179,7 +181,7 @@ struct PickerRow: View {
             shell.act(item.ref, .select, value)
         })
         Group {
-            if options.count <= 3, options.allSatisfy({ $0.label.count <= 10 && $0.disabled != true }) {
+            if !typeSize.isAccessibilitySize, options.count <= 3, options.allSatisfy({ $0.label.count <= 10 && $0.disabled != true }) {
                 // Two or three short choices are one tap apart, not a menu.
                 VStack(alignment: .leading, spacing: 8) {
                     RowLabel(title: item.text, detail: item.detail)
@@ -194,9 +196,12 @@ struct PickerRow: View {
             } else {
                 // The value reads as quiet text on one line; a menu picker's
                 // own label ignores the sheet's type and wraps long values.
-                HStack(spacing: 12) {
+                let layout = typeSize.isAccessibilitySize
+                    ? AnyLayout(VStackLayout(alignment: .leading, spacing: 8))
+                    : AnyLayout(HStackLayout(spacing: 12))
+                layout {
                     RowLabel(title: item.text, detail: item.detail)
-                    Spacer(minLength: 8)
+                    if !typeSize.isAccessibilitySize { Spacer(minLength: 8) }
                     Menu {
                         Picker(item.text, selection: selection) {
                             ForEach(options) { option in
@@ -208,10 +213,12 @@ struct PickerRow: View {
                     } label: {
                         HStack(spacing: 4) {
                             Text(options.first { ($0.value ?? $0.label) == selection.wrappedValue }?.label ?? selection.wrappedValue)
-                                .lineLimit(1)
+                                .fixedSize(horizontal: false, vertical: true)
+                                .multilineTextAlignment(typeSize.isAccessibilitySize ? .leading : .trailing)
                             Image(systemName: "chevron.up.chevron.down").portalFont(.caption2, weight: .semibold)
                         }
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(MenuSecondary())
+                        .frame(minHeight: MenuMetrics.minimumTarget)
                         .contentShape(.rect)
                     }
                     .menuStyle(.button)
@@ -282,7 +289,7 @@ struct FieldRow: View {
             }
         } else {
             VStack(alignment: .leading, spacing: 6) {
-                if !item.text.isEmpty { Text(item.text).portalFont(.footnote).foregroundStyle(.secondary) }
+                if !item.text.isEmpty { Text(item.text).portalFont(.footnote).foregroundStyle(MenuSecondary()) }
                 field
             }
             .onAppear { text = item.value?.string ?? "" }
@@ -344,7 +351,7 @@ struct NumberEntry: View {
                 .onSubmit(commit)
                 .onChange(of: focused) { if !focused { commit() } }
             if let unit = control.unit, !unit.isEmpty {
-                Text(unit).portalFont(.footnote).foregroundStyle(.secondary)
+                Text(unit).portalFont(.footnote).foregroundStyle(MenuSecondary())
             }
         }
         .disabled(control.disabled ?? false)
@@ -423,7 +430,7 @@ struct ButtonRow: View {
             .accessibilityValue(item.pressed.map { $0 ? "On" : "Off" } ?? "")
             .accessibilityAddTraits(item.pressed == true ? .isSelected : [])
             if let detail = item.detail, !detail.isEmpty {
-                Text(detail).portalFont(.caption).foregroundStyle(.secondary)
+                Text(detail).portalFont(.caption).foregroundStyle(MenuSecondary())
                     .padding(.horizontal, 8)
             }
         }
@@ -491,7 +498,7 @@ struct TextRow: View {
                 RowLabel(title: item.text, detail: item.detail)
                 Spacer(minLength: 8)
                 if let value = item.value?.string, !value.isEmpty {
-                    Text(value).foregroundStyle(.secondary).multilineTextAlignment(.trailing)
+                    Text(value).foregroundStyle(MenuSecondary()).multilineTextAlignment(.trailing)
                 }
             }
         case "pair":
@@ -503,10 +510,10 @@ struct TextRow: View {
             Label { content } icon: { Image(systemName: "checkmark.circle").foregroundStyle(.green) }
                 .portalFont(.footnote)
         case "status":
-            Label { content } icon: { Image(systemName: "info.circle").foregroundStyle(.secondary) }
+            Label { content } icon: { Image(systemName: "info.circle").foregroundStyle(MenuSecondary()) }
                 .portalFont(.footnote)
         case "hint":
-            content.portalFont(.caption).foregroundStyle(.secondary)
+            content.portalFont(.caption).foregroundStyle(MenuSecondary())
         default:
             content.portalFont(.footnote)
         }

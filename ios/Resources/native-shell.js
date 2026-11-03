@@ -228,7 +228,15 @@
     const group = $("[role=group],[role=radiogroup]", el);
     if (group && shown(group)) { out.push({ ...choiceGroup(group), title, detail }); return; }
     if (!controls.length) { out.push({ kind: "text", style: "row", title, detail, value: value ? clean(value.textContent) || undefined : undefined }); return; }
-    if (controls.length === 1) { out.push(controlItem(controls[0], { title, detail })); return; }
+    if (controls.length === 1) {
+      const control = controls[0];
+      // A row's explanatory sentence is not its button label.
+      const action = control.matches("button,a[href]");
+      const caption = action ? clean(control.textContent) || title : title;
+      const actionDetail = action && !strong ? title : detail;
+      out.push(controlItem(control, {title: caption, detail: actionDetail}));
+      return;
+    }
     // Several controls in one row (for example Auto plus a color well).
     out.push({ kind: "text", style: "row", title, detail });
     for (const control of controls) out.push(controlItem(control));
@@ -269,7 +277,7 @@
   function overlayRow(el) {
     const input = $("input[type=checkbox]", el);
     return { kind: "toggle", ref: input ? refOf(input) : refOf(el), title: clean($(".nm", el)?.textContent) || labelFor(input),
-      detail: clean($(".via", el)?.textContent) || undefined, badge: clean($(".nc", el)?.textContent) || undefined,
+      provenance: clean($(".via", el)?.textContent) || undefined, badge: clean($(".nc", el)?.textContent) || undefined,
       color: $(".sw", el) ? colorOf($(".sw", el)) : undefined, value: !!input?.checked, disabled: !!input?.disabled || el.classList.contains("dead") || undefined };
   }
 
@@ -348,7 +356,6 @@
   function detailsGroup(el, out) {
     const summary = $(":scope > summary", el);
     const items = [];
-    const disclosure = el.matches(DISCLOSURES) || undefined;
     const description = summary && $(".terrain-disclosure-description", summary);
     if (el.open) for (const child of el.children) if (child !== summary && shown(child) && !handle(child, items)) walk(child, items);
     /* A button in the summary (Elevation highlights' Reset) acts on the
@@ -357,7 +364,7 @@
     const swatch = summary && $(".ls-swatch", summary);
     out.push({ kind: "group", ref: refOf(el), title: summary ? textWithout(summary, ".pane-n,button,.ls-disclosure-value,.ls-preset-status,.ls-swatch,.terrain-disclosure-description") : "",
       detail: summary ? clean((description || $(".pane-n,.ls-disclosure-value,.ls-preset-status", summary))?.textContent) || undefined : undefined,
-      stops: swatch ? gradientOf(swatch) : undefined, open: el.open, disclosure, items });
+      stops: swatch ? gradientOf(swatch) : undefined, open: el.open, items });
   }
   function header(el, out) {
     const count = $(".pane-n", el);
@@ -482,11 +489,13 @@
     [".ls-field:not(.ls-field-wide)", lidarField],
     [".csp-setting-row,.csp-field-row", row],
     [".mk-layer", (el, out) => { out.push(markupCard(el)); }],
+    // Overlay labels contain provider spans: describe their controls before
+    // the generic label handler so provider metadata is not part of the name.
+    [".ovrow", (el, out) => { out.push(overlayRow(el)); }],
     ["label", choiceLabel],
     [".elev-field,.ls-slider", sliderField],
     [".unit-suffix", skip],
     [".elev-spectrum-scale,.elevRamp", spectrum],
-    [".ovrow", (el, out) => { out.push(overlayRow(el)); }],
     [".ov-line-control", lineOpacity],
     [".csp-layer-card", (el, out) => { out.push(layerCard(el)); }],
     [".item[data-i]", (el, out) => { out.push(sceneItem(el)); }],
@@ -535,25 +544,175 @@
     return items;
   }
 
-  /* The app groups a page's sections into its own list, so the web sections
-     behind it are kept open: every row is described and none waits on a tap.
-     Opening one only syncs its label and remembers it is open
-     (ui-system.js, lidar-studio.js); nothing loads. The LiDAR page's own
-     disclosures stay disclosures in the app, open or closed as on the web. */
-  const DISCLOSURES = "#terLayerSettings,#terDataOffline,.ls-customize";
-  const openSections = root => {
-    if (root) for (const details of $$("details:not([open])", root)) if (!details.matches(DISCLOSURES)) details.open = true;
+  /* Native information architecture. Only presentation changes here: every
+     control retains its live DOM reference, value and event handlers. */
+  const NATIVE_ROUTES = {
+    layers: ["Map layers", "Manage visibility, order and opacity"],
+    satellite: ["Satellite imagery", "Find and compare dated images"],
+    terrain: ["Terrain & LiDAR", "Style terrain, adjust lighting and download data"],
+    elevation: ["Elevation colors", "Color heights and highlight elevation ranges"],
+    analyze: ["Terrain analysis", "Measure and reveal landform patterns"],
+    markup: ["Draw & annotate", "Add drawings, labels and notes"],
+    export: ["Export image", "Save the map view or a selected area"],
+    conditions: ["Live conditions", "Weather, fire, snow and recent events"],
+    geology: ["Geology & hazards", "Explore geology, faults and landslides"],
+    past: ["Past landscapes", "Explore ice-age and historical landscapes"],
+    labels: ["Labels & reference", "Add roads, places and boundaries"],
+    appearance: ["App appearance", "Choose the app theme, text and colors"],
+    settings: ["App settings", "Connection, accessibility and device preferences"]
   };
+  function nativeGroups() {
+    const routes = new Map((window.CSPShell?.groups?.() || []).flatMap(group => group.routes.map(route => [route.key, route])));
+    return [
+      ["Explore the map", ["layers", "satellite", "terrain", "elevation"]],
+      ["Study & share", ["analyze", "markup", "export"]],
+      ["Reference layers", ["conditions", "geology", "past", "labels"]],
+      ["App", ["appearance", "settings"]]
+    ].map(([label, keys]) => ({label, routes: keys.filter(key => routes.has(key)).map(key => ({
+      ...routes.get(key), title: NATIVE_ROUTES[key][0], description: NATIVE_ROUTES[key][1]
+    }))}));
+  }
+  const localDisclosure = (ref, title, items, detail) => ({kind: "disclosure", ref, title, detail, items});
+  const nativeSection = (ref, title, items) => ({kind: "group", ref, title, items});
+  const withoutHeading = items => items[0]?.kind === "header" ? items.slice(1) : items;
+
+  // Describe all settings, including those in collapsed desktop disclosures.
+  // The app owns progressive disclosure locally; opening it never fetches data.
+  const openSections = root => {
+    if (root) for (const details of $$("details:not([open])", root)) details.open = true;
+  };
+  const nativeContents = selector => {
+    const root = $(selector), items = [];
+    if (root && shown(root) && !handle(root, items)) walk(root, items);
+    return items;
+  };
+  function nativeTerrainItems() {
+    const studio = nativeContents("#terStudio");
+    const customize = studio.find(item => item.kind === "group" && elementFor(item.ref)?.matches(".ls-customize"));
+    const presetItems = studio.filter(item => item !== customize && item.kind !== "header");
+    const items = [nativeSection("terrain:presets", "Quick presets", presetItems)];
+    const display = nativeContents("#terView");
+    display.push(panelControl("#terStyle", {title: "Terrain style"}));
+    display.push(...nativeContents("#terStyleHint"), ...nativeContents("#terLegend"));
+    const opacity = panelControl("#terOp", {title: "Terrain opacity"});
+    if (opacity) { opacity.display = `${opacity.value}%`; display.push(opacity); }
+    items.push(nativeSection("terrain:display", "Map display", display.filter(Boolean)));
+    if (customize) items.push(nativeSection("terrain:custom", "Customize terrain", [
+      localDisclosure("terrain:layers", "Layers & colors", customize.items || [], "Mix layers, edit palettes and apply terrain effects"),
+      localDisclosure("terrain:appearance", "Color & contrast", withoutHeading(nativeContents("#terAppearance")), "Brightness, contrast and saturation"),
+      localDisclosure("terrain:lighting", "Lighting & 3D relief", withoutHeading(nativeContents("#terLighting")), "Sun direction, ambient light and vertical exaggeration")
+    ]));
+    // Fallback rendering still offers appearance and lighting without GPU presets.
+    else items.push(nativeSection("terrain:custom", "Customize terrain", [
+      localDisclosure("terrain:appearance", "Color & contrast", withoutHeading(nativeContents("#terAppearance"))),
+      localDisclosure("terrain:lighting", "Lighting & 3D relief", withoutHeading(nativeContents("#terLighting")))
+    ]));
+    const downloads = [panelControl("#terSrc", {title: "Preferred terrain source"}), ...nativeContents("#terSrcHint")];
+    const offline = $("#terDataOffline .terrain-settings-body");
+    if (offline) for (const child of offline.children) if (child.id !== "terrainSourceDetails") {
+      if (!handle(child, downloads)) walk(child, downloads);
+    }
+    items.push(nativeSection("terrain:data", "Data & downloads", [
+      localDisclosure("terrain:downloads", "Terrain downloads", downloads.filter(Boolean), "Source preference, offline areas and Washington LiDAR")
+    ]));
+    items.push(nativeSection("terrain:sources", "About this terrain", [
+      localDisclosure("terrain:provenance", "Sources & scale", withoutHeading(nativeContents("#terrainSourceDetails")), "Rendered data, survey details and resolution")
+    ]));
+    items.push(nativeSection("terrain:reset", "Reset", [panelControl("#terReset")].filter(Boolean)));
+    return items;
+  }
+
+  // Credits are always at the end, behind a consistently named disclosure.
+  // Status, scientific warnings and control-specific units stay by the control.
+  function nativePageItems(route, items) {
+    if (route === "terrain") return nativeTerrainItems();
+    if (route === "export") { const result = []; snapshotItems(result); return result; }
+    if (route === "settings") {
+      // Export settings use the same editor as the camera shortcut. Avoid a
+      // second copy of its controls and keep the engine's live connection UI.
+      const result = [];
+      let section = "";
+      for (const item of items) {
+        if (item.kind === "header") {
+          section = item.title;
+          if (section === "Export") result.push(nativeSection("settings:export", "Image export", [{kind: "route", ref: "route:export", title: "Export image", detail: "Resolution, map info and capture area", id: "export"}]));
+        }
+        if (section === "Export") continue;
+        if (section === "Map sources") continue;
+        let next = item;
+        if (item.kind === "button") {
+          const el = elementFor(item.ref);
+          if (el?.matches("[data-open-engine]")) next = {...item, title: "Manage terrain engine", role: "navigate", detail: "Connect to your Mac or manage its saved address"};
+          if (el?.matches("[data-reset-all]")) next = {...item, title: "Reset app preferences", detail: "Reset appearance, accessibility and saved menu choices"};
+          if (el?.matches("[data-reset-layout]")) next = {...item, title: "Reset menu layout"};
+        }
+        result.push(next);
+      }
+      const sources = nativeContents("#cspMapSources");
+      if (sources.length) result.push(nativeSection("settings:sources", "About the map", [localDisclosure("settings:credits", "Sources & scale", sources)]));
+      return result;
+    }
+    if (route === "elevation") {
+      const spectrum = items.find(item => item.kind === "group" && item.title === "Elevation spectrum");
+      const palette = items.find(item => item.kind === "group" && item.title === "Palette & colors");
+      if (spectrum && palette) {
+        items = items.filter(item => item !== palette).map(item => item === spectrum
+          ? {...item, items: [...(item.items || []), localDisclosure("elevation:palette", "Spectrum colors", palette.items || [])]}
+          : item);
+      }
+    }
+    const provenance = [];
+    const customWells = new Set();
+    const findWells = rows => { for (const item of rows) {
+      if (item.kind === "swatches" && item.custom) customWells.add(item.custom.ref);
+      if (item.items) findWells(item.items);
+    } };
+    findWells(items);
+    const tidy = rows => rows.filter(item => !(item.kind === "color" && customWells.has(item.ref))).map(item => {
+      const next = {...item};
+      if (route === "layers" && next.role === "navigate") {
+        const destination = {"LiDAR": "terrain", "Elevation": "elevation", "Conditions": "conditions", "Markup": "markup"}[next.title];
+        if (destination) [next.title, next.detail] = NATIVE_ROUTES[destination];
+      }
+      if (next.provenance) {
+        provenance.push({kind: "text", style: "row", title: next.title, detail: next.provenance});
+        delete next.provenance;
+      }
+      const titles = {"#elevSpectrumReset": "Reset spectrum", "#elevBandsReset": "Reset highlights"};
+      if (titles[next.ref]) { next.title = titles[next.ref]; next.accessibility = next.title; }
+      if (next.items) next.items = tidy(next.items);
+      return next;
+    });
+    const mergeChoiceLabels = rows => {
+      const result = [];
+      for (let i = 0; i < rows.length; i++) {
+        let item = rows[i], next = rows[i + 1];
+        if (item.kind === "text" && item.style === "row" && !item.ref && next &&
+            ["segmented", "swatches"].includes(next.kind) &&
+            (item.title === next.title || item.title === "Preset" && next.title === "Theme preset")) {
+          item = {...next, detail: item.detail}; i++;
+        }
+        result.push(item.items ? {...item, items: mergeChoiceLabels(item.items)} : item);
+      }
+      return result;
+    };
+    const result = route === "appearance" ? mergeChoiceLabels(tidy(items)) : tidy(items);
+    if (provenance.length) result.push(nativeSection(route + ":sources", "About these layers", [
+      localDisclosure(route + ":provenance", "Sources & scale", provenance)
+    ]));
+    return result;
+  }
 
   function describePage() {
-    const shell = window.CSPShell;
-    const description = $("#cspWorkspaceDescription"), scroll = $("#cspWorkspaceScroll");
+    const route = window.CSPShell?.current?.() || "";
+    const scroll = $("#cspWorkspaceScroll");
     openSections(scroll);
+    const info = NATIVE_ROUTES[route];
     return {
-      route: shell?.current?.() || "",
-      title: clean($("#cspWorkspaceTitle")?.textContent),
-      description: description?.hidden ? "" : clean(description?.textContent),
-      items: describeRoot(scroll)
+      route,
+      title: info?.[0] || clean($("#cspWorkspaceTitle")?.textContent),
+      description: info?.[1] || "",
+      items: nativePageItems(route, route === "terrain" || route === "export" ? [] : describeRoot(scroll))
     };
   }
 
@@ -561,7 +720,7 @@
      source of truth; closing the native sheet closes the web pop-up. */
   const PANELS = {
     mkBar: { close: "#mkBar [data-act=close]", title: "Markup", stateless: true, items: markupItems },
-    snapshotPanel: { body: ".snapshot-export-body", close: "#snapshotClose", items: snapshotItems },
+    snapshotPanel: { title: "Export image", body: ".snapshot-export-body", close: "#snapshotClose", items: snapshotItems },
     serverPanel: { body: "#srvBox", close: "#srvClose", title: "Terrain engine", items: serverItems },
     terrainSourcePanel: { body: "#terrainSourcePanelBody", close: "#terrainSourceClose", stateless: true, items: terrainSourceItems },
     ctl: { body: "#ctlBody", close: "#ctlCollapse", title: "Displayed on map", items: (items, body) => {
@@ -690,7 +849,7 @@
     const notes = $$(".terrain-source-panel-note", body).filter(el => el !== references)
       .map(note => ({kind: "text", style: "hint", title: clean(note.textContent)}));
     if (references && clean(references.textContent)) notes.push({kind: "text", title: clean(references.textContent), markdown: tidyMarkdown(markdownOf(references))});
-    if (notes.length) items.push({kind: "disclosure", ref: "sources:references", title: "Sources & attribution", items: notes});
+    if (notes.length) items.push({kind: "disclosure", ref: "sources:references", title: "Sources & scale", items: notes});
   }
   const walkBody = (items, body) => { if (body) for (const child of body.children) if (!handle(child, items)) walk(child, items); };
   function describePanel(id) {
@@ -913,9 +1072,15 @@
       forceNext = true;
       flush();
     },
-    groups: () => shell?.groups?.() || [],
+    groups: nativeGroups,
     open(route) {
       const opened = !!shell?.activate?.(route);
+      // Reuse the camera panel's preview/3D-resolution preparation when the
+      // same editor is entered from the menu. Close it before publication.
+      if (route === "export" && $("#snapshotPanel")?.hidden) {
+        window.cspOpenSnapshotPanel?.();
+        $("#snapshotClose")?.click();
+      }
       view.page = route;
       flush();
       return opened;
