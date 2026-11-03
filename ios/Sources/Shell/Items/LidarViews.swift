@@ -26,7 +26,7 @@ struct ChoicesRow: View {
                         VStack(spacing: 5) {
                             Image(systemName: Symbols.terrainStyle(title: option.label, icon: option.icon))
                                 .font(.system(size: 16))
-                                .foregroundStyle(on ? AnyShapeStyle(.tint) : AnyShapeStyle(.secondary))
+                                .foregroundStyle(on ? AnyShapeStyle(.tint) : AnyShapeStyle(MenuSecondary()))
                                 .frame(height: 20)
                             Text(option.label.replacingOccurrences(of: "Contours — ", with: "Contours\n"))
                                 .portalFont(.caption2, weight: on ? .semibold : .regular)
@@ -64,46 +64,61 @@ struct ChoicesRow: View {
 /// terrain. Saved presets can be deleted from their context menu.
 struct LooksRow: View {
     @Environment(ShellModel.self) private var shell
+    @Environment(\.dynamicTypeSize) private var typeSize
     let item: ShellItem
 
     var body: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 10) {
-                ForEach(item.options ?? []) { look in
-                    let on = look.selected == true
-                    Button { shell.act(look.ref) } label: {
-                        VStack(alignment: .leading, spacing: 4) {
-                            Group {
-                                if let src = look.src { ShellImage(src: src) } else { Color.secondary.opacity(0.15) }
-                            }
-                            .frame(width: 100, height: 64)
-                            .clipShape(.rect(cornerRadius: 8))
-                            .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(on ? AnyShapeStyle(.tint) : AnyShapeStyle(.primary.opacity(0.08)), lineWidth: on ? 2 : 0.5))
-                            Text(look.label)
-                                .portalFont(.caption2, weight: on ? .semibold : .regular)
-                                .foregroundStyle(on ? AnyShapeStyle(.tint) : AnyShapeStyle(.secondary))
-                                .lineLimit(1)
-                                .frame(width: 100, alignment: .leading)
-                        }
-                    }
-                    .buttonStyle(.plain)
-                    .contextMenu {
-                        if let remove = look.remove {
-                            Button(role: .destructive) { shell.act(remove) } label: { Label("Delete Preset", systemImage: "trash") }
-                        }
-                    }
-                    .accessibilityLabel(look.label)
-                    .accessibilityAddTraits(on ? .isSelected : [])
-                    .accessibilityActions {
-                        if let remove = look.remove {
-                            Button("Delete Preset") { shell.act(remove) }
-                        }
-                    }
-                }
+        if typeSize.isAccessibilitySize {
+            VStack(alignment: .leading, spacing: 12) {
+                ForEach(item.options ?? []) { look in preset(look, accessible: true) }
             }
-            .padding(.vertical, 4)
+        } else {
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(alignment: .top, spacing: 10) {
+                    ForEach(item.options ?? []) { look in preset(look, accessible: false) }
+                }
+                .padding(.vertical, 4)
+            }
+            .scrollClipDisabled()
         }
-        .scrollClipDisabled()
+    }
+
+    private func preset(_ look: ItemOption, accessible: Bool) -> some View {
+        let on = look.selected == true
+        let layout = accessible
+            ? AnyLayout(HStackLayout(alignment: .center, spacing: 12))
+            : AnyLayout(VStackLayout(alignment: .leading, spacing: 4))
+        return Button { shell.act(look.ref) } label: {
+            layout {
+                Group {
+                    if let src = look.src { ShellImage(src: src) } else { Color.secondary.opacity(0.15) }
+                }
+                .frame(width: accessible ? 80 : 100, height: accessible ? 52 : 64)
+                .clipShape(.rect(cornerRadius: 8))
+                .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(on ? AnyShapeStyle(.tint) : AnyShapeStyle(.primary.opacity(0.08)), lineWidth: on ? 2 : 0.5))
+                Text(look.label)
+                    .portalFont(accessible ? .body : .caption2, weight: on ? .semibold : .regular)
+                    .foregroundStyle(on ? AnyShapeStyle(.tint) : AnyShapeStyle(PortalPrimary()))
+                    .fixedSize(horizontal: false, vertical: true)
+                    .frame(maxWidth: accessible ? .infinity : 100, alignment: .leading)
+                if accessible && on { Image(systemName: "checkmark").accessibilityHidden(true) }
+            }
+            .frame(minHeight: MenuMetrics.minimumTarget)
+            .contentShape(.rect)
+        }
+        .buttonStyle(.plain)
+        .contextMenu {
+            if let remove = look.remove {
+                Button(role: .destructive) { shell.act(remove) } label: { Label("Delete preset", systemImage: "trash") }
+            }
+        }
+        .accessibilityLabel(look.label)
+        .accessibilityAddTraits(on ? .isSelected : [])
+        .accessibilityActions {
+            if let remove = look.remove {
+                Button("Delete preset") { shell.act(remove) }
+            }
+        }
     }
 }
 
@@ -124,7 +139,7 @@ struct PalettesRow: View {
                                 .overlay(Capsule().strokeBorder(on ? AnyShapeStyle(.tint) : AnyShapeStyle(.primary.opacity(0.12)), lineWidth: on ? 2 : 0.5))
                             Text(palette.label)
                                 .portalFont(.caption2, weight: on ? .semibold : .regular)
-                                .foregroundStyle(on ? AnyShapeStyle(.tint) : AnyShapeStyle(.secondary))
+                                .foregroundStyle(on ? AnyShapeStyle(.tint) : AnyShapeStyle(MenuSecondary()))
                         }
                     }
                     .buttonStyle(.plain)
@@ -173,7 +188,7 @@ struct LidarLayerLabel: View {
             Button { shell.act(item.eye) } label: {
                 Image(systemName: item.visible == false ? "eye.slash" : "eye")
                     .portalFont(.footnote)
-                    .foregroundStyle(item.visible == false ? AnyShapeStyle(.tertiary) : AnyShapeStyle(.secondary))
+                    .foregroundStyle(item.visible == false ? AnyShapeStyle(.tertiary) : AnyShapeStyle(MenuSecondary()))
                     .frame(width: 44, height: 44)
                     .contentShape(.rect)
             }
@@ -182,7 +197,7 @@ struct LidarLayerLabel: View {
             GradientBar(stops: item.stops).frame(width: 30, height: 12)
             VStack(alignment: .leading, spacing: 1) {
                 Text(item.text).fontWeight(.medium)
-                if let detail = item.detail { Text(detail).portalFont(.caption).foregroundStyle(.secondary) }
+                if let detail = item.detail { Text(detail).portalFont(.caption).foregroundStyle(MenuSecondary()) }
             }
             .opacity(item.visible == false ? 0.55 : 1)
         }
@@ -259,7 +274,7 @@ struct RampEditor: View {
                     .fixedSize()
                 }
                 if let position = item.position {
-                    Text(position).portalFont(.footnote, digits: true).foregroundStyle(.secondary)
+                    Text(position).portalFont(.footnote, digits: true).foregroundStyle(MenuSecondary())
                 }
                 Spacer()
                 if let remove = item.remove {
@@ -270,7 +285,7 @@ struct RampEditor: View {
                 }
             }
             Text("Tap the bar to add a color. Drag a stop to move it.")
-                .portalFont(.caption).foregroundStyle(.secondary)
+                .portalFont(.caption).foregroundStyle(MenuSecondary())
         }
         .padding(.vertical, 2)
     }
@@ -326,7 +341,7 @@ struct SunDial: View {
                         let theta = Angle.degrees(Double(index) * 90 - 90).radians
                         Text(letter)
                             .portalFont(.caption2, weight: letter == "N" ? .bold : .medium)
-                            .foregroundStyle(letter == "N" ? AnyShapeStyle(PortalPrimary()) : AnyShapeStyle(.secondary))
+                            .foregroundStyle(letter == "N" ? AnyShapeStyle(PortalPrimary()) : AnyShapeStyle(MenuSecondary()))
                             .position(x: center.x + cos(theta) * (radius + 10), y: center.y + sin(theta) * (radius + 10))
                     }
                     Path { path in
@@ -396,9 +411,9 @@ struct SunDial: View {
 
     private func readout(title: String, value: String, detail: String) -> some View {
         VStack(spacing: 1) {
-            Text(title).portalFont(.caption2).foregroundStyle(.secondary).textCase(.uppercase)
+            Text(title).portalFont(.caption2).foregroundStyle(MenuSecondary()).textCase(.uppercase)
             Text(value).portalFont(.subheadline, weight: .medium, digits: true).contentTransition(.numericText())
-            Text(detail).portalFont(.caption2).foregroundStyle(.secondary)
+            Text(detail).portalFont(.caption2).foregroundStyle(MenuSecondary())
         }
         .frame(maxWidth: .infinity)
     }

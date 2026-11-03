@@ -3,8 +3,8 @@ import SwiftUI
 /// A described web page or pop-up as a native inset-grouped list. The web's
 /// sections (<details>) are kept open behind the app and drawn as the list's
 /// own sections, grouped by task where the page has a layout (PageLayout).
-/// Panes, LiDAR layers and the LiDAR page's disclosures stay rows that open
-/// and close the web's element.
+/// Panes and LiDAR layers keep their web actions; native task disclosures
+/// expand locally while preserving the live control references inside them.
 struct ItemList: View {
     let items: [ShellItem]
     var description: String?
@@ -19,7 +19,7 @@ struct ItemList: View {
                 // glass sheet washes the text out.
                 Text(description)
                     .portalFont(.subheadline)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(MenuSecondary())
                     .listRowBackground(Color.clear)
                     .listRowInsets(EdgeInsets(top: 2, leading: 4, bottom: 2, trailing: 4))
                     .listSectionSeparator(.hidden)
@@ -33,7 +33,9 @@ struct ItemList: View {
             }
         }
         .listStyle(.insetGrouped)
-        .listSectionSpacing(.compact)
+        .contentMargins(.horizontal, MenuMetrics.pageInset, for: .scrollContent)
+        .contentMargins(.top, 8, for: .scrollContent)
+        .listSectionSpacing(MenuMetrics.sectionSpacing)
         .scrollContentBackground(.hidden)
         .onSheetGlass()
         .modifier(SheetScrollTracking())
@@ -75,8 +77,7 @@ enum PageLayout {
 
     static func parts(for route: String?) -> [Part] {
         switch route {
-        // LiDAR needs no layout: its two cards arrive in the web's order,
-        // Presets then Terrain mode & data, each with its own disclosures.
+        // Terrain arrives as task sections from the native adapter.
         case "elevation": [
             Part(names: ["Reference & color range", "Spectrum opacity"]),
             Part(names: ["#elevPaletteBox"]),
@@ -201,9 +202,11 @@ struct ItemRows: View {
         ForEach(Self.keyed(items, prefix: prefix), id: \.0) { key, item in
             if item.kind == "button" {
                 ItemView(item: item, key: key)
+                    .listRowInsets(MenuMetrics.rowInsets)
             } else {
                 ItemView(item: item, key: key)
                     .listRowBackground(SheetRowBackground())
+                    .listRowInsets(MenuMetrics.rowInsets)
             }
         }
     }
@@ -225,6 +228,8 @@ struct ItemView: View {
 
     var body: some View {
         switch item.kind {
+        case "route": RouteLinkRow(item: item)
+        case "disclosure": LocalDisclosureRow(item: item, key: key)
         case "toggle": ToggleRow(item: item)
         case "slider": SliderRow(item: item)
         case "picker": PickerRow(item: item)
@@ -292,7 +297,7 @@ struct SubheaderRow: View {
             }
         }
         .portalFont(.footnote)
-        .foregroundStyle(.secondary)
+        .foregroundStyle(MenuSecondary())
         .padding(.top, 4)
         .accessibilityAddTraits(.isHeader)
     }
@@ -316,7 +321,7 @@ struct GradientRow: View {
                     }
                 }
                 .portalFont(.caption2)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(MenuSecondary())
             }
         }
         .padding(.vertical, 2)
@@ -356,14 +361,14 @@ struct GroupRow: View {
                         VStack(alignment: .leading, spacing: 2) {
                             Text(item.text).fontWeight(.medium)
                             if let detail = item.detail, !detail.isEmpty {
-                                Text(detail).portalFont(.caption).foregroundStyle(.secondary)
+                                Text(detail).portalFont(.caption).foregroundStyle(MenuSecondary())
                             }
                         }
                     } else {
                         Text(item.text).fontWeight(.medium)
                         Spacer(minLength: 8)
                         if let detail = item.detail, !detail.isEmpty {
-                            Text(detail).portalFont(.footnote).foregroundStyle(.secondary).lineLimit(1)
+                            Text(detail).portalFont(.footnote).foregroundStyle(MenuSecondary()).lineLimit(1)
                         }
                     }
                 }
@@ -392,7 +397,7 @@ struct SceneSearchRow: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 8) {
-                Image(systemName: "magnifyingglass").portalFont(.footnote, weight: .medium).foregroundStyle(.secondary)
+                Image(systemName: "magnifyingglass").portalFont(.footnote, weight: .medium).foregroundStyle(MenuSecondary())
                 TextField(item.placeholder ?? "Place or coordinates", text: $text)
                     .focused($focused)
                     .submitLabel(.search)
@@ -401,7 +406,7 @@ struct SceneSearchRow: View {
                     .onSubmit { submit() }
                     .onChange(of: text) { suggest() }
                 Button { shell.searchMapCenter(); text = "" } label: {
-                    Image(systemName: "scope").foregroundStyle(.secondary).frame(width: 44, height: 44)
+                    Image(systemName: "scope").foregroundStyle(MenuSecondary()).frame(width: 44, height: 44)
                 }
                 .buttonStyle(.borderless)
                 .accessibilityLabel("Search scenes at the map centre")
@@ -409,7 +414,7 @@ struct SceneSearchRow: View {
             .padding(.horizontal, 12)
             .frame(minHeight: 44)
             .background(.fill.tertiary, in: .capsule)
-            if let note { Text(note).portalFont(.footnote).foregroundStyle(.secondary) }
+            if let note { Text(note).portalFont(.footnote).foregroundStyle(MenuSecondary()) }
             ForEach(places) { place in
                 Button {
                     shell.pick(place)
@@ -461,12 +466,12 @@ struct PlaceRowLabel: View {
     var body: some View {
         HStack(spacing: 12) {
             Image(systemName: "mappin.and.ellipse")
-                .foregroundStyle(.secondary)
+                .foregroundStyle(MenuSecondary())
                 .frame(width: 22)
             VStack(alignment: .leading, spacing: 1) {
                 Text(place.primary).foregroundStyle(PortalPrimary())
                 if !place.secondary.isEmpty {
-                    Text(place.secondary).portalFont(.caption).foregroundStyle(.secondary).lineLimit(1)
+                    Text(place.secondary).portalFont(.caption).foregroundStyle(MenuSecondary()).lineLimit(1)
                 }
             }
             Spacer(minLength: 0)
@@ -478,30 +483,72 @@ struct PlaceRowLabel: View {
     }
 }
 
-/// A quiet section title: small, secondary, and set in capitals so it reads
-/// as a label rather than content.
+/// Shared menu rhythm, used by lists and toolbar cards alike.
+enum MenuMetrics {
+    static let pageInset: CGFloat = 18
+    static let rowInset: CGFloat = 16
+    static let minimumTarget: CGFloat = 44
+    static let sectionSpacing: CGFloat = 20
+    static let labelSpacing: CGFloat = 4
+    static let rowInsets = EdgeInsets(top: 10, leading: rowInset, bottom: 10, trailing: rowInset)
+}
+
+/// Sentence case and a full-width second line keep long headings readable.
 struct SectionTitle: View {
     let text: String
     var detail: String?
 
     var body: some View {
-        HStack(alignment: .firstTextBaseline) {
-            Text(text).textCase(.uppercase).tracking(0.3)
-            Spacer(minLength: 8)
-            if let detail, !detail.isEmpty { Text(detail).monospacedDigit().textCase(nil) }
+        VStack(alignment: .leading, spacing: MenuMetrics.labelSpacing) {
+            Text(text).textCase(nil)
+            if let detail, !detail.isEmpty {
+                Text(detail).portalFont(.caption).fontWeight(.regular).textCase(nil)
+            }
         }
-        .portalFont(.caption, weight: .semibold)
-        .foregroundStyle(.secondary)
+        .portalFont(.footnote, weight: .semibold)
+        .foregroundStyle(MenuSecondary())
+        .fixedSize(horizontal: false, vertical: true)
+        .accessibilityAddTraits(.isHeader)
     }
 }
 
-/// The sheet's compact type: rows at subheadline, details a step or two
-/// below, as text styles so Dynamic Type still scales them.
 struct SheetStyle: ViewModifier {
     func body(content: Content) -> some View {
         content
             .portalFont(.subheadline)
-            .environment(\.defaultMinListRowHeight, 40)
+            .environment(\.defaultMinListRowHeight, MenuMetrics.minimumTarget)
+    }
+}
+
+/// App-only disclosure: its state survives live value updates and never
+/// toggles or reloads the web's scientific controls.
+struct LocalDisclosureRow: View {
+    let item: ShellItem
+    let key: String
+    @State private var expanded = false
+
+    var body: some View {
+        DisclosureGroup(isExpanded: $expanded) {
+            AnyView(ItemRows(items: item.items ?? [], prefix: key))
+        } label: {
+            RowLabel(title: item.text, detail: item.detail)
+                .frame(minHeight: MenuMetrics.minimumTarget, alignment: .leading)
+                .accessibilityElement(children: .combine)
+                .accessibilityLabel(item.text)
+                .accessibilityValue(expanded ? "Expanded" : "Collapsed")
+                .accessibilityHint(item.detail ?? "")
+        }
+    }
+}
+
+struct RouteLinkRow: View {
+    let item: ShellItem
+
+    var body: some View {
+        NavigationLink(value: item.id ?? "") {
+            RowLabel(title: item.text, detail: item.detail)
+                .frame(minHeight: MenuMetrics.minimumTarget, alignment: .leading)
+        }
     }
 }
 

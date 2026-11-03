@@ -4,6 +4,7 @@ import SwiftUI
 /// segmented control; longer ones a row of capsules that scrolls.
 struct SegmentedRow: View {
     @Environment(ShellModel.self) private var shell
+    @Environment(\.dynamicTypeSize) private var typeSize
     let item: ShellItem
     @State private var pending: String?
 
@@ -12,7 +13,22 @@ struct SegmentedRow: View {
         let selected = pending ?? options.first(where: { $0.selected == true })?.id
         VStack(alignment: .leading, spacing: 6) {
             if !item.text.isEmpty { RowLabel(title: item.text, detail: item.detail) }
-            if options.count <= 4, options.allSatisfy({ $0.label.count <= 12 }) {
+            if typeSize.isAccessibilitySize {
+                ForEach(options) { option in
+                    Button { choose(option.id, in: options) } label: {
+                        HStack(spacing: 10) {
+                            Text(option.label).fixedSize(horizontal: false, vertical: true)
+                            Spacer(minLength: 8)
+                            if option.id == selected { Image(systemName: "checkmark") }
+                        }
+                        .frame(minHeight: MenuMetrics.minimumTarget)
+                        .contentShape(.rect)
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(option.disabled ?? false)
+                    .accessibilityAddTraits(option.id == selected ? .isSelected : [])
+                }
+            } else if options.count <= 4, options.allSatisfy({ $0.label.count <= 12 }) {
                 Picker(item.text, selection: Binding(get: { selected ?? "" }, set: { choose($0, in: options) })) {
                     ForEach(options) { option in
                         Text(option.label).tag(option.id)
@@ -21,6 +37,7 @@ struct SegmentedRow: View {
                 }
                 .pickerStyle(.segmented)
                 .labelsHidden()
+                .frame(minHeight: MenuMetrics.minimumTarget)
             } else {
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: 8) {
@@ -30,6 +47,7 @@ struct SegmentedRow: View {
                                 Text(option.label)
                                     .portalFont(.footnote, weight: on ? .semibold : .regular)
                                     .padding(.horizontal, 12).padding(.vertical, 6)
+                                    .frame(minHeight: MenuMetrics.minimumTarget)
                                     .foregroundStyle(on ? AnyShapeStyle(.tint) : AnyShapeStyle(PortalPrimary()))
                                     .background(on ? AnyShapeStyle(.tint.opacity(0.14)) : AnyShapeStyle(.fill.quaternary), in: .capsule)
                             }
@@ -62,6 +80,8 @@ struct SwatchesRow: View {
     var body: some View {
         let options = item.options ?? []
         let selected = pending ?? options.first(where: { $0.selected == true })?.id
+        VStack(alignment: .leading, spacing: 8) {
+        if !item.text.isEmpty { RowLabel(title: item.text, detail: item.detail) }
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 10) {
                 ForEach(options) { option in
@@ -75,7 +95,7 @@ struct SwatchesRow: View {
                             .overlay(Circle().strokeBorder(.primary.opacity(0.18), lineWidth: 0.5))
                             .overlay {
                                 if option.color == nil {
-                                    Image(systemName: "a.circle").foregroundStyle(.secondary)
+                                    Image(systemName: "a.circle").foregroundStyle(MenuSecondary())
                                 }
                             }
                             .frame(width: 26, height: 26)
@@ -99,6 +119,7 @@ struct SwatchesRow: View {
             .padding(.vertical, 2)
         }
         .scrollClipDisabled()
+        }
         .onChange(of: item.options) { pending = nil }
     }
 }
@@ -136,7 +157,7 @@ struct LayerCard: View {
                         }
                     }
                     if let detail = item.detail, !detail.isEmpty {
-                        Text(detail).portalFont(.caption).foregroundStyle(.secondary)
+                        Text(detail).portalFont(.caption).foregroundStyle(MenuSecondary())
                     }
                 }
                 Spacer(minLength: 8)
@@ -159,7 +180,7 @@ struct LayerCard: View {
                 }
             }
             if let confirm = item.confirm {
-                Text(confirm).portalFont(.caption).foregroundStyle(.secondary)
+                Text(confirm).portalFont(.caption).foregroundStyle(MenuSecondary())
             }
             if let buttons = item.buttons, !buttons.isEmpty {
                 ScrollView(.horizontal, showsIndicators: false) {
@@ -190,7 +211,7 @@ struct LayerCard: View {
 
     private func actionsMenu(_ actions: [LayerAction]) -> some View {
         Menu { actionButtons(actions) } label: {
-            Image(systemName: "ellipsis").foregroundStyle(.secondary)
+            Image(systemName: "ellipsis").foregroundStyle(MenuSecondary())
                 .frame(width: 44, height: 44)
                 .contentShape(.rect)
         }
@@ -235,7 +256,7 @@ struct OpacitySlider: View {
     var body: some View {
         let value = local ?? control.value?.number ?? 100
         HStack(spacing: 10) {
-            Image(systemName: "circle.lefthalf.filled").portalFont(.caption).foregroundStyle(.secondary)
+            Image(systemName: "circle.lefthalf.filled").portalFont(.caption).foregroundStyle(MenuSecondary())
             PortalSlider(value: Binding(get: { value }, set: { next in
                 local = next.rounded()
                 shell.act(control.ref, editing ? .input : .commit, next.rounded())
@@ -246,7 +267,7 @@ struct OpacitySlider: View {
             .frame(minHeight: 44)
             Text("\(Int(value.rounded()))%")
                 .portalFont(.caption, digits: true)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(MenuSecondary())
                 .frame(width: 36, alignment: .trailing)
         }
         .onChange(of: control.value) { if !editing { local = nil } }
@@ -270,7 +291,7 @@ struct SceneRow: View {
                 .clipShape(.rect(cornerRadius: 8))
                 VStack(alignment: .leading, spacing: 3) {
                     Text(item.text).fontWeight(.medium).foregroundStyle(PortalPrimary())
-                    if let detail = item.detail { Text(detail).portalFont(.caption, digits: true).foregroundStyle(.secondary) }
+                    if let detail = item.detail { Text(detail).portalFont(.caption, digits: true).foregroundStyle(MenuSecondary()) }
                     if let tags = item.tags, !tags.isEmpty {
                         HStack(spacing: 4) {
                             ForEach(Array(tags.prefix(4).enumerated()), id: \.offset) { _, tag in
@@ -278,7 +299,7 @@ struct SceneRow: View {
                                     .portalFont(.caption2, weight: .medium)
                                     .padding(.horizontal, 6).padding(.vertical, 2)
                                     .background(.fill.tertiary, in: .capsule)
-                                    .foregroundStyle(.secondary)
+                                    .foregroundStyle(MenuSecondary())
                             }
                         }
                     }

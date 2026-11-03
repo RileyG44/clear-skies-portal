@@ -12,7 +12,6 @@ return (async () => {
   const originalDock = [...document.querySelectorAll('#mapDock > .map-tool')].map(el => el.id);
   const dockKey = 'clearskies.mapToolOrder.v2', originalDockPreference = localStorage.getItem(dockKey);
   const failures = [], pages = [], panels = [];
-  const LIDAR_DISCLOSURES = "#terLayerSettings,#terDataOffline,.ls-customize";
   let lidar = null;
   const check = (condition, message) => { if (!condition) failures.push(message); };
   const flatten = items => items.flatMap(item => [item, ...flatten(item.items || [])]);
@@ -30,13 +29,11 @@ return (async () => {
     const style = getComputedStyle(element);
     return style.display !== "none" && style.visibility !== "hidden" && element.getClientRects().length > 0;
   };
-  /* LiDAR: Presets first, then Terrain mode & data; its three disclosures
-     open and close the web's own sections; saved presets can be deleted;
-     the sun dial sets the web's own inputs. */
+  /* Native terrain sections keep live controls behind app-owned disclosures;
+     saved presets and the sun dial still use the original web inputs. */
   async function verifyLidar() {
     const describe = async () => { shell.refresh(); await wait(120); return shell.describe(); };
     const original = { style: document.getElementById("terStyle").value,
-      open: [...document.querySelectorAll(LIDAR_DISCLOSURES)].map(el => [el, el.open]),
       azimuth: document.getElementById("terSunAz").value, altitude: document.getElementById("terSunAlt").value };
     const result = { order: [], disclosures: {}, preset: null, sun: null };
     shell.open("terrain");
@@ -45,35 +42,23 @@ return (async () => {
       shell.act("#terStyle", "select", "hs");
       await wait(400);
       let page = await describe();
-      const headers = page.items.filter(item => item.kind === "header").map(item => item.title);
+      const headers = page.items.map(item => item.title);
       result.order = headers;
-      check(headers[0] === "Presets" && headers.indexOf("Terrain mode & data") > 0, `terrain: Presets must come first (${headers.join(", ")})`);
-      check(!flatten(page.items).some(item => /look/i.test(item.title || "") && item.kind !== "looks"), "terrain: Looks naming remains");
-      const findGroup = (items, title) => flatten(items).find(item => item.kind === "group" && item.title === title);
-      for (const title of ["Customize preset", "Layer settings", "Data sources & offline use"]) {
-        let group = findGroup(page.items, title);
-        check(group?.disclosure === true, `terrain: ${title} is not a native disclosure`);
-        if (!group) continue;
-        const element = document.querySelector(`[data-cspn="${group.ref.slice(1)}"]`) || document.getElementById(group.ref.slice(1));
-        shell.act(group.ref, "open", false); page = await describe(); group = findGroup(page.items, title);
-        const closed = group?.open === false && !(group.items || []).length && element && !element.open;
-        shell.act(group.ref, "open", true); page = await describe(); group = findGroup(page.items, title);
-        const refs = references(group);
-        const opened = group?.open === true && (group.items || []).length > 0 && element.open;
-        shell.act(group.ref, "open", true); page = await describe(); // reopening stays open
-        result.disclosures[title] = { closed, opened, rows: flatten(group?.items || []).length };
-        check(closed && opened, `terrain: ${title} did not close and reopen`);
-        const required = { "Layer settings": ["terSrc", "terOp", "terBrightness", "terContrast", "terSaturation", "terLookReset", "terSunAz", "terSunAlt", "terAmbient", "terExaggeration", "terLightReset"],
-          "Data sources & offline use": ["terDepth", "terExtent", "terWarm", "dnrSelect", "dnrViewport", "terrainInspectSource"] }[title] || [];
+      check(headers[0] === "Quick presets" && headers.includes("Map display"), `terrain: missing task sections (${headers.join(", ")})`);
+      const findGroup = (items, title) => flatten(items).find(item => item.kind === "disclosure" && item.title === title);
+      for (const [title, required] of [
+        ["Layers & colors", []],
+        ["Color & contrast", ["terBrightness", "terContrast", "terSaturation", "terLookReset"]],
+        ["Lighting & 3D relief", ["terSunAz", "terSunAlt", "terAmbient", "terExaggeration", "terLightReset"]],
+        ["Terrain downloads", ["terSrc", "terDepth", "terExtent", "terWarm", "dnrSelect", "dnrViewport"]],
+        ["Sources & scale", ["terrainInspectSource"]]
+      ]) {
+        const group = findGroup(page.items, title), refs = references(group);
+        check(!!group, `terrain: ${title} is not a native submenu`);
+        result.disclosures[title] = { rows: flatten(group?.items || []).length };
         for (const id of required) check(refs.has("#" + id), `terrain: ${title} missing ${id}`);
-        // Every visible web control inside the open disclosure is in the app.
-        for (const control of element.querySelectorAll("input:not([type=hidden]),select,textarea,button")) {
-          if (!visible(control) || control.closest("summary")) continue;
-          const ref = control.id ? "#" + control.id : "@" + control.getAttribute("data-cspn");
-          check(refs.has(ref), `terrain: ${title} does not represent ${control.id || control.className || control.tagName}`);
-        }
-        if (title === "Layer settings") {
-          const sun = flatten(group.items).find(item => item.kind === "sun");
+        if (title === "Lighting & 3D relief") {
+          const sun = flatten(group?.items || []).find(item => item.kind === "sun");
           check(sun?.azimuth?.ref === "#terSunAz" && sun?.altitude?.ref === "#terSunAlt", "terrain: sun dial lost its inputs");
         }
       }
@@ -112,7 +97,6 @@ return (async () => {
     } finally {
       shell.act("#terSunAz", "commit", original.azimuth); shell.act("#terSunAlt", "commit", original.altitude);
       shell.act("#terStyle", "select", original.style);
-      for (const [el, open] of original.open) if (el.isConnected) el.open = open;
     }
     return result;
   }
@@ -126,8 +110,8 @@ return (async () => {
       await wait(100);
       const page = shell.describe(), rows = flatten(page.items);
       check(page.route === route && rows.length > 0, `${route}: missing page contents`);
-      // LiDAR's own disclosures stay closed until opened; others are open.
-      check(![...document.querySelectorAll("#cspWorkspaceScroll details:not([open])")].some(el => !el.matches(LIDAR_DISCLOSURES)),
+      // Desktop details stay open so native submenus always have live values.
+      check(!document.querySelector("#cspWorkspaceScroll details:not([open])"),
         `${route}: a section remains closed`);
       pages.push({ route, rows: rows.length, controls: references(page).size });
       if (route === "elevation") {
