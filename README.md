@@ -123,6 +123,12 @@ locally it still binds to `127.0.0.1` only.
 
 The same file works in VS Code locally via *Dev Containers: Reopen in Container*.
 
+## Install on Windows
+
+Get the permanent **ClearSkies Setup** EXE from [GitHub Releases](https://github.com/RileyG44/clear-skies-portal/releases). The one-click installer includes the local terrain engine, ClearSkies icon, Desktop/Start shortcuts and Windows uninstall support. No separate Node.js installation is needed. An optional guided installer adds installation choices and a Tailscale information page; a portable ZIP is also available.
+
+The first-run guide explains the engine's benefits and optional private remote access from desktops and mobile devices. Tailscale's [official website](https://tailscale.com/) and [latest stable Windows installer](https://pkgs.tailscale.com/stable/tailscale-setup-latest.exe) are linked directly. Automatic Tailscale server setup and engine-link generation are planned for the next app update. The engine runs while Clear Skies is open; keep its computer awake for remote access. Reopen the guide with F1. [Windows packaging details](docs/WINDOWS_INSTALLER.md).
+
 ## Hosted page and the terrain engine
 
 The [GitHub Pages app](https://rileyg44.github.io/clear-skies-portal/) draws

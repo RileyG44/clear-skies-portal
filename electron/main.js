@@ -5,7 +5,10 @@
    does it boot its own server.js on a free loopback port. The web app is
    untouched: every request it makes is relative, so it simply follows
    whichever origin we load.                                                  */
-const {app, BrowserWindow, shell, dialog, session} = require("electron");
+const {app, BrowserWindow, shell, dialog, session, ipcMain} = require("electron");
+const {pathToFileURL} = require("url");
+const {windowChrome} = require("./window-chrome");
+const {engineStorage} = require("./engine-storage");
 const {fork, execFile} = require("child_process");
 const fs   = require("fs");
 const os   = require("os");
@@ -27,6 +30,10 @@ const ENGINE_PLIST = path.join(os.homedir(), "Library", "LaunchAgents", `${ENGIN
 let child = null;
 let win   = null;
 let port  = 0;
+const setupFile = path.join(__dirname,"setup","index.html");
+const setupURL = pathToFileURL(setupFile).href;
+const setupMarker = () => path.join(app.getPath("userData"),"setup-v1.json");
+const showSetup = () => { if(win) win.loadFile(setupFile); };
 
 /* Finder launches do not inherit a terminal's CSP_ENGINE_PORT. Read the same
    saved port the service installer keeps, or a healthy updated engine on 8770
@@ -55,6 +62,7 @@ function freePort(){
 }
 
 function startServer(p){
+  const storage=engineStorage(app.getPath("userData"),app.isPackaged?path.dirname(SERVER):null);
   child = fork(SERVER, [], {
     env: {
       ...process.env,
@@ -62,7 +70,8 @@ function startServer(p){
       HOST,
       // Keep the tile cache out of the .app bundle: it is read-only once
       // signed, and writing into it would break the signature.
-      CSP_CACHE_DIR: path.join(app.getPath("userData"), "cache"),
+      CSP_CACHE_DIR: storage.cache,
+      CSP_MARKUP_DIR: storage.markup,
       ELECTRON_RUN_AS_NODE: "1",
     },
     stdio: ["ignore", "pipe", "pipe", "ipc"],
@@ -150,19 +159,25 @@ function createWindow(){
     title: "Clear Skies Portal",
     // macOS draws the traffic lights over the page. The page keeps a clear
     // drag strip; it does not paint a title bar.
-    titleBarStyle: process.platform==="darwin"?"hidden":"default",
-    ...(process.platform==="darwin"?{trafficLightPosition:{x:12,y:9}}:{}),
+    ...windowChrome(process.platform),
+    icon:app.isPackaged?path.join(process.resourcesPath,"ClearSkies.ico"):path.join(__dirname,"..","build","icon.ico"),
     webPreferences: {contextIsolation: true, nodeIntegration: false, preload:path.join(__dirname,"preload.js")},
   });
 
-  win.loadURL(`${internalOrigin}/`);
+  if(process.platform==="win32") win.setMenu(null);
+  if(process.argv.includes("--setup") || (process.platform==="win32" && !fs.existsSync(setupMarker()))) showSetup();
+  else win.loadURL(`${internalOrigin}/`);
+  win.webContents.on("before-input-event",(event,input)=>{
+    if(input.type==="keyDown" && input.key==="F1"){ event.preventDefault(); showSetup(); }
+  });
   win.on("closed", () => { win = null; });
 
   // Anything that is not our own server opens in the real browser,
   // so attribution links don't strand the user inside the app.
   const external = url => {
-    if (isInternal(url)) return false;
-    shell.openExternal(url);
+    if (isInternal(url) || url===setupURL) return false;
+    // Never hand file:, javascript: or custom protocols to an external app.
+    if(/^https?:\/\//i.test(url)) shell.openExternal(url);
     return true;
   };
   win.webContents.setWindowOpenHandler(({url}) => external(url) ? {action:"deny"} : {action:"allow"});
@@ -170,11 +185,19 @@ function createWindow(){
 }
 
 app.isQuittingCsp = false;
+app.setAppUserModelId("com.rileyg44.clear-skies-portal");
+ipcMain.handle("csp:finish-setup",async event=>{
+  if(!win || event.sender!==win.webContents || event.senderFrame?.url!==setupURL) return false;
+  fs.mkdirSync(app.getPath("userData"),{recursive:true});
+  fs.writeFileSync(setupMarker(),JSON.stringify({completedAt:new Date().toISOString()}));
+  await win.loadURL(`http://${HOST}:${port}/`);
+  return true;
+});
 
 if (!app.requestSingleInstanceLock()){
   app.quit();
 } else {
-  app.on("second-instance", () => { if (win){ if (win.isMinimized()) win.restore(); win.focus(); } });
+  app.on("second-instance", (_event,argv) => { if (win){ if(argv.includes("--setup")) showSetup(); if (win.isMinimized()) win.restore(); win.focus(); } });
 
   app.whenReady().then(async () => {
     // The locate button needs geolocation; grant it only to our own origin.
@@ -187,7 +210,7 @@ if (!app.requestSingleInstanceLock()){
 
     try {
       port = await pickServer();
-      console.log(child ? `[app] started a bundled server on ${port}` : `[app] using the Mac's terrain engine on ${port}`);
+      console.log(child ? `[app] started a bundled server on ${port}` : `[app] using the installed terrain engine on ${port}`);
       createWindow();
     } catch (err) {
       dialog.showErrorBox("Clear Skies Portal", `Could not start the local server.\n\n${err.message}`);
