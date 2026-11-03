@@ -32,3 +32,11 @@ and revisit on Chrome/Metal and WebKit/Apple GPU. Numerical evidence is in
 This repairs missing-data handling throughout the Oregon adapter. It does not
 establish complete provider coverage, uniform resolution, survey accuracy or
 inter-survey vertical-datum alignment.
+
+Native iPhone 17 Pro / iOS 26 simulator verification passed on build
+`2026-11-02b` at zooms 12, 13, 14, 15 and a return to 12. Each GPU field
+contained 3,162,132 valid pixels with no false zero elevations. Actual Oregon
+detail reached the field and its masked gaps revealed lower-ranked ground.
+The 27-tile live grid around the site returned successful full, partial and
+empty coverage. The native probe uses an 18-second observation window per view;
+provider refinement was still pending, so this is not a settled-load timing claim.

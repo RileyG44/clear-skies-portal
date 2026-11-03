@@ -206,5 +206,317 @@
         "milliseconds": 55
       }
     }
-  }
+  },
+  "simulator": {
+    "name": "iPhone 17 Pro",
+    "iOS": "26.0",
+    "ok": true,
+    "result": {
+      "build": "2026-11-02b",
+      "device": {
+        "dpr": 3,
+        "height": 874,
+        "native": true,
+        "width": 402
+      },
+      "failures": [],
+      "passed": true,
+      "results": [
+        {
+          "min": 861.8707275390625,
+          "nativeZeroes": 0,
+          "oregon": 1529558,
+          "oregonTiles": 59,
+          "store": {
+            "bytes": 50856536,
+            "maxBytes": 134217728,
+            "pending": 269,
+            "tiles": 344
+          },
+          "valid": 3162132,
+          "zeroes": 0,
+          "zoom": 12
+        },
+        {
+          "min": 997.4571533203125,
+          "nativeZeroes": 0,
+          "oregon": 1360305,
+          "oregonTiles": 111,
+          "store": {
+            "bytes": 97256696,
+            "maxBytes": 134217728,
+            "pending": 276,
+            "tiles": 689
+          },
+          "valid": 3162132,
+          "zeroes": 0,
+          "zoom": 13
+        },
+        {
+          "min": 1051.768798828125,
+          "nativeZeroes": 0,
+          "oregon": 801724,
+          "oregonTiles": 153,
+          "store": {
+            "bytes": 111675292,
+            "maxBytes": 134217728,
+            "pending": 230,
+            "tiles": 913
+          },
+          "valid": 3162132,
+          "zeroes": 0,
+          "zoom": 14
+        },
+        {
+          "min": 1080.9219970703125,
+          "nativeZeroes": 0,
+          "oregon": 0,
+          "oregonTiles": 154,
+          "store": {
+            "bytes": 115608288,
+            "maxBytes": 134217728,
+            "pending": 268,
+            "tiles": 1137
+          },
+          "valid": 3162132,
+          "zeroes": 0,
+          "zoom": 15
+        },
+        {
+          "min": 861.8707275390625,
+          "nativeZeroes": 0,
+          "oregon": 1529570,
+          "oregonTiles": 154,
+          "store": {
+            "bytes": 121375456,
+            "maxBytes": 134217728,
+            "pending": 252,
+            "tiles": 1159
+          },
+          "valid": 3162132,
+          "zeroes": 0,
+          "zoom": 12
+        }
+      ]
+    },
+    "runID": "13f70c4a-1a87-4709-b2b1-313f7280a20d"
+  },
+  "liveGrid": [
+    {
+      "z": 13,
+      "x": 1325,
+      "y": 2936,
+      "status": 200,
+      "coverage": "none",
+      "bytes": 68
+    },
+    {
+      "z": 13,
+      "x": 1324,
+      "y": 2936,
+      "status": 200,
+      "coverage": "none",
+      "bytes": 68
+    },
+    {
+      "z": 13,
+      "x": 1326,
+      "y": 2936,
+      "status": 200,
+      "coverage": "none",
+      "bytes": 68
+    },
+    {
+      "z": 13,
+      "x": 1325,
+      "y": 2937,
+      "status": 200,
+      "coverage": "0.308",
+      "bytes": 45225
+    },
+    {
+      "z": 13,
+      "x": 1326,
+      "y": 2937,
+      "status": 200,
+      "coverage": "0.02",
+      "bytes": 3800
+    },
+    {
+      "z": 13,
+      "x": 1324,
+      "y": 2937,
+      "status": 200,
+      "coverage": "0.656",
+      "bytes": 90237
+    },
+    {
+      "z": 13,
+      "x": 1325,
+      "y": 2938,
+      "status": 200,
+      "coverage": "0.91",
+      "bytes": 119682
+    },
+    {
+      "z": 13,
+      "x": 1324,
+      "y": 2938,
+      "status": 200,
+      "coverage": "1",
+      "bytes": 121137
+    },
+    {
+      "z": 14,
+      "x": 2650,
+      "y": 5874,
+      "status": 200,
+      "coverage": "0.13",
+      "bytes": 18650
+    },
+    {
+      "z": 13,
+      "x": 1326,
+      "y": 2938,
+      "status": 200,
+      "coverage": "0.965",
+      "bytes": 128109
+    },
+    {
+      "z": 14,
+      "x": 2651,
+      "y": 5874,
+      "status": 200,
+      "coverage": "0.004",
+      "bytes": 1217
+    },
+    {
+      "z": 14,
+      "x": 2652,
+      "y": 5874,
+      "status": 200,
+      "coverage": "none",
+      "bytes": 68
+    },
+    {
+      "z": 14,
+      "x": 2651,
+      "y": 5875,
+      "status": 200,
+      "coverage": "0.087",
+      "bytes": 14549
+    },
+    {
+      "z": 14,
+      "x": 2652,
+      "y": 5875,
+      "status": 200,
+      "coverage": "none",
+      "bytes": 68
+    },
+    {
+      "z": 14,
+      "x": 2650,
+      "y": 5875,
+      "status": 200,
+      "coverage": "1",
+      "bytes": 109552
+    },
+    {
+      "z": 14,
+      "x": 2650,
+      "y": 5876,
+      "status": 200,
+      "coverage": "1",
+      "bytes": 110096
+    },
+    {
+      "z": 14,
+      "x": 2651,
+      "y": 5876,
+      "status": 200,
+      "coverage": "0.633",
+      "bytes": 77687
+    },
+    {
+      "z": 16,
+      "x": 10605,
+      "y": 23500,
+      "status": 200,
+      "coverage": "none",
+      "bytes": 68
+    },
+    {
+      "z": 14,
+      "x": 2652,
+      "y": 5876,
+      "status": 200,
+      "coverage": "0.857",
+      "bytes": 105674
+    },
+    {
+      "z": 16,
+      "x": 10606,
+      "y": 23500,
+      "status": 200,
+      "coverage": "none",
+      "bytes": 68
+    },
+    {
+      "z": 16,
+      "x": 10607,
+      "y": 23500,
+      "status": 200,
+      "coverage": "none",
+      "bytes": 68
+    },
+    {
+      "z": 16,
+      "x": 10605,
+      "y": 23501,
+      "status": 200,
+      "coverage": "none",
+      "bytes": 68
+    },
+    {
+      "z": 16,
+      "x": 10606,
+      "y": 23501,
+      "status": 200,
+      "coverage": "none",
+      "bytes": 68
+    },
+    {
+      "z": 16,
+      "x": 10607,
+      "y": 23501,
+      "status": 200,
+      "coverage": "none",
+      "bytes": 68
+    },
+    {
+      "z": 16,
+      "x": 10605,
+      "y": 23502,
+      "status": 200,
+      "coverage": "none",
+      "bytes": 68
+    },
+    {
+      "z": 16,
+      "x": 10606,
+      "y": 23502,
+      "status": 200,
+      "coverage": "none",
+      "bytes": 68
+    },
+    {
+      "z": 16,
+      "x": 10607,
+      "y": 23502,
+      "status": 200,
+      "coverage": "none",
+      "bytes": 68
+    }
+  ]
 }
