@@ -41,11 +41,13 @@
     return {...view,centerMerc:[view.centerMerc[0]+(c*dx+s*dy)/world,view.centerMerc[1]+(-s*dx+c*dy)/world],
       cssSize:[width/scale,height/scale],dpr:scale,liveDpr:view.dpr};
   }
-  /* "Smoother panning" (CR-008): off (default), auto or on. Anything else
-     stored, or no storage, is off. */
+  /* "Smoother panning" (CR-008): off, auto or on. Until a choice is stored
+     the iPhone app starts on and other hosts off; anything else stored is
+     off. Choosing Off is stored, so it survives the app's "on" default. */
   const PAN_SHADING_KEY="clearskies.panShading.v1";
-  function panShadingMode(storage){
-    try{const value=storage?.getItem(PAN_SHADING_KEY);return value==="on"||value==="auto"?value:"off";}catch{return "off";}
+  function panShadingDefault(){return typeof window!=="undefined"&&window.CSPNativeHost?"on":"off";}
+  function panShadingMode(storage,fallback=panShadingDefault()){
+    try{const value=storage?.getItem(PAN_SHADING_KEY);if(value==null)return fallback;return value==="on"||value==="auto"?value:"off";}catch{return fallback;}
   }
   /* One user drag, from its first dragging move through inertia to moveend,
      may shade on the CSS grid. "on" does so at once. "auto" does once 3 of

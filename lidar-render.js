@@ -324,6 +324,13 @@
       scene:{style:"rem",base:layer("rem",{palette:"aurora",reverse:true,gamma:.7}),
         overlays:[layer("hs",{palette:"moonlight",blend:"soft-light",opacity:.9})],
         effects:{detail:.3,detailRadius:8,reliefExag:2,remRadius:3000}}},
+    /* Aurora's relative-elevation scene in Ember colors: scabland flood
+       channels glow over dark coulee walls. The app's launch view pairs it
+       with a below-elevation band and Rivers & lakes (app/spectrum.js). */
+    {id:"missoula",name:"Missoula",blurb:"Ice Age flood channels glowing ember over dark scabland.",
+      scene:{style:"rem",base:layer("rem",{palette:"ember",reverse:true,gamma:.7}),
+        overlays:[layer("hs",{palette:"moonlight",blend:"soft-light",opacity:.9})],
+        effects:{detail:.3,detailRadius:8,reliefExag:2,remRadius:3000}}},
     {id:"neon-slope",name:"Neon Slope",blurb:"Steepness in electric color. Cliffs and scarps pop.",
       scene:{style:"slope",base:layer("slope",{palette:"neon",min:0,max:45,gamma:.8}),
         overlays:[layer("hs",{blend:"soft-light",opacity:.7})],

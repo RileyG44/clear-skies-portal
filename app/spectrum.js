@@ -238,13 +238,28 @@ loadTerrainPrefs();
 if (cspFreshView && lidarStudio) {
   // Hydrate the existing model before the normal csp:ready renderer starts;
   // do not synthesize a user change or start a second startup rendering path.
-  const look = CSPLidarRender.LOOKS.find(look => look.id === "topo");
+  // The launch view is the Missoula preset: Rivers & lakes at 10% on top
+  // (overlays.js), ground below 2,320 ft shaded water blue at 35%, then the
+  // Missoula LiDAR look, in CSP_STARTUP_LAYER_ORDER.
+  const look = CSPLidarRender.LOOKS.find(look => look.id === "missoula");
   const result = CSPLidarRender.applyScene(lidarStudio.state(), look.scene, look.id);
   $("#terStyle").value = result.style;
   $("#terOp").value = look.opacity;
   lidarStudio.restoreDisplay({state:result.state});
+  $("#elevSh").checked = false;
+  $("#elevAboveOn").checked = false;
+  $("#elevBelowOn").checked = true;
+  $("#elevBelowColor").value = "#006981";
+  $("#elevBelowVal").value = 2320;
+  $("#elevBandAlpha").value = 35;
+  $("#elevBandAlphaOut").textContent = "35%";
+  $("#elevBandFeather").value = 40;
+  $("#elevBandOutline").checked = false;
   saveTerrainPrefs();
-  try { localStorage.setItem(CSPLidarStudio.STORAGE_KEY, JSON.stringify(result.state)); } catch (_) {}
+  try {
+    localStorage.setItem(CSPLidarStudio.STORAGE_KEY, JSON.stringify(result.state));
+    localStorage.setItem("clearskies.active-layer-order.v1", JSON.stringify(CSP_STARTUP_LAYER_ORDER));
+  } catch (_) {}
 }
 // The studio mounts before preferences hydrate the native style field.
 // Reconcile its rows and selected look with the restored map, including Off.

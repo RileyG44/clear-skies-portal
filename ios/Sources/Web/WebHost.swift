@@ -21,6 +21,9 @@ final class WebHost: NSObject {
     private let bridge: NativeBridge
     // One current recovery checkpoint, held only in this app process's memory.
     private var session: [String: Any]?
+    // The first page load of this app process starts a session; the page
+    // opens it on the launch view. Reloads after a WebContent crash do not.
+    private var sessionStart = true
     private var downloads: [ObjectIdentifier: URL] = [:]
     #if DEBUG
     var debugNavigation: (() -> [String: Any])?
@@ -233,7 +236,8 @@ final class WebHost: NSObject {
     private func installBootstrap() {
         let controller = webView.configuration.userContentController
         controller.removeAllUserScripts()
-        controller.addUserScript(WKUserScript(source: Self.bootstrapSource(engineBase: engine.base, session: session),
+        controller.addUserScript(WKUserScript(source: Self.bootstrapSource(engineBase: engine.base, session: session,
+                                                                           sessionStart: sessionStart),
                                               injectionTime: .atDocumentStart,
                                               forMainFrameOnly: true, in: .page))
         controller.addUserScript(WKUserScript(source: Self.resource("native-shell"),
@@ -249,9 +253,10 @@ final class WebHost: NSObject {
         return source
     }
 
-    private static func bootstrapSource(engineBase: String, session: [String: Any]?) -> String {
+    private static func bootstrapSource(engineBase: String, session: [String: Any]?, sessionStart: Bool) -> String {
         let template = resource("native-host")
-        let config: [String: Any] = ["engineBase": engineBase, "appVersion": appVersion, "resume": session ?? NSNull()]
+        let config: [String: Any] = ["engineBase": engineBase, "appVersion": appVersion, "resume": session ?? NSNull(),
+                                     "sessionStart": sessionStart]
         let json = (try? JSONSerialization.data(withJSONObject: config)).flatMap { String(data: $0, encoding: .utf8) } ?? "{}"
         return template.replacingOccurrences(of: "__CSP_NATIVE_CONFIG__", with: json)
     }
@@ -350,6 +355,7 @@ extension WebHost: WKNavigationDelegate {
     /// the app is in the background. The page restores itself from storage.
     func webViewWebContentProcessDidTerminate(_ webView: WKWebView) {
         onTerminate?()
+        sessionStart = false
         installBootstrap()
         load()
     }

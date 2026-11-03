@@ -20,6 +20,8 @@ final class ShellModel {
     var panelOpen: String?
     /// The sheet's medium height: how much of the map it covers there.
     var mediumSheetHeight: CGFloat = 0
+    /// The open sheet's top edge in the "portal-map" coordinate space.
+    var sheetTop: CGFloat?
     var page: ShellPage?
     var panel: ShellPanel?
     var connected = false
@@ -53,7 +55,6 @@ final class ShellModel {
     var detent: PresentationDetent = .medium { didSet { syncView() } }
     var path: [String] = []
     var query = ""
-    var searchRequested = false
     var suggestions: [PlaceSuggestion] = []
     var routeMatches: [RouteMatch] = []
     var searching = false
@@ -370,9 +371,10 @@ final class ShellModel {
 
     // MARK: - Search
 
+    /// The map's search capsule opens the full menu without the keyboard;
+    /// tapping the menu's search field then focuses it.
     func openSearch() {
         path = []
-        searchRequested = true
         openSheet(.expanded)
     }
 

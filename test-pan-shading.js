@@ -9,7 +9,16 @@ const {tileLevel,coverageTiles,gestureView}=require('./gpu-terrain-engine.js')._
 // Stored mode: only "auto" and "on" are honoured; anything else is off.
 const store=value=>({getItem:key=>{assert.equal(key,PAN_SHADING_KEY);return value;}});
 assert.equal(PAN_SHADING_KEY,'clearskies.panShading.v1');
-assert.equal(panShadingMode(store(null)),'off');
+assert.equal(panShadingMode(store(null)),'off','web hosts start off');
+// The iPhone app starts on until a choice is stored; a stored Off stays off.
+assert.equal(panShadingMode(store(null),'on'),'on');
+assert.equal(panShadingMode(store('off'),'on'),'off');
+assert.equal(panShadingMode(store('auto'),'on'),'auto');
+assert.equal(panShadingMode({getItem(){throw new Error('denied');}},'on'),'on');
+{
+  const previous=globalThis.window;globalThis.window={CSPNativeHost:{}};
+  try{assert.equal(panShadingMode(store(null)),'on','the native host defaults to on')}finally{if(previous===undefined)delete globalThis.window;else globalThis.window=previous}
+}
 assert.equal(panShadingMode(store('auto')),'auto');
 assert.equal(panShadingMode(store('on')),'on');
 for(const value of ['off','ON','1','true','',' on'])assert.equal(panShadingMode(store(value)),'off',`stored ${JSON.stringify(value)}`);
@@ -84,7 +93,8 @@ assert.match(ui,/<strong>Smoother panning<\/strong><span>While you drag, terrain
 assert.match(ui,/<select data-pan-shading aria-label="Smoother panning">\s*<option value="off">Off<\/option><option value="auto">Auto<\/option><option value="on">On<\/option>/);
 const reset=ui.match(/const keys=\[([^\]]*)\];/);assert(reset,'reset key list');
 assert(reset[1].includes('"clearskies.panShading.v1"'),'Reset all preferences clears the mode');
-assert.equal((ui.match(/clearskies\.panShading\.v1/g)||[]).length,3,'written, removed and reset under its own key only');
+assert.equal((ui.match(/clearskies\.panShading\.v1/g)||[]).length,2,'written (Off included) and reset under its own key only');
+assert(!/removeItem\("clearskies\.panShading\.v1"\)/.test(ui),'choosing Off is stored, not removed');
 const sources=fs.readFileSync('app/terrain-sources.js','utf8');
 assert.match(sources,/panShading:window\.CSPGpuTerrainLayer\.panShadingMode\(storage\)/);
 assert.match(sources,/addEventListener\("csp:pan-shading",event=>gpuTerrainLayer\?\.setPanShading\(event\.detail\?\.mode\)\)/);
