@@ -6,16 +6,17 @@ const arch=["arm64","x64"];
 
 module.exports={
   appId:"com.rileyg44.clear-skies-portal",
-  productName:"Clear Skies Portal",
+  productName:"ClearSkies",
   directories:{buildResources:"build",output:"dist"},
   files:["electron/**/*","package.json"],
   extraResources:[{from:".",to:"app",filter:[...site.web,...site.app,...site.engine,"vendor/**/*"]},
     {from:"build/icon.ico",to:"ClearSkies.ico"}],
   win:{target:[{target:"nsis",arch:["x64"]},{target:"zip",arch:["x64"]}],icon:"build/icon.ico",
     artifactName:"ClearSkies-${version}-${arch}.${ext}",
+    // Keep the existing launch target so old taskbar/startup links keep working.
     executableName:"Clear Skies Portal",signAndEditExecutable:true},
   nsis:{oneClick:true,perMachine:false,allowElevation:false,runAfterFinish:true,
-    artifactName:"ClearSkies-Setup-${version}-${arch}.exe",shortcutName:"Clear Skies Portal",
+    artifactName:"ClearSkies-Setup-${version}-${arch}.exe",shortcutName:"ClearSkies",
     createDesktopShortcut:true,createStartMenuShortcut:true,deleteAppDataOnUninstall:false,
     installerIcon:"build/icon.ico",uninstallerIcon:"build/icon.ico",installerHeaderIcon:"build/icon.ico",
     include:"build/installer.nsh"},
@@ -29,9 +30,9 @@ module.exports={
     entitlements:"build/entitlements.mac.plist",
     entitlementsInherit:"build/entitlements.mac.plist",
     extendInfo:{
-      NSLocationWhenInUseUsageDescription:"Clear Skies Portal uses your location only to centre the map on where you are.",
+      NSLocationWhenInUseUsageDescription:"ClearSkies uses your location only to centre the map on where you are.",
       NSHumanReadableCopyright:"MIT licensed. Imagery from Copernicus, NASA, USGS and WA DNR."
     }
   },
-  dmg:{title:"Clear Skies Portal"}
+  dmg:{title:"ClearSkies"}
 };

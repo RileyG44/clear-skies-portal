@@ -128,7 +128,7 @@ function geolocate(){
     },
     err=>{
       btn.classList.remove("busy"); btn.disabled=false;
-      const msg={1:NATIVE_HOST?"Location is off for Clear Skies \u2014 allow it in the Settings app"
+      const msg={1:NATIVE_HOST?"Location is off for ClearSkies \u2014 allow it in the Settings app"
                  :"Location permission denied \u2014 allow it in your browser\u2019s site settings",
                  2:"Location unavailable right now",
                  3:"Location request timed out"}[err.code] || "Could not get your location";

@@ -10,7 +10,7 @@ if(process.platform==="darwin" || process.platform==="win32"){
   document.addEventListener("DOMContentLoaded",addChrome,{once:true});
 }
 // Only this bundled, isolated setup document receives the completion bridge.
-if(location.protocol==="file:" && location.pathname.endsWith("/setup/index.html")){
+if(location.protocol==="file:" && /\/setup\/(index|guide)\.html$/.test(location.pathname)){
   const {contextBridge,ipcRenderer}=require("electron");
   contextBridge.exposeInMainWorld("clearSkiesSetup",{
     finish:()=>ipcRenderer.invoke("csp:finish-setup"),

@@ -1,5 +1,5 @@
 #!/bin/zsh
-# Build Clear Skies, install it on the paired iPhone and open it. The phone
+# Build ClearSkies, install it on the paired iPhone and open it. The phone
 # must be connected by cable or on the same network, and unlocked to open.
 # Pass --no-activate to install and launch without taking over the screen.
 set -euo pipefail
@@ -30,6 +30,6 @@ app="$derived/Build/Products/Debug-iphoneos/ClearSkies.app"
 bundle=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$app/Info.plist")
 
 xcrun devicectl device install app --device "$device" "$app"
-echo "Installed Clear Skies on physical iPhone $device."
+echo "Installed ClearSkies on physical iPhone $device."
 xcrun devicectl device process launch --device "$device" "${launch_options[@]}" "$bundle" \
-  || { echo "Installed on the physical iPhone, but launch failed. Unlock it and open Clear Skies." >&2; exit 1; }
+  || { echo "Installed on the physical iPhone, but launch failed. Unlock it and open ClearSkies." >&2; exit 1; }

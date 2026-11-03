@@ -1,4 +1,4 @@
-/* Clear Skies Portal — Electron shell.
+/* ClearSkies — Electron shell.
    Prefers the terrain engine this Mac already runs (the LaunchAgent on
    its configured loopback port): the page and every /api call come from that
    one local server, sharing its warm tile cache. Only when no engine answers
@@ -32,8 +32,10 @@ let win   = null;
 let port  = 0;
 const setupFile = path.join(__dirname,"setup","index.html");
 const setupURL = pathToFileURL(setupFile).href;
-const setupMarker = () => path.join(app.getPath("userData"),"setup-v1.json");
-const showSetup = () => { if(win) win.loadFile(setupFile); };
+const guideFile = path.join(__dirname,"setup","guide.html");
+const setupPages = new Set([setupURL,pathToFileURL(guideFile).href]);
+const setupMarker = () => path.join(app.getPath("userData"),"setup-v2.json");
+const showSetup = (guide=false) => { if(win) win.loadFile(guide?guideFile:setupFile); };
 
 /* Finder launches do not inherit a terminal's CSP_ENGINE_PORT. Read the same
    saved port the service installer keeps, or a healthy updated engine on 8770
@@ -81,7 +83,7 @@ function startServer(p){
   child.on("exit", (code, sig) => {
     child = null;
     if (!app.isQuittingCsp && code !== 0){
-      dialog.showErrorBox("Clear Skies Portal",
+      dialog.showErrorBox("ClearSkies",
         `The local server stopped unexpectedly (code ${code}${sig ? `, ${sig}` : ""}).\n\nQuit and reopen the app to try again.`);
     }
   });
@@ -156,7 +158,7 @@ function createWindow(){
   win = new BrowserWindow({
     width: 1400, height: 900, minWidth: 900, minHeight: 600,
     backgroundColor: "#000000",
-    title: "Clear Skies Portal",
+    title: "ClearSkies",
     // macOS draws the traffic lights over the page. The page keeps a clear
     // drag strip; it does not paint a title bar.
     ...windowChrome(process.platform),
@@ -168,14 +170,14 @@ function createWindow(){
   if(process.argv.includes("--setup") || (process.platform==="win32" && !fs.existsSync(setupMarker()))) showSetup();
   else win.loadURL(`${internalOrigin}/`);
   win.webContents.on("before-input-event",(event,input)=>{
-    if(input.type==="keyDown" && input.key==="F1"){ event.preventDefault(); showSetup(); }
+    if(input.type==="keyDown" && input.key==="F1"){ event.preventDefault(); showSetup(true); }
   });
   win.on("closed", () => { win = null; });
 
   // Anything that is not our own server opens in the real browser,
   // so attribution links don't strand the user inside the app.
   const external = url => {
-    if (isInternal(url) || url===setupURL) return false;
+    if (isInternal(url) || setupPages.has(url)) return false;
     // Never hand file:, javascript: or custom protocols to an external app.
     if(/^https?:\/\//i.test(url)) shell.openExternal(url);
     return true;
@@ -187,7 +189,7 @@ function createWindow(){
 app.isQuittingCsp = false;
 app.setAppUserModelId("com.rileyg44.clear-skies-portal");
 ipcMain.handle("csp:finish-setup",async event=>{
-  if(!win || event.sender!==win.webContents || event.senderFrame?.url!==setupURL) return false;
+  if(!win || event.sender!==win.webContents || !setupPages.has(event.senderFrame?.url)) return false;
   fs.mkdirSync(app.getPath("userData"),{recursive:true});
   fs.writeFileSync(setupMarker(),JSON.stringify({completedAt:new Date().toISOString()}));
   await win.loadURL(`http://${HOST}:${port}/`);
@@ -213,7 +215,7 @@ if (!app.requestSingleInstanceLock()){
       console.log(child ? `[app] started a bundled server on ${port}` : `[app] using the installed terrain engine on ${port}`);
       createWindow();
     } catch (err) {
-      dialog.showErrorBox("Clear Skies Portal", `Could not start the local server.\n\n${err.message}`);
+      dialog.showErrorBox("ClearSkies", `Could not start the local server.\n\n${err.message}`);
       app.quit();
     }
   });

@@ -21,7 +21,7 @@ async function deliverSnapshot(blob,name){
   const touchShare=matchMedia("(pointer: coarse)").matches||/iP(?:hone|ad|od)/.test(navigator.userAgent||"");
   if(touchShare&&file&&navigator.share&&navigator.canShare?.({files:[file]})){
     try{
-      await navigator.share({files:[file],title:"Clear Skies map export"});
+      await navigator.share({files:[file],title:"ClearSkies map export"});
       setSnapshotStatus(`Shared ${name}.`,7000);
       return true;
     }catch(error){

@@ -1,6 +1,6 @@
 {
-  "name": "Clear Skies Portal",
-  "short_name": "Clear Skies",
+  "name": "ClearSkies",
+  "short_name": "ClearSkies",
   "description": "Latest available satellite imagery by source and date, for any location.",
   "start_url": "./",
   "scope": "./",

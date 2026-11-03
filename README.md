@@ -1,4 +1,4 @@
-# Clear Skies Portal
+# ClearSkies
 
 A local web app that finds the most recent satellite imagery for any location on Earth,
 plus lidar terrain. Everything it uses is free and needs no API key.
@@ -125,9 +125,9 @@ The same file works in VS Code locally via *Dev Containers: Reopen in Container*
 
 ## Install on Windows
 
-Get the permanent **ClearSkies Setup** EXE from [GitHub Releases](https://github.com/RileyG44/clear-skies-portal/releases). The one-click installer includes the local terrain engine, ClearSkies icon, Desktop/Start shortcuts and Windows uninstall support. No separate Node.js installation is needed. An optional guided installer adds installation choices and a Tailscale information page; a portable ZIP is also available.
+Get the permanent **ClearSkies Setup** EXE from [GitHub Releases](https://github.com/RileyG44/clear-skies-portal/releases). The one-click installer includes the local terrain engine, ClearSkies icon, Desktop/Start shortcuts and Windows uninstall support. No separate Node.js installation is needed. An optional guided installer adds installation choices; a portable ZIP is also available.
 
-The first-run guide explains the engine's benefits and optional private remote access from desktops and mobile devices. Tailscale's [official website](https://tailscale.com/) and [latest stable Windows installer](https://pkgs.tailscale.com/stable/tailscale-setup-latest.exe) are linked directly. Automatic Tailscale server setup and engine-link generation are planned for the next app update. The engine runs while Clear Skies is open; keep its computer awake for remote access. Reopen the guide with F1. [Windows packaging details](docs/WINDOWS_INSTALLER.md).
+After installation, a LiDAR welcome page opens ClearSkies directly or leads to the optional second-page Tailscale guide. The guide explains the engine's benefits and optional private remote access from desktops and mobile devices. Tailscale's [official website](https://tailscale.com/) and [latest stable Windows installer](https://pkgs.tailscale.com/stable/tailscale-setup-latest.exe) are linked directly. Automatic Tailscale server setup and engine-link generation are planned for the next app update. The engine runs while ClearSkies is open; keep its computer awake for remote access. Reopen the guide with F1. [Windows packaging details](docs/WINDOWS_INSTALLER.md).
 
 ## Hosted page and the terrain engine
 
@@ -205,9 +205,9 @@ scripts/install-mac-service.sh` (any free port) and pass the same variable to
 to the service by hand. The desktop app reads the saved service port automatically,
 including when opened from Finder; `CSP_ENGINE_PORT` can override it.
 
-The sharing script adds only Clear Skies API routes on HTTPS port 443. It
+The sharing script adds only ClearSkies API routes on HTTPS port 443. It
 preserves the root page and other services, so T3 Code can share the same Mac
-address. Replacing the root Serve target previously made Clear Skies health
+address. Replacing the root Serve target previously made ClearSkies health
 requests return another application's HTML even though the local engine was
 healthy. The API routes avoid that collision.
 On a shared Mac, setting `CSP_MAINTAIN_TAILSCALE=1` in the maintained service's

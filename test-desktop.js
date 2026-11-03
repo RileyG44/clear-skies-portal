@@ -42,9 +42,30 @@ test("Windows first launch shows setup, completion saves once and opens local en
 test("Returning users go straight to the map; F1 and setup shortcut reopen the guide",async()=>{
   const f=await fixture({completed:true});assert.equal(f.win.url,"http://127.0.0.1:49152/");
   let prevented=false;f.win.webContents.emit("before-input-event",{preventDefault:()=>{prevented=true;}},{type:"keyDown",key:"F1"});
-  assert.ok(prevented);assert.match(f.win.url,/setup\/index.html$/);
+  assert.ok(prevented);assert.match(f.win.url,/setup\/guide.html$/);
   const again=await fixture({completed:true,argv:["--setup"]});assert.match(again.win.url,/setup\/index.html$/);
   const mac=await fixture({platform:"darwin"});assert.equal(mac.win.url,"http://127.0.0.1:49152/");
+});
+test("Both setup pages can launch the app, while other local files cannot",async()=>{
+  const f=await fixture(),w=f.win;
+  const guide=require("url").pathToFileURL(path.resolve("electron/setup/guide.html")).href;
+  assert.equal(w.open({url:guide}).action,"allow","learn-more stays in the native setup window");
+  assert.equal(w.open({url:w.url}).action,"allow","back to welcome stays in the setup window");
+  assert.equal(w.open({url:guide.replace('guide.html','other.html')}).action,"deny");
+  assert.equal(await f.handlers['csp:finish-setup']({sender:w.webContents,senderFrame:{url:guide}}),true);
+  assert.equal(w.url,"http://127.0.0.1:49152/");
+});
+test("Welcome uses the mobile wordmark and offers app access without requiring the Tailscale guide",()=>{
+  const welcome=fs.readFileSync("electron/setup/index.html","utf8");
+  const guide=fs.readFileSync("electron/setup/guide.html","utf8");
+  assert.match(welcome,/<h1 class="wordmark">ClearSkies<\/h1>/);
+  assert.match(welcome,/<button id="finish"[^>]*>Open ClearSkies/);
+  assert.match(welcome,/<a[^>]*href="guide.html"[^>]*>Learn about Tailscale/);
+  assert.match(guide,/href="index.html"/);
+  assert.match(guide,/<button id="finish"/);
+  assert.equal(fs.readFileSync("electron/setup/fonts/Pacifico.ttf").compare(fs.readFileSync("ios/Resources/Fonts/Pacifico.ttf")),0);
+  assert.match(fs.readFileSync("electron/setup/setup.css","utf8"),/\.wordmark\{font-family:Pacifico,cursive;font-weight:400/);
+  assert(!/Clear Skies/.test(welcome+guide),"display copy uses the canonical one-word name");
 });
 test("External download links open in a browser; executable protocols stay blocked",async()=>{
   const f=await fixture();

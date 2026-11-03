@@ -1,4 +1,4 @@
-# Clear Skies agent instructions
+# ClearSkies agent instructions
 
 Riley Grant owns the product. When he asks for a fix or feature, build it and
 ship it: branch, commit, PR, merge. No change requests, Spec Owner reviews,
@@ -8,6 +8,9 @@ unclear.
 ## Working rules
 
 - Keep changes focused on what was asked. Unrelated work needs its own request.
+- The product name is **ClearSkies**, always one word. Use the bundled
+  Pacifico Regular font for its wordmark, matching the native mobile main menu.
+  Keep legacy identifiers and data paths stable unless explicitly migrating them.
 - Run the tests that cover what you touched plus `npm run check`. The full suite
   isn't needed for every change. Riley tests live, and we fix what breaks.
 - Bump the build stamp (`version.js`, `sw.js`, `?build=` in `index.html`) for
