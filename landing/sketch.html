@@ -42,6 +42,8 @@ a{color:inherit}
 
 /* everything inked shares one roughening filter and multiplies into the paper */
 .inked{filter:url(#ink);mix-blend-mode:multiply}
+/* the wordmark is rubber-stamped: rough edges, uneven ink, specks where the stamp missed */
+.stamped{filter:url(#stamp);mix-blend-mode:multiply}
 
 .nav{position:absolute;top:0;right:0;z-index:3;display:flex;align-items:center;gap:clamp(16px,2.2vw,30px);
   padding:22px max(48px,env(safe-area-inset-right,0px)) 0 20px;font-size:clamp(15px,1.26vw,19px)}  /* same size as the tagline */
@@ -54,12 +56,10 @@ a{color:inherit}
    foot of the andesite; the script below sets --head-top and --foot from the drawing */
 .copy{display:flex;flex-direction:column;align-items:flex-start;padding:var(--head-top,96px) clamp(16px,2vw,32px) var(--foot,72px) max(24px,min(7.5vw,130px));max-width:640px}
 .title{display:inline-block;white-space:nowrap;font-family:Pacifico,"Brush Script MT",cursive;font-weight:400;color:var(--emerald);margin:0 0 .12em -.1em;
-  padding:0 .32em .06em .06em;font-size:clamp(40px,4.56vw,77px);line-height:1.15;letter-spacing:.005em}
-.lede{font-size:clamp(15px,1.26vw,19px);font-weight:400;line-height:1.3;margin:0 0 .7em;color:var(--ink)}
-.body{font-size:clamp(13px,.92vw,14.5px);font-weight:400;line-height:1.6;margin:0 0 2em;color:var(--ink-2);max-width:29em}
+  padding:0 .32em .06em .06em;font-size:clamp(56px,6vw,104px);line-height:1.15;letter-spacing:.005em}
 /* downloads: notebook entries in the space between the letterhead and the buttons */
-/* sits about 3/4 inch (72px) under the intro paragraph; the rest of the gap stays below it */
-.dl{margin:calc(72px - 2em - clamp(14px,3.4vh,36px)) 0 auto;display:grid;gap:0;width:min(100%,32em)}
+/* sits about 3/4 inch (72px) under the title; the rest of the gap stays below it */
+.dl{margin:calc(72px - clamp(14px,3.4vh,36px)) 0 auto;display:grid;gap:0;width:min(100%,32em)}
 .dl-row{display:flex;flex-wrap:wrap;align-items:baseline;gap:4px .45em;padding:clamp(14px,3.4vh,36px) 0}
 .dl-k{margin:0;font-size:clamp(16px,1.32vw,20px);font-weight:300;color:var(--ink-2)}
 .dl-links{display:inline-flex;flex-wrap:wrap;align-items:baseline;gap:4px 0}
@@ -106,10 +106,9 @@ a{color:inherit}
   .nav{position:static;justify-content:flex-start;padding:18px 20px 0 max(20px,env(safe-area-inset-left,0px));font-size:18px}
   .sk{grid-template-columns:1fr;min-height:0}
   .copy{padding:28px 20px 8px;max-width:none}
-  .title{font-size:clamp(40px,11vw,50px);padding-right:.18em}
-  .lede{font-size:18px}
-  .body{font-size:15px}
+  .title{font-size:clamp(52px,15vw,68px);padding-right:.18em}
   .dl{margin:4px 0 28px}
+  .dl-row{padding:12px 0}
   .actions{margin-top:0}
   .fig{height:auto;min-height:0;aspect-ratio:1.12/1.36}
 }
@@ -125,6 +124,17 @@ a{color:inherit}
     <feColorMatrix in="grain" type="matrix" values="0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 -.5 1.17" result="mask"/>
     <feComposite in="rough" in2="mask" operator="in"/>
   </filter>
+  <filter id="stamp" x="-4%" y="-20%" width="108%" height="140%" color-interpolation-filters="sRGB">
+    <feTurbulence type="fractalNoise" baseFrequency=".5" numOctaves="2" seed="11" result="edge"/>
+    <feDisplacementMap in="SourceGraphic" in2="edge" scale="2.2" xChannelSelector="R" yChannelSelector="G" result="rough"/>
+    <feTurbulence type="fractalNoise" baseFrequency=".9" numOctaves="3" seed="5" result="speck"/>
+    <feColorMatrix in="speck" type="matrix" values="0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 -5 3.75" result="specks"/>
+    <feComponentTransfer in="specks" result="voids"><feFuncA type="discrete" tableValues="0 .6 1 1"/></feComponentTransfer>
+    <feTurbulence type="fractalNoise" baseFrequency=".025 .05" numOctaves="2" seed="2" result="press"/>
+    <feColorMatrix in="press" type="matrix" values="0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 1.1 .5" result="pressure"/>
+    <feComposite in="voids" in2="pressure" operator="arithmetic" k1="1" result="ink"/>
+    <feComposite in="rough" in2="ink" operator="in"/>
+  </filter>
 </svg>
 <div class="paper" aria-hidden="true"></div>
 
@@ -134,9 +144,7 @@ a{color:inherit}
 
 <main class="sk">
   <section class="copy">
-    <h1 class="title inked write">ClearSkies</h1>
-    <p class="lede inked write" style="--d:.5s">See the ground beneath everything.</p>
-    <p class="body inked write" style="--d:.9s">The newest free satellite imagery, paired with LiDAR terrain sharp enough to find old roads, river terraces and trails hidden under the trees.</p>
+    <h1 class="title stamped write">ClearSkies</h1>
     <div class="dl write" style="--d:1.1s" aria-label="Downloads">
       <div class="dl-row">
         <p class="dl-k inked">For macOS</p><span class="dl-sep inked" aria-hidden="true">&ndash;</span>
