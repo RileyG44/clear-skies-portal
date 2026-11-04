@@ -42,7 +42,7 @@ a{color:inherit}
 
 /* everything inked shares one roughening filter and multiplies into the paper */
 .inked{filter:url(#ink);mix-blend-mode:multiply}
-/* the wordmark is stamped: a rough edge, uneven ink pressure and a fine, even grain */
+/* the wordmark is flat ink with a barely-there edge wobble and grain, so it reads as printed, not digital */
 .stamped{filter:url(#stamp);mix-blend-mode:multiply}
 
 .nav{position:absolute;top:0;right:0;z-index:3;display:flex;align-items:center;gap:clamp(16px,2.2vw,30px);
@@ -56,7 +56,7 @@ a{color:inherit}
    foot of the andesite; the script below sets --head-top and --foot from the drawing */
 .copy{--title-drop:clamp(26px,5vh,56px);display:flex;flex-direction:column;align-items:flex-start;padding:var(--head-top,96px) clamp(16px,2vw,32px) var(--foot,72px) max(24px,min(7.5vw,130px));max-width:640px}
 .title{display:inline-block;white-space:nowrap;font-family:Pacifico,"Brush Script MT",cursive;font-weight:400;color:var(--emerald);margin:var(--title-drop,0px) 0 .12em -.1em;
-  padding:0 .32em .06em .06em;font-size:clamp(64px,7.4vw,124px);line-height:1.15;letter-spacing:.005em}
+  padding:0 .32em .06em .06em;font-size:clamp(45px,5.2vw,87px);line-height:1.15;letter-spacing:.005em}
 /* downloads: notebook entries in the space between the letterhead and the buttons */
 /* sits about 3/4 inch (72px) under the title; the rest of the gap stays below it */
 .dl{margin:calc(72px - clamp(14px,3.4vh,36px)) 0 auto;display:grid;gap:0;width:min(100%,32em)}
@@ -106,7 +106,7 @@ a{color:inherit}
   .nav{position:static;justify-content:flex-start;padding:18px 20px 0 max(20px,env(safe-area-inset-left,0px));font-size:18px}
   .sk{grid-template-columns:1fr;min-height:0}
   .copy{padding:28px 20px 8px;max-width:none}
-  .title{font-size:clamp(52px,15vw,68px);padding-right:.18em;--title-drop:0px}
+  .title{font-size:clamp(38px,10.5vw,48px);padding-right:.18em;--title-drop:0px}
   .dl{margin:4px 0 28px}
   .dl-row{padding:12px 0}
   .actions{margin-top:0}
@@ -125,13 +125,13 @@ a{color:inherit}
     <feComposite in="rough" in2="mask" operator="in"/>
   </filter>
   <filter id="stamp" x="-4%" y="-20%" width="108%" height="140%" color-interpolation-filters="sRGB">
-    <feTurbulence type="fractalNoise" baseFrequency=".5" numOctaves="2" seed="11" result="edge"/>
-    <feDisplacementMap in="SourceGraphic" in2="edge" scale="2.2" xChannelSelector="R" yChannelSelector="G" result="rough"/>
-    <feTurbulence type="fractalNoise" baseFrequency="1.6" numOctaves="1" seed="5" result="speck"/>
-    <feColorMatrix in="speck" type="matrix" values="0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 -.45 1.2" result="voids"/>
-    <feTurbulence type="fractalNoise" baseFrequency=".025 .05" numOctaves="2" seed="2" result="press"/>
-    <feColorMatrix in="press" type="matrix" values="0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 .8 .68" result="pressure"/>
-    <feComposite in="voids" in2="pressure" operator="arithmetic" k1="1" result="ink"/>
+    <feTurbulence type="fractalNoise" baseFrequency=".9" numOctaves="2" seed="11" result="edge"/>
+    <feDisplacementMap in="SourceGraphic" in2="edge" scale="1.1" xChannelSelector="R" yChannelSelector="G" result="rough"/>
+    <feTurbulence type="fractalNoise" baseFrequency="1.8" numOctaves="1" seed="5" result="speck"/>
+    <feColorMatrix in="speck" type="matrix" values="0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 -.18 1.07" result="grain"/>
+    <feTurbulence type="fractalNoise" baseFrequency=".03 .06" numOctaves="2" seed="2" result="press"/>
+    <feColorMatrix in="press" type="matrix" values="0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 .2 .9" result="pressure"/>
+    <feComposite in="grain" in2="pressure" operator="arithmetic" k1="1" result="ink"/>
     <feComposite in="rough" in2="ink" operator="in"/>
   </filter>
 </svg>
