@@ -1,10 +1,13 @@
 # ClearSkies landing, Explore and download pages
 
-- `index.html`: the landing page. The hero is a side-view, segmented
-  point-cloud forest along the bottom of the window, swaying in a breeze. Moving
-  the cursor (or a finger) through the canopy sends gusts that ripple through
-  neighbouring trees. "Explore ClearSkies" opens the Explore page; the
-  Download link in the nav opens the download page.
+- `index.html`: the landing page. The hero is a 3D point-cloud forest in mid
+  fall colour on rolling hills that fade into the dark, swaying in a breeze;
+  the cursor sends gusts through it. "Explore ClearSkies" opens the Explore
+  page; the Download link in the nav opens the download page.
+- `sketch.html` + `sketch.js`: an alternative landing page, a page from a
+  geologist's sketchbook. A pen-and-ink Douglas-fir over a soil section draws
+  itself in, then every branch and twig is a damped spring on a bone
+  hierarchy, so brushing the crown with the cursor moves the boughs it touches.
 - `explore.html`: features and capabilities, real app captures and screenshots
   (`media/`), and two live demos: terrain relighting with the app's four
   lighting controls, and a point-cloud forest with All returns / Bare earth
