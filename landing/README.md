@@ -13,7 +13,7 @@
   lighting controls, and a point-cloud forest with All returns / Bare earth
   and colour modes.
 - `download.html`: per-platform downloads with platform detection. It links
-  the published GitHub release assets (edit `WIN` and `MAC` in the page when a
+  the published GitHub release assets (edit `WIN` and `MAC` in `releases.js` when a
   release goes out). The App Store and Google Play badges are placeholders
   until the apps are listed.
 

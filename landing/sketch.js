@@ -211,14 +211,17 @@ export function buildTree(seed = 20261104) {
         }
       }
     }
-    // a light wash of bark brown on the bole, a little heavier on the shaded right
-    for (let y = 0; y < 0.8; y += 0.004) {
-      const y1 = y + 0.0042, fade = y < 0.27 ? 1 : Math.max(0, 0.55 * (1 - (y - 0.27) / 0.5));
-      if (fade <= 0) break;
-      for (let s = -0.7; s <= 0.95; s += 0.22) {
-        const sj = clamp(s + R(-0.05, 0.05), -0.95, 0.97), k = (sj + 1) / 2;
-        line(tX(y) + sj * tR(y), y, tb(y), tX(y1) + sj * tR(y1), y1, tb(y1), R(1.6, 2.4), (y < 0.27 ? 0.16 + 0.34 * k * k : 0.1 + 0.28 * k * k) * fade, 0.18 + 0.2 * y, 0.008, INK.BARK);
+    // a light, even wash of bark brown on the bole: two broad strokes sized to the trunk
+    // (negative widths are in tree units), the second darkening the shaded right half
+    {
+      const fade = y => 1 - 0.75 * smooth(0.22, 0.7, y), wash = [], shade = [];
+      for (let y = 0; y <= 0.78; y += 0.006) {
+        wash.push([tX(y) + 0.04 * tR(y), y, tb(y)]);
+        shade.push([tX(y) + 0.5 * tR(y), y, tb(y)]);
       }
+      const at = (f, k) => -k * tR(f * 0.78);
+      poly(wash, f => at(f, 1.9), f => 0.17 * fade(f * 0.78), 0.18, 0.33, INK.BARK);
+      poly(shade, f => at(f, 0.95), f => 0.15 * fade(f * 0.78), 0.2, 0.35, INK.BARK);
     }
     // deep, braided Douglas-fir bark furrows
     for (let k = 0; k < 30; k++) {
@@ -565,7 +568,7 @@ void main(){
   float L = length(d);
   vec2 dir = L > 1e-4 ? d / L : vec2(1.0, 0.0);
   vec2 nrm = vec2(-dir.y, dir.x);
-  float w = aStyle.x * uDpr;
+  float w = (aStyle.x < 0.0 ? -aStyle.x * uScale : aStyle.x) * uDpr;
   float halfW = max(w, 0.9 * uDpr) * 0.5;
   float pad = halfW + 1.0;
   vec2 pos = a + d * position.x + nrm * position.y * pad;

@@ -142,19 +142,8 @@
 <script type="module">
 import { createStage } from "./scenes.js";
 
-/* Published builds. Update these when a release goes out. */
-const REPO = "https://github.com/RileyG44/clear-skies-portal/releases/download";
-const WIN = { version: "1.0.2", tag: "desktop-v1.0.2" };
-const MAC = { version: "1.0.0", tag: "build-2026-11-03a" };
-const FILES = {
-  "win-setup": `${REPO}/${WIN.tag}/ClearSkies-Setup-${WIN.version}-x64.exe`,
-  "win-guided": `${REPO}/${WIN.tag}/ClearSkies-Guided-Setup-${WIN.version}-x64.exe`,
-  "win-zip": `${REPO}/${WIN.tag}/ClearSkies-${WIN.version}-x64.zip`,
-  "win-sums": `${REPO}/${WIN.tag}/SHA256SUMS-Windows.txt`,
-  "mac-dmg": `${REPO}/${MAC.tag}/Clear.Skies.Portal-${MAC.version}-arm64.dmg`,
-  "mac-zip": `${REPO}/${MAC.tag}/Clear.Skies.Portal-${MAC.version}-arm64-mac.zip`,
-  "mac-sums": `${REPO}/${MAC.tag}/SHA256SUMS.txt`
-};
+/* Published builds live in releases.js. */
+import { REPO, WIN, MAC, FILES } from "./releases.js";
 for (const a of document.querySelectorAll("[data-file]")) { a.href = FILES[a.dataset.file]; a.rel = "noopener"; }
 
 const FEATURED = {
