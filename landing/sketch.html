@@ -44,7 +44,7 @@ a{color:inherit}
 .inked{filter:url(#ink);mix-blend-mode:multiply}
 
 .nav{position:absolute;top:0;right:0;z-index:3;display:flex;align-items:center;gap:clamp(16px,2.2vw,30px);
-  padding:22px max(48px,env(safe-area-inset-right,0px)) 0 20px;font-size:19px}
+  padding:22px max(48px,env(safe-area-inset-right,0px)) 0 20px;font-size:clamp(15px,1.26vw,19px)}  /* same size as the tagline */
 .nav a{text-decoration:none;position:relative;padding:4px 2px}
 .nav a::after{content:"";position:absolute;left:0;right:0;bottom:1px;height:2px;border-radius:2px;background:currentColor;transform:scaleX(0);transform-origin:left;transition:transform .35s ease}
 .nav a:hover::after{transform:scaleX(1)}
@@ -59,14 +59,14 @@ a{color:inherit}
 .body{font-size:clamp(13px,.92vw,14.5px);font-weight:400;line-height:1.6;margin:0 0 2em;color:var(--ink-2);max-width:29em}
 /* downloads: notebook entries in the space between the letterhead and the buttons */
 .dl{margin:auto 0;display:grid;gap:0;width:min(100%,27em)}
-.dl-row{display:grid;gap:4px;padding:14px 0 15px;border-top:1px dashed rgb(31 58 47 / .28)}
-.dl-row:last-child{border-bottom:1px dashed rgb(31 58 47 / .28)}
+.dl-row{display:grid;gap:4px;padding:15px 0}
 .dl-k{margin:0;font-size:clamp(14px,1.08vw,16.5px);font-weight:300;color:var(--ink-2)}
 .dl-links{display:flex;flex-wrap:wrap;gap:4px 26px}
 .dl-link{display:inline-flex;align-items:baseline;gap:.45em;font-size:clamp(16px,1.25vw,19px);font-weight:700;color:var(--emerald);text-decoration:none}
-.dl-link .t{text-decoration:underline;text-decoration-thickness:1px;text-underline-offset:4px;text-decoration-color:rgb(36 135 94 / .45);transition:text-decoration-color .25s}
-.dl-link:hover .t{text-decoration-color:currentColor}
-.dl-meta{font-size:.72em;font-weight:300;color:#5a5048;text-decoration:none;display:inline-block}
+
+/* the platform line is the link: same small grey hand, lightly underlined */
+.dl-meta{font-size:.72em;font-weight:300;color:#5a5048;text-decoration:underline;text-decoration-thickness:1px;text-underline-offset:3px;text-decoration-color:rgb(90 80 72 / .35);transition:text-decoration-color .25s}
+.dl-link:hover .dl-meta{text-decoration-color:rgb(90 80 72 / .85)}
 .actions{margin-top:0;display:flex;flex-wrap:wrap;gap:14px clamp(12px,1.2vw,18px);align-items:center}
 .btn{display:inline-flex;align-items:center;gap:.5em;font-family:var(--hand);font-weight:700;font-size:clamp(16px,1.25vw,18px);line-height:1;
   text-decoration:none;padding:15px clamp(18px,1.7vw,26px) 13px;border-radius:255px 22px 225px 22px / 22px 225px 22px 255px;
@@ -137,17 +137,17 @@ a{color:inherit}
     <div class="dl write" style="--d:1.1s" aria-label="Downloads">
       <div class="dl-row">
         <p class="dl-k inked">For those who use macOS</p>
-        <span class="dl-links"><a class="dl-link inked" data-file="mac-dmg" href="download.html"><span class="t">Download for Mac</span> <span class="dl-meta" data-meta="mac">Apple silicon</span></a></span>
+        <span class="dl-links"><a class="dl-link inked" data-file="mac-dmg" href="download.html"><span class="dl-meta" data-meta="mac">Apple silicon</span></a></span>
       </div>
       <div class="dl-row">
         <p class="dl-k inked">For those who use Windows</p>
-        <span class="dl-links"><a class="dl-link inked" data-file="win-setup" href="download.html"><span class="t">Download for Windows</span> <span class="dl-meta" data-meta="win">x64</span></a></span>
+        <span class="dl-links"><a class="dl-link inked" data-file="win-setup" href="download.html"><span class="dl-meta" data-meta="win">x64</span></a></span>
       </div>
       <div class="dl-row">
         <p class="dl-k inked">For those who explore</p>
         <span class="dl-links">
-          <a class="dl-link inked" href="https://apps.apple.com/" target="_blank" rel="noopener"><span class="t">iPhone &amp; iPad</span> <span class="dl-meta">App Store, coming soon</span></a>
-          <a class="dl-link inked" href="https://play.google.com/store" target="_blank" rel="noopener"><span class="t">Android</span> <span class="dl-meta">Google Play, coming soon</span></a>
+          <a class="dl-link inked" href="https://apps.apple.com/" target="_blank" rel="noopener"><span class="dl-meta">App Store, coming soon</span></a>
+          <a class="dl-link inked" href="https://play.google.com/store" target="_blank" rel="noopener"><span class="dl-meta">Google Play, coming soon</span></a>
         </span>
       </div>
     </div>
