@@ -1,7 +1,7 @@
 # Elevation color scaling
 
-Elevation layers fitted to the view default to **Land & water separately**.
-The land palette uses the minimum and maximum finite land samples, including
+Absolute and relative elevation layers fitted to the view default to **Land & water separately**.
+For absolute elevation, the land palette uses the minimum and maximum finite land samples, including
 negative elevations and isolated peaks/pits. Water has its own blue elevation
 ramp and fitted range. Neither fitting nor coloring changes the elevation
 field, measurements, contours, slope, data-source labels, or loading priority.
@@ -21,6 +21,17 @@ Gallery thumbnails use synthetic terrain without geographic water classification
 The web, native iOS adapter, 3D drape and export keys use the shared studio state.
 Scale settings and fitted ranges survive presets, storage and share links;
 pre-existing links with continuous fitted ranges remain supported.
+
+Relative elevation (including Missoula/Ember) keeps its existing valley-focused
+contrast: zero to the 60th percentile of land relative heights. Water is excluded
+from the local valley-floor minimum and smoothing calculation, then colored from
+its own absolute elevation range. Its key reads **Water · absolute elevation ·
+separate scale**, since lakes can sit above sea level. **Single relative scale**
+restores the original combined relative fit. Manual ranges remain continuous.
+In 3D, which has no local valley-floor field, separate REM uses a land-only view
+floor and matching fitted legend. Mixed manual/automatic layers retain independent
+floors. Missing local-floor samples stay aligned with the height and water samples;
+overview views without a local floor use the land-only view floor.
 
 ## Geography and practical limits
 
@@ -48,7 +59,8 @@ Renderer cleanup and context restoration follow the existing texture lifecycle.
 Fitting retains the existing coarse GPU readback limit of 128 by 128 samples.
 It preserves every finite sampled land extreme; it does not promise to find
 an unsampled narrow peak or pit. Relative elevation retains its existing local
-valley-floor calculation and fitting policy. CPU fallback terrain continues to
+valley-floor filter and fitting percentile, applied to land only in separate mode.
+CPU fallback terrain continues to
 use its existing fixed relief palette; the studio controls require WebGL2.
 
 ## Verification
@@ -60,6 +72,8 @@ use its existing fixed relief palette; the studio controls require WebGL2.
   native picker description, actions and dual gradient keys.
 - Existing shader parity in Chrome and WebKit, native menu/adapter tests,
   desktop packaging checks, static checks and site assembly.
+
+- `node scripts/performance/relative-elevation-regression.js chrome` and `webkit`: 52 numerical filter cases, including land-only geography, missing data and downsample boundaries.
 
 These tests use deterministic synthetic elevation and bundled geography. They
 are not live-provider field tests or a physical iPhone UI test.

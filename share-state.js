@@ -155,6 +155,7 @@
       Object.hasOwn(f,"land")&&Object.hasOwn(f,"water")&&(f.land===null||range(f.land))&&(f.water===null||range(f.water))&&!!(f.land||f.water);
     for(const fit of [state.studio.fitted,state.studio.flatFitted])check(fit&&typeof fit==="object"&&Object.values(fit).every(fitValue),"terrain display range");
     check(state.studio.remFloor===null||Number.isFinite(state.studio.remFloor),"relative elevation floor");
+    check(state.studio.remLandFloor==null||Number.isFinite(state.studio.remLandFloor),"land relative elevation floor");
   }
   function validateConditionsAndImagery(state){
     check(state.alerts&&typeof state.alerts.types==="object"&&["nws","quakes","volcanoes","fires","viewport"].every(key=>typeof state.alerts[key]==="boolean"),"condition filters");

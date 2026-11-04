@@ -42,6 +42,20 @@ const root=path.resolve(__dirname,'../..'),pw=require('../lib/playwright.js');
       check(maxError<=2,'3D coastline, transparency and curve GPU/CPU parity '+maxError);
       check(renderer.stats().waterMaskBytes===16*1024*1024,'GPU geography allocation accounted');
       const uploads=renderer.stats().uploads;renderer.renderBatch([job]);check(renderer.stats().uploads===uploads,'recoloring reuses elevation');
+      // 3D REM must use absolute seabed values, a land-only fallback floor,
+      // and the legacy floor for a manual REM overlay in the same stack.
+      const remState=R.emptyState();remState.base.rem={...R.defaultLayer('rem'),palette:'ember',param:0};
+      remState.overlays=[{...R.defaultLayer('rem'),auto:false,min:0,max:10000,palette:'viridis',param:0,opacity:.25,blend:'multiply'}];
+      const remStack=R.buildStack(remState,'rem',{base:{land:[0,500],water:fit.water}},{remFlatBase:-6000,remLandBase:-90});
+      renderer.renderBatch([{...job,state:{terrain:{style:'rem',stack:remStack}}}]);
+      gl.bindFramebuffer(gl.READ_FRAMEBUFFER,fbo);gl.readPixels(0,0,size,size,gl.RGBA,gl.UNSIGNED_BYTE,actual);
+      const remExpected=R.renderStack(remStack,{grid:inner,width:size,height:size,res:100,water,flat:true});
+      let remError=0;
+      for(let i=0;i<actual.length;i++){
+        const ref=i%4===3?remExpected[i]:Math.round(remExpected[i]*remExpected[(i>>2)*4+3]/255);
+        remError=Math.max(remError,Math.abs(actual[i]-ref));
+      }
+      check(remError<=2,'3D REM mixed floors/water GPU/CPU parity '+remError);
       renderer.destroy();check(gl.isTexture(external)&&gl.isTexture(target),'destroy retains caller textures');
       check(gl.getError()===gl.NO_ERROR,'3D GL error');
       // Real 2D engine: sampling flags must follow readback row order and bearing.
@@ -65,6 +79,22 @@ const root=path.resolve(__dirname,'../..'),pw=require('../lib/playwright.js');
           const x=Math.floor(merc[0]*16),y=Math.floor(merc[1]*16);
           const value=50+x+y*100;
           if(Math.abs(merc[0]*16-x-.5)<.45&&Math.abs(merc[1]*16-y-.5)<.45)check(Math.abs(samples.heights[i]-value)<1,'sample height/geography alignment');
+        }
+      }
+      const remRadius=S.metersPerPixel(view)*2;
+      engine.setState({terrain:{style:'rem',stack:{...remStack,remRadius}}});
+      for(const bearing of [0,37,90]){
+        const v={...view,bearing};engine.render(v);
+        const sampled=engine.sampleValues(),field=engine.debugReadHeight();
+        check(sampled.relative.length===sampled.heights.length&&sampled.landRelative.length===sampled.heights.length,'both bases stay sample-aligned');
+        const topGrid=Float32Array.from({length:size*size},(_,i)=>field.data[i*2]);
+        const topWater=Uint8Array.from({length:size*size},(_,i)=>+G.waterAtMercator(...S.screenToMercator(v,[(i%size+.5)/size,(Math.floor(i/size)+.5)/size])));
+        const base=R.relativeBase({grid:topGrid,width:size,height:size,water:topWater},2,true);
+        for(let i=0;i<sampled.heights.length;i++){
+          const top=(size-1-Math.floor(i/size))*size+i%size;
+          const expected=Math.max(0,topGrid[top]-base[top]),actual=sampled.landRelative[i];
+          check(Number.isFinite(actual)===Number.isFinite(expected),'land-floor sample validity '+i);
+          if(Number.isFinite(expected))check(Math.abs(actual-expected)<.003,'rotated land-only floor reference '+bearing+'/'+i);
         }
       }
       const v={...view,bearing:37};
@@ -95,7 +125,7 @@ const root=path.resolve(__dirname,'../..'),pw=require('../lib/playwright.js');
       window.webkit={messageHandlers:{cspNative:{postMessage:value=>{nativeMessages.push(value);return Promise.resolve()}}}};window.CSPNativeHost=true;
       window.CSPShell={current:()=> 'terrain',groups:()=>[],activate:()=>true};
       document.documentElement.classList.add('csp-boot');
-      return {max3DError:maxError,rotated2DSamples:samples.heights.length,changes};
+      return {max3DError:maxError,maxRem3DError:remError,rotated2DSamples:samples.heights.length,changes};
     });
     await page.addScriptTag({path:path.join(root,'ios/Resources/native-shell.js')});
     const native=await page.evaluate(()=>{
@@ -109,7 +139,41 @@ const root=path.resolve(__dirname,'../..'),pw=require('../lib/playwright.js');
       if(studio.state().base.tint.rangeMode!=='full')throw new Error('Native picker did not update shared state');
       return true;
     });
+    const remNative=await page.evaluate(()=>{
+      const check=(value,message)=>{if(!value)throw Error(message)},R=CSPLidarRender;
+      studio.destroy();
+      const state=R.applyScene(R.emptyState(),R.LOOKS.find(look=>look.id==='missoula').scene,'missoula').state;
+      let values={heights:Float32Array.from({length:40},(_,i)=>i<20?-5000+i*100:1000+i*10),
+        relative:Float32Array.from({length:40},(_,i)=>i<20?800+i:10+i),
+        landRelative:Float32Array.from({length:40},(_,i)=>i<20?NaN:10+i),water:Uint8Array.from({length:40},(_,i)=>+(i<20))};
+      studio=CSPLidarStudio.mount(document.getElementById('terStudio'),{getStyle:()=> 'rem',storage:{getItem:()=>JSON.stringify(state)},sample:options=>{check(options.water,'REM requests geography');return values}});
+      check(studio.fitFromView(true),'REM initial fit');
+      check(studio.stack().layers[0].water[0]===-5000,'REM water uses absolute height');
+      check(studio.stack().layers[0].max<60,'REM land fit excludes ocean relief');
+      const snapshot=studio.displayState();
+      values={...values,heights:Float32Array.from(values.heights,(h,i)=>i<20?h:h+100)};
+      check(studio.fitFromView(false),'3D floor changes notify even when local relative fit stays the same');
+      check(studio.stack('rem',{flat:true}).remLandBase>snapshot.remLandFloor,'3D floor follows changed land');
+      check(studio.stack('rem',{flat:true}).remLandBase>=1000,'3D floor excludes the ocean');
+      studio.restoreDisplay(snapshot);check(studio.legend().secondary.caption.includes('absolute elevation'),'REM water caption');
+      document.querySelector('[data-key="base"] .ls-layer-main').click();document.querySelectorAll('details').forEach(el=>el.open=true);
+      const legend=studio.legend();document.getElementById('terLegend').innerHTML=legend.scales.map(key=>`<div class="terlegend-scale"><div class="caption">${key.caption}</div><div class="bar" style="background:${key.bar};height:10px"></div><div class="ticks">${key.ticks.map(t=>`<span>${t}</span>`).join('')}</div></div>`).join('');
+      nativeMessages.length=0;CSPNativeShell.setView({sheet:'large',page:'terrain'});
+      const page=nativeMessages.map(m=>m.json&&JSON.parse(m.json)).find(m=>m?.page)?.page;
+      const flatten=items=>(items||[]).flatMap(i=>[i,...flatten(i.items)]),items=flatten(page?.items),scale=items.find(i=>i.title==='Elevation scale');
+      check(scale?.options.length===2,'native REM scale picker '+JSON.stringify({scale,titles:items.map(i=>i.title)}));
+      check(items.filter(i=>i.kind==='gradient').length>=2,'native REM water legend');
+      CSPNativeShell.act(scale.ref,'select','full');check(!studio.stack().layers[0].water,'native single-scale action');
+      studio.restoreDisplay(snapshot);
+      values={heights:new Float32Array(20).fill(-4000),relative:new Float32Array(20).fill(NaN),landRelative:new Float32Array(20).fill(NaN),water:new Uint8Array(20).fill(1)};
+      studio.fitFromView(true);check(studio.legend().caption.startsWith('Water')&&!studio.legend().secondary,'REM water-only without a base');
+      values={heights:new Float32Array(20).fill(1200),relative:new Float32Array(20).fill(5),landRelative:new Float32Array(20).fill(5),water:new Uint8Array(20)};
+      studio.fitFromView(true);check(!studio.legend().secondary&&!studio.stack().layers[0].water,'REM land-only clears water');
+      values={...values,landRelative:new Float32Array(20).fill(NaN)};studio.fitFromView(true);
+      check(studio.legend().caption.startsWith('Relative elevation'),'overview without a local floor still fits land');
+      return true;
+    });
     if(!native)throw new Error('Native adapter unavailable');
-    console.log(JSON.stringify({browser:process.argv[2]||'chrome',...result,nativeAdapter:true}));
+    console.log(JSON.stringify({browser:process.argv[2]||'chrome',...result,nativeAdapter:true,remNativeAdapter:remNative}));
   }finally{await browser.close()}
 })().catch(e=>{console.error(e);process.exitCode=1});

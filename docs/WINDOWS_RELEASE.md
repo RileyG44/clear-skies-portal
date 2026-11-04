@@ -1,8 +1,8 @@
-Windows 10/11 x64. Download **ClearSkies-Setup-1.0.6-x64.exe** for one-click installation. It permanently installs ClearSkies and its terrain engine into your user profile, creates Desktop and Start shortcuts, and registers an uninstaller in Windows Settings. No Node.js or terminal setup needed.
+Windows 10/11 x64. Download **ClearSkies-Setup-1.0.7-x64.exe** for one-click installation. It permanently installs ClearSkies and its terrain engine into your user profile, creates Desktop and Start shortcuts, and registers an uninstaller in Windows Settings. No Node.js or terminal setup needed.
 
-**ClearSkies-Guided-Setup-1.0.6-x64.exe** provides a branded wizard and location selection. The ZIP is an optional portable alternative; extract the entire folder before launching.
+**ClearSkies-Guided-Setup-1.0.7-x64.exe** provides a branded wizard and location selection. The ZIP is an optional portable alternative; extract the entire folder before launching.
 
-- New in 1.0.6: fitted elevation colors use separate land and water scales, preserving land contrast in ocean-heavy views and sampled land extremes. Includes native scale controls and separate legends; bundled map build 2026-11-04b.
+- New in 1.0.7: Relative elevation, including Missoula/Ember, now separates land relief from absolute seabed elevation. Coastal valley floors exclude water, and native menus, 3D and export keys show matching scales. Bundled map build 2026-11-04c.
 - Optional **Advanced configuration** on the welcome page lets you set terrain tile, WA DNR and memory cache limits, free disk-space reserve, terrain workers, and smoother panning (Off / Auto / On). Skip it to use the default setup. Reopen the welcome with the Start setup shortcut to change these later.
 - Includes the **Missoula** LiDAR preset and the Missoula scablands startup view near Medical Lake, WA.
 - ClearSkies icon, full-bleed map, overlaid window controls, no standard title/menu bars.

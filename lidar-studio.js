@@ -42,7 +42,7 @@
     if(!container) return null;
     host=host||{};
     const storage=host.storage!==undefined?host.storage:(()=>{try{return globalThis.localStorage}catch(_){return null}})();
-    let state=load(),fitted={},flatFitted={},remFloor=null,expanded=null,selectedStop=0,saveTimer=0,commitFrame=0,destroyed=false,previousMix=null;
+    let state=load(),fitted={},flatFitted={},remFloor=null,remLandFloor=null,expanded=null,selectedStop=0,saveTimer=0,commitFrame=0,destroyed=false,previousMix=null;
     let presetOrigin=state.look,presetScroll=0;
     const disclosures=new Set(["customize"]);
     const previews=new Map();let previewQueue=[],previewTimer=0;
@@ -160,7 +160,7 @@
       if(previousMix){
         const undo=el("button","linkbtn ls-undo-look","Undo preset");undo.type="button";
         undo.onclick=()=>{
-          const previous=previousMix,looks=state.userLooks;previousMix=null;state=previous.state;state.userLooks=looks;presetOrigin=previous.origin;fitted={};flatFitted={};remFloor=null;expanded=null;
+          const previous=previousMix,looks=state.userLooks;previousMix=null;state=previous.state;state.userLooks=looks;presetOrigin=previous.origin;fitted={};flatFitted={};remFloor=null;remLandFloor=null;expanded=null;
           host.setStyle&&host.setStyle(previous.style);
           if(Number.isFinite(previous.opacity)&&host.setOpacity)host.setOpacity(previous.opacity);
           save();render();
@@ -218,7 +218,7 @@
       const look=allLooks().find(l=>l.id===id);if(!look) return;
       previousMix={state:JSON.parse(JSON.stringify(state)),style:host.getStyle?host.getStyle():style(),opacity:host.getOpacity?host.getOpacity():undefined,origin:presetOrigin};
       const result=R.applyScene(state,look.scene,look.id);
-      state=result.state;presetOrigin=id;fitted={};flatFitted={};remFloor=null;expanded=null;save();
+      state=result.state;presetOrigin=id;fitted={};flatFitted={};remFloor=null;remLandFloor=null;expanded=null;save();
       if(host.getStyle&&host.getStyle()!==result.style&&host.setStyle) host.setStyle(result.style);
       /* Looks are designed at their own strength; the classic look keeps the
          usual see-through terrain. */
@@ -308,7 +308,7 @@
       if(layerKeys().length>=R.MAX_LAYERS) return;
       const spec=R.STYLES[styleId]||R.STYLES.hs,layer=R.defaultLayer(styleId);
       if(!style()){
-        state.base[styleId]=layer;state.overlays=[];fitted={};flatFitted={};remFloor=null;
+        state.base[styleId]=layer;state.overlays=[];fitted={};flatFitted={};remFloor=null;remLandFloor=null;
         host.setStyle&&host.setStyle(styleId);expanded="base";selectedStop=0;commit({rerender:true});return;
       }
       if(spec.family==="shade"){layer.blend="multiply";layer.opacity=.75}
@@ -439,19 +439,19 @@
           range.append(auto);
         }
         advancedBody.append(field("Range",range,"ls-field-wide"));
-        if(layer.style==="tint"){
+        if(layer.style==="tint"||layer.style==="rem"){
           const select=el("select","ls-select");select.setAttribute("aria-label","Elevation scale");
-          for(const [value,label] of [["separate","Land & water separately"],["full","Full elevation range"],["robust","Trim extremes (2–98%)"]]){
+          for(const [value,label] of (layer.style==="rem"?[["separate","Land & water separately"],["full","Single relative scale"]]:[["separate","Land & water separately"],["full","Full elevation range"],["robust","Trim extremes (2–98%)"]])){
             const option=el("option","",esc(label));option.value=value;select.append(option);
           }
-          select.value=layer.rangeMode;select.disabled=!layer.auto;
+          select.value=layer.style==="rem"&&layer.rangeMode!=="separate"?"full":layer.rangeMode;select.disabled=!layer.auto;
           select.onchange=()=>{updateLayer(key,{rangeMode:select.value},{rerender:true});fitFromView(true)};
           advancedBody.append(field("Elevation scale",select));
           advancedBody.append(el("p","control-hint",!layer.auto?
             "Manual range uses one continuous elevation scale. Enable Fit to view to scale land and water separately.":layer.rangeMode==="separate"?
-            "Land keeps its full sampled range. Water uses a separate blue scale. Shorelines are generalized; measurements stay unchanged.":
-            layer.rangeMode==="robust"?"Trims the lowest and highest 2% of samples for color fitting. Measurements stay unchanged.":
-            "One continuous color scale includes all sampled land elevations and water depths."));
+            (layer.style==="rem"?"Land shows height above the local valley floor. Water shows absolute elevation on a separate blue scale. Shorelines are generalized (~2 km).":"Land keeps its full sampled range. Water uses a separate blue scale. Shorelines are generalized; measurements stay unchanged."):
+            layer.style!=="rem"&&layer.rangeMode==="robust"?"Trims the lowest and highest 2% of samples for color fitting. Measurements stay unchanged.":
+            (layer.style==="rem"?"One relative-relief scale fits land and seabed together, using the original valley-focused contrast.":"One continuous color scale includes all sampled land elevations and water depths.")));
         }
       }
 
@@ -656,7 +656,7 @@
       wrap.append(grid);
       const reset=el("button","linkbtn ls-reset","Reset colors &amp; layers");reset.type="button";
       reset.onclick=()=>{
-        const keep=state.userLooks;state=R.emptyState();state.userLooks=keep;fitted={};flatFitted={};expanded=null;
+        const keep=state.userLooks;state=R.emptyState();state.userLooks=keep;fitted={};flatFitted={};remFloor=null;remLandFloor=null;expanded=null;
         commit({rerender:true});
       };
       wrap.append(reset);
@@ -699,22 +699,38 @@
     function fitFromView(force){
       const keys=autoKeys(),s=style();
       if(!s||!host.sample) return false;
-      const values=host.sample({water:keys.some(key=>{const layer=layerFor(key);return layer.style==="tint"&&layer.rangeMode==="separate"})});if(!values) return false;
+      const values=host.sample({water:keys.some(key=>{const layer=layerFor(key);return (layer.style==="tint"||layer.style==="rem")&&layer.rangeMode==="separate"})});if(!values) return false;
+      const previousFloors=[remFloor,remLandFloor],previousFlat=JSON.stringify(flatFitted);
       if(values.heights&&values.heights.length){const h=R.fitRange(values.heights,"tint","robust");if(h) remFloor=h[0]}
-      /* The 3D drape has no valley-floor field: there relative elevation is
-         measured from the view's lowest ground, so it gets its own range. */
-      if(remFloor!==null&&values.heights) for(const key of keys) if(layerFor(key).style==="rem")
-        flatFitted[key]=R.fitRange(Array.from(values.heights,h=>Math.max(0,h-remFloor)),"rem");
-      let changed=false;
+      // 3D has no local-floor field. Keep its legacy continuous floor and
+      // give separated REM layers a land-only floor, excluding lakes and seabed.
+      const landHeights=values.water?.length===values.heights?.length?Array.from(values.heights).filter((h,i)=>!values.water[i]):null;
+      remLandFloor=landHeights?R.fitRange(landHeights,"tint","robust")?.[0]??null:null;
+      if(remFloor!==null&&values.heights) for(const key of keys) if(layerFor(key).style==="rem"){
+        const mode=layerFor(key).rangeMode,floor=mode==="separate"&&remLandFloor!==null?remLandFloor:remFloor;
+        const relative=Array.from(values.heights,h=>Math.max(0,h-floor));
+        flatFitted[key]=R.fitRelative(relative,values.heights,values.water,mode);
+      }
+      let changed=keys.some(key=>layerFor(key).style==="rem")&&
+        (previousFloors[0]!==remFloor||previousFloors[1]!==remLandFloor||previousFlat!==JSON.stringify(flatFitted));
       for(const key of keys){
-        const layer=layerFor(key),source=layer.style==="rem"?values.relative:values.heights;
+        const layer=layerFor(key);
+        let source=layer.style==="rem"?values.relative:values.heights;
+        if(layer.style==="rem"&&layer.rangeMode==="separate"){
+          const local=values.landRelative||values.relative||Array(values.heights.length).fill(NaN);
+          source=Array.from(local,(v,i)=>Number.isFinite(v)?v:
+            remLandFloor!==null?Math.max(0,values.heights[i]-remLandFloor):NaN);
+        }
         if(!source||source.length<16) continue;
-        const prev=fitted[key],next=layer.style==="tint"?R.stableElevationFit(R.fitElevation(source,values.water,layer.rangeMode),prev,force):R.fitRange(source,layer.style);
+        const prev=fitted[key],elevation=layer.style==="tint"||(layer.style==="rem"&&layer.rangeMode==="separate");
+        const fit=layer.style==="rem"?R.fitRelative(source,values.heights,values.water,layer.rangeMode):
+          layer.style==="tint"?R.fitElevation(source,values.water,layer.rangeMode):R.fitRange(source,layer.style);
+        const next=elevation?R.stableElevationFit(fit,prev,force):fit;
         if(!next) continue;
         // Elevation extrema must track newly arrived peaks and pits, even when
         // they occupy less than the old 4% hysteresis threshold.
         const range=displayRange(next),old=displayRange(prev),span=Math.max(1e-6,range[1]-range[0]);
-        if(force||!prev||(layer.style==="tint"?JSON.stringify(next)!==JSON.stringify(prev):
+        if(force||!prev||(elevation?JSON.stringify(next)!==JSON.stringify(prev):
           Math.abs(old[0]-range[0])>span*.04||Math.abs(old[1]-range[1])>span*.04)){fitted[key]=next;changed=true}
       }
       if(changed){
@@ -729,25 +745,26 @@
     /* flat: for renderers without the valley-floor field (3D). */
     function stack(s,options){
       const flat=options&&options.flat;
-      return R.buildStack(state,s||style(),flat?Object.assign({},fitted,flatFitted):fitted,{remFlatBase:remFloor||0});
+      return R.buildStack(state,s||style(),flat?Object.assign({},fitted,flatFitted):fitted,{remFlatBase:remFloor||0,remLandBase:remLandFloor??remFloor??0});
     }
     function needsFit(){ return autoKeys().length>0 }
-    function legend(s){
-      s=s||style();const st=stack(s);if(!st) return null;
+    function legend(s,options){
+      const activeFitted=options?.flat?Object.assign({},fitted,flatFitted):fitted;
+      s=s||style();const st=stack(s,options);if(!st) return null;
       const visible=layerKeys().map(key=>({key,layer:layerFor(key)})).filter(entry=>entry.layer.visible&&entry.layer.opacity>0);
       if(!visible.length)return {hidden:true};
       function keysFor({key,layer},overlays=[]){
         const style=layer.style,spec=R.STYLES[style];
-        const fit=layer.auto&&fitted[key],range=displayRange(fit)||[layer.min,layer.max];
+        const fit=layer.auto&&activeFitted[key],range=displayRange(fit)||[layer.min,layer.max];
         const caption=`${spec.label}${layer.stops?" · custom colors":` · ${(R.PALETTES[layer.palette]||{}).name||""}`}${overlays.length?` + ${overlays.join(" + ")}`:""}`;
         let ticks;
         if(spec.unit==="shade")ticks=["shadow","relief","illuminated"];
         else if(spec.family==="lines")ticks=["intermediate","index"];
         else ticks=[R.formatValue(style,range[0]),R.formatValue(style,(range[0]+range[1])/2),R.formatValue(style,range[1])+(layer.auto?(fit?" · fitted":" · waiting for terrain"):"")];
-        const bar=style==="tint"?R.elevationGradient(layer,range):R.gradientCss(R.paletteStops(layer),layer.reverse);
+        const bar=(style==="tint"||style==="rem")?R.elevationGradient(layer,range):R.gradientCss(R.paletteStops(layer),layer.reverse);
         const land={caption:caption+(fit?.land&&fit?.water?" · land":""),bar,ticks};
         if(!fit?.water)return [land];
-        const water={caption:"Water · elevation · separate scale"+(overlays.length?` + ${overlays.join(" + ")}`:""),bar:R.elevationGradient(layer,fit.water,true),
+        const water={caption:(style==="rem"?"Water · absolute elevation · separate scale":"Water · elevation · separate scale")+(overlays.length?` + ${overlays.join(" + ")}`:""),bar:R.elevationGradient(layer,fit.water,true),
           ticks:[fit.water[0],(fit.water[0]+fit.water[1])/2,fit.water[1]].map((v,i)=>R.formatValue("tint",v)+(i===2?" · fitted":""))};
         return fit.land?[land,water]:[water];
       }
@@ -755,7 +772,7 @@
       const scales=keysFor(visible[0],overlays);
       // Elevation overlays need their own keys even when hillshade is the
       // bottom layer. All consumers (web, native and exports) share these.
-      for(const entry of visible.slice(1))if(entry.layer.style==="tint")scales.push(...keysFor(entry));
+      for(const entry of visible.slice(1))if(entry.layer.style==="tint"||entry.layer.style==="rem")scales.push(...keysFor(entry));
       return {...scales[0],secondary:scales[1],scales};
     }
 
@@ -767,11 +784,11 @@
       displayState(){
         const copy=JSON.parse(JSON.stringify(state));
         copy.userLooks=copy.userLooks.filter(look=>look.id===copy.look);
-        return {state:copy,fitted:JSON.parse(JSON.stringify(fitted)),flatFitted:JSON.parse(JSON.stringify(flatFitted)),remFloor};
+        return {state:copy,fitted:JSON.parse(JSON.stringify(fitted)),flatFitted:JSON.parse(JSON.stringify(flatFitted)),remFloor,remLandFloor};
       },
       restoreDisplay(snapshot){
         state=R.normalizeState(snapshot.state);fitted=snapshot.fitted||{};flatFitted=snapshot.flatFitted||{};
-        remFloor=snapshot.remFloor??null;expanded=null;render();host.onChange&&host.onChange();
+        remFloor=snapshot.remFloor??null;remLandFloor=snapshot.remLandFloor??null;expanded=null;render();host.onChange&&host.onChange();
       },
       applyLook,
       destroy(){destroyed=true;clearTimeout(saveTimer);container.innerHTML=""}

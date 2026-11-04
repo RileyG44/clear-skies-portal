@@ -556,7 +556,7 @@ function paintTerrainInfo(pick){
 
 function paintTerrainLegend(style){
   const el=$("#terLegend"); if(!el) return;
-  const studio=gpuTerrainEnabled&&style!=="off"?lidarStudio?.legend(style):null;
+  const studio=gpuTerrainEnabled&&style!=="off"?lidarStudio?.legend(style,{flat:document.body.classList.contains("terrain-3d")}):null;
   if(studio?.hidden){el.className="terlegend";el.innerHTML="";return}
   if(studio){
     el.className="terlegend on";

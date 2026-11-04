@@ -48,7 +48,7 @@ async function regression(){
     }
     return weight?total/weight:NaN;
   }
-  for(const missing of [false,true])for(const radius of [.75,1,6,8,13,14,22,31,32,33,127,2048,2300]){
+  for(const maskLand of [false,true])for(const missing of [false,true])for(const radius of [.75,1,6,8,13,14,22,31,32,33,127,2048,2300]){
     const canvas=document.createElement('canvas');document.body.append(canvas);
     const listeners=new Set(),grid=new Float32Array(256*256);
     for(let y=0;y<256;y++)for(let x=0;x<256;x++)grid[y*256+x]=missing&&((x-115)**2+(y-123)**2<100||x>145)?NaN:
@@ -57,7 +57,7 @@ async function regression(){
     const source={id:'fixture',rank:1,allowed:()=>true};
     const store={options:{sources:()=>[source]},on:(event,fn)=>listeners.add(fn),off:(event,fn)=>listeners.delete(fn),
       want(){},get:()=>record,finestFor:()=>record};
-    const shaders={VERSION:'test',SHADE_UNIFORMS:[],metersPerPixel:()=>1,uniformValues:()=>({}),
+    const shaders={VERSION:'test',screenToMercator:CSPGpuTerrainShaders.screenToMercator,SHADE_UNIFORMS:[],metersPerPixel:()=>1,uniformValues:()=>({}),
       fullscreenVertexSource:'#version 300 es\nout vec2 v_screenUv;void main(){vec2 p=vec2(float((gl_VertexID<<1)&2),float(gl_VertexID&2));v_screenUv=vec2(p.x,1.-p.y);gl_Position=vec4(p*2.-1.,0.,1.);}',
       shadeFragmentSource:prelude=>'#version 300 es\nprecision highp float;precision highp int;\n'+prelude+
         '\nin vec2 v_screenUv;out vec4 color;void main(){ivec2 p=ivec2(v_screenUv*vec2(csp_size()));color=csp_valid(p)?vec4(.2,.3,.4,1.):vec4(0.);}' };
@@ -65,7 +65,7 @@ async function regression(){
     if(!engine)throw Error('Engine unavailable: '+errors.join(';'));
     try{
       const view={centerMerc:[.5,.5],zoom:0,bearing:0,cssSize:[97,81],dpr:1,dz:0};
-      engine.setState({terrain:{stack:{layers:[{style:'rem'}],remRadius:radius}}});
+      engine.setState({terrain:{stack:{layers:[{style:'rem',separateRem:maskLand}],remRadius:radius}}});
       listeners.forEach(fn=>fn(record));engine.render(view);
       const drawCalls=engine.stats().drawCalls,height=engine.debugReadHeight(),w=height.width,h=height.height;
       const field={w,h,v:new Float32Array(w*h),valid:new Uint8Array(w*h)};
@@ -73,27 +73,33 @@ async function regression(){
       for(let y=0;y<h;y++)for(let x=0;x<w;x++){
         const i=((h-1-y)*w+x)*2;field.v[y*w+x]=height.data[i];field.valid[y*w+x]=height.data[i+1]>0?1:0;
       }
-      const actual=engine.sampleValues(),expected=[];
-      if(radius>=1){const base=reference(field,radius,true);
+      const actual=engine.sampleValues({water:false}),sampledRelative=maskLand?actual.landRelative:actual.relative,finiteRelative=Array.from(sampledRelative).filter(Number.isFinite),expected=[];
+      if(radius>=1){
+        const baseField={...field,valid:field.valid.slice()};
+        if(maskLand)for(let y=0;y<h;y++)for(let x=0;x<w;x++){
+          const merc=CSPGpuTerrainShaders.screenToMercator(view,[(x+.5)/w,1-(y+.5)/h]);
+          if(CSPWaterGeography.waterAtMercator(...merc))baseField.valid[y*w+x]=0;
+        }
+        const base=reference(baseField,radius,true);
         for(let y=0;y<h;y++)for(let x=0;x<w;x++)if(field.valid[y*w+x]){
           const b=sample(base,x,y);if(Number.isFinite(b))expected.push(Math.max(0,field.v[y*w+x]-b));
         }
       }
-      if(actual.relative.length!==expected.length)throw Error(`Validity mismatch ${radius}/${missing}`);
+      if(finiteRelative.length!==expected.length)throw Error(`Validity mismatch ${radius}/${missing}/land=${maskLand}: ${finiteRelative.length} vs ${expected.length}`);
       let maxError=0;
-      for(let i=0;i<expected.length;i++)maxError=Math.max(maxError,Math.abs(actual.relative[i]-expected[i]));
+      for(let i=0;i<expected.length;i++)maxError=Math.max(maxError,Math.abs(finiteRelative[i]-expected[i]));
       if(maxError>.002)throw Error(`Relative elevation error ${maxError}m at radius ${radius}/${missing}: `+
-        JSON.stringify(expected.map((v,i)=>({i,expected:v,actual:actual.relative[i],delta:actual.relative[i]-v})).filter(v=>Math.abs(v.delta)>.002).slice(0,8)));
+        JSON.stringify(expected.map((v,i)=>({i,expected:v,actual:finiteRelative[i],delta:finiteRelative[i]-v})).filter(v=>Math.abs(v.delta)>.002).slice(0,8)));
       if(radius>=1&&radius<8&&drawCalls!==6)throw Error('Unnecessary factor-one copy: '+drawCalls);
       if(!engine.stats().ready||engine.stats().error)throw Error(JSON.stringify(engine.stats()));
       // A detail-only change must invalidate its kernel without losing the
       // existing relative-elevation field or issuing elevation requests.
-      engine.setState({terrain:{stack:{layers:[{style:'rem'}],remRadius:radius,detail:.4,detailRadius:3}}});
+      engine.setState({terrain:{stack:{layers:[{style:'rem',separateRem:maskLand}],remRadius:radius,detail:.4,detailRadius:3}}});
       engine.render(view);
-      const second=engine.sampleValues();
+      const second=engine.sampleValues({water:false});
       for(let i=0;i<actual.relative.length;i++)if(Math.abs(second.relative[i]-actual.relative[i])>.002)throw Error('Kernel state leaked between detail and base');
-      results.push({radius,missing,samples:expected.length,maxErrorMetres:maxError,drawCalls});
-      if(radius===6)for(const style of ['rem','tint']){
+      results.push({radius,missing,maskLand,samples:expected.length,maxErrorMetres:maxError,drawCalls});
+      if(radius===6&&!maskLand)for(const style of ['rem','tint']){
         const pictures=[];
         // Force the previous derivative path and compare every output byte
         // with the optimized production ramp, including its nodata boundary.
@@ -123,7 +129,7 @@ async function regression(){
   try{
     const page=await browser.newPage(),errors=[];page.on('pageerror',e=>errors.push(String(e)));
     await page.setContent('<html><body></body></html>');
-    for(const file of ['elevation-tile-core.js','terrain-core.js','terrain-raster.js','elevation-bands.js','terrain-drape-core.js','gpu-terrain-shaders.js','gpu-terrain-engine.js'])
+    for(const file of ['elevation-tile-core.js','terrain-core.js','terrain-raster.js','elevation-bands.js','terrain-drape-core.js','water-geography-data.js','water-geography.js','gpu-terrain-shaders.js','gpu-terrain-engine.js'])
       await page.addScriptTag({content:fs.readFileSync(path.join(root,file),'utf8')});
     const results=await page.evaluate(regression);assert.deepEqual(errors,[]);
     const out=path.join(root,'output/performance-audit/relative-elevation');fs.mkdirSync(out,{recursive:true});

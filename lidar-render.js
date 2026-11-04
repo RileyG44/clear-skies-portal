@@ -260,13 +260,14 @@
       const rawFit=fitted&&fitted[key],fit=rawFit&&rawFit.land!==undefined?(rawFit.land||rawFit.water):rawFit;
       if(layer.auto&&Array.isArray(fit)&&fit.every(Number.isFinite)&&fit[1]>fit[0]){min=fit[0];max=fit[1]}
       layers.push({style:layer.style,opacity:layer.opacity,blend:layer.blend,stops:resolveStops(layer),
-        min,max,water:layer.style==="tint"&&layer.auto&&layer.rangeMode==="separate"&&rawFit?.water?rawFit.water:null,gamma:layer.gamma,steps:layer.steps,param:layer.style==="contour"||STYLES[layer.style].param?layer.param:0});
+        min,max,water:(layer.style==="tint"||layer.style==="rem")&&layer.auto&&layer.rangeMode==="separate"&&rawFit?.water?rawFit.water:null,
+        separateRem:layer.style==="rem"&&layer.auto&&layer.rangeMode==="separate",gamma:layer.gamma,steps:layer.steps,param:layer.style==="contour"||STYLES[layer.style].param?layer.param:0});
     }
     // An explicitly empty mix must stay transparent, not fall back to the
     // legacy base layer when the user hides the last visible layer.
     const effects=state.effects;
     return {layers,detail:effects.detail,detailRadius:effects.detailRadius,reliefExag:effects.reliefExag,
-      remRadius:effects.remRadius,remFlatBase:finite(opts.remFlatBase,0)};
+      remRadius:effects.remRadius,remFlatBase:finite(opts.remFlatBase,0),remLandBase:finite(opts.remLandBase,finite(opts.remFlatBase,0))};
   }
 
   /* Full sampled extrema for elevation; percentile trimming is opt-in.
@@ -291,6 +292,19 @@
     const land=[],depths=[];
     for(let i=0;i<values.length;i++)if(Number.isFinite(values[i]))(water[i]?depths:land).push(values[i]);
     const fit={land:fitRange(land,"tint"),water:fitRange(depths,"tint")};
+    return fit.land||fit.water?fit:null;
+  }
+  // REM keeps its near-valley contrast, fitted exclusively over land. Water
+  // has an absolute elevation key even when its local floor is unavailable.
+  function fitRelative(relative,heights,water,mode="separate"){
+    if(mode!=="separate"||!heights||!water||water.length!==heights.length||!relative||relative.length!==heights.length)
+      return fitRange(relative,"rem");
+    const land=[],depths=[];
+    for(let i=0;i<heights.length;i++){
+      if(water[i]){if(Number.isFinite(heights[i]))depths.push(heights[i])}
+      else if(Number.isFinite(relative[i]))land.push(relative[i]);
+    }
+    const fit={land:fitRange(land,"rem"),water:fitRange(depths,"tint")};
     return fit.land||fit.water?fit:null;
   }
   /* Ignore small inward endpoint changes while always admitting a newly
@@ -429,13 +443,19 @@
         let acc=mode==="min"?Infinity:0,weight=0;
         for(let k=-r;k<=r;k++){
           const xx=x+dx*k,yy=y+dy*k;if(xx<0||yy<0||xx>=w||yy>=h) continue;
-          const v=src[yy*w+xx];
+          const v=src[yy*w+xx];if(!Number.isFinite(v))continue;
+          if(mode==="min")weight++;
           if(mode==="min") acc=Math.min(acc,v);else{const g=Math.exp(-k*k/(2*sigma*sigma));acc+=v*g;weight+=g}
         }
-        dst[y*w+x]=mode==="min"?acc:acc/weight;
+        dst[y*w+x]=weight?(mode==="min"?acc:acc/weight):NaN;
       }
     };
     pass(grid,tmp,1,0);pass(tmp,out,0,1);return out;
+  }
+  function relativeBase(dem,radius,landOnly=false){
+    const {grid,width,height,water}=dem;
+    const source=landOnly&&water?.length===grid.length?grid.map((v,i)=>water[i]?NaN:v):grid;
+    return filterGrid(filterGrid(source,width,height,radius,"min"),width,height,radius,"blur");
   }
   const lum=c=>.3*c[0]+.59*c[1]+.11*c[2];
   function clipColour(c){
@@ -497,10 +517,11 @@
       const blur=filterGrid(grid,w,h,Math.min(8,stack.detailRadius/res),"blur");
       heights=grid.map((v,i)=>v+stack.detail*(v-blur[i]));
     }
-    let base=null;
-    if(stack.layers.some(layer=>layer.style==="rem")){
+    let base=null,landBase=null;
+    if(!dem.flat&&stack.layers.some(layer=>layer.style==="rem")){
       const radius=Math.min(24,Math.max(2,stack.remRadius/res/8));
-      base=filterGrid(filterGrid(grid,w,h,radius,"min"),w,h,radius,"blur");
+      base=relativeBase(dem,radius);
+      if(stack.layers.some(layer=>layer.separateRem))landBase=relativeBase(dem,radius,true);
     }
     const H=(x,y)=>heights[clamp(y,0,h-1)*w+clamp(x,0,w-1)];
     const zFactor=1+.024*Math.pow(Math.max(res,0),.664),exag=stack.reliefExag||1;
@@ -527,7 +548,7 @@
           case "aspect":if(aspect<0) coverage=0;value=aspect;break;
           case "northness":if(aspect<0) coverage=0;value=Math.cos(aspect*Math.PI/180);break;
           case "tint":value=height;break;
-          case "rem":value=Math.max(0,height-(base?base[y*w+x]:0));break;
+          case "rem":{const floor=layer.separateRem?landBase:base;value=Math.max(0,height-(floor&&Number.isFinite(floor[y*w+x])?floor[y*w+x]:layer.separateRem?stack.remLandBase||0:stack.remFlatBase||0));break}
           default:{
             const interval=layer.style==="contour"?Math.max(.5,layer.param):({c2:2,c5:5,c10:10,c25:25})[layer.style];
             if(!interval){coverage=0;break}
@@ -538,7 +559,7 @@
           }
         }
         if(!(coverage>0)) continue;
-        const color=layer.style==="tint"&&layer.water&&dem.water?.[y*w+x]?waterColour(value,layer.water,layer):paletteColour(layer,value);
+        const color=layer.water&&dem.water?.[y*w+x]?waterColour(height,layer.water,layer):paletteColour(layer,value);
         if((layer.style==="tint"||layer.style==="rem")&&layer.param>0){
           const shade=light.ambient+(1-light.ambient)*directShade(sdx,sdy,light.azimuth,light.altitude),m=1+(.33+.82*shade-1)*clamp(layer.param,0,1);
           for(let i=0;i<3;i++) color[i]=Math.min(1,color[i]*m);
@@ -560,7 +581,8 @@
     for(const [key,layer] of layers) if(layer.auto){
       if(layer.style==="rem"){
         if(!base){const radius=Math.min(24,Math.max(2,clean.effects.remRadius/dem.res/8));base=filterGrid(filterGrid(dem.grid,dem.width,dem.height,radius,"min"),dem.width,dem.height,radius,"blur")}
-        fitted[key]=fitRange(dem.grid.map((v,i)=>Math.max(0,v-base[i])),"rem");
+        const floor=layer.rangeMode==="separate"?relativeBase(dem,Math.min(24,Math.max(2,clean.effects.remRadius/dem.res/8)),true):base;
+        fitted[key]=fitRelative(dem.grid.map((v,i)=>Math.max(0,v-floor[i])),dem.grid,dem.water,layer.rangeMode);
       }else fitted[key]=layer.style==="tint"?fitElevation(dem.grid,dem.water,layer.rangeMode):fitRange(dem.grid,layer.style);
     }
     let stack=buildStack(state,clean.style,fitted);
@@ -606,7 +628,7 @@
 
   return Object.freeze({VERSION,MAX_LAYERS,MAX_STOPS,FT,PALETTES,STYLES,OVERLAY_STYLES,BLENDS,LOOKS,EFFECT_DEFAULTS,
     parseHex,toHex,normalizeStops,moveStop,registerStyle,defaultLayer,normalizeLayer,resolveStops,paletteStops,isDefaultLayer,
-    emptyState,normalizeState,normalizeEffects,baseLayer,isLegacy,buildStack,fitRange,fitElevation,stableElevationFit,WATER_STOPS,waterColour,normalizeScene,captureScene,applyScene,
+    emptyState,normalizeState,normalizeEffects,baseLayer,isLegacy,buildStack,fitRange,fitElevation,fitRelative,relativeBase,stableElevationFit,WATER_STOPS,waterColour,normalizeScene,captureScene,applyScene,
     matchLook,gradientCss,elevationGradient,palettesFor,formatValue,toDisplay,fromDisplay,
     previewTerrain,renderStack,renderScenePreview,blendColour,composite,_test:Object.freeze({filterGrid,rampColour,paletteColour})});
 });

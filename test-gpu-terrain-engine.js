@@ -261,3 +261,12 @@ assert.deepEqual(cropFor({ z: 0, x: 0, y: 0 }, { z: 22, x: 2 ** 22 - 1, y: 2 ** 
 }
 
 console.log("GPU terrain engine checks passed (pure helpers and unavailable-GPU fallback)");
+
+// Separate REM avoids deriving a second, unused legacy floor. Mixed stacks
+// still retain both fields for their independent rendering contracts.
+{
+  const radii=layers=>Engine._test.auxRadii({terrain:{stack:{layers,remRadius:3000}}},{},{metersPerPixel:()=>10});
+  assert.deepEqual(radii([{style:'rem',separateRem:true}]),{blur:0,base:0,landBase:300});
+  assert.deepEqual(radii([{style:'rem'}]),{blur:0,base:300,landBase:0});
+  assert.deepEqual(radii([{style:'rem',separateRem:true},{style:'rem'}]),{blur:0,base:300,landBase:300});
+}

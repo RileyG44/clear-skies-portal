@@ -132,7 +132,7 @@
     'for(int y=0;y<2;y++)for(int x=0;x<2;x++){float v=at(b+ivec2(x,y));float w=(x==0?1.-f.x:f.x)*(y==0?1.-f.y:f.y);if(valid(v)&&w>0.){sum+=v*w;weight+=w;}}' +
     'if(weight<=0.)discard;result=vec2(sum/weight,u_rank);}\n';
   // Shade-module coordinates are top-down; framebuffer texels are bottom-up.
-  var PRELUDE = '\n#define CSP_HAS_AUX 1\nuniform highp sampler2D u_cspField,u_cspBlur,u_cspBase; uniform float u_cspBlurScale,u_cspBaseScale; uniform mat3 u_cspAuxTransform;\n' +
+  var PRELUDE = '\n#define CSP_HAS_AUX 1\n#define CSP_HAS_LAND_BASE 1\nuniform highp sampler2D u_cspField,u_cspBlur,u_cspBase,u_cspLandBase; uniform float u_cspBlurScale,u_cspBaseScale,u_cspLandBaseScale; uniform mat3 u_cspAuxTransform;\n' +
     'ivec2 csp_size(){return textureSize(u_cspField,0);}\n' +
     'vec2 csp_sample(ivec2 p){ivec2 s=csp_size();p=clamp(p,ivec2(0),s-1);return texelFetch(u_cspField,ivec2(p.x,s.y-1-p.y),0).rg;}\n' +
     'float csp_height(ivec2 p){return csp_sample(p).r;}\n' +
@@ -145,7 +145,8 @@
     'for(int y=0;y<2;y++)for(int x=0;x<2;x++){vec2 a=texelFetch(t,clamp(b+ivec2(x,y),ivec2(0),ts-1),0).rg;float k=(x==0?1.-fr.x:fr.x)*(y==0?1.-fr.y:fr.y);' +
     'if(a.g>0.&&k>0.){sum+=a.r*k;w+=k;}}if(w<=0.)return false;v=sum/w;return true;}\n' +
     'bool csp_blur(ivec2 p,out float v){return csp_auxAt(u_cspBlur,u_cspBlurScale,p,v);}\n' +
-    'bool csp_base(ivec2 p,out float v){return csp_auxAt(u_cspBase,u_cspBaseScale,p,v);}\n';
+    'bool csp_base(ivec2 p,out float v){return csp_auxAt(u_cspBase,u_cspBaseScale,p,v);}\n' +
+    'bool csp_landBase(ivec2 p,out float v){return csp_auxAt(u_cspLandBase,u_cspLandBaseScale,p,v); }\n';
   /* Separable filters for the layer stack's derived fields. Modes: 0 and 1
    * downsample by u_factor (mean, minimum); 2 and 3 filter along u_dir
    * (Gaussian, minimum). Output is (value, valid). */
@@ -158,6 +159,8 @@
     'for(int k=-u_radius;k<=u_radius;k++){ivec2 q=o+u_dir*k;if(q.x<0||q.y<0||q.x>=s.x||q.y>=s.y)continue;vec2 v=texelFetch(u_src,q,0).rg;if(!ok(v))continue;' +
     'if(u_mode==3){acc=min(acc,v.r);w=1.;}else{float g=u_weights[abs(k)];acc+=v.r*g;w+=g;}}\n' +
     'if(w<=0.){result=vec2(0.);return;}result=vec2(u_mode==3?acc:acc/w,1.);}\n';
+  var LAND_FILTER = 'uniform bool u_landOnly; uniform highp sampler2D u_waterMask; uniform vec2 u_geoOrigin,u_geoX,u_geoY;\n/*CSP_WATER*/\n' +
+    'bool land(ivec2 q){return !u_landOnly || !cspWater(u_geoOrigin+(float(q.x)+.5)*u_geoX+(float(q.y)+.5)*u_geoY); }\n';
   /* Block minimum along u_dir: output texel o covers source texels o*factor ..
    * o*factor+factor-1 on that axis. A horizontal then a vertical pass equals
    * the 2D block minimum of FILTER mode 1 exactly (same skipped edges and
@@ -169,10 +172,11 @@
     'for(int k=0;k<u_factor;k++){ivec2 q=q0+u_dir*k;if(q.x>=s.x||q.y>=s.y)break;vec2 v=texelFetch(u_src,q,0).rg;if(!ok(v))continue;acc=min(acc,v.r);any=true;}\n' +
     'result=any?vec2(acc,1.):vec2(0.);}\n';
   /* Samples the visible height (and relative-elevation base) on a coarse
-   * grid for range fitting: (height, valid, base, baseValid). */
+   * grid for range fitting: (height, valid, legacy base, land-only base).
+   * Missing bases use a finite sentinel; JS converts it to aligned NaNs. */
   var STATS = '#version 300 es\nprecision highp float; precision highp int;\n' + PRELUDE +
     'in vec2 v_screenUv; out vec4 o; void main(){ivec2 s=csp_size();ivec2 p=clamp(ivec2(floor(v_screenUv*vec2(s))),ivec2(0),s-1);' +
-    'float b;bool hb=csp_base(p,b);o=vec4(csp_height(p),csp_valid(p)?1.:0.,b,hb?1.:0.);}\n';
+    'float b,l;bool hb=csp_base(p,b),hl=csp_landBase(p,l);float missing=-3.0e38;o=vec4(csp_height(p),csp_valid(p)?1.:0.,hb?b:missing,hl?l:missing);}\n';
   /* Plan for one derived field: a downsample factor that keeps the dense
    * filter radius at most 32 texels, and at most 64x64 source texels per
    * downsampled texel. Radii below one field pixel produce nothing. */
@@ -185,13 +189,16 @@
   /* Derived-field radii in field pixels for a state and view: the detail
    * blur and the relative-elevation base. Only layers that need them ask. */
   function auxRadii(state, view, shaders) {
-    var stack = state && state.terrain && state.terrain.stack, out = {blur: 0, base: 0};
+    var stack = state && state.terrain && state.terrain.stack, out = {blur: 0, base: 0, landBase: 0};
     if (!stack || !Array.isArray(stack.layers) || !stack.layers.length || !shaders.metersPerPixel) return out;
     var mpp = shaders.metersPerPixel(view);
     if (!(mpp > 0)) return out;
     if (Number(stack.detail) && Number(stack.detailRadius) > 0) out.blur = Number(stack.detailRadius) / mpp;
-    if (Number(stack.remRadius) > 0 && stack.layers.some(function (layer) { return layer && layer.style === 'rem'; }))
-      out.base = Number(stack.remRadius) / mpp;
+    if (Number(stack.remRadius) > 0) {
+      var radius=Number(stack.remRadius)/mpp;
+      if(stack.layers.some(function(layer){return layer && layer.style==='rem' && !layer.separateRem;})) out.base=radius;
+      if(stack.layers.some(function(layer){return layer && layer.style==='rem' && layer.separateRem;})) out.landBase=radius;
+    }
     return out;
   }
   var FULLSCREEN = '#version 300 es\nout vec2 v_screenUv;void main(){vec2 p=vec2(float((gl_VertexID<<1)&2),float(gl_VertexID&2));v_screenUv=vec2(p.x,1.-p.y);gl_Position=vec4(p*2.-1.,0.,1.);}\n';
@@ -320,6 +327,9 @@
       // Separate uniform filter modes at compile time. The minimum/Gaussian
       // kernels then avoid the nested downsample loop's register requirements
       // on mobile GPUs. The operations and accumulation order are identical.
+      var geoShaders=shaders.waterMaskSource?shaders:root.CSPGpuTerrainShaders||(typeof require==='function'?require('./gpu-terrain-shaders.js'):null);
+      var landSource=LAND_FILTER.replace('/*CSP_WATER*/',geoShaders.waterMaskSource());
+      function landFilter(source){return source.replace('bool ok(vec2 v)',landSource+'bool ok(vec2 v)').replaceAll('if(!ok(v))continue;','if(!ok(v)||!land(q))continue;');}
       [0, 2, 3, 4].forEach(function (mode) {
         var source = mode ? FILTER.replace('uniform int u_mode,u_factor,u_radius;', 'const int u_mode=' + (mode === 4 ? 3 : mode) + '; uniform int u_factor,u_radius;')
           : FILTER.replace('if(u_mode<2)', 'if(true)');
@@ -328,18 +338,18 @@
           // Clamping intermediate centres preserves the clipped window at
           // edges; skipping a centre could lose its valid interior samples.
           .replace('if(q.x<0||q.y<0||q.x>=s.x||q.y>=s.y)continue;', 'q=clamp(q,ivec2(0),s-1);');
-        var filter = filters[mode] = {program: program(FULLSCREEN, source)};
-        ['src', 'mode', 'factor', 'radius', 'dir', 'weights[0]'].forEach(function (n) { filter[n] = gl.getUniformLocation(filter.program, 'u_' + n); });
+        var filter = filters[mode] = {program: program(FULLSCREEN, landFilter(source))};
+        ['src', 'mode', 'factor', 'radius', 'dir', 'weights[0]', 'landOnly', 'waterMask', 'geoOrigin', 'geoX', 'geoY'].forEach(function (n) { filter[n] = gl.getUniformLocation(filter.program, 'u_' + n); });
       });
       statsProgram = program(FULLSCREEN, STATS);
-      blockMin.program = program(FULLSCREEN, BLOCK_MIN);
-      ['src', 'factor', 'dir'].forEach(function (n) { blockMin[n] = gl.getUniformLocation(blockMin.program, 'u_' + n); });
-      ['cspField', 'cspBlur', 'cspBase', 'cspBlurScale', 'cspBaseScale', 'cspAuxTransform'].forEach(function (n) { stats[n] = gl.getUniformLocation(statsProgram, 'u_' + n); });
+      blockMin.program = program(FULLSCREEN, landFilter(BLOCK_MIN));
+      ['src', 'factor', 'dir', 'landOnly', 'waterMask', 'geoOrigin', 'geoX', 'geoY'].forEach(function (n) { blockMin[n] = gl.getUniformLocation(blockMin.program, 'u_' + n); });
+      ['cspField', 'cspBlur', 'cspBase', 'cspLandBase', 'cspBlurScale', 'cspBaseScale', 'cspLandBaseScale', 'cspAuxTransform'].forEach(function (n) { stats[n] = gl.getUniformLocation(statsProgram, 'u_' + n); });
       filterRadius = -1;
       vao = gl.createVertexArray(); resources.vaos.add(vao); gl.bindVertexArray(vao);
       ['origin', 'axisX', 'axisY', 'target', 'sampleOrigin', 'sampleX', 'sampleY', 'native', 'rank', 'smooth', 'fast'].forEach(function (n) { h[n] = gl.getUniformLocation(heightProgram, 'u_' + n); });
       shadeSetters = setters(shadeProgram);
-      ['cspBlur', 'cspBase', 'cspBlurScale', 'cspBaseScale', 'cspAuxTransform'].forEach(function (n) { shadeAux[n] = gl.getUniformLocation(shadeProgram, 'u_' + n); });
+      ['cspBlur', 'cspBase', 'cspLandBase', 'cspBlurScale', 'cspBaseScale', 'cspLandBaseScale', 'cspAuxTransform'].forEach(function (n) { shadeAux[n] = gl.getUniformLocation(shadeProgram, 'u_' + n); });
       shadeField = gl.getUniformLocation(shadeProgram, 'u_cspField'); provenanceField = gl.getUniformLocation(provenanceProgram, 'u_cspField');
       gl.disable(gl.BLEND); gl.disable(gl.DEPTH_TEST); gl.disable(gl.CULL_FACE); gl.disable(gl.SCISSOR_TEST); gl.disable(gl.DITHER);
       gl.pixelStorei(gl.UNPACK_ALIGNMENT, 1); gl.pixelStorei(gl.PACK_ALIGNMENT, 1);
@@ -550,7 +560,9 @@
       // Unused aux samplers still point at a valid float texture.
       gl.activeTexture(gl.TEXTURE1); gl.bindTexture(gl.TEXTURE_2D, aux.blur ? aux.blur.target.texture : t.texture);
       gl.activeTexture(gl.TEXTURE2); gl.bindTexture(gl.TEXTURE_2D, aux.base ? aux.base.target.texture : t.texture);
+      gl.activeTexture(gl.TEXTURE0+4); gl.bindTexture(gl.TEXTURE_2D,aux.landBase?aux.landBase.target.texture:t.texture);
       gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, t.texture);
+      gl.uniform1i(shadeAux.cspLandBase,4);gl.uniform1f(shadeAux.cspLandBaseScale,aux.landBase?aux.landBase.factor:0);
       gl.uniform1i(shadeField, 0); gl.uniform1i(shadeAux.cspBlur, 1); gl.uniform1i(shadeAux.cspBase, 2);
       gl.uniform1f(shadeAux.cspBlurScale, aux.blur ? aux.blur.factor : 0); gl.uniform1f(shadeAux.cspBaseScale, aux.base ? aux.base.factor : 0);
       gl.uniformMatrix3fv(shadeAux.cspAuxTransform, false, transform || IDENTITY);
@@ -564,10 +576,21 @@
       shadeUniforms(settings);
       gl.drawArrays(gl.TRIANGLES, 0, 3); drawCalls++;
     }
-    function filterPass(src, dst, mode, factor, radius, dx, dy) {
+    function filterGeography(f,src,view){
+      gl.uniform1i(f.landOnly,view?1:0);gl.uniform1i(f.waterMask,3);
+      gl.activeTexture(gl.TEXTURE0+3);
+      if(!view){gl.bindTexture(gl.TEXTURE_2D,src.texture);gl.activeTexture(gl.TEXTURE0);return;}
+      if(!waterTexture){waterTexture=geography.upload(gl);resources.textures.add(waterTexture);}
+      gl.bindTexture(gl.TEXTURE_2D,waterTexture);gl.activeTexture(gl.TEXTURE0);
+      var origin=shaders.screenToMercator(view,[0,1]),x=shaders.screenToMercator(view,[1,1]),y=shaders.screenToMercator(view,[0,0]);
+      gl.uniform2fv(f.geoOrigin,origin);gl.uniform2f(f.geoX,(x[0]-origin[0])/src.width,(x[1]-origin[1])/src.width);
+      gl.uniform2f(f.geoY,(y[0]-origin[0])/src.height,(y[1]-origin[1])/src.height);
+    }
+    function filterPass(src, dst, mode, factor, radius, dx, dy, landView) {
       var f = filters[mode >= 2 ? mode : 0];
       gl.bindFramebuffer(gl.FRAMEBUFFER, dst.framebuffer); gl.viewport(0, 0, dst.width, dst.height);
       gl.bindVertexArray(vao); gl.useProgram(f.program); gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, src.texture);
+      filterGeography(f,src,landView);
       gl.uniform1i(f.src, 0); gl.uniform1i(f.mode, mode); gl.uniform1i(f.factor, factor || 1); gl.uniform1i(f.radius, radius || 0);
       gl.uniform2i(f.dir, dx || 0, dy || 0);
       if (mode === 2 && filterRadius !== radius) {
@@ -579,16 +602,17 @@
       }
       gl.drawArrays(gl.TRIANGLES, 0, 3); drawCalls++;
     }
-    function blockMinPass(src, dst, factor, dx, dy) {
+    function blockMinPass(src, dst, factor, dx, dy, landView) {
       gl.bindFramebuffer(gl.FRAMEBUFFER, dst.framebuffer); gl.viewport(0, 0, dst.width, dst.height);
       gl.bindVertexArray(vao); gl.useProgram(blockMin.program); gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, src.texture);
+      filterGeography(blockMin,src,landView);
       gl.uniform1i(blockMin.src, 0); gl.uniform1i(blockMin.factor, factor); gl.uniform2i(blockMin.dir, dx, dy);
       gl.drawArrays(gl.TRIANGLES, 0, 3); drawCalls++;
     }
     /* One derived field into cache[slot]: downsample (mean or minimum), an
      * optional separable minimum, then a separable Gaussian. Targets are
      * reused while their size holds. */
-    function derive(src, radiusPx, minimum, cache, slot) {
+    function derive(src, radiusPx, minimum, cache, slot, landView) {
       var plan = auxPlan(radiusPx, src.width, src.height), entry = cache[slot];
       if (!plan) { if (entry) { freeTarget(entry.a); freeTarget(entry.b); freeTarget(entry.rows); cache[slot] = null; } return null; }
       if (!entry || entry.a.width !== plan.width || entry.a.height !== plan.height) {
@@ -603,11 +627,11 @@
         if (!entry.rows || entry.rows.width !== plan.width || entry.rows.height !== src.height) {
           freeTarget(entry.rows); entry.rows = target(plan.width, src.height, true);
         }
-        blockMinPass(src, entry.rows, plan.factor, 1, 0); blockMinPass(entry.rows, entry.a, plan.factor, 0, 1); input = entry.a;
+        blockMinPass(src, entry.rows, plan.factor, 1, 0, landView); blockMinPass(entry.rows, entry.a, plan.factor, 0, 1); input = entry.a;
       } else if (plan.factor > 1) { filterPass(src, entry.a, 0, plan.factor); input = entry.a; }
       if (minimum) {
         if (plan.radius < 8) {
-          filterPass(input, entry.b, 3, 1, plan.radius, 1, 0); filterPass(entry.b, entry.a, 3, 1, plan.radius, 0, 1); input = entry.a;
+          filterPass(input, entry.b, 3, 1, plan.radius, 1, 0, input===src?landView:null); filterPass(entry.b, entry.a, 3, 1, plan.radius, 0, 1); input = entry.a;
         } else {
           // Exact minimum over [-r,r], composed from three-tap windows. If
           // the preceding window covers [-e,e], offsets -s/0/s cover every
@@ -616,7 +640,7 @@
           // invalid samples remain excluded at every stage.
           for (var axis = 0; axis < 2; axis++) for (var extent = 0; extent < plan.radius;) {
             var step = Math.min(2 * extent + 1, plan.radius - extent), next = input === entry.a ? entry.b : entry.a;
-            filterPass(input, next, 4, 1, step, axis === 0 ? 1 : 0, axis === 1 ? 1 : 0);
+            filterPass(input, next, 4, 1, step, axis === 0 ? 1 : 0, axis === 1 ? 1 : 0, input===src?landView:null);
             input = next; extent += step;
           }
         }
@@ -627,9 +651,9 @@
     }
     function deriveAll(t, view, st, cache) {
       var radii = auxRadii(st, view, shaders);
-      return {blur: derive(t, radii.blur, false, cache, 'blur'), base: derive(t, radii.base, true, cache, 'base')};
+      return {blur: derive(t, radii.blur, false, cache, 'blur'), base: derive(t, radii.base, true, cache, 'base'), landBase: derive(t,radii.landBase,true,cache,'landBase',view)};
     }
-    function freeAux(cache) { ['blur', 'base'].forEach(function (k) { var e = cache[k]; if (e) { freeTarget(e.a); freeTarget(e.b); freeTarget(e.rows); } cache[k] = null; }); }
+    function freeAux(cache) { ['blur', 'base', 'landBase'].forEach(function (k) { var e = cache[k]; if (e) { freeTarget(e.a); freeTarget(e.b); freeTarget(e.rows); } cache[k] = null; }); }
     function readFloat(t) {
       // RG32F is a renderable format but portable WebGL float readback uses RGBA.
       var rgba = new Float32Array(t.width * t.height * 4), out = new Float32Array(t.width * t.height * 2);
@@ -727,7 +751,7 @@
         }
         if (planDirty) buildPlan(view);
         t = now(); phaseMs.plan = t - mark; mark = t;
-        var radii = auxRadii(state, view, shaders), key = [Math.round(radii.blur * 4), Math.round(radii.base), field.width, field.height].join(',');
+        var radii = auxRadii(state, view, shaders), key = [Math.round(radii.blur * 4), Math.round(radii.base),Math.round(radii.landBase), field.width, field.height].join(',');
         if (gpuTiming) { gpuSync(field); mark = now(); }
         if (heightDirty) { drawHeight(field, view); heightDirty = false; dirty = true; auxKey = ''; if (gpuTiming) mark = gpuPhase('height', field, mark); }
         if (key !== auxKey) { liveAux = deriveAll(field, view, state, liveAux); auxKey = key; dirty = true; if (gpuTiming) mark = gpuPhase('aux', liveAux.base || liveAux.blur ? (liveAux.base || liveAux.blur).target : field, mark); }
@@ -762,7 +786,7 @@
     function gestureBytes() {
       if (!gesture) return 0;
       var n = gesture.field.width * gesture.field.height * 12;
-      ['blur', 'base'].forEach(function (k) {
+      ['blur', 'base', 'landBase'].forEach(function (k) {
         var e = gesture.aux[k]; if (!e) return;
         [e.a, e.b, e.rows].forEach(function (t) { if (t) n += t.width * t.height * 8; });
       });
@@ -854,7 +878,7 @@
       try {
         // Copy only the small derived fields. Native elevations stay resident
         // under the existing LRU; uploads resume when the capture is released.
-        ['blur', 'base'].forEach(function (name) {
+        ['blur', 'base', 'landBase'].forEach(function (name) {
           var entry = liveAux[name]; if (!entry) return;
           var source = entry.target, t = target(source.width, source.height, true);
           aux[name] = {a: t, target: t, factor: entry.factor};
@@ -957,12 +981,14 @@
         gl.viewport(0, 0, w, ht); gl.bindVertexArray(vao); gl.useProgram(statsProgram);
         gl.activeTexture(gl.TEXTURE1); gl.bindTexture(gl.TEXTURE_2D, liveAux.blur ? liveAux.blur.target.texture : field.texture);
         gl.activeTexture(gl.TEXTURE2); gl.bindTexture(gl.TEXTURE_2D, liveAux.base ? liveAux.base.target.texture : field.texture);
+        gl.activeTexture(gl.TEXTURE0+4);gl.bindTexture(gl.TEXTURE_2D,liveAux.landBase?liveAux.landBase.target.texture:field.texture);
         gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, field.texture);
+        gl.uniform1i(stats.cspLandBase,4);gl.uniform1f(stats.cspLandBaseScale,liveAux.landBase?liveAux.landBase.factor:0);
         gl.uniform1i(stats.cspField, 0); gl.uniform1i(stats.cspBlur, 1); gl.uniform1i(stats.cspBase, 2);
         gl.uniform1f(stats.cspBlurScale, liveAux.blur ? liveAux.blur.factor : 0); gl.uniform1f(stats.cspBaseScale, liveAux.base ? liveAux.base.factor : 0);
         gl.uniformMatrix3fv(stats.cspAuxTransform, false, IDENTITY);
         gl.drawArrays(gl.TRIANGLES, 0, 3);
-        var raw = new Float32Array(w * ht * 4), heights = [], relative = [], water = [];
+        var raw = new Float32Array(w * ht * 4), heights = [], relative = [], landRelative = [], water = [];
         var sampleView = {centerMerc:[viewScalars[0],viewScalars[1]],zoom:viewScalars[2],bearing:viewScalars[3],cssSize:[viewScalars[4],viewScalars[5]],dpr:viewScalars[6]};
         gl.readPixels(0, 0, w, ht, gl.RGBA, gl.FLOAT, raw);
         for (var i = 0; i < raw.length; i += 4) {
@@ -972,9 +998,10 @@
           // use the same geographic pixel centres, including map rotation.
           var cell=i/4, merc=options?.water===false?null:shaders.screenToMercator(sampleView,[(cell%w+.5)/w,1-(Math.floor(cell/w)+.5)/ht]);
           if(merc)water.push(geography ? +geography.waterAtMercator(merc[0],merc[1]) : 0);
-          if (raw[i + 3] > 0 && Number.isFinite(raw[i + 2])) relative.push(Math.max(0, raw[i] - raw[i + 2]));
+          relative.push(Number.isFinite(raw[i+2])&&raw[i+2]>-1e20?Math.max(0,raw[i]-raw[i+2]):NaN);
+          landRelative.push(Number.isFinite(raw[i+3])&&raw[i+3]>-1e20?Math.max(0,raw[i]-raw[i+3]):NaN);
         }
-        return {heights: Float32Array.from(heights), relative: Float32Array.from(relative), water: options?.water===false?undefined:Uint8Array.from(water), samples: w * ht};
+        return {heights: Float32Array.from(heights), relative: Float32Array.from(relative), landRelative:Float32Array.from(landRelative), water: options?.water===false?undefined:Uint8Array.from(water), samples: w * ht};
       } finally { deleteTexture(t); deleteFramebuffer(fb); gl.bindFramebuffer(gl.FRAMEBUFFER, null); }
     }
     function readProvenance(view) {
