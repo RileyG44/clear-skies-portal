@@ -22,6 +22,8 @@ final class ShellModel {
     var mediumSheetHeight: CGFloat = 0
     /// The open sheet's top edge in the "portal-map" coordinate space.
     var sheetTop: CGFloat?
+    /// The open sheet's horizontal extent in the "portal-map" coordinate space.
+    var sheetSpan: ClosedRange<CGFloat>?
     var page: ShellPage?
     var panel: ShellPanel?
     var connected = false

@@ -191,6 +191,10 @@ private struct FloatingToolsSheet: View {
         // corners follow the display's own rounded corners (never tighter
         // than the top's 32 points), so the screen does not clip them.
         .clipShape(.rect(uniformTopCorners: .fixed(32), uniformBottomCorners: .concentric(minimum: .fixed(32))))
+        .onGeometryChange(for: ClosedRange<CGFloat>.self) { proxy in
+            let frame = proxy.frame(in: .named("portal-map"))
+            return frame.minX...frame.maxX
+        } action: { shell.sheetSpan = $0 }
         .environment(\.portalSheetSurface, true)
         .scrollDisabled(resizing)
         .onPreferenceChange(SheetScrollTopKey.self) { listAtTop = $0 }
