@@ -59,9 +59,11 @@ a{color:inherit}
 .body{font-size:clamp(13px,.92vw,14.5px);font-weight:400;line-height:1.6;margin:0 0 2em;color:var(--ink-2);max-width:29em}
 /* downloads: notebook entries in the space between the letterhead and the buttons */
 .dl{margin:auto 0;display:grid;gap:0;width:min(100%,27em)}
-.dl-row{display:grid;gap:4px;padding:15px 0}
+.dl-row{display:flex;flex-wrap:wrap;align-items:baseline;gap:4px .45em;padding:15px 0}
 .dl-k{margin:0;font-size:clamp(14px,1.08vw,16.5px);font-weight:300;color:var(--ink-2)}
-.dl-links{display:flex;flex-wrap:wrap;gap:4px 26px}
+.dl-links{display:inline-flex;flex-wrap:wrap;align-items:baseline;gap:4px 0}
+.dl-comma{font-size:calc(.72 * clamp(16px,1.25vw,19px));font-weight:300;color:#5a5048;margin-right:.45em}
+.dl-sep{color:var(--ink-2);font-weight:300;font-size:clamp(14px,1.08vw,16.5px)}
 .dl-link{display:inline-flex;align-items:baseline;gap:.45em;font-size:clamp(16px,1.25vw,19px);font-weight:700;color:var(--emerald);text-decoration:none}
 
 /* the platform line is the link: same small grey hand, lightly underlined */
@@ -136,18 +138,18 @@ a{color:inherit}
     <p class="body inked write" style="--d:.9s">The newest free satellite imagery, paired with LiDAR terrain sharp enough to find old roads, river terraces and trails hidden under the trees.</p>
     <div class="dl write" style="--d:1.1s" aria-label="Downloads">
       <div class="dl-row">
-        <p class="dl-k inked">For those who use macOS</p>
+        <p class="dl-k inked">For macOS</p><span class="dl-sep inked" aria-hidden="true">&ndash;</span>
         <span class="dl-links"><a class="dl-link inked" data-file="mac-dmg" href="download.html"><span class="dl-meta" data-meta="mac">Apple silicon</span></a></span>
       </div>
       <div class="dl-row">
-        <p class="dl-k inked">For those who use Windows</p>
+        <p class="dl-k inked">For Windows</p><span class="dl-sep inked" aria-hidden="true">&ndash;</span>
         <span class="dl-links"><a class="dl-link inked" data-file="win-setup" href="download.html"><span class="dl-meta" data-meta="win">x64</span></a></span>
       </div>
       <div class="dl-row">
-        <p class="dl-k inked">For those who explore</p>
+        <p class="dl-k inked">For those who explore</p><span class="dl-sep inked" aria-hidden="true">&ndash;</span>
         <span class="dl-links">
-          <a class="dl-link inked" href="https://apps.apple.com/" target="_blank" rel="noopener"><span class="dl-meta">App Store, coming soon</span></a>
-          <a class="dl-link inked" href="https://play.google.com/store" target="_blank" rel="noopener"><span class="dl-meta">Google Play, coming soon</span></a>
+          <a class="dl-link inked" href="https://apps.apple.com/" target="_blank" rel="noopener"><span class="dl-meta">App Store</span></a><span class="dl-comma inked">,</span>
+          <a class="dl-link inked" href="https://play.google.com/store" target="_blank" rel="noopener"><span class="dl-meta">Google Play</span></a>
         </span>
       </div>
     </div>
@@ -166,8 +168,8 @@ a{color:inherit}
 import { createSketch } from "./sketch.js";
 import { WIN, MAC, FILES } from "./releases.js";
 for (const a of document.querySelectorAll("[data-file]")) a.href = FILES[a.dataset.file];
-document.querySelector('[data-meta="mac"]').textContent = `Apple silicon · version ${MAC.version}`;
-document.querySelector('[data-meta="win"]').textContent = `x64 · version ${WIN.version}`;
+document.querySelector('[data-meta="mac"]').textContent = `Apple silicon, Version ${MAC.version}`;
+document.querySelector('[data-meta="win"]').textContent = `x64, Version ${WIN.version}`;
 const copy = document.querySelector(".copy"), title = document.querySelector(".title"), wide = matchMedia("(min-width:861px)");
 const meter = document.createElement("canvas").getContext("2d");
 let last = null;
