@@ -16,6 +16,10 @@ struct MapChrome: View {
     @Environment(\.accessibilityReduceMotion) private var reducedMotion
     var toolbarHideProgress: CGFloat = 0
     @State private var locationActionsExpanded = false
+    /// Map info squeezed by an open menu spans the menu's width; the dock
+    /// steps aside for it as it does for the raised menu.
+    @State private var mapInfoSpansSheet = false
+    private var dockHiddenProgress: CGFloat { shell.presentedPanel == "mkBar" ? 1 : toolbarHideProgress }
 
     var body: some View {
         GeometryReader { geometry in
@@ -23,13 +27,14 @@ struct MapChrome: View {
                 VStack(alignment: .trailing, spacing: 0) {
                     HStack(alignment: .top, spacing: 10) {
                         VStack(alignment: .leading, spacing: 10) {
-                            TerrainStatusCapsule(maxHeight: min(420, max(100, geometry.size.height - MapControlSize.search - 30)), tileWidth: min(260, max(130, geometry.size.width - MapControlSize.tool - 34)))
+                            TerrainStatusCapsule(maxHeight: min(420, max(100, geometry.size.height - MapControlSize.search - 30)), tileWidth: min(260, max(130, geometry.size.width - MapControlSize.tool - 34)),
+                                                 compactWidth: geometry.size.width - 8, spansSheet: $mapInfoSpansSheet)
                             if shell.map.pointCloud && shell.hasLocation { LocationShareButton() }
                         }
                         Spacer(minLength: 0)
                         // The markup pane has its own tools and a Hide button;
                         // the dock steps aside so the map has room to draw on.
-                        let dockHidden = shell.presentedPanel == "mkBar" ? 1 : toolbarHideProgress
+                        let dockHidden = mapInfoSpansSheet ? 1 : dockHiddenProgress
                         MapTools(maxHeight: geometry.size.height - MapControlSize.search - (locationActionsExpanded ? 324 : 0) - 20)
                             .opacity(1 - dockHidden)
                             .scaleEffect(reducedMotion ? 1 : 1 - 0.04 * dockHidden, anchor: .topTrailing)
@@ -37,6 +42,7 @@ struct MapChrome: View {
                             .allowsHitTesting(dockHidden < 0.99)
                             .accessibilityHidden(dockHidden >= 0.99)
                             .animation(reducedMotion ? nil : .snappy(duration: 0.25), value: shell.presentedPanel == "mkBar")
+                            .animation(reducedMotion ? nil : .snappy(duration: 0.25), value: mapInfoSpansSheet)
                     }
                     .padding(.horizontal, 12)
                     .padding(.top, 6)
@@ -229,17 +235,65 @@ struct ToolButton: View {
 struct TerrainStatusCapsule: View {
     @Environment(ShellModel.self) private var shell
     @Environment(\.accessibilityReduceMotion) private var reducedMotion
-    @State private var expanded = false
+    @State private var expanded = Self.startsExpanded
     @State private var contentHeight: CGFloat = 180
-    @State private var originY: CGFloat = 0
+    @State private var origin: CGPoint = .zero
     var maxHeight: CGFloat = 420
     var tileWidth: CGFloat = 260
+    /// The menu's width, at which the compact layout is measured.
+    var compactWidth: CGFloat = 0
+    @Binding var spansSheet: Bool
+    @State private var narrowHeight: CGFloat = 0
+    @State private var compactHeight: CGFloat = 0
+    @State private var moreBelow = false
+
+    /// Debug builds accept `-cspDebugMapInfo open` to verify the open tile.
+    private static var startsExpanded: Bool {
+        #if DEBUG
+        UserDefaults.standard.string(forKey: "cspDebugMapInfo") == "open"
+        #else
+        false
+        #endif
+    }
+
+    /// When an open menu leaves too little height for the tile's details,
+    /// the tile shares the menu's leading edge and width and switches to a
+    /// compact summary of only what reads the map.
+    private var sheetSpan: ClosedRange<CGFloat>? {
+        guard expanded, shell.activeSheet != nil, let span = shell.sheetSpan,
+              span.upperBound - span.lowerBound > tileWidth,
+              narrowHeight + MapControlSize.status > heightLimit + 0.5 else { return nil }
+        return span
+    }
+    private var wide: Bool { sheetSpan != nil }
+    private var width: CGFloat {
+        guard expanded else { return MapControlSize.status }
+        guard let span = sheetSpan else { return tileWidth }
+        return span.upperBound - span.lowerBound
+    }
+    private var leadingShift: CGFloat {
+        guard let span = sheetSpan else { return 0 }
+        return span.lowerBound - origin.x
+    }
+
+    /// The compact layout is measured at the open menu's width, or the
+    /// screen's when no menu is open yet.
+    private var measuredCompactWidth: CGFloat {
+        guard let span = shell.sheetSpan else { return compactWidth }
+        return span.upperBound - span.lowerBound
+    }
+
+    /// Open map info asks the raised menu to stop below its compact layout.
+    private var menuReserve: CGFloat {
+        expanded && compactHeight > 0 ? origin.y + compactHeight + 8 : 0
+    }
 
     /// The tile's tallest size. With a menu open it ends 8 points above the
-    /// menu's top edge, so the menu never covers it; its details scroll.
+    /// menu's top edge, so the menu never covers it; its details scroll. It
+    /// is the actual room, which can be less than a control's height.
     private var heightLimit: CGFloat {
         guard shell.activeSheet != nil, let sheetTop = shell.sheetTop else { return maxHeight }
-        return min(maxHeight, max(MapControlSize.status, sheetTop - originY - 8))
+        return min(maxHeight, max(0, sheetTop - origin.y - 8))
     }
 
     var body: some View {
@@ -248,42 +302,42 @@ struct TerrainStatusCapsule: View {
             // prevents the dock's layout and system glass from recentering it.
             Color.clear
                 .frame(width: MapControlSize.status, height: MapControlSize.status)
-                .onGeometryChange(for: CGFloat.self) { $0.frame(in: .named("portal-map")).minY } action: { originY = $0 }
-                .overlay(alignment: .topLeading) {
-                    VStack(alignment: .leading, spacing: 0) {
-                        Button {
-                            withAnimation(reducedMotion ? nil : .snappy(duration: 0.26)) { expanded.toggle() }
-                        } label: {
-                            HStack(spacing: 8) {
-                                Image(systemName: "info.circle").font(.system(size: 18))
-                                if expanded {
-                                    Text("Map info").portalFont(.caption, weight: .semibold)
-                                    Spacer(minLength: 0)
-                                    Image(systemName: "xmark").font(.system(size: 12))
-                                }
+                .onGeometryChange(for: CGPoint.self) { $0.frame(in: .named("portal-map")).origin } action: { origin = $0 }
+                .background(alignment: .topLeading) {
+                    // Both layouts are measured whichever is showing: the
+                    // narrow one decides whether the menu squeezes the tile,
+                    // and the compact one is the room the raised menu leaves.
+                    if expanded {
+                        ZStack(alignment: .topLeading) {
+                            information(info)
+                                .padding(.horizontal, 12)
+                                .padding(.bottom, 12)
+                                .frame(width: tileWidth, alignment: .leading)
+                                .fixedSize(horizontal: false, vertical: true)
+                                .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { narrowHeight = $0 }
+                            VStack(alignment: .leading, spacing: 0) {
+                                compactHeader(info)
+                                compactBody(info)
                             }
-                            .foregroundStyle(PortalPrimary())
-                            .padding(.horizontal, expanded ? 12 : 0)
-                            .frame(width: expanded ? tileWidth : MapControlSize.status, height: MapControlSize.status)
-                            .contentShape(.rect)
+                            .frame(width: max(tileWidth, measuredCompactWidth), alignment: .leading)
+                                .fixedSize(horizontal: false, vertical: true)
+                                .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { compactHeight = $0 }
                         }
-                        .buttonStyle(.plain)
-                        .accessibilityLabel(expanded ? "Hide map info" : "Show map info")
-                        .accessibilityValue(expanded ? "Expanded" : "Collapsed")
-                        if expanded {
-                            ScrollView {
-                                information(info)
-                                    .padding(.horizontal, 12)
-                                    .padding(.bottom, 12)
-                                    .frame(width: tileWidth, alignment: .leading)
-                                    .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { contentHeight = $0 }
-                            }
-                            .frame(width: tileWidth, height: min(contentHeight, max(0, heightLimit - MapControlSize.status)), alignment: .top)
-                            .scrollBounceBehavior(.basedOnSize)
-                            .animation(reducedMotion ? nil : .snappy(duration: 0.3), value: heightLimit)
-                        }
+                        .hidden()
+                        .accessibilityHidden(true)
                     }
-                    .frame(width: expanded ? tileWidth : MapControlSize.status, alignment: .topLeading)
+                }
+                .onChange(of: wide, initial: true) { spansSheet = wide }
+                .onChange(of: menuReserve, initial: true) { shell.mapInfoReserve = menuReserve }
+                .onDisappear {
+                    spansSheet = false
+                    shell.mapInfoReserve = 0
+                }
+                .overlay(alignment: .topLeading) {
+                    Group {
+                        if wide { compactTile(info) } else { tile(info) }
+                    }
+                    .frame(width: width, alignment: .topLeading)
                     .clipped()
                     .chromeGlass(in: .rect(cornerRadius: expanded ? 18 : 22), interactive: false)
                     .onGeometryChange(for: CGFloat.self) { $0.size.height.rounded(.up) } action: { height in
@@ -292,6 +346,8 @@ struct TerrainStatusCapsule: View {
                         shell.call("document.documentElement.style.setProperty('--csp-map-info-height', height + 'px')",
                                    ["height": Double(height)])
                     }
+                    .offset(x: leadingShift)
+                    .animation(reducedMotion ? nil : .snappy(duration: 0.3), value: wide)
                     .id(expanded)
                     .transition(reducedMotion ? .identity : .opacity.combined(with: .scale(scale: 0.94, anchor: .topLeading)))
                     .onKeyPress(.escape) {
@@ -302,25 +358,180 @@ struct TerrainStatusCapsule: View {
         }
     }
 
-    private func information(_ info: MapInfoState) -> some View {
-        VStack(alignment: .leading, spacing: 12) {
+    private func toggle() {
+        withAnimation(reducedMotion ? nil : .snappy(duration: 0.26)) { expanded.toggle() }
+    }
+
+    /// The corner button, or a header above the details when expanded.
+    private func tile(_ info: MapInfoState) -> some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Button(action: toggle) {
+                HStack(spacing: 8) {
+                    Image(systemName: "info.circle").font(.system(size: 18))
+                    if expanded {
+                        Text("Map info").portalFont(.caption, weight: .semibold)
+                        Spacer(minLength: 0)
+                        Image(systemName: "xmark").font(.system(size: 12))
+                    }
+                }
+                .foregroundStyle(PortalPrimary())
+                .padding(.horizontal, expanded ? 12 : 0)
+                .frame(width: width, height: MapControlSize.status)
+                .contentShape(.rect)
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(expanded ? "Hide map info" : "Show map info")
+            .accessibilityValue(expanded ? "Expanded" : "Collapsed")
+            if expanded {
+                details(maxHeight: heightLimit - MapControlSize.status) {
+                    information(info)
+                        .padding(.horizontal, 12)
+                        .padding(.bottom, 12)
+                }
+            }
+        }
+    }
+
+    /// Squeezed by the menu, the tile keeps only what reads the map: where
+    /// it is sampling, the coordinates and elevation, and the active keys.
+    /// Sources and a ready terrain status drop out; trouble with terrain
+    /// still shows, briefly. The header stays put while the rest scrolls.
+    private func compactTile(_ info: MapInfoState) -> some View {
+        VStack(alignment: .leading, spacing: 0) {
+            compactHeader(info)
+            details(maxHeight: heightLimit - compactHeaderHeight) { compactBody(info) }
+        }
+        .overlay(alignment: .topTrailing) {
+            Button(action: toggle) {
+                Image(systemName: "xmark")
+                    .font(.system(size: 12))
+                    .foregroundStyle(PortalPrimary())
+                    .frame(width: MapControlSize.status, height: MapControlSize.status)
+                    .contentShape(.rect)
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Hide map info")
+            .accessibilityValue("Expanded")
+        }
+        .frame(width: width, alignment: .topLeading)
+    }
+
+    @State private var compactHeaderHeight: CGFloat = 34
+
+    private func compactHeader(_ info: MapInfoState) -> some View {
+        HStack(spacing: 6) {
+            Image(systemName: "info.circle").font(.system(size: 13)).accessibilityHidden(true)
+            Text(info.basis).portalFont(.caption2, weight: .semibold).foregroundStyle(.secondary)
+        }
+        .foregroundStyle(PortalPrimary())
+        .padding(.horizontal, 12)
+        .padding(.trailing, MapControlSize.status - 12)
+        .frame(minHeight: 34)
+        .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { compactHeaderHeight = $0 }
+    }
+
+    private func compactBody(_ info: MapInfoState) -> some View {
+        VStack(alignment: .leading, spacing: 0) {
             VStack(alignment: .leading, spacing: 2) {
-                Text(info.basis).portalFont(.caption2).foregroundStyle(.secondary)
-                Text(info.coordinates).portalFont(.caption, weight: .medium, digits: true)
-                Text(info.elevation).portalFont(.caption, digits: true)
-                if !info.source.isEmpty {
-                    Text(info.source).portalFont(.caption2).foregroundStyle(.secondary)
+                ViewThatFits(in: .horizontal) {
+                    HStack(alignment: .firstTextBaseline, spacing: 12) { compactPosition(info) }
+                    VStack(alignment: .leading, spacing: 2) { compactPosition(info) }
                 }
                 if !info.analysis.isEmpty {
-                    Text(info.analysis).portalFont(.caption)
+                    Text(info.analysis).portalFont(.caption2)
+                }
+                if let notice = Self.terrainNotice(info.terrain) {
+                    Label(notice.text, systemImage: notice.symbol)
+                        .portalFont(.caption2)
+                        .foregroundStyle(.secondary)
                 }
             }
+            // The close button's 44-point target reaches 10 points into this row.
+            .padding(.trailing, MapControlSize.status - 12)
             .accessibilityElement(children: .combine)
-            VStack(alignment: .leading, spacing: 2) {
-                Text("Terrain").portalFont(.caption2, weight: .semibold)
-                Text(info.terrain.text).portalFont(.caption2).foregroundStyle(.secondary)
+            if info.distance != nil || !info.keys.isEmpty {
+                FlowLayout(spacing: 16, lineSpacing: 8) {
+                    if let distance = info.distance {
+                        CompactDistanceKey(distance: distance)
+                    }
+                    ForEach(Array(info.keys.enumerated()), id: \.offset) { _, key in
+                        CompactInfoKey(key: key)
+                    }
+                }
+                .padding(.top, 8)
             }
-            .accessibilityElement(children: .combine)
+        }
+        .foregroundStyle(PortalPrimary())
+        .padding(.horizontal, 12)
+        .padding(.bottom, 10)
+        .fixedSize(horizontal: false, vertical: true)
+    }
+
+    @ViewBuilder private func compactPosition(_ info: MapInfoState) -> some View {
+        Text(info.coordinates).portalFont(.caption, weight: .semibold, digits: true).lineLimit(1)
+        // "Elevation ≈ 2,426 ft" reads as "≈ 2,426 ft" beside a mountain.
+        let elevation = info.elevation.hasPrefix("Elevation ") ? String(info.elevation.dropFirst("Elevation ".count)) : info.elevation
+        Label { Text(elevation).portalFont(.caption, weight: .medium, digits: true).lineLimit(1) } icon: {
+            Image(systemName: "mountain.2").font(.system(size: 11))
+        }
+        .labelStyle(CompactLabelStyle())
+        .accessibilityLabel(info.elevation)
+    }
+
+    /// A short notice for terrain that needs attention: loading (with its
+    /// progress), partial or offline. Ready or deliberately off terrain is
+    /// not news, and the full message's sources and coverage are fluff here.
+    static func terrainNotice(_ terrain: TerrainStatus) -> (text: String, symbol: String)? {
+        switch terrain.state {
+        case "loading":
+            let progress = terrain.text.firstMatch(of: /\d+%/).map { " · \($0.output)" } ?? ""
+            return ("Loading terrain" + progress, "arrow.triangle.2.circlepath")
+        case "partial": return ("Some terrain detail unavailable", "exclamationmark.triangle")
+        case "offline": return ("Terrain offline", "wifi.slash")
+        default: return nil
+        }
+    }
+
+    /// Details scroll once they are taller than the room above the menu.
+    /// While more is below, the bottom edge fades under a chevron.
+    private func details<Content: View>(maxHeight: CGFloat, @ViewBuilder content: () -> Content) -> some View {
+        ScrollView {
+            content()
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { contentHeight = $0 }
+        }
+        .frame(height: min(contentHeight, max(0, maxHeight)), alignment: .top)
+        .scrollBounceBehavior(.basedOnSize)
+        .scrollIndicatorsFlash(onAppear: true)
+        .onScrollGeometryChange(for: Bool.self) { geometry in
+            geometry.contentOffset.y + geometry.containerSize.height < geometry.contentSize.height - 2
+        } action: { _, more in moreBelow = more }
+        .mask {
+            LinearGradient(stops: [.init(color: .black, location: 0),
+                                   .init(color: .black, location: moreBelow ? 0.7 : 1),
+                                   .init(color: .black.opacity(moreBelow ? 0.15 : 1), location: 1)],
+                           startPoint: .top, endPoint: .bottom)
+        }
+        .overlay(alignment: .bottomTrailing) {
+            if moreBelow {
+                Image(systemName: "chevron.compact.down")
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundStyle(PortalPrimary())
+                    .padding(.trailing, 16)
+                    .padding(.bottom, 3)
+                    .allowsHitTesting(false)
+                    .accessibilityHidden(true)
+                    .transition(.opacity)
+            }
+        }
+        .animation(reducedMotion ? nil : .easeOut(duration: 0.2), value: moreBelow)
+        .animation(reducedMotion ? nil : .snappy(duration: 0.3), value: heightLimit)
+    }
+
+    private func information(_ info: MapInfoState) -> some View {
+        VStack(alignment: .leading, spacing: 12) {
+            location(info)
+            terrain(info)
             if let distance = info.distance {
                 MapDistanceKeyView(distance: distance)
             }
@@ -330,6 +541,217 @@ struct TerrainStatusCapsule: View {
         }
         .foregroundStyle(PortalPrimary())
         .fixedSize(horizontal: false, vertical: true)
+    }
+
+    private func location(_ info: MapInfoState) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(info.basis).portalFont(.caption2).foregroundStyle(.secondary)
+            Text(info.coordinates).portalFont(.caption, weight: .medium, digits: true)
+            Text(info.elevation).portalFont(.caption, digits: true)
+            if !info.source.isEmpty {
+                Text(info.source).portalFont(.caption2).foregroundStyle(.secondary)
+            }
+            if !info.analysis.isEmpty {
+                Text(info.analysis).portalFont(.caption)
+            }
+        }
+        .accessibilityElement(children: .combine)
+    }
+
+    private func terrain(_ info: MapInfoState) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text("Terrain").portalFont(.caption2, weight: .semibold)
+            Text(info.terrain.text).portalFont(.caption2).foregroundStyle(.secondary)
+        }
+        .accessibilityElement(children: .combine)
+    }
+}
+
+private struct CompactLabelStyle: LabelStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: 4) { configuration.icon; configuration.title }
+    }
+}
+
+/// Lays views out left to right, wrapping onto new lines.
+private struct FlowLayout: Layout {
+    var spacing: CGFloat
+    var lineSpacing: CGFloat
+
+    private func frames(_ width: CGFloat?, _ subviews: Subviews) -> [CGRect] {
+        let limit = width ?? .infinity
+        var frames: [CGRect] = []
+        var x: CGFloat = 0, y: CGFloat = 0, lineHeight: CGFloat = 0
+        for subview in subviews {
+            let size = subview.sizeThatFits(ProposedViewSize(width: width, height: nil))
+            if x > 0 && x + size.width > limit {
+                x = 0
+                y += lineHeight + lineSpacing
+                lineHeight = 0
+            }
+            frames.append(CGRect(origin: CGPoint(x: x, y: y), size: size))
+            x += size.width + spacing
+            lineHeight = max(lineHeight, size.height)
+        }
+        return frames
+    }
+
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        let union = frames(proposal.width, subviews).reduce(CGRect.null) { $0.union($1) }
+        return union.isNull ? .zero : CGSize(width: union.maxX, height: union.maxY)
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        for (frame, subview) in zip(frames(proposal.width ?? bounds.width, subviews), subviews) {
+            subview.place(at: CGPoint(x: bounds.minX + frame.minX, y: bounds.minY + frame.minY),
+                          proposal: ProposedViewSize(frame.size))
+        }
+    }
+}
+
+/// The distance key at half length, still true to scale, so it shares a
+/// line with the color keys. The number comes from the web as a value, not
+/// parsed from its localized label.
+private struct CompactDistanceKey: View {
+    let distance: MapDistanceKey
+
+    private var scaled: (label: String, width: CGFloat) {
+        let width = CGFloat(max(0, distance.width))
+        guard width > 96, let amount = distance.amount, amount > 0, let unit = distance.unit else { return (distance.label, width) }
+        return ("\((amount / 2).formatted(.number.precision(.fractionLength(0...2)))) \(unit)", width / 2)
+    }
+
+    var body: some View {
+        let scaled = scaled
+        VStack(alignment: .leading, spacing: 3) {
+            Text("Distance").portalFont(.caption2, weight: .semibold)
+            HStack(spacing: 6) {
+                DistanceScaleBar().frame(width: scaled.width, height: 7)
+                Text(scaled.label).portalFont(.caption2, weight: .semibold).lineLimit(1).fixedSize()
+            }
+            .frame(minHeight: 13)
+        }
+        .fixedSize()
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("Distance scale, \(scaled.label)")
+    }
+}
+
+/// A color key in the compact tile: its name over its ramp. A numeric range
+/// keeps its end values beside the ramp; a cyclic or categorical key (aspect,
+/// contours) keeps every label under it. Swatches wrap, three at first, and
+/// "+N" shows the rest. Qualifiers after " · " drop out of the visible text.
+private struct CompactInfoKey: View {
+    let key: MapInfoKey
+    @Environment(\.self) private var environment
+    @State private var showsAllSwatches = false
+
+    private static func short(_ label: String) -> String {
+        label.components(separatedBy: " · ").first ?? label
+    }
+
+    /// "Snow depth · inches" reads "Snow depth (inches)"; method notes such
+    /// as "Contours · 2 ft base interval · every fifth indexed" drop out.
+    private var shortName: String {
+        let parts = key.name.components(separatedBy: " · ")
+        guard parts.count > 1, let unit = parts.last,
+              ["inches", "feet", "degrees", "metres", "meters", "percent"].contains(unit) else { return parts[0] }
+        return "\(parts[0]) (\(unit))"
+    }
+
+    /// Every label starts with a number: a range whose ends say it all.
+    private var isNumericRange: Bool {
+        key.labels.count >= 2 && key.labels.allSatisfy { $0.trimmingCharacters(in: .whitespaces).firstMatch(of: /^[−\-+≈<>]?\s*\d/) != nil }
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 3) {
+            Text(shortName).portalFont(.caption2, weight: .semibold).lineLimit(1)
+            if let stops = key.stops {
+                if key.labels.isEmpty {
+                    ramp(stops).frame(width: 64, height: 6).padding(.vertical, 3.5)
+                } else if isNumericRange {
+                    HStack(spacing: 6) {
+                        Text(Self.short(key.labels[0]))
+                        ramp(stops).frame(width: 64, height: 6)
+                        Text(Self.short(key.labels[key.labels.count - 1]))
+                    }
+                    .frame(minHeight: 13)
+                } else {
+                    HStack(spacing: 0) {
+                        ForEach(Array(key.labels.enumerated()), id: \.offset) { index, label in
+                            if index > 0 { Spacer(minLength: 8) }
+                            Text(Self.short(label))
+                        }
+                    }
+                    .frame(minWidth: 96)
+                    .padding(.top, 9)
+                    .overlay(alignment: .top) { ramp(stops).frame(height: 6) }
+                }
+            }
+            if !key.swatches.isEmpty { swatches }
+        }
+        .portalFont(.caption2)
+        .lineLimit(1)
+        .fixedSize(horizontal: key.swatches.isEmpty, vertical: true)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(spokenDescription)
+        .accessibilityAction(named: showsAllSwatches ? "Show fewer" : "Show all") { showsAllSwatches.toggle() }
+    }
+
+    private func ramp(_ stops: [GradientStop]) -> some View {
+        RoundedRectangle(cornerRadius: 2)
+            .fill(LinearGradient(gradient: Gradient(stops: stops), startPoint: .leading, endPoint: .trailing))
+            .overlay(RoundedRectangle(cornerRadius: 2).strokeBorder(.primary.opacity(0.25), lineWidth: 0.5))
+    }
+
+    private var swatches: some View {
+        let hidden = key.swatches.count - 3
+        let shown = showsAllSwatches || hidden <= 0 ? key.swatches : Array(key.swatches.prefix(3))
+        return FlowLayout(spacing: 8, lineSpacing: 3) {
+            ForEach(Array(shown.enumerated()), id: \.offset) { _, swatch in
+                HStack(spacing: 3) {
+                    ShellImage(src: swatch.src).frame(width: 12, height: 9)
+                    Text(swatch.label).lineLimit(2)
+                }
+            }
+            if hidden > 0 {
+                Button(showsAllSwatches ? "Less" : "+\(hidden) more") {
+                    withAnimation(.snappy(duration: 0.25)) { showsAllSwatches.toggle() }
+                }
+                .buttonStyle(.plain)
+                .foregroundStyle(.tint)
+                .padding(.vertical, 6)
+                .padding(.horizontal, 4)
+                .contentShape(.rect)
+                .padding(.vertical, -6)
+            }
+        }
+    }
+
+    /// What the colors mean, for VoiceOver: which end is light or dark, or
+    /// every category in order, or every swatch.
+    private var spokenDescription: String {
+        if !key.swatches.isEmpty {
+            return "\(key.name): " + key.swatches.map(\.label).joined(separator: ", ")
+        }
+        guard let stops = key.stops, let first = stops.first, let last = stops.last else { return key.name }
+        if key.labels.isEmpty { return "\(key.name), shaded in this color" }
+        if !isNumericRange {
+            return "\(key.name), colors from left to right: " + key.labels.joined(separator: ", ")
+        }
+        let low = key.labels[0], high = key.labels[key.labels.count - 1]
+        let lowLight = luminance(first.color), highLight = luminance(last.color)
+        if abs(lowLight - highLight) > 0.15 {
+            let (lowTone, highTone) = lowLight > highLight ? ("light", "dark") : ("dark", "light")
+            return "\(key.name), \(lowTone) colors \(low), \(highTone) colors \(high)"
+        }
+        return "\(key.name), colors from \(low) to \(high)"
+    }
+
+    private func luminance(_ hex: String) -> Double {
+        let resolved = (Color(hex: hex) ?? .black).resolve(in: environment)
+        return 0.2126 * Double(resolved.linearRed) + 0.7152 * Double(resolved.linearGreen) + 0.0722 * Double(resolved.linearBlue)
     }
 }
 
@@ -656,121 +1078,18 @@ struct Toasts: View {
 }
 
 /// Shown until the map engine is ready, and again while it restores itself
-/// after iOS ends its process.
+/// after iOS ends its process. It is the map's own canvas color, matching the
+/// launch screen and the page's first frame, so startup has no loading
+/// animation and no color change: the map and its controls fade in over it.
 struct LaunchCover: View {
     var restoring = false
-    @Environment(\.accessibilityReduceMotion) private var reducedMotion
-    @Environment(\.displayScale) private var displayScale
-    @State private var started = Date()
 
     var body: some View {
-        GeometryReader { geometry in
-            let still = reducedMotion
-            let scale = max(1, floor(min((geometry.size.width - 48) / 240,
-                                         (geometry.size.height - 48) / 96, 3) * displayScale)) / displayScale
-            TimelineView(.animation(minimumInterval: 1.0 / 24, paused: still)) { timeline in
-                let frame = still ? 0 : Int(max(0, timeline.date.timeIntervalSince(started)) * 24) % 192
-                Image(uiImage: PixelSatellite.image(frame: frame))
-                    .interpolation(.none)
-                    .resizable()
-                    .frame(width: 240 * scale, height: 96 * scale)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-            }
-        }
-        .background(Color.black.ignoresSafeArea())
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel(restoring ? "Restoring your map" : "Loading your map and tools")
-        .transition(.opacity)
-    }
-}
-
-/// Pixel-for-pixel port of Riley's centered satellite generator, 2026-10-28.
-/// Render at logical resolution, then scale without interpolation.
-private enum PixelSatellite {
-    private static let stars: [(Int, Int, Double)] = [(162,19,0.7417869892607294),(206,47,0.9424502837770503),(192,44,0.922324996665417),(10,32,0.7759585674357169),(66,44,0.05185325369909766),(43,10,0.3717933555623072),(225,18,0.38075791704476514),(29,39,0.24933071444268662),(190,16,0.408151054974514),(49,27,0.15960421235803823),(207,7,0.13876741839890316),(161,31,0.1266992325502697),(3,3,0.2094563824951179),(58,13,0.8724077654368019),(77,23,0.9614779889500835),(141,46,0.6257301956771277),(49,47,0.19687904392603262),(231,27,0.29878889785386775),(95,29,0.1659560571297456),(40,19,0.06513971337567626),(80,41,0.5861412585033708),(155,46,0.7076761524222557),(19,22,0.35535135729996914),(81,33,0.6964198076411567),(50,33,0.47253834981224785),(48,6,0.25618183594271204),(8,25,0.8448808893881297),(7,38,0.7877383039804342),(96,27,0.5785188290568746),(5,31,0.04672711869894153),(49,42,0.9551798995911663),(53,10,0.7557364124513177),(212,32,0.34438181305301196),(93,36,0.25089395624103406),(121,9,0.5897633712619398),(202,26,0.8596943191875801),(12,30,0.9458001850421838),(26,16,0.34074053550422223),(159,26,0.9180871855333121),(90,20,0.9241976194277907)]
-    private static let surface: [Int] = {
-        let control = [(0,72),(16,62),(30,74),(46,66),(60,78),(76,64),(92,76),(108,68),
-                       (122,80),(138,64),(154,76),(170,62),(186,74),(204,66),(220,78),(240,70)]
-        return (0..<240).map { x in
-            let i = (0..<control.count-1).first { x <= control[$0+1].0 }!
-            let (x0,y0) = control[i], (x1,y1) = control[i+1]
-            return Int((Double(y0) + Double(y1-y0) * Double(x-x0) / Double(x1-x0)).rounded(.toNearestOrEven))
-        }
-    }()
-    static func image(frame f: Int) -> UIImage {
-        let format = UIGraphicsImageRendererFormat()
-        format.scale = 1
-        format.opaque = true
-        return UIGraphicsImageRenderer(size: CGSize(width: 240, height: 96), format: format).image { renderer in
-            let c = renderer.cgContext
-            c.setShouldAntialias(false)
-            c.setFillColor(UIColor.black.cgColor)
-            c.fill(CGRect(x: 0, y: 0, width: 240, height: 96))
-            let white = UIColor(white: 235.0/255, alpha: 1)
-            let gray = UIColor(white: 120.0/255, alpha: 1)
-            let dark = UIColor(white: 55.0/255, alpha: 1)
-            func point(_ x: Int, _ y: Int, _ color: UIColor) {
-                c.setFillColor(color.cgColor)
-                c.fill(CGRect(x: x, y: y, width: 1, height: 1))
-            }
-            func line(_ ax: Int, _ ay: Int, _ bx: Int, _ by: Int, _ visit: (Int, Int, Int) -> Void) {
-                var x = ax, y = ay, i = 0
-                let dx = abs(bx-x), dy = abs(by-y), sx = x < bx ? 1 : -1, sy = y < by ? 1 : -1
-                var error = dx-dy
-                while true {
-                    visit(x,y,i); i += 1
-                    if x == bx && y == by { break }
-                    let e = 2*error
-                    if e > -dy { error -= dy; x += sx }
-                    if e < dx { error += dx; y += sy }
-                }
-            }
-            func solid(_ x: Int, _ y: Int, _ bx: Int, _ by: Int, _ color: UIColor) {
-                line(x,y,bx,by) { px,py,_ in point(px,py,color) }
-            }
-            func rect(_ x: Int, _ y: Int, _ bx: Int, _ by: Int) {
-                c.setFillColor(UIColor.black.cgColor)
-                c.fill(CGRect(x: x, y: y, width: bx-x+1, height: by-y+1))
-                solid(x,y,bx,y,white); solid(bx,y,bx,by,white)
-                solid(bx,by,x,by,white); solid(x,by,x,y,white)
-            }
-            let t = Double(f)/192
-            func round(_ v: Double) -> Int { Int(v.rounded(.toNearestOrEven)) }
-            for (x,y,phase) in stars {
-                let tw = sin(2 * .pi * (2*t+phase))
-                if tw > -0.2 { point(x,y,tw > 0.5 ? white : gray) }
-            }
-            for x in 0..<240 {
-                let y = surface[x]
-                point(x,y,white)
-                for py in stride(from: y+3, to: 96, by: 4) where (x+py*3)%6 == 0 { point(x,py,dark) }
-            }
-            for (k,x) in [22,66,100,148,180,214].enumerated() {
-                let y = surface[x]
-                solid(x,y-1,x,y-6,gray)
-                if k%2 == 0 { solid(x-2,y-2,x+2,y-2,gray); solid(x-1,y-4,x+1,y-4,gray) }
-                else { solid(x-2,y-5,x+2,y-5,gray) }
-            }
-            let sx = 120, sy = round(26+1.2*sin(2 * .pi * t))
-            for (k,o) in [-9,0,9].enumerated() {
-                let hx = max(0,min(239,sx+round(Double(o)*1.6+9*sin(2 * .pi * (t+Double(k)/3)))))
-                let by = surface[hx]-1
-                line(sx+o/3,sy+6,hx,by) { x,y,i in
-                    if ((i-f*2+k*2)%6+6)%6 < 3 { point(x,y,white) }
-                }
-                if (f+k*2)%4 < 2 { point(hx+1,by,white); point(hx-1,by,white); point(hx,by-1,white) }
-            }
-            for (x,bx) in [(sx-16,sx-7),(sx+7,sx+16)] {
-                rect(x,sy-3,bx,sy+3)
-                for gx in stride(from: x+3, to: bx, by: 3) { solid(gx,sy-2,gx,sy+2,gray) }
-            }
-            solid(sx-6,sy,sx-4,sy,white); solid(sx+4,sy,sx+6,sy,white)
-            rect(sx-4,sy-4,sx+4,sy+4)
-            c.setFillColor(white.cgColor)
-            c.fill(CGRect(x: sx-1,y: sy-1,width: 3,height: 3))
-            solid(sx,sy-5,sx,sy-8,white); point(sx,sy-9,white)
-            solid(sx-1,sy+5,sx+1,sy+5,white)
-        }
+        Color("CanvasBackground")
+            .ignoresSafeArea()
+            .accessibilityElement()
+            .accessibilityLabel(restoring ? "Restoring your map" : "Loading your map and tools")
+            .transition(.opacity)
     }
 }
 

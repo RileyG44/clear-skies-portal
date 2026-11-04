@@ -3,7 +3,7 @@ const assert=require('node:assert/strict'),fs=require('node:fs'),vm=require('nod
 const main=fs.readFileSync('electron/main.js','utf8');
 const code=main.slice(0,main.indexOf('app.isQuittingCsp = false;'));
 
-function fixture({env={},platform='darwin',installed=true,saved='8770\n',error=null,healthy=true,kickstart=false}={}){
+function fixture({env={},platform='darwin',installed=true,saved='8770\n',error=null,healthy=true,kickstart=false,config}={}){
   const calls={reads:[],probes:[],waits:[],starts:[],kicks:0};
   const context={__dirname:__dirname+'/electron',process:{platform,env},
     require(name){
@@ -11,12 +11,15 @@ function fixture({env={},platform='darwin',installed=true,saved='8770\n',error=n
       if(name==='fs')return {existsSync:()=>installed};
       if(name==='./window-chrome')return require('./electron/window-chrome');
       if(name==='./engine-storage')return require('./electron/engine-storage');
+      if(name==='./setup-config')return require('./electron/setup-config');
+      if(name==='./startup-cache')return require('./electron/startup-cache');
       if(name==='child_process')return {execFile:(file,args,options,callback)=>{
         calls.reads.push({file,args,options});callback(error,saved);
       }};
       return require(name);
     }};
   vm.runInNewContext(code,context);
+  if(config)vm.runInNewContext(`setupConfig=${JSON.stringify(config)}`,context);
   context.engineUp=async port=>{calls.probes.push(port);return healthy;};
   context.kickstartAgent=async()=>{calls.kicks++;return kickstart;};
   context.freePort=async()=>49152;
@@ -55,5 +58,8 @@ function fixture({env={},platform='darwin',installed=true,saved='8770\n',error=n
   f=fixture({env:{CSP_ELECTRON_OWN_SERVER:'1'}});
   assert.equal(await f.run(),49152,'explicit standalone mode stays standalone');
   assert.equal(f.calls.reads.length,0);assert.equal(f.calls.probes.length,0);assert.equal(f.calls.kicks,0);
+  f=fixture({config:{...require('./electron/setup-config').DEFAULTS,tileCacheGiB:20}});
+  assert.equal(await f.run(),49152,'custom engine settings run in the bundled engine without changing an installed service');
+  assert.equal(f.calls.probes.length,0);assert.deepEqual(f.calls.starts,[49152]);
   console.log('Electron startup: saved engine port, Finder launch, warmup, overrides and bundled fallback passed');
 })().catch(error=>{console.error(error);process.exitCode=1;});

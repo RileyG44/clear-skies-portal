@@ -301,7 +301,8 @@ function pageSetup(uniformNames) {
     for (const name of uniformNames) {
       const loc = locations[name], value = values[name];
       if (!loc) continue;
-      if (name === "u_style") gl.uniform1i(loc, value);
+      if (name === "u_style" || name === "u_waterMask") gl.uniform1i(loc, name === "u_waterMask" ? 0 : value);
+      else if(CSPGpuTerrainShaders.UNIFORM_ARRAYS[name]===4)gl.uniform4fv(loc,value);
       else if (Array.isArray(value) && value.length === 2) gl.uniform2f(loc, value[0], value[1]);
       else if (Array.isArray(value) && value.length === 3) gl.uniform3f(loc, value[0], value[1], value[2]);
       else gl.uniform1f(loc, value);

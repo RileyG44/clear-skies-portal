@@ -259,6 +259,10 @@ assert(take('endSnapshotSelect','snapPoint').includes('cursorSelectionClosed()')
   assert(chrome.indexOf('if let distance = info.distance')>0&&chrome.indexOf('if let distance = info.distance')<chrome.indexOf('ForEach(Array(info.keys'),
     'the iPhone tile draws the distance key above the colour keys');
   assert(chrome.includes('distance.width')&&!chrome.includes('distance.fraction'),'the iPhone bar uses that pixel length');
+  assert(readout.includes('element.dataset.amount=String(key.amount)')&&shell.includes('el.dataset.amount')&&
+    chrome.includes('distance.amount')&&!/Double\(parts\[0\]/.test(chrome),
+    'the compact iPhone bar rescales the numeric amount, never the localized label');
+  assert.deepEqual([scale.distanceKey(1.5*1609.344/100,100).amount,scale.distanceKey(1.5*1609.344/100,100).unit],[1,'mi']);
 }
 /* The export decides cursor-or-centre once, before it awaits elevation and
    keys: a camera move during those awaits drops snapshotCursorLocation. */

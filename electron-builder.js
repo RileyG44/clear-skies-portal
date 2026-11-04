@@ -10,6 +10,8 @@ module.exports={
   directories:{buildResources:"build",output:"dist"},
   files:["electron/**/*","package.json"],
   extraResources:[{from:".",to:"app",filter:[...site.web,...site.app,...site.engine,"vendor/**/*"]},
+    {from:"build/startup-cache",to:"startup-cache"},
+    {from:"build/startup-terrain-LICENSE.txt",to:"startup-terrain-LICENSE.txt"},
     {from:"build/icon.ico",to:"ClearSkies.ico"}],
   win:{target:[{target:"nsis",arch:["x64"]},{target:"zip",arch:["x64"]}],icon:"build/icon.ico",
     artifactName:"ClearSkies-${version}-${arch}.${ext}",
@@ -22,10 +24,12 @@ module.exports={
     include:"build/installer.nsh"},
   mac:{
     target:[{target:"dmg",arch},{target:"zip",arch}],
+    artifactName:"ClearSkies-${version}-${arch}.${ext}",
     category:"public.app-category.reference",
     icon:"build/icon.icns",
     darkModeSupport:true,
     hardenedRuntime:true,
+    identity:"-",
     gatekeeperAssess:false,
     entitlements:"build/entitlements.mac.plist",
     entitlementsInherit:"build/entitlements.mac.plist",
@@ -34,5 +38,8 @@ module.exports={
       NSHumanReadableCopyright:"MIT licensed. Imagery from Copernicus, NASA, USGS and WA DNR."
     }
   },
-  dmg:{title:"ClearSkies"}
+  dmg:{title:"ClearSkies",artifactName:"ClearSkies-Setup-${version}-${arch}.${ext}",
+    backgroundColor:"#e6eef5",iconSize:100,
+    window:{width:540,height:380},
+    contents:[{x:150,y:180,type:"file"},{x:390,y:180,type:"link",path:"/Applications"}]}
 };

@@ -3,7 +3,8 @@
 
 const $=(selector,root=document)=>root.querySelector(selector);
 const $$=(selector,root=document)=>[...root.querySelectorAll(selector)];
-const icon=name=>`vendor/icons/${name}.svg`;
+// Inline (ui-icons.js) so controls arrive with their icons; files as a fallback.
+const icon=name=>window.CSPIcons?.[name]||`vendor/icons/${name}.svg`;
 const compactShell=matchMedia("(max-width:1050px)");
 const side=$("#side"),panes=$("#panes"),status=$("#status"),mapEl=$("#map");
 const bridge=window.ClearSkiesPortalBridge;

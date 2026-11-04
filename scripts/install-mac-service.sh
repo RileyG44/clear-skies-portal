@@ -60,6 +60,11 @@ for asset in $("$NODE_BIN" -e 'const s=require(process.argv[1]);console.log([...
 done
 rm -rf "$RUNTIME_DIR/vendor"
 cp -R "$REPO_ROOT/vendor" "$RUNTIME_DIR/vendor"
+# The installed service shares the same read-only starter terrain as the app.
+# This is runtime content, not the user's disposable cache or saved areas.
+(cd "$REPO_ROOT" && "$NODE_BIN" scripts/prepare-startup-cache.js)
+rm -rf "$RUNTIME_DIR/startup-cache"
+cp -R "$REPO_ROOT/build/startup-cache" "$RUNTIME_DIR/startup-cache"
 install -m 700 "$SCRIPT_DIR/launch-terrain-engine.sh" "$RUNTIME_DIR/launch-terrain-engine.sh"
 install -m 700 "$SCRIPT_DIR/share-terrain-engine.sh" "$RUNTIME_DIR/share-terrain-engine.sh"
 
@@ -97,6 +102,7 @@ for setting in $kept; do
   plutil -replace "EnvironmentVariables.${setting%%=*}" -string "${setting#*=}" "$AGENT_FILE"
 done
 plutil -replace EnvironmentVariables.CSP_ENGINE_PORT -string "$ENGINE_PORT" "$AGENT_FILE"
+plutil -replace EnvironmentVariables.CSP_STARTUP_CACHE_DIR -string "$RUNTIME_DIR/startup-cache" "$AGENT_FILE"
 plutil -lint "$AGENT_FILE"
 
 launchctl bootout "gui/$USER_ID" "$AGENT_FILE" 2>/dev/null || true

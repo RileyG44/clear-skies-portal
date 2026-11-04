@@ -89,7 +89,11 @@
     /* Pop-up controls need their layout boxes too: the adapter uses layout
        to distinguish visible controls from conditional ones. display:none
        on a pop-up would also erase its native fields, sliders and buttons. */
-    + "html.csp-native-chrome :is(#serverPanel,#snapshotPanel,#terrainSourcePanel,#ctl,#mkBar,#mkPop){translate:-400vw 0!important;pointer-events:none!important}";
+    + "html.csp-native-chrome :is(#serverPanel,#snapshotPanel,#terrainSourcePanel,#ctl,#mkBar,#mkPop){translate:-400vw 0!important;pointer-events:none!important}"
+    /* The native launch cover performs the one start-up fade over the map and
+       its native controls together; the page under it appears at once rather
+       than running a second, overlapping fade. */
+    + "html.csp-native-chrome #app{transition:none!important}";
   root.classList.add("csp-native-chrome");
   root.append(chrome);
   /* native-shell.js reports the page's selected theme; SwiftUI mirrors it

@@ -165,7 +165,7 @@
     const spec=STYLES[style]||STYLES.hs,palette=PALETTES[spec.palette];
     const domain=palette&&palette.domain||spec.domain;
     return {style:STYLES[style]?style:"hs",palette:spec.palette,stops:null,reverse:false,opacity:1,blend:"normal",
-      auto:!!spec.auto&&!(palette&&palette.domain),min:domain[0],max:domain[1],gamma:1,steps:0,
+      auto:!!spec.auto&&!(palette&&palette.domain),rangeMode:"separate",min:domain[0],max:domain[1],gamma:1,steps:0,
       param:spec.param==="shade"?(palette&&palette.shade?1:0):spec.param==="interval"?spec.paramDefault:0,visible:true};
   }
   function normalizeLayer(raw,fallbackStyle){
@@ -179,6 +179,7 @@
     layer.reverse=!!raw.reverse;
     layer.opacity=clamp(finite(raw.opacity,1),0,1);
     layer.blend=BLEND_IDS.has(raw.blend)?raw.blend:"normal";
+    layer.rangeMode=["separate","full","robust"].includes(raw.rangeMode)?raw.rangeMode:"separate";
     layer.auto=STYLES[style].auto?(raw.auto===undefined?base.auto:!!raw.auto):false;
     layer.min=finite(raw.min,base.min);layer.max=finite(raw.max,base.max);
     if(layer.max<=layer.min) layer.max=layer.min+Math.max(1e-3,Math.abs(layer.min)*1e-3);
@@ -203,7 +204,7 @@
   function isDefaultLayer(layer,style){
     const base=defaultLayer(style);
     return layer.style===style&&layer.palette===base.palette&&!layer.stops&&!layer.reverse&&layer.opacity===1&&
-      layer.blend==="normal"&&layer.auto===base.auto&&layer.min===base.min&&layer.max===base.max&&layer.gamma===1&&
+      layer.blend==="normal"&&layer.rangeMode===base.rangeMode&&layer.auto===base.auto&&layer.min===base.min&&layer.max===base.max&&layer.gamma===1&&
       layer.steps===0&&layer.param===base.param&&layer.visible;
   }
 
@@ -256,29 +257,76 @@
     for(const [key,layer] of list){
       if(!layer.visible||layers.length>=MAX_LAYERS) continue;
       let min=layer.min,max=layer.max;
-      const fit=fitted&&fitted[key];
+      const rawFit=fitted&&fitted[key],fit=rawFit&&rawFit.land!==undefined?(rawFit.land||rawFit.water):rawFit;
       if(layer.auto&&Array.isArray(fit)&&fit.every(Number.isFinite)&&fit[1]>fit[0]){min=fit[0];max=fit[1]}
       layers.push({style:layer.style,opacity:layer.opacity,blend:layer.blend,stops:resolveStops(layer),
-        min,max,gamma:layer.gamma,steps:layer.steps,param:layer.style==="contour"||STYLES[layer.style].param?layer.param:0});
+        min,max,water:(layer.style==="tint"||layer.style==="rem")&&layer.auto&&layer.rangeMode==="separate"&&rawFit?.water?rawFit.water:null,
+        separateRem:layer.style==="rem"&&layer.auto&&layer.rangeMode==="separate",gamma:layer.gamma,steps:layer.steps,param:layer.style==="contour"||STYLES[layer.style].param?layer.param:0});
     }
     // An explicitly empty mix must stay transparent, not fall back to the
     // legacy base layer when the user hides the last visible layer.
     const effects=state.effects;
     return {layers,detail:effects.detail,detailRadius:effects.detailRadius,reliefExag:effects.reliefExag,
-      remRadius:effects.remRadius,remFlatBase:finite(opts.remFlatBase,0)};
+      remRadius:effects.remRadius,remFlatBase:finite(opts.remFlatBase,0),remLandBase:finite(opts.remLandBase,finite(opts.remFlatBase,0))};
   }
 
-  /* Robust range of view samples: percentiles keep a single tower or pit
-     from flattening the whole palette. Relative elevation starts at zero. */
-  function fitRange(values,style){
-    if(!values||!values.length) return null;
-    const sorted=Float64Array.from(values).sort();
-    const pick=q=>sorted[Math.min(sorted.length-1,Math.max(0,Math.round(q*(sorted.length-1))))];
-    let low=style==="rem"?0:pick(.02),high=style==="rem"?pick(.6):pick(.98);
-    if(!(high>low)) high=low+1;
+  /* Full sampled extrema for elevation; percentile trimming is opt-in.
+     Relative elevation keeps its established near-valley fitting policy. */
+  function fitRange(values,style,mode){
+    if(!values||!values.length)return null;
+    if(mode===undefined&&style!=="tint")mode="robust";
+    const sorted=Float64Array.from(Array.from(values).filter(Number.isFinite)).sort();
+    if(!sorted.length)return null;
+    const pick=q=>sorted[Math.round(q*(sorted.length-1))];
+    let low=style==="rem"?0:mode==="robust"?pick(.02):sorted[0];
+    let high=style==="rem"?pick(.6):mode==="robust"?pick(.98):sorted[sorted.length-1];
+    if(!(high>low))high=low+1;
     const span=high-low,unit=span>200?10:span>20?1:.1;
-    low=Math.floor(low/unit)*unit;high=Math.ceil(high/unit)*unit;
-    return [low,high];
+    return [Math.floor(low/unit)*unit,Math.ceil(high/unit)*unit];
+  }
+  function fitElevation(values,water,mode="separate"){
+    if(mode!=="separate")return fitRange(values,"tint",mode);
+    // Classification must align with every height. Without geography, retain
+    // a full continuous scale instead of guessing from the height's sign.
+    if(!water||water.length!==values.length)return fitRange(values,"tint");
+    const land=[],depths=[];
+    for(let i=0;i<values.length;i++)if(Number.isFinite(values[i]))(water[i]?depths:land).push(values[i]);
+    const fit={land:fitRange(land,"tint"),water:fitRange(depths,"tint")};
+    return fit.land||fit.water?fit:null;
+  }
+  // REM keeps its near-valley contrast, fitted exclusively over land. Water
+  // has an absolute elevation key even when its local floor is unavailable.
+  function fitRelative(relative,heights,water,mode="separate"){
+    if(mode!=="separate"||!heights||!water||water.length!==heights.length||!relative||relative.length!==heights.length)
+      return fitRange(relative,"rem");
+    const land=[],depths=[];
+    for(let i=0;i<heights.length;i++){
+      if(water[i]){if(Number.isFinite(heights[i]))depths.push(heights[i])}
+      else if(Number.isFinite(relative[i]))land.push(relative[i]);
+    }
+    const fit={land:fitRange(land,"rem"),water:fitRange(depths,"tint")};
+    return fit.land||fit.water?fit:null;
+  }
+  /* Ignore small inward endpoint changes while always admitting a newly
+     sampled extreme. A pan to a materially different range still refits. */
+  function stableElevationFit(next,previous,force=false){
+    if(force||!previous)return next;
+    const stabilize=(n,p)=>{
+      if(!n||!p)return n;
+      const threshold=Math.max(1e-6,n[1]-n[0])*.04;
+      return [n[0]<p[0]||n[0]-p[0]>threshold?n[0]:p[0],n[1]>p[1]||p[1]-n[1]>threshold?n[1]:p[1]];
+    };
+    if(Array.isArray(next))return stabilize(next,Array.isArray(previous)?previous:null);
+    if(!next)return next;
+    return {land:stabilize(next.land,previous.land),water:stabilize(next.water,previous.water)};
+  }
+  const WATER_STOPS=Object.freeze([[0,3/255,4/255,94/255,1],[.5,0,119/255,182/255,1],[1,144/255,224/255,239/255,1]]);
+  function waterColour(value,range,layer){
+    let t=clamp((value-range[0])/(range[1]-range[0]),0,1);
+    if(layer){t=Math.pow(t,layer.gamma);if(layer.steps>=2)t=Math.min(Math.floor(t*layer.steps),layer.steps-1)/(layer.steps-1)}
+    const color=rampColour(WATER_STOPS,t);
+    if(layer)color[3]=rampColour(layer.stops,t)[3];
+    return color;
   }
 
   /* --------------------------------------------------------------- scenes
@@ -395,13 +443,19 @@
         let acc=mode==="min"?Infinity:0,weight=0;
         for(let k=-r;k<=r;k++){
           const xx=x+dx*k,yy=y+dy*k;if(xx<0||yy<0||xx>=w||yy>=h) continue;
-          const v=src[yy*w+xx];
+          const v=src[yy*w+xx];if(!Number.isFinite(v))continue;
+          if(mode==="min")weight++;
           if(mode==="min") acc=Math.min(acc,v);else{const g=Math.exp(-k*k/(2*sigma*sigma));acc+=v*g;weight+=g}
         }
-        dst[y*w+x]=mode==="min"?acc:acc/weight;
+        dst[y*w+x]=weight?(mode==="min"?acc:acc/weight):NaN;
       }
     };
     pass(grid,tmp,1,0);pass(tmp,out,0,1);return out;
+  }
+  function relativeBase(dem,radius,landOnly=false){
+    const {grid,width,height,water}=dem;
+    const source=landOnly&&water?.length===grid.length?grid.map((v,i)=>water[i]?NaN:v):grid;
+    return filterGrid(filterGrid(source,width,height,radius,"min"),width,height,radius,"blur");
   }
   const lum=c=>.3*c[0]+.59*c[1]+.11*c[2];
   function clipColour(c){
@@ -463,10 +517,11 @@
       const blur=filterGrid(grid,w,h,Math.min(8,stack.detailRadius/res),"blur");
       heights=grid.map((v,i)=>v+stack.detail*(v-blur[i]));
     }
-    let base=null;
-    if(stack.layers.some(layer=>layer.style==="rem")){
+    let base=null,landBase=null;
+    if(!dem.flat&&stack.layers.some(layer=>layer.style==="rem")){
       const radius=Math.min(24,Math.max(2,stack.remRadius/res/8));
-      base=filterGrid(filterGrid(grid,w,h,radius,"min"),w,h,radius,"blur");
+      base=relativeBase(dem,radius);
+      if(stack.layers.some(layer=>layer.separateRem))landBase=relativeBase(dem,radius,true);
     }
     const H=(x,y)=>heights[clamp(y,0,h-1)*w+clamp(x,0,w-1)];
     const zFactor=1+.024*Math.pow(Math.max(res,0),.664),exag=stack.reliefExag||1;
@@ -493,7 +548,7 @@
           case "aspect":if(aspect<0) coverage=0;value=aspect;break;
           case "northness":if(aspect<0) coverage=0;value=Math.cos(aspect*Math.PI/180);break;
           case "tint":value=height;break;
-          case "rem":value=Math.max(0,height-(base?base[y*w+x]:0));break;
+          case "rem":{const floor=layer.separateRem?landBase:base;value=Math.max(0,height-(floor&&Number.isFinite(floor[y*w+x])?floor[y*w+x]:layer.separateRem?stack.remLandBase||0:stack.remFlatBase||0));break}
           default:{
             const interval=layer.style==="contour"?Math.max(.5,layer.param):({c2:2,c5:5,c10:10,c25:25})[layer.style];
             if(!interval){coverage=0;break}
@@ -504,7 +559,7 @@
           }
         }
         if(!(coverage>0)) continue;
-        const color=paletteColour(layer,value);
+        const color=layer.water&&dem.water?.[y*w+x]?waterColour(height,layer.water,layer):paletteColour(layer,value);
         if((layer.style==="tint"||layer.style==="rem")&&layer.param>0){
           const shade=light.ambient+(1-light.ambient)*directShade(sdx,sdy,light.azimuth,light.altitude),m=1+(.33+.82*shade-1)*clamp(layer.param,0,1);
           for(let i=0;i<3;i++) color[i]=Math.min(1,color[i]*m);
@@ -517,6 +572,16 @@
     }
     return out;
   }
+  /* Every gallery preview draws the same terrain, so its relative-elevation
+     floor depends only on the radius. Compute each floor once per DEM. */
+  const previewFloors=new WeakMap();
+  function previewFloor(dem,radius){
+    let byRadius=previewFloors.get(dem.grid);
+    if(!byRadius){byRadius=new Map();previewFloors.set(dem.grid,byRadius)}
+    let floor=byRadius.get(radius);
+    if(!floor){floor=filterGrid(filterGrid(dem.grid,dem.width,dem.height,radius,"min"),dem.width,dem.height,radius,"blur");byRadius.set(radius,floor)}
+    return floor;
+  }
   /* A scene's preview with its auto ranges fitted to the preview terrain. */
   function renderScenePreview(scene,dem,lighting){
     const clean=normalizeScene(scene),state=emptyState();
@@ -525,9 +590,10 @@
     let base=null;
     for(const [key,layer] of layers) if(layer.auto){
       if(layer.style==="rem"){
-        if(!base){const radius=Math.min(24,Math.max(2,clean.effects.remRadius/dem.res/8));base=filterGrid(filterGrid(dem.grid,dem.width,dem.height,radius,"min"),dem.width,dem.height,radius,"blur")}
-        fitted[key]=fitRange(dem.grid.map((v,i)=>Math.max(0,v-base[i])),"rem");
-      }else fitted[key]=fitRange(dem.grid,layer.style);
+        if(!base)base=previewFloor(dem,Math.min(24,Math.max(2,clean.effects.remRadius/dem.res/8)));
+        const floor=layer.rangeMode==="separate"?relativeBase(dem,Math.min(24,Math.max(2,clean.effects.remRadius/dem.res/8)),true):base;
+        fitted[key]=fitRelative(dem.grid.map((v,i)=>Math.max(0,v-floor[i])),dem.grid,dem.water,layer.rangeMode);
+      }else fitted[key]=layer.style==="tint"?fitElevation(dem.grid,dem.water,layer.rangeMode):fitRange(dem.grid,layer.style);
     }
     let stack=buildStack(state,clean.style,fitted);
     if(!stack) stack={layers:[{style:clean.style,opacity:1,blend:"normal",stops:resolveStops(clean.base),min:clean.base.min,max:clean.base.max,
@@ -542,6 +608,15 @@
       const c=parseHex(color);
       return `rgba(${Math.round(c[0]*255)},${Math.round(c[1]*255)},${Math.round(c[2]*255)},${+c[3].toFixed(3)}) ${+(position*100).toFixed(2)}%`;
     }).join(",")+")";
+  }
+  function elevationGradient(layer,range,water=false){
+    const resolved={...layer,stops:resolveStops(layer),min:range[0],max:range[1]};
+    // Samples are placed in elevation space, so Curve and Bands match the
+    // rendering rather than making a linear legend for a nonlinear scale.
+    return gradientCss(Array.from({length:129},(_,i)=>{
+      const t=i/128,value=range[0]+t*(range[1]-range[0]);
+      return [t,toHex(water?waterColour(value,range,resolved):paletteColour(resolved,value))];
+    }));
   }
   function palettesFor(style){
     const family=(STYLES[style]||STYLES.hs).family,own=(STYLES[style]||STYLES.hs).palette;
@@ -563,7 +638,7 @@
 
   return Object.freeze({VERSION,MAX_LAYERS,MAX_STOPS,FT,PALETTES,STYLES,OVERLAY_STYLES,BLENDS,LOOKS,EFFECT_DEFAULTS,
     parseHex,toHex,normalizeStops,moveStop,registerStyle,defaultLayer,normalizeLayer,resolveStops,paletteStops,isDefaultLayer,
-    emptyState,normalizeState,normalizeEffects,baseLayer,isLegacy,buildStack,fitRange,normalizeScene,captureScene,applyScene,
-    matchLook,gradientCss,palettesFor,formatValue,toDisplay,fromDisplay,
+    emptyState,normalizeState,normalizeEffects,baseLayer,isLegacy,buildStack,fitRange,fitElevation,fitRelative,relativeBase,stableElevationFit,WATER_STOPS,waterColour,normalizeScene,captureScene,applyScene,
+    matchLook,gradientCss,elevationGradient,palettesFor,formatValue,toDisplay,fromDisplay,
     previewTerrain,renderStack,renderScenePreview,blendColour,composite,_test:Object.freeze({filterGrid,rampColour,paletteColour})});
 });

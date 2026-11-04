@@ -884,6 +884,12 @@ try{
   initialMapTheme = saved==="dark"||saved==="light" ? saved
     : (matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
 }catch(e){}
+/* A shared link opens in its own theme (its URL carries a theme hint; the
+   restored state applies the same value). Not saved, as before. */
+{
+  const hint=/[#&]csp=/.test(location.hash)&&/[#&]theme=(dark|light)(?:&|$)/.exec(location.hash);
+  if(hint)initialMapTheme=hint[1];
+}
 setMapTheme(initialMapTheme,false);
 const mapThemeButton=document.getElementById("mapTheme");
 mapThemeButton.addEventListener("click",event=>{

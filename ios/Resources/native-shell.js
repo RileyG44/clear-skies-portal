@@ -496,6 +496,15 @@
     [".elev-field,.ls-slider", sliderField],
     [".unit-suffix", skip],
     [".elev-spectrum-scale,.elevRamp", spectrum],
+    ["#terLegend", (el, out) => {
+      const scales=$$(".terlegend-scale",el);if(!scales.length)return false;
+      for(const scale of scales)handle(scale,out);
+    }],
+    [".terlegend-scale", (el, out) => {
+      const bar=$(".bar",el),stops=gradientOf(bar),title=clean($(".caption",el)?.textContent);
+      if(title)out.push({kind:"text",title,style:"hint"});
+      if(stops)out.push({kind:"gradient",stops,labels:$$(".ticks span",el).map(span=>clean(span.textContent))});
+    }],
     [".ov-line-control", lineOpacity],
     [".csp-layer-card", (el, out) => { out.push(layerCard(el)); }],
     [".item[data-i]", (el, out) => { out.push(sceneItem(el)); }],
@@ -1048,11 +1057,14 @@
   }
 
   // The bar's CSS width is its length on the map. One iPhone point is one CSS pixel.
+  // The amount and unit are numeric, so native code can rescale the bar in
+  // any locale without parsing the localized label.
   const distanceOf = el => {
     if (!el || el.hidden) return null;
     const label = clean($(".distance-label", el)?.textContent);
     const width = Number.parseFloat($(".distance-bar", el)?.style.width);
-    return label && width > 0 ? { label, width } : null;
+    const amount = Number.parseFloat(el.dataset.amount);
+    return label && width > 0 ? { label, width, amount: amount > 0 ? amount : null, unit: el.dataset.unit || null } : null;
   };
 
   function statusState() {
@@ -1394,8 +1406,10 @@
     flush();
     handler.postMessage({type: "ready"}).catch(() => {});
   };
+  /* Lift the native cover when the page reveals its shell, not at csp:ready:
+     a shared link holds the reveal until its view is in place. */
   if (document.documentElement.classList.contains("csp-boot")) {
-    document.documentElement.addEventListener("csp:ready", start, { once: true });
+    document.documentElement.addEventListener("csp:reveal", start, { once: true });
   } else {
     start();
   }

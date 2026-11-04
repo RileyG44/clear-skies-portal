@@ -23,7 +23,7 @@
   if(!R) throw new Error("lidar-render.js must load before lidar-studio.js");
 
   const STORAGE_KEY="clearskies.lidarStudio.v1";
-  const icon=name=>`vendor/icons/${name}.svg`;
+  const icon=name=>globalThis.CSPIcons?.[name]||`vendor/icons/${name}.svg`;   // inline (ui-icons.js) first
   const esc=value=>String(value).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"})[c]);
   const clamp=(v,lo,hi)=>Math.min(hi,Math.max(lo,v));
 
@@ -42,11 +42,14 @@
     if(!container) return null;
     host=host||{};
     const storage=host.storage!==undefined?host.storage:(()=>{try{return globalThis.localStorage}catch(_){return null}})();
-    let state=load(),fitted={},flatFitted={},remFloor=null,expanded=null,selectedStop=0,saveTimer=0,commitFrame=0,destroyed=false,previousMix=null;
+    let state=load(),fitted={},flatFitted={},remFloor=null,remLandFloor=null,expanded=null,selectedStop=0,saveTimer=0,commitFrame=0,destroyed=false,previousMix=null;
     let presetOrigin=state.look,presetScroll=0;
     const disclosures=new Set(["customize"]);
     const previews=new Map();let previewQueue=[],previewTimer=0;
-    const dem=R.previewTerrain(168,112);
+    /* The gallery's synthetic terrain is built when the first preview is
+       drawn, not at mount: the gallery is never on screen at startup. */
+    const PREVIEW_W=168,PREVIEW_H=112;let previewDem=null;
+    const dem=()=>previewDem||(previewDem=R.previewTerrain(PREVIEW_W,PREVIEW_H));
 
     function load(){
       try{return R.normalizeState(JSON.parse(storage&&storage.getItem(STORAGE_KEY)||"null"))}catch(_){return R.emptyState()}
@@ -70,7 +73,7 @@
     function updateLayer(key,patch,{rerender=false}={}){
       const current=layerFor(key);if(!current) return;
       setLayer(key,R.normalizeLayer(Object.assign({},current,patch),current.style));
-      if(patch.auto===false||patch.style) delete fitted[key];
+      if(patch.auto===false||patch.style||patch.rangeMode){delete fitted[key];delete flatFitted[key]}
       commit({rerender});
     }
     /* Push to the map on the next frame, so a dragged slider costs one redraw
@@ -140,7 +143,7 @@
         button.dataset.look=look.id;button.setAttribute("aria-checked",String(current===look.id));
         button.tabIndex=(current===look.id||(!looks.some(l=>l.id===current)&&look===looks[0]))?0:-1;
         button.title=`Apply ${look.name} · replaces the current layer mix`;
-        const canvas=document.createElement("canvas");canvas.width=dem.width;canvas.height=dem.height;canvas.className="ls-look-preview";
+        const canvas=document.createElement("canvas");canvas.width=PREVIEW_W;canvas.height=PREVIEW_H;canvas.className="ls-look-preview";
         canvas.setAttribute("aria-hidden","true");
         const name=el("span","ls-look-name",esc(look.name));
         button.append(canvas,name);
@@ -160,7 +163,7 @@
       if(previousMix){
         const undo=el("button","linkbtn ls-undo-look","Undo preset");undo.type="button";
         undo.onclick=()=>{
-          const previous=previousMix,looks=state.userLooks;previousMix=null;state=previous.state;state.userLooks=looks;presetOrigin=previous.origin;fitted={};flatFitted={};remFloor=null;expanded=null;
+          const previous=previousMix,looks=state.userLooks;previousMix=null;state=previous.state;state.userLooks=looks;presetOrigin=previous.origin;fitted={};flatFitted={};remFloor=null;remLandFloor=null;expanded=null;
           host.setStyle&&host.setStyle(previous.style);
           if(Number.isFinite(previous.opacity)&&host.setOpacity)host.setOpacity(previous.opacity);
           save();render();
@@ -218,7 +221,7 @@
       const look=allLooks().find(l=>l.id===id);if(!look) return;
       previousMix={state:JSON.parse(JSON.stringify(state)),style:host.getStyle?host.getStyle():style(),opacity:host.getOpacity?host.getOpacity():undefined,origin:presetOrigin};
       const result=R.applyScene(state,look.scene,look.id);
-      state=result.state;presetOrigin=id;fitted={};flatFitted={};remFloor=null;expanded=null;save();
+      state=result.state;presetOrigin=id;fitted={};flatFitted={};remFloor=null;remLandFloor=null;expanded=null;save();
       if(host.getStyle&&host.getStyle()!==result.style&&host.setStyle) host.setStyle(result.style);
       /* Looks are designed at their own strength; the classic look keeps the
          usual see-through terrain. */
@@ -228,11 +231,29 @@
       revealPreset(id);
       host.onChange&&host.onChange();
     }
+    /* Previews are CPU renders. Draw each only once its card is visible: a
+       closed menu or an off-screen card costs nothing at startup. */
+    const previewWatch=typeof IntersectionObserver==="function"?new IntersectionObserver(entries=>{
+      for(const entry of entries)if(entry.isIntersecting){previewWatch.unobserve(entry.target);entry.target._cspPreview?.()}
+    }):null;
     function paintPreview(canvas,look){
       const key=JSON.stringify(look.scene),cached=previews.get(key);
       if(cached){canvas.getContext("2d").putImageData(cached,0,0);return}
-      previewQueue.push({canvas,key,scene:look.scene});
-      if(!previewTimer) previewTimer=setTimeout(drainPreviews,30);
+      if(previewWatch&&!canvas._cspPreview){canvas._cspPreview=()=>queuePreview(canvas,key,look.scene);previewWatch.observe(canvas);return}
+      queuePreview(canvas,key,look.scene);
+    }
+    function queuePreview(canvas,key,scene){
+      if(!canvas.isConnected)return;
+      const cached=previews.get(key);
+      if(cached){canvas.getContext("2d").putImageData(cached,0,0);return}
+      previewQueue.push({canvas,key,scene});
+      if(previewTimer) return;
+      /* While the app is still fading in, wait for it: the gallery is never
+         the first thing on screen and its CPU previews would stall the fade. */
+      const root=globalThis.document&&globalThis.document.documentElement;
+      if(root&&root.classList&&(root.classList.contains("csp-boot")||root.classList.contains("csp-reveal"))){
+        previewTimer=-1;root.addEventListener("csp:revealed",()=>{previewTimer=setTimeout(drainPreviews,30)},{once:true});
+      }else previewTimer=setTimeout(drainPreviews,30);
     }
     /* One preview per slice of idle time keeps the panel responsive while
        the gallery fills in. */
@@ -240,8 +261,15 @@
       previewTimer=0;
       const job=previewQueue.shift();if(!job||destroyed) return;
       let image=previews.get(job.key);
+      /* The card may have been hidden since it was queued (start-up lays the
+         panes out before routing hides them). Wait until it is seen again. */
+      if(!image&&previewWatch&&job.canvas.isConnected&&!job.canvas.getClientRects().length){
+        previewWatch.observe(job.canvas);
+        if(previewQueue.length) previewTimer=setTimeout(drainPreviews,0);
+        return;
+      }
       if(!image){
-        try{image=new ImageData(R.renderScenePreview(job.scene,dem,host.lighting&&host.lighting()),dem.width,dem.height)}catch(_){image=null}
+        try{const terrain=dem();image=new ImageData(R.renderScenePreview(job.scene,terrain,host.lighting&&host.lighting()),terrain.width,terrain.height)}catch(_){image=null}
         if(image) previews.set(job.key,image);
       }
       if(image&&job.canvas.isConnected) job.canvas.getContext("2d").putImageData(image,0,0);
@@ -308,7 +336,7 @@
       if(layerKeys().length>=R.MAX_LAYERS) return;
       const spec=R.STYLES[styleId]||R.STYLES.hs,layer=R.defaultLayer(styleId);
       if(!style()){
-        state.base[styleId]=layer;state.overlays=[];fitted={};flatFitted={};remFloor=null;
+        state.base[styleId]=layer;state.overlays=[];fitted={};flatFitted={};remFloor=null;remLandFloor=null;
         host.setStyle&&host.setStyle(styleId);expanded="base";selectedStop=0;commit({rerender:true});return;
       }
       if(spec.family==="shade"){layer.blend="multiply";layer.opacity=.75}
@@ -410,7 +438,7 @@
       if(spec.family!=="lines"&&spec.unit!=="shade"){
         const range=el("div","ls-range");
         const unit=spec.unit==="m"?"ft":spec.unit==="deg"?"°":"";
-        const fit=fitted[key],shown=layer.auto&&fit?fit:[layer.min,layer.max];
+        const fit=displayRange(fitted[key]),shown=layer.auto&&fit?fit:[layer.min,layer.max];
         const number=(which,value)=>{
           const input=el("input");input.type="number";input.step=spec.unit==="m"?"10":spec.unit==="deg"?"1":"0.05";
           input.value=String(+R.toDisplay(layer.style,value).toFixed(spec.unit==="index"?2:0));
@@ -430,7 +458,7 @@
           const auto=el("label","ls-check",`<input type="checkbox" ${layer.auto?"checked":""}><span>Fit to view</span>`);
           auto.title="Stretch the palette across the terrain on screen. Updates as you pan.";
           auto.querySelector("input").onchange=event=>{
-            const current=layerFor(key),fit=fitted[key];
+            const current=layerFor(key),fit=displayRange(fitted[key]);
             const patch={auto:event.target.checked};
             if(!event.target.checked&&fit){patch.min=fit[0];patch.max=fit[1]}
             updateLayer(key,patch,{rerender:true});
@@ -439,6 +467,20 @@
           range.append(auto);
         }
         advancedBody.append(field("Range",range,"ls-field-wide"));
+        if(layer.style==="tint"||layer.style==="rem"){
+          const select=el("select","ls-select");select.setAttribute("aria-label","Elevation scale");
+          for(const [value,label] of (layer.style==="rem"?[["separate","Land & water separately"],["full","Single relative scale"]]:[["separate","Land & water separately"],["full","Full elevation range"],["robust","Trim extremes (2–98%)"]])){
+            const option=el("option","",esc(label));option.value=value;select.append(option);
+          }
+          select.value=layer.style==="rem"&&layer.rangeMode!=="separate"?"full":layer.rangeMode;select.disabled=!layer.auto;
+          select.onchange=()=>{updateLayer(key,{rangeMode:select.value},{rerender:true});fitFromView(true)};
+          advancedBody.append(field("Elevation scale",select));
+          advancedBody.append(el("p","control-hint",!layer.auto?
+            "Manual range uses one continuous elevation scale. Enable Fit to view to scale land and water separately.":layer.rangeMode==="separate"?
+            (layer.style==="rem"?"Land shows height above the local valley floor. Water shows absolute elevation on a separate blue scale. Shorelines are generalized (~2 km).":"Land keeps its full sampled range. Water uses a separate blue scale. Shorelines are generalized; measurements stay unchanged."):
+            layer.style!=="rem"&&layer.rangeMode==="robust"?"Trims the lowest and highest 2% of samples for color fitting. Measurements stay unchanged.":
+            (layer.style==="rem"?"One relative-relief scale fits land and seabed together, using the original valley-focused contrast.":"One continuous color scale includes all sampled land elevations and water depths.")));
+        }
       }
 
       /* Curve and bands */
@@ -642,7 +684,7 @@
       wrap.append(grid);
       const reset=el("button","linkbtn ls-reset","Reset colors &amp; layers");reset.type="button";
       reset.onclick=()=>{
-        const keep=state.userLooks;state=R.emptyState();state.userLooks=keep;fitted={};flatFitted={};expanded=null;
+        const keep=state.userLooks;state=R.emptyState();state.userLooks=keep;fitted={};flatFitted={};remFloor=null;remLandFloor=null;expanded=null;
         commit({rerender:true});
       };
       wrap.append(reset);
@@ -681,28 +723,50 @@
     }
     /* Reads the visible terrain and re-stretches auto layers. Small changes
        are ignored so panning does not make colors shimmer. */
-    function fitFromView(force){
+    const displayRange=fit=>fit&&fit.land!==undefined?(fit.land||fit.water):fit;
+    const sampleOptions=keys=>({water:keys.some(key=>{const layer=layerFor(key);return (layer.style==="tint"||layer.style==="rem")&&layer.rangeMode==="separate"})});
+    /* sampled: view values already read (fitFromViewAsync), or read now. */
+    function fitFromView(force,sampled){
       const keys=autoKeys(),s=style();
-      if(!s||!host.sample) return false;
-      const values=host.sample();if(!values) return false;
-      if(values.heights&&values.heights.length){const h=R.fitRange(values.heights,"tint");if(h) remFloor=h[0]}
-      /* The 3D drape has no valley-floor field: there relative elevation is
-         measured from the view's lowest ground, so it gets its own range. */
-      if(remFloor!==null&&values.heights) for(const key of keys) if(layerFor(key).style==="rem")
-        flatFitted[key]=R.fitRange(Array.from(values.heights,h=>Math.max(0,h-remFloor)),"rem");
-      let changed=false;
+      if(!s||(!sampled&&!host.sample)) return false;
+      const values=sampled||host.sample(sampleOptions(keys));if(!values) return false;
+      const previousFloors=[remFloor,remLandFloor],previousFlat=JSON.stringify(flatFitted);
+      if(values.heights&&values.heights.length){const h=R.fitRange(values.heights,"tint","robust");if(h) remFloor=h[0]}
+      // 3D has no local-floor field. Keep its legacy continuous floor and
+      // give separated REM layers a land-only floor, excluding lakes and seabed.
+      const landHeights=values.water?.length===values.heights?.length?Array.from(values.heights).filter((h,i)=>!values.water[i]):null;
+      remLandFloor=landHeights?R.fitRange(landHeights,"tint","robust")?.[0]??null:null;
+      if(remFloor!==null&&values.heights) for(const key of keys) if(layerFor(key).style==="rem"){
+        const mode=layerFor(key).rangeMode,floor=mode==="separate"&&remLandFloor!==null?remLandFloor:remFloor;
+        const relative=Array.from(values.heights,h=>Math.max(0,h-floor));
+        flatFitted[key]=R.fitRelative(relative,values.heights,values.water,mode);
+      }
+      let changed=keys.some(key=>layerFor(key).style==="rem")&&
+        (previousFloors[0]!==remFloor||previousFloors[1]!==remLandFloor||previousFlat!==JSON.stringify(flatFitted));
       for(const key of keys){
-        const layer=layerFor(key),source=layer.style==="rem"?values.relative:values.heights;
+        const layer=layerFor(key);
+        let source=layer.style==="rem"?values.relative:values.heights;
+        if(layer.style==="rem"&&layer.rangeMode==="separate"){
+          const local=values.landRelative||values.relative||Array(values.heights.length).fill(NaN);
+          source=Array.from(local,(v,i)=>Number.isFinite(v)?v:
+            remLandFloor!==null?Math.max(0,values.heights[i]-remLandFloor):NaN);
+        }
         if(!source||source.length<16) continue;
-        const next=R.fitRange(source,layer.style),prev=fitted[key];
+        const prev=fitted[key],elevation=layer.style==="tint"||(layer.style==="rem"&&layer.rangeMode==="separate");
+        const fit=layer.style==="rem"?R.fitRelative(source,values.heights,values.water,layer.rangeMode):
+          layer.style==="tint"?R.fitElevation(source,values.water,layer.rangeMode):R.fitRange(source,layer.style);
+        const next=elevation?R.stableElevationFit(fit,prev,force):fit;
         if(!next) continue;
-        const span=Math.max(1e-6,next[1]-next[0]);
-        if(force||!prev||Math.abs(prev[0]-next[0])>span*.04||Math.abs(prev[1]-next[1])>span*.04){fitted[key]=next;changed=true}
+        // Elevation extrema must track newly arrived peaks and pits, even when
+        // they occupy less than the old 4% hysteresis threshold.
+        const range=displayRange(next),old=displayRange(prev),span=Math.max(1e-6,range[1]-range[0]);
+        if(force||!prev||(elevation?JSON.stringify(next)!==JSON.stringify(prev):
+          Math.abs(old[0]-range[0])>span*.04||Math.abs(old[1]-range[1])>span*.04)){fitted[key]=next;changed=true}
       }
       if(changed){
         const open=expanded&&fitted[expanded]&&container.querySelector(`[data-key="${expanded}"] .ls-range-inputs`);
         if(open){const [a,b]=open.querySelectorAll("input"),layer=layerFor(expanded);
-          if(a&&b&&layer){a.value=String(Math.round(R.toDisplay(layer.style,fitted[expanded][0])));b.value=String(Math.round(R.toDisplay(layer.style,fitted[expanded][1])))}}
+          if(a&&b&&layer){a.value=String(Math.round(R.toDisplay(layer.style,displayRange(fitted[expanded])[0])));b.value=String(Math.round(R.toDisplay(layer.style,displayRange(fitted[expanded])[1])))}}
         host.onChange&&host.onChange();
       }
       return changed;
@@ -711,40 +775,68 @@
     /* flat: for renderers without the valley-floor field (3D). */
     function stack(s,options){
       const flat=options&&options.flat;
-      return R.buildStack(state,s||style(),flat?Object.assign({},fitted,flatFitted):fitted,{remFlatBase:remFloor||0});
+      return R.buildStack(state,s||style(),flat?Object.assign({},fitted,flatFitted):fitted,{remFlatBase:remFloor||0,remLandBase:remLandFloor??remFloor??0});
+    }
+    /* The same fit from a fenced (non-blocking) readback, where the host
+       offers one. Resolves to whether the ranges changed. */
+    // Everything a fit depends on besides the view: style, every auto layer's
+    // settings (range mode, style) and the effects (valley width).
+    const fitRevision=()=>{const keys=autoKeys();return JSON.stringify([style(),keys,keys.map(layerFor),state.effects])};
+    async function fitFromViewAsync(force,isCurrent){
+      if(!host.sampleAsync) return fitFromView(force);
+      const keys=autoKeys(),s=style();if(!keys.length||!s) return false;
+      const revision=fitRevision();
+      const values=await host.sampleAsync(sampleOptions(keys));
+      /* Samples describe the view and mix of the moment they were taken.
+         Drop them if the caller has moved on or the mix has changed. */
+      if(destroyed||!values||(isCurrent&&!isCurrent())||fitRevision()!==revision) return false;
+      return fitFromView(force,values);
     }
     function needsFit(){ return autoKeys().length>0 }
-    function legend(s){
-      s=s||style();const st=stack(s);if(!st) return null;
+    function legend(s,options){
+      const activeFitted=options?.flat?Object.assign({},fitted,flatFitted):fitted;
+      s=s||style();const st=stack(s,options);if(!st) return null;
       const visible=layerKeys().map(key=>({key,layer:layerFor(key)})).filter(entry=>entry.layer.visible&&entry.layer.opacity>0);
       if(!visible.length)return {hidden:true};
-      const {key,layer}=visible[0];s=layer.style;const spec=R.STYLES[s];
-      const range=layer.auto&&fitted[key]?fitted[key]:[layer.min,layer.max];
+      function keysFor({key,layer},overlays=[]){
+        const style=layer.style,spec=R.STYLES[style];
+        const fit=layer.auto&&activeFitted[key],range=displayRange(fit)||[layer.min,layer.max];
+        const caption=`${spec.label}${layer.stops?" · custom colors":` · ${(R.PALETTES[layer.palette]||{}).name||""}`}${overlays.length?` + ${overlays.join(" + ")}`:""}`;
+        let ticks;
+        if(spec.unit==="shade")ticks=["shadow","relief","illuminated"];
+        else if(spec.family==="lines")ticks=["intermediate","index"];
+        else ticks=[R.formatValue(style,range[0]),R.formatValue(style,(range[0]+range[1])/2),R.formatValue(style,range[1])+(layer.auto?(fit?" · fitted":" · waiting for terrain"):"")];
+        const bar=(style==="tint"||style==="rem")?R.elevationGradient(layer,range):R.gradientCss(R.paletteStops(layer),layer.reverse);
+        const land={caption:caption+(fit?.land&&fit?.water?" · land":""),bar,ticks};
+        if(!fit?.water)return [land];
+        const water={caption:(style==="rem"?"Water · absolute elevation · separate scale":"Water · elevation · separate scale")+(overlays.length?` + ${overlays.join(" + ")}`:""),bar:R.elevationGradient(layer,fit.water,true),
+          ticks:[fit.water[0],(fit.water[0]+fit.water[1])/2,fit.water[1]].map((v,i)=>R.formatValue("tint",v)+(i===2?" · fitted":""))};
+        return fit.land?[land,water]:[water];
+      }
       const overlays=visible.slice(1).map(entry=>(R.STYLES[entry.layer.style]||{}).label).filter(Boolean);
-      const caption=`${spec.label}${layer.stops?" · custom colors":` · ${(R.PALETTES[layer.palette]||{}).name||""}`}${overlays.length?` + ${overlays.join(" + ")}`:""}`;
-      let ticks;
-      if(spec.unit==="shade") ticks=["shadow","relief","illuminated"];
-      else if(spec.family==="lines") ticks=["intermediate","index"];
-      else ticks=[R.formatValue(s,range[0]),R.formatValue(s,(range[0]+range[1])/2),R.formatValue(s,range[1])+(layer.auto?" · fitted":"")];
-      return {caption,bar:R.gradientCss(R.paletteStops(layer),layer.reverse),ticks};
+      const scales=keysFor(visible[0],overlays);
+      // Elevation overlays need their own keys even when hillshade is the
+      // bottom layer. All consumers (web, native and exports) share these.
+      for(const entry of visible.slice(1))if(entry.layer.style==="tint"||entry.layer.style==="rem")scales.push(...keysFor(entry));
+      return {...scales[0],secondary:scales[1],scales};
     }
 
     render();
     return {
-      stack,legend,fitFromView,needsFit,
+      stack,legend,fitFromView,fitFromViewAsync,needsFit,
       refresh(){render()},
       state:()=>JSON.parse(JSON.stringify(state)),
       displayState(){
         const copy=JSON.parse(JSON.stringify(state));
         copy.userLooks=copy.userLooks.filter(look=>look.id===copy.look);
-        return {state:copy,fitted:JSON.parse(JSON.stringify(fitted)),flatFitted:JSON.parse(JSON.stringify(flatFitted)),remFloor};
+        return {state:copy,fitted:JSON.parse(JSON.stringify(fitted)),flatFitted:JSON.parse(JSON.stringify(flatFitted)),remFloor,remLandFloor};
       },
       restoreDisplay(snapshot){
         state=R.normalizeState(snapshot.state);fitted=snapshot.fitted||{};flatFitted=snapshot.flatFitted||{};
-        remFloor=snapshot.remFloor??null;expanded=null;render();host.onChange&&host.onChange();
+        remFloor=snapshot.remFloor??null;remLandFloor=snapshot.remLandFloor??null;expanded=null;render();host.onChange&&host.onChange();
       },
       applyLook,
-      destroy(){destroyed=true;clearTimeout(saveTimer);container.innerHTML=""}
+      destroy(){destroyed=true;clearTimeout(saveTimer);previewWatch?.disconnect();container.innerHTML=""}
     };
   }
 

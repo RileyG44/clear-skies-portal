@@ -3462,3 +3462,5 @@ body.csp-redesign #panes .elev-settings{border-top:1px solid var(--ui-line);marg
 @media (max-width:420px){
   .csp-glass body.csp-redesign.csp-grouped-menus #cspWorkspace .csp-setting-row > .csp-segmented{flex:1 1 100%}
 }
+
+.terlegend-scale + .terlegend-scale{margin-top:10px}

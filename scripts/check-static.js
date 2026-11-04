@@ -224,7 +224,9 @@ assert(index.includes('id="buildDiag"'),"the geometry readout must be reachable 
 
   /* There is one shell in the document; failures must show recovery, never the removed sidebar. */
   assert(index.includes('id="cspNav"')&&index.includes('id="cspWorkspace"'),"the modern shell must be static HTML");
-  assert(/html\.csp-boot #app\{visibility:hidden\}/.test(index),"startup must keep map geometry measurable");
+  assert(/html\.csp-boot #app\{opacity:0;pointer-events:none\}/.test(index),"startup must keep map geometry measurable while the shell is transparent");
+  assert(!/cspPixelLoader|satellite-loader/.test(index),"startup has no loading animation; the shell fades in over the map color");
+  assert(index.includes('<div id="app" inert>')&&index.includes('removeAttribute("inert")'),"the transparent boot shell must be inert until ready");
   assert(index.includes('window.CSPBoot')&&index.includes('id="cspStartupRetry"'),"startup errors need an explicit recovery view");
   assert(!uiSystem.includes('classicUi')&&!uiSystem.includes('oldHeader'),"the classic shell must not be selectable or constructed");
   assert(uiSystem.includes('dispatchEvent(new Event("csp:ready"))')&&uiSystem.includes('window.CSPBoot?.fail'),"startup must distinguish ready from failure");

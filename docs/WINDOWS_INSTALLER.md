@@ -15,3 +15,19 @@ Manual acceptance: run the guided wizard and inspect install, progress and finis
 Caches and new markup live under the app's persistent user-data directory. Before replacing legacy app files, the installer closes the old app and preserves in-bundle markup (including deletion tombstones) in a retained legacy-markup backup. First launch imports that backup only when no newer markup store exists.
 
 The public name is ClearSkies (one word). Pacifico Regular is bundled locally with its license and matches the native mobile menu wordmark. The welcome image is an optimized copy of Riley's supplied LiDAR capture, not a generated illustration. Keep the legacy executable filename, application ID, package name and data paths stable for existing installations.
+
+## Advanced configuration (1.0.4)
+
+The welcome screen includes the same optional advanced setup as Mac. Open
+**Advanced configuration** to choose tile/DNR/memory cache sizes, free disk
+space reserve, automatic or fixed terrain workers, and Off/Auto/On smoother
+panning. Skip it to use the defaults documented in `MAC_RELEASE.md`. Settings
+are validated and stored outside the installation in `desktop-config.json`.
+Reopen the welcome using the Start setup shortcut to change them later.
+No separate Node.js, runtime or terminal setup is needed.
+
+The Windows package includes the same starter overview terrain snapshot as Mac.
+The map renders under the welcome page while setup is open. Finishing default
+setup reveals that already-loaded map; custom engine resource limits reuse the
+same caches after restart. Starter tiles are read-only app resources and remain
+available even when the normal cache free-space reserve prevents disk writes.

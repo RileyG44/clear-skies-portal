@@ -102,15 +102,15 @@ function distanceKeyFromMetres(maxMetres){
   if(!(maxMetres>0)||!Number.isFinite(maxMetres))return null;
   if(maxMetres>=DISTANCE_MILE_M){
     const amount=niceDistance(maxMetres/DISTANCE_MILE_M);
-    return {metres:amount*DISTANCE_MILE_M,label:`${formatDistance(amount)} mi`};
+    return {metres:amount*DISTANCE_MILE_M,amount,unit:"mi",label:`${formatDistance(amount)} mi`};
   }
   const amount=niceDistance(maxMetres/DISTANCE_FOOT_M);
-  return amount?{metres:amount*DISTANCE_FOOT_M,label:`${formatDistance(amount)} ft`}:null;
+  return amount?{metres:amount*DISTANCE_FOOT_M,amount,unit:"ft",label:`${formatDistance(amount)} ft`}:null;
 }
 function distanceKey(metresPerPixel,maxBarPx){
   if(!(metresPerPixel>0)||!(maxBarPx>0))return null;
   const key=distanceKeyFromMetres(metresPerPixel*maxBarPx);
-  return key?{metres:key.metres,label:key.label,widthPx:key.metres/metresPerPixel}:null;
+  return key?{metres:key.metres,amount:key.amount,unit:key.unit,label:key.label,widthPx:key.metres/metresPerPixel}:null;
 }
 function mercatorMetresPerPixel(lat,zoom,worldPx){
   const cos=Math.cos(lat*Math.PI/180);
@@ -294,8 +294,15 @@ setInterval(()=>{if(cursorLocation&&!document.hidden)refreshCursorElevation()},1
 function readoutColourKeys(){
   const keys=[],is3d=!!map3d,style=$("#terStyle").value;
   if(style!=="off"&&terrainOpacity()>0){
-    const legend=$("#terLegend"),bar=legend?.querySelector(".bar")?.style.backgroundImage;
-    if(bar)keys.push({name:$("#terStyle").selectedOptions[0].textContent,bar,labels:[...legend.querySelectorAll(".ticks span")].map(el=>el.textContent)});
+    const legend=$("#terLegend");
+    for(const scale of legend?.querySelectorAll(".terlegend-scale")||[]){
+      const bar=scale.querySelector(".bar")?.style.backgroundImage;
+      if(bar)keys.push({name:scale.querySelector(".caption")?.textContent||"Elevation",bar,labels:[...scale.querySelectorAll(".ticks span")].map(el=>el.textContent)});
+    }
+    if(!legend?.querySelector(".terlegend-scale")){
+      const bar=legend?.querySelector(".bar")?.style.backgroundImage;
+      if(bar)keys.push({name:$("#terStyle").selectedOptions[0].textContent,bar,labels:[...legend.querySelectorAll(".ticks span")].map(el=>el.textContent)});
+    }
   }
   if(is3d&&map3d.getLayer("terrain-relief")){
     const ramp=hypsometricRamp().slice(3),top=ramp[ramp.length-2];
@@ -419,12 +426,14 @@ function paintMapDistanceKey(){
   const inner=Math.max(90,(parseFloat(readoutRoot.style.getPropertyValue("--map-info-width"))||260)-24);
   const maxBar=Math.max(32,inner-58);
   const key=distanceKey(readoutMetresPerPixel(),maxBar);
-  if(!key){element.hidden=true;element.textContent="";element.removeAttribute("aria-label");return}
+  if(!key){element.hidden=true;element.textContent="";element.removeAttribute("aria-label");delete element.dataset.amount;delete element.dataset.unit;return}
   const widthPx=Math.min(maxBar,key.widthPx);
   const bar=`<span class="distance-bar" style="width:${widthPx.toFixed(1)}px"></span>`;
   const html=`<div class="key-name">Distance</div><div class="distance-scale">${bar}<span class="distance-label">${esc(key.label)}</span></div>`;
   if(element.innerHTML!==html)element.innerHTML=html;
   element.hidden=false;
+  // The label is localized display text; the iPhone tile rescales the number.
+  element.dataset.amount=String(key.amount);element.dataset.unit=key.unit;
   element.setAttribute("aria-label",`Distance scale, ${key.label}`);
 }
 function scheduleDistanceKey(){

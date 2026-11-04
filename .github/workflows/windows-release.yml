@@ -4,7 +4,7 @@ on:
   push:
     tags: ['desktop-v*']
   pull_request:
-    paths: ['electron/**', 'build/**', 'electron-builder*.js', 'package*.json', '.github/workflows/windows-release.yml']
+    paths: ['electron/**', 'build/**', 'electron-builder*.js', 'package*.json', 'scripts/build-windows.js', 'scripts/verify-windows-package.js', 'scripts/verify-desktop-setup.js', 'test-desktop.js', 'test-electron-startup.js', 'test-setup-config.js', 'test-startup-cache.js', 'scripts/*startup*.js', '.github/workflows/windows-release.yml']
 permissions:
   contents: read
 jobs:
@@ -18,7 +18,9 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run check
-      - run: node --test test-desktop.js test-electron-startup.js
+      - run: node --test test-desktop.js test-electron-startup.js test-setup-config.js test-startup-cache.js
+      - name: Verify first-launch setup and restart persistence in Electron
+        run: node scripts/verify-desktop-setup.js
       - name: Build one-click and guided installers, plus portable ZIP
         run: npm run dist:win
         env:

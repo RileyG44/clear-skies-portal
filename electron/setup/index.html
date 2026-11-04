@@ -20,6 +20,25 @@
     <a class="welcome-learn" href="guide.html">Learn about Tailscale <span aria-hidden="true">↗</span></a>
   </div>
   <p id="error" role="alert" hidden>Could not open the map. Please try again.</p>
+  <p class="setup-preparing">Your starting map is preparing in the background. Open whenever you’re ready.</p>
+  <details class="advanced-setup">
+    <summary>Advanced configuration</summary>
+    <form id="configuration">
+      <p>Defaults are ready to use. Options apply when you choose Open ClearSkies. Cache limits use space as needed; they do not reserve it in advance.</p>
+      <label>Terrain tile cache (GiB)<input name="tileCacheGiB" type="number" min="1" max="1024" step="any" required></label>
+      <label>WA DNR terrain cache (GiB)<input name="dnrCacheGiB" type="number" min="1" max="1024" step="any" required></label>
+      <label>DNR download limit (GiB)<input name="dnrArchiveGiB" type="number" min="0.1" max="4" step="any" required></label>
+      <label>Memory cache (MiB)<input name="memoryCacheMiB" type="number" min="32" max="1024" step="1" required></label>
+      <label>Keep disk space free (GiB)<input name="minFreeGiB" type="number" min="1" max="1024" step="any" required></label>
+      <label>Terrain workers<select name="workers"><option value="0">Auto (up to 8)</option><option>1</option><option>2</option><option>3</option><option>4</option><option>5</option><option>6</option><option>7</option><option>8</option></select></label>
+      <label>Smoother panning<select name="panShading"><option value="off">Off</option><option value="auto">Auto</option><option value="on">On</option></select></label>
+      <p>Auto lowers terrain drawing resolution only when dragging is slow, then sharpens it when you stop.</p>
+      <p>The tile cache limit covers disposable tiles; saved offline areas are protected. The DNR download limit caps each acquisition separately from its terrain cache. Keep enough free space for all caches and other apps.</p>
+      <p>Custom cache or worker settings use the included terrain engine. Existing terrain services keep their own settings. Reopen this welcome page to change these options later.</p>
+      <button id="restore-defaults" type="button">Restore defaults</button>
+      <button id="apply-configuration" type="button">Open ClearSkies →</button>
+    </form>
+  </details>
 </main>
 <footer class="welcome-caption">A terrain capture from ClearSkies<span>01 / WELCOME</span></footer>
 </body></html>
