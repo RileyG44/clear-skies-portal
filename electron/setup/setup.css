@@ -32,6 +32,15 @@ footer{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-betw
 .welcome-actions button:hover{background:#fff}.welcome-actions button span{padding-left:15px}
 .welcome-learn{border:1px solid #d3e6ff42;color:#d7e6f7;background:#07152b28;backdrop-filter:blur(10px);font-weight:450;display:inline-flex;align-items:center;gap:16px}
 .welcome-learn:hover{background:#adcff01c;text-decoration:none;border-color:#d3e6ff80}
+.advanced-setup{margin-top:24px;max-width:470px;font-size:12px;color:#c5d8eb}
+.advanced-setup summary{cursor:pointer;list-style-position:inside;width:fit-content;padding:6px 0}
+.advanced-setup summary:focus-visible{outline:2px solid #d8edff;outline-offset:4px}
+.advanced-setup form{margin-top:10px;padding:18px;background:#07152bec;backdrop-filter:blur(12px);border:1px solid #d3e6ff42;border-radius:9px}
+.advanced-setup form p{font-size:11px;line-height:1.65;margin:0 0 14px}
+.advanced-setup label{display:flex;align-items:center;justify-content:space-between;gap:15px;margin-bottom:13px}
+.advanced-setup input,.advanced-setup select{width:140px;padding:7px 9px;border:1px solid #809bbd;border-radius:5px;background:#122438;color:#eff6ff;font:inherit}
+.advanced-setup button{font-size:11px;padding:9px 13px}
+.welcome-page:has(.advanced-setup[open]) .welcome-content{padding-top:105px;padding-bottom:80px}
 .welcome-caption{position:absolute;bottom:30px;left:clamp(48px,6.5vw,100px);right:42px;border:0;padding:0;margin:0;gap:16px;color:#b5c9dc;font-size:9px;letter-spacing:.025em;line-height:1.6;opacity:.75}
 .welcome-caption span{font-size:9px;letter-spacing:.16em;color:#a9c5de}
 @media(max-width:1050px){body{grid-template-columns:220px 1fr}aside{padding:48px 23px}.intro h1{font-size:31px}main{padding:50px 30px}th,td{padding:11px}.steps{gap:13px}.welcome-content{padding-top:125px;padding-bottom:115px}.welcome-status{top:40px}.welcome-content .wordmark{margin-bottom:12px}}

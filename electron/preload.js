@@ -13,6 +13,23 @@ if(process.platform==="darwin" || process.platform==="win32"){
 if(location.protocol==="file:" && /\/setup\/(index|guide)\.html$/.test(location.pathname)){
   const {contextBridge,ipcRenderer}=require("electron");
   contextBridge.exposeInMainWorld("clearSkiesSetup",{
-    finish:()=>ipcRenderer.invoke("csp:finish-setup"),
+    platform:process.platform,
+    configuration:()=>ipcRenderer.invoke("csp:get-setup-config"),
+    finish:config=>ipcRenderer.invoke("csp:finish-setup",config),
   });
+}
+// Seed preferences before page scripts run; the engine's free port can change.
+if(location.protocol==="http:" && location.hostname==="127.0.0.1"){
+  const {ipcRenderer}=require("electron");
+  const preferences=ipcRenderer.sendSync("csp:map-preferences");
+  if(preferences){
+    try{localStorage.setItem("clearskies.panShading.v1",preferences.panShading);}catch{}
+    const savePan=mode=>{try{ipcRenderer.invoke("csp:pan-shading",mode).catch(()=>{});}catch{}};
+    document.addEventListener("csp:pan-shading",()=>{
+      try{savePan(localStorage.getItem("clearskies.panShading.v1"));}catch{}
+    });
+    document.addEventListener("click",event=>{
+      if(event.target.closest?.("[data-reset-all]"))savePan("auto");
+    },true);
+  }
 }

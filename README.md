@@ -123,6 +123,21 @@ locally it still binds to `127.0.0.1` only.
 
 The same file works in VS Code locally via *Dev Containers: Reopen in Container*.
 
+## Install on Mac
+
+Download the Apple Silicon (`arm64`) or Intel (`x64`) **ClearSkies Setup DMG**
+from [GitHub Releases](https://github.com/RileyG44/clear-skies-portal/releases).
+Drag ClearSkies into Applications, then open it. The runtime, terrain engine
+and client assets are included; no separate Node.js installation is needed.
+Mac downloads are currently ad-hoc signed without Apple notarization; see
+[Mac installation and release notes](docs/MAC_RELEASE.md) for the first-open step.
+
+Both Mac and Windows show the terrain welcome page with an optional
+**Advanced configuration** menu for disk and memory cache sizes, free-space
+reserve, terrain workers and smoother panning (Off / Auto / On). Skip Advanced
+to use the default setup. The guide links to Tailscale for your platform.
+Reopen the welcome from Help on Mac or the Start setup shortcut on Windows.
+
 ## Install on Windows
 
 Get the permanent **ClearSkies Setup** EXE from [GitHub Releases](https://github.com/RileyG44/clear-skies-portal/releases). The one-click installer includes the local terrain engine, ClearSkies icon, Desktop/Start shortcuts and Windows uninstall support. No separate Node.js installation is needed. An optional guided installer adds installation choices; a portable ZIP is also available.

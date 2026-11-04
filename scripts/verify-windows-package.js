@@ -5,7 +5,7 @@ async function verify(){
   const root=path.resolve("dist/win-unpacked/resources"),site=require("../site.json");
   for(const file of [...site.web,...site.app,...site.engine,...site.vendor])
     assert(fs.existsSync(path.join(root,"app",file)),`Packaged engine/client file missing: ${file}`);
-  for(const file of ["electron/main.js","electron/preload.js","electron/window-chrome.js","electron/engine-storage.js","electron/setup/index.html","electron/setup/guide.html","electron/setup/setup.js","electron/setup/setup.css","electron/setup/icon.png","electron/setup/terrain-welcome.webp","electron/setup/fonts/Pacifico.ttf","electron/setup/fonts/Inter.woff2"])
+  for(const file of ["electron/main.js","electron/preload.js","electron/window-chrome.js","electron/engine-storage.js","electron/setup-config.js","electron/setup/index.html","electron/setup/guide.html","electron/setup/setup.js","electron/setup/setup.css","electron/setup/icon.png","electron/setup/terrain-welcome.webp","electron/setup/fonts/Pacifico.ttf","electron/setup/fonts/Inter.woff2"])
     assert(extractFile(path.join(root,"app.asar"),path.normalize(file)).length,`Shell asset missing: ${file}`);
   const ico=fs.readFileSync(path.join(root,"ClearSkies.ico"));
   assert.equal(ico.readUInt16LE(2),1);assert.equal(ico.readUInt16LE(4),1);

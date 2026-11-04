@@ -1,0 +1,55 @@
+name: Mac installers
+on:
+  workflow_dispatch:
+  push:
+    tags: ['mac-v*']
+  pull_request:
+    paths: ['electron/**', 'build/**', 'electron-builder*.js', 'package*.json', 'scripts/verify-mac-package.js', 'scripts/verify-desktop-setup.js', 'test-desktop.js', 'test-electron-startup.js', 'test-setup-config.js', '.github/workflows/mac-release.yml']
+permissions:
+  contents: read
+jobs:
+  package:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+          cache: npm
+      - run: npm ci
+      - run: npm run check
+      - run: node --test test-desktop.js test-electron-startup.js test-setup-config.js
+      - name: Verify first-launch setup and restart persistence in Electron
+        run: node scripts/verify-desktop-setup.js
+      - name: Build Apple Silicon and Intel DMGs and ZIPs
+        run: npm run dist:mac
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+      - name: Verify both packages and create checksums
+        run: node scripts/verify-mac-package.js
+      - uses: actions/upload-artifact@v6
+        with:
+          name: ClearSkies-Mac
+          path: |
+            dist/ClearSkies-*.dmg
+            dist/ClearSkies-*.zip
+            dist/SHA256SUMS-Mac.txt
+  publish:
+    if: startsWith(github.ref, 'refs/tags/mac-v')
+    needs: package
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/download-artifact@v7
+        with:
+          name: ClearSkies-Mac
+          path: dist
+      - name: Publish Mac release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          test "$RELEASE_TAG" = "mac-v$(node -p 'require("./package.json").version')"
+          gh release create "$RELEASE_TAG" dist/* --verify-tag --title "ClearSkies for Mac ${RELEASE_TAG#mac-v}" --notes-file docs/MAC_RELEASE.md

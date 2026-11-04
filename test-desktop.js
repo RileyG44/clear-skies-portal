@@ -3,7 +3,7 @@ const {test}=require("node:test"),assert=require("node:assert/strict");
 const fs=require("fs"),vm=require("vm"),path=require("path"),{EventEmitter}=require("events");
 const {windowChrome}=require("./electron/window-chrome");
 async function fixture({platform="win32",completed=false,argv=[]}={}){
-  const calls={opened:[],writes:[],windows:[]},handlers={},app=new EventEmitter();
+  const calls={opened:[],writes:[],windows:[],configWrites:[],serverStarts:0},handlers={},app=new EventEmitter();
   let ready;
   Object.assign(app,{isPackaged:true,getPath:()=>path.resolve("test-user-data"),
     requestSingleInstanceLock:()=>true,whenReady:()=>({then:fn=>{ready=fn;}}),
@@ -18,16 +18,19 @@ async function fixture({platform="win32",completed=false,argv=[]}={}){
   }
   const fakeFS={existsSync:()=>completed,mkdirSync:()=>{},writeFileSync:(...args)=>calls.writes.push(args)};
   const context={console,URL,__dirname:path.resolve("electron"),process:{platform,env:{},argv,resourcesPath:path.resolve("resources")},
-    require:name=>name==="electron"?{app,BrowserWindow:Window,shell:{openExternal:url=>calls.opened.push(url)},
+    require:name=>name==="electron"?{app,BrowserWindow:Window,Menu:{buildFromTemplate:items=>items,setApplicationMenu:items=>{calls.menu=items;}},shell:{openExternal:url=>calls.opened.push(url)},
       dialog:{showErrorBox:(...args)=>{throw Error(args.join(":"));}},session:{defaultSession:{setPermissionRequestHandler(){}}},
-      ipcMain:{handle:(name,fn)=>{handlers[name]=fn;}}}:name==="fs"?fakeFS:name==="./window-chrome"?{windowChrome}:name==="./engine-storage"?require("./electron/engine-storage"):require(name)};
+      ipcMain:{handle:(name,fn)=>{handlers[name]=fn;},on:(name,fn)=>{handlers[name]=fn;}}}:name==="fs"?fakeFS:name==="./window-chrome"?{windowChrome}:name==="./engine-storage"?require("./electron/engine-storage"):name==="./setup-config"?{
+        ...require("./electron/setup-config"),readConfig:()=>({...require("./electron/setup-config").DEFAULTS}),saveConfig:(_dir,value)=>{calls.configWrites.push(value);return value;},
+      }:require(name)};
   vm.runInNewContext(fs.readFileSync("electron/main.js","utf8"),context);
-  context.pickServer=async()=>49152;
+  context.pickServer=async()=>{calls.serverStarts++;return 49152;};
   await ready();
   return {calls,handlers,win:calls.windows[0],app};
 }
 test("Windows first launch shows setup, completion saves once and opens local engine",async()=>{
   const f=await fixture(),w=f.win;
+  assert.equal(f.calls.serverStarts,0,"new users configure the engine before it starts");
   assert.match(w.url,/\/electron\/setup\/index.html$/);assert.equal(w.menu,null);
   assert.equal(w.options.titleBarStyle,"hidden");assert.equal(w.options.titleBarOverlay.height,30);
   assert.equal(w.options.webPreferences.nodeIntegration,false);assert.equal(w.options.webPreferences.contextIsolation,true);
@@ -38,13 +41,83 @@ test("Windows first launch shows setup, completion saves once and opens local en
   assert.equal(await finish({sender:w.webContents,senderFrame:{url}}),true);
   assert.equal(f.calls.writes.length,1);assert.equal(w.url,"http://127.0.0.1:49152/");
   assert.ok(JSON.parse(f.calls.writes[0][1]).completedAt);
+  assert.equal(f.calls.serverStarts,1);
+  assert.equal(f.calls.configWrites[0].panShading,"auto");
+});
+test("Advanced setup applies validated configuration; untrusted pages and invalid values cannot save",async()=>{
+  for(const platform of ["win32","darwin"]){
+    const f=await fixture({platform}),event={sender:f.win.webContents,senderFrame:{url:f.win.url}};
+    const loaded=f.handlers["csp:get-setup-config"](event);
+    assert.equal(loaded.config.tileCacheGiB,15);assert.equal(loaded.defaults.panShading,"auto");
+    assert.equal(f.handlers["csp:get-setup-config"]({sender:{},senderFrame:{url:f.win.url}}),null);
+    const config={...loaded.config,tileCacheGiB:23,memoryCacheMiB:128,workers:2,panShading:"on"};
+    await assert.rejects(f.handlers["csp:finish-setup"](event,{...config,workers:99}));
+    assert.equal(f.calls.configWrites.length,0);assert.equal(f.calls.writes.length,0);
+    assert.equal(await f.handlers["csp:finish-setup"](event,config),true);
+    assert.equal(f.calls.configWrites[0].tileCacheGiB,23);assert.equal(f.calls.serverStarts,1);
+    const mapEvent={sender:f.win.webContents,senderFrame:{url:f.win.url}};
+    f.handlers["csp:map-preferences"](mapEvent);assert.equal(mapEvent.returnValue.panShading,"on");
+    assert.equal(f.handlers["csp:pan-shading"](mapEvent,"off"),true);
+    assert.equal(f.calls.configWrites.at(-1).panShading,"off");
+    assert.equal(f.handlers["csp:pan-shading"]({...mapEvent,senderFrame:{url:"https://untrusted.example/"}},"on"),false);
+  }
+});
+test("Map preload carries smoother panning across engine ports and saves in-app changes",async()=>{
+  const stored=new Map(),listeners={},updates=[];
+  vm.runInNewContext(fs.readFileSync("electron/preload.js","utf8"),{
+    process:{platform:"darwin"},location:{protocol:"http:",hostname:"127.0.0.1"},
+    localStorage:{setItem:(key,value)=>stored.set(key,value),getItem:key=>stored.get(key)},
+    document:{addEventListener:(name,handler)=>{listeners[name]=handler;}},
+    require:()=>({ipcRenderer:{sendSync:()=>({panShading:"auto"}),invoke:async(...args)=>updates.push(args)}}),
+  });
+  assert.equal(stored.get("clearskies.panShading.v1"),"auto");
+  stored.set("clearskies.panShading.v1","off");listeners["csp:pan-shading"]();
+  assert.deepEqual(updates,[["csp:pan-shading","off"]]);
+  listeners.click({target:{closest:selector=>selector==="[data-reset-all]"}});
+  assert.deepEqual(updates.at(-1),["csp:pan-shading","auto"],"Reset all preferences restores the desktop default");
 });
 test("Returning users go straight to the map; F1 and setup shortcut reopen the guide",async()=>{
   const f=await fixture({completed:true});assert.equal(f.win.url,"http://127.0.0.1:49152/");
   let prevented=false;f.win.webContents.emit("before-input-event",{preventDefault:()=>{prevented=true;}},{type:"keyDown",key:"F1"});
   assert.ok(prevented);assert.match(f.win.url,/setup\/guide.html$/);
   const again=await fixture({completed:true,argv:["--setup"]});assert.match(again.win.url,/setup\/index.html$/);
-  const mac=await fixture({platform:"darwin"});assert.equal(mac.win.url,"http://127.0.0.1:49152/");
+  const mac=await fixture({platform:"darwin",completed:true});assert.equal(mac.win.url,"http://127.0.0.1:49152/");
+});
+test("Mac first launch shares the welcome, remembers completion, and offers native Help entries",async()=>{
+  const f=await fixture({platform:"darwin"}),w=f.win;
+  assert.match(w.url,/setup\/index.html$/);
+  assert.equal(w.options.titleBarStyle,"hidden");
+  assert.deepEqual(JSON.parse(JSON.stringify(w.options.trafficLightPosition)),{x:12,y:9});
+  assert.equal(await f.handlers["csp:finish-setup"]({sender:w.webContents,senderFrame:{url:w.url}}),true);
+  assert.equal(w.url,"http://127.0.0.1:49152/");
+  assert.ok(f.calls.writes[0][0].endsWith("setup-v3.json"));
+  const help=f.calls.menu.find(item=>item.role==="help").submenu;
+  help[1].click();assert.match(w.url,/setup\/guide.html$/);
+  help[0].click();assert.match(w.url,/setup\/index.html$/);
+  const again=await fixture({platform:"darwin",completed:true,argv:["--setup"]});
+  assert.match(again.win.url,/setup\/index.html$/);
+});
+test("Setup guide uses the host platform's official download and app instructions",async()=>{
+  for(const platform of ["darwin","win32"]){
+    const elements=Object.fromEntries(["tailscale-download","tailscale-download-note","reopen-guide","pin-app","finish","error"]
+      .map(id=>[id,{textContent:"Windows",href:"https://pkgs.tailscale.com/stable/tailscale-setup-latest.exe",addEventListener(){}}]));
+    vm.runInNewContext(fs.readFileSync("electron/setup/setup.js","utf8"),{
+      window:{clearSkiesSetup:{platform}},document:{getElementById:id=>elements[id]},
+    });
+    if(platform==="darwin"){
+      assert.equal(elements["tailscale-download"].href,"https://tailscale.com/download/mac");
+      assert.match(elements["tailscale-download"].textContent,/for Mac/);
+      assert.match(elements["reopen-guide"].textContent,/Help → Terrain Engine/);
+      assert.match(elements["pin-app"].textContent,/Keep in Dock/);
+      assert(!/Windows|taskbar|in Start/.test(Object.values(elements).map(el=>el.textContent).slice(0,4).join(" ")));
+    }else assert.match(elements["tailscale-download"].href,/tailscale-setup-latest.exe$/);
+  }
+  let exposed;
+  vm.runInNewContext(fs.readFileSync("electron/preload.js","utf8"),{
+    process:{platform:"darwin"},location:{protocol:"file:",pathname:"/app.asar/electron/setup/guide.html"},
+    document:{addEventListener(){}},require:()=>({contextBridge:{exposeInMainWorld:(name,value)=>{exposed=value;}},ipcRenderer:{invoke:async()=>true}}),
+  });
+  assert.equal(exposed.platform,"darwin");assert.equal(await exposed.finish(),true);
 });
 test("Both setup pages can launch the app, while other local files cannot",async()=>{
   const f=await fixture(),w=f.win;

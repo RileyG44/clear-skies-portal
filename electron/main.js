@@ -5,10 +5,11 @@
    does it boot its own server.js on a free loopback port. The web app is
    untouched: every request it makes is relative, so it simply follows
    whichever origin we load.                                                  */
-const {app, BrowserWindow, shell, dialog, session, ipcMain} = require("electron");
+const {app, BrowserWindow, Menu, shell, dialog, session, ipcMain} = require("electron");
 const {pathToFileURL} = require("url");
 const {windowChrome} = require("./window-chrome");
 const {engineStorage} = require("./engine-storage");
+const {DEFAULTS,validate,readConfig,saveConfig,engineEnvironment,customEngine} = require("./setup-config");
 const {fork, execFile} = require("child_process");
 const fs   = require("fs");
 const os   = require("os");
@@ -30,11 +31,14 @@ const ENGINE_PLIST = path.join(os.homedir(), "Library", "LaunchAgents", `${ENGIN
 let child = null;
 let win   = null;
 let port  = 0;
+let setupConfig = {...DEFAULTS};
+let finishingSetup = false;
 const setupFile = path.join(__dirname,"setup","index.html");
 const setupURL = pathToFileURL(setupFile).href;
 const guideFile = path.join(__dirname,"setup","guide.html");
 const setupPages = new Set([setupURL,pathToFileURL(guideFile).href]);
-const setupMarker = () => path.join(app.getPath("userData"),"setup-v2.json");
+const setupMarker = () => path.join(app.getPath("userData"),"setup-v3.json");
+const needsSetup = () => process.argv.includes("--setup") || (["win32","darwin"].includes(process.platform) && !fs.existsSync(setupMarker()));
 const showSetup = (guide=false) => { if(win) win.loadFile(guide?guideFile:setupFile); };
 
 /* Finder launches do not inherit a terminal's CSP_ENGINE_PORT. Read the same
@@ -68,6 +72,7 @@ function startServer(p){
   child = fork(SERVER, [], {
     env: {
       ...process.env,
+      ...engineEnvironment(setupConfig),
       PORT: String(p),
       HOST,
       // Keep the tile cache out of the .app bundle: it is read-only once
@@ -80,12 +85,22 @@ function startServer(p){
   });
   child.stdout.on("data", d => process.stdout.write(`[server] ${d}`));
   child.stderr.on("data", d => process.stderr.write(`[server] ${d}`));
-  child.on("exit", (code, sig) => {
-    child = null;
-    if (!app.isQuittingCsp && code !== 0){
+  const server = child;
+  server.on("exit", (code, sig) => {
+    if(child===server) child = null;
+    if (!app.isQuittingCsp && !server.cspStopping && code !== 0){
       dialog.showErrorBox("ClearSkies",
         `The local server stopped unexpectedly (code ${code}${sig ? `, ${sig}` : ""}).\n\nQuit and reopen the app to try again.`);
     }
+  });
+}
+
+async function stopServer(){
+  const server=child;if(!server)return;
+  server.cspStopping=true;
+  await new Promise(resolve=>{
+    const timer=setTimeout(()=>server.kill("SIGKILL"),5000);
+    server.once("exit",()=>{clearTimeout(timer);resolve();});server.kill();
   });
 }
 
@@ -118,7 +133,7 @@ function kickstartAgent(){
 
 /* Use the Mac's engine if it is up or can be woken; otherwise our own copy. */
 async function pickServer(){
-  if (process.env.CSP_ELECTRON_OWN_SERVER !== "1"){
+  if (process.env.CSP_ELECTRON_OWN_SERVER !== "1" && !customEngine(setupConfig)){
     const engine = await enginePort();
     if (await engineUp(engine)) return engine;
     if (await kickstartAgent()){
@@ -150,9 +165,8 @@ function waitForServer(p, timeoutMs = 20000){
 }
 
 function createWindow(){
-  const internalOrigin = `http://${HOST}:${port}`;
   const isInternal = value => {
-    try{ return new URL(value).origin === internalOrigin }
+    try{ return new URL(value).origin === `http://${HOST}:${port}` }
     catch(e){ return false }
   };
   win = new BrowserWindow({
@@ -167,8 +181,8 @@ function createWindow(){
   });
 
   if(process.platform==="win32") win.setMenu(null);
-  if(process.argv.includes("--setup") || (process.platform==="win32" && !fs.existsSync(setupMarker()))) showSetup();
-  else win.loadURL(`${internalOrigin}/`);
+  if(needsSetup()) showSetup();
+  else win.loadURL(`http://${HOST}:${port}/`);
   win.webContents.on("before-input-event",(event,input)=>{
     if(input.type==="keyDown" && input.key==="F1"){ event.preventDefault(); showSetup(true); }
   });
@@ -188,12 +202,28 @@ function createWindow(){
 
 app.isQuittingCsp = false;
 app.setAppUserModelId("com.rileyg44.clear-skies-portal");
-ipcMain.handle("csp:finish-setup",async event=>{
-  if(!win || event.sender!==win.webContents || !setupPages.has(event.senderFrame?.url)) return false;
-  fs.mkdirSync(app.getPath("userData"),{recursive:true});
-  fs.writeFileSync(setupMarker(),JSON.stringify({completedAt:new Date().toISOString()}));
-  await win.loadURL(`http://${HOST}:${port}/`);
-  return true;
+const trustedSetup = event => win && event.sender===win.webContents && setupPages.has(event.senderFrame?.url);
+const trustedMap = event => win && event.sender===win.webContents && event.senderFrame?.url?.startsWith(`http://${HOST}:${port}/`);
+ipcMain.handle("csp:get-setup-config",event=>trustedSetup(event)?{config:setupConfig,defaults:DEFAULTS}:null);
+ipcMain.on("csp:map-preferences",event=>{event.returnValue=trustedMap(event)?{panShading:setupConfig.panShading}:null;});
+ipcMain.handle("csp:pan-shading",(event,mode)=>{
+  if(!trustedMap(event) || !["off","auto","on"].includes(mode))return false;
+  setupConfig=saveConfig(app.getPath("userData"),{...setupConfig,panShading:mode});return true;
+});
+ipcMain.handle("csp:finish-setup",async (event,config)=>{
+  if(!trustedSetup(event) || finishingSetup) return false;
+  finishingSetup=true;
+  try{
+    const next=config===undefined?setupConfig:validate(config);
+    const engineChanged=JSON.stringify(engineEnvironment(next))!==JSON.stringify(engineEnvironment(setupConfig));
+    setupConfig=saveConfig(app.getPath("userData"),next);
+    if(engineChanged){await stopServer();port=0;}
+    if(!port)port=await pickServer();
+    await win.loadURL(`http://${HOST}:${port}/`);
+    fs.mkdirSync(app.getPath("userData"),{recursive:true});
+    fs.writeFileSync(setupMarker(),JSON.stringify({completedAt:new Date().toISOString()}));
+    return true;
+  }finally{finishingSetup=false;}
 });
 
 if (!app.requestSingleInstanceLock()){
@@ -211,9 +241,17 @@ if (!app.requestSingleInstanceLock()){
     });
 
     try {
-      port = await pickServer();
-      console.log(child ? `[app] started a bundled server on ${port}` : `[app] using the installed terrain engine on ${port}`);
+      setupConfig=readConfig(app.getPath("userData"));
+      // Configure the included engine before it starts on a fresh installation.
+      if(!needsSetup())port = await pickServer();
       createWindow();
+      if(process.platform==="darwin") Menu.setApplicationMenu(Menu.buildFromTemplate([
+        {role:"appMenu"}, {role:"editMenu"}, {role:"viewMenu"}, {role:"windowMenu"},
+        {role:"help",submenu:[
+          {label:"Welcome to ClearSkies",click:()=>showSetup()},
+          {label:"Terrain Engine & Tailscale",accelerator:"F1",click:()=>showSetup(true)},
+        ]},
+      ]));
     } catch (err) {
       dialog.showErrorBox("ClearSkies", `Could not start the local server.\n\n${err.message}`);
       app.quit();

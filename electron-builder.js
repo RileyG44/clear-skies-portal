@@ -22,10 +22,12 @@ module.exports={
     include:"build/installer.nsh"},
   mac:{
     target:[{target:"dmg",arch},{target:"zip",arch}],
+    artifactName:"ClearSkies-${version}-${arch}.${ext}",
     category:"public.app-category.reference",
     icon:"build/icon.icns",
     darkModeSupport:true,
     hardenedRuntime:true,
+    identity:"-",
     gatekeeperAssess:false,
     entitlements:"build/entitlements.mac.plist",
     entitlementsInherit:"build/entitlements.mac.plist",
@@ -34,5 +36,8 @@ module.exports={
       NSHumanReadableCopyright:"MIT licensed. Imagery from Copernicus, NASA, USGS and WA DNR."
     }
   },
-  dmg:{title:"ClearSkies"}
+  dmg:{title:"ClearSkies",artifactName:"ClearSkies-Setup-${version}-${arch}.${ext}",
+    backgroundColor:"#e6eef5",iconSize:100,
+    window:{width:540,height:380},
+    contents:[{x:150,y:180,type:"file"},{x:390,y:180,type:"link",path:"/Applications"}]}
 };
