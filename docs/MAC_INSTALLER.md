@@ -54,3 +54,7 @@ into read-only application resources. The engine reads it after its live cache,
 using the original capture age and normal source labels. It needs no second disk
 copy, obeys the RAM cache budget, and cannot overwrite live or higher-rank data.
 Third-party display-only basemap/satellite tiles are not redistributed.
+
+Updating an existing Mac service with `scripts/install-mac-service.sh` also
+installs these read-only starter resources, preserving its port and normal
+cache/markup paths. The desktop shell can then reuse that updated warm engine.
