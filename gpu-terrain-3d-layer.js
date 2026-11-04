@@ -84,7 +84,7 @@
             const stamp=stamps.get(tile);
             if(stamp?.handle===texture.texture&&stamp.record===record.revision&&stamp.state===stateRevisions[id])continue;
             jobs.push({key:record.key,revision:record.revision,grid:record.grid,size:256,
-              targetTexture:texture.texture,state:values[id],groundRes:options.groundResolution(coord)});
+              targetTexture:texture.texture,coord,state:values[id],groundRes:options.groundResolution(coord)});
             updated.push({tile,handle:texture.texture,record:record.revision,state:stateRevisions[id]});
           }
         }

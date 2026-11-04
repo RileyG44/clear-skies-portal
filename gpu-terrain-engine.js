@@ -203,6 +203,7 @@
     var canvas = options.canvas, store = options.store, shaders = options.shaders, gl;
     var root = typeof globalThis !== 'undefined' ? globalThis : {};
     var core = options.elevationCore || root.ElevationTileCore;
+    var geography = root.CSPWaterGeography || (typeof require === 'function' ? require('./water-geography.js') : null), waterTexture = null;
     var raster = root.CSPTerrainRaster, drape = root.CSPTerrainDrape, bands = root.ElevationBands;
     if (!core && typeof require === 'function') core = require('./elevation-tile-core.js');
     var now = function () { return root.performance ? root.performance.now() : Date.now(); };
@@ -276,6 +277,7 @@
         resources.framebuffers.forEach(function (f) { gl.deleteFramebuffer(f); }); resources.textures.forEach(function (t) { gl.deleteTexture(t); });
         resources.programs.forEach(function (p) { gl.deleteProgram(p); }); resources.vaos.forEach(function (v) { gl.deleteVertexArray(v); });
       }
+      waterTexture = null;
       Object.keys(resources).forEach(function (k) { resources[k].clear(); }); field = null; gesture = null; liveAux = {}; auxKey = '';
     }
     function setters(p) {
@@ -552,7 +554,14 @@
       gl.uniform1i(shadeField, 0); gl.uniform1i(shadeAux.cspBlur, 1); gl.uniform1i(shadeAux.cspBase, 2);
       gl.uniform1f(shadeAux.cspBlurScale, aux.blur ? aux.blur.factor : 0); gl.uniform1f(shadeAux.cspBaseScale, aux.base ? aux.base.factor : 0);
       gl.uniformMatrix3fv(shadeAux.cspAuxTransform, false, transform || IDENTITY);
-      shadeUniforms(values || shaders.uniformValues(state, view));
+      var settings = values || shaders.uniformValues(state, view);
+      if(settings.u_layerC && settings.u_layerC.some(function(v,i){return i%4===1 && v>0.5;})){
+        gl.activeTexture(gl.TEXTURE0 + 3);
+        if(!waterTexture){waterTexture=geography.upload(gl);resources.textures.add(waterTexture);}
+        gl.bindTexture(gl.TEXTURE_2D,waterTexture);
+      }else{gl.activeTexture(gl.TEXTURE0 + 3);gl.bindTexture(gl.TEXTURE_2D,t.texture);}
+      gl.activeTexture(gl.TEXTURE0);
+      shadeUniforms(settings);
       gl.drawArrays(gl.TRIANGLES, 0, 3); drawCalls++;
     }
     function filterPass(src, dst, mode, factor, radius, dx, dy) {
@@ -938,7 +947,7 @@
     /* Synchronous coarse readback for "fit range to view": at most 128x128
      * samples of the current field. Returns finite heights and, where the
      * relative-elevation base exists, height above it. */
-    function sampleValues() {
+    function sampleValues(options) {
       if (!ready || !field || destroyed) return null;
       var w = Math.min(128, field.width), ht = Math.min(128, field.height), t = texture(), fb = framebuffer();
       try {
@@ -953,14 +962,19 @@
         gl.uniform1f(stats.cspBlurScale, liveAux.blur ? liveAux.blur.factor : 0); gl.uniform1f(stats.cspBaseScale, liveAux.base ? liveAux.base.factor : 0);
         gl.uniformMatrix3fv(stats.cspAuxTransform, false, IDENTITY);
         gl.drawArrays(gl.TRIANGLES, 0, 3);
-        var raw = new Float32Array(w * ht * 4), heights = [], relative = [];
+        var raw = new Float32Array(w * ht * 4), heights = [], relative = [], water = [];
+        var sampleView = {centerMerc:[viewScalars[0],viewScalars[1]],zoom:viewScalars[2],bearing:viewScalars[3],cssSize:[viewScalars[4],viewScalars[5]],dpr:viewScalars[6]};
         gl.readPixels(0, 0, w, ht, gl.RGBA, gl.FLOAT, raw);
         for (var i = 0; i < raw.length; i += 4) {
           if (!(raw[i + 1] > 0) || !Number.isFinite(raw[i])) continue;
           heights.push(raw[i]);
+          // readPixels rows grow from the south; sampling and shading must
+          // use the same geographic pixel centres, including map rotation.
+          var cell=i/4, merc=options?.water===false?null:shaders.screenToMercator(sampleView,[(cell%w+.5)/w,1-(Math.floor(cell/w)+.5)/ht]);
+          if(merc)water.push(geography ? +geography.waterAtMercator(merc[0],merc[1]) : 0);
           if (raw[i + 3] > 0 && Number.isFinite(raw[i + 2])) relative.push(Math.max(0, raw[i] - raw[i + 2]));
         }
-        return {heights: Float32Array.from(heights), relative: Float32Array.from(relative), samples: w * ht};
+        return {heights: Float32Array.from(heights), relative: Float32Array.from(relative), water: options?.water===false?undefined:Uint8Array.from(water), samples: w * ht};
       } finally { deleteTexture(t); deleteFramebuffer(fb); gl.bindFramebuffer(gl.FRAMEBUFFER, null); }
     }
     function readProvenance(view) {
@@ -1031,7 +1045,7 @@
       invalidate: invalidate, render: render, createSnapshot: createSnapshot,
       releaseGestureTargets: function () { if (!lost) releaseGesture(); },
       releaseExport: releaseExport, exportDetail: exportDetail, neededTiles: function (view) { return coverageTiles(view, 0); }, renderToCanvas: renderToCanvas, readProvenance: readProvenance, sampleValues: sampleValues,
-      stats: function () { return {textures: lru.size, textureBytes: lru.bytes, frames: frames, drawCalls: drawCalls, lastFrameMs: lastFrameMs,
+      stats: function () { return {textures: lru.size, textureBytes: lru.bytes, waterMaskBytes: waterTexture ? 16777216 : 0, frames: frames, drawCalls: drawCalls, lastFrameMs: lastFrameMs,
         ready: ready, queuedUploads: queue.size,
         exportTextures: Array.from(snapshots).reduce(function (n, capture) { return n + capture.tiles.size; }, 0),
         exportTextureBytes: Array.from(snapshots).reduce(function (n, capture) { return n + capture.bytes; }, 0), uploads: uploads, evictions: evictions, generation: generation, error: error,

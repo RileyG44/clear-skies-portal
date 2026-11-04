@@ -294,8 +294,15 @@ setInterval(()=>{if(cursorLocation&&!document.hidden)refreshCursorElevation()},1
 function readoutColourKeys(){
   const keys=[],is3d=!!map3d,style=$("#terStyle").value;
   if(style!=="off"&&terrainOpacity()>0){
-    const legend=$("#terLegend"),bar=legend?.querySelector(".bar")?.style.backgroundImage;
-    if(bar)keys.push({name:$("#terStyle").selectedOptions[0].textContent,bar,labels:[...legend.querySelectorAll(".ticks span")].map(el=>el.textContent)});
+    const legend=$("#terLegend");
+    for(const scale of legend?.querySelectorAll(".terlegend-scale")||[]){
+      const bar=scale.querySelector(".bar")?.style.backgroundImage;
+      if(bar)keys.push({name:scale.querySelector(".caption")?.textContent||"Elevation",bar,labels:[...scale.querySelectorAll(".ticks span")].map(el=>el.textContent)});
+    }
+    if(!legend?.querySelector(".terlegend-scale")){
+      const bar=legend?.querySelector(".bar")?.style.backgroundImage;
+      if(bar)keys.push({name:$("#terStyle").selectedOptions[0].textContent,bar,labels:[...legend.querySelectorAll(".ticks span")].map(el=>el.textContent)});
+    }
   }
   if(is3d&&map3d.getLayer("terrain-relief")){
     const ramp=hypsometricRamp().slice(3),top=ramp[ramp.length-2];

@@ -560,7 +560,7 @@ function paintTerrainLegend(style){
   if(studio?.hidden){el.className="terlegend";el.innerHTML="";return}
   if(studio){
     el.className="terlegend on";
-    el.innerHTML=`<div class="caption">${esc(studio.caption)}</div><div class="bar" style="background:${studio.bar}"></div><div class="ticks">${studio.ticks.map(t=>`<span>${esc(t)}</span>`).join("")}</div>`;
+    el.innerHTML=(studio.scales||[studio,studio.secondary].filter(Boolean)).map(key=>`<div class="terlegend-scale"><div class="caption">${esc(key.caption)}</div><div class="bar" style="background:${key.bar}"></div><div class="ticks">${key.ticks.map(t=>`<span>${esc(t)}</span>`).join("")}</div></div>`).join("");
     return;
   }
   const intervals={c2:"2 ft",c5:"5 ft",c10:"10 ft",c25:"25 ft"};
@@ -647,7 +647,7 @@ lidarStudio=window.CSPLidarStudio?.mount($("#terStudio"),{
   getStyle:()=>$("#terStyle").value,
   setStyle:style=>{$("#terStyle").value=style;$("#terStyle").dispatchEvent(new Event("change",{bubbles:true}))},
   onChange:()=>{applyTerrain();schedule3dStyle();paintTerrainInfo();scheduleStudioFit()},
-  sample:()=>gpuTerrainEnabled&&gpuTerrainLayer&&map.hasLayer(gpuTerrainLayer)?gpuTerrainLayer.getEngine()?.sampleValues():null,
+  sample:options=>gpuTerrainEnabled&&gpuTerrainLayer&&map.hasLayer(gpuTerrainLayer)?gpuTerrainLayer.getEngine()?.sampleValues(options):null,
   gpuAvailable:()=>gpuTerrainDecided?gpuTerrainEnabled:true,
   getOpacity:()=>terrainOpacity(),
   setOpacity:value=>{const input=$("#terOp");input.value=Math.round(value);input.dispatchEvent(new Event("input",{bubbles:true}));input.dispatchEvent(new Event("change",{bubbles:true}))},

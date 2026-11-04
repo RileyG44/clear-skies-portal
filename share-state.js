@@ -139,8 +139,21 @@
   function validateTerrain(state,env){
     check(state.terrainLook&&["contrast","saturation","brightness"].every(key=>Number.isFinite(state.terrainLook[key])),"terrain appearance");
     if(!state.studio)return;
-    check(state.studio.state&&same(state.studio.state,env.lidarRender.normalizeState(state.studio.state)),"unsupported terrain mix settings");
-    for(const fit of [state.studio.fitted,state.studio.flatFitted])check(fit&&typeof fit==="object"&&Object.values(fit).every(range=>Array.isArray(range)&&range.length===2&&range.every(Number.isFinite)&&range[1]>range[0]),"terrain display range");
+    // Add only the new scale default to old links; keep strict validation of
+    // every other field, including unknown styles and out-of-range settings.
+    const withScaleDefaults=value=>{
+      const copy=JSON.parse(JSON.stringify(value));
+      const layer=l=>{if(l&&typeof l==="object"&&!Object.hasOwn(l,"rangeMode"))l.rangeMode="separate"};
+      const scene=s=>{if(s){layer(s.base);if(Array.isArray(s.overlays))s.overlays.forEach(layer)}};
+      Object.values(copy.base||{}).forEach(layer);if(Array.isArray(copy.overlays))copy.overlays.forEach(layer);
+      if(Array.isArray(copy.userLooks))copy.userLooks.forEach(look=>scene(look.scene));
+      return copy;
+    };
+    check(state.studio.state&&same(withScaleDefaults(state.studio.state),env.lidarRender.normalizeState(state.studio.state)),"unsupported terrain mix settings");
+    const range=r=>Array.isArray(r)&&r.length===2&&r.every(Number.isFinite)&&r[1]>r[0];
+    const fitValue=f=>range(f)||f&&typeof f==="object"&&!Array.isArray(f)&&Object.keys(f).length===2&&
+      Object.hasOwn(f,"land")&&Object.hasOwn(f,"water")&&(f.land===null||range(f.land))&&(f.water===null||range(f.water))&&!!(f.land||f.water);
+    for(const fit of [state.studio.fitted,state.studio.flatFitted])check(fit&&typeof fit==="object"&&Object.values(fit).every(fitValue),"terrain display range");
     check(state.studio.remFloor===null||Number.isFinite(state.studio.remFloor),"relative elevation floor");
   }
   function validateConditionsAndImagery(state){

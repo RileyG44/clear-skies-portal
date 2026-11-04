@@ -496,6 +496,15 @@
     [".elev-field,.ls-slider", sliderField],
     [".unit-suffix", skip],
     [".elev-spectrum-scale,.elevRamp", spectrum],
+    ["#terLegend", (el, out) => {
+      const scales=$$(".terlegend-scale",el);if(!scales.length)return false;
+      for(const scale of scales)handle(scale,out);
+    }],
+    [".terlegend-scale", (el, out) => {
+      const bar=$(".bar",el),stops=gradientOf(bar),title=clean($(".caption",el)?.textContent);
+      if(title)out.push({kind:"text",title,style:"hint"});
+      if(stops)out.push({kind:"gradient",stops,labels:$$(".ticks span",el).map(span=>clean(span.textContent))});
+    }],
     [".ov-line-control", lineOpacity],
     [".csp-layer-card", (el, out) => { out.push(layerCard(el)); }],
     [".item[data-i]", (el, out) => { out.push(sceneItem(el)); }],

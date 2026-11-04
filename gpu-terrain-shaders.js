@@ -92,7 +92,7 @@
     "u_centerMerc", "u_zoom", "u_bearingRad", "u_cssSize", "u_dpr",
     "u_groundResOverride",
     "u_stackOn", "u_stackGradient", "u_layerCount", "u_layerA", "u_layerB", "u_layerC", "u_layerPos", "u_layerColors",
-    "u_detail", "u_reliefExag", "u_remFlatBase"
+    "u_detail", "u_reliefExag", "u_remFlatBase", "u_waterMask"
   ]);
   /* Array uniforms and their component count; every other uniform is a
    * scalar or the fixed vectors above. Renderers that set uniforms by hand
@@ -261,7 +261,7 @@
       u_groundResOverride: finiteOr(s.groundResOverride, 0),
       u_stackOn: stack.on, u_stackGradient: stack.gradient, u_layerCount: stack.count,
       u_layerA: stack.a, u_layerB: stack.b, u_layerC: stack.c, u_layerPos: stack.pos, u_layerColors: stack.colors,
-      u_detail: stack.detail, u_reliefExag: stack.reliefExag, u_remFlatBase: stack.remFlatBase
+      u_waterMask: 3, u_detail: stack.detail, u_reliefExag: stack.reliefExag, u_remFlatBase: stack.remFlatBase
     };
   }
 
@@ -288,7 +288,7 @@
       var blend = Object.prototype.hasOwnProperty.call(BLEND_IDS, layer.blend) ? BLEND_IDS[layer.blend] : 0;
       a.splice(count * 4, 4, id, clamp(finiteOr(layer.opacity, 1), 0, 1), blend, stops.length);
       b.splice(count * 4, 4, min, max, clamp(finiteOr(layer.gamma, 1), 0.1, 10), Math.max(0, Math.round(finiteOr(layer.steps, 0))));
-      c.splice(count * 4, 4, finiteOr(layer.param, 0), 0, 0, 0);
+      c.splice(count * 4, 4, finiteOr(layer.param, 0), layer.water ? 1 : 0, finiteOr(layer.water && layer.water[0], 0), finiteOr(layer.water && layer.water[1], 1));
       // Unshaded elevation/relative-elevation ramps use only height/base.
       // Other built-ins and registered analysis styles need the gradient.
       if ((id !== 5 && id !== 10) || finiteOr(layer.param, 0) > 0) gradient = 1;
@@ -359,6 +359,7 @@
       "uniform float u_detail;",
       "uniform float u_reliefExag;",
       "uniform float u_remFlatBase;",
+      "uniform highp sampler2D u_waterMask;",
       "in vec2 v_screenUv;",
       "out vec4 fragColor;",
       "const float CSP_PI = 3.141592653589793;",
@@ -497,7 +498,7 @@
       /* Terrain layer. */
       "  vec4 terrain = vec4(0.0);",
       "  if(u_stackOn > 0.5){",
-      "    terrain = cspStack(p, value, groundRes, cosB, sinB);",
+      "    terrain = cspStack(p, value, groundRes, cosB, sinB, merc);",
       "  } else if(u_style >= 0){",
       "    ivec2 px = ivec2(1, 0), py = ivec2(0, 1);",
       "    bool allValid = csp_valid(p - px - py) && csp_valid(p - py) && csp_valid(p + px - py)",
@@ -719,7 +720,19 @@
       "  if(style >= " + CUSTOM_BASE + ") return cspCustomStyle(style, c);",
       "  return vec2(0.0);",
       "}",
-      "vec4 cspStack(ivec2 p, float value, float groundRes, float cosB, float sinB){",
+      "bool cspWater(vec2 merc){",
+      "  float latitude = degrees(atan(sinh(3.141592653589793 * (1.0 - 2.0 * merc.y))));",
+      "  ivec2 q = ivec2(min(16383.0, floor(fract(merc.x) * 16384.0)), clamp(floor((90.0 - latitude) / 180.0 * 8192.0), 0.0, 8191.0));",
+      "  vec4 packed = texelFetch(u_waterMask, ivec2(q.x / 8, q.y / 4), 0); float bits = round(packed[q.y % 4] * 255.0);",
+      "  return mod(floor(bits / exp2(float(7 - q.x % 8))), 2.0) > 0.5;",
+      "}",
+      "vec4 cspWaterColour(int layer, float value, vec2 range){",
+      "  float t = clamp((value - range.x) / max(0.000001, range.y - range.x), 0.0, 1.0);",
+      "  vec4 r = u_layerB[layer]; t = pow(max(t, 0.0), r.z); if(r.w >= 2.0) t = min(floor(t * r.w), r.w - 1.0) / (r.w - 1.0);",
+      "  vec3 deep = vec3(3.0,4.0,94.0)/255.0, mid = vec3(0.0,119.0,182.0)/255.0, shallow = vec3(144.0,224.0,239.0)/255.0;",
+      "  return vec4(t < 0.5 ? mix(deep, mid, t*2.0) : mix(mid, shallow, (t-0.5)*2.0), cspRampAt(layer, t).a);",
+      "}",
+      "vec4 cspStack(ivec2 p, float value, float groundRes, float cosB, float sinB, vec2 merc){",
       "  ivec2 px = ivec2(1, 0), py = ivec2(0, 1);",
       "  if(!(csp_valid(p - px - py) && csp_valid(p - py) && csp_valid(p + px - py) && csp_valid(p - px) && csp_valid(p + px)",
       "    && csp_valid(p - px + py) && csp_valid(p + py) && csp_valid(p + px + py))) return vec4(0.0);",
@@ -753,7 +766,7 @@
       "    float param = u_layerC[i].x;",
       "    vec2 v = cspLayerValue(style, param, c);",
       "    if(v.y <= 0.0) continue;",
-      "    vec4 colour = cspPalette(i, v.x);",
+      "    vec4 colour = style == 5 && u_layerC[i].y > 0.5 && cspWater(merc) ? cspWaterColour(i, v.x, u_layerC[i].zw) : cspPalette(i, v.x);",
       /* Built-in relief shading for elevation-like layers (legacy tint look). */
       "    if((style == 5 || style == 10) && param > 0.0){",
       "      float shade = u_ambient + (1.0 - u_ambient) * cspDirectShade(c.sdx, c.sdy, u_sunAzimuth);",

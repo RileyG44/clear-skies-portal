@@ -70,7 +70,7 @@
     function updateLayer(key,patch,{rerender=false}={}){
       const current=layerFor(key);if(!current) return;
       setLayer(key,R.normalizeLayer(Object.assign({},current,patch),current.style));
-      if(patch.auto===false||patch.style) delete fitted[key];
+      if(patch.auto===false||patch.style||patch.rangeMode){delete fitted[key];delete flatFitted[key]}
       commit({rerender});
     }
     /* Push to the map on the next frame, so a dragged slider costs one redraw
@@ -410,7 +410,7 @@
       if(spec.family!=="lines"&&spec.unit!=="shade"){
         const range=el("div","ls-range");
         const unit=spec.unit==="m"?"ft":spec.unit==="deg"?"°":"";
-        const fit=fitted[key],shown=layer.auto&&fit?fit:[layer.min,layer.max];
+        const fit=displayRange(fitted[key]),shown=layer.auto&&fit?fit:[layer.min,layer.max];
         const number=(which,value)=>{
           const input=el("input");input.type="number";input.step=spec.unit==="m"?"10":spec.unit==="deg"?"1":"0.05";
           input.value=String(+R.toDisplay(layer.style,value).toFixed(spec.unit==="index"?2:0));
@@ -430,7 +430,7 @@
           const auto=el("label","ls-check",`<input type="checkbox" ${layer.auto?"checked":""}><span>Fit to view</span>`);
           auto.title="Stretch the palette across the terrain on screen. Updates as you pan.";
           auto.querySelector("input").onchange=event=>{
-            const current=layerFor(key),fit=fitted[key];
+            const current=layerFor(key),fit=displayRange(fitted[key]);
             const patch={auto:event.target.checked};
             if(!event.target.checked&&fit){patch.min=fit[0];patch.max=fit[1]}
             updateLayer(key,patch,{rerender:true});
@@ -439,6 +439,20 @@
           range.append(auto);
         }
         advancedBody.append(field("Range",range,"ls-field-wide"));
+        if(layer.style==="tint"){
+          const select=el("select","ls-select");select.setAttribute("aria-label","Elevation scale");
+          for(const [value,label] of [["separate","Land & water separately"],["full","Full elevation range"],["robust","Trim extremes (2–98%)"]]){
+            const option=el("option","",esc(label));option.value=value;select.append(option);
+          }
+          select.value=layer.rangeMode;select.disabled=!layer.auto;
+          select.onchange=()=>{updateLayer(key,{rangeMode:select.value},{rerender:true});fitFromView(true)};
+          advancedBody.append(field("Elevation scale",select));
+          advancedBody.append(el("p","control-hint",!layer.auto?
+            "Manual range uses one continuous elevation scale. Enable Fit to view to scale land and water separately.":layer.rangeMode==="separate"?
+            "Land keeps its full sampled range. Water uses a separate blue scale. Shorelines are generalized; measurements stay unchanged.":
+            layer.rangeMode==="robust"?"Trims the lowest and highest 2% of samples for color fitting. Measurements stay unchanged.":
+            "One continuous color scale includes all sampled land elevations and water depths."));
+        }
       }
 
       /* Curve and bands */
@@ -681,11 +695,12 @@
     }
     /* Reads the visible terrain and re-stretches auto layers. Small changes
        are ignored so panning does not make colors shimmer. */
+    const displayRange=fit=>fit&&fit.land!==undefined?(fit.land||fit.water):fit;
     function fitFromView(force){
       const keys=autoKeys(),s=style();
       if(!s||!host.sample) return false;
-      const values=host.sample();if(!values) return false;
-      if(values.heights&&values.heights.length){const h=R.fitRange(values.heights,"tint");if(h) remFloor=h[0]}
+      const values=host.sample({water:keys.some(key=>{const layer=layerFor(key);return layer.style==="tint"&&layer.rangeMode==="separate"})});if(!values) return false;
+      if(values.heights&&values.heights.length){const h=R.fitRange(values.heights,"tint","robust");if(h) remFloor=h[0]}
       /* The 3D drape has no valley-floor field: there relative elevation is
          measured from the view's lowest ground, so it gets its own range. */
       if(remFloor!==null&&values.heights) for(const key of keys) if(layerFor(key).style==="rem")
@@ -694,15 +709,18 @@
       for(const key of keys){
         const layer=layerFor(key),source=layer.style==="rem"?values.relative:values.heights;
         if(!source||source.length<16) continue;
-        const next=R.fitRange(source,layer.style),prev=fitted[key];
+        const prev=fitted[key],next=layer.style==="tint"?R.stableElevationFit(R.fitElevation(source,values.water,layer.rangeMode),prev,force):R.fitRange(source,layer.style);
         if(!next) continue;
-        const span=Math.max(1e-6,next[1]-next[0]);
-        if(force||!prev||Math.abs(prev[0]-next[0])>span*.04||Math.abs(prev[1]-next[1])>span*.04){fitted[key]=next;changed=true}
+        // Elevation extrema must track newly arrived peaks and pits, even when
+        // they occupy less than the old 4% hysteresis threshold.
+        const range=displayRange(next),old=displayRange(prev),span=Math.max(1e-6,range[1]-range[0]);
+        if(force||!prev||(layer.style==="tint"?JSON.stringify(next)!==JSON.stringify(prev):
+          Math.abs(old[0]-range[0])>span*.04||Math.abs(old[1]-range[1])>span*.04)){fitted[key]=next;changed=true}
       }
       if(changed){
         const open=expanded&&fitted[expanded]&&container.querySelector(`[data-key="${expanded}"] .ls-range-inputs`);
         if(open){const [a,b]=open.querySelectorAll("input"),layer=layerFor(expanded);
-          if(a&&b&&layer){a.value=String(Math.round(R.toDisplay(layer.style,fitted[expanded][0])));b.value=String(Math.round(R.toDisplay(layer.style,fitted[expanded][1])))}}
+          if(a&&b&&layer){a.value=String(Math.round(R.toDisplay(layer.style,displayRange(fitted[expanded])[0])));b.value=String(Math.round(R.toDisplay(layer.style,displayRange(fitted[expanded])[1])))}}
         host.onChange&&host.onChange();
       }
       return changed;
@@ -718,15 +736,27 @@
       s=s||style();const st=stack(s);if(!st) return null;
       const visible=layerKeys().map(key=>({key,layer:layerFor(key)})).filter(entry=>entry.layer.visible&&entry.layer.opacity>0);
       if(!visible.length)return {hidden:true};
-      const {key,layer}=visible[0];s=layer.style;const spec=R.STYLES[s];
-      const range=layer.auto&&fitted[key]?fitted[key]:[layer.min,layer.max];
+      function keysFor({key,layer},overlays=[]){
+        const style=layer.style,spec=R.STYLES[style];
+        const fit=layer.auto&&fitted[key],range=displayRange(fit)||[layer.min,layer.max];
+        const caption=`${spec.label}${layer.stops?" · custom colors":` · ${(R.PALETTES[layer.palette]||{}).name||""}`}${overlays.length?` + ${overlays.join(" + ")}`:""}`;
+        let ticks;
+        if(spec.unit==="shade")ticks=["shadow","relief","illuminated"];
+        else if(spec.family==="lines")ticks=["intermediate","index"];
+        else ticks=[R.formatValue(style,range[0]),R.formatValue(style,(range[0]+range[1])/2),R.formatValue(style,range[1])+(layer.auto?(fit?" · fitted":" · waiting for terrain"):"")];
+        const bar=style==="tint"?R.elevationGradient(layer,range):R.gradientCss(R.paletteStops(layer),layer.reverse);
+        const land={caption:caption+(fit?.land&&fit?.water?" · land":""),bar,ticks};
+        if(!fit?.water)return [land];
+        const water={caption:"Water · elevation · separate scale"+(overlays.length?` + ${overlays.join(" + ")}`:""),bar:R.elevationGradient(layer,fit.water,true),
+          ticks:[fit.water[0],(fit.water[0]+fit.water[1])/2,fit.water[1]].map((v,i)=>R.formatValue("tint",v)+(i===2?" · fitted":""))};
+        return fit.land?[land,water]:[water];
+      }
       const overlays=visible.slice(1).map(entry=>(R.STYLES[entry.layer.style]||{}).label).filter(Boolean);
-      const caption=`${spec.label}${layer.stops?" · custom colors":` · ${(R.PALETTES[layer.palette]||{}).name||""}`}${overlays.length?` + ${overlays.join(" + ")}`:""}`;
-      let ticks;
-      if(spec.unit==="shade") ticks=["shadow","relief","illuminated"];
-      else if(spec.family==="lines") ticks=["intermediate","index"];
-      else ticks=[R.formatValue(s,range[0]),R.formatValue(s,(range[0]+range[1])/2),R.formatValue(s,range[1])+(layer.auto?" · fitted":"")];
-      return {caption,bar:R.gradientCss(R.paletteStops(layer),layer.reverse),ticks};
+      const scales=keysFor(visible[0],overlays);
+      // Elevation overlays need their own keys even when hillshade is the
+      // bottom layer. All consumers (web, native and exports) share these.
+      for(const entry of visible.slice(1))if(entry.layer.style==="tint")scales.push(...keysFor(entry));
+      return {...scales[0],secondary:scales[1],scales};
     }
 
     render();
