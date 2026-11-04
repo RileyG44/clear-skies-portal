@@ -5,10 +5,11 @@
    does it boot its own server.js on a free loopback port. The web app is
    untouched: every request it makes is relative, so it simply follows
    whichever origin we load.                                                  */
-const {app, BrowserWindow, shell, dialog, session, ipcMain} = require("electron");
+const {app, BrowserWindow, WebContentsView, Menu, shell, dialog, session, ipcMain} = require("electron");
 const {pathToFileURL} = require("url");
 const {windowChrome} = require("./window-chrome");
 const {engineStorage} = require("./engine-storage");
+const {DEFAULTS,validate,readConfig,saveConfig,engineEnvironment,customEngine} = require("./setup-config");
 const {fork, execFile} = require("child_process");
 const fs   = require("fs");
 const os   = require("os");
@@ -30,12 +31,45 @@ const ENGINE_PLIST = path.join(os.homedir(), "Library", "LaunchAgents", `${ENGIN
 let child = null;
 let win   = null;
 let port  = 0;
+let setupConfig = {...DEFAULTS};
+let finishingSetup = false;
+let setupView = null;
+let preparing = null;
 const setupFile = path.join(__dirname,"setup","index.html");
 const setupURL = pathToFileURL(setupFile).href;
 const guideFile = path.join(__dirname,"setup","guide.html");
 const setupPages = new Set([setupURL,pathToFileURL(guideFile).href]);
-const setupMarker = () => path.join(app.getPath("userData"),"setup-v2.json");
-const showSetup = (guide=false) => { if(win) win.loadFile(guide?guideFile:setupFile); };
+const setupMarker = () => path.join(app.getPath("userData"),"setup-v3.json");
+const needsSetup = () => process.argv.includes("--setup") || (["win32","darwin"].includes(process.platform) && !fs.existsSync(setupMarker()));
+const preferences = () => ({contextIsolation:true,nodeIntegration:false,preload:path.join(__dirname,"preload.js"),backgroundThrottling:false});
+function showSetup(guide=false){
+  if(!win)return;
+  if(!setupView){
+    setupView=new WebContentsView({webPreferences:preferences()});
+    setupView.setBackgroundColor("#040c1e");
+    win.contentView.addChildView(setupView);
+    wireNavigation(setupView.webContents);
+    sizeSetup();
+  }
+  setupView.webContents.loadFile(guide?guideFile:setupFile);
+}
+function sizeSetup(){
+  if(setupView&&win){const {width,height}=win.getContentBounds();setupView.setBounds({x:0,y:0,width,height});}
+}
+function dismissSetup(){
+  if(!setupView)return;
+  const view=setupView;setupView=null;
+  win?.contentView.removeChildView(view);
+  if(!view.webContents.isDestroyed())view.webContents.close();
+}
+function prepareMap(){
+  if(preparing)return preparing;
+  preparing=(async()=>{
+    if(!port)port=await pickServer();
+    if(win)await win.loadURL(`http://${HOST}:${port}/`);
+  })().catch(async error=>{await stopServer();port=0;throw error;}).finally(()=>{preparing=null;});
+  return preparing;
+}
 
 /* Finder launches do not inherit a terminal's CSP_ENGINE_PORT. Read the same
    saved port the service installer keeps, or a healthy updated engine on 8770
@@ -63,16 +97,18 @@ function freePort(){
   });
 }
 
-function startServer(p){
+async function startServer(p){
   const storage=engineStorage(app.getPath("userData"),app.isPackaged?path.dirname(SERVER):null);
   child = fork(SERVER, [], {
     env: {
       ...process.env,
+      ...engineEnvironment(setupConfig),
       PORT: String(p),
       HOST,
       // Keep the tile cache out of the .app bundle: it is read-only once
       // signed, and writing into it would break the signature.
       CSP_CACHE_DIR: storage.cache,
+      CSP_STARTUP_CACHE_DIR:app.isPackaged?path.join(process.resourcesPath,"startup-cache"):path.join(__dirname,"..","build","startup-cache"),
       CSP_MARKUP_DIR: storage.markup,
       ELECTRON_RUN_AS_NODE: "1",
     },
@@ -80,12 +116,22 @@ function startServer(p){
   });
   child.stdout.on("data", d => process.stdout.write(`[server] ${d}`));
   child.stderr.on("data", d => process.stderr.write(`[server] ${d}`));
-  child.on("exit", (code, sig) => {
-    child = null;
-    if (!app.isQuittingCsp && code !== 0){
+  const server = child;
+  server.on("exit", (code, sig) => {
+    if(child===server) child = null;
+    if (!app.isQuittingCsp && !server.cspStopping && code !== 0){
       dialog.showErrorBox("ClearSkies",
         `The local server stopped unexpectedly (code ${code}${sig ? `, ${sig}` : ""}).\n\nQuit and reopen the app to try again.`);
     }
+  });
+}
+
+async function stopServer(){
+  const server=child;if(!server)return;
+  server.cspStopping=true;
+  await new Promise(resolve=>{
+    const timer=setTimeout(()=>server.kill("SIGKILL"),5000);
+    server.once("exit",()=>{clearTimeout(timer);resolve();});server.kill();
   });
 }
 
@@ -118,7 +164,7 @@ function kickstartAgent(){
 
 /* Use the Mac's engine if it is up or can be woken; otherwise our own copy. */
 async function pickServer(){
-  if (process.env.CSP_ELECTRON_OWN_SERVER !== "1"){
+  if (process.env.CSP_ELECTRON_OWN_SERVER !== "1" && !customEngine(setupConfig)){
     const engine = await enginePort();
     if (await engineUp(engine)) return engine;
     if (await kickstartAgent()){
@@ -127,7 +173,7 @@ async function pickServer(){
     }
   }
   const p = await freePort();
-  startServer(p);
+  await startServer(p);
   await waitForServer(p);
   return p;
 }
@@ -149,12 +195,23 @@ function waitForServer(p, timeoutMs = 20000){
   });
 }
 
-function createWindow(){
-  const internalOrigin = `http://${HOST}:${port}`;
+function wireNavigation(contents){
   const isInternal = value => {
-    try{ return new URL(value).origin === internalOrigin }
+    try{ return new URL(value).origin === `http://${HOST}:${port}` }
     catch(e){ return false }
   };
+  contents.on("before-input-event",(event,input)=>{
+    if(input.type==="keyDown" && input.key==="F1"){event.preventDefault();showSetup(true);}
+  });
+  const external = url => {
+    if (isInternal(url) || setupPages.has(url)) return false;
+    if(/^https?:\/\//i.test(url))shell.openExternal(url);
+    return true;
+  };
+  contents.setWindowOpenHandler(({url})=>external(url)?{action:"deny"}:{action:"allow"});
+  contents.on("will-navigate",(event,url)=>{if(external(url))event.preventDefault();});
+}
+function createWindow(){
   win = new BrowserWindow({
     width: 1400, height: 900, minWidth: 900, minHeight: 600,
     backgroundColor: "#000000",
@@ -163,37 +220,46 @@ function createWindow(){
     // drag strip; it does not paint a title bar.
     ...windowChrome(process.platform),
     icon:app.isPackaged?path.join(process.resourcesPath,"ClearSkies.ico"):path.join(__dirname,"..","build","icon.ico"),
-    webPreferences: {contextIsolation: true, nodeIntegration: false, preload:path.join(__dirname,"preload.js")},
+    webPreferences: preferences(),
   });
 
   if(process.platform==="win32") win.setMenu(null);
-  if(process.argv.includes("--setup") || (process.platform==="win32" && !fs.existsSync(setupMarker()))) showSetup();
-  else win.loadURL(`${internalOrigin}/`);
-  win.webContents.on("before-input-event",(event,input)=>{
-    if(input.type==="keyDown" && input.key==="F1"){ event.preventDefault(); showSetup(true); }
-  });
-  win.on("closed", () => { win = null; });
-
-  // Anything that is not our own server opens in the real browser,
-  // so attribution links don't strand the user inside the app.
-  const external = url => {
-    if (isInternal(url) || setupPages.has(url)) return false;
-    // Never hand file:, javascript: or custom protocols to an external app.
-    if(/^https?:\/\//i.test(url)) shell.openExternal(url);
-    return true;
-  };
-  win.webContents.setWindowOpenHandler(({url}) => external(url) ? {action:"deny"} : {action:"allow"});
-  win.webContents.on("will-navigate", (e, url) => { if (external(url)) e.preventDefault(); });
+  wireNavigation(win.webContents);
+  win.on("resize",sizeSetup);
+  if(needsSetup()){
+    showSetup();
+    prepareMap().catch(error=>console.warn(`[app] setup map preparation: ${error.message}`));
+  }
+  else win.loadURL(`http://${HOST}:${port}/`);
+  win.on("closed", () => {win=null;dismissSetup();});
 }
 
 app.isQuittingCsp = false;
 app.setAppUserModelId("com.rileyg44.clear-skies-portal");
-ipcMain.handle("csp:finish-setup",async event=>{
-  if(!win || event.sender!==win.webContents || !setupPages.has(event.senderFrame?.url)) return false;
-  fs.mkdirSync(app.getPath("userData"),{recursive:true});
-  fs.writeFileSync(setupMarker(),JSON.stringify({completedAt:new Date().toISOString()}));
-  await win.loadURL(`http://${HOST}:${port}/`);
-  return true;
+const trustedSetup = event => setupView && event.sender===setupView.webContents && setupPages.has(event.senderFrame?.url);
+const trustedMap = event => win && event.sender===win.webContents && event.senderFrame?.url?.startsWith(`http://${HOST}:${port}/`);
+ipcMain.handle("csp:get-setup-config",event=>trustedSetup(event)?{config:setupConfig,defaults:DEFAULTS}:null);
+ipcMain.on("csp:map-preferences",event=>{event.returnValue=trustedMap(event)?{panShading:setupConfig.panShading}:null;});
+ipcMain.handle("csp:pan-shading",(event,mode)=>{
+  if(!trustedMap(event) || !["off","auto","on"].includes(mode))return false;
+  setupConfig=saveConfig(app.getPath("userData"),{...setupConfig,panShading:mode});return true;
+});
+ipcMain.handle("csp:finish-setup",async (event,config)=>{
+  if(!trustedSetup(event) || finishingSetup) return false;
+  finishingSetup=true;
+  try{
+    const next=config===undefined?setupConfig:validate(config);
+    const engineChanged=JSON.stringify(engineEnvironment(next))!==JSON.stringify(engineEnvironment(setupConfig));
+    if(preparing)await preparing.catch(()=>{});
+    setupConfig=saveConfig(app.getPath("userData"),next);
+    if(engineChanged){await stopServer();port=0;}
+    if(!port)await prepareMap();
+    else if(!engineChanged)await win.webContents.executeJavaScript(`localStorage.setItem("clearskies.panShading.v1",${JSON.stringify(next.panShading)});document.dispatchEvent(new CustomEvent("csp:pan-shading",{detail:{mode:${JSON.stringify(next.panShading)}}}));`);
+    fs.mkdirSync(app.getPath("userData"),{recursive:true});
+    fs.writeFileSync(setupMarker(),JSON.stringify({completedAt:new Date().toISOString()}));
+    dismissSetup();
+    return true;
+  }finally{finishingSetup=false;}
 });
 
 if (!app.requestSingleInstanceLock()){
@@ -211,9 +277,17 @@ if (!app.requestSingleInstanceLock()){
     });
 
     try {
-      port = await pickServer();
-      console.log(child ? `[app] started a bundled server on ${port}` : `[app] using the installed terrain engine on ${port}`);
+      setupConfig=readConfig(app.getPath("userData"));
+      // Render the real map underneath setup, retaining its tiles/GPU state.
+      if(!needsSetup())port = await pickServer();
       createWindow();
+      if(process.platform==="darwin") Menu.setApplicationMenu(Menu.buildFromTemplate([
+        {role:"appMenu"}, {role:"editMenu"}, {role:"viewMenu"}, {role:"windowMenu"},
+        {role:"help",submenu:[
+          {label:"Welcome to ClearSkies",click:()=>showSetup()},
+          {label:"Terrain Engine & Tailscale",accelerator:"F1",click:()=>showSetup(true)},
+        ]},
+      ]));
     } catch (err) {
       dialog.showErrorBox("ClearSkies", `Could not start the local server.\n\n${err.message}`);
       app.quit();
