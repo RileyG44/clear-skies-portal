@@ -1,8 +1,8 @@
-Download **ClearSkies-Setup-1.0.5-arm64.dmg** for Apple Silicon (M1 and newer), or **ClearSkies-Setup-1.0.5-x64.dmg** for an Intel Mac.
+Download **ClearSkies-Setup-1.0.6-arm64.dmg** for Apple Silicon (M1 and newer), or **ClearSkies-Setup-1.0.6-x64.dmg** for an Intel Mac.
 
 Open the disk image, drag **ClearSkies** into **Applications**, then open it from Applications. The app and terrain engine are included together; no Node.js or terminal setup is needed. ZIP downloads are also available.
 
-- New in 1.0.5: the bundled map matches the web app and iPhone at build 2026-11-03f.
+- New in 1.0.6: fitted elevation colors use separate land and water scales, preserving land contrast in ocean-heavy views and sampled land extremes. Includes native scale controls and separate legends; bundled map build 2026-11-04b.
 - First launch shows the same terrain welcome page and Pacifico ClearSkies wordmark as Windows. Choose **Open ClearSkies** to start exploring, or **Learn about Tailscale** for the optional remote-access guide.
 - Optional **Advanced configuration** on the welcome page sets terrain tile, WA DNR and memory cache limits, free disk-space reserve, terrain workers, and smoother panning (Off / Auto / On). Skip it to use the default setup.
 - The guide includes the official Tailscale for Mac download, engine capabilities, and Dock instructions. Reopen the welcome or guide from the **Help** menu.
