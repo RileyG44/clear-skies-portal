@@ -42,7 +42,7 @@ a{color:inherit}
 
 /* everything inked shares one roughening filter and multiplies into the paper */
 .inked{filter:url(#ink);mix-blend-mode:multiply}
-/* the wordmark is rubber-stamped: rough edges, uneven ink, specks where the stamp missed */
+/* the wordmark is stamped: a rough edge, uneven ink pressure and a fine, even grain */
 .stamped{filter:url(#stamp);mix-blend-mode:multiply}
 
 .nav{position:absolute;top:0;right:0;z-index:3;display:flex;align-items:center;gap:clamp(16px,2.2vw,30px);
@@ -54,7 +54,7 @@ a{color:inherit}
 .sk{display:grid;grid-template-columns:minmax(0,44fr) minmax(0,56fr);min-height:100svh}
 /* letterhead: the title's top sits level with the tree's tip and the buttons' bottom with the
    foot of the andesite; the script below sets --head-top and --foot from the drawing */
-.copy{--title-drop:clamp(12px,2.6vh,28px);display:flex;flex-direction:column;align-items:flex-start;padding:var(--head-top,96px) clamp(16px,2vw,32px) var(--foot,72px) max(24px,min(7.5vw,130px));max-width:640px}
+.copy{--title-drop:clamp(26px,5vh,56px);display:flex;flex-direction:column;align-items:flex-start;padding:var(--head-top,96px) clamp(16px,2vw,32px) var(--foot,72px) max(24px,min(7.5vw,130px));max-width:640px}
 .title{display:inline-block;white-space:nowrap;font-family:Pacifico,"Brush Script MT",cursive;font-weight:400;color:var(--emerald);margin:var(--title-drop,0px) 0 .12em -.1em;
   padding:0 .32em .06em .06em;font-size:clamp(64px,7.4vw,124px);line-height:1.15;letter-spacing:.005em}
 /* downloads: notebook entries in the space between the letterhead and the buttons */
@@ -127,9 +127,8 @@ a{color:inherit}
   <filter id="stamp" x="-4%" y="-20%" width="108%" height="140%" color-interpolation-filters="sRGB">
     <feTurbulence type="fractalNoise" baseFrequency=".5" numOctaves="2" seed="11" result="edge"/>
     <feDisplacementMap in="SourceGraphic" in2="edge" scale="2.2" xChannelSelector="R" yChannelSelector="G" result="rough"/>
-    <feTurbulence type="fractalNoise" baseFrequency=".6" numOctaves="2" seed="5" result="speck"/>
-    <feColorMatrix in="speck" type="matrix" values="0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 -8 6.6" result="specks"/>
-    <feComponentTransfer in="specks" result="voids"><feFuncA type="discrete" tableValues="0 1 1 1"/></feComponentTransfer>
+    <feTurbulence type="fractalNoise" baseFrequency="1.6" numOctaves="1" seed="5" result="speck"/>
+    <feColorMatrix in="speck" type="matrix" values="0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 -.45 1.2" result="voids"/>
     <feTurbulence type="fractalNoise" baseFrequency=".025 .05" numOctaves="2" seed="2" result="press"/>
     <feColorMatrix in="press" type="matrix" values="0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 .8 .68" result="pressure"/>
     <feComposite in="voids" in2="pressure" operator="arithmetic" k1="1" result="ink"/>
