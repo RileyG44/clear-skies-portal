@@ -25,3 +25,9 @@ panning. Skip it to use the defaults documented in `MAC_RELEASE.md`. Settings
 are validated and stored outside the installation in `desktop-config.json`.
 Reopen the welcome using the Start setup shortcut to change them later.
 No separate Node.js, runtime or terminal setup is needed.
+
+The Windows package includes the same starter overview terrain snapshot as Mac.
+The map renders under the welcome page while setup is open. Finishing default
+setup reveals that already-loaded map; custom engine resource limits reuse the
+same caches after restart. Starter tiles are read-only app resources and remain
+available even when the normal cache free-space reserve prevents disk writes.

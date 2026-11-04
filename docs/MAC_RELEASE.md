@@ -12,3 +12,5 @@ Open the disk image, drag **ClearSkies** into **Applications**, then open it fro
 These builds are ad-hoc signed and are **not Apple-notarized**. macOS may block the first opening of an app downloaded from the internet. After moving it to Applications and trying to open it, use **System Settings → Privacy & Security → Open Anyway** if macOS blocks it. SHA-256 checksums are included.
 
 Default setup: 15 GiB disposable tile cache, 32 GiB WA DNR terrain cache, 2 GiB DNR download limit, 256 MiB memory cache, 8 GiB free-space reserve, automatic terrain workers (up to 8), and Auto smoother panning. Limits are not preallocated. Saved offline areas are protected from tile-cache eviction. Custom cache/worker settings use the included engine without changing an existing terrain service.
+
+- The installer includes a 235-tile overview elevation snapshot (about 23 MiB) for the default Missoula view and its immediate border. The real map loads behind the welcome page during setup; Open ClearSkies reveals that same map without reloading. Normal national and survey sources refine it as available. Basemaps and live overlays still use their usual providers.

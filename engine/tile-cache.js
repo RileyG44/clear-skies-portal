@@ -10,6 +10,7 @@ const TTL_TILE   = 90*24*3600*1000;   // lidar hillshade never changes
 const TTL_META   = 7*24*3600*1000;
 const CACHE_MIN_FREE_GIB=Math.max(0,Number(process.env.CSP_CACHE_MIN_FREE_GB)||8);
 const CACHE_MIN_FREE_BYTES=CACHE_MIN_FREE_GIB*1024*1024*1024;
+const STARTUP_CACHE=process.env.CSP_STARTUP_CACHE_DIR;
 let CACHE = null, cacheCount = 0, cacheBudget = null;
 
 /* canEvict reports whether eviction may run: an area download changes its
@@ -59,15 +60,15 @@ function memoryCacheGet(k,ttl){
 }
 function cacheGet(k, ttl){
   const warm=memoryCacheGet(k,ttl);if(warm){cacheBudgetCore.touchAccess(path.join(CACHE,k));return warm}
-  const f = path.join(CACHE, k);
-  try{
-    const st = fs.statSync(f);
-    if(Date.now() - st.mtimeMs > ttl) return null;
-    const raw = JSON.parse(fs.readFileSync(f + ".meta", "utf8"));
-    const value={body: fs.readFileSync(f), ...raw};
-    cacheBudgetCore.touchAccess(f,st);
-    memoryCachePut(k,value,st.mtimeMs);return value;
-  }catch(e){ return null }
+  for(const folder of [CACHE,STARTUP_CACHE].filter(Boolean))try{
+    const f=path.join(folder,k),st=fs.statSync(f),raw=JSON.parse(fs.readFileSync(f+".meta","utf8"));
+    const seed=folder===STARTUP_CACHE,at=seed?Date.parse(raw.seedCapturedAt):st.mtimeMs;
+    if(!Number.isFinite(at)||Date.now()-at>ttl)continue;
+    const value={body:fs.readFileSync(f),...raw};
+    if(!seed)cacheBudgetCore.touchAccess(f,st);
+    memoryCachePut(k,value,at);return value;
+  }catch{/* Missing or invalid cache entries fall through to the next store. */}
+  return null;
 }
 function cachePut(k, status, type, body,sourceMeta){
   /* RAM stays useful even when the disk has reached its safety reserve. The

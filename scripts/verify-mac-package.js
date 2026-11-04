@@ -15,7 +15,7 @@ async function smoke(appPath,arch){
   const resources=path.join(appPath,"Contents/Resources");
   const child=spawn(path.join(appPath,"Contents/MacOS/ClearSkies"),[path.join(resources,"app/server.js")],{
     env:{...process.env,ELECTRON_RUN_AS_NODE:"1",HOST:"127.0.0.1",PORT:String(port),
-      CSP_CACHE_DIR:path.join(scratch,"cache"),CSP_MARKUP_DIR:path.join(scratch,"markup")},
+      CSP_CACHE_DIR:path.join(scratch,"cache"),CSP_MARKUP_DIR:path.join(scratch,"markup"),CSP_STARTUP_CACHE_DIR:path.join(resources,"startup-cache")},
   });
   let output="",spawnError;
   child.stdout.on("data",data=>{output+=data;});child.stderr.on("data",data=>{output+=data;});
@@ -39,6 +39,8 @@ async function smoke(appPath,arch){
     assert.match(await page.text(),/ClearSkies/);
     const client=await fetch(`http://127.0.0.1:${port}/app.js`);assert.equal(client.status,200);
     assert((await client.text()).length>1000,"Bundled client must assemble successfully");
+    const seed=await fetch(`http://127.0.0.1:${port}/api/elev/overview/10/177/357.png`);
+    assert.equal(seed.headers.get("X-Cache"),"hit","bundled starter terrain must be a cache hit");
     console.log(`${arch}: engine from mounted DMG served healthy API, map and assembled client.`);
   }finally{
     if(child.pid && child.exitCode===null && child.signalCode===null){child.kill();await once(child,"exit");}
@@ -58,7 +60,7 @@ async function verify(){
     run("/usr/bin/codesign",["--verify","--deep","--strict",appPath]);
     for(const file of [...site.web,...site.app,...site.engine,...site.vendor])
       assert(fs.existsSync(path.join(resources,"app",file)),`Packaged engine/client file missing (${arch}): ${file}`);
-    for(const file of ["main.js","preload.js","window-chrome.js","engine-storage.js","setup-config.js","setup/index.html","setup/guide.html","setup/setup.js","setup/setup.css","setup/icon.png","setup/terrain-welcome.webp","setup/fonts/Pacifico.ttf","setup/fonts/Inter.woff2"])
+    for(const file of ["main.js","preload.js","window-chrome.js","engine-storage.js","setup-config.js","startup-cache.js","setup/index.html","setup/guide.html","setup/setup.js","setup/setup.css","setup/icon.png","setup/terrain-welcome.webp","setup/fonts/Pacifico.ttf","setup/fonts/Inter.woff2"])
       assert(extractFile(path.join(resources,"app.asar"),`electron/${file}`).length,`Missing shell asset (${arch}): ${file}`);
     for(const name of [`ClearSkies-Setup-${version}-${arch}.dmg`,`ClearSkies-${version}-${arch}.zip`]){
       const file=path.resolve("dist",name);assert(fs.statSync(file).size>1e6,`Empty package: ${name}`);

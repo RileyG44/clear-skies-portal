@@ -38,8 +38,19 @@ credentials. App identifiers and user-data paths are unchanged.
 Advanced configuration is shared with Windows and is collapsed by default.
 Settings are validated and saved in `desktop-config.json` in the existing
 Electron user-data directory. They configure the bundled engine through its
-existing environment variables before startup. Custom engine resource settings
+existing environment variables. Setup starts the engine/map in the background;
+changing engine resource limits restarts it while retaining the normal caches. Custom engine resource settings
 select the bundled engine; they never rewrite another terrain service.
 Smoother panning defaults to Auto, uses the existing map preference, and is
 saved outside the changing loopback origin so in-app changes survive restarts.
 The version 3 welcome is shown once to existing desktop users on upgrade too.
+
+The checked-in `build/startup-terrain.json.gz` and manifest contain only numeric
+overview elevation for the default view and a one-tile border. Refresh with
+`node scripts/build-startup-cache.js` (network required; `--dry-run` lists scope).
+The optional `--national` flag also captures USGS national tiles when available.
+Builds run `scripts/prepare-startup-cache.js` to validate and unpack the snapshot
+into read-only application resources. The engine reads it after its live cache,
+using the original capture age and normal source labels. It needs no second disk
+copy, obeys the RAM cache budget, and cannot overwrite live or higher-rank data.
+Third-party display-only basemap/satellite tiles are not redistributed.

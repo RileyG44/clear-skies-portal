@@ -33,6 +33,7 @@ footer{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-betw
 .welcome-learn{border:1px solid #d3e6ff42;color:#d7e6f7;background:#07152b28;backdrop-filter:blur(10px);font-weight:450;display:inline-flex;align-items:center;gap:16px}
 .welcome-learn:hover{background:#adcff01c;text-decoration:none;border-color:#d3e6ff80}
 .advanced-setup{margin-top:24px;max-width:470px;font-size:12px;color:#c5d8eb}
+.setup-preparing{font-size:11px;line-height:1.65;max-width:420px;color:#a6bdd4;margin:18px 0 0}
 .advanced-setup summary{cursor:pointer;list-style-position:inside;width:fit-content;padding:6px 0}
 .advanced-setup summary:focus-visible{outline:2px solid #d8edff;outline-offset:4px}
 .advanced-setup form{margin-top:10px;padding:18px;background:#07152bec;backdrop-filter:blur(12px);border:1px solid #d3e6ff42;border-radius:9px}

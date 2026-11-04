@@ -137,6 +137,8 @@ Both Mac and Windows show the terrain welcome page with an optional
 reserve, terrain workers and smoother panning (Off / Auto / On). Skip Advanced
 to use the default setup. The guide links to Tailscale for your platform.
 Reopen the welcome from Help on Mac or the Start setup shortcut on Windows.
+The downloads include starter terrain for the default Missoula view and its
+immediate border. The map prepares behind the welcome page while setup is open.
 
 ## Install on Windows
 

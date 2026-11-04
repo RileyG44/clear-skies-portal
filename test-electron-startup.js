@@ -12,6 +12,7 @@ function fixture({env={},platform='darwin',installed=true,saved='8770\n',error=n
       if(name==='./window-chrome')return require('./electron/window-chrome');
       if(name==='./engine-storage')return require('./electron/engine-storage');
       if(name==='./setup-config')return require('./electron/setup-config');
+      if(name==='./startup-cache')return require('./electron/startup-cache');
       if(name==='child_process')return {execFile:(file,args,options,callback)=>{
         calls.reads.push({file,args,options});callback(error,saved);
       }};

@@ -10,6 +10,8 @@ module.exports={
   directories:{buildResources:"build",output:"dist"},
   files:["electron/**/*","package.json"],
   extraResources:[{from:".",to:"app",filter:[...site.web,...site.app,...site.engine,"vendor/**/*"]},
+    {from:"build/startup-cache",to:"startup-cache"},
+    {from:"build/startup-terrain-LICENSE.txt",to:"startup-terrain-LICENSE.txt"},
     {from:"build/icon.ico",to:"ClearSkies.ico"}],
   win:{target:[{target:"nsis",arch:["x64"]},{target:"zip",arch:["x64"]}],icon:"build/icon.ico",
     artifactName:"ClearSkies-${version}-${arch}.${ext}",

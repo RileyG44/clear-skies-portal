@@ -1,0 +1,20 @@
+ClearSkies startup terrain snapshot
+
+The package contains numeric elevation PNG tiles for the default Missoula /
+Medical Lake view and its immediate border. It contains no basemap, satellite
+imagery, rendered screenshot, or private/user data.
+
+National elevation: U.S. Geological Survey 3D Elevation Program (3DEP).
+USGS-authored elevation data are in the public domain.
+https://www.usgs.gov/3d-elevation-program
+
+Overview elevation: Mapzen Terrain Tiles, sourced from the existing public
+Terrarium tile service, https://s3.amazonaws.com/elevation-tiles-prod/terrarium/
+Attribution: Mapzen, data from USGS and other open elevation sources.
+https://github.com/tilezen/joerd/blob/master/docs/attribution.md
+Source data retain their respective attribution/license requirements.
+
+The capture timestamp, tile coordinates, source kind, original engine metadata
+and SHA-256 body checksums are recorded inside startup-terrain.json.gz. These
+are national/overview elevation products, not raw one-metre LiDAR. The normal
+source-quality rules continue to refine them with available survey detail.

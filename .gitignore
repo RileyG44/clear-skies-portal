@@ -39,6 +39,7 @@ Desktop.ini
 # Electron build output
 dist/
 build/icon-1024.png
+build/startup-cache/
 .ui-stress/
 
 # Markup (annotation) layers live on this machine only
