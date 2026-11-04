@@ -1,0 +1,183 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Inside ClearSkies</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<meta name="description" content="What ClearSkies does: LiDAR terrain you can relight, point clouds you can strip to bare earth, and the newest satellite imagery.">
+<meta name="theme-color" content="#02050d">
+<link rel="icon" href="icon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=Inter:wght@400..700&display=swap">
+<link rel="stylesheet" href="site.css">
+<script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js"}}</script>
+</head>
+<body class="explore">
+<div class="page">
+  <nav class="nav wrap" aria-label="Main">
+    <a class="brand" id="home" href="index.html" aria-label="ClearSkies home"><span>ClearSkies</span></a>
+    <div class="nav-links">
+      <a href="https://rileyg44.github.io/clear-skies-portal/" target="_blank" rel="noopener">Web app</a>
+      <a href="https://github.com/RileyG44/clear-skies-portal" target="_blank" rel="noopener">GitHub</a>
+      <a class="pill" href="download.html">Download</a>
+    </div>
+  </nav>
+
+  <main class="ex">
+    <header class="ex-head wrap">
+      <h1>Inside ClearSkies</h1>
+      <p>A map for reading the land. The newest satellite scenes, LiDAR terrain you can relight from any angle, and point clouds you can strip to bare earth.</p>
+    </header>
+
+    <figure class="ex-hero">
+      <img src="media/capture-relative-elevation.webp" width="2000" height="1033" alt="A relative elevation model of braided river channels glowing mint and teal against dark navy uplands.">
+      <figcaption class="wrap"><span>Relative elevation</span><span>Captured in ClearSkies</span></figcaption>
+    </figure>
+
+    <section class="ex-row wrap" aria-labelledby="terrainTitle">
+      <div class="ex-copy">
+        <p class="kicker">LiDAR terrain</p>
+        <h2 id="terrainTitle">Terrain sharp enough to read.</h2>
+        <p>National USGS 3DEP elevation loads everywhere, decoded on your own device. With the terrain engine running, ClearSkies adds raw 1&nbsp;m DEMs and official WA DNR bare-earth surveys, and every style below is drawn from the same numeric elevation.</p>
+        <ul class="chips" aria-label="Terrain styles">
+          <li>Hillshade</li><li>Multidirectional</li><li>Slope</li><li>Aspect</li><li>Northness</li><li>Elevation tint</li><li>Contours</li><li>Elevation bands</li><li>Relative elevation</li>
+        </ul>
+      </div>
+      <div class="ex-gallery">
+        <figure><img src="media/capture-drainage.webp" width="1600" height="1200" loading="lazy" alt="A drainage network rendered in teal and pale green, every tributary bright against dark ridges."><figcaption>Drainage network</figcaption></figure>
+        <figure><img src="media/capture-canyon.webp" width="1600" height="900" loading="lazy" alt="A meandering river canyon in cream and ember orange, with dark oxblood uplands."><figcaption>River canyon</figcaption></figure>
+      </div>
+    </section>
+
+    <section class="ex-row ex-demo-row wrap" aria-labelledby="relightTitle">
+      <div class="ex-copy">
+        <p class="kicker">3D terrain</p>
+        <h2 id="relightTitle">Move the sun. See what it hides.</h2>
+        <p>Low, grazing light raises relief that overhead imagery flattens. Raw elevation relights instantly from the cached DEM, in 2D or in a pitched, orbitable 3D view. These are the app's own four controls.</p>
+        <div class="controls" id="relightControls">
+          <label for="az"><span>Sun azimuth</span><output id="azOut">315°</output></label>
+          <input id="az" type="range" min="0" max="360" value="315">
+          <label for="alt"><span>Sun altitude</span><output id="altOut">24°</output></label>
+          <input id="alt" type="range" min="4" max="85" value="24">
+          <label for="amb"><span>Ambient light</span><output id="ambOut">18%</output></label>
+          <input id="amb" type="range" min="0" max="60" value="18">
+          <label for="relief"><span>3D relief</span><output id="reliefOut">1.6×</output></label>
+          <input id="relief" type="range" min="5" max="30" value="16">
+        </div>
+      </div>
+      <figure class="demo">
+        <canvas id="relightDemo" aria-label="Interactive 3D terrain. Drag to orbit."></canvas>
+        <figcaption><span>Drag to orbit</span><span>Demo terrain is generated in your browser</span></figcaption>
+      </figure>
+    </section>
+
+    <section class="ex-row ex-demo-row ex-flip wrap" aria-labelledby="cloudTitle">
+      <div class="ex-copy">
+        <p class="kicker">Point clouds</p>
+        <h2 id="cloudTitle">Lift the canopy off the land.</h2>
+        <p>Stream USGS 3DEP point clouds across Washington straight from the public archive, with a 1 to 10 million point budget, Eye-Dome Lighting and ASPRS class filters. <b>Bare earth</b> keeps class 2 only, and the 2D map stays linked as your reference.</p>
+        <div class="seg-group">
+          <span class="seg-label">Returns</span>
+          <div class="seg" role="group" aria-label="Returns">
+            <button type="button" id="ret-all" data-ret="all" aria-pressed="true">All returns</button>
+            <button type="button" id="ret-bare" data-ret="bare" aria-pressed="false">Bare earth</button>
+          </div>
+          <span class="seg-label">Colour</span>
+          <div class="seg" role="group" aria-label="Colour">
+            <button type="button" id="col-tree" data-col="tree" aria-pressed="true">Segment</button>
+            <button type="button" id="col-elevation" data-col="elevation" aria-pressed="false">Elevation</button>
+            <button type="button" id="col-class" data-col="class" aria-pressed="false">Classification</button>
+          </div>
+        </div>
+      </div>
+      <figure class="demo">
+        <canvas id="cloudDemo" aria-label="Interactive point cloud of a forest. Drag to orbit."></canvas>
+        <figcaption><span>Drag to orbit</span><span>Demo cloud is generated in your browser</span></figcaption>
+      </figure>
+    </section>
+
+    <section class="ex-row wrap" aria-labelledby="imageryTitle">
+      <div class="ex-copy">
+        <p class="kicker">Satellite imagery</p>
+        <h2 id="imageryTitle">The newest scene for anywhere on Earth.</h2>
+        <p>ClearSkies finds the most recent Sentinel-2 and Landsat imagery for any place you search, with scene filters, dated optical, radar and infrared layers, and global mosaics. Layers stack in render order, and each keeps its own opacity.</p>
+      </div>
+      <figure class="shot shot-wide"><img src="media/app-desktop.webp" width="1280" height="800" loading="lazy" alt="The ClearSkies desktop app showing the Layers panel over a tinted elevation map of western North America."></figure>
+    </section>
+
+    <section class="ex-row ex-flip wrap" aria-labelledby="fieldTitle">
+      <div class="ex-copy">
+        <p class="kicker">In the field</p>
+        <h2 id="fieldTitle">Take it outside.</h2>
+        <ul class="facts">
+          <li><b>Exports up to 32×</b><span>PNG renders straight from the source tiles, up to 2,000 MP in Chrome or Edge, with an optional map-info corner.</span></li>
+          <li><b>Offline areas</b><span>Save an area to the terrain engine and it stays pinned, resumable and available without a signal.</span></li>
+          <li><b>Markup layers</b><span>Draw, label and describe, with widths in real feet and one undo per change.</span></li>
+          <li><b>Any coordinate</b><span>Paste decimal degrees or DMS straight from Google Earth or Google Maps.</span></li>
+          <li><b>Your engine, anywhere</b><span>Reach the terrain engine on your computer from your phone over Tailscale.</span></li>
+        </ul>
+      </div>
+      <figure class="shot shot-phone"><img src="media/app-phone.webp" width="440" height="956" loading="lazy" alt="ClearSkies on an iPhone, showing shaded relief with river labels and the map tool dock."></figure>
+    </section>
+
+    <section class="ex-research wrap" aria-labelledby="researchTitle">
+      <p class="kicker">Layer groups</p>
+      <h2 id="researchTitle">Built for geology, archaeology and long walks.</h2>
+      <div class="cards">
+        <article><h3>Geology &amp; hazards</h3><p>Surface geology, faults and landslides.</p></article>
+        <article><h3>Conditions</h3><p>Weather, seismicity, fire and SNODAS snow.</p></article>
+        <article><h3>Past landscapes</h3><p>Glacial moraines and the landforms the ice left behind.</p></article>
+        <article><h3>Labels &amp; reference</h3><p>Rivers and lakes from the USGS National Hydrography Dataset.</p></article>
+      </div>
+    </section>
+
+    <section class="ex-honest wrap" aria-labelledby="honestTitle">
+      <h2 id="honestTitle">Honest about its data.</h2>
+      <ol>
+        <li><b>Overview is never called LiDAR.</b> Low-resolution fill is labelled for what it is.</li>
+        <li><b>Sources report real pixels.</b> The source panel counts the samples that actually rendered, by provider.</li>
+        <li><b>Two numbers for resolution.</b> Native survey spacing and current display sampling, side by side.</li>
+      </ol>
+    </section>
+
+    <section class="ex-cta wrap" aria-labelledby="ctaTitle">
+      <h2 id="ctaTitle">Free on Windows, macOS and the web.</h2>
+      <div class="actions">
+        <a class="btn btn-primary" href="download.html">Download ClearSkies <span class="arrow" aria-hidden="true">↓</span></a>
+        <a class="btn btn-ghost" href="https://rileyg44.github.io/clear-skies-portal/" target="_blank" rel="noopener">Open in your browser <span class="arrow" aria-hidden="true">↗</span></a>
+      </div>
+    </section>
+  </main>
+</div>
+
+<script type="module">
+import { createDemo } from "./scenes.js";
+const $ = id => document.getElementById(id);
+
+const relight = createDemo($("relightDemo"), "relight");
+const cloud = createDemo($("cloudDemo"), "forest");
+
+const fmt = { az: v => `${String(v).padStart(3, "0")}°`, alt: v => `${v}°`, amb: v => `${v}%`, relief: v => `${(v / 10).toFixed(1)}×` };
+function applyLight() {
+  for (const k of Object.keys(fmt)) $(`${k}Out`).textContent = fmt[k]($(k).valueAsNumber);
+  if (!relight) return;
+  relight.setRelief($("relief").valueAsNumber / 10);
+  relight.setLight($("az").valueAsNumber, $("alt").valueAsNumber, $("amb").valueAsNumber / 100);
+}
+for (const k of Object.keys(fmt)) $(k).addEventListener("input", applyLight);
+applyLight();
+
+function seg(attr, fn) {
+  const buttons = document.querySelectorAll(`[data-${attr}]`);
+  for (const b of buttons) b.addEventListener("click", () => {
+    for (const o of buttons) o.setAttribute("aria-pressed", String(o === b));
+    fn(b.dataset[attr]);
+  });
+}
+seg("ret", v => cloud && cloud.setReturns(v));
+seg("col", v => cloud && cloud.setColour(v));
+</script>
+</body>
+</html>

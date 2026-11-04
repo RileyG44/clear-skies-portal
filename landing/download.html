@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en" data-dir="sweep">
+<html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
@@ -20,7 +20,7 @@
 
 <div class="page">
   <nav class="nav wrap" aria-label="Main">
-    <a class="brand" id="home" href="index.html#sweep" aria-label="ClearSkies home"><img src="icon.png" alt=""><span>ClearSkies</span></a>
+    <a class="brand" id="home" href="index.html" aria-label="ClearSkies home"><img src="icon.png" alt=""><span>ClearSkies</span></a>
     <div class="nav-links">
       <a class="hide-sm" href="https://rileyg44.github.io/clear-skies-portal/" target="_blank" rel="noopener">Web app</a>
       <a href="https://github.com/RileyG44/clear-skies-portal/releases" target="_blank" rel="noopener">Release notes</a>
@@ -189,12 +189,8 @@ document.getElementById("copyCmd").addEventListener("click", async e => {
   setTimeout(() => { e.target.textContent = "Copy"; }, 1800);
 });
 
-const DIRS = ["sweep", "watershed", "relight"];
-const dir = DIRS.includes(location.hash.slice(1)) ? location.hash.slice(1) : "sweep";
-document.documentElement.dataset.dir = dir;
-document.getElementById("home").href = `index.html#${dir}`;
 const stage = createStage(document.getElementById("stage"), { shift: 0.0 });
-if (stage) stage.set("ambient", { palette: dir, background: dir === "relight" ? 0x0d0306 : 0x02050d });
+if (stage) stage.set("ambient");
 </script>
 </body>
 </html>
