@@ -9,11 +9,11 @@
 import * as THREE from "three";
 
 const KIND = { STATIC: 0, TRUNK: 1, BRANCH: 2, TWIG: 3, FERN: 4 };
-const INK = { GREEN: 0, SEPIA: 1, GRAPHITE: 2 };
+const INK = { GREEN: 0, SEPIA: 1, GRAPHITE: 2, BARK: 3 };
 const DEG = Math.PI / 180;
 
 // The drawing lives in "tree units": the trunk stands at x = 0 and is 1 tall.
-export const VIEW = { cx: -0.01, cy: 0.405, w: 1.12, h: 1.42 };
+export const VIEW = { cx: -0.01, cy: 0.41, w: 1.0, h: 1.25 };
 const DRAW_SECONDS = 6.2;
 
 function mulberry32(a) {
@@ -89,9 +89,9 @@ export function buildTree(seed = 20261104) {
   }
 
   /* ---------- soil section (the geology) ---------- */
-  const xL = -0.42, xR = 0.34, yBot = -0.205;
+  const xL = -0.42, xR = 0.34, yBot = -0.172;
   const yA = x => groundY(x) - 0.03 + 0.003 * Math.sin(x * 13 + 2);
-  const yB = x => -0.108 + 0.010 * Math.sin(x * 4.1 + 0.7) + 0.004 * Math.sin(x * 15 + 1);
+  const yB = x => -0.098 + 0.009 * Math.sin(x * 4.1 + 0.7) + 0.004 * Math.sin(x * 15 + 1);
   const tSec = x => 0.08 + 0.14 * (x - xL) / (xR - xL);
   {
     const edge = (x, ytop) => {
@@ -182,9 +182,9 @@ export function buildTree(seed = 20261104) {
       if (!inC(x, y)) continue;
       line(x, y, ROOT, x + Math.cos(a) * l, y + Math.sin(a) * l, ROOT, 1.1, 0.5, tSec(x) + 0.08, 0.01, INK.SEPIA);
     }
-    label(xR + 0.016, (groundY(xR) + yA(xR)) / 2, "<b>A</b> duff &amp; loam", { t: 0.2, cls: "sec" });
-    label(xR + 0.016, (yA(xR) + yB(xR)) / 2, "<b>B</b> glacial till", { t: 0.24, cls: "sec" });
-    label(xR + 0.016, (yB(xR) + yBot) / 2, "<b>C</b> andesite", { t: 0.28, cls: "sec" });
+    label(xR + 0.011, (groundY(xR) + yA(xR)) / 2, "<b>A</b> duff &amp; loam", { t: 0.2, cls: "sec" });
+    label(xR + 0.011, (yA(xR) + yB(xR)) / 2, "<b>B</b> glacial till", { t: 0.24, cls: "sec" });
+    label(xR + 0.011, (yB(xR) + yBot) / 2, "<b>C</b> andesite", { t: 0.28, cls: "sec" });
   }
 
   /* ---------- trunk ---------- */
@@ -209,6 +209,14 @@ export function buildTree(seed = 20261104) {
           const off = -s * 0.0014;
           line(pts[i][0] + off, y, pts[i][2], pts[i + 1][0] + off, pts[i + 1][1], pts[i + 1][2], 0.8, 0.38, 0.12 + 0.22 * y, 0.01, INK.GREEN);
         }
+      }
+    }
+    // light brown tone on the bole: close vertical strokes, heavier on the shaded right
+    for (let y = 0; y < 0.97; y += 0.004) {
+      const y1 = y + 0.0042, fade = y < 0.27 ? 1 : Math.max(0.12, 0.55 * (1 - (y - 0.27) / 0.55));
+      for (let s = -0.75; s <= 0.96; s += 0.19) {
+        const sj = clamp(s + R(-0.05, 0.05), -0.95, 0.97), k = (sj + 1) / 2;
+        line(tX(y) + sj * tR(y), y, tb(y), tX(y1) + sj * tR(y1), y1, tb(y1), R(1.8, 2.8), (0.13 + 0.34 * k * k) * fade, 0.18 + 0.2 * y, 0.008, INK.BARK);
       }
     }
     // deep, braided Douglas-fir bark furrows
@@ -352,6 +360,7 @@ export function buildTree(seed = 20261104) {
       return { x: lerp(a.x, b.x, r), y: lerp(a.y, b.y, r), dx: a.dx, dy: a.dy };
     };
     const t0 = 0.3 + 0.36 * u + R(0, 0.015), inkK = back ? 0.5 : 1;
+    poly(P.map(p => [p.x, p.y - 0.0011, boneAt(p.v)]), f => (lerp(2.6, 1.0, u) * (1 - 0.6 * f) + 0.6), f => lerp(0.5, 0.2, f) * inkK, t0 + 0.01, t0 + 0.06, INK.BARK);
     poly(P.map(p => [p.x, p.y, boneAt(p.v)]), f => (lerp(1.9, 0.8, u) * (1 - 0.6 * f) + 0.3) * (fore ? 0.8 : 1), f => lerp(0.42, 0.28, f) * inkK, t0, t0 + 0.05, INK.GREEN);
 
     let d = R(0.004, 0.012), side = rnd() < 0.5 ? 1 : -1;
@@ -404,24 +413,51 @@ export function buildTree(seed = 20261104) {
     const a = R(-48, -10) * DEG, b = tb(hh), x0 = tX(hh) + s * tR(hh) * 0.9;
     const x1 = x0 + s * Math.cos(a) * L, y1 = hh + Math.sin(a) * L;
     poly([[x0, hh, b], [lerp(x0, x1, 0.55), lerp(hh, y1, 0.55) + 0.0015, b], [x1, y1, b]], f => lerp(1.5, 0.7, f), 0.75, 0.24 + hh * 0.2, 0.27 + hh * 0.2, INK.GREEN);
+    poly([[x0, hh - 0.001, b], [x1, y1 - 0.001, b]], f => lerp(2.2, 0.9, f), 0.4, 0.25 + hh * 0.2, 0.28 + hh * 0.2, INK.BARK);
     if (L > 0.02) {
       const xm = lerp(x0, x1, 0.6), ym = lerp(hh, y1, 0.6), a2 = a + s * 0.7, l2 = L * 0.4;
       line(xm, ym, b, xm + s * Math.cos(a2) * l2, ym + Math.sin(a2) * l2, b, 0.7, 0.6, 0.27 + hh * 0.2, 0.01, INK.GREEN);
     }
   }
-  // Douglas-fir cones hang below the branches, with three-pointed bracts
-  {
-    const upper = branches.filter(b => b.u > 0.42 && b.L > 0.05 && !b.fore);
-    for (let k = 0; k < 16 && upper.length; k++) {
-      const br = upper[Math.floor(rnd() * upper.length)], v = R(0.45, 0.85), p = br.at(v), b = br.boneAt(v);
-      const cx = p.x, cy = p.y - 0.011, rot = R(-0.2, 0.2) + Math.PI / 2;
-      circle(cx, cy, 0.0085, 0.85, 0.75, br.t0 + 0.2, INK.GREEN, b, 12, 0.0042, rot);
-      for (let j = -1; j <= 1; j++) {
-        const yy = cy + j * 0.004;
-        line(cx - 0.003, yy + 0.001, b, cx + 0.003, yy - 0.001, b, 0.7, 0.5, br.t0 + 0.21, 0.01, INK.GREEN);
-      }
-      for (let j = -1; j <= 1; j++) line(cx + j * 0.0015, cy - 0.006, b, cx + j * 0.0025, cy - 0.0095, b, 0.7, 0.6, br.t0 + 0.22, 0.01, INK.GREEN);
+  // Douglas-fir cones: ovoid, hanging, overlapping round scales with the species'
+  // three-pointed bracts poking out between them. Drawn in bark brown, on the
+  // branch's bone so they swing with it.
+  const cone = (ax, ay, len, wid, ang, b, t) => {
+    const ca = Math.cos(ang), sa = Math.sin(ang);
+    const P2 = (lx, u) => { const ly = -len * u; return [ax + lx * ca - ly * sa, ay + lx * sa + ly * ca, b]; };
+    const hw = u => wid / 2 * Math.pow(Math.sin(Math.PI * clamp(0.06 + u * 0.94, 0, 1) ** 0.85), 0.8);
+    line(ax, ay + 0.004 * ca, b, ax, ay, b, 0.9, 0.7, t, 0.01, INK.BARK);       // stalk
+    for (const sd of [-1, 1]) {
+      const pts = [];
+      for (let i = 0; i <= 10; i++) { const u = i / 10; pts.push(P2(sd * hw(u) * (1 + 0.08 * Math.sin(i * 2.7)), u)); }
+      poly(pts, 0.95, 0.85, t, t + 0.02, INK.BARK);
     }
+    // five tiers of rounded scales, staggered, each with its bract sticking out below
+    const rows = 5;
+    for (let r = 0; r < rows; r++) {
+      const u = 0.14 + 0.72 * r / (rows - 1), w = hw(u + 0.05);
+      for (const o of r % 2 ? [-0.72, 0, 0.72] : [-0.38, 0.38]) {
+        const cx = o * w, sw = w * (r % 2 ? 0.3 : 0.4) * (1 - 0.25 * Math.abs(o)), dep = 0.11;
+        const arc = [];
+        for (let i = 0; i <= 6; i++) { const a = Math.PI * i / 6; arc.push(P2(cx - Math.cos(a) * sw, u + Math.sin(a) * dep)); }
+        poly(arc, 0.8, o > 0 ? 0.8 : 0.66, t + 0.01, t + 0.025, INK.BARK);
+        const m = P2(cx, u + dep - 0.01), m2 = P2(cx, u + dep + 0.075);
+        line(m[0], m[1], b, m2[0], m2[1], b, 0.7, 0.72, t + 0.025, 0.01, INK.BARK);
+        for (const q of [-1, 1]) { const e = P2(cx + q * sw * 0.45, u + dep + 0.04); line(m[0], m[1], b, e[0], e[1], b, 0.65, 0.55, t + 0.026, 0.01, INK.BARK); }
+      }
+      const a = P2(hw(u) * 0.5, u + 0.03), e = P2(hw(u) * 0.9, u + 0.09);        // shade on the right flank
+      line(a[0], a[1], b, e[0], e[1], b, 0.75, 0.35, t + 0.03, 0.01, INK.BARK);
+    }
+  };
+  {
+    const upper = branches.filter(b => b.u > 0.38 && b.L > 0.05 && !b.fore);
+    for (let k = 0; k < 18 && upper.length; k++) {
+      const br = upper[Math.floor(rnd() * upper.length)], v = R(0.55, 0.92), p = br.at(v), b = br.boneAt(v);
+      const n = rnd() < 0.3 ? 2 : 1;
+      for (let j = 0; j < n; j++) cone(p.x + j * R(0.008, 0.012), p.y - 0.003, R(0.034, 0.042), R(0.016, 0.019), R(-0.25, 0.25), b, br.t0 + 0.2);
+    }
+    // a few fallen cones on the duff
+    for (const [x, a] of [[-0.055, 1.35], [0.048, -1.45], [0.135, 1.5]]) cone(x, groundY(x) + 0.0085, 0.038, 0.017, a, ROOT, 0.26);
   }
 
   /* ---------- understory: sword ferns and grass at the foot of the tree ---------- */
@@ -492,10 +528,10 @@ export function buildTree(seed = 20261104) {
     label(xr - 0.014, gy + 0.016, "last return &middot; bare earth", { anchor: "r", t: 0.93 });
 
     // species note with a leader to the upper crown
-    const lp = [[-0.17, 0.905, ROOT], [-0.12, 0.902, ROOT], [-0.075, 0.893, ROOT], [-0.035, 0.879, ROOT]];
+    const lp = [[-0.214, 0.905, ROOT], [-0.15, 0.903, ROOT], [-0.09, 0.894, ROOT], [-0.035, 0.879, ROOT]];
     poly(lp, 0.75, 0.55, 0.84, 0.87, INK.GRAPHITE);
-    label(-0.176, 0.905, "<i>Pseudotsuga menziesii</i><br>Douglas-fir, west slope", { anchor: "r", t: 0.86, cls: "sp" });
-    label(-0.04, yBot - 0.03, "Fig. 1 &nbsp;Old Douglas-fir on glacial till over andesite, North Cascades", { anchor: "c", t: 0.97, cls: "cap" });
+    label(-0.222, 0.905, "<i>Pseudotsuga menziesii</i><br>Douglas-fir, west slope", { anchor: "r", t: 0.86, cls: "sp" });
+    label(-0.04, yBot - 0.022, "Fig. 1 &nbsp;Old Douglas-fir on glacial till over andesite, North Cascades", { anchor: "c", t: 0.97, cls: "cap" });
   }
 
   /* ---------- bone physics constants ---------- */
@@ -570,6 +606,7 @@ precision highp float;
 uniform vec3 uInk0;
 uniform vec3 uInk1;
 uniform vec3 uInk2;
+uniform vec3 uInk3;
 varying float vAlong;
 varying float vDist;
 varying float vHalf;
@@ -583,7 +620,7 @@ void main(){
   float cov = clamp(vHalf + 0.5 - abs(vDist), 0.0, 1.0);
   float grain = hash(floor(gl_FragCoord.xy));
   float a = vInk * cov * (0.86 + 0.14 * grain);
-  vec3 ink = vCol < 0.5 ? uInk0 : vCol < 1.5 ? uInk1 : uInk2;
+  vec3 ink = vCol < 0.5 ? uInk0 : vCol < 1.5 ? uInk1 : vCol < 2.5 ? uInk2 : uInk3;
   ink *= 1.0 - 0.3 * vWet;           // fresh ink is darker, then dries
   a = min(1.0, a * (1.0 + 0.4 * vWet));
   gl_FragColor = vec4(mix(vec3(1.0), ink, a), 1.0);
@@ -616,7 +653,8 @@ export function createSketch(canvas, layer, opts = {}) {
     uRes: { value: new THREE.Vector2(1, 1) }, uDpr: { value: 1 }, uDraw: { value: reduce ? 1.2 : 0 },
     uInk0: { value: new THREE.Color(0.16, 0.53, 0.37) },   // emerald
     uInk1: { value: new THREE.Color(0.47, 0.37, 0.27) },   // iron-oxide sepia
-    uInk2: { value: new THREE.Color(0.33, 0.32, 0.30) }    // graphite
+    uInk2: { value: new THREE.Color(0.33, 0.32, 0.30) },   // graphite
+    uInk3: { value: new THREE.Color(0.58, 0.4, 0.24) }     // light bark brown
   };
   const mat = new THREE.ShaderMaterial({
     vertexShader: VS, fragmentShader: FS, uniforms: U, transparent: true, depthTest: false, depthWrite: false,
