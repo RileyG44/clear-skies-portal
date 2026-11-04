@@ -22,7 +22,7 @@ const root=path.resolve(__dirname,'../..'),pw=require('../lib/playwright.js');
         if(x>=0&&y>=0&&x<size&&y<size){inner[y*size+x]=h;water[y*size+x]=+wet}
       }
       check(water.some(Boolean)&&water.some(v=>!v),'fixture must include land and water');
-      const state=R.emptyState();state.base.tint={...R.defaultLayer('tint'),palette:'viridis',param:0,gamma:.7,stops:[[0,'#44015455'],[1,'#fde725cc']]};
+      const state=R.emptyState();state.base.tint={...R.defaultLayer('tint'),auto:true,palette:'viridis',param:0,gamma:.7,stops:[[0,'#44015455'],[1,'#fde725cc']]};
       const fit=R.fitElevation(inner,water),stack=R.buildStack(state,'tint',{base:fit});
       const canvas=document.createElement('canvas'),gl=canvas.getContext('webgl2',{antialias:false});
       const renderer=CSPGpuTerrain3DRenderer.create({gl});check(renderer,'3D renderer startup');
@@ -72,7 +72,7 @@ const root=path.resolve(__dirname,'../..'),pw=require('../lib/playwright.js');
       check(pixels.some((value,i)=>i%4===3&&value>0),'exports render separate scales');engine.releaseExport();engine.destroy();
       // Studio uses the same state owner for web and the native adapter.
       let values={heights:inner,water},changes=0;
-      window.studio=CSPLidarStudio.mount(document.getElementById('terStudio'),{getStyle:()=> 'tint',storage:null,sample:()=>values,onChange:()=>changes++});
+      window.studio=CSPLidarStudio.mount(document.getElementById('terStudio'),{getStyle:()=> 'tint',storage:{getItem:()=>JSON.stringify(state)},sample:()=>values,onChange:()=>changes++});
       check(studio.fitFromView(true),'fit initial view');
       check(studio.legend('tint').secondary,'mixed-view legend includes water');
       document.querySelector('.ls-layer-main').click();

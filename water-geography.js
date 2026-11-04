@@ -1,6 +1,7 @@
 /* Display-only land/water geography shared by range sampling, 2D and 3D.
- * Natural Earth's generalized shoreline is buffered toward water: ambiguous
- * coasts stay on the land scale. Never infer water from negative elevation.
+ * Natural Earth's generalized shoreline includes major bays and inland lakes.
+ * Narrow coastlines remain limited by the display mask's cell spacing.
+ * Never infer water from negative elevation.
  * No network request, elevation mutation, or new scientific source is involved. */
 (function(root,factory){
   if(typeof module==='object'&&module.exports)module.exports=factory(require('./water-geography-data.js'));

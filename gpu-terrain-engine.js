@@ -947,7 +947,7 @@
     /* Synchronous coarse readback for "fit range to view": at most 128x128
      * samples of the current field. Returns finite heights and, where the
      * relative-elevation base exists, height above it. */
-    function sampleValues() {
+    function sampleValues(options) {
       if (!ready || !field || destroyed) return null;
       var w = Math.min(128, field.width), ht = Math.min(128, field.height), t = texture(), fb = framebuffer();
       try {
@@ -970,11 +970,11 @@
           heights.push(raw[i]);
           // readPixels rows grow from the south; sampling and shading must
           // use the same geographic pixel centres, including map rotation.
-          var cell=i/4, merc=shaders.screenToMercator(sampleView,[(cell%w+.5)/w,1-(Math.floor(cell/w)+.5)/ht]);
-          water.push(geography ? +geography.waterAtMercator(merc[0],merc[1]) : 0);
+          var cell=i/4, merc=options?.water===false?null:shaders.screenToMercator(sampleView,[(cell%w+.5)/w,1-(Math.floor(cell/w)+.5)/ht]);
+          if(merc)water.push(geography ? +geography.waterAtMercator(merc[0],merc[1]) : 0);
           if (raw[i + 3] > 0 && Number.isFinite(raw[i + 2])) relative.push(Math.max(0, raw[i] - raw[i + 2]));
         }
-        return {heights: Float32Array.from(heights), relative: Float32Array.from(relative), water: Uint8Array.from(water), samples: w * ht};
+        return {heights: Float32Array.from(heights), relative: Float32Array.from(relative), water: options?.water===false?undefined:Uint8Array.from(water), samples: w * ht};
       } finally { deleteTexture(t); deleteFramebuffer(fb); gl.bindFramebuffer(gl.FRAMEBUFFER, null); }
     }
     function readProvenance(view) {

@@ -144,9 +144,9 @@
     const withScaleDefaults=value=>{
       const copy=JSON.parse(JSON.stringify(value));
       const layer=l=>{if(l&&typeof l==="object"&&!Object.hasOwn(l,"rangeMode"))l.rangeMode="separate"};
-      const scene=s=>{if(s){layer(s.base);(s.overlays||[]).forEach(layer)}};
-      Object.values(copy.base||{}).forEach(layer);(copy.overlays||[]).forEach(layer);
-      (copy.userLooks||[]).forEach(look=>scene(look.scene));
+      const scene=s=>{if(s){layer(s.base);if(Array.isArray(s.overlays))s.overlays.forEach(layer)}};
+      Object.values(copy.base||{}).forEach(layer);if(Array.isArray(copy.overlays))copy.overlays.forEach(layer);
+      if(Array.isArray(copy.userLooks))copy.userLooks.forEach(look=>scene(look.scene));
       return copy;
     };
     check(state.studio.state&&same(withScaleDefaults(state.studio.state),env.lidarRender.normalizeState(state.studio.state)),"unsupported terrain mix settings");

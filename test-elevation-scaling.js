@@ -15,11 +15,25 @@ assert.deepEqual(R.fitElevation([NaN,Infinity,-Infinity],new Uint8Array(3)),null
 assert.deepEqual(R.fitElevation([10,20],new Uint8Array(2)),{land:[10,20],water:null});
 assert.deepEqual(R.fitElevation([200,300],new Uint8Array([1,1])),{land:null,water:[200,300]},'lake beds need not be below sea level');
 assert.equal(R.fitElevation([],[]),null);
+assert.deepEqual(R.stableElevationFit([1,99],[0,100]),[0,100],'small inward moves do not shimmer');
+assert.deepEqual(R.stableElevationFit([-.1,100.1],[0,100]),[-.1,100.1],'every new extreme is admitted');
+assert.deepEqual(R.stableElevationFit([10,90],[0,100]),[10,90],'a materially different view refits');
+assert.deepEqual(R.stableElevationFit({land:[1,99],water:null},{land:[0,100],water:[-5000,0]}),{land:[0,100],water:null},'domain changes clear stale water');
+assert.deepEqual(R.stableElevationFit([1,99],[0,100],true),[1,99],'explicit fit ignores smoothing');
+assert.equal(R.defaultLayer('tint').auto,false,'Classic relief retains its fixed absolute domain');
+assert.equal(R.isLegacy(R.emptyState(),'tint'),true,'untouched Classic relief retains the original renderer');
+const classic=R.defaultLayer('tint');
+assert.equal(R.toHex(R._test.paletteColour({...classic,stops:R.resolveStops(classic)},1000)),'#858c5e','Missoula land keeps its fixed olive color');
+
+
 
 for(const [name,lon,lat,expected] of [
-  ['Death Valley',-116.8258,36.24,false],['Dutch polder',5.4,52.5,false],['Seattle',-122.33,47.61,false],
+  ['Death Valley',-116.8258,36.24,false],['Zuidplaspolder',4.65,51.99,false],['Flevoland',5.65,52.5,false],['Seattle',-122.33,47.61,false],
   ['Fiji',178.4,-18.1,false],['Mariana Trench',142.2,11.35,true],['Pacific',-130,40,true],
   ['Lake Superior',-87,47.5,true],['Dead Sea',35.47,31.5,true],['Caspian Sea',50,42,true],
+  ['San Francisco Bay',-122.35,37.8,true],['San Pablo Bay',-122.4,37.98,true],
+  ['Puget Sound',-122.45,47.6,true],['Puget Sound north',-122.45,47.8,true],
+  ['Hood Canal',-122.88,47.67,true],['Bosphorus',29.06,41.1,true],
   ['Pacific east of date line',-179,0,true],['Pacific west of date line',179,0,true]
 ]){
   assert.equal(G.waterAt(lon,lat),expected,name);
@@ -31,7 +45,7 @@ assert.equal(G.bytes().byteLength,16*1024*1024,'packed geography has a bounded C
 assert.equal(G.waterAt(NaN,0),false);
 assert.equal(G.waterAt(0,91),false);
 
-const state=R.emptyState();state.base.tint={...R.defaultLayer('tint'),palette:'viridis',param:0};
+const state=R.emptyState();state.base.tint={...R.defaultLayer('tint'),auto:true,palette:'viridis',param:0};
 const stack=R.buildStack(state,'tint',{base:fit});
 assert.deepEqual([stack.layers[0].min,stack.layers[0].max],fit.land);
 assert.deepEqual(stack.layers[0].water,fit.water);

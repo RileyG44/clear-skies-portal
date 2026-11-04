@@ -647,7 +647,7 @@ lidarStudio=window.CSPLidarStudio?.mount($("#terStudio"),{
   getStyle:()=>$("#terStyle").value,
   setStyle:style=>{$("#terStyle").value=style;$("#terStyle").dispatchEvent(new Event("change",{bubbles:true}))},
   onChange:()=>{applyTerrain();schedule3dStyle();paintTerrainInfo();scheduleStudioFit()},
-  sample:()=>gpuTerrainEnabled&&gpuTerrainLayer&&map.hasLayer(gpuTerrainLayer)?gpuTerrainLayer.getEngine()?.sampleValues():null,
+  sample:options=>gpuTerrainEnabled&&gpuTerrainLayer&&map.hasLayer(gpuTerrainLayer)?gpuTerrainLayer.getEngine()?.sampleValues(options):null,
   gpuAvailable:()=>gpuTerrainDecided?gpuTerrainEnabled:true,
   getOpacity:()=>terrainOpacity(),
   setOpacity:value=>{const input=$("#terOp");input.value=Math.round(value);input.dispatchEvent(new Event("input",{bubbles:true}));input.dispatchEvent(new Event("change",{bubbles:true}))},

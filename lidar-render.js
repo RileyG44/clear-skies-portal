@@ -165,7 +165,7 @@
     const spec=STYLES[style]||STYLES.hs,palette=PALETTES[spec.palette];
     const domain=palette&&palette.domain||spec.domain;
     return {style:STYLES[style]?style:"hs",palette:spec.palette,stops:null,reverse:false,opacity:1,blend:"normal",
-      auto:style==="tint"||!!spec.auto&&!(palette&&palette.domain),rangeMode:"separate",min:domain[0],max:domain[1],gamma:1,steps:0,
+      auto:!!spec.auto&&!(palette&&palette.domain),rangeMode:"separate",min:domain[0],max:domain[1],gamma:1,steps:0,
       param:spec.param==="shade"?(palette&&palette.shade?1:0):spec.param==="interval"?spec.paramDefault:0,visible:true};
   }
   function normalizeLayer(raw,fallbackStyle){
@@ -243,7 +243,6 @@
   /* True when the scene draws exactly like the legacy renderer. */
   function isLegacy(state,style){
     if(!style||style==="off") return true;
-    if(style==="tint"&&baseLayer(state,style).auto)return false;
     if(style==="rem"||!STYLES[style]) return style!=="rem";
     return !state.overlays.some(layer=>layer.visible)&&isDefaultLayer(baseLayer(state,style),style)&&effectsDefault(state.effects);
   }
@@ -293,6 +292,19 @@
     for(let i=0;i<values.length;i++)if(Number.isFinite(values[i]))(water[i]?depths:land).push(values[i]);
     const fit={land:fitRange(land,"tint"),water:fitRange(depths,"tint")};
     return fit.land||fit.water?fit:null;
+  }
+  /* Ignore small inward endpoint changes while always admitting a newly
+     sampled extreme. A pan to a materially different range still refits. */
+  function stableElevationFit(next,previous,force=false){
+    if(force||!previous)return next;
+    const stabilize=(n,p)=>{
+      if(!n||!p)return n;
+      const threshold=Math.max(1e-6,n[1]-n[0])*.04;
+      return [n[0]<p[0]||n[0]-p[0]>threshold?n[0]:p[0],n[1]>p[1]||p[1]-n[1]>threshold?n[1]:p[1]];
+    };
+    if(Array.isArray(next))return stabilize(next,Array.isArray(previous)?previous:null);
+    if(!next)return next;
+    return {land:stabilize(next.land,previous.land),water:stabilize(next.water,previous.water)};
   }
   const WATER_STOPS=Object.freeze([[0,3/255,4/255,94/255,1],[.5,0,119/255,182/255,1],[1,144/255,224/255,239/255,1]]);
   function waterColour(value,range,layer){
@@ -594,7 +606,7 @@
 
   return Object.freeze({VERSION,MAX_LAYERS,MAX_STOPS,FT,PALETTES,STYLES,OVERLAY_STYLES,BLENDS,LOOKS,EFFECT_DEFAULTS,
     parseHex,toHex,normalizeStops,moveStop,registerStyle,defaultLayer,normalizeLayer,resolveStops,paletteStops,isDefaultLayer,
-    emptyState,normalizeState,normalizeEffects,baseLayer,isLegacy,buildStack,fitRange,fitElevation,WATER_STOPS,waterColour,normalizeScene,captureScene,applyScene,
+    emptyState,normalizeState,normalizeEffects,baseLayer,isLegacy,buildStack,fitRange,fitElevation,stableElevationFit,WATER_STOPS,waterColour,normalizeScene,captureScene,applyScene,
     matchLook,gradientCss,elevationGradient,palettesFor,formatValue,toDisplay,fromDisplay,
     previewTerrain,renderStack,renderScenePreview,blendColour,composite,_test:Object.freeze({filterGrid,rampColour,paletteColour})});
 });

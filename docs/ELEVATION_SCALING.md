@@ -6,6 +6,11 @@ negative elevations and isolated peaks/pits. Water has its own blue elevation
 ramp and fitted range. Neither fitting nor coloring changes the elevation
 field, measurements, contours, slope, data-source labels, or loading priority.
 
+Classic relief retains its existing fixed colors and absolute elevation domain.
+Selecting a palette without a fixed domain enables fitting as before; users can
+also enable Fit to view explicitly. Small inward range changes are smoothed,
+while newly sampled extremes always expand the fitted range.
+
 The existing Range & shading controls also offer **Full elevation range**
 (one scale for all samples) and **Trim extremes (2–98%)** (the former robust
 fit). Manual ranges remain continuous. Curve and Bands apply to both ramps;
@@ -24,16 +29,18 @@ requires Pillow. Attribution and terms: <https://www.naturalearthdata.com/about/
 There are no live shoreline requests or new elevation providers.
 
 The mask has 16,384 by 8,192 geographic cells (about 2.45 km at the equator;
-east/west spacing decreases toward the poles). Water is eroded by one cell
-so ambiguous shore pixels favor land. Small islands, narrow inlets and lakes,
-and modern shoreline changes may not be resolved. This is not survey-grade
-shoreline or flood mapping. Coastal water retained as land can still affect
-the land fit; users can adjust the manual range or use the explicit trimmed mode.
+east/west spacing decreases toward the poles). A scanline rasterizer classifies
+cell centers from the polygon geometry, with no extra shoreline erosion.
+Small islands, narrow inlets and lakes, and modern shoreline changes may not
+be resolved. This is not survey-grade
+shoreline or flood mapping. Coast cells can represent the opposite side of a
+shoreline away from the cell center. Coastal water represented as land can
+affect the land fit; users can adjust the manual range or use the explicit trimmed mode.
 Water labels report absolute elevation, which can be positive for inland lakes.
 
 One-bit geography is packed into a 2,048-square RGBA8 texture, within WebGL2's
-guaranteed texture dimensions. The module decodes once (16 MiB CPU); each active
-renderer uploads one 16 MiB texture lazily and reports its allocation in stats.
+guaranteed texture dimensions. The module decodes once (16 MiB CPU, only when
+separate elevation fitting requests geography); each active renderer uploads one 16 MiB texture lazily and reports its allocation in stats.
 Renderer cleanup and context restoration follow the existing texture lifecycle.
 
 Fitting retains the existing coarse GPU readback limit of 128 by 128 samples.

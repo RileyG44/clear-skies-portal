@@ -449,7 +449,7 @@
           advancedBody.append(field("Elevation scale",select));
           advancedBody.append(el("p","control-hint",!layer.auto?
             "Manual range uses one continuous elevation scale. Enable Fit to view to scale land and water separately.":layer.rangeMode==="separate"?
-            "Land keeps its full sampled range. Water uses a separate blue scale. Generalized shorelines favor land near coasts; measurements stay unchanged.":
+            "Land keeps its full sampled range. Water uses a separate blue scale. Shorelines are generalized; measurements stay unchanged.":
             layer.rangeMode==="robust"?"Trims the lowest and highest 2% of samples for color fitting. Measurements stay unchanged.":
             "One continuous color scale includes all sampled land elevations and water depths."));
         }
@@ -699,7 +699,7 @@
     function fitFromView(force){
       const keys=autoKeys(),s=style();
       if(!s||!host.sample) return false;
-      const values=host.sample();if(!values) return false;
+      const values=host.sample({water:keys.some(key=>{const layer=layerFor(key);return layer.style==="tint"&&layer.rangeMode==="separate"})});if(!values) return false;
       if(values.heights&&values.heights.length){const h=R.fitRange(values.heights,"tint","robust");if(h) remFloor=h[0]}
       /* The 3D drape has no valley-floor field: there relative elevation is
          measured from the view's lowest ground, so it gets its own range. */
@@ -709,7 +709,7 @@
       for(const key of keys){
         const layer=layerFor(key),source=layer.style==="rem"?values.relative:values.heights;
         if(!source||source.length<16) continue;
-        const next=layer.style==="tint"?R.fitElevation(source,values.water,layer.rangeMode):R.fitRange(source,layer.style),prev=fitted[key];
+        const prev=fitted[key],next=layer.style==="tint"?R.stableElevationFit(R.fitElevation(source,values.water,layer.rangeMode),prev,force):R.fitRange(source,layer.style);
         if(!next) continue;
         // Elevation extrema must track newly arrived peaks and pits, even when
         // they occupy less than the old 4% hysteresis threshold.
@@ -743,11 +743,11 @@
         let ticks;
         if(spec.unit==="shade")ticks=["shadow","relief","illuminated"];
         else if(spec.family==="lines")ticks=["intermediate","index"];
-        else ticks=[R.formatValue(style,range[0]),R.formatValue(style,(range[0]+range[1])/2),R.formatValue(style,range[1])+(layer.auto?" · fitted":"")];
+        else ticks=[R.formatValue(style,range[0]),R.formatValue(style,(range[0]+range[1])/2),R.formatValue(style,range[1])+(layer.auto?(fit?" · fitted":" · waiting for terrain"):"")];
         const bar=style==="tint"?R.elevationGradient(layer,range):R.gradientCss(R.paletteStops(layer),layer.reverse);
-        const land={caption:caption+(fit?.land?" · land":""),bar,ticks};
+        const land={caption:caption+(fit?.land&&fit?.water?" · land":""),bar,ticks};
         if(!fit?.water)return [land];
-        const water={caption:"Water · elevation · separate scale",bar:R.elevationGradient(layer,fit.water,true),
+        const water={caption:"Water · elevation · separate scale"+(overlays.length?` + ${overlays.join(" + ")}`:""),bar:R.elevationGradient(layer,fit.water,true),
           ticks:[fit.water[0],(fit.water[0]+fit.water[1])/2,fit.water[1]].map(v=>R.formatValue("tint",v))};
         return fit.land?[land,water]:[water];
       }
