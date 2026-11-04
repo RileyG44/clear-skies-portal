@@ -58,7 +58,8 @@ a{color:inherit}
 .hero{align-self:center;display:grid;justify-items:start;gap:22px;padding-block:6vh 4vh}
 .home{--bg:#000}
 .home .page{grid-template-rows:auto 1fr}
-.home .hero{align-self:start;padding-block:clamp(24px,9vh,120px) 0}
+.home .hero{align-self:start;gap:18px;padding-block:clamp(4px,2vh,32px) 0}
+.home .btn-primary{background:#fff;color:#05080d}
 .hero>*{max-width:560px}
 .kicker{font-family:var(--font-mono);font-size:var(--step--1);letter-spacing:.16em;text-transform:uppercase;color:var(--accent);margin:0;display:flex;align-items:center;gap:10px}
 .kicker::before{content:"";width:22px;height:1px;background:currentColor;opacity:.7}
@@ -78,7 +79,7 @@ a{color:inherit}
 @media (max-width:900px){
   .shade{background:linear-gradient(0deg,var(--shade-1) 0%,rgb(0 0 0 / .35) 55%,rgb(0 0 0 / .25) 100%)}
   .hero{align-self:end;padding-block:30vh 4vh}
-  .home .hero{align-self:start;padding-block:3vh 0;gap:16px}
+  .home .hero{align-self:start;padding-block:1vh 0;gap:16px}
 }
 @media (max-width:560px){
   .home .nav{justify-content:flex-start}
