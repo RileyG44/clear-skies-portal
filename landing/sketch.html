@@ -15,7 +15,6 @@
 /* A page from a field geologist's sketchbook. The paper is CSS; the tree and the
    section are one three.js canvas multiplied onto it; the words are inked with an
    SVG filter so they sit in the paper rather than on it. */
-@font-face{font-family:Pacifico;src:url("fonts/Pacifico.ttf") format("truetype");font-weight:400;font-style:normal;font-display:block}
 :root{
   color-scheme:light;
   --paper:#f4f1e8;
@@ -55,8 +54,8 @@ a{color:inherit}
 /* letterhead: the title's top sits level with the tree's tip and the buttons' bottom with the
    foot of the andesite; the script below sets --head-top and --foot from the drawing */
 .copy{--title-drop:0px;--title-fs:clamp(52px,5.98vw,100px);display:flex;flex-direction:column;align-items:flex-start;padding:var(--head-top,96px) clamp(16px,2vw,32px) var(--foot,72px) max(24px,min(7.5vw,130px));max-width:640px}
-.title{display:inline-block;white-space:nowrap;font-family:Pacifico,"Brush Script MT",cursive;font-weight:400;color:var(--emerald);margin:var(--title-drop,0px) 0 .12em -.1em;
-  padding:0 .32em .06em .06em;font-size:var(--title-fs);line-height:1.15;letter-spacing:.005em}
+.title{display:inline-block;white-space:nowrap;font-family:var(--note);font-weight:600;color:var(--emerald);margin:var(--title-drop,0px) 0 .12em -.04em;
+  padding:0 .12em .06em .02em;font-size:calc(1.3 * var(--title-fs));line-height:calc(1.15 * var(--title-fs));letter-spacing:0}
 /* downloads: notebook entries in the space between the letterhead and the buttons */
 /* sits about 3/4 inch (72px) under the title; the rest of the gap stays below it */
 .dl{margin:calc(24px - clamp(14px,3.4vh,36px) + clamp(26px,5vh,56px) - .15*var(--title-fs)) 0 auto;display:grid;gap:0;width:min(100%,32em)}
@@ -106,7 +105,7 @@ a{color:inherit}
   .nav{position:static;justify-content:flex-start;padding:18px 20px 0 max(20px,env(safe-area-inset-left,0px));font-size:18px}
   .sk{grid-template-columns:1fr;min-height:0}
   .copy{padding:28px 20px 8px;max-width:none}
-  .title{font-size:clamp(44px,12vw,55px);padding-right:.18em;--title-drop:0px}
+  .copy{--title-fs:clamp(44px,12vw,55px)}.title{padding-right:.08em;--title-drop:0px}
   .dl{margin:4px 0 28px}
   .dl-row{padding:12px 0}
   .actions{margin-top:0}
@@ -188,8 +187,8 @@ let last = null;
 // distance from the top of the title's line box to the top of its tallest glyph
 function glyphTop() {
   const cs = getComputedStyle(title), fs = parseFloat(cs.fontSize);
-  meter.font = `400 ${fs}px Pacifico`;
-  const m = meter.measureText(title.textContent), lh = parseFloat(cs.lineHeight) || fs * 1.15;
+  meter.font = `${cs.fontWeight} ${fs}px ${cs.fontFamily}`;
+  const m = meter.measureText(title.textContent), lh = parseFloat(cs.lineHeight) || fs;
   const asc = m.fontBoundingBoxAscent, desc = m.fontBoundingBoxDescent;
   return (lh - asc - desc) / 2 + asc - m.actualBoundingBoxAscent;
 }
@@ -205,7 +204,7 @@ window.__sketch = createSketch(document.getElementById("tree"), document.getElem
   onNoWebGL() { document.getElementById("fig").classList.add("nogl"); },
   onLayout: align
 });
-document.fonts.load("400 60px Pacifico").then(() => align());
+document.fonts.load("600 60px Caveat").then(() => align());
 wide.addEventListener("change", () => align());
 </script>
 </body>
