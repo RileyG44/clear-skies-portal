@@ -7,10 +7,13 @@ const scratch=fs.mkdtempSync(path.join(os.tmpdir(),"csp-setup-flow-"));
 const userData=path.join(scratch,"profile"),entry=path.join(scratch,"entry.cjs");
 fs.mkdirSync(userData);
 fs.writeFileSync(entry,`const {app}=require("electron");app.setPath("userData",${JSON.stringify(userData)});app.setPath("sessionData",${JSON.stringify(userData)});require(${JSON.stringify(path.resolve("electron/main.js"))});`);
+const appEnv={...process.env,CSP_ELECTRON_OWN_SERVER:"1",CSP_DNR_ARCHIVE_DIR:"off"};
+// On Windows an empty value still enables Electron's Node-only mode.
+delete appEnv.ELECTRON_RUN_AS_NODE;
 
 async function launch(){
   const child=spawn(require("electron"),[entry,"--remote-debugging-port=0"],{
-    env:{...process.env,ELECTRON_RUN_AS_NODE:"",CSP_ELECTRON_OWN_SERVER:"1",CSP_DNR_ARCHIVE_DIR:"off"},
+    env:appEnv,
   });
   let log="";child.stdout.on("data",data=>{log+=data;});
   const endpoint=await new Promise((resolve,reject)=>{
@@ -28,7 +31,7 @@ async function launch(){
   const page=context.pages()[0]||await context.waitForEvent("page");
   await page.waitForLoadState("domcontentloaded");
   return {page,async reopen(){
-    const second=spawn(require("electron"),[entry,"--setup"],{env:{...process.env,ELECTRON_RUN_AS_NODE:""},stdio:"ignore"});
+    const second=spawn(require("electron"),[entry,"--setup"],{env:appEnv,stdio:"ignore"});
     await once(second,"exit");await page.waitForURL("**/setup/index.html");
   },async close(){
     const session=await browser.newBrowserCDPSession();
