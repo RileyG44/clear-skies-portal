@@ -31,7 +31,7 @@ document.getElementById("finish").addEventListener("click",async event=>{
     if(!configurationReady || !form.reportValidity())return;
     config=Object.fromEntries(Array.from(form.elements).filter(element=>element.name)
       .map(element=>[element.name,element.name==="panShading"?element.value:Number(element.value)]));
-    if(config.dnrArchiveGiB>config.dnrCacheGiB){error.textContent="DNR download cache cannot exceed the DNR terrain cache.";error.hidden=false;return;}
+    if(config.dnrArchiveGiB>config.dnrCacheGiB){error.textContent="DNR download limit cannot exceed the DNR terrain cache.";error.hidden=false;return;}
   }
   button.disabled=true;error.hidden=true;
   try{if(!await window.clearSkiesSetup.finish(config)) throw new Error("Setup not completed");}

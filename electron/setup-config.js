@@ -11,7 +11,7 @@ function validate(value){
       throw Error(`Invalid ${key}: expected ${min}–${max}`);
     result[key]=n;
   }
-  if(result.dnrArchiveGiB>result.dnrCacheGiB)throw Error("DNR download cache cannot exceed its terrain cache");
+  if(result.dnrArchiveGiB>result.dnrCacheGiB)throw Error("DNR download limit cannot exceed its terrain cache");
   if(!["off","auto","on"].includes(value.panShading))throw Error("Invalid smoother panning mode");
   return {...result,panShading:value.panShading};
 }
