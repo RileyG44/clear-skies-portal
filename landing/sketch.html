@@ -59,7 +59,7 @@ a{color:inherit}
   padding:0 .32em .06em .06em;font-size:var(--title-fs);line-height:1.15;letter-spacing:.005em}
 /* downloads: notebook entries in the space between the letterhead and the buttons */
 /* sits about 3/4 inch (72px) under the title; the rest of the gap stays below it */
-.dl{margin:calc(72px - clamp(14px,3.4vh,36px) + clamp(26px,5vh,56px) - .15*var(--title-fs)) 0 auto;display:grid;gap:0;width:min(100%,32em)}
+.dl{margin:calc(24px - clamp(14px,3.4vh,36px) + clamp(26px,5vh,56px) - .15*var(--title-fs)) 0 auto;display:grid;gap:0;width:min(100%,32em)}
 .dl-row{display:flex;flex-wrap:wrap;align-items:baseline;gap:4px .45em;padding:clamp(14px,3.4vh,36px) 0}
 .dl-k{margin:0;font-size:clamp(16px,1.32vw,20px);font-weight:300;color:var(--ink-2)}
 .dl-links{display:inline-flex;flex-wrap:wrap;align-items:baseline;gap:4px 0}
@@ -154,7 +154,11 @@ a{color:inherit}
         <span class="dl-links"><a class="dl-link inked" data-file="win-setup" href="download.html"><span class="dl-meta" data-meta="win">x64</span></a></span>
       </div>
       <div class="dl-row">
-        <p class="dl-k inked">For those who explore</p><span class="dl-sep inked" aria-hidden="true">&ndash;</span>
+        <p class="dl-k inked">For Linux</p><span class="dl-sep inked" aria-hidden="true">&ndash;</span>
+        <span class="dl-links"><a class="dl-link inked" href="https://github.com/RileyG44/clear-skies-portal/releases" target="_blank" rel="noopener"><span class="dl-meta">x64 AppImage</span></a></span>
+      </div>
+      <div class="dl-row">
+        <p class="dl-k inked">For those on the go</p><span class="dl-sep inked" aria-hidden="true">&ndash;</span>
         <span class="dl-links">
           <a class="dl-link inked" href="https://apps.apple.com/" target="_blank" rel="noopener"><span class="dl-meta">App Store</span></a><span class="dl-comma inked">,</span>
           <a class="dl-link inked" href="https://play.google.com/store" target="_blank" rel="noopener"><span class="dl-meta">Google Play</span></a>
