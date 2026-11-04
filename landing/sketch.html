@@ -54,12 +54,12 @@ a{color:inherit}
 .sk{display:grid;grid-template-columns:minmax(0,44fr) minmax(0,56fr);min-height:100svh}
 /* letterhead: the title's top sits level with the tree's tip and the buttons' bottom with the
    foot of the andesite; the script below sets --head-top and --foot from the drawing */
-.copy{--title-drop:clamp(26px,5vh,56px);display:flex;flex-direction:column;align-items:flex-start;padding:var(--head-top,96px) clamp(16px,2vw,32px) var(--foot,72px) max(24px,min(7.5vw,130px));max-width:640px}
+.copy{--title-drop:0px;--title-fs:clamp(52px,5.98vw,100px);display:flex;flex-direction:column;align-items:flex-start;padding:var(--head-top,96px) clamp(16px,2vw,32px) var(--foot,72px) max(24px,min(7.5vw,130px));max-width:640px}
 .title{display:inline-block;white-space:nowrap;font-family:Pacifico,"Brush Script MT",cursive;font-weight:400;color:var(--emerald);margin:var(--title-drop,0px) 0 .12em -.1em;
-  padding:0 .32em .06em .06em;font-size:clamp(45px,5.2vw,87px);line-height:1.15;letter-spacing:.005em}
+  padding:0 .32em .06em .06em;font-size:var(--title-fs);line-height:1.15;letter-spacing:.005em}
 /* downloads: notebook entries in the space between the letterhead and the buttons */
 /* sits about 3/4 inch (72px) under the title; the rest of the gap stays below it */
-.dl{margin:calc(72px - clamp(14px,3.4vh,36px)) 0 auto;display:grid;gap:0;width:min(100%,32em)}
+.dl{margin:calc(72px - clamp(14px,3.4vh,36px) + clamp(26px,5vh,56px) - .15*var(--title-fs)) 0 auto;display:grid;gap:0;width:min(100%,32em)}
 .dl-row{display:flex;flex-wrap:wrap;align-items:baseline;gap:4px .45em;padding:clamp(14px,3.4vh,36px) 0}
 .dl-k{margin:0;font-size:clamp(16px,1.32vw,20px);font-weight:300;color:var(--ink-2)}
 .dl-links{display:inline-flex;flex-wrap:wrap;align-items:baseline;gap:4px 0}
@@ -106,7 +106,7 @@ a{color:inherit}
   .nav{position:static;justify-content:flex-start;padding:18px 20px 0 max(20px,env(safe-area-inset-left,0px));font-size:18px}
   .sk{grid-template-columns:1fr;min-height:0}
   .copy{padding:28px 20px 8px;max-width:none}
-  .title{font-size:clamp(38px,10.5vw,48px);padding-right:.18em;--title-drop:0px}
+  .title{font-size:clamp(44px,12vw,55px);padding-right:.18em;--title-drop:0px}
   .dl{margin:4px 0 28px}
   .dl-row{padding:12px 0}
   .actions{margin-top:0}
