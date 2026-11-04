@@ -54,9 +54,9 @@ a{color:inherit}
 .sk{display:grid;grid-template-columns:minmax(0,44fr) minmax(0,56fr);min-height:100svh}
 /* letterhead: the title's top sits level with the tree's tip and the buttons' bottom with the
    foot of the andesite; the script below sets --head-top and --foot from the drawing */
-.copy{display:flex;flex-direction:column;align-items:flex-start;padding:var(--head-top,96px) clamp(16px,2vw,32px) var(--foot,72px) max(24px,min(7.5vw,130px));max-width:640px}
-.title{display:inline-block;white-space:nowrap;font-family:Pacifico,"Brush Script MT",cursive;font-weight:400;color:var(--emerald);margin:0 0 .12em -.1em;
-  padding:0 .32em .06em .06em;font-size:clamp(56px,6vw,104px);line-height:1.15;letter-spacing:.005em}
+.copy{--title-drop:clamp(12px,2.6vh,28px);display:flex;flex-direction:column;align-items:flex-start;padding:var(--head-top,96px) clamp(16px,2vw,32px) var(--foot,72px) max(24px,min(7.5vw,130px));max-width:640px}
+.title{display:inline-block;white-space:nowrap;font-family:Pacifico,"Brush Script MT",cursive;font-weight:400;color:var(--emerald);margin:var(--title-drop,0px) 0 .12em -.1em;
+  padding:0 .32em .06em .06em;font-size:clamp(64px,7.4vw,124px);line-height:1.15;letter-spacing:.005em}
 /* downloads: notebook entries in the space between the letterhead and the buttons */
 /* sits about 3/4 inch (72px) under the title; the rest of the gap stays below it */
 .dl{margin:calc(72px - clamp(14px,3.4vh,36px)) 0 auto;display:grid;gap:0;width:min(100%,32em)}
@@ -106,7 +106,7 @@ a{color:inherit}
   .nav{position:static;justify-content:flex-start;padding:18px 20px 0 max(20px,env(safe-area-inset-left,0px));font-size:18px}
   .sk{grid-template-columns:1fr;min-height:0}
   .copy{padding:28px 20px 8px;max-width:none}
-  .title{font-size:clamp(52px,15vw,68px);padding-right:.18em}
+  .title{font-size:clamp(52px,15vw,68px);padding-right:.18em;--title-drop:0px}
   .dl{margin:4px 0 28px}
   .dl-row{padding:12px 0}
   .actions{margin-top:0}
@@ -127,11 +127,11 @@ a{color:inherit}
   <filter id="stamp" x="-4%" y="-20%" width="108%" height="140%" color-interpolation-filters="sRGB">
     <feTurbulence type="fractalNoise" baseFrequency=".5" numOctaves="2" seed="11" result="edge"/>
     <feDisplacementMap in="SourceGraphic" in2="edge" scale="2.2" xChannelSelector="R" yChannelSelector="G" result="rough"/>
-    <feTurbulence type="fractalNoise" baseFrequency=".9" numOctaves="3" seed="5" result="speck"/>
-    <feColorMatrix in="speck" type="matrix" values="0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 -5 3.75" result="specks"/>
-    <feComponentTransfer in="specks" result="voids"><feFuncA type="discrete" tableValues="0 .6 1 1"/></feComponentTransfer>
+    <feTurbulence type="fractalNoise" baseFrequency=".6" numOctaves="2" seed="5" result="speck"/>
+    <feColorMatrix in="speck" type="matrix" values="0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 -8 6.6" result="specks"/>
+    <feComponentTransfer in="specks" result="voids"><feFuncA type="discrete" tableValues="0 1 1 1"/></feComponentTransfer>
     <feTurbulence type="fractalNoise" baseFrequency=".025 .05" numOctaves="2" seed="2" result="press"/>
-    <feColorMatrix in="press" type="matrix" values="0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 1.1 .5" result="pressure"/>
+    <feColorMatrix in="press" type="matrix" values="0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 .8 .68" result="pressure"/>
     <feComposite in="voids" in2="pressure" operator="arithmetic" k1="1" result="ink"/>
     <feComposite in="rough" in2="ink" operator="in"/>
   </filter>
