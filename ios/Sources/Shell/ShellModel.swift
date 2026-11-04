@@ -24,6 +24,9 @@ final class ShellModel {
     var sheetTop: CGFloat?
     /// The open sheet's horizontal extent in the "portal-map" coordinate space.
     var sheetSpan: ClosedRange<CGFloat>?
+    /// With map info open, the raised menu stops below this "portal-map"
+    /// y so the tile's compact layout fits above it.
+    var mapInfoReserve: CGFloat = 0
     var page: ShellPage?
     var panel: ShellPanel?
     var connected = false

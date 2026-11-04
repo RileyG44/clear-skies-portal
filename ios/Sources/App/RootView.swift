@@ -136,7 +136,13 @@ private struct FloatingToolsSheet: View {
         return false
     }
 
-    private var expandedHeight: CGFloat { geometry.size.height * 0.9 }
+    /// 90% of the height, less a little (never below 84%) to leave map info
+    /// room for its compact layout when it is open.
+    private var expandedHeight: CGFloat {
+        let full = geometry.size.height * 0.9
+        guard shell.mapInfoReserve > 0, verticalSizeClass != .compact else { return full }
+        return max(geometry.size.height * 0.84, min(full, geometry.size.height - 4 - shell.mapInfoReserve))
+    }
     private var mediumHeight: CGFloat {
         verticalSizeClass == .compact ? expandedHeight :
             min(expandedHeight, (geometry.size.height + geometry.safeAreaInsets.top) * 0.5 + homeInset)
@@ -270,6 +276,7 @@ private struct FloatingToolsSheet: View {
         .padding(.horizontal, 4)
         .padding(.bottom, keyboardInset + 4)
         .animation(reducedMotion ? nil : .spring(duration: 0.35, bounce: 0.12), value: shell.detent)
+        .animation(reducedMotion ? nil : .spring(duration: 0.35, bounce: 0.12), value: expandedHeight)
     }
 }
 

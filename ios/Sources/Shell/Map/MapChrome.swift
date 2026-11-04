@@ -28,7 +28,7 @@ struct MapChrome: View {
                     HStack(alignment: .top, spacing: 10) {
                         VStack(alignment: .leading, spacing: 10) {
                             TerrainStatusCapsule(maxHeight: min(420, max(100, geometry.size.height - MapControlSize.search - 30)), tileWidth: min(260, max(130, geometry.size.width - MapControlSize.tool - 34)),
-                                                 spansSheet: $mapInfoSpansSheet)
+                                                 compactWidth: geometry.size.width - 8, spansSheet: $mapInfoSpansSheet)
                             if shell.map.pointCloud && shell.hasLocation { LocationShareButton() }
                         }
                         Spacer(minLength: 0)
@@ -240,9 +240,11 @@ struct TerrainStatusCapsule: View {
     @State private var origin: CGPoint = .zero
     var maxHeight: CGFloat = 420
     var tileWidth: CGFloat = 260
+    /// The menu's width, at which the compact layout is measured.
+    var compactWidth: CGFloat = 0
     @Binding var spansSheet: Bool
     @State private var narrowHeight: CGFloat = 0
-    @ScaledMetric(relativeTo: .caption2) private var distanceLabelWidth: CGFloat = 48
+    @State private var compactHeight: CGFloat = 0
 
     /// Debug builds accept `-cspDebugMapInfo open` to verify the open tile.
     private static var startsExpanded: Bool {
@@ -254,8 +256,8 @@ struct TerrainStatusCapsule: View {
     }
 
     /// When an open menu leaves too little height for the tile's details,
-    /// the tile shares the menu's leading edge and width and lays its
-    /// details out in columns to need less height.
+    /// the tile shares the menu's leading edge and width and switches to a
+    /// compact summary of only what reads the map.
     private var sheetSpan: ClosedRange<CGFloat>? {
         guard expanded, shell.activeSheet != nil, let span = shell.sheetSpan,
               span.upperBound - span.lowerBound > tileWidth,
@@ -273,6 +275,11 @@ struct TerrainStatusCapsule: View {
         return span.lowerBound - origin.x
     }
 
+    /// Open map info asks the raised menu to stop below its compact layout.
+    private var menuReserve: CGFloat {
+        expanded && compactHeight > 0 ? origin.y + compactHeight + 8 : 0
+    }
+
     /// The tile's tallest size. With a menu open it ends 8 points above the
     /// menu's top edge, so the menu never covers it; its details scroll.
     private var heightLimit: CGFloat {
@@ -288,24 +295,35 @@ struct TerrainStatusCapsule: View {
                 .frame(width: MapControlSize.status, height: MapControlSize.status)
                 .onGeometryChange(for: CGPoint.self) { $0.frame(in: .named("portal-map")).origin } action: { origin = $0 }
                 .background(alignment: .topLeading) {
-                    // The narrow layout's natural height decides whether the
-                    // menu squeezes the tile, whichever layout is showing.
+                    // Both layouts are measured whichever is showing: the
+                    // narrow one decides whether the menu squeezes the tile,
+                    // and the compact one is the room the raised menu leaves.
                     if expanded {
-                        information(info)
-                            .padding(.horizontal, 12)
-                            .padding(.bottom, 12)
-                            .frame(width: tileWidth, alignment: .leading)
-                            .fixedSize(horizontal: false, vertical: true)
-                            .hidden()
-                            .accessibilityHidden(true)
-                            .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { narrowHeight = $0 }
+                        ZStack(alignment: .topLeading) {
+                            information(info)
+                                .padding(.horizontal, 12)
+                                .padding(.bottom, 12)
+                                .frame(width: tileWidth, alignment: .leading)
+                                .fixedSize(horizontal: false, vertical: true)
+                                .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { narrowHeight = $0 }
+                            compactLayout(info)
+                                .frame(width: max(tileWidth, compactWidth), alignment: .leading)
+                                .fixedSize(horizontal: false, vertical: true)
+                                .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { compactHeight = $0 }
+                        }
+                        .hidden()
+                        .accessibilityHidden(true)
                     }
                 }
                 .onChange(of: wide, initial: true) { spansSheet = wide }
-                .onDisappear { spansSheet = false }
+                .onChange(of: menuReserve, initial: true) { shell.mapInfoReserve = menuReserve }
+                .onDisappear {
+                    spansSheet = false
+                    shell.mapInfoReserve = 0
+                }
                 .overlay(alignment: .topLeading) {
                     Group {
-                        if wide { wideTile(info) } else { tile(info) }
+                        if wide { compactTile(info) } else { tile(info) }
                     }
                     .frame(width: width, alignment: .topLeading)
                     .clipped()
@@ -362,33 +380,84 @@ struct TerrainStatusCapsule: View {
         }
     }
 
-    /// Squeezed by the menu, the header folds into the details' first row:
-    /// the info glyph leads, the close button trails, and the details fill
-    /// the width between them.
-    private func wideTile(_ info: MapInfoState) -> some View {
-        HStack(alignment: .top, spacing: 0) {
-            Image(systemName: "info.circle")
-                .font(.system(size: 18))
-                .foregroundStyle(PortalPrimary())
-                .frame(width: MapControlSize.status, height: MapControlSize.status)
-                .accessibilityHidden(true)
-            details(maxHeight: heightLimit) {
-                wideInformation(info)
-                    .padding(.top, 11)
-                    .padding(.bottom, 12)
+    /// Squeezed by the menu, the tile keeps only what reads the map: where
+    /// it is sampling, the coordinates and elevation, and the active keys.
+    /// Sources and a ready terrain status drop out; trouble with terrain
+    /// still shows.
+    private func compactTile(_ info: MapInfoState) -> some View {
+        details(maxHeight: heightLimit) { compactLayout(info) }
+            .overlay(alignment: .topTrailing) {
+                Button(action: toggle) {
+                    Image(systemName: "xmark")
+                        .font(.system(size: 12))
+                        .foregroundStyle(PortalPrimary())
+                        .frame(width: MapControlSize.status, height: 34)
+                        .contentShape(.rect)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Hide map info")
+                .accessibilityValue("Expanded")
             }
-            Button(action: toggle) {
-                Image(systemName: "xmark")
-                    .font(.system(size: 12))
-                    .foregroundStyle(PortalPrimary())
-                    .frame(width: MapControlSize.status, height: MapControlSize.status)
-                    .contentShape(.rect)
+            .frame(width: width, alignment: .topLeading)
+    }
+
+    private func compactLayout(_ info: MapInfoState) -> some View {
+        VStack(alignment: .leading, spacing: 0) {
+            HStack(spacing: 6) {
+                Image(systemName: "info.circle").font(.system(size: 13)).accessibilityHidden(true)
+                Text(info.basis).portalFont(.caption2, weight: .semibold).foregroundStyle(.secondary)
             }
-            .buttonStyle(.plain)
-            .accessibilityLabel("Hide map info")
-            .accessibilityValue("Expanded")
+            .frame(height: 34)
+            .padding(.trailing, MapControlSize.status)
+            VStack(alignment: .leading, spacing: 2) {
+                ViewThatFits(in: .horizontal) {
+                    HStack(alignment: .firstTextBaseline, spacing: 12) { compactPosition(info) }
+                    VStack(alignment: .leading, spacing: 2) { compactPosition(info) }
+                }
+                if !info.analysis.isEmpty {
+                    Text(info.analysis).portalFont(.caption2)
+                }
+                if Self.terrainNeedsAttention(info.terrain) {
+                    Label(info.terrain.text, systemImage: info.terrain.state == "loading" ? "arrow.triangle.2.circlepath" : "exclamationmark.triangle")
+                        .portalFont(.caption2)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                }
+            }
+            .accessibilityElement(children: .combine)
+            if info.distance != nil || !info.keys.isEmpty {
+                FlowLayout(spacing: 16, lineSpacing: 8) {
+                    if let distance = info.distance {
+                        CompactDistanceKey(distance: distance)
+                    }
+                    ForEach(Array(info.keys.enumerated()), id: \.offset) { _, key in
+                        CompactInfoKey(key: key)
+                    }
+                }
+                .padding(.top, 8)
+            }
         }
-        .frame(width: width, alignment: .topLeading)
+        .foregroundStyle(PortalPrimary())
+        .padding(.horizontal, 12)
+        .padding(.bottom, 10)
+        .fixedSize(horizontal: false, vertical: true)
+    }
+
+    @ViewBuilder private func compactPosition(_ info: MapInfoState) -> some View {
+        Text(info.coordinates).portalFont(.caption, weight: .semibold, digits: true).lineLimit(1)
+        // "Elevation ≈ 2,426 ft" reads as "≈ 2,426 ft" beside a mountain.
+        let elevation = info.elevation.hasPrefix("Elevation ") ? String(info.elevation.dropFirst("Elevation ".count)) : info.elevation
+        Label { Text(elevation).portalFont(.caption, weight: .medium, digits: true).lineLimit(1) } icon: {
+            Image(systemName: "mountain.2").font(.system(size: 11))
+        }
+        .labelStyle(CompactLabelStyle())
+        .accessibilityLabel(info.elevation)
+    }
+
+    /// Ready or deliberately off terrain is not news; loading, partial and
+    /// offline terrain is.
+    static func terrainNeedsAttention(_ terrain: TerrainStatus) -> Bool {
+        !["ready", "off", ""].contains(terrain.state)
     }
 
     /// Details scroll once they are taller than the room above the menu.
@@ -412,30 +481,6 @@ struct TerrainStatusCapsule: View {
             }
             ForEach(Array(info.keys.enumerated()), id: \.offset) { _, key in
                 MapInfoKeyView(key: key)
-            }
-        }
-        .foregroundStyle(PortalPrimary())
-        .fixedSize(horizontal: false, vertical: true)
-    }
-
-    /// The short, wide layout: location beside terrain, then the color keys
-    /// in as many columns as the width allows.
-    private func wideInformation(_ info: MapInfoState) -> some View {
-        VStack(alignment: .leading, spacing: 10) {
-            BesideOrBelow(spacing: 14, minTrailingWidth: 140) {
-                location(info)
-                terrain(info)
-            }
-            // Columns hold the distance bar, which keeps its true map length, and its label.
-            LazyVGrid(columns: [GridItem(.adaptive(minimum: max(140, CGFloat(info.distance?.width ?? 0) + 8 + distanceLabelWidth)),
-                                         spacing: 14, alignment: .topLeading)],
-                      alignment: .leading, spacing: 10) {
-                if let distance = info.distance {
-                    MapDistanceKeyView(distance: distance)
-                }
-                ForEach(Array(info.keys.enumerated()), id: \.offset) { _, key in
-                    MapInfoKeyView(key: key)
-                }
             }
         }
         .foregroundStyle(PortalPrimary())
@@ -466,40 +511,119 @@ struct TerrainStatusCapsule: View {
     }
 }
 
-/// Two views side by side, the first at its natural width, when the second
-/// still gets `minTrailingWidth`; otherwise the second goes below the first.
-private struct BesideOrBelow: Layout {
-    var spacing: CGFloat
-    var minTrailingWidth: CGFloat
+private struct CompactLabelStyle: LabelStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: 4) { configuration.icon; configuration.title }
+    }
+}
 
-    private func frames(_ proposal: ProposedViewSize, _ subviews: Subviews) -> [CGRect] {
-        guard subviews.count == 2 else { return [] }
-        let width = proposal.width ?? .infinity
-        let leadingIdeal = subviews[0].sizeThatFits(.unspecified).width
-        if leadingIdeal + spacing + minTrailingWidth <= width {
-            let leading = subviews[0].sizeThatFits(ProposedViewSize(width: leadingIdeal, height: nil))
-            let trailingWidth = width.isFinite ? width - leadingIdeal - spacing : nil
-            let trailing = subviews[1].sizeThatFits(ProposedViewSize(width: trailingWidth, height: nil))
-            return [CGRect(origin: .zero, size: leading),
-                    CGRect(origin: CGPoint(x: leadingIdeal + spacing, y: 0), size: trailing)]
+/// Lays views out left to right, wrapping onto new lines.
+private struct FlowLayout: Layout {
+    var spacing: CGFloat
+    var lineSpacing: CGFloat
+
+    private func frames(_ width: CGFloat?, _ subviews: Subviews) -> [CGRect] {
+        let limit = width ?? .infinity
+        var frames: [CGRect] = []
+        var x: CGFloat = 0, y: CGFloat = 0, lineHeight: CGFloat = 0
+        for subview in subviews {
+            let size = subview.sizeThatFits(ProposedViewSize(width: width, height: nil))
+            if x > 0 && x + size.width > limit {
+                x = 0
+                y += lineHeight + lineSpacing
+                lineHeight = 0
+            }
+            frames.append(CGRect(origin: CGPoint(x: x, y: y), size: size))
+            x += size.width + spacing
+            lineHeight = max(lineHeight, size.height)
         }
-        let fit = ProposedViewSize(width: proposal.width, height: nil)
-        let leading = subviews[0].sizeThatFits(fit)
-        let trailing = subviews[1].sizeThatFits(fit)
-        return [CGRect(origin: .zero, size: leading),
-                CGRect(origin: CGPoint(x: 0, y: leading.height + spacing), size: trailing)]
+        return frames
     }
 
     func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
-        let union = frames(proposal, subviews).reduce(CGRect.null) { $0.union($1) }
+        let union = frames(proposal.width, subviews).reduce(CGRect.null) { $0.union($1) }
         return union.isNull ? .zero : CGSize(width: proposal.width ?? union.maxX, height: union.maxY)
     }
 
     func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
-        for (frame, subview) in zip(frames(ProposedViewSize(width: bounds.width, height: nil), subviews), subviews) {
+        for (frame, subview) in zip(frames(bounds.width, subviews), subviews) {
             subview.place(at: CGPoint(x: bounds.minX + frame.minX, y: bounds.minY + frame.minY),
-                          proposal: ProposedViewSize(width: frame.width, height: nil))
+                          proposal: ProposedViewSize(frame.size))
         }
+    }
+}
+
+/// The distance key at half length, still true to scale, so it shares a
+/// line with the color keys.
+private struct CompactDistanceKey: View {
+    let distance: MapDistanceKey
+
+    private var scaled: (label: String, width: CGFloat) {
+        let width = CGFloat(max(0, distance.width))
+        let parts = distance.label.split(separator: " ", maxSplits: 1)
+        guard width > 96, parts.count == 2,
+              let amount = Double(parts[0].replacingOccurrences(of: ",", with: "")) else { return (distance.label, width) }
+        let formatter = NumberFormatter()
+        formatter.numberStyle = .decimal
+        formatter.maximumFractionDigits = 2
+        guard let half = formatter.string(from: NSNumber(value: amount / 2)) else { return (distance.label, width) }
+        return ("\(half) \(parts[1])", width / 2)
+    }
+
+    var body: some View {
+        let scaled = scaled
+        VStack(alignment: .leading, spacing: 3) {
+            Text("Distance").portalFont(.caption2, weight: .semibold)
+            HStack(spacing: 6) {
+                DistanceScaleBar().frame(width: scaled.width, height: 7)
+                Text(scaled.label).portalFont(.caption2, weight: .semibold).lineLimit(1).fixedSize()
+            }
+            .frame(minHeight: 13)
+        }
+        .fixedSize()
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("Distance, \(scaled.label)")
+    }
+}
+
+/// A color key on two lines: its name, then its ramp between the end values
+/// (or its swatches). Qualifiers after " · " drop out.
+private struct CompactInfoKey: View {
+    let key: MapInfoKey
+
+    private func short(_ label: String?) -> String? {
+        guard let label, !label.isEmpty else { return nil }
+        return label.components(separatedBy: " · ").first
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 3) {
+            Text(key.name).portalFont(.caption2, weight: .semibold).lineLimit(1)
+            HStack(spacing: 6) {
+                if let stops = key.stops {
+                    if let low = short(key.labels.first), key.labels.count > 1 { Text(low) }
+                    RoundedRectangle(cornerRadius: 2)
+                        .fill(LinearGradient(gradient: Gradient(stops: stops), startPoint: .leading, endPoint: .trailing))
+                        .overlay(RoundedRectangle(cornerRadius: 2).strokeBorder(.primary.opacity(0.25), lineWidth: 0.5))
+                        .frame(width: 64, height: 6)
+                    if let high = short(key.labels.last) { Text(high) }
+                }
+                ForEach(Array(key.swatches.prefix(3).enumerated()), id: \.offset) { _, swatch in
+                    HStack(spacing: 3) {
+                        ShellImage(src: swatch.src).frame(width: 12, height: 9).accessibilityHidden(true)
+                        Text(swatch.label)
+                    }
+                }
+                if key.swatches.count > 3 {
+                    Text("+\(key.swatches.count - 3)").foregroundStyle(.secondary)
+                }
+            }
+            .portalFont(.caption2)
+            .lineLimit(1)
+            .frame(minHeight: 13)
+        }
+        .fixedSize()
+        .accessibilityElement(children: .combine)
     }
 }
 
