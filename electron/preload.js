@@ -21,6 +21,16 @@ if(location.protocol==="file:" && /\/setup\/(index|guide)\.html$/.test(location.
 // Seed preferences before page scripts run; the engine's free port can change.
 if(location.protocol==="http:" && location.hostname==="127.0.0.1"){
   const {ipcRenderer}=require("electron");
+  // Report the map theme so the next launch's window opens in its colour.
+  let sentTheme="";
+  const sendTheme=()=>{
+    const theme=document.documentElement?.dataset.uiTheme;
+    if((theme==="dark"||theme==="light")&&theme!==sentTheme){sentTheme=theme;ipcRenderer.send("csp:map-theme",theme);}
+  };
+  document.addEventListener("DOMContentLoaded",()=>{
+    sendTheme();
+    new MutationObserver(sendTheme).observe(document.documentElement,{attributes:true,attributeFilter:["data-ui-theme"]});
+  },{once:true});
   const preferences=ipcRenderer.sendSync("csp:map-preferences");
   if(preferences){
     try{localStorage.setItem("clearskies.panShading.v1",preferences.panShading);}catch{}

@@ -423,6 +423,10 @@ let terSig=null;
 function applyTerrain(force){
   const style=$("#terStyle").value;
   if(style==="off"){ clearTerrain(); terSig=null; setCount("terrain",""); paintTerrainInfo(); return }
+  /* Until start-up decides between the GPU and CPU renderers (csp:revealed,
+     which then applies terrain again), build no layer: a CPU tile layer made
+     now would fetch and paint tiles only to be replaced by the GPU map. */
+  if(!gpuTerrainDecided){ setCount("terrain",STYLE_NAME[style]||""); return }
   const op=+$("#terOp").value/100;
   const pick=chooseTerrain(style);
   if(gpuTerrainEnabled&&pick.src!=="wadnr"){
@@ -648,6 +652,8 @@ lidarStudio=window.CSPLidarStudio?.mount($("#terStudio"),{
   setStyle:style=>{$("#terStyle").value=style;$("#terStyle").dispatchEvent(new Event("change",{bubbles:true}))},
   onChange:()=>{applyTerrain();schedule3dStyle();paintTerrainInfo();scheduleStudioFit()},
   sample:options=>gpuTerrainEnabled&&gpuTerrainLayer&&map.hasLayer(gpuTerrainLayer)?gpuTerrainLayer.getEngine()?.sampleValues(options):null,
+  sampleAsync:options=>gpuTerrainEnabled&&gpuTerrainLayer&&map.hasLayer(gpuTerrainLayer)&&gpuTerrainLayer.getEngine()?.sampleValuesAsync
+    ?gpuTerrainLayer.getEngine().sampleValuesAsync(options).catch(()=>null):Promise.resolve(null),
   gpuAvailable:()=>gpuTerrainDecided?gpuTerrainEnabled:true,
   getOpacity:()=>terrainOpacity(),
   setOpacity:value=>{const input=$("#terOp");input.value=Math.round(value);input.dispatchEvent(new Event("input",{bubbles:true}));input.dispatchEvent(new Event("change",{bubbles:true}))},

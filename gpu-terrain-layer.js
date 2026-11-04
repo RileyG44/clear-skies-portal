@@ -89,9 +89,16 @@
         this._canvas=root.document.createElement("canvas");this._canvas.className="csp-gpu-terrain";
         this._canvas.style.cssText="display:block;pointer-events:none;transform:none;transition:none";
         const engine=this.options.engine||root.CSPGpuTerrainEngine;
+        /* deferInit: the engine compiles without blocking and finishes its
+           self-test later, then fires "engineready" or "enginefailed". */
+        let created=false;
         try{this._engine=engine?.create({canvas:this._canvas,store:this.options.store,
-          shaders:root.CSPGpuTerrainShaders,maxTextureBytes:this.options.maxTextureBytes,
+          shaders:root.CSPGpuTerrainShaders,maxTextureBytes:this.options.maxTextureBytes,deferInit:!!this.options.deferInit,
+          rejectSoftware:!!this.options.rejectSoftware,
+          onError:error=>{this._creationError=error;if(created)this.fire("enginefailed",{error});},
+          onReady:()=>this.fire("engineready"),
           onNeedsFrame:()=>this.redraw()})||null;}catch(error){this._creationError=error;this._engine=null;}
+        created=true;
         if(this._engine&&this._state)this._engine.setState(this._state);
         this._pan=new PanShading(this.options.panShading);
       },

@@ -8,9 +8,9 @@ function fixture({loaded=true,cache}={}){
   const nodes=Object.fromEntries(['cspStartup','cspStartupMessage','cspStartupRetry'].map(id=>[id,{hidden:false,textContent:'',classes:new Set(),classList:{toggle(c,on){if(on)this.owner.classes.add(c);else this.owner.classes.delete(c)}}}]));
   for(const node of Object.values(nodes))node.classList.owner=node;
   let reloads=0,timerId=0,destination;
-  const root={classList:{add:c=>classes.add(c),remove:c=>classes.delete(c)},style:{setProperty(){}},addEventListener:(n,f)=>rootEvents[n]=f};
+  const root={classList:{add:(...c)=>c.forEach(x=>classes.add(x)),remove:c=>classes.delete(c),contains:c=>classes.has(c)},style:{setProperty(){}},addEventListener:(n,f)=>rootEvents[n]=f,dispatchEvent:e=>rootEvents[e.type]?.(e)};
   const context={window:{addEventListener:(n,f)=>winEvents[n]=f},document:{documentElement:root,getElementById:id=>nodes[id],addEventListener:(n,f)=>docEvents[n]=f},
-    URL,Promise,Date,caches:cache,localStorage:{getItem:()=>null},location:{href:'https://portal.test/clear-skies-portal/#view',replace:url=>{reloads++;destination=url}},setTimeout:(fn,ms)=>{const id=++timerId;timers.set(id,{fn,ms});return id},clearTimeout:id=>timers.delete(id)};
+    URL,Promise,Date,Event,caches:cache,localStorage:{getItem:()=>null},location:{href:'https://portal.test/clear-skies-portal/#view',replace:url=>{reloads++;destination=url}},setTimeout:(fn,ms)=>{const id=++timerId;timers.set(id,{fn,ms});return id},clearTimeout:id=>timers.delete(id)};
   vm.runInNewContext(bootSource,context);
   context.window.caches=cache;
   if(loaded)docEvents.DOMContentLoaded();
@@ -25,9 +25,34 @@ function fixture({loaded=true,cache}={}){
   assert(f.nodes.cspStartup.classes.has('failed'),'slow startup reveals recovery controls');
   f.rootEvents['csp:ready']();
   assert(!f.classes.has('csp-boot'));assert(f.nodes.cspStartup.hidden);
-  assert.equal(f.timers.size,0);
+  assert(!f.timers.has(1),'ready clears the slow-start watchdog');
+  assert(f.classes.has('csp-reveal'),'the map colour stays under the shell while it fades in');
+  let revealed=0;f.rootEvents['csp:revealed']=()=>revealed++;
+  for(const [id,t] of [...f.timers])if(t.ms<=500){t.fn();f.timers.delete(id)}
+  assert(!f.classes.has('csp-reveal'));
+  assert.equal(revealed,1,'optional rendering starts once the fade has finished');
+  assert(!f.classes.has('csp-map-staging'),'the shell never appears over a held map');assert.equal(f.timers.size,0);
   f.context.window.CSPBoot.fail('late rendering failure');
   assert(f.nodes.cspStartup.hidden,'an optional renderer failure must not cover a working shell');
+}
+async function revealHold(){
+  // A shared link holds the fade-in until its view is applied...
+  let release;const f=fixture();f.context.window.CSPBoot.hold=new Promise(r=>release=r);
+  f.rootEvents['csp:ready']();
+  assert(f.classes.has('csp-boot'),'the shell stays hidden while a shared view is applied');
+  assert(f.nodes.cspStartup.hidden,'holding is not a failure');
+  release();await new Promise(resolve=>setImmediate(resolve));
+  assert(!f.classes.has('csp-boot'),'the shell fades in once the shared view is in place');
+  // ...as does the first map picture (boot.holds)...
+  let mapShown;const m=fixture();m.context.window.CSPBoot.holds.push(new Promise(r=>mapShown=r));
+  m.rootEvents['csp:ready']();assert(m.classes.has('csp-boot'),'the shell waits for the first map picture');
+  mapShown();await new Promise(resolve=>setImmediate(resolve));
+  assert(!m.classes.has('csp-boot'),'shell and map arrive together');
+  // ...but never for more than 1.6 s.
+  const g=fixture();g.context.window.CSPBoot.hold=new Promise(()=>{});
+  g.rootEvents['csp:ready']();assert(g.classes.has('csp-boot'));
+  [...g.timers.values()].find(t=>t.ms===1600).fn();
+  assert(!g.classes.has('csp-boot'),'a stalled shared view cannot keep the app hidden');
 }
 {
   const f=fixture();f.winEvents.error({target:{tagName:'SCRIPT'}});
@@ -43,19 +68,46 @@ function fixture({loaded=true,cache}={}){
 }
 // A device-specific GPU exception runs after shell readiness, falls back to CPU,
 // and cannot prevent navigation from starting.
-{
+async function gpuStartup(){
   const begin=html.indexOf('document.documentElement.addEventListener("csp:ready",()=>requestAnimationFrame(');
   const end=html.indexOf('if("serviceWorker" in navigator',begin);
   assert(begin>=0&&end>begin);
-  let readyHook,frame,rendered=0,cleaned=0;
-  const context={document:{documentElement:{dataset:{},addEventListener:(name,fn)=>readyHook=fn}},
+  let frame,rendered=0,cleaned=0;const readyHooks=[],readyHook=()=>readyHooks.forEach(fn=>fn());
+  const rootClasses=new Set(['csp-map-staging']);
+  const boot={holds:[]};
+  const context={window:{CSPBoot:boot},Promise,document:{documentElement:{dataset:{},classList:{remove:c=>rootClasses.delete(c)},addEventListener:(name,fn)=>{if(name==="csp:ready")readyHooks.push(fn)}},querySelectorAll:()=>[]},
     requestAnimationFrame:fn=>frame=fn,initGpuTerrain:()=>{throw Error("GPU unsupported")},
     gpuTerrainEnabled:true,gpuTerrainLayer:{destroy:()=>cleaned++},gpuTerrainStore:{destroy:()=>cleaned++},
     lidarStudio:{refresh(){}},console:{warn(){}},$:()=>({value:"hs"}),applyTerrain:()=>rendered++,
-    elevationActive:()=>false,syncElevationChecks(){}};
+    elevationActive:()=>false,syncElevationChecks(){},cspRendererReady(){context.decided=(context.decided||0)+1},terLayer:null,elevLayer:null,terBase:null,baseLayer:null,terrainSwap:null,
+    map:{hasLayer:()=>false,getContainer:()=>({addEventListener(){},removeEventListener(){}})},performance:{now:()=>1000},
+    setInterval:fn=>(context.ticks=(context.ticks||[])).push(fn),clearInterval(){},setTimeout:fn=>{context.deadline=fn;return 1},clearTimeout(){}};
   vm.runInNewContext(html.slice(begin,end),context);
   assert.equal(rendered,0);readyHook();assert.equal(rendered,0);
   frame();assert.equal(cleaned,2);assert.equal(rendered,1);
+  // Nothing to draw: released after the short grace (simulated clock).
+  context.performance.now=()=>1300;context.ticks.at(-1)();
+  assert.equal(context.decided,1,'shared views learn the renderer even when GPU start-up fails');
+  assert(!rootClasses.has('csp-map-staging'),'the map is shown at once when there is no GPU picture to stage');
+  // The first-picture coordinator holds the map while CPU terrain layers load,
+  // a terrain swap is staging, or the basemap is loading; it releases once all
+  // are done (after its short grace).
+  let tick=null,clock=0;const fake=loading=>({loading,isLoading(){return this.loading}});
+  const a=fake(true),b=fake(true),base=fake(true);
+  Object.assign(context,{gpuTerrainEnabled:false,terLayer:a,elevLayer:b,terBase:null,baseLayer:base,terrainSwap:null,
+    map:{hasLayer:()=>true,on(){},off(){},getContainer:()=>({addEventListener(){},removeEventListener(){}})},performance:{now:()=>clock},
+    setTimeout:()=>0,clearTimeout(){},setInterval:fn=>{tick=fn;return 1},clearInterval(){tick=null}});
+  rootClasses.add('csp-map-staging');context.cspStageFirstPicture();clock=300;
+  a.loading=false;tick();
+  assert(rootClasses.has('csp-map-staging'),'one finished layer must not release the map while another loads');
+  b.loading=false;context.terrainSwap=()=>{};tick();
+  assert(rootClasses.has('csp-map-staging'),'a terrain swap still staging keeps the map held');
+  context.terrainSwap=null;tick();
+  assert(rootClasses.has('csp-map-staging'),'the basemap is part of the first picture');
+  base.loading=false;tick();
+  assert(!rootClasses.has('csp-map-staging'),'the map is released once the first picture is complete');
+  assert.equal(boot.holds.length,2,'the shell waits for the first map picture and its visible icons');
+  let shown=0;await Promise.all(boot.holds.map(hold=>hold.then(()=>shown++)));assert.equal(shown,2,'both holds settle once the picture and icons are ready');
   assert.equal(context.gpuTerrainEnabled,false);assert.equal(context.document.documentElement.dataset.gpu2d,"off");
 }
 async function retryBeforeLoad(){
@@ -75,6 +127,7 @@ async function retryBeforeLoad(){
   assert.equal(g.reloads(),1,'retry navigates as soon as shell cleanup finishes');
   assert.match(html,/<a id="cspStartupRetry" href="\?reload=[^"]+">Reload portal<\/a>/,'retry has a native navigation fallback');
   assert(html.indexOf('window.CSPBoot')<html.indexOf('<link rel="stylesheet" href="ui-theme.css'),'the watchdog must execute before a stylesheet can stall parsing');
+  assert.match(fs.readFileSync('ios/Resources/native-shell.js','utf8'),/addEventListener\("csp:reveal", start/,'the iOS cover lifts when the page reveals, after any shared-link hold');
   const scripts=[...html.matchAll(/<script src="([^"]+)"/g)].map(m=>m[1]);
   assert(scripts.length>25);assert(scripts.every(url=>/\?build=\d{4}-\d{2}-\d{2}[a-z]$/.test(url)),'every startup script must bypass older unversioned worker entries');
 }
@@ -129,4 +182,4 @@ function lidarRouteIsolation(){
   }
 }
 lidarRouteIsolation();
-Promise.all([retryBeforeLoad(),workerCache()]).then(()=>console.log('UI startup checks passed (static shell, pre-load retry, bounded cache recovery, missing bridge, exact offline asset URLs, LiDAR menu isolation)')).catch(e=>{console.error(e);process.exitCode=1});
+Promise.all([retryBeforeLoad(),workerCache(),revealHold(),gpuStartup()]).then(()=>console.log('UI startup checks passed (static shell, pre-load retry, bounded cache recovery, missing bridge, exact offline asset URLs, LiDAR menu isolation)')).catch(e=>{console.error(e);process.exitCode=1});

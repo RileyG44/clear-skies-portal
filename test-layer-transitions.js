@@ -14,7 +14,7 @@ async function main(){
   const map={layers:new Set(),hasLayer(layer){return this.layers.has(layer);},removeLayer(layer){this.layers.delete(layer);}};
   const timers=new Map();let timerId=0;
   const context={map,HTMLCanvasElement:Canvas,setTimeout:fn=>{timers.set(++timerId,fn);return timerId;},clearTimeout:id=>timers.delete(id),
-    gpuTerrainEnabled:false,gpuTerrainLayer:null,PublishedHillshadeLayer:class extends Layer{},
+    gpuTerrainDecided:true,gpuTerrainEnabled:false,gpuTerrainLayer:null,PublishedHillshadeLayer:class extends Layer{},
     terrainSwap:null,terrainSwapMessage:'',terBase:null,terLayer:null,terSig:null,
     terrainLoadStatus:{dataset:{}},scheduleTerrainStatus:()=>{},applyTerrainAppearanceTo:()=>{},$:()=>({value:'70'}),
     mosToken:1,PENDING_NEIGH:new Set()};

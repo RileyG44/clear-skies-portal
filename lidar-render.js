@@ -572,6 +572,16 @@
     }
     return out;
   }
+  /* Every gallery preview draws the same terrain, so its relative-elevation
+     floor depends only on the radius. Compute each floor once per DEM. */
+  const previewFloors=new WeakMap();
+  function previewFloor(dem,radius){
+    let byRadius=previewFloors.get(dem.grid);
+    if(!byRadius){byRadius=new Map();previewFloors.set(dem.grid,byRadius)}
+    let floor=byRadius.get(radius);
+    if(!floor){floor=filterGrid(filterGrid(dem.grid,dem.width,dem.height,radius,"min"),dem.width,dem.height,radius,"blur");byRadius.set(radius,floor)}
+    return floor;
+  }
   /* A scene's preview with its auto ranges fitted to the preview terrain. */
   function renderScenePreview(scene,dem,lighting){
     const clean=normalizeScene(scene),state=emptyState();
@@ -580,7 +590,7 @@
     let base=null;
     for(const [key,layer] of layers) if(layer.auto){
       if(layer.style==="rem"){
-        if(!base){const radius=Math.min(24,Math.max(2,clean.effects.remRadius/dem.res/8));base=filterGrid(filterGrid(dem.grid,dem.width,dem.height,radius,"min"),dem.width,dem.height,radius,"blur")}
+        if(!base)base=previewFloor(dem,Math.min(24,Math.max(2,clean.effects.remRadius/dem.res/8)));
         const floor=layer.rangeMode==="separate"?relativeBase(dem,Math.min(24,Math.max(2,clean.effects.remRadius/dem.res/8)),true):base;
         fitted[key]=fitRelative(dem.grid.map((v,i)=>Math.max(0,v-floor[i])),dem.grid,dem.water,layer.rangeMode);
       }else fitted[key]=layer.style==="tint"?fitElevation(dem.grid,dem.water,layer.rangeMode):fitRange(dem.grid,layer.style);

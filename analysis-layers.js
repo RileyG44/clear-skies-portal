@@ -31,7 +31,7 @@
   const clamp=(value,low,high)=>Math.min(high,Math.max(low,value));
   const finite=(value,fallback)=>{const n=Number(value);return Number.isFinite(n)?n:fallback};
   const esc=value=>String(value).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"})[c]);
-  const icon=name=>`vendor/icons/${name}.svg`;
+  const icon=name=>globalThis.CSPIcons?.[name]||`vendor/icons/${name}.svg`;   // inline (ui-icons.js) first
 
   /* ------------------------------------------------------------------ model
      A layer's saved style. defaults come from the product's look: the

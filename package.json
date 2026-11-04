@@ -8,6 +8,7 @@
   "main": "electron/main.js",
   "scripts": {
     "vendor": "node scripts/sync-vendor.js",
+    "ui-icons": "node scripts/build-ui-icons.js",
     "catalog:point-cloud": "node scripts/sync-point-cloud-catalog.js",
     "catalog:maxar": "node scripts/sync-maxar-catalog.js",
     "start": "node server.js",

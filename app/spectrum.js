@@ -123,6 +123,8 @@ function applyElev(){
   paintElevOut();
   paintElevationBandOut(); syncElevationChecks();
   const on=elevationActive();
+  // As in applyTerrain: no layer before the renderer is decided at start-up.
+  if(!gpuTerrainDecided)return;
   if(gpuTerrainEnabled){syncGpuTerrain();scheduleTerrainStatus();sync3dSpectrum();return;}
   if(!on){
     if(elevLayer){ map.removeLayer(elevLayer); elevLayer=null }
