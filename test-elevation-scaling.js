@@ -60,3 +60,26 @@ assert.equal(R.normalizeState({base:{tint:{rangeMode:'robust'}}}).base.tint.rang
 const layer={min:0,max:100,gamma:1,steps:0,stops:[[0,0,0,0,.2],[1,1,1,1,.8]]};
 assert.ok(Math.abs(R.waterColour(-50,[-100,0],layer)[3]-.5)<1e-12);
 console.log('Elevation scaling: ocean-heavy views, rare land extrema, inland depressions, lakes, missing/invalid data, wrapping, manual ranges and transparency passed');
+
+// Relative relief keeps its inland contrast, but no ocean sample sets its fit.
+const remHeights=[...Array(90).fill(-5000),...Array.from({length:10},(_,i)=>100+i*10)];
+const remWater=Uint8Array.from(remHeights,(_,i)=>+(i<90));
+const remValues=remHeights.map((h,i)=>i<90?2000+i:10+i-90);
+assert.deepEqual(R.fitRelative(remValues,remHeights,remWater),{land:R.fitRange(remValues.slice(90),'rem'),water:[-5000,-4999]});
+assert.deepEqual(R.fitRelative(remValues.slice(90),remHeights.slice(90),new Uint8Array(10)).land,R.fitRange(remValues.slice(90),'rem'),'inland REM fit is unchanged');
+assert.deepEqual(R.fitRelative([NaN,NaN],[-9000,-2500],new Uint8Array([1,1])),{land:null,water:[-9000,-2500]},'water fits without a local base');
+assert.deepEqual(R.fitRelative([NaN,30,50],[-9000,-86,100],new Uint8Array([1,0,0])),{land:[0,50],water:[-9000,-8999]},'missing base stays aligned and negative land stays land');
+assert.deepEqual(R.fitRelative(remValues,remHeights,remWater,'full'),R.fitRange(remValues,'rem'),'single relative scale retains the original fit');
+const remState=R.emptyState();remState.base.rem=R.defaultLayer('rem');
+const remStack=R.buildStack(remState,'rem',{base:R.fitRelative(remValues,remHeights,remWater)},{remFlatBase:-5000,remLandBase:100});
+assert.equal(remStack.layers[0].separateRem,true);assert.deepEqual(remStack.layers[0].water,[-5000,-4999]);
+assert.equal(remStack.remFlatBase,-5000);assert.equal(remStack.remLandBase,100);
+assert.equal(S.stackUniforms(remStack).c[1],3,'water ramp and land floor are independent flags');
+// Changing only seabed elevations cannot alter the land floor or its colors.
+const w=13,h=9,mask=Uint8Array.from({length:w*h},(_,i)=>+(i%w<6));
+const makeDem=depth=>({width:w,height:h,res:100,water:mask,grid:Float32Array.from(mask,(wet,i)=>wet?depth:-86+(i%w)*3)});
+const shallow=makeDem(-1000),deep=makeDem(-10000),floorA=R.relativeBase(shallow,2,true),floorB=R.relativeBase(deep,2,true);
+for(let i=0;i<mask.length;i++)if(!mask[i])assert.equal(floorA[i],floorB[i],'coastal floor excludes seabed');
+const pixelsA=R.renderStack(remStack,shallow),pixelsB=R.renderStack(remStack,deep);
+for(let i=0;i<mask.length;i++)if(!mask[i])assert.deepEqual(pixelsA.slice(i*4,i*4+4),pixelsB.slice(i*4,i*4+4),'land colors are independent of ocean extremes');
+console.log('Relative elevation: separate fits, missing bases, inland contrast and coastal-floor isolation passed');

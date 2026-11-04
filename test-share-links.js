@@ -21,6 +21,7 @@ vm.runInContext(html.slice(html.indexOf('const CSP_SHARE_WEB_URL='),html.indexOf
  ctx.cspValidateShareState(fixture);
  const mixed=structuredClone(fixture);
  mixed.studio.state=ctx.CSPLidarRender.normalizeState({base:{tint:{auto:true,rangeMode:'separate'}}});
+ mixed.studio.remLandFloor=-86;
  mixed.studio.fitted={base:{land:[-90,150],water:[-4500,0]}};
  ctx.cspValidateShareState(mixed);
  for(const fit of [{land:null,water:null},{land:[5,2],water:[-500,0]},{land:[0,50],water:[-500,0],extra:true}]){
@@ -28,6 +29,9 @@ vm.runInContext(html.slice(html.indexOf('const CSP_SHARE_WEB_URL='),html.indexOf
  }
  const restored=await C.decode(await C.encode(mixed));ctx.cspValidateShareState(restored);
  assert.deepEqual(restored.studio.fitted,mixed.studio.fitted);
+ assert.equal(restored.studio.remLandFloor,-86);
+ for(const floor of [null,undefined,0,1234]){const value=structuredClone(mixed);value.studio.remLandFloor=floor;ctx.cspValidateShareState(value)}
+ for(const floor of [NaN,Infinity,"12"]){const bad=structuredClone(mixed);bad.studio.remLandFloor=floor;assert.throws(()=>ctx.cspValidateShareState(bad),/Invalid share link/)}
 
  const invalid=[s=>s.version=9,s=>s.engineBase='https://private.example',s=>s.view.location.lat=91,s=>delete s.controls.terStyle,s=>s.controls.engineBase='private',s=>s.controls.mosaic='true',s=>s.overlays.push({id:'not-a-source',opacity:80}),s=>s.order.push({id:'bad'}),s=>s.order.push('overlay:not-a-source'),s=>s.order.push(s.order[0]),s=>s.studio.state.effects.detail=999,s=>s.studio.state.base.unknown={style:'unknown'},s=>s.studio.fitted={base:[5,2]}];
  for(const change of invalid){const value=structuredClone(fixture);change(value);assert.throws(()=>ctx.cspValidateShareState(value),/Invalid share link/);await assert.rejects(()=>ctx.cspRestoreShareState(value),/Invalid share link/)}
