@@ -8,15 +8,18 @@
    onto the paper, so overlapping lines darken the way real ink does. */
 import * as THREE from "three";
 
-const KIND = { STATIC: 0, TRUNK: 1, BRANCH: 2, TWIG: 3, FERN: 4 };
+export const KIND = { STATIC: 0, TRUNK: 1, BRANCH: 2, TWIG: 3, FERN: 4, FALL: 5 };
 const INK = { GREEN: 0, SEPIA: 1, GRAPHITE: 2, BARK: 3 };
-const DEG = Math.PI / 180;
+// the fir's four inks; other drawings pass their own [r, g, b] (plus an optional wash softness)
+const FIR_INKS = [[0.16, 0.53, 0.37], [0.47, 0.37, 0.27], [0.33, 0.32, 0.30], [0.62, 0.42, 0.25]];
+export const DEG = Math.PI / 180;
 
 // The drawing lives in "tree units": the trunk stands at x = 0 and is 1 tall.
 export const VIEW = { cx: -0.01, cy: 0.405, w: 1.12, h: 1.42 };
+const FIR_VIEW = VIEW;
 const DRAW_SECONDS = 6.2;
 
-function mulberry32(a) {
+export function mulberry32(a) {
   return function () {
     a |= 0; a = a + 0x6D2B79F5 | 0;
     let t = Math.imul(a ^ a >>> 15, 1 | a);
@@ -24,17 +27,22 @@ function mulberry32(a) {
     return ((t ^ t >>> 14) >>> 0) / 4294967296;
   };
 }
-const lerp = (a, b, t) => a + (b - a) * t;
-const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
-const smooth = (e0, e1, x) => { const t = clamp((x - e0) / (e1 - e0), 0, 1); return t * t * (3 - 2 * t); };
+export const lerp = (a, b, t) => a + (b - a) * t;
+export const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+export const smooth = (e0, e1, x) => { const t = clamp((x - e0) / (e1 - e0), 0, 1); return t * t * (3 - 2 * t); };
 
-export function buildTree(seed = 20261104) {
+/* The drawing kit shared by every sketch: a seeded random source, the stroke and bone
+   buffers, and the pen primitives. A colour is an ink index into `palette` or an
+   [r, g, b, soft] array; soft > 0 draws a round-ended watercolour wash instead of a
+   pen line. */
+export function canvasAPI(seed, palette = FIR_INKS) {
   const rnd = mulberry32(seed);
   const R = (a, b) => a + (b - a) * rnd();
-
-  const seg = [], bon = [], sty = [], col = [];
+  const seg = [], bon = [], sty = [], col = [], tag = [];
   const line = (x0, y0, b0, x1, y1, b1, w, ink, t, dur, c) => {
-    seg.push(x0, y0, x1, y1); bon.push(b0, b1); sty.push(w, clamp(ink, 0, 1), t, dur); col.push(c);
+    seg.push(x0, y0, x1, y1); bon.push(b0, b1); sty.push(w, clamp(ink, 0, 1), t, dur);
+    const k = typeof c === "number" ? palette[c] : c;
+    col.push(k[0], k[1], k[2], k[3] || 0); tag.push(typeof c === "number" ? c : -1);
   };
   // pts = [[x, y, bone], ...]; the pen travels along it from t0 to t1
   const poly = (pts, w, ink, t0, t1, c) => {
@@ -71,6 +79,12 @@ export function buildTree(seed = 20261104) {
   const ROOT = bone(-1, 0, 0, 0, 0, KIND.STATIC, 0, 0, 0, 1);
   const labels = [];
   const label = (x, y, html, o = {}) => labels.push({ x, y, html, anchor: o.anchor || "l", rot: o.rot || 0, t: o.t ?? 0.9, cls: o.cls || "" });
+  return { rnd, R, seg, bon, sty, col, tag, line, poly, dashed, circle, B, bone, ROOT, labels, label };
+}
+
+/* The ground line and the soil section under it (duff and loam, glacial till, andesite). */
+export function drawSection(K, ink) {
+  const { rnd, R, line, poly, ROOT, label } = K;
 
   /* ---------- ground line ---------- */
   const g0 = 0.0035 * Math.sin(1.1) + 0.0025 * Math.sin(0.3);
@@ -79,12 +93,12 @@ export function buildTree(seed = 20261104) {
     for (const dir of [-1, 1]) {
       const pts = [];
       for (let x = 0; Math.abs(x) <= 0.5; x += dir * 0.004) pts.push([x, groundY(x) + R(-0.0004, 0.0004), ROOT]);
-      poly(pts, f => lerp(1.5, 0.9, f), f => 0.85 - 0.35 * f * f, 0.0, 0.07, INK.SEPIA);
+      poly(pts, f => lerp(1.5, 0.9, f), f => 0.85 - 0.35 * f * f, 0.0, 0.07, ink);
     }
     // a little duff and litter on the surface
     for (let i = 0; i < 70; i++) {
       const x = R(-0.47, 0.47), y = groundY(x) + R(0.0005, 0.003), a = R(-0.4, 0.4), l = R(0.003, 0.008);
-      line(x, y, ROOT, x + Math.cos(a) * l, y + Math.sin(a) * l, ROOT, 0.8, R(0.35, 0.6), 0.04 + 0.05 * Math.abs(x), 0.01, INK.SEPIA);
+      line(x, y, ROOT, x + Math.cos(a) * l, y + Math.sin(a) * l, ROOT, 0.8, R(0.35, 0.6), 0.04 + 0.05 * Math.abs(x), 0.01, ink);
     }
   }
 
@@ -98,30 +112,30 @@ export function buildTree(seed = 20261104) {
       const pts = [];
       for (let y = ytop; y >= yBot - 1e-6; y -= 0.006) pts.push([x + R(-0.0005, 0.0005), y, ROOT]);
       pts.push([x, yBot, ROOT]);
-      poly(pts, 1.1, 0.75, 0.05, 0.1, INK.SEPIA);
+      poly(pts, 1.1, 0.75, 0.05, 0.1, ink);
     };
     edge(xL, groundY(xL)); edge(xR, groundY(xR));
     const bot = [];
     for (let x = xL; x <= xR + 1e-6; x += 0.006) bot.push([x, yBot + R(-0.0004, 0.0004), ROOT]);
-    poly(bot, 1.1, 0.75, 0.08, 0.14, INK.SEPIA);
+    poly(bot, 1.1, 0.75, 0.08, 0.14, ink);
     // A/B contact is gradational: draw it dashed. B/C is a sharp contact on rock.
     for (let x = xL; x < xR - 0.004; x += 0.011) {
       const x1 = Math.min(xR, x + 0.0065);
-      line(x, yA(x), ROOT, x1, yA(x1), ROOT, 0.9, 0.55, tSec(x), 0.01, INK.SEPIA);
+      line(x, yA(x), ROOT, x1, yA(x1), ROOT, 0.9, 0.55, tSec(x), 0.01, ink);
     }
     const bc = [];
     for (let x = xL; x <= xR + 1e-6; x += 0.005) bc.push([x, yB(x), ROOT]);
-    poly(bc, 1.15, 0.72, 0.1, 0.18, INK.SEPIA);
+    poly(bc, 1.15, 0.72, 0.1, 0.18, ink);
 
     // A horizon: duff and loam, stippled densest at the top
     for (let i = 0; i < 900; i++) {
       const x = R(xL + 0.003, xR - 0.003), top = groundY(x) - 0.0025, bt = yA(x) + 0.001;
       const y = top - (top - bt) * Math.pow(rnd(), 0.75);
-      line(x, y, ROOT, x + 0.0004, y + 0.0002, ROOT, R(1.1, 1.7), R(0.35, 0.65), tSec(x) + 0.02, 0.01, INK.SEPIA);
+      line(x, y, ROOT, x + 0.0004, y + 0.0002, ROOT, R(1.1, 1.7), R(0.35, 0.65), tSec(x) + 0.02, 0.01, ink);
     }
     for (let i = 0; i < 60; i++) { // short horizontal duff flecks
       const x = R(xL + 0.006, xR - 0.012), y = groundY(x) - R(0.002, 0.008), l = R(0.003, 0.007);
-      line(x, y, ROOT, x + l, y + R(-0.001, 0.001), ROOT, 0.8, 0.45, tSec(x) + 0.02, 0.01, INK.SEPIA);
+      line(x, y, ROOT, x + l, y + R(-0.001, 0.001), ROOT, 0.8, 0.45, tSec(x) + 0.02, 0.01, ink);
     }
 
     // B horizon: glacial till, unsorted pebbles and cobbles in a fine matrix
@@ -140,18 +154,18 @@ export function buildTree(seed = 20261104) {
         const a = i / n * Math.PI * 2, rr = r * jit[i % n], px = Math.cos(a) * rr, py = Math.sin(a) * rr * asp;
         pts.push([x + px * Math.cos(rot) - py * Math.sin(rot), y + px * Math.sin(rot) + py * Math.cos(rot), ROOT]);
       }
-      poly(pts, r > 0.004 ? 1.0 : 0.85, R(0.5, 0.72), tSec(x) + 0.04, tSec(x) + 0.06, INK.SEPIA);
+      poly(pts, r > 0.004 ? 1.0 : 0.85, R(0.5, 0.72), tSec(x) + 0.04, tSec(x) + 0.06, ink);
       if (r > 0.0045) { // shade the lower right of bigger clasts
         for (let k = 0; k < 3; k++) {
           const a = R(-1.2, -0.2), px = x + Math.cos(a) * r * 0.55, py = y + Math.sin(a) * r * 0.55 * asp;
-          line(px - 0.0012, py - 0.0016, ROOT, px + 0.0012, py + 0.0016, ROOT, 0.7, 0.35, tSec(x) + 0.07, 0.01, INK.SEPIA);
+          line(px - 0.0012, py - 0.0016, ROOT, px + 0.0012, py + 0.0016, ROOT, 0.7, 0.35, tSec(x) + 0.07, 0.01, ink);
         }
       }
     }
     for (let i = 0; i < 380; i++) {
       const x = R(xL + 0.003, xR - 0.003), y = R(yB(x) + 0.002, yA(x) - 0.002);
       if (peb.some(p => Math.hypot(p[0] - x, p[1] - y) < p[2] + 0.001)) continue;
-      line(x, y, ROOT, x + 0.0003, y, ROOT, R(0.9, 1.3), R(0.3, 0.5), tSec(x) + 0.05, 0.01, INK.SEPIA);
+      line(x, y, ROOT, x + 0.0003, y, ROOT, R(0.9, 1.3), R(0.3, 0.5), tSec(x) + 0.05, 0.01, ink);
     }
 
     // C: andesite bedrock. Diagonal hatch, steep joints, a scatter of phenocrysts.
@@ -164,7 +178,7 @@ export function buildTree(seed = 20261104) {
         const x = ox + hx * s, y = oy + hy * s, inside = inC(x, y) && rnd() > 0.015;
         if (inside && !on) on = [x, y];
         if ((!inside || s + 0.002 > 0.5) && on) {
-          if (Math.hypot(x - on[0], y - on[1]) > 0.003) line(on[0], on[1], ROOT, x, y, ROOT, 0.75, R(0.26, 0.38), tSec(on[0]) + 0.06, 0.02, INK.SEPIA);
+          if (Math.hypot(x - on[0], y - on[1]) > 0.003) line(on[0], on[1], ROOT, x, y, ROOT, 0.75, R(0.26, 0.38), tSec(on[0]) + 0.06, 0.02, ink);
           on = null;
         }
       }
@@ -175,17 +189,46 @@ export function buildTree(seed = 20261104) {
       while (y > yBot + 0.004 && x > xL + 0.003 && x < xR - 0.003) {
         x += Math.cos(a + R(-0.25, 0.25)) * 0.009; y += Math.sin(a) * 0.009; pts.push([x, Math.max(y, yBot), ROOT]);
       }
-      poly(pts, 1.05, 0.62, tSec(x) + 0.07, tSec(x) + 0.1, INK.SEPIA);
+      poly(pts, 1.05, 0.62, tSec(x) + 0.07, tSec(x) + 0.1, ink);
     }
     for (let i = 0; i < 110; i++) {
       const x = R(xL, xR), y = R(yBot, -0.11), a = R(0, Math.PI), l = R(0.0015, 0.003);
       if (!inC(x, y)) continue;
-      line(x, y, ROOT, x + Math.cos(a) * l, y + Math.sin(a) * l, ROOT, 1.1, 0.5, tSec(x) + 0.08, 0.01, INK.SEPIA);
+      line(x, y, ROOT, x + Math.cos(a) * l, y + Math.sin(a) * l, ROOT, 1.1, 0.5, tSec(x) + 0.08, 0.01, ink);
     }
     label(xR + 0.016, (groundY(xR) + yA(xR)) / 2, "<b>A</b> duff &amp; loam", { t: 0.2, cls: "sec" });
     label(xR + 0.016, (yA(xR) + yB(xR)) / 2, "<b>B</b> glacial till", { t: 0.24, cls: "sec" });
     label(xR + 0.016, (yB(xR) + yBot) / 2, "<b>C</b> andesite", { t: 0.28, cls: "sec" });
   }
+  return { groundY, yA, yB, xL, xR, yBot, tSec };
+}
+
+/* Physics constants and typed buffers for the renderer. */
+export function pack(K, anchors) {
+  const { seg, bon, sty, col, B, labels } = K;
+  const n = B.ox.length, mSub = Float32Array.from(B.m);
+  for (let b = n - 1; b > 0; b--) if (B.par[b] >= 0) mSub[B.par[b]] += mSub[b];
+  const invI = new Float32Array(n);
+  for (let b = 0; b < n; b++) {
+    const I = Math.max(1e-6, mSub[b] * B.ext[b] * B.ext[b] / 3);
+    // branches get a little more give than a rigid rod would, so a sweep visibly lifts the bough
+    invI[b] = B.kind[b] === KIND.STATIC ? 0 : B.kind[b] === KIND.TRUNK ? 0.15 / I : B.kind[b] === KIND.BRANCH ? 3 / I : 1 / I;
+  }
+  return {
+    count: sty.length / 4, nb: n, labels, anchors,
+    seg: new Float32Array(seg), bon: new Float32Array(bon), sty: new Float32Array(sty), col: new Float32Array(col),
+    bones: {
+      ox: Float32Array.from(B.ox), oy: Float32Array.from(B.oy), ex: Float32Array.from(B.ex), ey: Float32Array.from(B.ey),
+      par: Int32Array.from(B.par), kind: Uint8Array.from(B.kind), w0: Float32Array.from(B.w0), zeta: Float32Array.from(B.zeta),
+      m: Float32Array.from(B.m), invI
+    }
+  };
+}
+
+export function buildTree(seed = 20261104) {
+  const K = canvasAPI(seed, FIR_INKS);
+  const { rnd, R, line, poly, dashed, circle, bone, ROOT, label, seg, tag } = K;
+  const { groundY, yA, yB, xL, xR, yBot, tSec } = drawSection(K, INK.SEPIA);
 
   /* ---------- trunk ---------- */
   const tX = y => 0.0035 * Math.sin(y * 4.3 + 0.4) + 0.0022 * Math.sin(y * 11.7 + 1.3) - 0.0035 * Math.sin(0.4) - 0.0022 * Math.sin(1.3);
@@ -490,8 +533,8 @@ export function buildTree(seed = 20261104) {
     // one lidar pulse: first return on the crown, last return on bare earth
     const xr = -0.2;
     let hit = 0;
-    for (let i = 0; i < col.length; i++) {
-      if (col[i] !== INK.GREEN) continue;
+    for (let i = 0; i < tag.length; i++) {
+      if (tag[i] !== INK.GREEN) continue;
       for (const k of [0, 2]) {
         const x = seg[i * 4 + k], y = seg[i * 4 + k + 1];
         if (Math.abs(x - xr) < 0.0028 && y > hit) hit = y;
@@ -514,26 +557,9 @@ export function buildTree(seed = 20261104) {
   }
 
   let tipY = 0;
-  for (let i = 0; i < col.length; i++) if (col[i] === INK.GREEN && Math.abs(seg[i * 4]) < 0.03) tipY = Math.max(tipY, seg[i * 4 + 1], seg[i * 4 + 3]);
+  for (let i = 0; i < tag.length; i++) if (tag[i] === INK.GREEN && Math.abs(seg[i * 4]) < 0.03) tipY = Math.max(tipY, seg[i * 4 + 1], seg[i * 4 + 3]);
 
-  /* ---------- bone physics constants ---------- */
-  const n = B.ox.length, mSub = Float32Array.from(B.m);
-  for (let b = n - 1; b > 0; b--) if (B.par[b] >= 0) mSub[B.par[b]] += mSub[b];
-  const invI = new Float32Array(n);
-  for (let b = 0; b < n; b++) {
-    const I = Math.max(1e-6, mSub[b] * B.ext[b] * B.ext[b] / 3);
-    // branches get a little more give than a rigid rod would, so a sweep visibly lifts the bough
-    invI[b] = B.kind[b] === KIND.STATIC ? 0 : B.kind[b] === KIND.TRUNK ? 0.15 / I : B.kind[b] === KIND.BRANCH ? 3 / I : 1 / I;
-  }
-  return {
-    count: col.length, nb: n, labels, anchors: { tip: tipY, rock: yBot },
-    seg: new Float32Array(seg), bon: new Float32Array(bon), sty: new Float32Array(sty), col: new Float32Array(col),
-    bones: {
-      ox: Float32Array.from(B.ox), oy: Float32Array.from(B.oy), ex: Float32Array.from(B.ex), ey: Float32Array.from(B.ey),
-      par: Int32Array.from(B.par), kind: Uint8Array.from(B.kind), w0: Float32Array.from(B.w0), zeta: Float32Array.from(B.zeta),
-      m: Float32Array.from(B.m), invI
-    }
-  };
+  return pack(K, { tip: tipY, rock: yBot });
 }
 
 const VS = /* glsl */`
@@ -542,7 +568,7 @@ precision highp sampler2D;
 attribute vec4 aSeg;
 attribute vec2 aBone;
 attribute vec4 aStyle;
-attribute float aCol;
+attribute vec4 aCol;
 uniform sampler2D uBones;
 uniform vec2 uCenter;
 uniform float uScale;
@@ -553,7 +579,10 @@ varying float vAlong;
 varying float vDist;
 varying float vHalf;
 varying float vInk;
-varying float vCol;
+varying vec3 vRGB;
+varying float vSoft;
+varying float vAlongPx;
+varying float vLen;
 varying float vReveal;
 varying float vWet;
 vec2 xf(vec2 p, float b){
@@ -571,13 +600,18 @@ void main(){
   float w = (aStyle.x < 0.0 ? -aStyle.x * uScale : aStyle.x) * uDpr;
   float halfW = max(w, 0.9 * uDpr) * 0.5;
   float pad = halfW + 1.0;
-  vec2 pos = a + d * position.x + nrm * position.y * pad;
+  // a wash has round ends, so its quad reaches past both end points by the half width
+  float cap = aCol.w > 0.0 ? pad : 0.0;
+  vec2 pos = a - dir * cap + (d + 2.0 * dir * cap) * position.x + nrm * position.y * pad;
   gl_Position = vec4(pos / (uRes * 0.5), 0.0, 1.0);
   vAlong = position.x;
+  vAlongPx = position.x * (L + 2.0 * cap) - cap;
+  vLen = L;
   vDist = position.y * pad;
   vHalf = halfW;
   vInk = aStyle.y * min(1.0, w / (0.9 * uDpr));
-  vCol = aCol;
+  vRGB = aCol.rgb;
+  vSoft = aCol.w;
   float since = uDraw - aStyle.z;
   vReveal = since / max(aStyle.w, 1e-4);
   vWet = clamp(1.0 - (since - aStyle.w) / 0.07, 0.0, 1.0);
@@ -585,26 +619,42 @@ void main(){
 
 const FS = /* glsl */`
 precision highp float;
-uniform vec3 uInk0;
-uniform vec3 uInk1;
-uniform vec3 uInk2;
-uniform vec3 uInk3;
 varying float vAlong;
 varying float vDist;
 varying float vHalf;
 varying float vInk;
-varying float vCol;
+varying vec3 vRGB;
+varying float vSoft;
+varying float vAlongPx;
+varying float vLen;
 varying float vReveal;
 varying float vWet;
 float hash(vec2 p){ return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+float vnoise(vec2 p){
+  vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f);
+  return mix(mix(hash(i), hash(i + vec2(1, 0)), f.x), mix(hash(i + vec2(0, 1)), hash(i + vec2(1, 1)), f.x), f.y);
+}
 void main(){
   if (vReveal < vAlong) discard;
-  float cov = clamp(vHalf + 0.5 - abs(vDist), 0.0, 1.0);
   float grain = hash(floor(gl_FragCoord.xy));
-  float a = vInk * cov * (0.86 + 0.14 * grain);
-  vec3 ink = vCol < 0.5 ? uInk0 : vCol < 1.5 ? uInk1 : vCol < 2.5 ? uInk2 : uInk3;
-  ink *= 1.0 - 0.3 * vWet;           // fresh ink is darker, then dries
-  a = min(1.0, a * (1.0 + 0.4 * vWet));
+  float a;
+  vec3 ink = vRGB;
+  if (vSoft > 0.0) {
+    // watercolour: a soft-edged capsule whose pigment pools a little at the rim and
+    // settles into the paper's tooth
+    float ex = max(0.0, max(-vAlongPx, vAlongPx - vLen));
+    float d = length(vec2(ex, vDist)) / max(vHalf, 0.5);
+    float wob = 0.34 * (vnoise(gl_FragCoord.xy * 0.045 + vRGB.xy * 40.0) - 0.5) + 0.1 * (vnoise(gl_FragCoord.xy * 0.2) - 0.5);
+    float cov = 1.0 - smoothstep(1.0 - vSoft + wob, 1.0 + wob, d);
+    float rim = 0.9 + 0.22 * smoothstep(0.5, 1.0, d + wob);
+    float tooth = 0.72 + 0.4 * vnoise(gl_FragCoord.xy * 0.55) + 0.1 * grain;
+    a = vInk * cov * rim * tooth;
+  } else {
+    float cov = clamp(vHalf + 0.5 - abs(vDist), 0.0, 1.0);
+    a = vInk * cov * (0.86 + 0.14 * grain);
+    ink *= 1.0 - 0.3 * vWet;           // fresh ink is darker, then dries
+  }
+  a = min(1.0, a * (1.0 + 0.4 * vWet * (1.0 - step(0.001, vSoft))));
   gl_FragColor = vec4(mix(vec3(1.0), ink, a), 1.0);
 }`;
 
@@ -615,7 +665,8 @@ export function createSketch(canvas, layer, opts = {}) {
   catch (e) { opts.onNoWebGL && opts.onNoWebGL(); return null; }
   renderer.setClearColor(0xffffff, 1);
 
-  const T = buildTree(opts.seed);
+  const T = opts.build ? opts.build() : buildTree(opts.seed);
+  const VIEW = opts.view || FIR_VIEW;
   const n = T.nb, BW = 64, BH = Math.ceil(n / BW), Bn = T.bones;
   const data = new Float32Array(BW * BH * 4);
   const tex = new THREE.DataTexture(data, BW, BH, THREE.RGBAFormat, THREE.FloatType);
@@ -627,16 +678,12 @@ export function createSketch(canvas, layer, opts = {}) {
   geo.setAttribute("aSeg", new THREE.InstancedBufferAttribute(T.seg, 4));
   geo.setAttribute("aBone", new THREE.InstancedBufferAttribute(T.bon, 2));
   geo.setAttribute("aStyle", new THREE.InstancedBufferAttribute(T.sty, 4));
-  geo.setAttribute("aCol", new THREE.InstancedBufferAttribute(T.col, 1));
+  geo.setAttribute("aCol", new THREE.InstancedBufferAttribute(T.col, 4));
   geo.instanceCount = T.count;
 
   const U = {
     uBones: { value: tex }, uCenter: { value: new THREE.Vector2(VIEW.cx, VIEW.cy) }, uScale: { value: 600 },
-    uRes: { value: new THREE.Vector2(1, 1) }, uDpr: { value: 1 }, uDraw: { value: reduce ? 1.2 : 0 },
-    uInk0: { value: new THREE.Color(0.16, 0.53, 0.37) },   // emerald
-    uInk1: { value: new THREE.Color(0.47, 0.37, 0.27) },   // iron-oxide sepia
-    uInk2: { value: new THREE.Color(0.33, 0.32, 0.30) },   // graphite
-    uInk3: { value: new THREE.Color(0.62, 0.42, 0.25) }      // light bark brown
+    uRes: { value: new THREE.Vector2(1, 1) }, uDpr: { value: 1 }, uDraw: { value: reduce ? 1.2 : 0 }
   };
   const mat = new THREE.ShaderMaterial({
     vertexShader: VS, fragmentShader: FS, uniforms: U, transparent: true, depthTest: false, depthWrite: false,
@@ -665,6 +712,26 @@ export function createSketch(canvas, layer, opts = {}) {
   }
   const P = { gain: opts.gain ?? 2.4, breeze: opts.breeze ?? 0.16, decay: 0.72 };
 
+  /* falling leaves: FALL bones drift down from where they hang, tumbling, then start over */
+  const offX = new Float32Array(n), offY = new Float32Array(n), fall = [];
+  for (let b = 0; b < n; b++) if (Bn.kind[b] === KIND.FALL) {
+    fall.push({ b, t: Math.random() * 14, v: 0.035 + Math.random() * 0.025, drift: 0.012 + Math.random() * 0.02,
+      amp: 0.012 + Math.random() * 0.018, w: 1.2 + Math.random() * 1.2, ph: Math.random() * 6.28, rest: 0 });
+  }
+  function falling(dt) {
+    for (const f of fall) {
+      const oy = Bn.oy[f.b];
+      if (f.rest > 0) { f.rest -= dt; if (f.rest <= 0) f.t = 0; continue; }
+      f.t += dt;
+      let y = -f.v * f.t;
+      const land = 0.004 - oy;              // the ground sits near y = 0
+      if (y < land) { y = land; f.rest = 2.5 + Math.random() * 4; }
+      offY[f.b] = y;
+      offX[f.b] = f.drift * f.t + f.amp * Math.sin(f.t * f.w + f.ph);
+      ang[f.b] = y === land ? 0 : 0.9 * Math.sin(f.t * f.w * 1.3 + f.ph);
+    }
+  }
+
   function pose() {
     for (let b = 0; b < n; b++) {
       const p = Bn.par[b], d = ang[b], ox = Bn.ox[b], oy = Bn.oy[b];
@@ -675,6 +742,7 @@ export function createSketch(canvas, layer, opts = {}) {
         A[b] = a; C[b] = Math.cos(a); S[b] = Math.sin(a);
         TX[b] = cp * qx - sp * qy + TX[p]; TY[b] = sp * qx + cp * qy + TY[p];
       }
+      TX[b] += offX[b]; TY[b] += offY[b];
       const o = b * 4; data[o] = C[b]; data[o + 1] = S[b]; data[o + 2] = TX[b]; data[o + 3] = TY[b];
     }
     tex.needsUpdate = true;
@@ -697,7 +765,7 @@ export function createSketch(canvas, layer, opts = {}) {
     if (P.breeze > 0) {
       for (let b = 1; b < n; b++) {
         const kd = Bn.kind[b];
-        if (kd < KIND.TWIG) continue;
+        if (kd < KIND.TWIG || kd === KIND.FALL) continue;
         const mx = (Bn.ox[b] + Bn.ex[b]) / 2, my = (Bn.oy[b] + Bn.ey[b]) / 2;
         const g = 0.25 + 0.75 * Math.pow(0.5 + 0.5 * Math.sin(2.1 * mx - 0.85 * time + 0.7 * Math.sin(0.29 * time + 2.3 * my)), 3);
         const fl = Math.sin(time * fq[b] + ph[b]), W = P.breeze * Bn.m[b] * (kd === KIND.FERN ? 0.5 : 1);
@@ -709,7 +777,7 @@ export function createSketch(canvas, layer, opts = {}) {
       const sp = Math.hypot(ptr.vx, ptr.vy), sc = sp > 2.5 ? 2.5 / sp : 1, vx = ptr.vx * sc, vy = ptr.vy * sc;
       for (let b = 1; b < n; b++) {
         const kd = Bn.kind[b];
-        if (kd < KIND.BRANCH) continue;
+        if (kd < KIND.BRANCH || kd === KIND.FALL) continue;
         const ox = C[b] * Bn.ox[b] - S[b] * Bn.oy[b] + TX[b], oy = S[b] * Bn.ox[b] + C[b] * Bn.oy[b] + TY[b];
         const ex = C[b] * Bn.ex[b] - S[b] * Bn.ey[b] + TX[b], ey = S[b] * Bn.ex[b] + C[b] * Bn.ey[b] + TY[b];
         const dx = ex - ox, dy = ey - oy, L2 = dx * dx + dy * dy || 1e-9;
@@ -724,7 +792,7 @@ export function createSketch(canvas, layer, opts = {}) {
     const steps = 3, h = dt / steps;
     for (let s = 0; s < steps; s++) {
       for (let b = 1; b < n; b++) {
-        if (Bn.kind[b] === KIND.STATIC) continue;
+        if (Bn.kind[b] === KIND.STATIC || Bn.kind[b] === KIND.FALL) continue;
         vel[b] += (-k[b] * ang[b] - c[b] * vel[b] + tau[b] * Bn.invI[b]) * h;
         const a = ang[b] + vel[b] * h;
         if (a > lim[b] || a < -lim[b]) { ang[b] = Math.sign(a) * lim[b]; vel[b] *= -0.3; } else ang[b] = a;
@@ -767,6 +835,7 @@ export function createSketch(canvas, layer, opts = {}) {
   function render() { renderer.render(scene, cam); }
   function updateLabels(draw) { T.labels.forEach((l, i) => els[i].classList.toggle("on", draw >= l.t)); }
 
+  if (reduce) for (const f of fall) { f.t = 3 + Math.random() * 6; falling(0); }
   pose();
   let raf = 0, last = 0, start = 0, visible = true, draw = reduce ? 1.2 : 0;
   function frame(now) {
@@ -779,7 +848,7 @@ export function createSketch(canvas, layer, opts = {}) {
     if (Math.abs(ptr.vx) + Math.abs(ptr.vy) < 1e-3) ptr.vx = ptr.vy = 0;
     draw = Math.min(1.2, (now - start) / 1000 / DRAW_SECONDS);
     U.uDraw.value = draw;
-    physics(dt); pose(); updateLabels(draw); render();
+    physics(dt); if (draw > 1) falling(dt); pose(); updateLabels(draw); render();
   }
   function play() { if (!raf && visible && !document.hidden) { last = performance.now(); raf = requestAnimationFrame(frame); } }
   function pause() { cancelAnimationFrame(raf); raf = 0; }

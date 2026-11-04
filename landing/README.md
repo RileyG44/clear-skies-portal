@@ -8,6 +8,14 @@
   geologist's sketchbook. A pen-and-ink Douglas-fir over a soil section draws
   itself in, then every branch and twig is a damped spring on a bone
   hierarchy, so brushing the crown with the cursor moves the boughs it touches.
+- `maple.html` + `maple.js` + `phenology.js`: a seasonal variant of the sketchbook.
+  An open-grown bigleaf maple (Acer macrophyllum) in pen, ink and watercolour,
+  drawn for the visitor's date: bare and mossy in winter, flower tassels and
+  lime leaf-out in spring, deep green in summer, yellow to gold to tan in
+  autumn with leaves falling and litter on the ground. `phenology.js` holds the
+  calendar for its native range (west slope of the Cascades, Puget lowland), so
+  nothing is fetched. Add `?date=2026-04-20` to preview another day. The page's
+  link and hover accents take the canopy's colour that day.
 - `explore.html`: features and capabilities, real app captures and screenshots
   (`media/`), and two live demos: terrain relighting with the app's four
   lighting controls, and a point-cloud forest with All returns / Bare earth
