@@ -748,7 +748,7 @@
         const land={caption:caption+(fit?.land&&fit?.water?" · land":""),bar,ticks};
         if(!fit?.water)return [land];
         const water={caption:"Water · elevation · separate scale"+(overlays.length?` + ${overlays.join(" + ")}`:""),bar:R.elevationGradient(layer,fit.water,true),
-          ticks:[fit.water[0],(fit.water[0]+fit.water[1])/2,fit.water[1]].map(v=>R.formatValue("tint",v))};
+          ticks:[fit.water[0],(fit.water[0]+fit.water[1])/2,fit.water[1]].map((v,i)=>R.formatValue("tint",v)+(i===2?" · fitted":""))};
         return fit.land?[land,water]:[water];
       }
       const overlays=visible.slice(1).map(entry=>(R.STYLES[entry.layer.style]||{}).label).filter(Boolean);

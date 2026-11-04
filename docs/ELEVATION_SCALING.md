@@ -16,6 +16,8 @@ The existing Range & shading controls also offer **Full elevation range**
 fit). Manual ranges remain continuous. Curve and Bands apply to both ramps;
 custom palette transparency, layer opacity, shading and blending are preserved.
 Legends reflect the curve and show separate scales, including elevation overlays.
+Reverse changes the land palette; water retains dark-deep to light-shallow blue.
+Gallery thumbnails use synthetic terrain without geographic water classification.
 The web, native iOS adapter, 3D drape and export keys use the shared studio state.
 Scale settings and fitted ranges survive presets, storage and share links;
 pre-existing links with continuous fitted ranges remain supported.
