@@ -46,10 +46,11 @@ for (const id of ["hs", "hsmulti", "slope", "aspect", "northness", "tint", "rem"
 assert.equal(render.MAX_LAYERS, shaders.MAX_LAYERS);
 assert.equal(render.MAX_STOPS, shaders.MAX_STOPS);
 
-/* Untouched styling stays on the legacy renderer: no stack. */
+/* Untouched non-elevation styling stays on the legacy renderer. Elevation
+ * uses the shared stack so its automatic land/water ranges can take effect. */
 {
   const state = render.emptyState();
-  for (const style of ["hs", "hsmulti", "slope", "aspect", "northness", "tint", "c10"]) {
+  for (const style of ["hs", "hsmulti", "slope", "aspect", "northness", "c10"]) {
     assert.ok(render.isLegacy(state, style), `${style} default is legacy`);
     assert.equal(render.buildStack(state, style), null);
   }
@@ -130,7 +131,7 @@ assert.equal(render.MAX_STOPS, shaders.MAX_STOPS);
 {
   const values = Array.from({ length: 1001 }, (_, i) => 1000 + i);
   values.push(9000, -500);
-  const [low, high] = render.fitRange(values, "tint");
+  const [low, high] = render.fitRange(values, "tint", "robust");
   assert.ok(low >= 1000 && low <= 1030 && high >= 1970 && high <= 2010, `robust range ${low}..${high}`);
   assert.equal(render.fitRange(values, "rem")[0], 0);
   assert.equal(render.fitRange([], "tint"), null);

@@ -560,7 +560,7 @@ function paintTerrainLegend(style){
   if(studio?.hidden){el.className="terlegend";el.innerHTML="";return}
   if(studio){
     el.className="terlegend on";
-    el.innerHTML=`<div class="caption">${esc(studio.caption)}</div><div class="bar" style="background:${studio.bar}"></div><div class="ticks">${studio.ticks.map(t=>`<span>${esc(t)}</span>`).join("")}</div>`;
+    el.innerHTML=(studio.scales||[studio,studio.secondary].filter(Boolean)).map(key=>`<div class="terlegend-scale"><div class="caption">${esc(key.caption)}</div><div class="bar" style="background:${key.bar}"></div><div class="ticks">${key.ticks.map(t=>`<span>${esc(t)}</span>`).join("")}</div></div>`).join("");
     return;
   }
   const intervals={c2:"2 ft",c5:"5 ft",c10:"10 ft",c25:"25 ft"};
