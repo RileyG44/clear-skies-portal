@@ -285,6 +285,9 @@ struct MapDistanceKey: Decodable, Hashable {
     let label: String
     /// Length of the scale bar in CSS pixels, which match points on the map.
     let width: Double
+    /// The label's number and unit ("mi" or "ft"), for rescaling the bar.
+    var amount: Double?
+    var unit: String?
 }
 
 struct MapInfoState: Decodable, Hashable {

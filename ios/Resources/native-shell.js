@@ -1048,11 +1048,14 @@
   }
 
   // The bar's CSS width is its length on the map. One iPhone point is one CSS pixel.
+  // The amount and unit are numeric, so native code can rescale the bar in
+  // any locale without parsing the localized label.
   const distanceOf = el => {
     if (!el || el.hidden) return null;
     const label = clean($(".distance-label", el)?.textContent);
     const width = Number.parseFloat($(".distance-bar", el)?.style.width);
-    return label && width > 0 ? { label, width } : null;
+    const amount = Number.parseFloat(el.dataset.amount);
+    return label && width > 0 ? { label, width, amount: amount > 0 ? amount : null, unit: el.dataset.unit || null } : null;
   };
 
   function statusState() {

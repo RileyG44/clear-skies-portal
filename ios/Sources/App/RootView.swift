@@ -136,12 +136,14 @@ private struct FloatingToolsSheet: View {
         return false
     }
 
-    /// 90% of the height, less a little (never below 84%) to leave map info
-    /// room for its compact layout when it is open.
+    /// 90% of the height, less a little to leave map info room for its
+    /// compact layout when it is open: never below 84%, or 70% in a short
+    /// landscape window, where the menu fills it at every detent.
     private var expandedHeight: CGFloat {
         let full = geometry.size.height * 0.9
-        guard shell.mapInfoReserve > 0, verticalSizeClass != .compact else { return full }
-        return max(geometry.size.height * 0.84, min(full, geometry.size.height - 4 - shell.mapInfoReserve))
+        guard shell.mapInfoReserve > 0 else { return full }
+        let floor = geometry.size.height * (verticalSizeClass == .compact ? 0.7 : 0.84)
+        return max(floor, min(full, geometry.size.height - 4 - shell.mapInfoReserve))
     }
     private var mediumHeight: CGFloat {
         verticalSizeClass == .compact ? expandedHeight :
