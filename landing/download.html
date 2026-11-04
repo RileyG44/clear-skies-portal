@@ -38,7 +38,7 @@
       <div>
         <p class="eyebrow" id="featuredEyebrow">Recommended for this device</p>
         <h2 id="featuredTitle">ClearSkies for Windows</h2>
-        <p class="meta" id="featuredMeta">Version 1.0.2 · x64 · includes terrain engine</p>
+        <p class="meta" id="featuredMeta">Version 1.0.7 · x64 · includes terrain engine</p>
       </div>
       <div class="actions" id="featuredActions"></div>
     </section>
@@ -68,9 +68,10 @@
         <ul class="files">
           <li><a class="primary" data-file="mac-dmg" href="#"><span class="name">ClearSkies for Apple silicon</span><small>.dmg · arm64</small></a></li>
           <li><a data-file="mac-zip" href="#"><span class="name">Apple silicon archive</span><small>.zip · arm64</small></a></li>
-          <li><span class="row"><span class="name">Intel Macs</span><small>build from source</small></span></li>
+          <li><a data-file="mac-dmg-x64" href="#"><span class="name">ClearSkies for Intel Macs</span><small>.dmg · x64</small></a></li>
+          <li><a data-file="mac-zip-x64" href="#"><span class="name">Intel archive</span><small>.zip · x64</small></a></li>
         </ul>
-        <p class="req">M-series Mac · <a data-file="mac-sums" href="#">SHA-256 checksums</a></p>
+        <p class="req">Apple silicon or Intel Mac · <a data-file="mac-sums" href="#">SHA-256 checksums</a></p>
       </article>
 
       <article class="plat" data-os="web">
@@ -143,9 +144,11 @@
 import { createStage } from "./scenes.js";
 
 /* Published builds live in releases.js. */
-import { REPO, WIN, MAC, FILES } from "./releases.js";
-for (const a of document.querySelectorAll("[data-file]")) { a.href = FILES[a.dataset.file]; a.rel = "noopener"; }
+import { REPO, WIN, MAC, FILES, refresh } from "./releases.js";
 
+const os = detect();
+function render() {
+for (const a of document.querySelectorAll("[data-file]")) { a.href = FILES[a.dataset.file]; a.rel = "noopener"; }
 const FEATURED = {
   windows: { title: "ClearSkies for Windows", meta: `Version ${WIN.version} · x64 · includes terrain engine`, primary: ["Download for Windows", FILES["win-setup"]], secondary: ["Portable ZIP", FILES["win-zip"]] },
   mac: { title: "ClearSkies for Mac", meta: `Version ${MAC.version} · Apple silicon · includes terrain engine`, primary: ["Download for Mac", FILES["mac-dmg"]], secondary: ["Open in browser", "https://rileyg44.github.io/clear-skies-portal/"] },
@@ -153,6 +156,8 @@ const FEATURED = {
   android: { title: "ClearSkies on Android", meta: "Native app planned · the web app runs in Chrome today", primary: ["Open the web app", "https://rileyg44.github.io/clear-skies-portal/"], secondary: ["Google Play · soon", "https://play.google.com/store"] },
   web: { title: "ClearSkies in your browser", meta: "Nothing to install · WebGL2 for 3D terrain", primary: ["Open the web app", "https://rileyg44.github.io/clear-skies-portal/"], secondary: ["Run the terrain engine", "#cmd"] }
 };
+renderFeatured(FEATURED);
+}
 function detect() {
   const ua = navigator.userAgent, p = (navigator.userAgentData && navigator.userAgentData.platform) || navigator.platform || "";
   if (/iPhone|iPad|iPod/.test(ua) || (/Mac/.test(p) && navigator.maxTouchPoints > 1)) return "ios";
@@ -161,13 +166,17 @@ function detect() {
   if (/Mac/.test(p) || /Mac OS X/.test(ua)) return "mac";
   return "web";
 }
-const os = detect(), f = FEATURED[os];
+function renderFeatured(FEATURED) {
+const f = FEATURED[os];
 document.getElementById("featuredTitle").textContent = f.title;
 document.getElementById("featuredMeta").textContent = f.meta;
 const ext = h => /^https?:/.test(h) && !h.startsWith(REPO) ? ' target="_blank" rel="noopener"' : "";
 document.getElementById("featuredActions").innerHTML =
   `<a class="btn btn-primary" href="${f.primary[1]}"${ext(f.primary[1])}>${f.primary[0]} <span class="arrow" aria-hidden="true">${f.primary[1].startsWith(REPO) ? "↓" : "↗"}</span></a>` +
   `<a class="btn btn-ghost" href="${f.secondary[1]}"${ext(f.secondary[1])}>${f.secondary[0]}</a>`;
+}
+render();
+refresh().then(n => n && render());
 const mine = document.querySelector(`.plat[data-os="${os}"]`);
 if (mine) { mine.classList.add("is-you"); mine.parentElement.prepend(mine); }
 

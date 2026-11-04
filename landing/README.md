@@ -13,8 +13,8 @@
   lighting controls, and a point-cloud forest with All returns / Bare earth
   and colour modes.
 - `download.html`: per-platform downloads with platform detection. It links
-  the published GitHub release assets (edit `WIN` and `MAC` in `releases.js` when a
-  release goes out). The App Store and Google Play badges are placeholders
+  the published GitHub release assets (the newest `mac-v*` and `desktop-v*` releases; `releases.js` holds a fallback copy, bump `WIN` and `MAC` there when a
+  release goes out; the pages also pick up newer releases from the GitHub API on load). The App Store and Google Play badges are placeholders
   until the apps are listed.
 
 All 3D content is procedural (`scenes.js`). The demos say so; nothing is

@@ -165,10 +165,14 @@ a{color:inherit}
 
 <script type="module">
 import { createSketch } from "./sketch.js";
-import { WIN, MAC, FILES } from "./releases.js";
-for (const a of document.querySelectorAll("[data-file]")) a.href = FILES[a.dataset.file];
-document.querySelector('[data-meta="mac"]').textContent = `Apple silicon, Version ${MAC.version}`;
-document.querySelector('[data-meta="win"]').textContent = `x64, Version ${WIN.version}`;
+import { WIN, MAC, FILES, RELEASES_PAGE, refresh } from "./releases.js";
+function links() {
+  for (const a of document.querySelectorAll("[data-file]")) a.href = FILES[a.dataset.file];
+  document.querySelector('[data-meta="mac"]').textContent = `Apple silicon, Version ${MAC.version}`;
+  document.querySelector('[data-meta="win"]').textContent = `x64, Version ${WIN.version}`;
+}
+links();
+refresh().then(n => n && links());
 const copy = document.querySelector(".copy"), title = document.querySelector(".title"), wide = matchMedia("(min-width:861px)");
 const meter = document.createElement("canvas").getContext("2d");
 let last = null;
