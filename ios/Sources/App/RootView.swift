@@ -136,7 +136,15 @@ private struct FloatingToolsSheet: View {
         return false
     }
 
-    private var expandedHeight: CGFloat { geometry.size.height * 0.9 }
+    /// 90% of the height, less a little to leave map info room for its
+    /// compact layout when it is open: never below 84%, or 70% in a short
+    /// landscape window, where the menu fills it at every detent.
+    private var expandedHeight: CGFloat {
+        let full = geometry.size.height * 0.9
+        guard shell.mapInfoReserve > 0 else { return full }
+        let floor = geometry.size.height * (verticalSizeClass == .compact ? 0.7 : 0.84)
+        return max(floor, min(full, geometry.size.height - 4 - shell.mapInfoReserve))
+    }
     private var mediumHeight: CGFloat {
         verticalSizeClass == .compact ? expandedHeight :
             min(expandedHeight, (geometry.size.height + geometry.safeAreaInsets.top) * 0.5 + homeInset)
@@ -191,6 +199,10 @@ private struct FloatingToolsSheet: View {
         // corners follow the display's own rounded corners (never tighter
         // than the top's 32 points), so the screen does not clip them.
         .clipShape(.rect(uniformTopCorners: .fixed(32), uniformBottomCorners: .concentric(minimum: .fixed(32))))
+        .onGeometryChange(for: ClosedRange<CGFloat>.self) { proxy in
+            let frame = proxy.frame(in: .named("portal-map"))
+            return frame.minX...frame.maxX
+        } action: { shell.sheetSpan = $0 }
         .environment(\.portalSheetSurface, true)
         .scrollDisabled(resizing)
         .onPreferenceChange(SheetScrollTopKey.self) { listAtTop = $0 }
@@ -266,6 +278,7 @@ private struct FloatingToolsSheet: View {
         .padding(.horizontal, 4)
         .padding(.bottom, keyboardInset + 4)
         .animation(reducedMotion ? nil : .spring(duration: 0.35, bounce: 0.12), value: shell.detent)
+        .animation(reducedMotion ? nil : .spring(duration: 0.35, bounce: 0.12), value: expandedHeight)
     }
 }
 
