@@ -50,12 +50,14 @@ a{color:inherit}
 .nav a:hover::after{transform:scaleX(1)}
 
 .sk{display:grid;grid-template-columns:minmax(0,44fr) minmax(0,56fr);min-height:100svh}
-.copy{align-self:center;padding:96px clamp(16px,2vw,32px) 72px max(24px,min(7.5vw,130px));max-width:640px}
+/* letterhead: the title's top sits level with the tree's tip and the buttons' bottom with the
+   foot of the andesite; the script below sets --head-top and --foot from the drawing */
+.copy{display:flex;flex-direction:column;align-items:flex-start;padding:var(--head-top,96px) clamp(16px,2vw,32px) var(--foot,72px) max(24px,min(7.5vw,130px));max-width:640px}
 .title{display:inline-block;white-space:nowrap;font-family:Pacifico,"Brush Script MT",cursive;font-weight:400;color:var(--emerald);margin:0 0 .12em -.1em;
-  padding:0 .32em .06em .06em;font-size:clamp(64px,7.6vw,128px);line-height:1.15;letter-spacing:.005em}
-.lede{font-size:clamp(23px,2.1vw,32px);font-weight:400;line-height:1.3;margin:0 0 .7em;color:var(--ink)}
-.body{font-size:clamp(17px,1.28vw,20px);font-weight:300;line-height:1.6;margin:0 0 2em;color:var(--ink-2);max-width:29em}
-.actions{display:flex;flex-wrap:wrap;gap:14px clamp(12px,1.2vw,18px);align-items:center}
+  padding:0 .32em .06em .06em;font-size:clamp(40px,4.56vw,77px);line-height:1.15;letter-spacing:.005em}
+.lede{font-size:clamp(15px,1.26vw,19px);font-weight:400;line-height:1.3;margin:0 0 .7em;color:var(--ink)}
+.body{font-size:clamp(13px,.92vw,14.5px);font-weight:400;line-height:1.6;margin:0 0 2em;color:var(--ink-2);max-width:29em}
+.actions{margin-top:auto;display:flex;flex-wrap:wrap;gap:14px clamp(12px,1.2vw,18px);align-items:center}
 .btn{display:inline-flex;align-items:center;gap:.5em;font-family:var(--hand);font-weight:700;font-size:clamp(16px,1.25vw,18px);line-height:1;
   text-decoration:none;padding:15px clamp(18px,1.7vw,26px) 13px;border-radius:255px 22px 225px 22px / 22px 225px 22px 255px;
   transition:transform .3s cubic-bezier(.2,.8,.2,1),background-color .3s}
@@ -91,7 +93,10 @@ a{color:inherit}
   .nav{position:static;justify-content:flex-start;padding:18px 20px 0 max(20px,env(safe-area-inset-left,0px));font-size:18px}
   .sk{grid-template-columns:1fr;min-height:0}
   .copy{padding:28px 20px 8px;max-width:none}
-  .title{font-size:clamp(52px,16vw,72px);padding-right:.18em}
+  .title{font-size:clamp(40px,11vw,50px);padding-right:.18em}
+  .lede{font-size:18px}
+  .body{font-size:15px}
+  .actions{margin-top:8px}
   .fig{height:auto;min-height:0;aspect-ratio:1.12/1.36}
 }
 @media (max-width:380px){.btn{padding:14px 20px 12px}.btn-ghost{padding:12px 18px 10px}}
@@ -133,9 +138,31 @@ a{color:inherit}
 
 <script type="module">
 import { createSketch } from "./sketch.js";
+const copy = document.querySelector(".copy"), title = document.querySelector(".title"), wide = matchMedia("(min-width:861px)");
+const meter = document.createElement("canvas").getContext("2d");
+let last = null;
+// distance from the top of the title's line box to the top of its tallest glyph
+function glyphTop() {
+  const cs = getComputedStyle(title), fs = parseFloat(cs.fontSize);
+  meter.font = `400 ${fs}px Pacifico`;
+  const m = meter.measureText(title.textContent), lh = parseFloat(cs.lineHeight) || fs * 1.15;
+  const asc = m.fontBoundingBoxAscent, desc = m.fontBoundingBoxDescent;
+  return (lh - asc - desc) / 2 + asc - m.actualBoundingBoxAscent;
+}
+function align(pageY, a) {
+  if (pageY) last = [pageY, a];
+  if (!last) return;
+  if (!wide.matches) { copy.style.removeProperty("--head-top"); copy.style.removeProperty("--foot"); return; }
+  const [py, an] = last, top = copy.getBoundingClientRect().top + scrollY;
+  copy.style.setProperty("--head-top", Math.max(16, py(an.tip) - top - glyphTop()) + "px");
+  copy.style.setProperty("--foot", Math.max(16, top + copy.offsetHeight - py(an.rock)) + "px");
+}
 window.__sketch = createSketch(document.getElementById("tree"), document.getElementById("labels"), {
-  onNoWebGL() { document.getElementById("fig").classList.add("nogl"); }
+  onNoWebGL() { document.getElementById("fig").classList.add("nogl"); },
+  onLayout: align
 });
+document.fonts.load("400 60px Pacifico").then(() => align());
+wide.addEventListener("change", () => align());
 </script>
 </body>
 </html>

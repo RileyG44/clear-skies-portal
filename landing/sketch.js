@@ -9,7 +9,7 @@
 import * as THREE from "three";
 
 const KIND = { STATIC: 0, TRUNK: 1, BRANCH: 2, TWIG: 3, FERN: 4 };
-const INK = { GREEN: 0, SEPIA: 1, GRAPHITE: 2 };
+const INK = { GREEN: 0, SEPIA: 1, GRAPHITE: 2, BARK: 3 };
 const DEG = Math.PI / 180;
 
 // The drawing lives in "tree units": the trunk stands at x = 0 and is 1 tall.
@@ -211,6 +211,15 @@ export function buildTree(seed = 20261104) {
         }
       }
     }
+    // a light wash of bark brown on the bole, a little heavier on the shaded right
+    for (let y = 0; y < 0.8; y += 0.004) {
+      const y1 = y + 0.0042, fade = y < 0.27 ? 1 : Math.max(0, 0.55 * (1 - (y - 0.27) / 0.5));
+      if (fade <= 0) break;
+      for (let s = -0.7; s <= 0.95; s += 0.22) {
+        const sj = clamp(s + R(-0.05, 0.05), -0.95, 0.97), k = (sj + 1) / 2;
+        line(tX(y) + sj * tR(y), y, tb(y), tX(y1) + sj * tR(y1), y1, tb(y1), R(1.6, 2.4), (y < 0.27 ? 0.16 + 0.34 * k * k : 0.1 + 0.28 * k * k) * fade, 0.18 + 0.2 * y, 0.008, INK.BARK);
+      }
+    }
     // deep, braided Douglas-fir bark furrows
     for (let k = 0; k < 30; k++) {
       let s = R(-0.94, 0.94), y = R(0.003, 0.05);
@@ -352,6 +361,8 @@ export function buildTree(seed = 20261104) {
       return { x: lerp(a.x, b.x, r), y: lerp(a.y, b.y, r), dx: a.dx, dy: a.dy };
     };
     const t0 = 0.3 + 0.36 * u + R(0, 0.015), inkK = back ? 0.5 : 1;
+    // light brown shading along the underside of each limb
+    poly(P.map(p => [p.x, p.y - 0.001, boneAt(p.v)]), f => lerp(2.2, 0.9, u) * (1 - 0.6 * f) + 0.5, f => lerp(0.45, 0.14, f) * inkK, t0 + 0.01, t0 + 0.06, INK.BARK);
     poly(P.map(p => [p.x, p.y, boneAt(p.v)]), f => (lerp(1.9, 0.8, u) * (1 - 0.6 * f) + 0.3) * (fore ? 0.8 : 1), f => lerp(0.42, 0.28, f) * inkK, t0, t0 + 0.05, INK.GREEN);
 
     let d = R(0.004, 0.012), side = rnd() < 0.5 ? 1 : -1;
@@ -404,6 +415,7 @@ export function buildTree(seed = 20261104) {
     const a = R(-48, -10) * DEG, b = tb(hh), x0 = tX(hh) + s * tR(hh) * 0.9;
     const x1 = x0 + s * Math.cos(a) * L, y1 = hh + Math.sin(a) * L;
     poly([[x0, hh, b], [lerp(x0, x1, 0.55), lerp(hh, y1, 0.55) + 0.0015, b], [x1, y1, b]], f => lerp(1.5, 0.7, f), 0.75, 0.24 + hh * 0.2, 0.27 + hh * 0.2, INK.GREEN);
+    poly([[x0, hh - 0.001, b], [x1, y1 - 0.001, b]], f => lerp(2, 0.8, f), 0.25, 0.25 + hh * 0.2, 0.28 + hh * 0.2, INK.BARK);
     if (L > 0.02) {
       const xm = lerp(x0, x1, 0.6), ym = lerp(hh, y1, 0.6), a2 = a + s * 0.7, l2 = L * 0.4;
       line(xm, ym, b, xm + s * Math.cos(a2) * l2, ym + Math.sin(a2) * l2, b, 0.7, 0.6, 0.27 + hh * 0.2, 0.01, INK.GREEN);
@@ -498,6 +510,9 @@ export function buildTree(seed = 20261104) {
     label(-0.04, yBot - 0.03, "Fig. 1 &nbsp;Old Douglas-fir on glacial till over andesite, North Cascades", { anchor: "c", t: 0.97, cls: "cap" });
   }
 
+  let tipY = 0;
+  for (let i = 0; i < col.length; i++) if (col[i] === INK.GREEN && Math.abs(seg[i * 4]) < 0.03) tipY = Math.max(tipY, seg[i * 4 + 1], seg[i * 4 + 3]);
+
   /* ---------- bone physics constants ---------- */
   const n = B.ox.length, mSub = Float32Array.from(B.m);
   for (let b = n - 1; b > 0; b--) if (B.par[b] >= 0) mSub[B.par[b]] += mSub[b];
@@ -508,7 +523,7 @@ export function buildTree(seed = 20261104) {
     invI[b] = B.kind[b] === KIND.STATIC ? 0 : B.kind[b] === KIND.TRUNK ? 0.15 / I : B.kind[b] === KIND.BRANCH ? 3 / I : 1 / I;
   }
   return {
-    count: col.length, nb: n, labels,
+    count: col.length, nb: n, labels, anchors: { tip: tipY, rock: yBot },
     seg: new Float32Array(seg), bon: new Float32Array(bon), sty: new Float32Array(sty), col: new Float32Array(col),
     bones: {
       ox: Float32Array.from(B.ox), oy: Float32Array.from(B.oy), ex: Float32Array.from(B.ex), ey: Float32Array.from(B.ey),
@@ -570,6 +585,7 @@ precision highp float;
 uniform vec3 uInk0;
 uniform vec3 uInk1;
 uniform vec3 uInk2;
+uniform vec3 uInk3;
 varying float vAlong;
 varying float vDist;
 varying float vHalf;
@@ -583,7 +599,7 @@ void main(){
   float cov = clamp(vHalf + 0.5 - abs(vDist), 0.0, 1.0);
   float grain = hash(floor(gl_FragCoord.xy));
   float a = vInk * cov * (0.86 + 0.14 * grain);
-  vec3 ink = vCol < 0.5 ? uInk0 : vCol < 1.5 ? uInk1 : uInk2;
+  vec3 ink = vCol < 0.5 ? uInk0 : vCol < 1.5 ? uInk1 : vCol < 2.5 ? uInk2 : uInk3;
   ink *= 1.0 - 0.3 * vWet;           // fresh ink is darker, then dries
   a = min(1.0, a * (1.0 + 0.4 * vWet));
   gl_FragColor = vec4(mix(vec3(1.0), ink, a), 1.0);
@@ -616,7 +632,8 @@ export function createSketch(canvas, layer, opts = {}) {
     uRes: { value: new THREE.Vector2(1, 1) }, uDpr: { value: 1 }, uDraw: { value: reduce ? 1.2 : 0 },
     uInk0: { value: new THREE.Color(0.16, 0.53, 0.37) },   // emerald
     uInk1: { value: new THREE.Color(0.47, 0.37, 0.27) },   // iron-oxide sepia
-    uInk2: { value: new THREE.Color(0.33, 0.32, 0.30) }    // graphite
+    uInk2: { value: new THREE.Color(0.33, 0.32, 0.30) },   // graphite
+    uInk3: { value: new THREE.Color(0.62, 0.42, 0.25) }      // light bark brown
   };
   const mat = new THREE.ShaderMaterial({
     vertexShader: VS, fragmentShader: FS, uniforms: U, transparent: true, depthTest: false, depthWrite: false,
@@ -728,8 +745,12 @@ export function createSketch(canvas, layer, opts = {}) {
       els[i].style.transform = `translate(${tx},-50%)` + (l.rot ? ` rotate(${l.rot}deg)` : "");
       if (l.rot) els[i].style.transformOrigin = "50% 50%", els[i].style.transform = `translate(-50%,-50%) rotate(${l.rot}deg)`;
     });
+    if (opts.onLayout) opts.onLayout(pageY, T.anchors);
     render();
   }
+  // page Y (document coordinates) of a height in the drawing
+  const pageY = y => view.top + scrollY + view.h / 2 - (y - VIEW.cy) * view.scale;
+  const anchors = T.anchors;
   const toTree = (cx, cy) => {
     const r = canvas.getBoundingClientRect();
     return [VIEW.cx + (cx - r.left - r.width / 2) / view.scale, VIEW.cy - (cy - r.top - r.height / 2) / view.scale];
@@ -769,7 +790,7 @@ export function createSketch(canvas, layer, opts = {}) {
     play();
   }
   return {
-    params: P, strokes: T.count, bones: n,
+    params: P, strokes: T.count, bones: n, anchors, pageY, relayout: () => layout(),
     state: () => ({ maxTwig: Math.max(...[...ang].filter((_, b) => Bn.kind[b] === KIND.TWIG).map(Math.abs)), maxBranch: Math.max(...[...ang].filter((_, b) => Bn.kind[b] === KIND.BRANCH).map(Math.abs)) }),
     finish() { start = performance.now() - DRAW_SECONDS * 1200; },
     setDraw(v) { U.uDraw.value = v; updateLabels(v); render(); },
