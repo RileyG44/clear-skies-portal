@@ -41,9 +41,11 @@
 import { createStage } from "./scenes.js";
 const stage = createStage(document.getElementById("stage"), {
   background: 0x000000,
+  // the forest starts just below the hero copy, whatever the window height
+  horizon: () => Math.min(0.8, document.getElementById("hero").getBoundingClientRect().bottom / innerHeight + 0.035),
   onNoWebGL() { document.body.insertAdjacentHTML("afterbegin", '<div class="nogl"></div>'); }
 });
-if (stage) stage.set("treeline");
+if (stage) stage.set("autumn");
 </script>
 </body>
 </html>

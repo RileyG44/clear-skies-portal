@@ -3,8 +3,8 @@
  * One procedural landscape (a meandering river cut into ridged uplands, with
  * an old road bench and a ring earthwork hidden in the micro-relief) is
  * generated once and shown several ways:
- *   treeline – the hero: a side view of a point-cloud forest swaying in a
- *              breeze the cursor stirs.
+ *   autumn   – the hero: a point-cloud forest mid colour-change on rolling
+ *              hills, swaying in a breeze the cursor stirs.
  *   forest   – the Explore page's point-cloud demo. A segmented point-cloud forest, each tree its own
  *              colour, is classified away: every return lifts into the sky,
  *              most burn out, a few stay as stars, and the bare earth beneath
@@ -313,156 +313,185 @@ function forestScene(field, quality, { auto = true } = {}) {
 }
 
 
-/* ---------- the treeline: the hero ---------- */
+/* ---------- the autumn forest: the hero ---------- */
 
-/* A side elevation of a segmented point-cloud forest standing along the bottom
-   of the window, black sky above for the copy. A breeze moves through it, and
-   the cursor stirs gusts that ripple out through neighbouring crowns. */
-function treelineScene(field, quality) {
+/* A point-cloud forest in the middle of the fall colour change, standing on
+   rolling hills that recede into the dark. Conifers stay green; broadleaf
+   crowns are part-way through turning brown, orange, red and purple. A breeze
+   moves through it, and the cursor stirs gusts that ripple out across the
+   canopy. The sky above is left black for the copy. */
+const EVERGREEN = ["#2c7a38", "#3a8a3e", "#4f9a44", "#2f6e52", "#467a2c"].map(h => new THREE.Color(h));
+const FALL = ["#f0711e", "#f7962a", "#de3a22", "#c02a22", "#9a3a9c", "#7d3590", "#93592a", "#ad7034", "#e8aa30"].map(h => new THREE.Color(h));
+const LEAF_GREEN = new THREE.Color("#5a8a2e");
+const LITTER = ["#7a4e24", "#94602c", "#a8461f", "#55642a", "#7e3646"].map(h => new THREE.Color(h));
+
+function autumnScene(field, quality) {
   const scene = new THREE.Scene();
   const big = quality > 1;
-  const uniforms = {
-    uTime: { value: 0 }, uPx: { value: 1 }, uSize: { value: big ? 1.55 : 1.8 }, uHalfW: { value: 2 },
-    uWind: { value: null }, uPointer: { value: new THREE.Vector2(9, 9) }, uGlow: { value: 0 }
+  const NEAR = 0.6, FAR = 34, SPAN0 = 1.4, SPANK = 1.05;   // visible half-width ≈ SPAN0 + SPANK·distance
+  const hill = (x, z) => {
+    const d = Math.max(0, -z);
+    // ridges stack upward with distance so each fold of the hills shows behind the last
+    return 0.006 * Math.pow(d, 1.6) + (fbm(x * 0.13 + 10, z * 0.15 + 3, 4, 77) - 0.42) * (0.25 + 0.75 * smooth(1, 6, d) + 0.05 * d) * 2.1 + 0.1 * fbm(x * 0.8, z * 0.8, 3, 9);
   };
-  const BINS = 384, wind = new Float32Array(BINS), windV = new Float32Array(BINS);
-  const windTex = new THREE.DataTexture(wind, BINS, 1, THREE.RedFormat, THREE.FloatType);
+  const eyeGround = hill(0, -1);
+  // Sun low from the upper left: lit slopes brighten, so the folds of the hills read.
+  const slopeLight = (x, z) => {
+    const e = 0.05, gx = (hill(x + e, z) - hill(x - e, z)) / (2 * e), gz = (hill(x, z + e) - hill(x, z - e)) / (2 * e);
+    const n = norm([-gx, 1, -gz]);
+    return 0.45 + 0.95 * Math.max(0, n[0] * -0.6 + n[1] * 0.55 + n[2] * 0.58);
+  };
+  const uniforms = {
+    uTime: { value: 0 }, uPx: { value: 1 }, uSize: { value: big ? 1.0 : 1.25 }, uWind: { value: null },
+    uNear: { value: NEAR }, uFar: { value: FAR }, uSpan0: { value: SPAN0 }, uSpanK: { value: SPANK }
+  };
+  const WX = 96, WZ = 48, wind = new Float32Array(WX * WZ), windV = new Float32Array(WX * WZ);
+  const windTex = new THREE.DataTexture(wind, WX, WZ, THREE.RedFormat, THREE.FloatType);
   windTex.magFilter = windTex.minFilter = THREE.LinearFilter;
   windTex.needsUpdate = true;
   uniforms.uWind.value = windTex;
+
+  const rng = mulberry(29);
+  const pos = [], seed = [], tree = [], col = [];
+  const push = (x, y, z, c, tr, pr, bx, bz, hf, H) => { pos.push(x, y, z); seed.push(tr, pr, bx, hf); tree.push(bz, H); col.push(c.r, c.g, c.b); };
+
+  // Trees: denser and more detailed near the viewer, thinning into the distance.
+  const TREES = big ? 3000 : 1900, DENS = big ? 3000 : 2200;
+  for (let n = 0; n < TREES; n++) {
+    const d = 1.3 + (FAR - 1.3) * Math.pow(rng(), 1.5);
+    const half = SPAN0 + SPANK * d;
+    const x = (rng() * 2 - 1) * half, z = -d;
+    if (fbm(x * 0.35 + 5, z * 0.35, 3, 61) > 0.6 && rng() < 0.9) { n--; continue; }   // meadows let the hills show
+    const base = hill(x, z);
+    const lit = slopeLight(x, z);
+    const conifer = rng() < 0.42;
+    const H = (conifer ? 0.2 + 0.2 * rng() : 0.14 + 0.14 * rng()) * (0.85 + 0.3 * rng());
+    const tr = rng();
+    const count = Math.max(30, Math.round(DENS * H * (conifer ? 1 : 1.35) / Math.pow(Math.max(d, 1.8) / 2.4, 1.05)));
+    const c = conifer ? EVERGREEN[Math.floor(rng() * EVERGREEN.length)] : FALL[Math.floor(rng() * FALL.length)];
+    const turn = 0.45 + 0.55 * rng();                     // how far this crown has turned
+    const R = H * (conifer ? 0.16 + 0.08 * rng() : 0.34 + 0.1 * rng());
+    const crownBase = H * (conifer ? 0.12 + 0.2 * rng() : 0.3 + 0.15 * rng());
+    const tiers = 7 + Math.floor(rng() * 6), rot = rng() * 6.28;
+    for (let k = 0; k < count; k++) {
+      let px, py, pz, pc = c;
+      if (rng() < 0.05) { py = rng() * H * 0.9; px = (rng() - 0.5) * 0.006; pz = (rng() - 0.5) * 0.006; pc = LITTER[0]; }
+      else if (conifer) {
+        const f = 1 - Math.sqrt(rng());
+        const tier = (f * tiers + tr * 3) % 1;
+        const rmax = R * Math.pow(1 - f, 0.9);
+        const r = rmax * (0.3 + 0.7 * Math.sqrt(rng())) * (0.55 + 0.45 * smooth(0, 0.8, tier));
+        const a = (Math.floor(rng() * 6) + rng() * 0.4) / 6 * 6.283 + rot + f * 4;
+        px = Math.cos(a) * r; pz = Math.sin(a) * r; py = crownBase + f * (H - crownBase) - r * 0.35;
+      } else {
+        const u = rng() * 6.283, v = Math.acos(2 * rng() - 1), s = Math.pow(rng(), 0.35);
+        const lump = 0.78 + 0.4 * vnoise(u * 2 + tr * 9, v * 3, 5);
+        px = Math.sin(v) * Math.cos(u) * R * s * lump; pz = Math.sin(v) * Math.sin(u) * R * s * lump;
+        py = H * 0.62 + Math.cos(v) * H * 0.36 * s * lump;
+        if (py < crownBase) py = crownBase + rng() * 0.02;
+        if (rng() > turn) pc = LEAF_GREEN;                 // leaves that haven't turned yet
+        else if (rng() < 0.2) pc = FALL[Math.floor(rng() * FALL.length)];
+      }
+      const kk = (0.72 + 0.4 * rng()) * lit;
+      push(x + px, base + py, z + pz, { r: pc.r * kk, g: pc.g * kk, b: pc.b * kk }, tr, rng(), x, z, Math.max(0, Math.min(1, py / H)), H);
+    }
+  }
+  // Ground returns: leaf litter and grass over the hills.
+  const GROUND = big ? 200000 : 90000;
+  for (let i = 0; i < GROUND; i++) {
+    const d = NEAR + (FAR - NEAR) * Math.pow(rng(), 1.9);
+    const x = (rng() * 2 - 1) * (SPAN0 + SPANK * d), z = -d;
+    const c = LITTER[Math.floor(rng() * LITTER.length)], kk = (0.6 + 0.6 * rng()) * slopeLight(x, z) * 1.25;
+    push(x, hill(x, z) + rng() * 0.01, z, { r: c.r * kk, g: c.g * kk, b: c.b * kk }, 0, rng(), x, z, 0, 0.01);
+  }
+
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3));
+  geo.setAttribute("aSeed", new THREE.Float32BufferAttribute(seed, 4));
+  geo.setAttribute("aTree", new THREE.Float32BufferAttribute(tree, 2));
+  geo.setAttribute("aColor", new THREE.Float32BufferAttribute(col, 3));
   const mat = new THREE.ShaderMaterial({
     uniforms,
     vertexShader: /* glsl */`
-      attribute vec4 aSeed; attribute vec3 aColor; attribute float aH;
-      uniform sampler2D uWind; uniform float uHalfW, uTime, uPx, uSize, uGlow; uniform vec2 uPointer;
+      attribute vec4 aSeed; attribute vec2 aTree; attribute vec3 aColor;
+      uniform sampler2D uWind; uniform float uTime, uPx, uSize, uNear, uFar, uSpan0, uSpanK;
       varying vec3 vCol;
       void main(){
-        float hf = aSeed.w, bx = aSeed.z;
-        float gust = texture2D(uWind, vec2(clamp((bx + uHalfW)/(2.*uHalfW), 0., 1.), .5)).r;
-        float breeze = .005 + sin(uTime*.8 + bx*1.7 + aSeed.x*6.)*.006 + sin(uTime*.33 - bx*.5)*.01;
-        float bend = pow(hf, 1.7) * (aH/.6);
+        float hf = aSeed.w, bx = aSeed.z, bz = aTree.x, H = aTree.y, dist = -bz;
+        vec2 wuv = vec2(.5 + .5 * bx / (uSpan0 + uSpanK*dist), (dist - uNear)/(uFar - uNear));
+        float gust = texture2D(uWind, clamp(wuv, 0., 1.)).r;
+        float breeze = .25*(.5 + sin(uTime*.8 + bx*2.1 + bz*.7 + aSeed.x*6.)*.6 + sin(uTime*.33 - bx*.4 + bz*.3)*.9);
+        float bend = pow(hf, 1.7) * H * .32;
         vec3 p = position;
         p.x += (breeze + gust) * bend;
-        p.y -= abs(gust) * bend * .12;
-        p.x += sin(uTime*5.3 + aSeed.y*60.) * .0016 * hf;
-        p.y += cos(uTime*4.1 + aSeed.y*40.) * .001 * hf;
-        float d = distance(p.xy, uPointer);
-        vCol = aColor * (1. + exp(-d*d*28.) * uGlow * .7);
-        gl_Position = projectionMatrix * modelViewMatrix * vec4(p, 1.);
-        gl_PointSize = uSize * uPx;
+        p.y -= abs(gust) * bend * .15;
+        p.x += sin(uTime*5.3 + aSeed.y*60.) * .0035 * hf * H;
+        p.y += cos(uTime*4.1 + aSeed.y*40.) * .0025 * hf * H;
+        float fog = exp(-max(dist - 5., 0.) * .05);
+        vCol = mix(vec3(.012,.012,.03), aColor * 1.45, fog);
+        vec4 mv = modelViewMatrix * vec4(p, 1.);
+        gl_Position = projectionMatrix * mv;
+        gl_PointSize = max(1.2 * uPx, uSize * uPx * (3.4 / -mv.z));
       }`,
     fragmentShader: /* glsl */`
       varying vec3 vCol;
       void main(){ vec2 c = gl_PointCoord - .5; if (dot(c,c) > .25) discard; gl_FragColor = vec4(vCol, 1.); }`
   });
-  let points = null, halfW = 0, band = 0.45;
+  const points = new THREE.Points(geo, mat);
+  points.frustumCulled = false;
+  scene.add(points);
 
-  function build(aspect, narrow) {
-    if (points) { scene.remove(points); points.geometry.dispose(); }
-    halfW = aspect + 0.12; band = narrow ? 0.36 : 0.42;
-    uniforms.uHalfW.value = halfW;
-    const rng = mulberry(19);
-    const top = -1 + band * 2, floorY = -0.975;
-    const pos = [], seed = [], col = [], hs = [];
-    const DENS = big ? 4600 : 3800;
-    const plant = (x, z, H, dim, conifer) => {
-      const tr = rng(), c = TREE_COLOURS[Math.floor(rng() * TREE_COLOURS.length)];
-      const R = H * (conifer ? 0.12 + 0.07 * rng() : 0.26 + 0.08 * rng());
-      const crownBase = H * (conifer ? 0.1 + 0.25 * rng() : 0.3 + 0.2 * rng());
-      const tiers = 8 + Math.floor(rng() * 8), lean = (rng() - 0.5) * 0.05;
-      const count = Math.round(DENS * H * (conifer ? 0.9 : 1.3) * (dim < 1 ? 0.75 : 1));
-      for (let k = 0; k < count; k++) {
-        let px, py, pz = 0;
-        if (rng() < 0.05) { py = rng() * H * 0.92; px = (rng() - 0.5) * 0.004; }
-        else if (conifer) {
-          const f = 1 - Math.sqrt(rng());
-          const tier = (f * tiers + tr * 3) % 1;
-          const rmax = R * Math.pow(1 - f, 0.9) * (0.85 + 0.3 * vnoise(f * 9, tr * 40, 5));
-          const r = rmax * (0.25 + 0.75 * Math.sqrt(rng())) * (0.5 + 0.5 * smooth(0, 0.8, tier));
-          const side = rng() < 0.5 ? -1 : 1;
-          px = side * r; pz = (rng() - 0.5) * r;
-          py = crownBase + f * (H - crownBase) - r * 0.4;
-        } else {
-          const u = rng() * 6.283, v = Math.acos(2 * rng() - 1), s = Math.pow(rng(), 0.35);
-          const lump = 0.78 + 0.4 * vnoise(u * 2, v * 3, k % 7);
-          px = Math.sin(v) * Math.cos(u) * R * s * lump; pz = Math.sin(v) * Math.sin(u) * R * s * lump * 0.4;
-          py = H * 0.6 + Math.cos(v) * H * 0.36 * s * lump;
-          if (py < crownBase) py = crownBase + rng() * 0.02;
-        }
-        const hf = Math.max(0, Math.min(1, py / H));
-        pos.push(x + px + lean * py, floorY + py, z + pz);
-        seed.push(tr, rng(), x, hf);
-        const kk = (0.78 + 0.36 * rng()) * dim;
-        col.push(c.r * kk, c.g * kk, c.b * kk);
-        hs.push(H);
-      }
-    };
-    const maxH = band * 2 - 0.05;
-    // three rows, back to front; tall, uneven conifers with black sky between them
-    [[-0.9, 0.5, 0.085], [-0.45, 0.72, 0.075], [0, 1, 0.095]].forEach(([z, dim, gap]) => {
-      for (let x = -halfW; x < halfW; x += gap * (0.45 + 1.1 * rng())) {
-        const conifer = rng() < 0.88;
-        const giant = rng() < 0.12;
-        const H = conifer
-          ? maxH * (giant ? 0.88 + 0.12 * rng() : 0.28 + 0.6 * Math.pow(rng(), 1.1)) * (z < 0 ? 0.9 : 1)
-          : maxH * (0.16 + 0.24 * rng());
-        plant(x, z, H, dim, conifer);
-      }
-    });
-    for (let x = -halfW; x < halfW; x += 0.06 + rng() * 0.12) plant(x, 0.05, 0.025 + rng() * 0.06, 0.85, rng() < 0.5);   // understory
-    for (let i = 0; i < halfW * 2 * 2600; i++) {                                                              // ground returns
-      const x = -halfW + rng() * halfW * 2;
-      pos.push(x, floorY - 0.012 + rng() * 0.014 + 0.006 * Math.sin(x * 3), rng() - 0.5);
-      seed.push(0, rng(), x, 0);
-      const g = rng() < 0.7 ? TREE_COLOURS[10] : TREE_COLOURS[8];
-      col.push(g.r * 0.9, g.g * 0.9, g.b * 0.9); hs.push(0.01);
-    }
-    const geo = new THREE.BufferGeometry();
-    geo.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3));
-    geo.setAttribute("aSeed", new THREE.Float32BufferAttribute(seed, 4));
-    geo.setAttribute("aColor", new THREE.Float32BufferAttribute(col, 3));
-    geo.setAttribute("aH", new THREE.Float32BufferAttribute(hs, 1));
-    points = new THREE.Points(geo, mat);
-    points.frustumCulled = false;
-    scene.add(points);
-    wind.fill(0); windV.fill(0);
-  }
-
-  const prev = { x: 0, y: 0, ok: false }; let vel = 0, glow = 0;
+  const ray = new THREE.Raycaster();
+  let prev = null, vel = 0;
   return {
-    scene, ortho: true, start: 0, still: 6,
-    resize(aspect, narrow) { if (!points || aspect + 0.12 > halfW + 0.01 || aspect + 0.12 < halfW - 0.6 || (narrow ? 0.36 : 0.42) !== band) build(aspect, narrow); },
+    scene, start: 0, still: 6,
+    camera3d(cam, aspect, t, sx, sy, horizon) {
+      const narrow = aspect < 0.9;
+      const eye = eyeGround + 0.95;
+      cam.fov = narrow ? 46 : 38;
+      cam.position.set(sx * 0.12, eye + sy * 0.03, 1.6);
+      // Tilt up until the farthest ridges sit just below the copy (horizon = fraction of the
+      // window from the top where the forest may begin); the far ridges rise about 2.8° above eye level.
+      const top = 1 - 2 * (horizon ?? (narrow ? 0.6 : 0.55));
+      const pitch = Math.atan(-top * Math.tan(THREE.MathUtils.degToRad(cam.fov / 2))) + THREE.MathUtils.degToRad(2.8);
+      cam.lookAt(sx * 0.12, eye + Math.tan(pitch) * 11.6, -10);
+      cam.updateProjectionMatrix();
+    },
     update(t, ctx) {
       uniforms.uTime.value = t; uniforms.uPx.value = ctx.px;
       const dt = Math.min(0.05, ctx.dt || 0.016);
-      const p = ctx.pointerWorld;
-      // pointer speed drives the gust; only when the cursor is in or near the canopy
-      if (p && prev.ok) vel = vel * 0.6 + ((p.x - prev.x) / Math.max(dt, 1e-3)) * 0.4; else vel *= 0.85;
-      if (p) { prev.x = p.x; prev.y = p.y; prev.ok = true; } else prev.ok = false;
-      const inCanopy = p && p.y < -1 + band * 2 + 0.15;
-      glow += ((inCanopy ? 1 : 0) - glow) * Math.min(1, dt * 4);
-      uniforms.uGlow.value = glow;
-      if (p) uniforms.uPointer.value.set(p.x, p.y);
-      const steps = 3, h = dt / steps, K = 16, C = 2.6, S = 900;
-      const binW = (2 * halfW) / BINS;
+      let hit = null;
+      if (ctx.pointerNdc && ctx.camera) {
+        ray.setFromCamera(ctx.pointerNdc, ctx.camera);
+        const o = ray.ray.origin, dir = ray.ray.direction;
+        for (let s = 0.3; s < FAR + 4; s *= 1.04) {          // march to the first hill or canopy height it meets
+          const x = o.x + dir.x * s, y = o.y + dir.y * s, z = o.z + dir.z * s;
+          if (-z > NEAR && y < hill(x, z) + 0.3) { hit = { x, z, d: -z }; break; }
+        }
+      }
+      if (hit && prev) vel = vel * 0.6 + ((ctx.pointerNdc.x - prev) / Math.max(dt, 1e-3)) * 0.4; else vel *= 0.85;
+      prev = ctx.pointerNdc ? ctx.pointerNdc.x : null;
+      const steps = 3, h = dt / steps, K = 14, C = 2.4, S = 18;
       for (let s = 0; s < steps; s++) {
-        if (inCanopy && Math.abs(vel) > 0.02) {
-          const c = (p.x + halfW) / binW, r = 0.22 / binW;
-          const reach = 1 - Math.min(1, Math.max(0, p.y - (-1 + band * 2)) / 0.15);
-          for (let i = Math.max(0, Math.floor(c - r * 2)); i < Math.min(BINS, Math.ceil(c + r * 2)); i++) {
-            const q = (i - c) / r;
-            windV[i] += Math.max(-4, Math.min(4, vel)) * Math.exp(-q * q) * 0.9 * h * reach;
-          }
+        if (hit && Math.abs(vel) > 0.01) {
+          const ci = (0.5 + 0.5 * hit.x / (SPAN0 + SPANK * hit.d)) * (WX - 1), cj = (hit.d - NEAR) / (FAR - NEAR) * (WZ - 1);
+          const rx = 5, rz = 3;
+          for (let j = Math.max(0, Math.floor(cj - rz * 2)); j < Math.min(WZ, Math.ceil(cj + rz * 2)); j++)
+            for (let i = Math.max(0, Math.floor(ci - rx * 2)); i < Math.min(WX, Math.ceil(ci + rx * 2)); i++) {
+              const q = ((i - ci) / rx) ** 2 + ((j - cj) / rz) ** 2;
+              windV[j * WX + i] += Math.max(-3, Math.min(3, vel)) * Math.exp(-q) * 2.2 * h;
+            }
         }
-        for (let i = 0; i < BINS; i++) {
-          const lap = (i > 0 ? wind[i - 1] : wind[i]) + (i < BINS - 1 ? wind[i + 1] : wind[i]) - 2 * wind[i];
-          windV[i] += (-K * wind[i] - C * windV[i] + S * lap * binW * binW * 40) * h;
+        for (let j = 0; j < WZ; j++) for (let i = 0; i < WX; i++) {
+          const k = j * WX + i, w = wind[k];
+          const lap = (i > 0 ? wind[k - 1] : w) + (i < WX - 1 ? wind[k + 1] : w) + (j > 0 ? wind[k - WX] : w) + (j < WZ - 1 ? wind[k + WX] : w) - 4 * w;
+          windV[k] += (-K * w - C * windV[k] + S * lap) * h;
         }
-        for (let i = 0; i < BINS; i++) wind[i] = Math.max(-0.12, Math.min(0.12, wind[i] + windV[i] * h));
+        for (let k = 0; k < wind.length; k++) wind[k] = Math.max(-1.2, Math.min(1.2, wind[k] + windV[k] * h));
       }
       windTex.needsUpdate = true;
     },
-    dispose() { if (points) points.geometry.dispose(); mat.dispose(); windTex.dispose(); }
+    dispose() { geo.dispose(); mat.dispose(); windTex.dispose(); }
   };
 }
 
@@ -528,7 +557,7 @@ function ambientScene(field, quality) {
   return { scene, camera: { radius: 2.5, polar: 1.0, height: 0.0, spin: 0.035 }, update() {}, dispose() { geo.dispose(); mat.dispose(); } };
 }
 
-const BUILDERS = { treeline: treelineScene, forest: forestScene, relight: relightScene, ambient: ambientScene };
+const BUILDERS = { autumn: autumnScene, forest: forestScene, relight: relightScene, ambient: ambientScene };
 const reducedMotion = () => matchMedia("(prefers-reduced-motion: reduce)").matches;
 const qualityFor = el => ((el.clientWidth > 700 || Math.min(innerWidth, innerHeight) > 700) && (navigator.hardwareConcurrency || 4) >= 4) ? 2 : 1;
 let sharedField = null;
@@ -572,8 +601,11 @@ export function createStage(canvas, opts = {}) {
   }
   function render(t) {
     let cam = ortho;
-    if (!current.ortho) { cam = persp; orbit(persp, current.camera, t, pointer.sx * 0.16, pointer.sy * 0.05, shift, reduced); }
+    if (current.camera3d) { cam = persp; current.camera3d(persp, aspect, t, pointer.sx, pointer.sy, opts.horizon && opts.horizon()); }
+    else if (!current.ortho) { cam = persp; orbit(persp, current.camera, t, pointer.sx * 0.16, pointer.sy * 0.05, shift, reduced); }
     ctx.pointerWorld = pointer.inside ? { x: pointer.x * aspect, y: pointer.y } : null;
+    ctx.pointerNdc = pointer.inside ? { x: pointer.x, y: pointer.y } : null;
+    ctx.camera = cam;
     current.update(t, ctx);
     renderer.render(current.scene, cam);
   }
