@@ -1406,8 +1406,10 @@
     flush();
     handler.postMessage({type: "ready"}).catch(() => {});
   };
+  /* Lift the native cover when the page reveals its shell, not at csp:ready:
+     a shared link holds the reveal until its view is in place. */
   if (document.documentElement.classList.contains("csp-boot")) {
-    document.documentElement.addEventListener("csp:ready", start, { once: true });
+    document.documentElement.addEventListener("csp:reveal", start, { once: true });
   } else {
     start();
   }

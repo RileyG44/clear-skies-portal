@@ -5,7 +5,7 @@
    does it boot its own server.js on a free loopback port. The web app is
    untouched: every request it makes is relative, so it simply follows
    whichever origin we load.                                                  */
-const {app, BrowserWindow, WebContentsView, Menu, shell, dialog, session, ipcMain} = require("electron");
+const {app, BrowserWindow, WebContentsView, Menu, shell, dialog, session, ipcMain, nativeTheme} = require("electron");
 const {pathToFileURL} = require("url");
 const {windowChrome} = require("./window-chrome");
 const {engineStorage} = require("./engine-storage");
@@ -211,10 +211,21 @@ function wireNavigation(contents){
   contents.setWindowOpenHandler(({url})=>external(url)?{action:"deny"}:{action:"allow"});
   contents.on("will-navigate",(event,url)=>{if(external(url))event.preventDefault();});
 }
+/* The window paints its background before the page can. Use the map theme
+   the page last reported, so a saved dark map never opens on a light window. */
+const mapThemeFile=()=>path.join(app.getPath("userData"),"map-theme.txt");
+function windowBackground(){
+  let theme="";
+  try{theme=fs.readFileSync(mapThemeFile(),"utf8").trim();}catch{}
+  if(theme!=="dark"&&theme!=="light")theme=nativeTheme.shouldUseDarkColors?"dark":"light";
+  return theme==="dark"?"#111416":"#dbe6eb";
+}
 function createWindow(){
   win = new BrowserWindow({
     width: 1400, height: 900, minWidth: 900, minHeight: 600,
-    backgroundColor: "#000000",
+    // The map's own canvas color, so the window never flashes black before
+    // the page paints.
+    backgroundColor: windowBackground(),
     title: "ClearSkies",
     // macOS draws the traffic lights over the page. The page keeps a clear
     // drag strip; it does not paint a title bar.
@@ -239,6 +250,10 @@ app.setAppUserModelId("com.rileyg44.clear-skies-portal");
 const trustedSetup = event => setupView && event.sender===setupView.webContents && setupPages.has(event.senderFrame?.url);
 const trustedMap = event => win && event.sender===win.webContents && event.senderFrame?.url?.startsWith(`http://${HOST}:${port}/`);
 ipcMain.handle("csp:get-setup-config",event=>trustedSetup(event)?{config:setupConfig,defaults:DEFAULTS}:null);
+ipcMain.on("csp:map-theme",(event,theme)=>{
+  if(!trustedMap(event)||(theme!=="dark"&&theme!=="light"))return;
+  try{fs.writeFileSync(mapThemeFile(),theme);}catch{}
+});
 ipcMain.on("csp:map-preferences",event=>{event.returnValue=trustedMap(event)?{panShading:setupConfig.panShading}:null;});
 ipcMain.handle("csp:pan-shading",(event,mode)=>{
   if(!trustedMap(event) || !["off","auto","on"].includes(mode))return false;

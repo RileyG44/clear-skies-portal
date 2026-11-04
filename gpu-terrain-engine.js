@@ -250,20 +250,32 @@
     function deleteTexture(t) { gl.deleteTexture(t); resources.textures.delete(t); }
     function framebuffer() { var f = gl.createFramebuffer(); if (!f) throw new Error('Framebuffer allocation failed'); resources.framebuffers.add(f); return f; }
     function deleteFramebuffer(f) { gl.deleteFramebuffer(f); resources.framebuffers.delete(f); }
-    function program(vertex, fragment) {
+    /* Programs compile in two steps: startProgram issues compile and link
+       without asking for a result, finishProgram checks them. Starting every
+       program before checking any lets the driver compile them concurrently
+       (KHR_parallel_shader_compile, where available) instead of one after
+       another, which shortens the one-time start-up stall. */
+    function startProgram(vertex, fragment) {
       var p = gl.createProgram(), parts = [];
       if (!p) throw new Error('Program allocation failed');
+      resources.programs.add(p);
+      [vertex, fragment].forEach(function (src, i) {
+        var s = gl.createShader(i ? gl.FRAGMENT_SHADER : gl.VERTEX_SHADER); parts.push(s);
+        gl.shaderSource(s, src); gl.compileShader(s); gl.attachShader(p, s);
+      });
+      gl.linkProgram(p);
+      return {program: p, parts: parts};
+    }
+    function finishProgram(job) {
+      var p = job.program;
       try {
-        [vertex, fragment].forEach(function (src, i) {
-          var s = gl.createShader(i ? gl.FRAGMENT_SHADER : gl.VERTEX_SHADER); parts.push(s);
-          gl.shaderSource(s, src); gl.compileShader(s);
-          if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) throw new Error(gl.getShaderInfoLog(s));
-          gl.attachShader(p, s);
-        });
-        gl.linkProgram(p); if (!gl.getProgramParameter(p, gl.LINK_STATUS)) throw new Error(gl.getProgramInfoLog(p));
-        resources.programs.add(p); return p;
-      } catch (e) { gl.deleteProgram(p); throw e; }
-      finally { parts.forEach(function (s) { gl.deleteShader(s); }); }
+        if (!gl.getProgramParameter(p, gl.LINK_STATUS)) {
+          job.parts.forEach(function (s) { if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) throw new Error(gl.getShaderInfoLog(s)); });
+          throw new Error(gl.getProgramInfoLog(p));
+        }
+        return p;
+      } catch (e) { gl.deleteProgram(p); resources.programs.delete(p); throw e; }
+      finally { job.parts.forEach(function (s) { gl.deleteShader(s); }); job.parts = []; }
     }
     function params() {
       gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
@@ -317,19 +329,24 @@
         }
       }
     }
-    function init() {
+    /* init(true) starts compiling and returns {jobs, complete}; the caller
+       finishes once the driver reports the programs compiled. init() does
+       both at once. */
+    function init(deferred) {
       if (!gl.getExtension('EXT_color_buffer_float')) throw new Error('EXT_color_buffer_float is required (CPU fallback)');
       var dims = gl.getParameter(gl.MAX_VIEWPORT_DIMS);
       maxSize = Math.min(gl.getParameter(gl.MAX_RENDERBUFFER_SIZE), gl.getParameter(gl.MAX_TEXTURE_SIZE), dims[0], dims[1]);
-      heightProgram = program(HEIGHT_VERTEX, HEIGHT_FRAGMENT);
-      shadeProgram = program(shaders.fullscreenVertexSource, shaders.shadeFragmentSource(PRELUDE));
-      provenanceProgram = program(FULLSCREEN, PROVENANCE);
+      gl.getExtension('KHR_parallel_shader_compile');
       // Separate uniform filter modes at compile time. The minimum/Gaussian
       // kernels then avoid the nested downsample loop's register requirements
       // on mobile GPUs. The operations and accumulation order are identical.
       var geoShaders=shaders.waterMaskSource?shaders:root.CSPGpuTerrainShaders||(typeof require==='function'?require('./gpu-terrain-shaders.js'):null);
       var landSource=LAND_FILTER.replace('/*CSP_WATER*/',geoShaders.waterMaskSource());
       function landFilter(source){return source.replace('bool ok(vec2 v)',landSource+'bool ok(vec2 v)').replaceAll('if(!ok(v))continue;','if(!ok(v)||!land(q))continue;');}
+      var jobs = [], started = function (vertex, fragment) { var job = startProgram(vertex, fragment); jobs.push(job); return job; };
+      var heightJob = started(HEIGHT_VERTEX, HEIGHT_FRAGMENT);
+      var shadeJob = started(shaders.fullscreenVertexSource, shaders.shadeFragmentSource(PRELUDE));
+      var provenanceJob = started(FULLSCREEN, PROVENANCE), filterJobs = {};
       [0, 2, 3, 4].forEach(function (mode) {
         var source = mode ? FILTER.replace('uniform int u_mode,u_factor,u_radius;', 'const int u_mode=' + (mode === 4 ? 3 : mode) + '; uniform int u_factor,u_radius;')
           : FILTER.replace('if(u_mode<2)', 'if(true)');
@@ -338,11 +355,25 @@
           // Clamping intermediate centres preserves the clipped window at
           // edges; skipping a centre could lose its valid interior samples.
           .replace('if(q.x<0||q.y<0||q.x>=s.x||q.y>=s.y)continue;', 'q=clamp(q,ivec2(0),s-1);');
-        var filter = filters[mode] = {program: program(FULLSCREEN, landFilter(source))};
-        ['src', 'mode', 'factor', 'radius', 'dir', 'weights[0]', 'landOnly', 'waterMask', 'geoOrigin', 'geoX', 'geoY'].forEach(function (n) { filter[n] = gl.getUniformLocation(filter.program, 'u_' + n); });
+        filterJobs[mode] = started(FULLSCREEN, landFilter(source));
       });
-      statsProgram = program(FULLSCREEN, STATS);
-      blockMin.program = program(FULLSCREEN, landFilter(BLOCK_MIN));
+      var statsJob = started(FULLSCREEN, STATS), blockMinJob = started(FULLSCREEN, landFilter(BLOCK_MIN));
+      if (deferred) return {jobs: jobs, complete: complete};
+      return complete();
+      function complete() {
+      try {
+        heightProgram = finishProgram(heightJob); shadeProgram = finishProgram(shadeJob); provenanceProgram = finishProgram(provenanceJob);
+        [0, 2, 3, 4].forEach(function (mode) {
+          var filter = filters[mode] = {program: finishProgram(filterJobs[mode])};
+          ['src', 'mode', 'factor', 'radius', 'dir', 'weights[0]', 'landOnly', 'waterMask', 'geoOrigin', 'geoX', 'geoY'].forEach(function (n) { filter[n] = gl.getUniformLocation(filter.program, 'u_' + n); });
+        });
+        statsProgram = finishProgram(statsJob); blockMin.program = finishProgram(blockMinJob);
+      } catch (e) {
+        // One failed program fails the engine. Release the shaders of programs
+        // never checked; cleanResources deletes the programs themselves.
+        jobs.forEach(function (job) { job.parts.forEach(function (sh) { gl.deleteShader(sh); }); job.parts = []; });
+        throw e;
+      }
       ['src', 'factor', 'dir', 'landOnly', 'waterMask', 'geoOrigin', 'geoX', 'geoY'].forEach(function (n) { blockMin[n] = gl.getUniformLocation(blockMin.program, 'u_' + n); });
       ['cspField', 'cspBlur', 'cspBase', 'cspLandBase', 'cspBlurScale', 'cspBaseScale', 'cspLandBaseScale', 'cspAuxTransform'].forEach(function (n) { stats[n] = gl.getUniformLocation(statsProgram, 'u_' + n); });
       filterRadius = -1;
@@ -355,6 +386,56 @@
       gl.pixelStorei(gl.UNPACK_ALIGNMENT, 1); gl.pixelStorei(gl.PACK_ALIGNMENT, 1);
       selfTest();
       ready = true; error = null; heightDirty = dirty = planDirty = true;
+      }
+    }
+    /* Deferred start-up (options.deferInit): compile without blocking, check
+       completion each frame, then run the self-test. Success reports
+       options.onReady; a failure releases the engine and reports
+       options.onError, as create() does synchronously. */
+    var pendingInit = null, pendingTimer = 0, announced = false;
+    // A deferred start reports its outcome exactly once, even if the context
+    // is lost while it compiles and the restore finishes the start instead.
+    function announce(e) {
+      if (!options.deferInit || announced) return; announced = true;
+      var callback = e ? options.onError : options.onReady;
+      if (callback) { try { e ? callback(e) : callback(); } catch (_) {} }
+    }
+    function pollInit() {
+      pendingTimer = 0;
+      if (destroyed || lost || !pendingInit) return;
+      var parallel = gl.getExtension('KHR_parallel_shader_compile');
+      if (parallel && !pendingInit.jobs.every(function (job) { return gl.getProgramParameter(job.program, parallel.COMPLETION_STATUS_KHR); })) {
+        pendingTimer = setTimeout(pollInit, 16); return;
+      }
+      if (!parallel) {
+        // Without parallel compilation, asking for a link result compiles
+        // that program. Take one per task so the cost arrives in slices.
+        for (var i = 0; i < pendingInit.jobs.length; i++) if (!pendingInit.jobs[i].linked) {
+          pendingInit.jobs[i].linked = true; gl.getProgramParameter(pendingInit.jobs[i].program, gl.LINK_STATUS);
+          pendingTimer = setTimeout(pollInit, 0); return;
+        }
+      }
+      var job = pendingInit;
+      try {
+        /* The land/water mask: decode within a few milliseconds per task,
+           then upload 256 rows per task, before the first frame needs it. */
+        if (geography && geography.decodeStep && geography.uploadRows && !waterTexture) {
+          var water = job.water || (job.water = {texture: null, row: 0});
+          if (!geography.decodeStep(4)) { pendingTimer = setTimeout(pollInit, 0); return; }
+          if (!water.texture) { water.texture = geography.allocate(gl); resources.textures.add(water.texture); pendingTimer = setTimeout(pollInit, 0); return; }
+          var count = Math.min(256, geography.ROWS - water.row);
+          geography.uploadRows(gl, water.texture, water.row, count); water.row += count;
+          if (water.row < geography.ROWS) { pendingTimer = setTimeout(pollInit, 0); return; }
+          waterTexture = water.texture;
+        }
+      } catch (e) { pendingInit = null; error = String(e && e.message || e); destroy(); announce(e); return; }
+      pendingInit = null;
+      try { job.complete(); }
+      catch (e) {
+        error = String(e && e.message || e); destroy(); announce(e);
+        return;
+      }
+      needsFrame(); announce();
     }
     function makeNative(record) {
       var t = texture(); gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, t); params();
@@ -799,6 +880,7 @@
     function cancelReads(reason) { pendingReads.forEach(function (job) { job.cancel(reason); }); pendingReads.clear(); }
     function onLost(event) {
       event.preventDefault(); lost = true; ready = false; frameRequested = false; cancelReads('Terrain context lost');
+      clearTimeout(pendingTimer); pendingTimer = 0; pendingInit = null;
       snapshots.forEach(function (snapshot) { snapshot.invalid = true; });
       cleanResources(); lru.clear(); queue.clear(); plan.length = 0; lastResult = {coverage: 0, missing: wanted.length};
     }
@@ -807,8 +889,13 @@
       lost = false;
       try {
         init(); known.forEach(function (_, key) { var record = store.get(key); if (record) queue.set(key, record); });
-        coverageKey = ''; viewScalars.fill(NaN); needsFrame();
-      } catch (e) { error = String(e && e.message || e); ready = false; cleanResources(); }
+        coverageKey = ''; viewScalars.fill(NaN); needsFrame(); announce();
+      } catch (e) {
+        error = String(e && e.message || e); ready = false; cleanResources();
+        // A deferred engine that was already announced still reports a failed
+        // restore, so the app can hand terrain to the CPU renderer.
+        if (announced && options.deferInit && options.onError) { try { options.onError(e); } catch (_) {} } else announce(e);
+      }
     }
     function copyState(value) {
       if (!value || typeof value !== 'object') return value;
@@ -971,10 +1058,13 @@
     /* Synchronous coarse readback for "fit range to view": at most 128x128
      * samples of the current field. Returns finite heights and, where the
      * relative-elevation base exists, height above it. */
-    function sampleValues(options) {
-      if (!ready || !field || destroyed) return null;
-      var w = Math.min(128, field.width), ht = Math.min(128, field.height), t = texture(), fb = framebuffer();
+    /* The view-statistics pass behind automatic colour ranges. sampleValues
+       reads it back at once; sampleValuesAsync waits on a fence instead, so
+       the first range fit at start-up does not stall the main thread. */
+    function drawStatsSample() {
+      var w = Math.min(128, field.width), ht = Math.min(128, field.height), t = texture(), fb = null;
       try {
+        fb = framebuffer();
         gl.bindTexture(gl.TEXTURE_2D, t); params();
         gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA32F, w, ht, 0, gl.RGBA, gl.FLOAT, null);
         gl.bindFramebuffer(gl.FRAMEBUFFER, fb); gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, t, 0);
@@ -988,21 +1078,84 @@
         gl.uniform1f(stats.cspBlurScale, liveAux.blur ? liveAux.blur.factor : 0); gl.uniform1f(stats.cspBaseScale, liveAux.base ? liveAux.base.factor : 0);
         gl.uniformMatrix3fv(stats.cspAuxTransform, false, IDENTITY);
         gl.drawArrays(gl.TRIANGLES, 0, 3);
-        var raw = new Float32Array(w * ht * 4), heights = [], relative = [], landRelative = [], water = [];
         var sampleView = {centerMerc:[viewScalars[0],viewScalars[1]],zoom:viewScalars[2],bearing:viewScalars[3],cssSize:[viewScalars[4],viewScalars[5]],dpr:viewScalars[6]};
-        gl.readPixels(0, 0, w, ht, gl.RGBA, gl.FLOAT, raw);
-        for (var i = 0; i < raw.length; i += 4) {
-          if (!(raw[i + 1] > 0) || !Number.isFinite(raw[i])) continue;
-          heights.push(raw[i]);
-          // readPixels rows grow from the south; sampling and shading must
-          // use the same geographic pixel centres, including map rotation.
-          var cell=i/4, merc=options?.water===false?null:shaders.screenToMercator(sampleView,[(cell%w+.5)/w,1-(Math.floor(cell/w)+.5)/ht]);
-          if(merc)water.push(geography ? +geography.waterAtMercator(merc[0],merc[1]) : 0);
-          relative.push(Number.isFinite(raw[i+2])&&raw[i+2]>-1e20?Math.max(0,raw[i]-raw[i+2]):NaN);
-          landRelative.push(Number.isFinite(raw[i+3])&&raw[i+3]>-1e20?Math.max(0,raw[i]-raw[i+3]):NaN);
+        return {w: w, ht: ht, t: t, fb: fb, view: sampleView};
+      } catch (e) { deleteTexture(t); if (fb) deleteFramebuffer(fb); gl.bindFramebuffer(gl.FRAMEBUFFER, null); throw e; }
+    }
+    function decodeStatsStart() { return {heights: [], relative: [], landRelative: [], water: []}; }
+    // Decode texture rows [rowStart, rowEnd) of a statistics sample into acc.
+    function decodeStatsRows(raw, sample, options, acc, rowStart, rowEnd) {
+      var w = sample.w, ht = sample.ht, sampleView = sample.view, heights = acc.heights, relative = acc.relative, landRelative = acc.landRelative, water = acc.water;
+      for (var i = rowStart * w * 4; i < rowEnd * w * 4; i += 4) {
+        if (!(raw[i + 1] > 0) || !Number.isFinite(raw[i])) continue;
+        heights.push(raw[i]);
+        // readPixels rows grow from the south; sampling and shading must
+        // use the same geographic pixel centres, including map rotation.
+        var cell=i/4, merc=options?.water===false?null:shaders.screenToMercator(sampleView,[(cell%w+.5)/w,1-(Math.floor(cell/w)+.5)/ht]);
+        if(merc)water.push(geography ? +geography.waterAtMercator(merc[0],merc[1]) : 0);
+        relative.push(Number.isFinite(raw[i+2])&&raw[i+2]>-1e20?Math.max(0,raw[i]-raw[i+2]):NaN);
+        landRelative.push(Number.isFinite(raw[i+3])&&raw[i+3]>-1e20?Math.max(0,raw[i]-raw[i+3]):NaN);
+      }
+    }
+    function decodeStatsEnd(acc, sample, options) {
+      var heights = acc.heights, relative = acc.relative, landRelative = acc.landRelative, water = acc.water, w = sample.w, ht = sample.ht;
+      return {heights: Float32Array.from(heights), relative: Float32Array.from(relative), landRelative:Float32Array.from(landRelative), water: options?.water===false?undefined:Uint8Array.from(water), samples: w * ht};
+    }
+    function decodeStatsSample(raw, sample, options) {
+      var acc = decodeStatsStart(); decodeStatsRows(raw, sample, options, acc, 0, sample.ht); return decodeStatsEnd(acc, sample, options);
+    }
+    function sampleValues(options) {
+      if (!ready || !field || destroyed) return null;
+      var sample = drawStatsSample();
+      try {
+        var raw = new Float32Array(sample.w * sample.ht * 4);
+        gl.readPixels(0, 0, sample.w, sample.ht, gl.RGBA, gl.FLOAT, raw);
+        return decodeStatsSample(raw, sample, options);
+      } finally { deleteTexture(sample.t); deleteFramebuffer(sample.fb); gl.bindFramebuffer(gl.FRAMEBUFFER, null); }
+    }
+    function sampleValuesAsync(options) {
+      if (!ready || !field || destroyed) return Promise.resolve(null);
+      return new Promise(function (resolve, reject) {
+        var sample = null, buffer = null, sync = null, timer = null, finished = false;
+        var job = {cancel: function (reason) { finish(new Error(reason)); }}; pendingReads.add(job);
+        function finish(err, value) {
+          if (finished) return; finished = true; if (timer !== null) clearTimeout(timer); pendingReads.delete(job);
+          if (!lost) { if (sync) gl.deleteSync(sync); if (buffer) gl.deleteBuffer(buffer); if (sample) { deleteTexture(sample.t); deleteFramebuffer(sample.fb); } }
+          resources.syncs.delete(sync); resources.buffers.delete(buffer);
+          if (err) reject(err); else resolve(value);
         }
-        return {heights: Float32Array.from(heights), relative: Float32Array.from(relative), landRelative:Float32Array.from(landRelative), water: options?.water===false?undefined:Uint8Array.from(water), samples: w * ht};
-      } finally { deleteTexture(t); deleteFramebuffer(fb); gl.bindFramebuffer(gl.FRAMEBUFFER, null); }
+        try {
+          sample = drawStatsSample();
+          buffer = gl.createBuffer(); resources.buffers.add(buffer); gl.bindBuffer(gl.PIXEL_PACK_BUFFER, buffer);
+          gl.bufferData(gl.PIXEL_PACK_BUFFER, sample.w * sample.ht * 16, gl.STREAM_READ); gl.readPixels(0, 0, sample.w, sample.ht, gl.RGBA, gl.FLOAT, 0);
+          gl.bindBuffer(gl.PIXEL_PACK_BUFFER, null); sync = gl.fenceSync(gl.SYNC_GPU_COMMANDS_COMPLETE, 0); resources.syncs.add(sync); gl.flush();
+          gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+          var started = now();
+          var poll = function () {
+            if (finished) return;
+            if (!ready || destroyed || lost) { finish(new Error('Terrain readback cancelled')); return; }
+            var status = gl.clientWaitSync(sync, 0, 0);
+            if (status === gl.WAIT_FAILED) { finish(new Error('Terrain fence wait failed')); return; }
+            if (status === gl.TIMEOUT_EXPIRED) {
+              if (now() - started > 5000) finish(new Error('Terrain fence timeout'));
+              else timer = setTimeout(poll, 4);
+              return;
+            }
+            var raw = new Float32Array(sample.w * sample.ht * 4);
+            gl.bindBuffer(gl.PIXEL_PACK_BUFFER, buffer); gl.getBufferSubData(gl.PIXEL_PACK_BUFFER, 0, raw); gl.bindBuffer(gl.PIXEL_PACK_BUFFER, null);
+            // Decode 32 rows per task; the result is identical to one pass.
+            var acc = decodeStatsStart(), row = 0;
+            var step = function () {
+              if (finished) return;
+              var end = Math.min(sample.ht, row + 32); decodeStatsRows(raw, sample, options, acc, row, end); row = end;
+              if (row < sample.ht) { timer = setTimeout(step, 0); return; }
+              finish(null, decodeStatsEnd(acc, sample, options));
+            };
+            step();
+          };
+          timer = setTimeout(poll, 0);
+        } catch (e) { gl.bindBuffer(gl.PIXEL_PACK_BUFFER, null); gl.bindFramebuffer(gl.FRAMEBUFFER, null); finish(e); }
+      });
     }
     function readProvenance(view) {
       if (!ready || !field || destroyed) return Promise.resolve({ranks: {}});
@@ -1049,6 +1202,7 @@
     }
     function destroy() {
       if (destroyed) return; destroyed = true; ready = false; cancelReads('Terrain engine destroyed');
+      clearTimeout(pendingTimer); pendingTimer = 0; pendingInit = null;
       Array.from(snapshots).forEach(function (snapshot) { snapshot.release(); }); exportCache = null;
       if (store && store.off) store.off('tile', onTile);
       if (canvas && canvas.removeEventListener) { canvas.removeEventListener('webglcontextlost', onLost); canvas.removeEventListener('webglcontextrestored', onRestored); }
@@ -1058,7 +1212,16 @@
       if (!canvas || !store || !shaders || !canvas.getContext) return null;
       gl = canvas.getContext('webgl2', {alpha: true, premultipliedAlpha: true, antialias: false, preserveDrawingBuffer: false});
       if (!gl) return null;
-      init(); refreshSources(); store.on('tile', onTile);
+      /* options.rejectSoftware: a software rasteriser (a blocklisted GPU)
+         compiles and draws on the main thread; the CPU renderer is smoother. */
+      if (options.rejectSoftware) {
+        var info = gl.getExtension('WEBGL_debug_renderer_info');
+        var renderer = String(gl.getParameter(info ? info.UNMASKED_RENDERER_WEBGL : gl.RENDERER) || '');
+        if (/SwiftShader|llvmpipe|softpipe|Software Adapter|Microsoft Basic Render|software rasterizer/i.test(renderer))
+          throw new Error('Software WebGL renderer (' + renderer + '); using the CPU renderer');
+      }
+      if (options.deferInit) { pendingInit = init(true); pendingTimer = setTimeout(pollInit, 0); } else init();
+      refreshSources(); store.on('tile', onTile);
       canvas.addEventListener('webglcontextlost', onLost); canvas.addEventListener('webglcontextrestored', onRestored);
     } catch (e) { error = String(e && e.message || e); destroy(); if (options.onError) { try { options.onError(e); } catch (_) {} } return null; }
     function invalidate() {
@@ -1071,7 +1234,7 @@
       setState: function (next) { state = next || {}; dirty = true; if (refreshSources()) heightDirty = planDirty = true; needsFrame(); },
       invalidate: invalidate, render: render, createSnapshot: createSnapshot,
       releaseGestureTargets: function () { if (!lost) releaseGesture(); },
-      releaseExport: releaseExport, exportDetail: exportDetail, neededTiles: function (view) { return coverageTiles(view, 0); }, renderToCanvas: renderToCanvas, readProvenance: readProvenance, sampleValues: sampleValues,
+      releaseExport: releaseExport, exportDetail: exportDetail, neededTiles: function (view) { return coverageTiles(view, 0); }, renderToCanvas: renderToCanvas, readProvenance: readProvenance, sampleValues: sampleValues, sampleValuesAsync: sampleValuesAsync,
       stats: function () { return {textures: lru.size, textureBytes: lru.bytes, waterMaskBytes: waterTexture ? 16777216 : 0, frames: frames, drawCalls: drawCalls, lastFrameMs: lastFrameMs,
         ready: ready, queuedUploads: queue.size,
         exportTextures: Array.from(snapshots).reduce(function (n, capture) { return n + capture.tiles.size; }, 0),

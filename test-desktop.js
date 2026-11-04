@@ -35,7 +35,7 @@ async function fixture({platform="win32",completed=false,argv=[]}={}){
   const fakeFS={existsSync:()=>completed,mkdirSync:()=>{},writeFileSync:(...args)=>calls.writes.push(args)};
   const context={console,URL,__dirname:path.resolve("electron"),process:{platform,env:{},argv,resourcesPath:path.resolve("resources")},
     require:name=>name==="electron"?{app,BrowserWindow:Window,WebContentsView:View,Menu:{buildFromTemplate:items=>items,setApplicationMenu:items=>{calls.menu=items;}},shell:{openExternal:url=>calls.opened.push(url)},
-      dialog:{showErrorBox:(...args)=>{throw Error(args.join(":"));}},session:{defaultSession:{setPermissionRequestHandler(){}}},
+      dialog:{showErrorBox:(...args)=>{throw Error(args.join(":"));}},session:{defaultSession:{setPermissionRequestHandler(){}}},nativeTheme:{shouldUseDarkColors:false},
       ipcMain:{handle:(name,fn)=>{handlers[name]=fn;},on:(name,fn)=>{handlers[name]=fn;}}}:name==="fs"?fakeFS:name==="./window-chrome"?{windowChrome}:name==="./engine-storage"?require("./electron/engine-storage"):name==="./startup-cache"?{installStartupCache:async()=>({installed:0})}:name==="./setup-config"?{
         ...require("./electron/setup-config"),readConfig:()=>({...require("./electron/setup-config").DEFAULTS}),saveConfig:(_dir,value)=>{calls.configWrites.push(value);return value;},
       }:require(name)};

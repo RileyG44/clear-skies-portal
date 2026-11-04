@@ -23,7 +23,7 @@
   if(!R) throw new Error("lidar-render.js must load before lidar-studio.js");
 
   const STORAGE_KEY="clearskies.lidarStudio.v1";
-  const icon=name=>`vendor/icons/${name}.svg`;
+  const icon=name=>globalThis.CSPIcons?.[name]||`vendor/icons/${name}.svg`;   // inline (ui-icons.js) first
   const esc=value=>String(value).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"})[c]);
   const clamp=(v,lo,hi)=>Math.min(hi,Math.max(lo,v));
 
@@ -46,7 +46,10 @@
     let presetOrigin=state.look,presetScroll=0;
     const disclosures=new Set(["customize"]);
     const previews=new Map();let previewQueue=[],previewTimer=0;
-    const dem=R.previewTerrain(168,112);
+    /* The gallery's synthetic terrain is built when the first preview is
+       drawn, not at mount: the gallery is never on screen at startup. */
+    const PREVIEW_W=168,PREVIEW_H=112;let previewDem=null;
+    const dem=()=>previewDem||(previewDem=R.previewTerrain(PREVIEW_W,PREVIEW_H));
 
     function load(){
       try{return R.normalizeState(JSON.parse(storage&&storage.getItem(STORAGE_KEY)||"null"))}catch(_){return R.emptyState()}
@@ -140,7 +143,7 @@
         button.dataset.look=look.id;button.setAttribute("aria-checked",String(current===look.id));
         button.tabIndex=(current===look.id||(!looks.some(l=>l.id===current)&&look===looks[0]))?0:-1;
         button.title=`Apply ${look.name} · replaces the current layer mix`;
-        const canvas=document.createElement("canvas");canvas.width=dem.width;canvas.height=dem.height;canvas.className="ls-look-preview";
+        const canvas=document.createElement("canvas");canvas.width=PREVIEW_W;canvas.height=PREVIEW_H;canvas.className="ls-look-preview";
         canvas.setAttribute("aria-hidden","true");
         const name=el("span","ls-look-name",esc(look.name));
         button.append(canvas,name);
@@ -228,11 +231,29 @@
       revealPreset(id);
       host.onChange&&host.onChange();
     }
+    /* Previews are CPU renders. Draw each only once its card is visible: a
+       closed menu or an off-screen card costs nothing at startup. */
+    const previewWatch=typeof IntersectionObserver==="function"?new IntersectionObserver(entries=>{
+      for(const entry of entries)if(entry.isIntersecting){previewWatch.unobserve(entry.target);entry.target._cspPreview?.()}
+    }):null;
     function paintPreview(canvas,look){
       const key=JSON.stringify(look.scene),cached=previews.get(key);
       if(cached){canvas.getContext("2d").putImageData(cached,0,0);return}
-      previewQueue.push({canvas,key,scene:look.scene});
-      if(!previewTimer) previewTimer=setTimeout(drainPreviews,30);
+      if(previewWatch&&!canvas._cspPreview){canvas._cspPreview=()=>queuePreview(canvas,key,look.scene);previewWatch.observe(canvas);return}
+      queuePreview(canvas,key,look.scene);
+    }
+    function queuePreview(canvas,key,scene){
+      if(!canvas.isConnected)return;
+      const cached=previews.get(key);
+      if(cached){canvas.getContext("2d").putImageData(cached,0,0);return}
+      previewQueue.push({canvas,key,scene});
+      if(previewTimer) return;
+      /* While the app is still fading in, wait for it: the gallery is never
+         the first thing on screen and its CPU previews would stall the fade. */
+      const root=globalThis.document&&globalThis.document.documentElement;
+      if(root&&root.classList&&(root.classList.contains("csp-boot")||root.classList.contains("csp-reveal"))){
+        previewTimer=-1;root.addEventListener("csp:revealed",()=>{previewTimer=setTimeout(drainPreviews,30)},{once:true});
+      }else previewTimer=setTimeout(drainPreviews,30);
     }
     /* One preview per slice of idle time keeps the panel responsive while
        the gallery fills in. */
@@ -240,8 +261,15 @@
       previewTimer=0;
       const job=previewQueue.shift();if(!job||destroyed) return;
       let image=previews.get(job.key);
+      /* The card may have been hidden since it was queued (start-up lays the
+         panes out before routing hides them). Wait until it is seen again. */
+      if(!image&&previewWatch&&job.canvas.isConnected&&!job.canvas.getClientRects().length){
+        previewWatch.observe(job.canvas);
+        if(previewQueue.length) previewTimer=setTimeout(drainPreviews,0);
+        return;
+      }
       if(!image){
-        try{image=new ImageData(R.renderScenePreview(job.scene,dem,host.lighting&&host.lighting()),dem.width,dem.height)}catch(_){image=null}
+        try{const terrain=dem();image=new ImageData(R.renderScenePreview(job.scene,terrain,host.lighting&&host.lighting()),terrain.width,terrain.height)}catch(_){image=null}
         if(image) previews.set(job.key,image);
       }
       if(image&&job.canvas.isConnected) job.canvas.getContext("2d").putImageData(image,0,0);
@@ -696,10 +724,12 @@
     /* Reads the visible terrain and re-stretches auto layers. Small changes
        are ignored so panning does not make colors shimmer. */
     const displayRange=fit=>fit&&fit.land!==undefined?(fit.land||fit.water):fit;
-    function fitFromView(force){
+    const sampleOptions=keys=>({water:keys.some(key=>{const layer=layerFor(key);return (layer.style==="tint"||layer.style==="rem")&&layer.rangeMode==="separate"})});
+    /* sampled: view values already read (fitFromViewAsync), or read now. */
+    function fitFromView(force,sampled){
       const keys=autoKeys(),s=style();
-      if(!s||!host.sample) return false;
-      const values=host.sample({water:keys.some(key=>{const layer=layerFor(key);return (layer.style==="tint"||layer.style==="rem")&&layer.rangeMode==="separate"})});if(!values) return false;
+      if(!s||(!sampled&&!host.sample)) return false;
+      const values=sampled||host.sample(sampleOptions(keys));if(!values) return false;
       const previousFloors=[remFloor,remLandFloor],previousFlat=JSON.stringify(flatFitted);
       if(values.heights&&values.heights.length){const h=R.fitRange(values.heights,"tint","robust");if(h) remFloor=h[0]}
       // 3D has no local-floor field. Keep its legacy continuous floor and
@@ -747,6 +777,21 @@
       const flat=options&&options.flat;
       return R.buildStack(state,s||style(),flat?Object.assign({},fitted,flatFitted):fitted,{remFlatBase:remFloor||0,remLandBase:remLandFloor??remFloor??0});
     }
+    /* The same fit from a fenced (non-blocking) readback, where the host
+       offers one. Resolves to whether the ranges changed. */
+    // Everything a fit depends on besides the view: style, every auto layer's
+    // settings (range mode, style) and the effects (valley width).
+    const fitRevision=()=>{const keys=autoKeys();return JSON.stringify([style(),keys,keys.map(layerFor),state.effects])};
+    async function fitFromViewAsync(force,isCurrent){
+      if(!host.sampleAsync) return fitFromView(force);
+      const keys=autoKeys(),s=style();if(!keys.length||!s) return false;
+      const revision=fitRevision();
+      const values=await host.sampleAsync(sampleOptions(keys));
+      /* Samples describe the view and mix of the moment they were taken.
+         Drop them if the caller has moved on or the mix has changed. */
+      if(destroyed||!values||(isCurrent&&!isCurrent())||fitRevision()!==revision) return false;
+      return fitFromView(force,values);
+    }
     function needsFit(){ return autoKeys().length>0 }
     function legend(s,options){
       const activeFitted=options?.flat?Object.assign({},fitted,flatFitted):fitted;
@@ -778,7 +823,7 @@
 
     render();
     return {
-      stack,legend,fitFromView,needsFit,
+      stack,legend,fitFromView,fitFromViewAsync,needsFit,
       refresh(){render()},
       state:()=>JSON.parse(JSON.stringify(state)),
       displayState(){
@@ -791,7 +836,7 @@
         remFloor=snapshot.remFloor??null;remLandFloor=snapshot.remLandFloor??null;expanded=null;render();host.onChange&&host.onChange();
       },
       applyLook,
-      destroy(){destroyed=true;clearTimeout(saveTimer);container.innerHTML=""}
+      destroy(){destroyed=true;clearTimeout(saveTimer);previewWatch?.disconnect();container.innerHTML=""}
     };
   }
 

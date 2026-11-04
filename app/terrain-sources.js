@@ -307,10 +307,23 @@ let gpuSourceSpecs=null,gpuSourceSpecsKey=null;
 let lidarStudio=null,studioFitTimer=0;
 function studioStack(style,options){ return style&&style!=="off"&&lidarStudio?lidarStudio.stack(style,options):null }
 /* Auto ranges follow the view once the terrain has settled after a pan. */
+/* Automatic ranges follow the settled view. Fits read the GPU field back
+   through a fence and run one at a time (start-up staging shares this
+   queue); a result for a view or size that has since changed is dropped, and
+   the change schedules a fresh fit. */
+let studioFitChain=Promise.resolve(false);
+const studioFitView=()=>{const c=map.getCenter(),size=map.getSize();return [c.lat,c.lng,map.getZoom(),map.getBearing?.()||0,size.x,size.y].join()};
+function fitStudio(isCurrent){
+  const view=studioFitView(),current=()=>studioFitView()===view&&(!isCurrent||isCurrent());
+  return studioFitChain=studioFitChain.catch(()=>false).then(()=>{
+    if(!current()||!lidarStudio)return false;
+    return lidarStudio.fitFromViewAsync?lidarStudio.fitFromViewAsync(false,current):!!lidarStudio.fitFromView();
+  }).catch(()=>false);
+}
 function scheduleStudioFit(){
   if(!lidarStudio?.needsFit())return;
   clearTimeout(studioFitTimer);
-  studioFitTimer=setTimeout(()=>lidarStudio?.fitFromView(),450);
+  studioFitTimer=setTimeout(()=>fitStudio(),450);
 }
 function initGpuTerrain(){
   if(gpuTerrainDecided)return gpuTerrainEnabled;
@@ -321,9 +334,14 @@ function initGpuTerrain(){
       sources:gpuElevationSources,request:gpuElevationRequest,
       prioritize:(url,priority,options)=>elevationRequests.prioritize(url,priority,options),
       maxBytes:(matchMedia("(pointer:coarse)").matches?128:192)*1024*1024});
+    /* deferInit keeps shader compilation and the self-test off the main
+       thread's critical path; the map stays responsive while they finish. */
     gpuTerrainLayer=L.cspGpuTerrainLayer({store:gpuTerrainStore,state:gpuTerrainState(),zIndex:440,
-      maxTextureBytes:(matchMedia("(pointer:coarse)").matches?128:192)*1024*1024,
+      maxTextureBytes:(matchMedia("(pointer:coarse)").matches?128:192)*1024*1024,deferInit:true,
+      // A software rasteriser gets the CPU renderer unless GPU 2D was asked for.
+      rejectSoftware:!(new URLSearchParams(location.search).get("gpu2d")==="1"||(()=>{try{return storage?.getItem("clearskies.gpu2d")==="1"}catch{return false}})()),
       panShading:window.CSPGpuTerrainLayer.panShadingMode(storage)});
+    gpuTerrainLayer.on("enginefailed",event=>gpuTerrainFailedLate(event.error));
     /* Settings → Smoother panning (CR-008). */
     document.addEventListener("csp:pan-shading",event=>gpuTerrainLayer?.setPanShading(event.detail?.mode));
     gpuTerrainEnabled=!!gpuTerrainLayer.getEngine();
@@ -336,6 +354,21 @@ function initGpuTerrain(){
   document.documentElement.dataset.gpu2d=gpuTerrainEnabled?"on":"off";
   if(!gpuTerrainEnabled)lidarStudio?.refresh();
   return gpuTerrainEnabled;
+}
+/* A deferred engine that fails its self-test after start-up hands terrain to
+   the CPU renderer, exactly as a synchronous failure would have. */
+function gpuTerrainFailedLate(error){
+  if(!gpuTerrainEnabled)return;
+  gpuTerrainEnabled=false;
+  try{gpuTerrainLayer?.destroy();gpuTerrainStore?.destroy()}catch{}
+  gpuTerrainLayer=null;gpuTerrainStore=null;
+  document.documentElement.dataset.gpu2d="off";lidarStudio?.refresh();
+  console.warn("Terrain GPU unavailable; using the CPU renderer",error);
+  try{
+    if($("#terStyle").value!=="off")applyTerrain(true);
+    if(elevationActive())applyElev();else syncElevationChecks();
+  }catch(failure){console.warn("Terrain rendering failed",failure)}
+  // A first picture still being staged now waits for these CPU layers.
 }
 function gpuElevationRequest(url,options={}){
   const {kind,...requestOptions}=options;

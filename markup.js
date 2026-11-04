@@ -49,7 +49,7 @@ const COLOR_GRID=[
 ].flat();
 const DEFAULT_COLOR="#ff3b30";
 const VIEW_KEY="clearskies.markup.view.v1",STYLE_KEY="clearskies.markup.style.v1",LAST_KEY="clearskies.markup.last.v1";
-const icon=name=>`vendor/icons/${name}.svg`;
+const icon=name=>globalThis.CSPIcons?.[name]||`vendor/icons/${name}.svg`;   // inline (ui-icons.js) first
 const esc=s=>String(s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 const coarse=()=>matchMedia("(pointer:coarse)").matches;
 

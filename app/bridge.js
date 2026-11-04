@@ -230,7 +230,9 @@ function cspValidateShareScene(scene){return CSPShareState.validateScene(scene)}
 function cspValidateShareState(state){return CSPShareState.validate(state,cspShareEnvironment())}
 async function cspShareURL(){
   const state=cspCaptureShareState(),payload=await window.CSPShareState.encode(state);
-  return CSP_SHARE_WEB_URL+"#csp="+payload;
+  /* theme= is only a launch hint: index.html paints the first frame in the
+     link's map colour before the payload is decoded. The payload decides. */
+  return CSP_SHARE_WEB_URL+"#csp="+payload+"&theme="+(state.theme==="dark"?"dark":"light");
 }
 /* The steps of restoring a shared view. Each adds to warnings what it could
    not restore, rather than failing the whole view. */
@@ -303,6 +305,11 @@ async function cspRestoreShareState(state){
   PREV_DAYS=+$("#days").value;syncDateUI();syncChecks();
   setMapTheme(state.theme,false);
   await B.restoreSession({...state.view,mode:"2d"});
+  // Theme, controls and camera are in place: the shell may now fade in.
+  cspShareShown?.();
+  // Terrain layers and the GPU warning below depend on the renderer, which
+  // start-up decides once the shell has faded in.
+  await cspRendererDecided;
   applyTerrain(true);applyElev();
   if(state.controls.terStyle!=="off"){
     const source=chooseTerrain(state.controls.terStyle);
@@ -330,7 +337,12 @@ async function cspRestoreShareState(state){
   return {complete:warnings.length===0,warnings};
 }
 Object.assign(window.ClearSkiesPortalBridge,{shareURL:cspShareURL,captureShareState:cspCaptureShareState,restoreShareState:cspRestoreShareState});
-let cspShareReady=false,cspShareRunning=false,cspShareRequested,cspShareLast;
+let cspShareReady=false,cspShareRunning=false,cspShareRequested,cspShareLast,cspShareShown=null,cspRendererReady;
+const cspRendererDecided=new Promise(resolve=>cspRendererReady=resolve);
+/* A shared link opens straight into its view: index.html holds the shell's
+   fade-in (for at most 1.5 s) until the link's theme and camera are applied. */
+if(new URLSearchParams(location.hash.slice(1)).has("csp")&&window.CSPBoot)
+  window.CSPBoot.hold=new Promise(resolve=>cspShareShown=()=>{cspShareShown=null;resolve()});
 function cspReceiveShare(){
   const params=new URLSearchParams(location.hash.slice(1));
   if(!cspShareReady||!params.has("csp"))return;
@@ -353,6 +365,7 @@ function cspReceiveShare(){
         result={complete:false,warnings:[message]};
       }
     }
+    cspShareShown?.();   // a failed link must not keep the shell hidden
     cspShareRunning=false;return result;
   })();
 }
@@ -373,7 +386,9 @@ document.documentElement.addEventListener("csp:ready", () => {
   if (left) map.panBy([-left / 2, 0], {animate:false});
 }, {once:true});
 
-/* Optional rendering starts in its own task after navigation is usable. A
+/* Optional rendering starts in its own task once the shell is built. The
+   shell stays hidden until the first map picture is ready (index.html waits
+   on cspMapReady), so this work never runs under a visible fade. A
    device-specific GPU failure must never abort the shell's initialization. */
 document.documentElement.addEventListener("csp:ready",()=>requestAnimationFrame(()=>{
   try{initGpuTerrain()}catch(error){
@@ -387,9 +402,115 @@ document.documentElement.addEventListener("csp:ready",()=>requestAnimationFrame(
   try{
     if($("#terStyle").value!=="off")applyTerrain(true);
     if(elevationActive())applyElev();else syncElevationChecks();
-  }catch(error){console.warn("Initial terrain rendering failed",error)}
+    cspStageFirstPicture();
+  }catch(error){console.warn("Initial terrain rendering failed",error);cspReleaseMap()}
+  /* Shared views wait for the renderer to be settled: a deferred GPU engine
+     is either ready or has handed terrain to the CPU renderer. */
+  const engine=gpuTerrainEnabled&&gpuTerrainLayer?.getEngine?.();
+  if(engine&&!engine.ready){
+    let settled=false;const settle=()=>{if(!settled){settled=true;cspRendererReady()}};
+    gpuTerrainLayer.once("engineready",settle);gpuTerrainLayer.once("enginefailed",settle);
+    // A driver that never finishes compiling must not leave terrain pending.
+    setTimeout(()=>{
+      if(!settled&&gpuTerrainEnabled&&gpuTerrainLayer?.getEngine?.()&&!gpuTerrainLayer.getEngine().ready)
+        gpuTerrainFailedLate(new Error("GPU terrain start-up timed out"));
+      settle();
+    },8000);
+  }else cspRendererReady();
 }),{once:true});
 
+/* The first map picture appears whole rather than tile by tile.
+   csp-map-staging keeps the map pane (basemap, terrain, overlays) transparent
+   and the shell waits on cspMapReady (index.html), so both appear in one fade.
+   Map controls sit outside the pane. */
+let cspMapShown;
+const cspMapReady=new Promise(resolve=>cspMapShown=resolve);
+if(window.CSPBoot)(window.CSPBoot.holds||(window.CSPBoot.holds=[])).push(cspMapReady);
+function cspReleaseMap(){document.documentElement.classList.remove("csp-map-staging");cspMapShown()}
+/* Staging gives way only when the person takes the map. Programmatic camera
+   moves (a shared link's view, the fresh-view fit) keep it waiting for the
+   picture of the view they land on. */
+function cspUserInput(fn,on){
+  const el=map.getContainer();
+  for(const name of ["pointerdown","wheel","keydown","touchstart"])
+    on?el.addEventListener(name,fn,{passive:true}):el.removeEventListener(name,fn,{passive:true});
+}
+/* One coordinator for the first picture. Which renderer draws it settles over
+   the first moments (a shared link's restored controls can add the GPU layer a
+   frame after the GPU block; a late GPU failure hands terrain to the CPU
+   renderer; WA DNR published hillshade is a CPU tile layer). Every 50 ms:
+   terrain is ready when the GPU picture is covered and fitted, or when no CPU
+   tile layer or terrain swap is busy; the basemap is ready when it has loaded
+   its first view. Release the map when both are (after a 200 ms grace). At the
+   1.5 s deadline the map is shown anyway, but an unfinished GPU picture stays
+   hidden on its own and fades in whole when it is ready. Taking the map shows
+   everything at once. */
+function cspStageFirstPicture(){
+  let done=false,gpu=null;const started=performance.now();
+  const cpuBusy=()=>!!terrainSwap||[terBase,terLayer,elevLayer].some(layer=>layer&&map.hasLayer(layer)&&layer.isLoading?.());
+  const baseBusy=()=>!!(baseLayer&&map.hasLayer(baseLayer)&&baseLayer.isLoading?.());
+  const stop=()=>{done=true;clearInterval(poll);clearTimeout(timer);cspUserInput(onInput,false)};
+  const release=()=>{if(done)return;stop();cspReleaseMap()};
+  const onInput=()=>{gpu?.show();release()};
+  const deadline=()=>{gpu?.hideUntilReady();release()};
+  const step=()=>{
+    if(done)return;
+    const gpuOn=gpuTerrainEnabled&&gpuTerrainLayer&&map.hasLayer(gpuTerrainLayer);
+    if(gpu&&(!gpuOn||gpu.layer!==gpuTerrainLayer)){gpu.stop();gpu=null}
+    if(gpuOn&&!gpu)gpu=cspGpuPicture(gpuTerrainLayer);
+    const terrainReady=gpu?gpu.ready:!cpuBusy();
+    if(terrainReady&&!baseBusy()&&performance.now()-started>=200)release();
+  };
+  const poll=setInterval(step,50),timer=setTimeout(deadline,1500);
+  cspUserInput(onInput,true);step();
+}
+/* The GPU picture is ready once the terrain covers the view and its automatic
+   colour ranges are fitted (the frame after the fit carries the fitted
+   colours, so the picture does not re-colour after it appears). If the map
+   had to be shown first, the terrain canvas waits hidden and fades in whole
+   when ready, at the latest 8 s later. */
+function cspGpuPicture(layer){
+  const el=layer.getContainer(),root=document.documentElement;
+  const picture={layer,ready:false};
+  let phase="cover",stopped=false,hidden=false,cap=0;
+  const fadeIn=()=>{
+    if(!hidden)return;hidden=false;
+    const still=root.classList.contains("csp-reduce-motion")||matchMedia("(prefers-reduced-motion: reduce)").matches;
+    el.style.transition=still?"none":"opacity .32s cubic-bezier(.2,.7,.2,1)";el.style.opacity="";
+    if(!still)setTimeout(()=>{el.style.transition="none"},400);
+  };
+  const detach=()=>{layer.off("render",check);clearTimeout(cap);cspUserInput(finish,false);root.removeEventListener("csp:reveal",onShell)};
+  function finish(){if(picture.ready||stopped)return;picture.ready=true;detach();fadeIn()}
+  function check(event){
+    if(phase==="refitted"){finish();return}
+    if(phase!=="cover"||!(event.coverage?.coverage>=.98))return;
+    if(!lidarStudio?.needsFit()){finish();return}
+    phase="fitting";
+    const fallback=setTimeout(finish,600);   // a fenced readback, bounded
+    // Once the picture is out (cap, input), a late fit is dropped.
+    fitStudio(()=>!picture.ready&&!stopped)
+      .then(refit=>{if(refit)phase="refitted";else{clearTimeout(fallback);finish()}})   // a refit re-renders; that frame finishes
+      .catch(error=>{console.warn("Initial range fit failed",error);clearTimeout(fallback);finish()});
+  }
+  picture.hideUntilReady=()=>{
+    if(picture.ready||stopped||hidden)return;
+    hidden=true;el.style.transition="none";el.style.opacity="0";
+    cspUserInput(finish,true);cap=setTimeout(finish,8000);
+  };
+  // The shell can appear (its 1.6 s cap) before the 1.5 s deadline fires.
+  function onShell(){picture.hideUntilReady()}
+  picture.show=finish;
+  picture.stop=()=>{if(stopped)return;stopped=true;detach();if(hidden){hidden=false;el.style.opacity=""}};
+  layer.on("render",check);root.addEventListener("csp:reveal",onShell,{once:true});
+  return picture;
+}
+/* The shell's visible icons arrive with it (bounded by the same cap). */
+if(window.CSPBoot)window.CSPBoot.holds.push(new Promise(resolve=>{
+  document.documentElement.addEventListener("csp:ready",()=>{
+    const icons=[...document.querySelectorAll("#app img")].filter(img=>img.getClientRects().length&&!img.complete);
+    Promise.all(icons.map(img=>img.decode?img.decode().catch(()=>{}):Promise.resolve())).then(resolve);
+  },{once:true});
+}));
 
 if("serviceWorker" in navigator && (location.protocol==="https:" || location.hostname==="localhost"))
   addEventListener("load",()=>navigator.serviceWorker.register("sw.js",{updateViaCache:"none"})

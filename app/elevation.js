@@ -12,7 +12,10 @@ function elevRampRgb(value,level,span,colors=[[248,92,108],[255,255,250],[70,160
    Float32 elevation texture at a time, draws it on the GPU, then copies the
    finished pixels into the tile's ordinary 2D canvas. */
 class ElevationGpuRenderer{
-  constructor(){ this.init() }
+  /* Created on first use. Startup with the GPU 2D engine never needs this
+     context; building it (and its self-test) delayed the first frame. */
+  constructor(){ this.ready=false; this.started=false }
+  start(){ if(!this.started){ this.started=true; this.init() } return this.ready }
   /* Re-run when the browser restores a lost context (GPU memory pressure, a
      driver reset); without it shading stayed on the slow CPU path for the rest
      of the session. */
@@ -109,6 +112,7 @@ class ElevationGpuRenderer{
     }catch(error){ this.ready=false; console.warn("Elevation GPU disabled:",error) }
   }
   paint(target,elev,settings){
+    this.start();
     if(!this.ready||!elev||target.width!==256||target.height!==256) return false;
     try{
       const gl=this.gl; gl.viewport(0,0,256,256); gl.useProgram(this.program);
@@ -146,7 +150,8 @@ const elevGpu=new ElevationGpuRenderer();
    Leaflet's ordinary canvas. This avoids both a context-per-tile limit and the
    pre-coloured ArcGIS tiles that became transparent at deep zoom. */
 class TerrainGpuRenderer{
-  constructor(){ this.init() }
+  constructor(){ this.ready=false; this.started=false }   // see ElevationGpuRenderer
+  start(){ if(!this.started){ this.started=true; this.init() } return this.ready }
   init(){   // see ElevationGpuRenderer.init
     this.ready=false;
     try{
@@ -299,6 +304,7 @@ class TerrainGpuRenderer{
     }catch(error){this.ready=false;console.warn("Terrain GPU disabled:",error)}
   }
   paint(target,elevation,groundResolution,style,lighting=terrainLighting()){
+    this.start();
       const modes={hs:0,hsmulti:1,slope:2,aspect:3,northness:4,tint:5,c2:6,c5:7,c10:8,c25:9};
     if(!this.ready||!elevation||target.width!==256||target.height!==256||!(style in modes)) return false;
     try{

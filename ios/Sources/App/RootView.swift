@@ -41,7 +41,9 @@ struct RootView: View {
         .foregroundStyle(PortalPrimary())
         .portalFont(.body)
         .preferredColorScheme(appearance)
-        .animation(.easeOut(duration: 0.35), value: portal.ready)
+        // The launch cover's single fade to the map; instant with Reduce Motion.
+        // index.html waits 360 ms (this duration) before starting GPU work.
+        .animation(reducedMotion ? nil : .easeOut(duration: 0.35), value: portal.ready)
         .animation(reducedMotion ? nil : .spring(duration: 0.35, bounce: 0.12), value: portal.shell.activeSheet)
         .sensoryFeedback(.selection, trigger: portal.shell.feedback)
         .onPreferenceChange(MapToolbarVisibilityKey.self) { visibility in

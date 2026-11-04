@@ -66,7 +66,8 @@ final class WebHost: NSObject {
         // Touches reach the map at once; the page never scrolls as a document.
         webView.scrollView.delaysContentTouches = false
         webView.isOpaque = false
-        webView.backgroundColor = .black
+        // Before the page paints, show the map canvas color rather than black.
+        webView.backgroundColor = UIColor(named: "CanvasBackground") ?? .black
         webView.scrollView.backgroundColor = webView.backgroundColor
         webView.underPageBackgroundColor = webView.backgroundColor
     }
