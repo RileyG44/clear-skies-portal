@@ -1,8 +1,9 @@
 /* ClearSkies sketchbook hero, seasonal variant.
    An open-grown bigleaf maple (Acer macrophyllum) in pen, ink and watercolour over the
-   same soil section as the Douglas-fir page. Its limbs are grown by space colonisation
-   inside a broad dome crown, thickened with the pipe model, and carry moss and licorice
-   fern the way west-slope maples do. The leaves, flowers, seed keys, epiphytes, grass
+   same soil section as the Douglas-fir page. The tree is grown in three dimensions by
+   maple-growth.js (buds competing for light, apical control, flowering forks, self-
+   pruning, sag under load) and drawn here as seen from the front; its limbs carry moss
+   and licorice fern the way west-slope maples do. The leaves, flowers, seed keys, epiphytes, grass
    and litter are drawn for one day of the year (see phenology.js), so the page shows
    the tree as it stands in its native range on the day it is opened.
 
@@ -10,6 +11,8 @@
    a bone, branches are damped springs, and the cursor brushes the twigs it touches. */
 import { KIND, DEG, lerp, clamp, smooth, mulberry32, canvasAPI, drawSection, pack } from "./sketch.js";
 import { season as seasonOf } from "./phenology.js";
+import { growMaple, unpackMaple } from "./maple-growth.js";
+import { BAKED } from "./maple-tree.js";
 
 export const VIEW = { cx: 0.0, cy: 0.425, w: 1.32, h: 1.46 };
 
@@ -21,183 +24,10 @@ const SHADE = [0.47, 0.47, 0.57, 0.55];  // cool shadow wash (round dabs)
 const SHADE_FLAT = [0.5, 0.5, 0.58];     // the same, laid along a limb
 const FERN = [0.22, 0.42, 0.21];         // sword fern, evergreen
 const WHITE = [1, 1, 1];
+const LIDAR_X = -0.37;                   // where the lidar pulse in the margin note comes down
 const mix = (a, b, t) => [lerp(a[0], b[0], t), lerp(a[1], b[1], t), lerp(a[2], b[2], t)];
 const mul = (a, k) => [a[0] * k[0], a[1] * k[1], a[2] * k[2]];
 const LIGHT = (() => { const x = -0.55, y = 0.83, l = Math.hypot(x, y); return [x / l, y / l]; })();
-
-/* ---------- the skeleton: trunk, scaffold limbs, then space colonisation ---------- */
-function growSkeleton(seed) {
-  const rnd = mulberry32(seed), R = (a, b) => a + (b - a) * rnd();
-  const X = [], Y = [], Par = [], Sc = [];
-  const add = (x, y, p, sc) => { X.push(x); Y.push(y); Par.push(p); Sc.push(sc); return X.length - 1; };
-  const D = 0.0095;
-
-  /* the scaffold, the way an open-grown bigleaf maple holds it: a short leaning bole
-     (Sc 2), then two leaders that each throw a side limb and fork again, so the big forks are staggered up the tree (Sc 1) */
-  const path = (from, a0, a1, L, sc, wob = 0.11) => {
-    const out = []; let x = X[from], y = Y[from], q = from;
-    const n = Math.max(1, Math.round(L / D)), ph = R(0, 6.3), ph2 = R(0, 6.3), f1 = R(0.3, 0.45), f2 = R(0.75, 1.05);
-    for (let i = 1; i <= n; i++) {
-      // a limb bends one way and then another as it grows: two slow waves and a little jitter
-      const th = lerp(a0 * DEG, a1 * DEG, smooth(0, 1, i / n)) + wob * Math.sin(i * f1 + ph) + wob * 0.45 * Math.sin(i * f2 + ph2) + R(-0.03, 0.03);
-      x += Math.cos(th) * D; y += Math.sin(th) * D; q = add(x, y, q, sc); out.push(q);
-    }
-    return out;
-  };
-  const bole = path(add(0, 0, -1, 2), 86, 97, 0.175, 2, 0.04);
-  const fork = bole[bole.length - 1], forkY = Y[fork];
-  const lft = path(fork, 117 + R(-3, 3), 101, 0.15, 1);
-  const rgt = path(fork, 70 + R(-3, 3), 80, 0.125, 1);
-  path(lft[Math.round(lft.length * 0.5)], 152, 130, 0.165, 1, 0.14);
-  path(lft[lft.length - 1], 127, 114, 0.12, 1);
-  path(lft[lft.length - 1], 97, 88, 0.13, 1);
-  path(rgt[Math.round(rgt.length * 0.45)], 44, 62, 0.14, 1, 0.14);
-  path(rgt[rgt.length - 1], 93, 101, 0.13, 1);
-  path(rgt[rgt.length - 1], 66, 73, 0.105, 1);
-
-  // crown: a broad dome with a lobed, billowing edge
-  const C = { x: 0, y: 0.625, rx: 0.47, ry: 0.335 };
-  const ph = [R(0, 6.3), R(0, 6.3), R(0, 6.3)];
-  const env = (x, y) => {
-    const u = (x - C.x) / C.rx, v = (y - C.y) / C.ry, th = Math.atan2(v, u);
-    const rr = 1 + 0.06 * Math.sin(5 * th + ph[0]) + 0.045 * Math.sin(8 * th + ph[1]) + 0.03 * Math.sin(13 * th + ph[2]);
-    return Math.hypot(u, v) / rr;
-  };
-  // foliage grows in billows: clumps of attraction points through the crown (most near
-  // the shell, some deep inside where the scaffold carries its own leafy sprays), plus a scatter
-  const AX = [], AY = [];
-  const inside = (x, y) => env(x, y) <= 1 && y >= 0.28;
-  for (let tries = 0, clumps = 0; clumps < 120 && tries < 20000; tries++) {
-    const x = R(-C.rx * 1.1, C.rx * 1.1), y = R(0.3, C.y + C.ry * 1.1), e = env(x, y);
-    if (!inside(x, y) || e < 0.22 || rnd() > 0.3 + 0.7 * e * e) continue;
-    clumps++;
-    const cr = R(0.035, 0.075), m = Math.round(R(35, 70));
-    for (let j = 0; j < m; j++) {
-      const a = R(0, 6.283), d = cr * Math.sqrt(rnd()), px = x + Math.cos(a) * d, py = y + Math.sin(a) * d * 0.8;
-      if (inside(px, py)) { AX.push(px); AY.push(py); }
-    }
-  }
-  for (let tries = 0, k = 0; k < 1400 && tries < 20000; tries++) {
-    const x = R(-C.rx * 1.1, C.rx * 1.1), y = R(0.3, C.y + C.ry * 1.1);
-    if (!inside(x, y) || rnd() > 0.45 + 0.55 * env(x, y)) continue;
-    AX.push(x); AY.push(y); k++;
-  }
-  const alive = new Uint8Array(AX.length).fill(1);
-
-  const di = 0.075, dk = 0.017, cs = di;
-  const grid = new Map(), key = (i, j) => i * 100003 + j;
-  const ins = k => { const g = key(Math.floor(X[k] / cs), Math.floor(Y[k] / cs)); (grid.get(g) || grid.set(g, []).get(g)).push(k); };
-  for (let k = 0; k < X.length; k++) ins(k);
-  const kids = new Int32Array(60000);
-  /* each shoot has its own way of wandering: a heading that swings slowly from side to side
-     as it grows (amplitude, phase), so limbs snake, kink and cross instead of running
-     straight out to the light. A shoot's leader keeps its parent's wander; a new side
-     shoot starts its own */
-  const WA = new Float32Array(60000), WP = new Float32Array(60000), WL = new Float32Array(60000);
-  for (let k = 0; k < X.length; k++) { WA[k] = R(0.24, 0.42); WP[k] = R(0, 6.3); }
-
-  for (let it = 0; it < 220; it++) {
-    const sx = new Map();
-    for (let a = 0; a < AX.length; a++) {
-      if (!alive[a]) continue;
-      const ci = Math.floor(AX[a] / cs), cj = Math.floor(AY[a] / cs);
-      let best = -1, bd = di * di;
-      for (let i = ci - 1; i <= ci + 1; i++) for (let j = cj - 1; j <= cj + 1; j++) {
-        const cell = grid.get(key(i, j));
-        if (!cell) continue;
-        for (const k of cell) {
-          const dx = AX[a] - X[k], dy = AY[a] - Y[k], d2 = dx * dx + dy * dy;
-          if (d2 < bd) { bd = d2; best = k; }
-        }
-      }
-      if (best < 0) continue;
-      const d = Math.sqrt(bd) || 1, v = sx.get(best) || [0, 0, 0];
-      v[0] += (AX[a] - X[best]) / d; v[1] += (AY[a] - Y[best]) / d; v[2]++; sx.set(best, v);
-    }
-    const fresh = [];
-    for (const [k, v] of sx) {
-      if (kids[k] >= 3) continue;
-      // a little phototropism, and limbs that lean out from the centre of the crown
-      let dx = v[0] / v[2] + 0.06 * Math.sign(X[k] - C.x), dy = v[1] / v[2] + 0.03;
-      let l = Math.hypot(dx, dy) || 1; dx /= l; dy /= l;
-      // momentum: a shoot carries on roughly the way it was going
-      const pk = Par[k];
-      if (pk >= 0) {
-        let px = X[k] - X[pk], py = Y[k] - Y[pk]; const pl = Math.hypot(px, py) || 1;
-        dx = 0.58 * dx + 0.42 * px / pl; dy = 0.58 * dy + 0.42 * py / pl;
-      }
-      // the wander: the leader inherits it, a new side shoot gets its own
-      const side = kids[k] > 0, wa = side ? R(0.22, 0.5) : WA[k], wp = side ? R(0, 6.3) : WP[k] + (rnd() < 0.06 ? R(1.2, 2.6) : 0);
-      const wl = side ? 0 : WL[k] + D;
-      const th = Math.atan2(dy, dx) + wa * Math.sin(wl * 36 + wp) + R(-0.12, 0.12);
-      dx = Math.cos(th); dy = Math.sin(th);
-      const nx = X[k] + dx * D, ny = Y[k] + dy * D;
-      // don't stack a second shoot right on top of an existing one
-      let dup = false;
-      for (const f of fresh) if (Math.abs(X[f] - nx) < D * 0.4 && Math.abs(Y[f] - ny) < D * 0.4) { dup = true; break; }
-      if (dup) continue;
-      const q = add(nx, ny, k, 0); kids[k]++; fresh.push(q); ins(q);
-      WA[q] = wa; WP[q] = wp; WL[q] = wl;
-    }
-    if (!fresh.length) break;
-    for (const q of fresh) {
-      for (let a = 0; a < AX.length; a++) {
-        if (!alive[a]) continue;
-        const dx = AX[a] - X[q], dy = AY[a] - Y[q];
-        if (dx * dx + dy * dy < dk * dk) alive[a] = 0;
-      }
-    }
-  }
-
-  // short lateral shoots all along the limbs, so the crown is a mesh of fine twigs
-  {
-    const n0 = X.length, kid0 = Array.from({ length: n0 }, () => 0);
-    for (let k = 1; k < n0; k++) kid0[Par[k]]++;
-    for (let k = 1; k < n0; k++) {
-      if (Sc[k] || env(X[k], Y[k]) < 0.3 || rnd() > 0.42) continue;
-      const a = Par[k], tx = X[k] - X[a], ty = Y[k] - Y[a], tl = Math.hypot(tx, ty) || 1;
-      const side = rnd() < 0.5 ? -1 : 1, rot = side * R(38, 68) * DEG;
-      let th = Math.atan2(ty, tx) + rot, x = X[k], y = Y[k], q = k;
-      const steps = 1 + Math.floor(R(1, 4));
-      for (let i = 0; i < steps; i++) {
-        th += (-Math.PI / 2 - th) * 0.06 + (i % 2 ? 1 : -1) * R(0.12, 0.35);   // side shoots droop a little and zigzag node to node
-        x += Math.cos(th) * D * 0.85; y += Math.sin(th) * D * 0.85; q = add(x, y, q, 0);
-      }
-    }
-  }
-  const n = X.length, Kids = Array.from({ length: n }, () => []);
-  for (let k = 1; k < n; k++) Kids[Par[k]].push(k);
-  // relax the zig-zag of the colonisation steps
-  for (let pass = 0; pass < 3; pass++) for (let k = 1; k < n; k++) {
-    if (Sc[k] || Kids[k].length !== 1) continue;
-    const a = Par[k], b = Kids[k][0];
-    X[k] = 0.5 * X[k] + 0.25 * (X[a] + X[b]); Y[k] = 0.5 * Y[k] + 0.25 * (Y[a] + Y[b]);
-  }
-  // pipe model: a limb's cross-section carries all the shoots beyond it
-  const r = new Float32Array(n), acc = new Float32Array(n), E = 2.45, r0 = 0.00105;
-  for (let k = n - 1; k >= 0; k--) {
-    r[k] = acc[k] > 0 ? Math.pow(acc[k], 1 / E) : r0;
-    if (Par[k] >= 0) acc[Par[k]] += Math.pow(r[k], E);
-  }
-  // map the pipe-model radii so the bole is 0.03 thick at the first fork and the
-  // shoot tips are hairlines
-  const gam = Math.log(0.03 / 0.0006) / Math.log(r[fork] / r0);
-  for (let k = 0; k < n; k++) {
-    r[k] = 0.0006 * Math.pow(r[k] / r0, gam);
-    if (Sc[k] === 2) r[k] *= 1 + 0.5 * Math.exp(-Y[k] / 0.028);   // root flare
-  }
-  // distance along the wood from the ground, for the order the pen draws in
-  const dist = new Float32Array(n);
-  for (let k = 1; k < n; k++) dist[k] = dist[Par[k]] + Math.hypot(X[k] - X[Par[k]], Y[k] - Y[Par[k]]);
-  let dmax = 0; for (let k = 0; k < n; k++) dmax = Math.max(dmax, dist[k]);
-  // how many steps each node is from the nearest shoot tip; leaves grow on the last few
-  const hTip = new Int32Array(n).fill(1e6);
-  for (let k = n - 1; k >= 0; k--) {
-    if (!Kids[k].length) hTip[k] = 0;
-    if (Par[k] >= 0) hTip[Par[k]] = Math.min(hTip[Par[k]], hTip[k] + 1);
-  }
-  return { n, X, Y, Par, Kids, r, Sc, dist, dmax, env, C, forkY, fork, hTip };
-}
 
 /* ---------- the drawing for one date ---------- */
 export function buildMaple(date = new Date(), seed = 20261104) {
@@ -205,8 +35,10 @@ export function buildMaple(date = new Date(), seed = 20261104) {
   const K = canvasAPI(seed + 7);
   const { R, line, poly, dashed, circle, bone, ROOT, label, seg, tag } = K;
   const { groundY, yBot, xR } = drawSection(K, SEPIA);
-  const G = growSkeleton(seed);
-  const { n, X, Y, Par, Kids, r, env, C } = G;
+  // the tree is baked ahead of time (scripts/bake-maple.mjs); it is grown here only if
+  // the bake is stale or another seed is asked for
+  const G = unpackMaple(BAKED, seed) || growMaple(seed);
+  const { n, X, Y, Z, Par, Kids, r, env, C } = G;
   const tNode = k => 0.13 + 0.5 * G.dist[k] / G.dmax;
 
   /* chains: follow the thickest child; every other child starts a new chain */
@@ -230,7 +62,7 @@ export function buildMaple(date = new Date(), seed = 20261104) {
   const boneOf = new Int32Array(n).fill(ROOT);
   for (const ch of chains) {
     let par = boneOf[ch[0]];
-    const per = r[ch[1] ?? ch[0]] > 0.006 ? 6 : 4;
+    const per = r[ch[1] ?? ch[0]] > 0.006 ? 6 : r[ch[1] ?? ch[0]] > 0.002 ? 5 : 7;
     let total = 0;
     for (let i = 1; i < ch.length; i++) total += Math.hypot(X[ch[i]] - X[ch[i - 1]], Y[ch[i]] - Y[ch[i - 1]]);
     let done = 0;
@@ -257,9 +89,11 @@ export function buildMaple(date = new Date(), seed = 20261104) {
     if (G.Sc[k]) continue;
     // most leaves crowd the last few nodes of each shoot; older wood inside the crown
     // carries a sparser spray of its own, so the centre is not hollow
-    const deep = G.hTip[k] > 4;
+    // leaves crowd the last nodes of each shoot (a maple's are on this year's and last
+    // year's wood); older wood inside the crown carries the odd spray of its own
+    const deep = G.hTip[k] > 3;
     if (deep && r[k] > 0.0045) continue;
-    const tip = Kids[k].length === 0, cnt = deep ? (lr() < 0.55 ? 1 : 0) : tip ? 3 : 2;
+    const tip = Kids[k].length === 0, cnt = deep ? (lr() < 0.12 ? 1 : 0) : tip ? 2 : lr() < 0.6 ? 1 : 0;
     for (let j = 0; j < cnt; j++) {
       const a = LR(0, 6.283), d = 0.011 * Math.sqrt(lr());
       const x = X[k] + Math.cos(a) * d, y = Y[k] + Math.sin(a) * d - 0.002;
@@ -326,8 +160,37 @@ export function buildMaple(date = new Date(), seed = 20261104) {
     for (let i = 0; i < Math.min(ch.length - 1, 6); i++)
       capsule(capsules[pc], X[ch[i]], Y[ch[i]], r[ch[Math.max(1, i)]], X[ch[i + 1]], Y[ch[i + 1]], r[ch[i + 1]]);
   });
+  /* depth: the tree is three-dimensional, so a limb nearer the viewer hides the lines of
+     a limb behind it. Thick limbs are filed by cell with their depth */
+  const DG = 0.03, dgrid = new Map(), dkey = (i, j) => i * 7919 + j;
+  const related = dch.map((ch, c) => new Set([c]));
+  dch.forEach((ch, c) => { if (c && chainAt[ch[0]] >= 0) { related[c].add(chainAt[ch[0]]); related[chainAt[ch[0]]].add(c); } });
+  dch.forEach((ch, c) => {
+    if (!thick(ch)) return;
+    for (let i = 0; i < ch.length - 1; i++) {
+      const a = ch[i], b = ch[i + 1], ra = r[ch[Math.max(1, i)]] * 0.96, rb = r[b] * 0.96;
+      if (rb < 0.003) break;
+      const cap = [X[a], Y[a], X[b], Y[b], ra, rb, (Z[a] + Z[b]) / 2, c], m = Math.max(ra, rb);
+      for (let gi = Math.floor((Math.min(X[a], X[b]) - m) / DG); gi <= Math.floor((Math.max(X[a], X[b]) + m) / DG); gi++)
+        for (let gj = Math.floor((Math.min(Y[a], Y[b]) - m) / DG); gj <= Math.floor((Math.max(Y[a], Y[b]) + m) / DG); gj++) {
+          const g = dkey(gi, gj); (dgrid.get(g) || dgrid.set(g, []).get(g)).push(cap);
+        }
+    }
+  });
+  const inCap = (x, y, ax, ay, bx, by, ra, rb) => {
+    const dx = bx - ax, dy = by - ay, l2 = dx * dx + dy * dy || 1, t = clamp(((x - ax) * dx + (y - ay) * dy) / l2, 0, 1);
+    const rr = lerp(ra, rb, t), ex = x - ax - dx * t, ey = y - ay - dy * t;
+    return ex * ex + ey * ey < rr * rr;
+  };
+  const hidden = (c, x, y, z) => {
+    const cell = dgrid.get(dkey(Math.floor(x / DG), Math.floor(y / DG)));
+    if (cell) for (const [ax, ay, bx, by, ra, rb, zc, cc] of cell)
+      if (zc > z + 0.012 && !related[c].has(cc) && inCap(x, y, ax, ay, bx, by, ra, rb)) return true;
+    return false;
+  };
   // (the roots block only the bole's outline, not the bark drawn on its face)
-  const blocked = (c, x, y, outline = false) => {
+  const blocked = (c, x, y, outline = false, z) => {
+    if (z !== undefined && hidden(c, x, y, z)) return true;
     for (const [ax, ay, bx, by, ra, rb] of outline && c === 0 ? capsules[0].concat(rootCaps) : capsules[c]) {
       const dx = bx - ax, dy = by - ay, l2 = dx * dx + dy * dy || 1, t = clamp(((x - ax) * dx + (y - ay) * dy) / l2, 0, 1);
       const rr = lerp(ra, rb, t), ex = x - ax - dx * t, ey = y - ay - dy * t;
@@ -340,11 +203,11 @@ export function buildMaple(date = new Date(), seed = 20261104) {
     let run = [], i0 = 0;
     const nn = pts.length - 1, flush = i => { if (run.length > 1) strand(run, w, ink, lerp(t0, t1, i0 / nn), lerp(t0, t1, i / nn), col); run = []; };
     for (let i = 0; i <= nn; i++) {
-      const p = pts[i], inside = blocked(c, p[0], p[1], true);
-      if (i && inside !== blocked(c, pts[i - 1][0], pts[i - 1][1], true)) {
+      const p = pts[i], z = p[3] !== undefined ? Z[p[3]] : undefined, inside = blocked(c, p[0], p[1], true, z);
+      if (i && inside !== blocked(c, pts[i - 1][0], pts[i - 1][1], true, z)) {
         // find the surface between the two points so the line ends exactly on it
         let lo = 0, hi = 1, q = pts[i - 1];
-        for (let it = 0; it < 6; it++) { const m = (lo + hi) / 2; (blocked(c, lerp(q[0], p[0], m), lerp(q[1], p[1], m), true) === inside ? hi = m : lo = m); }
+        for (let it = 0; it < 6; it++) { const m = (lo + hi) / 2; (blocked(c, lerp(q[0], p[0], m), lerp(q[1], p[1], m), true, z) === inside ? hi = m : lo = m); }
         const e = [lerp(q[0], p[0], lo), lerp(q[1], p[1], lo), p[2], p[3]];
         if (inside) { run.push(e); flush(i); } else { i0 = i; run.push(e); }
       }
@@ -422,8 +285,8 @@ export function buildMaple(date = new Date(), seed = 20261104) {
       // (it slides smoothly round the limb as the limb turns against the light)
       const darkC = N.map(([nx, ny]) => clamp(-(nx * LIGHT[0] + ny * LIGHT[1]) * 1.8, -1, 1));
       const flank = (u, i) => { const k = ch[i], [x, y] = base(i), rk = r[k] * u * darkC[i]; return [x + N[i][0] * rk, y + N[i][1] * rk, boneOf[k], node(i)]; };
-      strand(ch.map((k, i) => flank(0.48, i)), k => -r[k] * 0.95, k => 0.27 * wood(k, 1) * lap(k), t0 + 0.05, t1 + 0.05, SHADE_FLAT);
-      if (big) strand(ch.map((k, i) => flank(0.6, i)), k => -r[k] * 0.5, k => 0.28 * wood(k, 1) * lap(k), t0 + 0.06, t1 + 0.06, SHADE_FLAT);
+      clipped(c, ch.map((k, i) => flank(0.48, i)), k => -r[k] * 0.95, k => 0.27 * wood(k, 1) * lap(k), t0 + 0.05, t1 + 0.05, SHADE_FLAT);
+      if (big) clipped(c, ch.map((k, i) => flank(0.6, i)), k => -r[k] * 0.5, k => 0.28 * wood(k, 1) * lap(k), t0 + 0.06, t1 + 0.06, SHADE_FLAT);
       // cross-contours: hatching that curves round the limb on its shaded half, the way
       // a pen describes a cylinder seen from below
       if (rr > 0.008) for (let i = ch[0] === 0 ? 0 : 1; i < m - 1; i++) {
@@ -436,7 +299,7 @@ export function buildMaple(date = new Date(), seed = 20261104) {
             const u = lerp(u0, 0.97, z / 4), o = bow * Math.sqrt(1 - u * u);
             arc.push([cx + nx * rk * u + tx * o, cy + ny * rk * u + ty * o, boneOf[q], q]);
           }
-          if (blocked(c, arc[0][0], arc[0][1]) || blocked(c, arc[4][0], arc[4][1])) continue;
+          if (blocked(c, arc[0][0], arc[0][1], false, Z[q]) || blocked(c, arc[4][0], arc[4][1], false, Z[q])) continue;
           strand(arc, 0.8, R(0.26, 0.42) * wood(k, 1), tAt(i) + 0.04, tAt(i) + 0.05, PEN);
         }
       }
@@ -453,7 +316,7 @@ export function buildMaple(date = new Date(), seed = 20261104) {
             for (let q = i; q <= stop; q++) {
               drift = clamp(drift + R(-0.035, 0.035), -0.3, 0.3);
               const sv = clamp(s0 + drift + amp * Math.sin(G.dist[ch[q]] * fq + ph), -0.93, 0.93), p = off(q, sv);
-              if (blocked(c, p[0], p[1])) break;
+              if (blocked(c, p[0], p[1], false, Z[p[3]])) break;
               run.push(p); l += -dark[q] * Math.sign(sv) * Math.abs(sv);
             }
             if (run.length > 1) {
@@ -476,7 +339,9 @@ export function buildMaple(date = new Date(), seed = 20261104) {
       }
     } else {
       // (laid lighter as it thickens, so it doesn't read darker than the limbs drawn in outline)
-      poly(pts, f => -1.9 * r[at(f)], f => (r[at(f)] > 0.0015 ? lerp(0.7, 0.4, smooth(0.0022, 0.0042, r[at(f)])) : 0.5) * wood(at(f), 1), t0, t1, TWIG_INK);
+      // (lifted where it passes behind a nearer limb)
+      const tw = pts.map((p, i) => [p[0], p[1], p[2], ch[Math.max(1, i)]]);
+      clipped(c, tw, k => -1.9 * r[k], k => (r[k] > 0.0015 ? lerp(0.7, 0.4, smooth(0.0022, 0.0042, r[k])) : 0.5) * wood(k, 1), t0, t1, TWIG_INK);
     }
   }
   // the roots themselves: a wash, a lit upper edge, a lower edge sinking into the soil,
@@ -495,6 +360,32 @@ export function buildMaple(date = new Date(), seed = 20261104) {
     for (let i = 1; i < m - 2; i++) {
       const p = pts[i], [nx, ny] = nrm[i];
       line(p[0] - nx * p[2] * 0.05, p[1] - ny * p[2] * 0.05, ROOT, p[0] - nx * p[2] * 0.75 + s * 0.001, p[1] - ny * p[2] * 0.75, ROOT, 0.7, 0.24, 0.16, 0.01, PEN);
+    }
+  }
+
+  /* knots: where the tree shed a branch, the bark has closed over the stub in a ring */
+  for (const kn of G.knots) {
+    const k = kn.k, p = Par[k];
+    if (p < 0 || r[k] < 0.0055 || !Kids[k].length) continue;
+    const q = Kids[k][0], dx = X[q] - X[p], dy = Y[q] - Y[p], dl = Math.hypot(dx, dy) || 1, nx = -dy / dl, ny = dx / dl;
+    // where on the limb it sits: a stub that pointed sideways shows near the edge, one
+    // that pointed at or away from us shows on the face
+    const s = clamp(kn.d[0] * nx + kn.d[1] * ny, -0.75, 0.75);
+    const x = X[k] + nx * r[k] * s, y = Y[k] + ny * r[k] * s, z = Z[k] + r[k];
+    if (hidden(chainAt[k] >= 0 ? chainAt[k] : 0, x, y, z)) continue;
+    const kr = clamp(kn.r, 0.0018, r[k] * 0.5), rot = Math.atan2(dy, dx), b = boneOf[k], t = tNode(k) + 0.06;
+    circle(x, y, kr, 0.85, 0.6 * wood(k, 1), t, PEN, b, 12, kr * 0.62 * (1 - 0.5 * Math.abs(s)), rot);
+    circle(x, y, kr * 0.45, 0.7, 0.45 * wood(k, 1), t + 0.01, PEN, b, 8, kr * 0.3, rot);
+    line(x - Math.cos(rot) * kr * 0.2, y - Math.sin(rot) * kr * 0.2, b, x + Math.cos(rot) * kr * 0.2, y + Math.sin(rot) * kr * 0.2, b, -kr * 0.5, 0.35 * wood(k, 1), t + 0.01, 0.01, PEN);
+    // the bark puckers round it: a couple of curved lines above and below
+    for (const side of [-1, 1]) {
+      const arc = [];
+      for (let i = 0; i <= 5; i++) {
+        const u = (i / 5 - 0.5) * 2.2, ex = Math.cos(rot) * kr * u * 1.6, ey = Math.sin(rot) * kr * u * 1.6;
+        const off = side * kr * (0.95 + 0.5 * (1 - u * u / 1.21));
+        arc.push([x + ex - Math.sin(rot) * off, y + ey + Math.cos(rot) * off, b]);
+      }
+      poly(arc, 0.7, 0.4 * wood(k, 1), t + 0.02, t + 0.03, PEN);
     }
   }
 
@@ -582,7 +473,7 @@ export function buildMaple(date = new Date(), seed = 20261104) {
   for (const k of tips) {
     const pf = fr(), pk = fr(), nkeys = 2 + Math.floor(fr() * 3), sway = fr() * 2 - 1;
     const b = boneOf[k], t = Math.min(0.95, tNode(k) + 0.1);
-    if (pf < 0.55 * S.flowers) {
+    if (pf < 0.3 * S.flowers) {
       const len = 0.012 + 0.009 * fr(), pts = [];
       let x = X[k], y = Y[k], th = -Math.PI / 2 + 0.5 * sway;
       for (let i = 0; i <= 6; i++) { pts.push([x, y]); th += (-Math.PI / 2 - th) * 0.25; x += Math.cos(th) * len / 6; y += Math.sin(th) * len / 6; }
@@ -594,7 +485,7 @@ export function buildMaple(date = new Date(), seed = 20261104) {
       }
       line(pts[1][0], pts[1][1], fb, pts[5][0], pts[5][1], fb, -0.009, 0.12, t + 0.03, 0.03, [0.88, 0.87, 0.5, 0.5]);
     }
-    if (pk < 0.24 * S.keys) {
+    if (pk < 0.12 * S.keys) {
       const hidden = P > 0.5 && P < 2.9 ? 0.55 : 1;   // among summer leaves they are hard to see
       for (let j = 0; j < nkeys; j++) {
         const sl = 0.004 + 0.003 * fr(), sa = -Math.PI / 2 + (fr() - 0.5) * 1.2;
@@ -669,6 +560,8 @@ export function buildMaple(date = new Date(), seed = 20261104) {
   }
   /* grass and wildflowers. Plants stand in the same places every year (their own random
      stream); the date decides which are up, in leaf or in flower */
+  // the spot the lidar note calls bare earth is kept bare
+  const bare = x => Math.abs(x - LIDAR_X) < 0.05;
   const gr = mulberry32(seed + 13), GR = (a, b) => a + (b - a) * gr();
   /* the snow's surface: a lying depth that undulates, a drift the west wind piles against
      the trunk's windward side (left), the hollow it scoops in the lee, and little tails of
@@ -691,7 +584,7 @@ export function buildMaple(date = new Date(), seed = 20261104) {
   const ppoly = (pts, w, ink, t0, t1, c) => poly(pts.map(p => [ox + (p[0] - ox) * GS, oy + (p[1] - oy) * GS, p[2]]), w, ink, t0, t1, c);
   for (let i = 0; i < 90; i++) {
     const x = GR(-0.5, 0.5), nb = Math.floor(GR(3, 8)), lk = GR(0.85, 1.15), seedy = gr();
-    if (Math.abs(x) < 0.04) continue;
+    if (Math.abs(x) < 0.04 || bare(x)) continue;
     const y = groundY(x), b = sway(x, y, 0.012), over = S.snow > 0.2;
     for (let k = 0; k < nb; k++) {
       const a = (90 + GR(-30, 30) * (S.grassLen < 0.8 ? 1.3 : 1)) * DEG, l = GR(0.004, 0.013) * S.grassLen * lk;
@@ -718,7 +611,7 @@ export function buildMaple(date = new Date(), seed = 20261104) {
     }
   }
   // plants that come up in the same spot each year
-  const plant = (n, x0, x1) => Array.from({ length: n }, () => { const x = GR(x0, x1); return { x, y: groundY(x), r: [gr(), gr(), gr(), gr()] }; });
+  const plant = (n, x0, x1) => Array.from({ length: n }, () => { const x = GR(x0, x1); return { x, y: groundY(x), r: [gr(), gr(), gr(), gr()] }; }).filter(p => !bare(p.x));
   const fores = plant(5, -0.34, 0.34).filter(p => Math.abs(p.x) > 0.07);   // the shade under the crown
   const opens = plant(7, -0.5, 0.5).filter(p => Math.abs(p.x) > 0.22);    // the open grass beyond it
   // Oregon grape: a low evergreen shrub of spiny leaflets, yellow in spring, blue berries late summer
@@ -855,12 +748,12 @@ export function buildMaple(date = new Date(), seed = 20261104) {
     for (let x = xr; x < xr + 0.09; x += 0.006) line(x, snowY(x) - 0.003, ROOT, x + 0.008, snowY(x + 0.008) - 0.003, ROOT, -0.007, 0.12 * S.snow, 0.33, 0.02, late([0.62, 0.68, 0.82, 0.6]));
     for (let x = xl - 0.1; x < xl; x += 0.008) line(x, snowY(x) - 0.006, ROOT, x + 0.01, snowY(x + 0.01) - 0.006, ROOT, -0.009, 0.06 * S.snow, 0.33, 0.02, late([0.62, 0.68, 0.82, 0.6]));
     if (S.snow > 0.4) for (const ch of chains) {
-      if (ch.length < 3 || r[ch[1]] < 0.0042) continue;
+      if (ch.length < 3 || r[ch[1]] < 0.008) continue;
       for (let i = 1; i < ch.length - 1; i++) {
         const k = ch[i], q = ch[i + 1], dx = X[q] - X[k], dy = Y[q] - Y[k], L = Math.hypot(dx, dy) || 1;
         if (Math.abs(dy / L) > 0.72 || Y[k] < 0.1) continue;
         let nx = -dy / L, ny = dx / L; if (ny < 0) { nx = -nx; ny = -ny; }
-        const c = Math.min(0.006, r[k] * 0.55) * (1 - Math.abs(dy / L) / 0.72) * S.snow, b = boneOf[q];
+        const c = Math.min(0.004, r[k] * 0.35) * (1 - Math.abs(dy / L) / 0.72) * S.snow, b = boneOf[q];
         const o0 = r[k] * 0.55, o1 = r[k] + c, mid = (o0 + o1) / 2;
         line(X[k] + nx * mid, Y[k] + ny * mid, b, X[q] + nx * mid, Y[q] + ny * mid, b, -(o1 - o0), 1, tNode(q) + 0.12, 0.01, [1, 1, 1, -2]);
         line(X[k] + nx * o1, Y[k] + ny * o1, b, X[q] + nx * o1, Y[q] + ny * o1, b, 0.8, 0.55, tNode(q) + 0.13, 0.01, late(GRAPHITE));
@@ -892,7 +785,7 @@ export function buildMaple(date = new Date(), seed = 20261104) {
     label(xd + 0.014, (groundY(xd) + top) / 2, `${(top * 25).toFixed(1)} m &middot; canopy height`, { anchor: "c", rot: -90, t: 0.88, cls: "dim" });
 
     // one lidar pulse: first return off the canopy (or, in winter, a limb), last return on bare earth
-    const xr = -0.37;
+    const xr = LIDAR_X;
     let hit = 0;
     for (let i = 0; i < treeEnd; i++) {
       for (const kk of [0, 2]) { const x = seg[i * 4 + kk], y = seg[i * 4 + kk + 1]; if (Math.abs(x - xr) < 0.003 && y > hit && y < 1.05) hit = y; }
