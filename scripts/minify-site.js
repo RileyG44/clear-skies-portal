@@ -57,7 +57,9 @@ function shrinkHtml(rel) {
   const before = fs.readFileSync(file, "utf8");
   const after = before
     .replace(/(<script(?![^>]*\bsrc=)[^>]*>)([\s\S]*?)(<\/script>)/gi,
-      (m, open, code, close) => open + esbuild.transformSync(code, Object.assign({ loader: "js" }, JS_OPTS)).code + close)
+      (m, open, code, close) => /\btype\s*=\s*["'](?:importmap|application\/ld\+json)["']/i.test(open)
+        ? open + JSON.stringify(JSON.parse(code)) + close
+        : open + esbuild.transformSync(code, Object.assign({ loader: "js" }, JS_OPTS)).code + close)
     .replace(/(<style[^>]*>)([\s\S]*?)(<\/style>)/gi,
       (m, open, css, close) => open + esbuild.transformSync(css, { loader: "css", minify: true }).code + close);
   if (after.length >= before.length) return 0;

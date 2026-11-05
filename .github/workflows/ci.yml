@@ -98,7 +98,7 @@ jobs:
         run: npm ci --ignore-scripts
 
       - name: Assemble the static site
-        run: python3 scripts/assemble-site.py . _site
+        run: python3 scripts/assemble-site.py . _site --pages
 
       # The repo stays readable (check-static asserts exact strings, and the tests
       # run against the sources); only the shipped bytes are compacted.

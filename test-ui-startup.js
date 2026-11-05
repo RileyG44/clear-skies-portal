@@ -747,7 +747,7 @@ async function splashManifest(){
     caches:{open:async()=>({put:async(_url,response)=>{stored=await response.text()}}),keys:async()=>[],
       match:async req=>{const url=typeof req==="string"?req:req?.url||"";
         if(String(url).includes("csp-map-theme")&&themeText)return {text:async()=>themeText};
-        if(String(url).includes("index.html"))return shell();
+        if(new URL(url,"https://portal.test/").pathname==="/")return shell();
         return null}},
     fetch:async req=>{
       if(offline)throw new Error("offline");
@@ -766,7 +766,7 @@ async function splashManifest(){
   themeText="light";
   const light=await (await ask()).json();
   assert.equal(light.background_color,"#dbe6eb");assert.equal(light.theme_color,"#dbe6eb");
-  const open=()=>new Promise(resolve=>events.fetch({request:{method:"GET",url:"https://portal.test/",mode:"navigate"},respondWith:p=>resolve(p)}));
+  const open=()=>new Promise(resolve=>events.fetch({request:{method:"GET",url:"https://portal.test/",mode:"navigate"},waitUntil:()=>{},respondWith:p=>resolve(p)}));
   themeText="";
   const first=await (await open()).text();
   assert(first.includes('media="(prefers-color-scheme: light)"'),"a first launch keeps the device theme-color until a theme is saved");
