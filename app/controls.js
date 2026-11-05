@@ -16,6 +16,11 @@ $("#mosaic").onchange=()=>{
 /* Surroundings match the scene actually drawn, not a selected catalog record
    that could not be displayed. */
 function displayedScene(){ return overlay&&overlay._cspItem||null }
+/* A person's chosen stack (for example imagery above terrain) applies to every
+   imagery layer published later: replacements, auto-fill, manual fill, swaps. */
+function applySavedSceneOrder(){
+  try{ const order=JSON.parse(localStorage.getItem("clearskies.active-layer-order.v1")||"null"); if(Array.isArray(order)&&order.includes("scene")) cspSetLayerOrder(order) }catch(error){}
+}
 $("#fillNow").onclick=()=>{ if(displayedScene()) fillMosaic(displayedScene(), true) };
 
 /* The layer list, counts and the iPhone shell redraw from csp:layers-changed.

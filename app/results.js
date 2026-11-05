@@ -296,8 +296,7 @@ async function select(i){
     if(previous&&map.hasLayer(previous)) map.removeLayer(previous);
     clearMosaic();
     next.setOpacity(+$("#op").value/100);next.setZIndex(400); overlay=next; next._cspItem=it;
-    // A person's chosen stack (for example imagery above terrain) applies to every new scene.
-    try{ const order=JSON.parse(localStorage.getItem("clearskies.active-layer-order.v1")||"null"); if(Array.isArray(order)&&order.includes("scene")) cspSetLayerOrder(order) }catch(error){}
+    if(typeof applySavedSceneOrder==="function") applySavedSceneOrder();
     nameEl.textContent=label;$("#ctlDate").textContent=it.date.slice(0,10)+"  ("+ago(it.date)+")";
     $("#ctlLink").innerHTML=linkHtml;nameEl.dataset.link="";
     sceneState(errors||loaded<expected?"partial":"shown",errors||loaded<expected?"Some tiles are missing; the basemap shows through the gaps.":"");
