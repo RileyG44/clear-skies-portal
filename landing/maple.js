@@ -433,14 +433,19 @@ export function buildMaple(date = new Date(), seed = 20261104) {
 
   /* ---------- foliage ---------- */
   let accent = [0, 0, 0], aw = 0;
+  // where the crown is many leaves deep (its middle, seen through all its depth) the
+  // washes would multiply to near black; a sketcher draws only as many as read as foliage
+  const DEEP = 4.5;
   for (const L of out) {
+    const cc = cov.get(ck(L.x, L.y)) || 0;
+    if (cc > DEEP && (L.keep * 7.31) % 1 > DEEP / cc) continue;
     const A = L.A, g = A < 0.95 ? 0.3 + 0.7 * smooth(0.1, 0.95, A) : A > 3.1 ? 0.85 : 1;
     let c = mul(S.leaf(A + L.jit), L.v);
-    c = L.lit > 0.5 ? mix(c, WHITE, (L.lit - 0.5) * 0.32) : mix(mul(c, [0.74, 0.76, 0.84]), c, L.lit * 2);
+    c = L.lit > 0.5 ? mix(c, WHITE, (L.lit - 0.5) * 0.32) : mix(mul(c, [0.84, 0.85, 0.9]), c, L.lit * 2);
     c = c.map(v => clamp(v, 0, 1));
     accent = accent.map((v, i) => v + c[i]); aw++;
     const b = boneOf[L.k], s = L.sz * g, t = Math.min(0.93, tNode(L.k) + 0.07 + DR(0, 0.08));
-    const ink = lerp(0.8, 0.5, L.lit);
+    const ink = lerp(0.66, 0.48, L.lit);
     const lobes = DR(0, 1) < 0.55 ? [-1.75, -0.85, 0, 0.85, 1.75] : [-0.85, 0, 0.85];
     // a leaf held at a slant is foreshortened along one axis
     const tilt = DR(0, 1) < 0.4 ? DR(0.35, 0.7) : 1, ua = DR(0, 3.14), ux = Math.cos(ua), uy = Math.sin(ua);
@@ -450,7 +455,7 @@ export function buildMaple(date = new Date(), seed = 20261104) {
       const pr = (vx * ux + vy * uy) * (1 - tilt); vx -= pr * ux; vy -= pr * uy;
       line(L.x, L.y, b, L.x + vx, L.y + vy, b, DR(2.1, 2.9) * (0.7 + 0.3 * g), ink * DR(0.88, 1.04), t, 0.012, c);
     }
-    if (L.shade < 0.3 && L.lit < 0.55) { // a few pen touches in the shadowed leaves
+    if (L.shade < 0.14 && L.lit < 0.5) { // a few pen touches in the shadowed leaves
       const a = L.th + DR(-1, 1);
       line(L.x, L.y, b, L.x + Math.cos(a) * s * 0.9, L.y + Math.sin(a) * s * 0.9, b, 0.8, 0.4, t + 0.01, 0.01, PEN);
     }
@@ -505,8 +510,9 @@ export function buildMaple(date = new Date(), seed = 20261104) {
     const pool = out.filter(L => L.e > 0.75 && L.y < 0.62 && L.A > 2.5);
     for (let i = 0; i < S.falling && pool.length; i++) {
       const L = pool[Math.floor(DR(0, pool.length))];
-      const x = L.x + DR(-0.03, 0.03), y = L.y - DR(0.01, 0.04);
-      const fb = bone(ROOT, x, y, x, y + 0.01, KIND.FALL, 1, 0, 0.01, 0.01);
+      // each one starts on the tree, among the leaves it belongs to, and lets go later
+      const x = L.x, y = L.y;
+      const fb = bone(ROOT, x, y, x, y + 0.01, KIND.FALL, 1, 0, 0.01, 2 + groundY(x) + 0.002);
       const c = S.leaf(L.A + DR(0, 0.25));
       for (const o of [-0.85, 0, 0.85]) line(x, y, fb, x + Math.cos(L.th + o) * 0.006, y + Math.sin(L.th + o) * 0.006, fb, 2, 0.85, 0.95, 0.02, c);
     }
@@ -561,7 +567,7 @@ export function buildMaple(date = new Date(), seed = 20261104) {
   /* grass and wildflowers. Plants stand in the same places every year (their own random
      stream); the date decides which are up, in leaf or in flower */
   // the spot the lidar note calls bare earth is kept bare
-  const bare = x => Math.abs(x - LIDAR_X) < 0.05;
+  const bare = x => x > LIDAR_X - 0.13 && x < LIDAR_X + 0.05;   // (the note itself sits to its left)
   const gr = mulberry32(seed + 13), GR = (a, b) => a + (b - a) * gr();
   /* the snow's surface: a lying depth that undulates, a drift the west wind piles against
      the trunk's windward side (left), the hollow it scoops in the lee, and little tails of

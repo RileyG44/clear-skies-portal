@@ -752,11 +752,16 @@ export function createSketch(canvas, layer, opts = {}) {
   }
   const P = { gain: opts.gain ?? 2.4, breeze: opts.breeze ?? 0.16, decay: 0.72 };
 
-  /* falling leaves: FALL bones drift down from where they hang, tumbling, then start over */
+  /* falling leaves: FALL bones drift down from where they hang, tumbling, then start over.
+     ext says where one lands (y is a ground height, within a few hundredths of 0): near 0,
+     the default ground; 1 + y, at height y; 2 + y, at height y, and it starts out hanging
+     where it was drawn (a leaf on the tree) and lets go after a while, instead of starting
+     somewhere mid-fall (a snowflake) */
   const offX = new Float32Array(n), offY = new Float32Array(n), fall = [];
   for (let b = 0; b < n; b++) if (Bn.kind[b] === KIND.FALL) {
-    fall.push({ b, t: Math.random() * 14, v: 0.035 + Math.random() * 0.025, drift: 0.012 + Math.random() * 0.02,
-      amp: 0.012 + Math.random() * 0.018, w: 1.2 + Math.random() * 1.2, ph: Math.random() * 6.28, rest: 0 });
+    const hangs = Bn.ext[b] >= 1.5;
+    fall.push({ b, t: hangs ? 0 : Math.random() * 14, v: 0.035 + Math.random() * 0.025, drift: 0.012 + Math.random() * 0.02,
+      amp: 0.012 + Math.random() * 0.018, w: 1.2 + Math.random() * 1.2, ph: Math.random() * 6.28, rest: hangs ? 0.6 + Math.random() * 9 : 0 });
   }
   function falling(dt) {
     for (const f of fall) {
@@ -764,8 +769,7 @@ export function createSketch(canvas, layer, opts = {}) {
       if (f.rest > 0) { f.rest -= dt; if (f.rest <= 0) f.t = 0; continue; }
       f.t += dt;
       let y = -f.v * f.t;
-      // the ground sits near y = 0; a bone may name its own landing height as 1 + y in ext
-      const land = (Bn.ext[f.b] >= 1 ? Bn.ext[f.b] - 1 : 0.004) - oy;
+      const e = Bn.ext[f.b], land = (e >= 1.5 ? e - 2 : e >= 0.5 ? e - 1 : 0.004) - oy;
       if (y < land) { y = land; f.rest = 2.5 + Math.random() * 4; }
       offY[f.b] = y;
       offX[f.b] = f.drift * f.t + f.amp * Math.sin(f.t * f.w + f.ph);
