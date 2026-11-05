@@ -16,13 +16,13 @@ function cspActiveLayers(){
       opacity:+$("#terOp").value,visible:true,kind:"terrain"});
   }
   if($("#elevSh").checked){
-    layers.push({id:"elevation-spectrum",name:"Elevation spectrum",
-      meta:`Reference ${$("#elevVal").value} ${$("#elevUnit").value} · span ${$("#elevSpan").value} ft`,
+    layers.push({id:"elevation-spectrum",name:"Color by elevation",
+      meta:`Reference ${elevFormat(elevMetres())} · span ±${elevFormat(elevSpanMetres())}`,
       opacity:+$("#elevAlpha").value,visible:true,kind:"analysis"});
   }
   if($("#elevBelowOn").checked||$("#elevAboveOn").checked){
     layers.push({id:"elevation-bands",name:"Elevation highlights",
-      meta:"Below / above range shading · Elevation",
+      meta:[$("#elevBelowOn").checked&&`Below ${(+$("#elevBelowVal").value||0).toLocaleString()} ${elevUnitKey()}`,$("#elevAboveOn").checked&&`Above ${(+$("#elevAboveVal").value||0).toLocaleString()} ${elevUnitKey()}`].filter(Boolean).join(" · "),
       opacity:+$("#elevBandAlpha").value,visible:true,kind:"analysis"});
   }
   for(const entry of researchStack.slice().reverse()){
@@ -306,7 +306,7 @@ async function cspRestoreShareState(state){
   const mosaicChoice=$("#mosaic").checked;$("#mosaic").checked=false;
   terrainLooks[$("#terStyle").value]={...state.terrainLook};
   if(state.studio){if(lidarStudio)lidarStudio.restoreDisplay(state.studio);else warnings.push("The shared terrain mix is unavailable in this renderer.")}
-  syncTerrainLookControls();syncTerrainLighting();syncSpectrumPalette();syncElevSpanSlider();syncElevationChecks();
+  syncTerrainLookControls();syncTerrainLighting();syncElevationFromControls();syncSpectrumPalette();syncElevSpanSlider();syncElevationChecks();
   PREV_DAYS=+$("#days").value;syncDateUI();syncChecks();
   setMapTheme(state.theme,false);
   await B.restoreSession({...state.view,mode:"2d"});

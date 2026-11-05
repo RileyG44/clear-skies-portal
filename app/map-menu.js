@@ -152,7 +152,7 @@ async function fetchGeologyAt(ll){
   }
 }
 async function identifyGeologyAt(ll,openPane){
-  if(openPane) openResearchAt(ll); else setLoc(ll.lat,ll.lng,true);
+  if(openPane) openResearchAt(ll,"geology"); else setLoc(ll.lat,ll.lng,true);
   const output=$("#geologyOut"),button=$("#geologyIdentify"),token=++geologyIdentifyToken;
   output.innerHTML='<span class="spin"></span> Reading mapped surface units…';
   button.disabled=true;
@@ -235,9 +235,14 @@ document.addEventListener("keydown",event=>{
     event.preventDefault();hideCoordinateMenu();$("#coordOpen").focus({preventScroll:true});
   }
 });
-function openResearchAt(ll){
+/* The research pane holds two route-scoped groups: Analyze shows the terrain
+   tools and Geology & hazards shows point identification. Opening the pane
+   without its route left the requested tool hidden, so always route first. */
+function openResearchAt(ll,route="analyze"){
+  document.dispatchEvent(new CustomEvent("csp:open-route",{detail:{route}}));
   setCollapsed(false);paneState.min.research=false;applyPanes();savePanes();
-  const pane=paneEl("research");pane?.scrollIntoView({behavior:matchMedia("(prefers-reduced-motion: reduce)").matches?"auto":"smooth",block:"start"});
+  const target=route==="geology"?$("#geologyIdentifyBox"):paneEl("research");
+  requestAnimationFrame(()=>target?.scrollIntoView({behavior:matchMedia("(prefers-reduced-motion: reduce)").matches?"auto":"smooth",block:"start"}));
   setLoc(ll.lat,ll.lng,true);setCount("research",`${ll.lat.toFixed(3)}, ${ll.lng.toFixed(3)}`);
 }
 map.on("contextmenu",e=>{
@@ -262,7 +267,7 @@ map.on("contextmenu",e=>{
     `<div class="m" role="menuitem" tabindex="-1" data-action="search"><div class="a">Search imagery here</div><div class="b">${ll.lat.toFixed(6)}, ${ll.lng.toFixed(6)}</div></div>`+
     `<div class="m" role="menuitem" tabindex="-1" data-action="geology"><div class="a">Identify surface geology here</div><div class="b">Shows every overlapping map compilation</div></div>`+
     `<div class="m" role="menuitem" tabindex="-1" data-action="research"><div class="a">Open terrain research tools here</div></div>`+
-    `<div class="m ${SEL==null?"disabled":""}" role="menuitem" tabindex="${SEL==null?"-1":"0"}" aria-disabled="${SEL==null}" data-action="fill"><div class="a">Fill surroundings for this viewport</div><div class="b">${SEL==null?"Select a scene first":"Uses the best available matching images"}</div></div>`;
+    `<div class="m ${!displayedScene()?"disabled":""}" role="menuitem" tabindex="${!displayedScene()?"-1":"0"}" aria-disabled="${!displayedScene()}" data-action="fill"><div class="a">Fill surroundings for this viewport</div><div class="b">${!displayedScene()?"Show a scene first":"Uses the best available matching images"}</div></div>`;
   menuEl.style.display="block";positionMapMenu(e.originalEvent.clientX,e.originalEvent.clientY);
   menuEl.querySelectorAll("[role=menuitem]").forEach(el=>el.onclick=async()=>{
     if(el.getAttribute("aria-disabled")==="true") return;
@@ -280,7 +285,7 @@ map.on("contextmenu",e=>{
     }
     else if(action==="geology") await identifyGeologyAt(ll,true);
     else if(action==="research") openResearchAt(ll);
-    else if(action==="fill"&&SEL!=null) fillMosaic(ITEMS[SEL],true);
+    else if(action==="fill"&&displayedScene()) fillMosaic(displayedScene(),true);
   });
   requestAnimationFrame(()=>menuEl.querySelector('[role="menuitem"]:not([aria-disabled="true"])')?.focus({preventScroll:true}));
 });
@@ -309,9 +314,9 @@ document.addEventListener("keydown",e=>{
    ran for the checkbox, so a fill started from the button never followed the
    map. */
 map.on("moveend", ()=>{
-  if((!MOSAIC_ON&&!MOSAIC_ONCE) || SEL==null) return;
+  if((!MOSAIC_ON&&!MOSAIC_ONCE) || !displayedScene()) return;
   clearTimeout(mosTimer);
-  mosTimer=setTimeout(()=>fillMosaic(ITEMS[SEL],MOSAIC_ONCE), 450);
+  mosTimer=setTimeout(()=>{ if(displayedScene()) fillMosaic(displayedScene(),MOSAIC_ONCE) }, 450);
 });
 map.on("movestart zoomstart",()=>{
   if(!mosAbort&&!PENDING_NEIGH.size) return;

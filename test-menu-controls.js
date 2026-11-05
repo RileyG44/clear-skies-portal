@@ -20,11 +20,12 @@ function spanChecks(){
   const nodes=elements(),context={$:nodes.get,document:{activeElement:null},Event:class {constructor(type){this.type=type}},
     scheduleElevPaint(){context.paints++},saveTerrainPrefs(){context.saves++},applyElev(){context.paints++},paints:0,saves:0};
   vm.createContext(context);
-  vm.runInContext(between('function elevSpanPosition(', 'function elevSpanMetres(')+
+  // The span reads and writes through the page's unit helpers (feet by default).
+  vm.runInContext(between('const ELEV_UNIT=', 'function elevSpanMetres(')+
     between('$("#elevSpan").addEventListener("input"', '$("#elevAlpha").addEventListener("input"'),context);
   const number=nodes.get('#elevSpan'),slider=nodes.get('#elevSpanSlide');
   number.value=1200;number.dispatchEvent(new context.Event('input'));
-  assert.equal(slider.value,630);assert.equal(slider.attributes['aria-valuetext'],'1,200 feet');
+  assert.equal(slider.value,630);assert.equal(slider.attributes['aria-valuetext'],'1,200 ft');
   number.value=49;number.dispatchEvent(new context.Event('input'));
   assert.equal(number.value,49,'numeric entry preserves an exact value near a preset');
   context.document.activeElement=slider;

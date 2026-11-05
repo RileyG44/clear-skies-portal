@@ -58,25 +58,35 @@ function renderPasses(){
      not from orbital elements. Accurate to a few hours; acquisition is not guaranteed on every pass.</div>`;
 }
 
+/* Best match: one obvious first choice, two quick alternatives, and the size
+   of the catalog behind them. Real buttons, so keyboards reach them too. */
 function summarise(pool){
   const el=$("#summary");
   showPane("summary", pool.length>0);
-  if(!pool.length){ el.innerHTML=""; return }
+  if(!pool.length){ el.innerHTML=""; setCount("summary",""); return }
   const byDate=pool.slice().sort((a,b)=>new Date(b.date)-new Date(a.date));
   const newest=byDate[0];
   const photo=bestPhoto(pool);
-  const sharp=pool.slice().sort((a,b)=>(a.gsd??1e9)-(b.gsd??1e9))[0];
+  const sharp=pool.slice().sort((a,b)=>(a.gsd??1e9)-(b.gsd??1e9)||(new Date(b.date)-new Date(a.date)))[0];
   const srcs=new Set(pool.map(x=>x.src)).size;
-  const row=(k,it,extra)=> it
-    ? `<div class="srow" data-id="${esc(it.id)}"><span class="k">${k}</span> <b>${esc(it.label)}</b> &middot; ${ago(it.date)}${extra||""}</div>`
+  const current=SEL!=null?ITEMS[SEL]:null,isCurrent=it=>!!(it&&current&&it.id===current.id&&it.src===current.src);
+  const provider=it=>esc(it.src.split(" ")[0]);
+  const meta=it=>[ago(it.date),res(it.gsd),it.cloud!=null?it.cloud.toFixed(0)+"% cloud":"",provider(it)].filter(Boolean).join(" &middot; ");
+  const main=photo
+    ? `<button type="button" class="csp-best-main" data-id="${esc(photo.id)}" data-src="${esc(photo.src)}" aria-pressed="${isCurrent(photo)}">
+        <span class="csp-best-k">${isCurrent(photo)?"Showing best clear image":"Show best clear image"}</span>
+        <strong>${esc(photo.label)} &middot; ${esc(photo.date.slice(0,10))}</strong>
+        <span class="csp-best-meta">${meta(photo)}</span>
+      </button>`
+    : `<p class="csp-best-none">No clear daylight photo matches these filters. Try a wider time window or Any cloud.</p>`;
+  const chip=(k,it,detail)=>it&&it!==photo
+    ? `<button type="button" class="csp-best-chip" data-id="${esc(it.id)}" data-src="${esc(it.src)}" aria-pressed="${isCurrent(it)}"><span>${k}</span><b>${esc(it.label)}</b><small>${detail}${it.tiles?"":" &middot; outline only"}</small></button>`
     : "";
-  el.innerHTML =
-    row("Newest", newest, ` &middot; ${res(newest.gsd)} <span style="color:var(--ink-3)">(${esc(newest.src.split(" ")[0])})</span>`)+
-    row("Best photo", photo, photo ? ` &middot; ${res(photo.gsd)}${photo.cloud!=null?" &middot; "+photo.cloud.toFixed(0)+"% cloud":""}` : "")+
-    row("Sharpest", sharp, ` &middot; ${res(sharp.gsd)}`)+
-    `<div><span class="k">Coverage</span> ${pool.length} scenes across ${srcs} sources</div>`;
-  el.querySelectorAll(".srow").forEach(r=>r.onclick=()=>{
-    const i=ITEMS.findIndex(x=>x.id===r.dataset.id); if(i>=0) select(i);
+  const chips=chip("Newest",newest,`${ago(newest.date)} &middot; ${provider(newest)}`)+chip("Sharpest",sharp,`${res(sharp.gsd)} &middot; ${ago(sharp.date)}`);
+  el.innerHTML=main+(chips?`<div class="csp-best-alt">${chips}</div>`:"")+
+    `<div class="csp-best-cover">${pool.length.toLocaleString()} matching scenes from ${srcs} ${srcs===1?"source":"sources"}, listed below</div>`;
+  el.querySelectorAll("button[data-id]").forEach(button=>button.onclick=()=>{
+    const i=ITEMS.findIndex(x=>x.id===button.dataset.id&&x.src===button.dataset.src); if(i>=0) select(i);
   });
   setCount("summary", pool.length+" scenes");
 }
@@ -125,10 +135,17 @@ function render(enter=false){
   if(!ITEMS.length){
     resEl.innerHTML = LOC ? '<div class="empty">No imagery found.<br>Widen the date range or cloud filter.</div>'
                           : `<div class="empty">No search yet.<br>Try <b>Moses Lake</b>, <b>Zermatt</b>, or double-${MAP_TAP} the map.</div>`;
-    setCount("results","");
+    setCount("results","");summarise([]);
     return;
   }
   const mode=$("#sort").value, pool=resultPool();
+  if(!pool.length){
+    summarise(pool);
+    resEl.innerHTML=`<div class="empty">None of the ${ITEMS.length.toLocaleString()} scenes match these list filters.<br><button type="button" class="linkbtn" data-show-all>Show all scene types</button></div>`;
+    setCount("results","0 of "+ITEMS.length);
+    resEl.querySelector("[data-show-all]").onclick=()=>{$("#vis").value="all";$("#viewable").checked=false;$("#viewable").dispatchEvent(new Event("change"));$("#vis").dispatchEvent(new Event("change"))};
+    return;
+  }
   const groups={};
   for(const it of pool) (groups[it.src] ||= []).push(it);
   const itemIndex=new Map(ITEMS.map((it,i)=>[it,i]));
@@ -192,8 +209,11 @@ async function select(i){
   if(!it) return;
   if(+$("#op").value===0) $("#op").value=+$("#op").dataset.lastVisible||100;
   showSceneControls();
-  $("#ctlName").textContent=it.label+"  ·  "+it.src;
-  $("#ctlDate").textContent=it.date.slice(0,10)+"  ("+ago(it.date)+")";
+  /* #ctlName/#ctlDate name only what is actually drawn. The request being
+     loaded, and why it could not replace the picture, live in its dataset. */
+  const nameEl=$("#ctlName"),label=it.label+"  ·  "+it.src,shown=()=>!!(overlay&&map.hasLayer(overlay));
+  const sceneState=(state,note="")=>{nameEl.dataset.state=state;nameEl.dataset.note=note;nameEl.dataset.pending=state==="loading"?label:""};
+  sceneState("loading");
   const providerLink=safeHttpUrl(it.link);
   $("#ctlLink").innerHTML = providerLink?`<a href="${esc(providerLink)}" target="_blank" rel="noopener">Open in provider viewer &rarr;</a>`:"";
 
@@ -204,9 +224,9 @@ async function select(i){
     footprint=L.geoJSON(it.geom,{style:{color:"#4a9eff",weight:1.5,fill:false,dashArray:"4 3"}}).addTo(map);
   }
   if(!it.tiles){
-    clearMosaic();
-    if(overlay){ map.removeLayer(overlay); overlay=null }
-    $("#ctlName").textContent += "  (no map tiles)";
+    /* A catalog record without map tiles cannot replace useful imagery; draw
+       its outline and point to the provider instead. */
+    sceneState(shown()?"shown":"footprint",`${label} has no map tiles, so only its outline is drawn${providerLink?". Open it in the provider viewer":""}${shown()?". The scene below stays on the map.":"."}`);
     return;
   }
 
@@ -218,7 +238,7 @@ async function select(i){
   let url;
   try{ url=await tileUrl(it,controller.signal) }
   catch(e){
-    if(token===sceneToken) $("#ctlName").textContent+="  (imagery unavailable — kept previous scene)";
+    if(token===sceneToken) sceneState(shown()?"shown":"failed",`${label} is unavailable from its provider right now${shown()?"; the scene below stays on the map":""}.`);
     return;
   }
   if(token!==sceneToken) return;
@@ -238,14 +258,15 @@ async function select(i){
     if(!loaded||ratio<0.9){
       map.removeLayer(next);
       recordProviderOutcome(it.srcKey,performance.now()-started,false);
-      $("#ctlName").textContent+="  (imagery was too incomplete — kept previous scene)";
+      sceneState(shown()?"shown":"failed",`${label} loaded too few tiles to show${shown()?"; the scene below stays on the map":""}.`);
       return;
     }
     recordProviderOutcome(it.srcKey,performance.now()-started,true);
     if(previous&&map.hasLayer(previous)) map.removeLayer(previous);
     clearMosaic();
-    next.setOpacity(+$("#op").value/100);next.setZIndex(400); overlay=next;
-    if(errors||loaded<expected) $("#ctlName").textContent+="  (partial footprint; basemap preserved beneath)";
+    next.setOpacity(+$("#op").value/100);next.setZIndex(400); overlay=next; next._cspItem=it;
+    nameEl.textContent=label;$("#ctlDate").textContent=it.date.slice(0,10)+"  ("+ago(it.date)+")";
+    sceneState(errors||loaded<expected?"partial":"shown",errors||loaded<expected?"Some tiles are missing; the basemap shows through the gaps.":"");
     if(MOSAIC_ON||$("#mosaic").checked) fillMosaic(it);
   };
   next.on("tileload",()=>{ loaded++ });

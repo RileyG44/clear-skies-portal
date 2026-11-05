@@ -185,10 +185,10 @@ html[data-ui-theme="dark"] #cspStartup{background:#111416;color:#ebebeb}
   <p id="cspStartupMessage">Loading your map and tools…</p>
   <a id="cspStartupRetry" href="?reload=2026-10-24n">Reload portal</a>
 </section>
-<link rel="stylesheet" href="vendor/leaflet.css?build=2026-11-04g">
-<link rel="stylesheet" href="ui-base.css?build=2026-11-04g">
-<link rel="stylesheet" href="ui-theme.css?build=2026-11-04g">
-<link rel="stylesheet" href="ui-system.css?build=2026-11-04g">
+<link rel="stylesheet" href="vendor/leaflet.css?build=2026-11-05a">
+<link rel="stylesheet" href="ui-base.css?build=2026-11-05a">
+<link rel="stylesheet" href="ui-theme.css?build=2026-11-05a">
+<link rel="stylesheet" href="ui-system.css?build=2026-11-05a">
 <!-- inert until csp:ready: the transparent shell must not take focus or input. -->
 <div id="app" inert>
   <div id="side">
@@ -574,144 +574,139 @@ html[data-ui-theme="dark"] #cspStartup{background:#111416;color:#ebebeb}
           <span class="pane-n" id="n_elevation"></span>
           <span class="pane-x">&#9662;</span>
         </div>
-        <div class="pane-b">
-          <p class="control-hint">Turn on a height overlay, then open its settings to adjust it.</p>
-          <div class="fabbox" id="elevSpectrumBox">
-            <div class="elev-module-head">
-              <label class="check elev-toggle" id="lb_elevSh"><input type="checkbox" id="elevSh"> Elevation spectrum</label>
-              <button class="linkbtn" id="elevSpectrumReset" type="button">Reset</button>
-            </div>
-            <div id="elevOut" class="fabout"></div>
-            <details class="terrain-appearance elev-settings" id="elevPaletteBox">
-              <summary>Palette & colors</summary>
-              <div class="elev-settings-body">
-                <div class="elevRamp" id="elevPalettePreview" aria-hidden="true"></div>
-                <label for="elevPalette">Preset</label>
-                <select id="elevPalette" aria-label="Spectrum color preset">
-                  <option value="classic">Red / white / blue</option>
-                  <option value="orange-blue">Orange / cream / blue</option>
-                  <option value="terrain">Forest / sand / snow</option>
-                  <option value="ember">Ember</option>
-                  <option value="glacier">Glacier</option>
-                  <option value="viridis">Viridis</option>
-                  <option value="custom">Custom</option>
+        <div class="pane-b ev-page">
+          <section class="csp-menu-section ev-section" id="elevSpectrumSection" aria-labelledby="elevSpectrumHeading">
+            <div class="ev-section-head">
+              <h3 class="csp-section-label" id="elevSpectrumHeading">Color by elevation</h3>
+              <label class="ev-unit-wrap"><span>Units</span>
+                <select id="elevUnit" class="ev-unit" aria-label="Units for every height on this page">
+                  <option value="ft" selected>feet</option>
+                  <option value="m">metres</option>
                 </select>
-                <div class="elev-spectrum-colors">
-                  <label>Lower<input type="color" id="elevLowColor" value="#f85c6c" aria-label="Lower elevation color"></label>
-                  <label>Reference<input type="color" id="elevMidColor" value="#fffffa" aria-label="Reference elevation color"></label>
-                  <label>Higher<input type="color" id="elevHighColor" value="#46a0ff" aria-label="Higher elevation color"></label>
-                </div>
-                <div class="ls-actions">
-                  <button class="ls-pill" id="elevPaletteReverse" type="button">Reverse</button>
-                  <button class="ls-pill" id="elevPaletteReset" type="button">Reset colors</button>
-                </div>
-                <p class="control-hint">Edit any color to customize the spectrum. Your colors are saved on this device.</p>
-              </div>
-            </details>
-            <details class="terrain-appearance elev-settings">
-              <summary>Reference & color range</summary>
-              <div class="elev-form elev-settings-body">
-              <div class="elev-field">
-                <div class="elev-control-row">
-                  <div class="elev-field"><label class="elev-label" for="elevVal">Reference elevation</label><input type="number" id="elevVal" value="1100" step="10"></div>
-                  <div class="elev-field"><label class="control-hint" for="elevUnit">Unit</label><select id="elevUnit" aria-label="Elevation unit">
-                    <option value="ft" selected>feet</option>
-                    <option value="yd">yards</option>
-                  </select></div>
-                </div>
-                <input type="range" id="elevSlide" min="-500" max="4500" step="1" value="335" aria-label="Reference elevation">
-              </div>
-              <div class="elev-field">
-                <label class="elev-label" for="elevSpan">Color span</label>
-                <div class="unit-field">
-                  <input type="number" id="elevSpan" list="elevSpanPresets" min="10" max="20000" step="1" value="300"
-                         title="Enter any distance in feet from the reference where colors reach full strength"
-                         aria-label="Custom elevation color span in feet">
-                  <span class="unit-suffix">ft</span>
-                </div>
-                <input type="range" id="elevSpanSlide" min="0" max="1000" step="1" value="447" aria-label="Color span in feet" aria-describedby="elevSpanHint">
-                <p class="control-hint" id="elevSpanHint">Colors reach full strength this far from the reference. A smaller span makes subtle height changes stand out.</p>
-              </div>
-              <datalist id="elevSpanPresets">
-                <option value="50"><option value="150"><option value="300">
-                <option value="600"><option value="1200"><option value="2500">
-              </datalist>
-              <div class="elev-spectrum-scale">
-                <div class="elevRamp" id="elevRangePreview" aria-hidden="true"></div>
-                <div class="elevKey"><span>Lower</span><span>Reference</span><span>Higher</span></div>
-              </div>
-              </div>
-            </details>
-            <details class="terrain-appearance elev-settings">
-              <summary>Spectrum opacity</summary>
-              <div class="elev-settings-body">
-              <div class="elev-field elev-opacity-control">
-                <div class="elev-label-row">
-                  <label class="elev-label" for="elevAlpha">Spectrum opacity</label>
-                  <span class="elev-value" id="elevAlphaOut">48%</span>
-                </div>
-                <input type="range" id="elevAlpha" min="0" max="100" step="1" value="48" aria-label="Elevation spectrum opacity">
-              </div>
-              </div>
-            </details>
-          </div>
-          <details class="fabbox elev-module" id="elevBandsBox">
-            <summary class="elev-module-head">
-              <h3 class="menu-section-title">Elevation highlights</h3>
-              <button class="linkbtn" id="elevBandsReset" type="button">Reset</button>
-            </summary>
-            <div class="elev-module-body">
-            <p class="control-hint">Highlight ground below or above a height.</p>
-            <div class="elev-highlight-toggles">
-              <label class="check" id="lb_elevBelow"><input type="checkbox" id="elevBelowOn"> Below</label>
-              <label class="check" id="lb_elevAbove"><input type="checkbox" id="elevAboveOn"> Above</label>
-            </div>
-            <div class="elev-band-note" id="elevBandOut">Enable a below or above band to highlight ground at those heights.</div>
-            <details class="terrain-appearance elev-settings">
-              <summary>Thresholds & colors</summary>
-              <div class="elev-settings-body elev-thresholds">
-                <div class="elev-field">
-                  <label for="elevBelowVal">Below elevation</label>
-                  <div class="elev-threshold-row">
-                    <input type="color" id="elevBelowColor" value="#f85c6c" aria-label="Below-elevation color">
-                    <div class="unit-field"><input type="number" id="elevBelowVal" value="1000" step="10" aria-label="Shade below elevation in feet"><span class="unit-suffix">ft</span></div>
-                  </div>
-                </div>
-                <div class="elev-field">
-                  <label for="elevAboveVal">Above elevation</label>
-                  <div class="elev-threshold-row">
-                    <input type="color" id="elevAboveColor" value="#46a0ff" aria-label="Above-elevation color">
-                    <div class="unit-field"><input type="number" id="elevAboveVal" value="1500" step="10" aria-label="Shade above elevation in feet"><span class="unit-suffix">ft</span></div>
-                  </div>
-                </div>
-              </div>
-            </details>
-            <details class="terrain-appearance elev-settings">
-              <summary>Edges & opacity</summary>
-              <div class="elev-settings-body">
-            <div class="elev-band-options">
-              <div class="elev-field">
-                <label class="elev-label" for="elevBandFeather">Soft transition</label>
-                <div class="unit-field">
-                  <input type="number" id="elevBandFeather" min="0" max="10000" step="5" value="40">
-                  <span class="unit-suffix">ft</span>
-                </div>
-              </div>
-              <div class="elev-field">
-                <div class="elev-label-row">
-                  <label class="elev-label" for="elevBandAlpha">Band opacity</label>
-                  <span class="elev-value" id="elevBandAlphaOut">52%</span>
-                </div>
-                <input type="range" id="elevBandAlpha" min="0" max="100" step="1" value="52" aria-label="Elevation highlight opacity">
-              </div>
-              <label class="check" id="lb_elevBandOutline">
-                <input type="checkbox" id="elevBandOutline"> White threshold line
               </label>
             </div>
+            <div class="csp-card csp-menu-card fabbox ev-card" id="elevSpectrumBox">
+              <label class="csp-switch-row ev-toggle" id="lb_elevSh">
+                <span class="ev-toggle-text"><strong>Show on map</strong><small>Tints ground lower or higher than a reference height.</small></span>
+                <span class="csp-switch"><input type="checkbox" id="elevSh" role="switch"><span></span></span>
+              </label>
+              <div class="ev-body">
+                <div class="elev-spectrum-scale" aria-describedby="elevKey">
+                  <div class="elevRamp" id="elevRangePreview" aria-hidden="true"></div>
+                  <div class="elevKey" id="elevKey" aria-label="Color scale"><span id="elevKeyLow">800 ft</span><span id="elevKeyMid">1,100 ft</span><span id="elevKeyHigh">1,400 ft</span></div>
+                </div>
+                <div class="elev-field ev-field">
+                  <div class="elev-label-row ev-inline">
+                    <label class="elev-label" for="elevVal">Reference elevation</label>
+                    <div class="unit-field"><input type="number" id="elevVal" value="1100" min="-1640" max="29035" step="10" aria-describedby="elevValHint"><span class="unit-suffix" data-elev-unit>ft</span></div>
+                  </div>
+                  <input type="range" id="elevSlide" min="-500" max="8850" step="1" value="335" aria-label="Reference elevation">
+                  <p class="control-hint ev-invalid" id="elevValHint" hidden></p>
+                </div>
+                <div class="elev-field ev-field">
+                  <div class="elev-label-row ev-inline">
+                    <label class="elev-label" for="elevSpan">Color span</label>
+                    <div class="unit-field">
+                      <span class="unit-prefix" aria-hidden="true">±</span>
+                      <input type="number" id="elevSpan" list="elevSpanPresets" min="10" max="20000" step="1" value="300"
+                             title="Distance from the reference where colors reach full strength" aria-describedby="elevSpanHint">
+                      <span class="unit-suffix" data-elev-unit>ft</span>
+                    </div>
+                  </div>
+                  <input type="range" id="elevSpanSlide" min="0" max="1000" step="1" value="447" aria-label="Color span" aria-describedby="elevSpanHint">
+                  <p class="control-hint" id="elevSpanHint">Colors reach full strength this far from the reference. Smaller spans reveal subtler relief.</p>
+                </div>
+                <datalist id="elevSpanPresets">
+                  <option value="50"><option value="150"><option value="300">
+                  <option value="600"><option value="1200"><option value="2500">
+                </datalist>
+                <div class="ev-field ev-colors" id="elevPaletteBox">
+                  <div class="elev-label-row"><label class="elev-label" for="elevPalette">Colors</label></div>
+                  <div class="ev-color-row">
+                    <select id="elevPalette" aria-label="Color preset">
+                      <option value="classic">Red / white / blue</option>
+                      <option value="orange-blue">Orange / cream / blue</option>
+                      <option value="terrain">Forest / sand / snow</option>
+                      <option value="ember">Ember</option>
+                      <option value="glacier">Glacier</option>
+                      <option value="viridis">Viridis</option>
+                      <option value="custom">Custom</option>
+                    </select>
+                    <span class="ev-swatches">
+                      <input type="color" id="elevLowColor" value="#f85c6c" aria-label="Lower color" title="Lower">
+                      <input type="color" id="elevMidColor" value="#fffffa" aria-label="Reference color" title="Reference">
+                      <input type="color" id="elevHighColor" value="#46a0ff" aria-label="Higher color" title="Higher">
+                    </span>
+                    <button class="ev-icon-btn" id="elevPaletteReverse" type="button" title="Reverse colors" aria-label="Reverse colors">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 7h11l-3-3M17 17H6l3 3"/></svg>
+                    </button>
+                  </div>
+                </div>
+                <div class="elev-field ev-field">
+                  <div class="elev-label-row">
+                    <label class="elev-label" for="elevAlpha">Opacity</label>
+                    <span class="elev-value" id="elevAlphaOut">48%</span>
+                  </div>
+                  <input type="range" id="elevAlpha" min="0" max="100" step="1" value="48" aria-label="Color by elevation opacity">
+                </div>
+                <div id="elevOut" class="ev-status" role="status" aria-live="polite"></div>
               </div>
-            </details>
+              <div class="ev-actions">
+                <button class="linkbtn" id="elevPaletteReset" type="button">Reset colors</button>
+                <button class="linkbtn" id="elevSpectrumReset" type="button" title="Restores the reference, span, colors and opacity, and turns coloring off">Reset all</button>
+              </div>
             </div>
-          </details>
+          </section>
+          <section class="csp-menu-section ev-section" id="elevBandsSection" aria-labelledby="elevBandsHeading">
+            <h3 class="csp-section-label" id="elevBandsHeading">Highlight elevations</h3>
+            <div class="csp-card csp-menu-card fabbox ev-card" id="elevBandsBox">
+              <p class="ev-intro">Paint ground below or above a height you choose.</p>
+              <div class="ev-band-row">
+                <label class="csp-switch ev-band-switch" id="lb_elevBelow"><input type="checkbox" id="elevBelowOn" role="switch" aria-label="Highlight ground below"><span></span></label>
+                <label class="ev-band-name" for="elevBelowVal">Below</label>
+                <div class="elev-threshold-row">
+                  <input type="color" id="elevBelowColor" value="#f85c6c" aria-label="Below color">
+                  <div class="unit-field"><input type="number" id="elevBelowVal" value="1000" step="10" aria-label="Highlight ground below this elevation"><span class="unit-suffix" data-elev-unit>ft</span></div>
+                </div>
+              </div>
+              <div class="ev-band-row">
+                <label class="csp-switch ev-band-switch" id="lb_elevAbove"><input type="checkbox" id="elevAboveOn" role="switch" aria-label="Highlight ground above"><span></span></label>
+                <label class="ev-band-name" for="elevAboveVal">Above</label>
+                <div class="elev-threshold-row">
+                  <input type="color" id="elevAboveColor" value="#46a0ff" aria-label="Above color">
+                  <div class="unit-field"><input type="number" id="elevAboveVal" value="1500" step="10" aria-label="Highlight ground above this elevation"><span class="unit-suffix" data-elev-unit>ft</span></div>
+                </div>
+              </div>
+              <div class="ev-status" id="elevBandOut" role="status" aria-live="polite"></div>
+              <details class="ev-more" id="elevBandMore">
+                <summary><span>Edges &amp; opacity</span><span class="ev-more-value" id="elevBandMoreValue">52% · 40 ft soft edge</span></summary>
+                <div class="ev-more-body">
+                  <div class="elev-field ev-field">
+                    <div class="elev-label-row">
+                      <label class="elev-label" for="elevBandAlpha">Highlight opacity</label>
+                      <span class="elev-value" id="elevBandAlphaOut">52%</span>
+                    </div>
+                    <input type="range" id="elevBandAlpha" min="0" max="100" step="1" value="52" aria-label="Highlight opacity">
+                  </div>
+                  <div class="ev-field">
+                    <div class="elev-label-row"><label class="elev-label" for="elevBandFeather">Soft edge</label></div>
+                    <div class="unit-field">
+                      <input type="number" id="elevBandFeather" min="0" max="10000" step="5" value="40" aria-describedby="elevBandFeatherHint">
+                      <span class="unit-suffix" data-elev-unit>ft</span>
+                    </div>
+                    <p class="control-hint" id="elevBandFeatherHint">Blends the highlight in over this height instead of a hard cut. 0 gives a sharp edge.</p>
+                  </div>
+                  <label class="csp-switch-row ev-toggle" id="lb_elevBandOutline">
+                    <span class="ev-toggle-text"><span>Outline the threshold</span><small>Draws a thin white line where ground crosses each height.</small></span>
+                    <span class="csp-switch"><input type="checkbox" id="elevBandOutline" role="switch"><span></span></span>
+                  </label>
+                </div>
+              </details>
+              <div class="ev-actions">
+                <button class="linkbtn" id="elevBandsReset" type="button" title="Restores default heights, colors and edges, and turns both highlights off">Reset highlights</button>
+              </div>
+            </div>
+          </section>
         </div>
         <div class="pane-rz" title="Drag to resize"></div>
       </section>
@@ -987,8 +982,8 @@ html[data-ui-theme="dark"] #cspStartup{background:#111416;color:#ebebeb}
 </div>
 <div id="paneLive" role="status" aria-live="polite"></div>
 
-<script src="vendor/leaflet.js?build=2026-11-04g"></script>
-<script src="vendor/leaflet-rotate.umd.min.js?build=2026-11-04g"></script>
+<script src="vendor/leaflet.js?build=2026-11-05a"></script>
+<script src="vendor/leaflet-rotate.umd.min.js?build=2026-11-05a"></script>
 <script>
 /* leaflet-rotate wraps Renderer.onAdd(map) and reads map._rotate, but Leaflet's
    Canvas and SVG renderers call Renderer.prototype.onAdd.call(this) with no
@@ -1000,40 +995,40 @@ html[data-ui-theme="dark"] #cspStartup{background:#111416;color:#ebebeb}
   L.Renderer.prototype.onAdd=function(map){return onAdd.call(this,map||this._map)};
 })();
 </script>
-<script src="ui-icons.js?build=2026-11-04g"></script>
-<script src="version.js?build=2026-11-04g"></script>
-<script src="mosaic-core.js?build=2026-11-04g"></script>
-<script src="png-stream.js?build=2026-11-04g"></script>
-<script src="terrain-core.js?build=2026-11-04g"></script>
-<script src="terrain-raster.js?build=2026-11-04g"></script>
-<script src="elevation-bands.js?build=2026-11-04g"></script>
-<script src="elevation-tile-core.js?build=2026-11-04g"></script>
-<script src="terrain-drape-core.js?build=2026-11-04g"></script>
-<script src="terrain-drape-pool.js?build=2026-11-04g"></script>
-<script src="public-terrain.js?build=2026-11-04g"></script>
-<script src="tile-pipeline.js?build=2026-11-04g"></script>
-<script src="water-geography-data.js?build=2026-11-04g"></script>
-<script src="water-geography.js?build=2026-11-04g"></script>
-<script src="gpu-terrain-shaders.js?build=2026-11-04g"></script>
-<script src="lidar-render.js?build=2026-11-04g"></script>
-<script src="lidar-studio.js?build=2026-11-04g"></script>
-<script src="analysis-layers.js?build=2026-11-04g"></script>
-<script src="share-state.js?build=2026-11-04g"></script>
-<script src="coordinates.js?build=2026-11-04g"></script>
-<script src="location-search.js?build=2026-11-04g"></script>
-<script src="gpu-terrain-store.js?build=2026-11-04g"></script>
-<script src="gpu-terrain-engine.js?build=2026-11-04g"></script>
-<script src="gpu-terrain-layer.js?build=2026-11-04g"></script>
-<script src="gpu-terrain-3d-cache.js?build=2026-11-04g"></script>
-<script src="gpu-terrain-3d-renderer.js?build=2026-11-04g"></script>
-<script src="gpu-terrain-3d-layer.js?build=2026-11-04g"></script>
-<script src="wa-archaeology.js?build=2026-11-04g"></script>
-<script src="research-contract.js?build=2026-11-04g"></script>
-<script src="point-cloud-core.js?build=2026-11-04g"></script>
-<script src="point-cloud-viewer.js?build=2026-11-04g"></script>
-<script src="app.js?build=2026-11-04g"></script>
-<script src="markup-3d.js?build=2026-11-04g"></script>
-<script src="markup.js?build=2026-11-04g"></script>
-<script src="ui-system.js?build=2026-11-04g"></script>
+<script src="ui-icons.js?build=2026-11-05a"></script>
+<script src="version.js?build=2026-11-05a"></script>
+<script src="mosaic-core.js?build=2026-11-05a"></script>
+<script src="png-stream.js?build=2026-11-05a"></script>
+<script src="terrain-core.js?build=2026-11-05a"></script>
+<script src="terrain-raster.js?build=2026-11-05a"></script>
+<script src="elevation-bands.js?build=2026-11-05a"></script>
+<script src="elevation-tile-core.js?build=2026-11-05a"></script>
+<script src="terrain-drape-core.js?build=2026-11-05a"></script>
+<script src="terrain-drape-pool.js?build=2026-11-05a"></script>
+<script src="public-terrain.js?build=2026-11-05a"></script>
+<script src="tile-pipeline.js?build=2026-11-05a"></script>
+<script src="water-geography-data.js?build=2026-11-05a"></script>
+<script src="water-geography.js?build=2026-11-05a"></script>
+<script src="gpu-terrain-shaders.js?build=2026-11-05a"></script>
+<script src="lidar-render.js?build=2026-11-05a"></script>
+<script src="lidar-studio.js?build=2026-11-05a"></script>
+<script src="analysis-layers.js?build=2026-11-05a"></script>
+<script src="share-state.js?build=2026-11-05a"></script>
+<script src="coordinates.js?build=2026-11-05a"></script>
+<script src="location-search.js?build=2026-11-05a"></script>
+<script src="gpu-terrain-store.js?build=2026-11-05a"></script>
+<script src="gpu-terrain-engine.js?build=2026-11-05a"></script>
+<script src="gpu-terrain-layer.js?build=2026-11-05a"></script>
+<script src="gpu-terrain-3d-cache.js?build=2026-11-05a"></script>
+<script src="gpu-terrain-3d-renderer.js?build=2026-11-05a"></script>
+<script src="gpu-terrain-3d-layer.js?build=2026-11-05a"></script>
+<script src="wa-archaeology.js?build=2026-11-05a"></script>
+<script src="research-contract.js?build=2026-11-05a"></script>
+<script src="point-cloud-core.js?build=2026-11-05a"></script>
+<script src="point-cloud-viewer.js?build=2026-11-05a"></script>
+<script src="app.js?build=2026-11-05a"></script>
+<script src="markup-3d.js?build=2026-11-05a"></script>
+<script src="markup.js?build=2026-11-05a"></script>
+<script src="ui-system.js?build=2026-11-05a"></script>
 </body>
 </html>

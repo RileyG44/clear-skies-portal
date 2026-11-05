@@ -10,10 +10,13 @@ $("#ctlReset").onclick=()=>{
 };
 $("#mosaic").onchange=()=>{
   MOSAIC_ON=$("#mosaic").checked;
-  if(MOSAIC_ON && SEL!=null) fillMosaic(ITEMS[SEL]);
+  if(MOSAIC_ON && displayedScene()) fillMosaic(displayedScene());
   else { clearMosaic(); const s2=$("#mosStat"); if(s2) s2.textContent="" }
 };
-$("#fillNow").onclick=()=>{ if(SEL!=null) fillMosaic(ITEMS[SEL], true) };
+/* Surroundings match the scene actually drawn, not a selected catalog record
+   that could not be displayed. */
+function displayedScene(){ return overlay&&overlay._cspItem||null }
+$("#fillNow").onclick=()=>{ if(displayedScene()) fillMosaic(displayedScene(), true) };
 
 /* The layer list, counts and the iPhone shell redraw from csp:layers-changed.
    Code that changes several layer controls at once without the input events
@@ -34,6 +37,7 @@ function clearScene(renderResults=true){
   MOSAIC_ON=$("#mosaic").checked;
   const status=$("#mosStat"); if(status) status.textContent="";
   hideMenu(); hideSceneControls(); SEL=null;
+  const name=$("#ctlName"); if(name){ name.textContent="";name.dataset.state="";name.dataset.note="";name.dataset.pending="";$("#ctlDate").textContent="" }
   if(renderResults) render();
   announceLayers();
 }

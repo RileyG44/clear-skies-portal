@@ -1,5 +1,9 @@
-const ELEV_UNIT={m:1, ft:0.3048, yd:0.9144};
-let elevLayer=null;
+/* One page-wide unit (feet or metres) for every height on the Elevation page.
+   The reference is held in metres, so a typed value outside the slider's
+   travel, a unit switch or a reload never changes the physical height. */
+const ELEV_UNIT={m:1, ft:0.3048};
+const ELEV_REF_MIN_M=-500, ELEV_REF_MAX_M=8850;
+let elevLayer=null, elevRefM=1100*0.3048, elevShownUnit="ft";
 /* The spectrum and the below/above highlights for one tile of heights, as
    straight (not premultiplied) RGBA. The 2D layer's CPU path and the 3D
    drape both color through here, so the two views cannot disagree. `stride`
@@ -8,8 +12,52 @@ let elevLayer=null;
 function elevationColours(elev,count,settings,out,width=count,stride=width,offset=0){
   return CSPTerrainDrape.elevationColours(elev,count,settings,out,width,stride,offset);
 }
-function elevMetres(){ return (+$("#elevVal").value||0) * ELEV_UNIT[$("#elevUnit").value] }
-// Both the menu and map panel use the same logarithmic span range.
+function elevUnitKey(){ return ELEV_UNIT[$("#elevUnit").value]?$("#elevUnit").value:"ft" }
+function elevUnitFactor(){ return ELEV_UNIT[elevUnitKey()] }
+function elevMetres(){ return elevRefM }
+function elevFormat(metres){
+  const unit=elevUnitKey();
+  return `${Math.round(metres/ELEV_UNIT[unit]).toLocaleString()} ${unit}`;
+}
+/* Restate every height field in the newly chosen unit. */
+function convertElevationUnit(next){
+  const from=ELEV_UNIT[elevShownUnit]||ELEV_UNIT.ft,to=ELEV_UNIT[next]||ELEV_UNIT.ft;
+  for(const id of ["#elevSpan","#elevBelowVal","#elevAboveVal","#elevBandFeather"]){
+    const input=$(id),value=+input.value;
+    if(input.value!==""&&Number.isFinite(value)) input.value=Math.round(value*from/to);
+  }
+  elevShownUnit=ELEV_UNIT[next]?next:"ft";
+  $("#elevSpan").min=Math.ceil(elevSpanLimitsFt()[0]*0.3048/to);$("#elevSpan").max=Math.floor(elevSpanLimitsFt()[1]*0.3048/to);
+  $("#elevVal").min=Math.ceil(ELEV_REF_MIN_M/to);$("#elevVal").max=Math.floor(ELEV_REF_MAX_M/to);
+  $("#elevBandFeather").max=Math.floor(3048/to);
+  $("#elevVal").step=$("#elevBelowVal").step=$("#elevAboveVal").step=elevShownUnit==="m"?"5":"10";
+  for(const suffix of document.querySelectorAll("[data-elev-unit]")) suffix.textContent=elevShownUnit;
+  showElevReference();
+}
+/* Shared views write raw control values; rebuild the canonical reference from
+   the slider's metres and restate the fields in the restored unit. */
+function syncElevationFromControls(){
+  if(!ELEV_UNIT[$("#elevUnit").value]) $("#elevUnit").value="ft";
+  elevShownUnit=$("#elevUnit").value;convertElevationUnit(elevShownUnit);
+  const m=+$("#elevSlide").value;if(Number.isFinite(m)) elevRefM=m;
+  $("#elevVal").value=Math.round(elevRefM/elevUnitFactor());showElevReference();
+}
+function showElevReference(){
+  if(document.activeElement!==$("#elevVal")) $("#elevVal").value=Math.round(elevRefM/elevUnitFactor());
+  const slide=$("#elevSlide");
+  slide.value=Math.max(ELEV_REF_MIN_M,Math.min(ELEV_REF_MAX_M,Math.round(elevRefM)));
+  slide.setAttribute("aria-valuetext",elevFormat(elevRefM));
+}
+// Both the menu and map panel use the same logarithmic span range, in feet.
+function elevSpanLimitsFt(){ return [10,20000] }
+function elevSpanFt(){
+  const value=+$("#elevSpan").value,feet=value>0?value*elevUnitFactor()/0.3048:300;
+  return Math.max(10,Math.min(20000,feet));
+}
+function setElevSpanFt(feet){
+  const unit=elevUnitFactor();
+  $("#elevSpan").value=unit===ELEV_UNIT.ft?Math.round(feet):Math.max(3,Math.round(feet*0.3048));
+}
 function elevSpanPosition(feet){
   return Math.round(Math.log(Math.max(10,Math.min(20000,+feet||300))/10)/Math.log(2000)*1000);
 }
@@ -19,11 +67,12 @@ function elevSpanFromPosition(position){
   return preset||Math.round(feet);
 }
 function syncElevSpanSlider(){
-  const input=$("#elevSpanSlide"),feet=Math.max(10,Math.min(20000,+$("#elevSpan").value||300));
+  const input=$("#elevSpanSlide"),feet=elevSpanFt();
   if(document.activeElement!==input)input.value=elevSpanPosition(feet);
-  input.setAttribute("aria-valuetext",feet.toLocaleString()+" feet");
+  input.setAttribute("aria-valuetext",elevFormat(feet*0.3048));
 }
-function elevSpanMetres(){ return Math.max(3,(+$("#elevSpan").value||300)*0.3048) }
+function elevSpanMetres(){ return Math.max(3,elevSpanFt()*0.3048) }
+function elevFeatherValue(){ return Math.max(0,+$("#elevBandFeather").value||0) }
 function inputPercent(id,fallback){
   const value=+$(id).value;
   return Math.max(0,Math.min(100,Number.isFinite(value)?value:fallback));
@@ -31,34 +80,34 @@ function inputPercent(id,fallback){
 function elevAlpha(){ return Math.round(255*inputPercent("#elevAlpha",48)/100) }
 function elevationBandState(){
   const opacity=inputPercent("#elevBandAlpha",52)/100;
-  const feather=Math.max(0,+$("#elevBandFeather").value||0);
+  const unit=elevUnitKey(),feather=elevFeatherValue();
   const outline={enabled:$("#elevBandOutline").checked,color:"#ffffff",opacity:.88,width:8,unit:"ft"};
-  return ElevationBands.sanitizeState({unit:"ft",bands:[
+  return ElevationBands.sanitizeState({unit,bands:[
     {id:"below",label:"Below elevation",enabled:$("#elevBelowOn").checked,operator:"below",
-     max:+$("#elevBelowVal").value||0,unit:"ft",color:$("#elevBelowColor").value,
+     max:+$("#elevBelowVal").value||0,unit,color:$("#elevBelowColor").value,
      opacity,feather,outline,order:0},
     {id:"above",label:"Above elevation",enabled:$("#elevAboveOn").checked,operator:"above",
-     min:+$("#elevAboveVal").value||0,unit:"ft",color:$("#elevAboveColor").value,
+     min:+$("#elevAboveVal").value||0,unit,color:$("#elevAboveColor").value,
      opacity,feather,outline,order:1}
-  ]},{defaults:false,defaultUnit:"ft"});
+  ]},{defaults:false,defaultUnit:unit});
 }
 function restoreElevationBands(saved){
   if(!saved) return;
-  const state=ElevationBands.sanitizeState(saved,{defaults:false,defaultUnit:"ft"});
+  const state=ElevationBands.sanitizeState(saved,{defaults:false,defaultUnit:"ft"}),unit=elevUnitKey();
   const byId=Object.fromEntries(state.bands.map(b=>[b.id,b]));
   const below=byId.below,above=byId.above;
   if(below){
     $("#elevBelowOn").checked=!!below.enabled; $("#elevBelowColor").value=below.color.slice(0,7);
-    $("#elevBelowVal").value=Math.round(ElevationBands.fromMeters(below.maxM,"ft"));
+    $("#elevBelowVal").value=Math.round(ElevationBands.fromMeters(below.maxM,unit));
   }
   if(above){
     $("#elevAboveOn").checked=!!above.enabled; $("#elevAboveColor").value=above.color.slice(0,7);
-    $("#elevAboveVal").value=Math.round(ElevationBands.fromMeters(above.minM,"ft"));
+    $("#elevAboveVal").value=Math.round(ElevationBands.fromMeters(above.minM,unit));
   }
   const exemplar=below||above;
   if(exemplar){
     $("#elevBandAlpha").value=Math.round(exemplar.opacity*100);
-    $("#elevBandFeather").value=Math.round(ElevationBands.fromMeters(exemplar.featherM,"ft"));
+    $("#elevBandFeather").value=Math.round(ElevationBands.fromMeters(exemplar.featherM,unit));
     $("#elevBandOutline").checked=!!(exemplar.outline&&exemplar.outline.enabled);
   }
 }
@@ -74,7 +123,7 @@ function elevationRenderSettings(){
     below:{enabled:!!(below&&below.enabled),level:below?below.maxM:0,color:below?rgb(below):[1,0,0]},
     above:{enabled:!!(above&&above.enabled),level:above?above.minM:0,color:above?rgb(above):[0,0,1]},
     bandAlpha:inputPercent("#elevBandAlpha",52)/100,
-    bandFeather:Math.max(0,(+$("#elevBandFeather").value||0)*0.3048),
+    bandFeather:elevFeatherValue()*elevUnitFactor(),
     outline:$("#elevBandOutline").checked,outlineWidth:8*0.3048,
     bandCompiled:ElevationBands.compileBands(state)};
 }
@@ -85,22 +134,36 @@ function syncElevationChecks(){
   for(const [input,label] of [["#elevSh","#lb_elevSh"],["#elevBelowOn","#lb_elevBelow"],
     ["#elevAboveOn","#lb_elevAbove"],["#elevBandOutline","#lb_elevBandOutline"]])
     $(label).classList.toggle("on",$(input).checked);
+  $("#elevSpectrumBox")?.classList.toggle("ev-on",$("#elevSh").checked);
+  $("#elevBandsBox")?.classList.toggle("ev-on",$("#elevBelowOn").checked||$("#elevAboveOn").checked);
+  for(const id of ["Below","Above"]) $(`#elev${id}On`).closest(".ev-band-row")?.classList.toggle("ev-on",$(`#elev${id}On`).checked);
+}
+/* The one color scale: its ends are the heights where colors reach full strength. */
+function paintElevLegend(){
+  const m=elevMetres(),span=elevSpanMetres();
+  const set=(id,text)=>{const el=$(id);if(el&&el.textContent!==text) el.textContent=text};
+  set("#elevKeyLow",elevFormat(m-span));set("#elevKeyMid",elevFormat(m));set("#elevKeyHigh",elevFormat(m+span));
+  $("#elevKey")?.setAttribute("aria-label",`Color scale from ${elevFormat(m-span)} through ${elevFormat(m)} to ${elevFormat(m+span)}`);
 }
 function paintElevOut(){
+  paintElevLegend();
   const o=$("#elevOut"); if(!o) return;
-  const m=elevMetres();
-  if(!$("#elevSh").checked){ o.textContent=""; return }
+  if(!$("#elevSh").checked){ o.textContent=""; o.dataset.state="off"; return }
   const loaded=terrainLayerSummary(elevLayer);
-  const source=loaded.sources.length?`Displayed: ${loaded.sources.map(s=>s.label).join(" + ")}.`:'Elevation is loading; source details appear after tiles render.';
-  o.textContent=`Reference at ${Math.round(m/0.3048).toLocaleString()} ft; selected colors below and above, strongest by \u00b1${Math.round(elevSpanMetres()/0.3048).toLocaleString()} ft at ${$("#elevAlpha").value}% opacity. ${source}`;
+  o.dataset.state="on";
+  o.textContent=loaded.sources.length?`On the map from ${loaded.sources.map(s=>s.label).join(" + ")}.`:"On. Elevation is loading; its source appears once tiles render.";
 }
 function paintElevationBandOut(){
-  const out=$("#elevBandOut"),parts=[];
-  if($("#elevBelowOn").checked) parts.push(`below ${(+$("#elevBelowVal").value||0).toLocaleString()} ft`);
-  if($("#elevAboveOn").checked) parts.push(`above ${(+$("#elevAboveVal").value||0).toLocaleString()} ft`);
-  out.textContent=parts.length
-    ? `Highlighting ${parts.join(" and ")} with ${(+$("#elevBandFeather").value||0).toLocaleString()} ft soft transitions. Colors update as you adjust the controls.`
-    : "Enable a below or above band to highlight ground at those heights.";
+  const out=$("#elevBandOut"),unit=elevUnitKey(),parts=[];
+  const below=+$("#elevBelowVal").value||0,above=+$("#elevAboveVal").value||0;
+  const belowOn=$("#elevBelowOn").checked,aboveOn=$("#elevAboveOn").checked;
+  if(belowOn) parts.push(`below ${below.toLocaleString()} ${unit}`);
+  if(aboveOn) parts.push(`above ${above.toLocaleString()} ${unit}`);
+  let text=parts.length?`Highlighting ground ${parts.join(" and ")}.`:"";
+  if(belowOn&&aboveOn&&above<below) text+=` Between ${above.toLocaleString()} and ${below.toLocaleString()} ${unit} both apply, so their colors mix.`;
+  out.textContent=text;out.dataset.state=parts.length?"on":"off";
+  const feather=elevFeatherValue(),more=$("#elevBandMoreValue");
+  if(more) more.textContent=`${$("#elevBandAlpha").value}% · ${feather?`${feather.toLocaleString()} ${unit} soft edge`:"sharp edge"}${$("#elevBandOutline").checked?" · outlined":""}`;
 }
 let elevPaintFrame=0;
 function scheduleElevPaint(){
@@ -109,15 +172,32 @@ function scheduleElevPaint(){
   elevPaintFrame=requestAnimationFrame(()=>{ elevPaintFrame=0; applyElev() });
 }
 function syncElevFromSlider(){
-  const m=+$("#elevSlide").value;
-  const u=ELEV_UNIT[$("#elevUnit").value];
-  $("#elevVal").value = Math.round(m/u);
-  scheduleElevPaint();
+  elevRefM=+$("#elevSlide").value;
+  $("#elevVal").value=Math.round(elevRefM/elevUnitFactor());
+  $("#elevValHint").hidden=true;$("#elevVal").removeAttribute("aria-invalid");
+  showElevReference();scheduleElevPaint();
+}
+/* A typed height is used as typed when it is a real elevation on Earth; the
+   slider shows the nearest point of its travel and never rewrites the value. */
+function elevTypedMetres(){
+  const raw=$("#elevVal").value,value=+raw;
+  if(raw===""||!Number.isFinite(value)) return null;
+  return value*elevUnitFactor();
 }
 function syncElevFromBox(){
-  const m=elevMetres();
-  $("#elevSlide").value = Math.max(-500, Math.min(4500, Math.round(m)));
-  scheduleElevPaint();
+  const m=elevTypedMetres(),hint=$("#elevValHint");
+  const valid=m!=null&&m>=ELEV_REF_MIN_M&&m<=ELEV_REF_MAX_M;
+  hint.hidden=valid;
+  if(valid){ $("#elevVal").removeAttribute("aria-invalid");elevRefM=m;showElevReference();scheduleElevPaint();return }
+  $("#elevVal").setAttribute("aria-invalid","true");
+  hint.textContent=`Enter a height between ${elevFormat(ELEV_REF_MIN_M)} and ${elevFormat(ELEV_REF_MAX_M)}.`;
+}
+function commitElevFromBox(){
+  const m=elevTypedMetres();
+  elevRefM=m==null?elevRefM:Math.max(ELEV_REF_MIN_M,Math.min(ELEV_REF_MAX_M,m));
+  $("#elevValHint").hidden=true;$("#elevVal").removeAttribute("aria-invalid");
+  $("#elevVal").value=Math.round(elevRefM/elevUnitFactor());
+  showElevReference();saveTerrainPrefs();applyElev();
 }
 function applyElev(){
   paintElevOut();
@@ -222,7 +302,7 @@ function syncSpectrumPalette(){
   $("#elevPalette").value=Object.keys(SPECTRUM_PALETTES).find(id=>SPECTRUM_PALETTES[id].every((v,i)=>v===colors[i]))||"custom";
   const level=elevMetres(),span=elevSpanMetres();
   const gradient="linear-gradient(90deg,"+Array.from({length:17},(_,i)=>`rgb(${elevRampRgb(level-span+i*span/8,level,span,spectrumHexColors().map(hex=>ElevationBands.parseColor(hex).slice(0,3))).join(",")}) ${i/16*100}%`).join(",")+")";
-  for(const id of ["#elevPalettePreview","#elevRangePreview"])$(id).style.background=gradient;
+  $("#elevRangePreview").style.background=gradient;
 }
 function applySpectrumColors(colors){
   SPECTRUM_COLOR_IDS.forEach((id,i)=>$(id).value=colors[i]);
@@ -274,23 +354,23 @@ syncElevationChecks();
 $("#elevSh").addEventListener("change",()=>{ saveTerrainPrefs(); applyElev() });
 $("#elevSlide").addEventListener("input", syncElevFromSlider);
 $("#elevVal").addEventListener("input", syncElevFromBox);
-$("#elevVal").addEventListener("change",saveTerrainPrefs);
+$("#elevVal").addEventListener("change",commitElevFromBox);
 $("#elevSlide").addEventListener("change",saveTerrainPrefs);
 $("#elevSpan").addEventListener("input",()=>{syncElevSpanSlider();scheduleElevPaint()});
 $("#elevSpanSlide").addEventListener("input",()=>{
-  const span=$("#elevSpan");span.value=elevSpanFromPosition($("#elevSpanSlide").value);
-  $("#elevSpanSlide").setAttribute("aria-valuetext",Number(span.value).toLocaleString()+" feet");
+  const span=$("#elevSpan");setElevSpanFt(elevSpanFromPosition($("#elevSpanSlide").value));
+  $("#elevSpanSlide").setAttribute("aria-valuetext",elevFormat(elevSpanFt()*0.3048));
   span.dispatchEvent(new Event("input",{bubbles:true}));
 });
 $("#elevSpanSlide").addEventListener("change",()=>$("#elevSpan").dispatchEvent(new Event("change",{bubbles:true})));
-$("#elevSpan").addEventListener("change",()=>{ $("#elevSpan").value=Math.max(10,Math.min(20000,+$("#elevSpan").value||300));syncElevSpanSlider();saveTerrainPrefs();applyElev() });
+$("#elevSpan").addEventListener("change",()=>{ setElevSpanFt(elevSpanFt());syncElevSpanSlider();saveTerrainPrefs();applyElev() });
 $("#elevAlpha").addEventListener("input",()=>{ $("#elevAlphaOut").textContent=$("#elevAlpha").value+"%"; scheduleElevPaint() });
 $("#elevAlpha").addEventListener("change",saveTerrainPrefs);
-$("#elevUnit").addEventListener("change", ()=>{        // keep the height, restate the number
-  const m=+$("#elevSlide").value;
-  $("#elevVal").value=Math.round(m/ELEV_UNIT[$("#elevUnit").value]);
-  saveTerrainPrefs(); applyElev();
+$("#elevUnit").addEventListener("change", ()=>{        // keep every height, restate the numbers
+  convertElevationUnit(elevUnitKey());$("#elevVal").value=Math.round(elevRefM/elevUnitFactor());
+  syncElevSpanSlider();saveTerrainPrefs();applyElev();
 });
+$("#elevBandFeather").addEventListener("change",()=>{ $("#elevBandFeather").value=elevFeatherValue() },true);
 for(const id of ["#elevBelowOn","#elevAboveOn","#elevBandOutline"])
   $(id).addEventListener("change",()=>{ saveTerrainPrefs(); applyElev() });
 for(const id of ["#elevBelowColor","#elevAboveColor","#elevBelowVal","#elevAboveVal","#elevBandFeather"]){
@@ -304,14 +384,14 @@ $("#elevBandAlpha").addEventListener("change",saveTerrainPrefs);
 $("#elevSpectrumReset").onclick=()=>{
   SPECTRUM_COLOR_IDS.forEach((id,i)=>$(id).value=SPECTRUM_PALETTES.classic[i]);syncSpectrumPalette();
   $("#elevSh").checked=false;
-  $("#elevUnit").value="ft";$("#elevVal").value=1100;$("#elevSlide").value=335;
-  $("#elevSpan").value=300;syncElevSpanSlider();$("#elevAlpha").value=48;$("#elevAlphaOut").textContent="48%";
+  elevRefM=1100*0.3048;setElevSpanFt(300);$("#elevVal").value=Math.round(elevRefM/elevUnitFactor());showElevReference();syncElevSpanSlider();$("#elevAlpha").value=48;$("#elevAlphaOut").textContent="48%";
   saveTerrainPrefs();applyElev();announceLayers();
 };
 $("#elevBandsReset").onclick=()=>{
-  $("#elevBelowOn").checked=false;$("#elevBelowColor").value="#f85c6c";$("#elevBelowVal").value=1000;
-  $("#elevAboveOn").checked=false;$("#elevAboveColor").value="#46a0ff";$("#elevAboveVal").value=1500;
-  $("#elevBandFeather").value=40;$("#elevBandAlpha").value=52;$("#elevBandAlphaOut").textContent="52%";
+  const u=elevUnitFactor()/0.3048;
+  $("#elevBelowOn").checked=false;$("#elevBelowColor").value="#f85c6c";$("#elevBelowVal").value=Math.round(1000/u);
+  $("#elevAboveOn").checked=false;$("#elevAboveColor").value="#46a0ff";$("#elevAboveVal").value=Math.round(1500/u);
+  $("#elevBandFeather").value=Math.round(40/u);$("#elevBandAlpha").value=52;$("#elevBandAlphaOut").textContent="52%";
   $("#elevBandOutline").checked=false;
   saveTerrainPrefs();applyElev();announceLayers();
 };
