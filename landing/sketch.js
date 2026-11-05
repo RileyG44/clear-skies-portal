@@ -824,9 +824,11 @@ void main(){
 
 /* opts.still draws the finished drawing once, as reduced motion does, and leaves the
    pointer alone: a picture to hold up while something else loads. layer, for the
-   labels, may then be null. */
+   labels, may then be null. opts.drawSeconds adjusts the drawing's pace without
+   speeding up the breeze; opts.interactive can leave the pointer alone while it animates. */
 export function createSketch(canvas, layer, opts = {}) {
   const still = !!opts.still, reduce = still || matchMedia("(prefers-reduced-motion: reduce)").matches;
+  const drawSeconds = opts.drawSeconds ?? DRAW_SECONDS;
   let renderer;
   try { renderer = new THREE.WebGLRenderer({ canvas, antialias: false, alpha: false, powerPreference: "high-performance" }); }
   catch (e) { opts.onNoWebGL && opts.onNoWebGL(); return null; }
@@ -1070,12 +1072,14 @@ export function createSketch(canvas, layer, opts = {}) {
     const r = canvas.getBoundingClientRect();
     return [VIEW.cx + (cx - r.left - r.width / 2) / view.scale, VIEW.cy - (cy - r.top - r.height / 2) / view.scale];
   };
-  if (!still) {
-    addEventListener("pointermove", e => {
-      const [x, y] = toTree(e.clientX, e.clientY);
-      ptr.x = x; ptr.y = y; ptr.in = Math.abs(x - VIEW.cx) < VIEW.w / 2 + 0.1 && y > -0.05 && y < 1.1; ptr.fresh = true;
-    }, { passive: true });
-    addEventListener("pointerdown", e => { const [x, y] = toTree(e.clientX, e.clientY); ptr.x = ptr.px = x; ptr.y = ptr.py = y; }, { passive: true });
+  const pointerMove = e => {
+    const [x, y] = toTree(e.clientX, e.clientY);
+    ptr.x = x; ptr.y = y; ptr.in = Math.abs(x - VIEW.cx) < VIEW.w / 2 + 0.1 && y > -0.05 && y < 1.1; ptr.fresh = true;
+  };
+  const pointerDown = e => { const [x, y] = toTree(e.clientX, e.clientY); ptr.x = ptr.px = x; ptr.y = ptr.py = y; };
+  if (!reduce && opts.interactive !== false) {
+    addEventListener("pointermove", pointerMove, { passive: true });
+    addEventListener("pointerdown", pointerDown, { passive: true });
   }
 
   function render() { renderer.render(scene, cam); }
@@ -1083,8 +1087,9 @@ export function createSketch(canvas, layer, opts = {}) {
 
   if (reduce) for (const f of fall) { f.t = 3 + Math.random() * 6; falling(0); }
   pose();
-  let raf = 0, last = 0, start = 0, visible = true, draw = reduce ? 1.2 : 0;
+  let raf = 0, last = 0, start = 0, visible = true, disposed = false, draw = reduce ? 1.2 : 0;
   function frame(now) {
+    if (disposed) return;
     raf = requestAnimationFrame(frame);
     if (!start) { start = now; last = now; ptr.px = ptr.x; ptr.py = ptr.y; }
     const dt = Math.min(1 / 30, Math.max(1e-3, (now - last) / 1000)); last = now; time += dt;
@@ -1092,7 +1097,7 @@ export function createSketch(canvas, layer, opts = {}) {
     const ivx = (ptr.x - ptr.px) / dt, ivy = (ptr.y - ptr.py) / dt;
     ptr.vx = lerp(ptr.vx, ivx, 0.6); ptr.vy = lerp(ptr.vy, ivy, 0.6); ptr.px = ptr.x; ptr.py = ptr.y;
     if (Math.abs(ptr.vx) + Math.abs(ptr.vy) < 1e-3) ptr.vx = ptr.vy = 0;
-    draw = Math.min(1.2, (now - start) / 1000 / DRAW_SECONDS);
+    draw = Math.min(1.2, (now - start) / 1000 / drawSeconds);
     U.uDraw.value = draw;
     if (leafU) {
       leafU.uTime.value = time; leafU.uBreeze.value = P.breeze / 0.16;
@@ -1102,22 +1107,29 @@ export function createSketch(canvas, layer, opts = {}) {
     }
     physics(dt); if (draw > 1) falling(dt); pose(); updateLabels(draw); render();
   }
-  function play() { if (!raf && visible && !document.hidden) { last = performance.now(); raf = requestAnimationFrame(frame); } }
+  function play() { if (!disposed && !raf && visible && !document.hidden) { last = performance.now(); raf = requestAnimationFrame(frame); } }
   function pause() { cancelAnimationFrame(raf); raf = 0; }
+  const visibilityChanged = () => document.hidden ? pause() : play();
   addEventListener("resize", layout);
   const resized = new ResizeObserver(layout);
   resized.observe(canvas);
   layout();
+  let intersection;
   if (reduce) { updateLabels(1.2); render(); }
   else {
-    new IntersectionObserver(es => { visible = es[0].isIntersecting; visible ? play() : pause(); }).observe(canvas);
-    document.addEventListener("visibilitychange", () => document.hidden ? pause() : play());
+    intersection = new IntersectionObserver(es => { visible = es[0].isIntersecting; visible ? play() : pause(); });
+    intersection.observe(canvas);
+    document.addEventListener("visibilitychange", visibilityChanged);
     play();
   }
   return {
     // stop drawing and give the GL context back
     dispose() {
-      pause(); visible = false; removeEventListener("resize", layout); resized.disconnect();
+      if (disposed) return;
+      disposed = true; pause(); visible = false;
+      removeEventListener("resize", layout); resized.disconnect(); intersection?.disconnect();
+      removeEventListener("pointermove", pointerMove); removeEventListener("pointerdown", pointerDown);
+      document.removeEventListener("visibilitychange", visibilityChanged);
       renderer.dispose(); renderer.forceContextLoss();
     },
     params: P, angles: ang, poseOf: b => [TX[b], TY[b], A[b]], strokes: T.count, bones: n, anchors, pageY, relayout: () => layout(),
@@ -1125,7 +1137,7 @@ export function createSketch(canvas, layer, opts = {}) {
     toPage(x, y) { const r = canvas.getBoundingClientRect(); return [r.left + r.width / 2 + (x - VIEW.cx) * view.scale, r.top + r.height / 2 - (y - VIEW.cy) * view.scale]; },
     unit: () => view.scale,
     state: () => ({ maxTwig: Math.max(...[...ang].filter((_, b) => Bn.kind[b] === KIND.TWIG).map(Math.abs)), maxBranch: Math.max(...[...ang].filter((_, b) => Bn.kind[b] === KIND.BRANCH).map(Math.abs)) }),
-    finish() { start = performance.now() - DRAW_SECONDS * 1200; },
+    finish() { start = performance.now() - drawSeconds * 1200; },
     setDraw(v) { U.uDraw.value = v; updateLabels(v); render(); },
     // test hook: sweep a pointer along a path in tree units, stepping the physics at 60 Hz
     sweep(path, settle = 0) {
