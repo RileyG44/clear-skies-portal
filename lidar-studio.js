@@ -823,7 +823,7 @@
 
     render();
     return {
-      stack,legend,fitFromView,fitFromViewAsync,needsFit,
+      stack,legend,fitFromView,fitFromViewAsync,needsFit,fitKey:fitRevision,
       refresh(){render()},
       state:()=>JSON.parse(JSON.stringify(state)),
       displayState(){

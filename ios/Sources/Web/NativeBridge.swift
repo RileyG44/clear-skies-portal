@@ -56,6 +56,14 @@ final class NativeBridge: NSObject, WKScriptMessageHandlerWithReply {
             host?.pageReady()
             return (true, nil)
 
+        case "startup.failed":
+            host?.pictureFailed(body["message"] as? String ?? "The map could not start. Reload to try again.")
+            return (true, nil)
+
+        case "startup.settled":
+            host?.clearStartupFailure()
+            return (true, nil)
+
         case "shell":
             guard let json = body["json"] as? String else { return (nil, "Missing update") }
             host?.shellMessage(json)

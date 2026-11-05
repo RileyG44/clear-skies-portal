@@ -1,8 +1,23 @@
 import SwiftUI
+import UIKit
 
 @main
 struct ClearSkiesApp: App {
     @State private var portal = PortalModel()
+
+    init() {
+        // The system draws LaunchBackground from the device appearance before
+        // this process exists, so that asset cannot read the saved theme.
+        // The first window can. Paint it before SwiftUI creates the scene so
+        // the cover does not open on the other colour.
+        let theme = MapCanvasColor.theme()
+        UIWindow.appearance().backgroundColor = MapCanvasColor.uiColor(theme: theme)
+        switch theme {
+        case "dark": UIWindow.appearance().overrideUserInterfaceStyle = .dark
+        case "light": UIWindow.appearance().overrideUserInterfaceStyle = .light
+        default: break
+        }
+    }
 
     var body: some Scene {
         WindowGroup {
@@ -15,6 +30,7 @@ struct ClearSkiesApp: App {
 @MainActor @Observable
 final class PortalModel {
     var ready = false
+    var startupFailure: String?
     /// True while the page reloads after iOS ended its process.
     var restoring = false
 
@@ -29,6 +45,7 @@ final class PortalModel {
             self?.restoring = false
         }
         host.onShell = { [weak self] json in self?.shell.apply(json: json) }
+        host.onStartupFailure = { [weak self] message in self?.startupFailure = message }
         #if DEBUG
         host.debugNavigation = { [weak self] in
             guard let shell = self?.shell else { return [:] }

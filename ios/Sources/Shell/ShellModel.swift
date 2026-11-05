@@ -81,7 +81,7 @@ final class ShellModel {
     init() {
         // Cache only the existing selected UI theme, so the first native frame
         // already agrees with the web preference that will be published next.
-        map.theme = UserDefaults.standard.string(forKey: "clearskies.native.theme.v1") ?? ""
+        map.theme = UserDefaults.standard.string(forKey: MapCanvasColor.preferenceKey) ?? ""
     }
 
     var sheetPresented: Bool { activeSheet == .tools }
@@ -181,7 +181,8 @@ final class ShellModel {
         let wasBusy = mapBusy
         map = next
         if next.theme == "light" || next.theme == "dark" {
-            UserDefaults.standard.set(next.theme, forKey: "clearskies.native.theme.v1")
+            UserDefaults.standard.set(next.theme, forKey: MapCanvasColor.preferenceKey)
+            host?.useMapCanvas(next.theme)
         }
         if mapBusy, !wasBusy, activeSheet != nil, presentedPanel != "mkBar" { activeSheet = nil }
     }

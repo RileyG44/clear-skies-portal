@@ -708,9 +708,22 @@ function mark3dGlassMotion(){
   if(!map3dGlassMoving){map3dGlassMoving=true;document.body.classList.add("map3d-moving")}
   clearTimeout(map3dGlassTimer);map3dGlassTimer=setTimeout(reset3dGlassMotion,200);
 }
+/* The 3D canvas is inside #map, so it inherits the live map colour before
+   MapLibre has painted. An inline copy covers the same moment if the
+   stylesheet has not applied yet. */
+function paintMap3dTheme(){
+  const node=document.getElementById("map3d");if(!node)return;
+  const dark=document.documentElement.dataset.uiTheme==="dark"||document.getElementById("map")?.dataset.basemapTheme==="dark";
+  node.style.background=dark?"#111416":"#dbe6eb";
+}
+/* terrain-3d reveals #map3d. It stays off until MapLibre's load, which is its
+   first complete frame, so a dark open does not flash the empty canvas. */
+var map3dFrameReady=false;
 function setTerrainModeUi(on,status){
   if(!on) reset3dGlassMotion();
-  document.body.classList.toggle("terrain-3d",on);$("#map3d").setAttribute("aria-hidden",String(!on));
+  if(!on) map3dFrameReady=false;
+  const shown=!!on&&map3dFrameReady;
+  document.body.classList.toggle("terrain-3d",shown);$("#map3d").setAttribute("aria-hidden",String(!shown));
   $("#terMode2d").setAttribute("aria-pressed",String(!on));$("#terMode3d").setAttribute("aria-pressed",String(on));
   $("#terModeNote").textContent=status||(on?(matchMedia("(pointer:coarse)").matches?"Two fingers rotate, pitch, and zoom.":"Orbit with right-drag or Control-drag. Two fingers rotate, pitch, and zoom."):"Drag to pan. Pinch to zoom. North reset is on the map.");
   syncBearingButton();
@@ -755,6 +768,8 @@ function loadMaplibreStyles(){
 async function enterTerrain3d(){
   if(map3d||map3dLoading) return map3dLoading;
   if($("#terStyle").value==="off"&&!elevationActive()){ $("#terStyle").value="hs";syncTerrainLookControls();saveTerrainPrefs();applyTerrain(true);announceLayers() }
+  paintMap3dTheme();
+  map3dFrameReady=false;
   setTerrainModeUi(true,"Starting the GPU terrain viewer…");
   map3dWanted=true;
   map3dLoading=(async()=>{
@@ -810,8 +825,11 @@ async function enterTerrain3d(){
     map3d.on("move",cursorCameraMoved);map3d.on("idle",cursorCameraIdle);
     map3d.on("rotate",syncBearingButton);map3d.on("pitch",syncBearingButton);
     map3d.on("moveend",scheduleTerrainStatus);map3d.on("idle",scheduleTerrainStatus);
-    map3d.on("load",()=>{setTerrainModeUi(true);map3d.resize();
-      if(map3d.getPitch()<1) map3d.easeTo({pitch:MAP3D_PITCH,duration:matchMedia("(prefers-reduced-motion: reduce)").matches?0:1100})});
+    const view=map3d;
+    view.on("load",()=>{
+      if(map3d!==view||!map3dWanted)return;
+      map3dFrameReady=true;setTerrainModeUi(true);view.resize();
+      if(view.getPitch()<1) view.easeTo({pitch:MAP3D_PITCH,duration:matchMedia("(prefers-reduced-motion: reduce)").matches?0:1100})});
     map3d.on("error",event=>{if(event?.error) console.warn("3D terrain:",event.error)});
     /* Overview tiles that come back into view, or finish decoding after their
        3DEP already landed, still need their refresh; a refined tile's load

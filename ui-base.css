@@ -94,6 +94,7 @@ body.collapsed #side{transform:translateX(calc(-100% - 20px)) scale(.985);opacit
 #map[data-basemap-theme="dark"]{background:#111416}
 #map3d{position:absolute;inset:0;z-index:900;background:#dbe6eb;visibility:hidden;opacity:0;pointer-events:none;
   transition:opacity .22s var(--ease-out);touch-action:none}
+html[data-ui-theme="dark"] #map3d,#map[data-basemap-theme="dark"] #map3d{background:#111416}
 body.terrain-3d #map3d{visibility:visible;opacity:1;pointer-events:auto}
 body.terrain-3d #map>.leaflet-pane,body.terrain-3d #map>.leaflet-control-container{visibility:hidden}
 #map3d .maplibregl-canvas{outline:none}

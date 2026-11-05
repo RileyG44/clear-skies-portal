@@ -6,7 +6,8 @@
      native scale so a pinch that begins on a control cannot magnify the whole
      interface. Map pinch/rotate remains handled by Leaflet and MapLibre. -->
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
-<meta name="theme-color" content="#0b0f14">
+<meta name="theme-color" content="#dbe6eb" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#111416" media="(prefers-color-scheme: dark)">
 <link rel="manifest" href="manifest.json">
 <link rel="icon" href="icon-192.png" sizes="192x192">
 <link rel="apple-touch-icon" href="icon-180.png">
@@ -35,13 +36,19 @@
    stays under the shell until its fade-in has finished (csp-reveal). */
 :is(html.csp-boot,html.csp-reveal),:is(html.csp-boot,html.csp-reveal) body{background:#dbe6eb linear-gradient(#dbe6eb,#dbe6eb)}
 :is(html.csp-boot,html.csp-reveal)[data-ui-theme="dark"],:is(html.csp-boot,html.csp-reveal)[data-ui-theme="dark"] body{background:#111416 linear-gradient(#111416,#111416)}
+/* A dark device paints the dark map colour even before the saved theme is read.
+   An explicit light choice wins over that device colour. */
+@media (prefers-color-scheme: dark){
+  :is(html.csp-boot,html.csp-reveal):not([data-ui-theme="light"]),
+  :is(html.csp-boot,html.csp-reveal):not([data-ui-theme="light"]) body{background:#111416 linear-gradient(#111416,#111416)}
+}
 html.csp-boot #app{opacity:0;pointer-events:none}
 #app{transition:opacity .22s cubic-bezier(.2,.7,.2,1)}
 html.csp-reduce-motion #app{transition:none}
 @media (prefers-reduced-motion:reduce){#app{transition:none}}
-/* The map picture (basemap, terrain and overlays) arrives together: app/
-   bridge.js releases csp-map-staging once the first terrain picture is
-   ready, and the shell's reveal always releases it. */
+/* The map picture stays on the canvas colour until bridge.js releases
+   csp-map-staging. The shell can fade in over that colour; it does not
+   uncover a half-loaded imagery grid. */
 html.csp-map-staging #map>.leaflet-map-pane{opacity:0}
 html.csp-boot #map>.leaflet-map-pane{transition:none}   /* revealed with the shell: one fade */
 #map>.leaflet-map-pane{transition:opacity .32s cubic-bezier(.2,.7,.2,1)}
@@ -60,10 +67,20 @@ html[data-ui-theme="dark"] #cspStartup{background:#111416;color:#ebebeb}
   var root=document.documentElement;
   root.classList.add("csp-boot","csp-map-staging");
   /* Match the first painted frame to the map theme map.js will apply. */
-  try{var theme=localStorage.getItem("clearskies.mapTheme.v1");if(theme!=="dark"&&theme!=="light")theme=matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light";
+  try{var savedTheme=localStorage.getItem("clearskies.mapTheme.v1");
+    var theme=savedTheme==="dark"||savedTheme==="light"?savedTheme:(matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light");
+    var splashTheme=theme;
     // A shared link carries its map theme as a hint, so it opens in its own colour.
     var hint=/[#&]csp=/.test(location.hash)&&/[#&]theme=(dark|light)(?:&|$)/.exec(location.hash);if(hint)theme=hint[1];
-    root.dataset.uiTheme=theme}catch(e){}
+    root.dataset.uiTheme=theme;
+    var canvas=theme==="dark"?"#111416":"#dbe6eb",themeMeta=document.querySelector&&document.querySelector('meta[name="theme-color"]');
+    if(themeMeta)themeMeta.setAttribute("content",canvas);
+    if(document.querySelectorAll){var themeMetas=document.querySelectorAll('meta[name="theme-color"]');
+      for(var ti=0;ti<themeMetas.length;ti++){themeMetas[ti].setAttribute("content",canvas);themeMetas[ti].removeAttribute("media")}}
+    /* The installed splash reads this on the next open. A shared link does not repaint it. */
+    if(window.caches&&caches.open)caches.open("clear-skies-map-theme").then(function(cache){
+      return cache.put(new URL("csp-map-theme",location.href),new Response(splashTheme,{headers:{"Content-Type":"text/plain"}}));
+    }).catch(function(){})}catch(e){}
   try{var accent=localStorage.getItem("clearskies.controlAccent.v1");if(/^#[0-9a-f]{6}$/i.test(accent||""))root.style.setProperty("--csp-control-on",accent)}catch(e){}
   try{var ap=JSON.parse(localStorage.getItem("clearskies.appearance.v1")||"{}"),ok=function(v){return /^#[0-9a-f]{6}$/i.test(v||"")?v:null};
     if(ok(ap.toggle))root.style.setProperty("--csp-control-on",ap.toggle);
@@ -78,7 +95,7 @@ html[data-ui-theme="dark"] #cspStartup{background:#111416;color:#ebebeb}
   var boot=window.CSPBoot={done:false,message:"Loading your map and tools…"};
   var paint=function(){
     var panel=document.getElementById("cspStartup"),text=document.getElementById("cspStartupMessage");
-    if(panel){panel.hidden=boot.done;panel.classList.toggle("failed",!!boot.failed)}
+    if(panel){panel.hidden=boot.done&&!boot.failed;panel.classList.toggle("failed",!!boot.failed)}
     if(text)text.textContent=boot.message;
   };
   /* This listener exists before any external stylesheet or script can stall.
@@ -98,15 +115,43 @@ html[data-ui-theme="dark"] #cspStartup{background:#111416;color:#ebebeb}
       }):null;
     }).catch(function(){}).then(function(){clearTimeout(fallback);navigate()});
   });
-  boot.fail=function(message){if(boot.done)return;boot.failed=true;boot.message=message||"The portal could not finish starting. Reload to try again.";paint()};
+  boot.fail=function(message){if(boot.done)return;boot.failed=true;boot.message=message||"The portal could not finish starting. Reload to try again.";paint();window.CSPNativeHost?.startupFailed?.(boot.message)};
+  /* The shell can be up while the first picture is still withheld. Reload
+     follows twelve seconds without a new frame, not twelve seconds from ready.
+     A fetch that is still drawing, or a basemap or scene request still in
+     flight, keeps resetting this watch. */
+  var pictureTimer=0,pictureToken=0;
+  boot.failPicture=function(message){
+    if(!root.classList.contains("csp-map-staging")&&!root.classList.contains("csp-terrain-pending"))return;
+    boot.failed=true;boot.message=message||"The map is taking longer to start. Check your connection, then reload.";paint();
+    window.CSPNativeHost?.startupFailed?.(boot.message);
+  };
+  boot.pictureStillMoving=function(){return false};
+  boot.armPictureWatch=function(){
+    clearTimeout(pictureTimer);
+    var token=++pictureToken;
+    pictureTimer=setTimeout(function(){
+      if(token!==pictureToken)return;
+      if(boot.pictureStillMoving()){boot.armPictureWatch();return}
+      boot.failPicture("The map is taking longer to start. Check your connection, then reload.");
+    },12000);
+  };
+  /* Tile draws call this. A settled picture has cleared pictureTimer, so a late frame cannot arm another watch. */
+  boot.notePictureProgress=function(){if(!pictureTimer)return;boot.armPictureWatch()};
+  boot.settlePicture=function(){
+    if(root.classList.contains("csp-map-staging")||root.classList.contains("csp-terrain-pending"))return;
+    clearTimeout(pictureTimer);pictureTimer=0;
+    if(!boot.failed)return;
+    boot.failed=false;boot.message="Loading your map and tools…";paint();
+    window.CSPNativeHost?.startupSettled?.();
+  };
   var timer=setTimeout(function(){boot.fail("The portal is taking longer to start. Check your connection, then reload.")},12000);
   /* csp:revealed follows once the shell's fade has finished; heavy optional
      work (GPU terrain start-up) waits for it so it cannot stall the fade. */
   var revealed=false,reveal=function(){
     if(revealed)return;revealed=true;
-    /* The shell never appears over a held map: release the map first and
-       flush styles, so it is simply visible under the shell's one fade. */
-    root.classList.remove("csp-map-staging");if(document.body)void document.body.offsetWidth;
+    /* Leave csp-map-staging to the picture coordinator. Dropping it here
+       shows whatever imagery tiles have arrived and lets the rest pop in. */
     root.classList.add("csp-reveal");root.classList.remove("csp-boot");var shell=document.getElementById("app");if(shell)shell.removeAttribute("inert");
     root.dispatchEvent(new Event("csp:reveal"));   // the iOS cover lifts with it
     var still=root.classList.contains("csp-reduce-motion")||!!(window.matchMedia&&matchMedia("(prefers-reduced-motion: reduce)").matches);
@@ -119,7 +164,8 @@ html[data-ui-theme="dark"] #cspStartup{background:#111416;color:#ebebeb}
      registers before csp:ready (the first map picture; a shared link's view,
      also boot.hold); the fade-in waits for all of them, never more than 1.6 s. */
   boot.holds=[];
-  root.addEventListener("csp:ready",function(){boot.done=true;clearTimeout(timer);paint();
+  root.addEventListener("csp:ready",function(){boot.done=true;boot.failed=false;clearTimeout(timer);paint();
+    if(root.classList.contains("csp-map-staging")||root.classList.contains("csp-terrain-pending"))boot.armPictureWatch();
     var holds=boot.holds.slice();if(boot.hold)holds.push(boot.hold);
     holds=holds.filter(function(hold){return hold&&typeof hold.then==="function"});
     if(!holds.length){reveal();return}
@@ -139,10 +185,10 @@ html[data-ui-theme="dark"] #cspStartup{background:#111416;color:#ebebeb}
   <p id="cspStartupMessage">Loading your map and tools…</p>
   <a id="cspStartupRetry" href="?reload=2026-10-24n">Reload portal</a>
 </section>
-<link rel="stylesheet" href="vendor/leaflet.css?build=2026-11-04d">
-<link rel="stylesheet" href="ui-base.css?build=2026-11-04d">
-<link rel="stylesheet" href="ui-theme.css?build=2026-11-04d">
-<link rel="stylesheet" href="ui-system.css?build=2026-11-04d">
+<link rel="stylesheet" href="vendor/leaflet.css?build=2026-11-04e">
+<link rel="stylesheet" href="ui-base.css?build=2026-11-04e">
+<link rel="stylesheet" href="ui-theme.css?build=2026-11-04e">
+<link rel="stylesheet" href="ui-system.css?build=2026-11-04e">
 <!-- inert until csp:ready: the transparent shell must not take focus or input. -->
 <div id="app" inert>
   <div id="side">
@@ -941,8 +987,8 @@ html[data-ui-theme="dark"] #cspStartup{background:#111416;color:#ebebeb}
 </div>
 <div id="paneLive" role="status" aria-live="polite"></div>
 
-<script src="vendor/leaflet.js?build=2026-11-04d"></script>
-<script src="vendor/leaflet-rotate.umd.min.js?build=2026-11-04d"></script>
+<script src="vendor/leaflet.js?build=2026-11-04e"></script>
+<script src="vendor/leaflet-rotate.umd.min.js?build=2026-11-04e"></script>
 <script>
 /* leaflet-rotate wraps Renderer.onAdd(map) and reads map._rotate, but Leaflet's
    Canvas and SVG renderers call Renderer.prototype.onAdd.call(this) with no
@@ -954,40 +1000,40 @@ html[data-ui-theme="dark"] #cspStartup{background:#111416;color:#ebebeb}
   L.Renderer.prototype.onAdd=function(map){return onAdd.call(this,map||this._map)};
 })();
 </script>
-<script src="ui-icons.js?build=2026-11-04d"></script>
-<script src="version.js?build=2026-11-04d"></script>
-<script src="mosaic-core.js?build=2026-11-04d"></script>
-<script src="png-stream.js?build=2026-11-04d"></script>
-<script src="terrain-core.js?build=2026-11-04d"></script>
-<script src="terrain-raster.js?build=2026-11-04d"></script>
-<script src="elevation-bands.js?build=2026-11-04d"></script>
-<script src="elevation-tile-core.js?build=2026-11-04d"></script>
-<script src="terrain-drape-core.js?build=2026-11-04d"></script>
-<script src="terrain-drape-pool.js?build=2026-11-04d"></script>
-<script src="public-terrain.js?build=2026-11-04d"></script>
-<script src="tile-pipeline.js?build=2026-11-04d"></script>
-<script src="water-geography-data.js?build=2026-11-04d"></script>
-<script src="water-geography.js?build=2026-11-04d"></script>
-<script src="gpu-terrain-shaders.js?build=2026-11-04d"></script>
-<script src="lidar-render.js?build=2026-11-04d"></script>
-<script src="lidar-studio.js?build=2026-11-04d"></script>
-<script src="analysis-layers.js?build=2026-11-04d"></script>
-<script src="share-state.js?build=2026-11-04d"></script>
-<script src="coordinates.js?build=2026-11-04d"></script>
-<script src="location-search.js?build=2026-11-04d"></script>
-<script src="gpu-terrain-store.js?build=2026-11-04d"></script>
-<script src="gpu-terrain-engine.js?build=2026-11-04d"></script>
-<script src="gpu-terrain-layer.js?build=2026-11-04d"></script>
-<script src="gpu-terrain-3d-cache.js?build=2026-11-04d"></script>
-<script src="gpu-terrain-3d-renderer.js?build=2026-11-04d"></script>
-<script src="gpu-terrain-3d-layer.js?build=2026-11-04d"></script>
-<script src="wa-archaeology.js?build=2026-11-04d"></script>
-<script src="research-contract.js?build=2026-11-04d"></script>
-<script src="point-cloud-core.js?build=2026-11-04d"></script>
-<script src="point-cloud-viewer.js?build=2026-11-04d"></script>
-<script src="app.js?build=2026-11-04d"></script>
-<script src="markup-3d.js?build=2026-11-04d"></script>
-<script src="markup.js?build=2026-11-04d"></script>
-<script src="ui-system.js?build=2026-11-04d"></script>
+<script src="ui-icons.js?build=2026-11-04e"></script>
+<script src="version.js?build=2026-11-04e"></script>
+<script src="mosaic-core.js?build=2026-11-04e"></script>
+<script src="png-stream.js?build=2026-11-04e"></script>
+<script src="terrain-core.js?build=2026-11-04e"></script>
+<script src="terrain-raster.js?build=2026-11-04e"></script>
+<script src="elevation-bands.js?build=2026-11-04e"></script>
+<script src="elevation-tile-core.js?build=2026-11-04e"></script>
+<script src="terrain-drape-core.js?build=2026-11-04e"></script>
+<script src="terrain-drape-pool.js?build=2026-11-04e"></script>
+<script src="public-terrain.js?build=2026-11-04e"></script>
+<script src="tile-pipeline.js?build=2026-11-04e"></script>
+<script src="water-geography-data.js?build=2026-11-04e"></script>
+<script src="water-geography.js?build=2026-11-04e"></script>
+<script src="gpu-terrain-shaders.js?build=2026-11-04e"></script>
+<script src="lidar-render.js?build=2026-11-04e"></script>
+<script src="lidar-studio.js?build=2026-11-04e"></script>
+<script src="analysis-layers.js?build=2026-11-04e"></script>
+<script src="share-state.js?build=2026-11-04e"></script>
+<script src="coordinates.js?build=2026-11-04e"></script>
+<script src="location-search.js?build=2026-11-04e"></script>
+<script src="gpu-terrain-store.js?build=2026-11-04e"></script>
+<script src="gpu-terrain-engine.js?build=2026-11-04e"></script>
+<script src="gpu-terrain-layer.js?build=2026-11-04e"></script>
+<script src="gpu-terrain-3d-cache.js?build=2026-11-04e"></script>
+<script src="gpu-terrain-3d-renderer.js?build=2026-11-04e"></script>
+<script src="gpu-terrain-3d-layer.js?build=2026-11-04e"></script>
+<script src="wa-archaeology.js?build=2026-11-04e"></script>
+<script src="research-contract.js?build=2026-11-04e"></script>
+<script src="point-cloud-core.js?build=2026-11-04e"></script>
+<script src="point-cloud-viewer.js?build=2026-11-04e"></script>
+<script src="app.js?build=2026-11-04e"></script>
+<script src="markup-3d.js?build=2026-11-04e"></script>
+<script src="markup.js?build=2026-11-04e"></script>
+<script src="ui-system.js?build=2026-11-04e"></script>
 </body>
 </html>

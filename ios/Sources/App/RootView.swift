@@ -2,6 +2,38 @@ import SwiftUI
 import UIKit
 import WebKit
 
+/// The map canvas. A saved theme wins over the system appearance, using the
+/// same colours as `#map` (`#dbe6eb` / `#111416`). With nothing saved, the
+/// system colour asset still follows the device.
+enum MapCanvasColor {
+    static let preferenceKey = "clearskies.native.theme.v1"
+    static let light = UIColor(red: 219 / 255, green: 230 / 255, blue: 235 / 255, alpha: 1)
+    static let dark = UIColor(red: 17 / 255, green: 20 / 255, blue: 22 / 255, alpha: 1)
+
+    static func theme(defaults: UserDefaults = .standard) -> String? {
+        switch defaults.string(forKey: preferenceKey) {
+        case "dark": return "dark"
+        case "light": return "light"
+        default: return nil
+        }
+    }
+
+    static func uiColor(theme explicit: String? = nil, style: UIUserInterfaceStyle = .unspecified) -> UIColor {
+        switch explicit ?? theme() {
+        case "dark": return dark
+        case "light": return light
+        default:
+            if style == .dark { return dark }
+            if style == .light { return light }
+            return UIColor(named: "CanvasBackground") ?? light
+        }
+    }
+
+    static func color(theme explicit: String? = nil, style: UIUserInterfaceStyle = .unspecified) -> Color {
+        Color(uiColor: uiColor(theme: explicit, style: style))
+    }
+}
+
 /// Stage 2 of CR-001. The map and its native glass controls share one
 /// composition surface; expanding a menu never substitutes an opaque modal.
 struct RootView: View {
@@ -18,8 +50,9 @@ struct RootView: View {
                 MapChrome(toolbarHideProgress: toolbarVisibility.progress)
                     .padding(.bottom, portal.host.webView.window?.safeAreaInsets.bottom ?? 0)
                     .opacity(portal.ready ? 1 : 0)
-                if !portal.ready {
-                    LaunchCover(restoring: portal.restoring)
+                if !portal.ready || portal.startupFailure != nil {
+                    LaunchCover(restoring: portal.restoring, failure: portal.startupFailure,
+                                retry: portal.host.retryStartup)
                         .padding(.bottom, portal.host.webView.window?.safeAreaInsets.bottom ?? 0)
                 }
                 if let sheet = portal.shell.activeSheet {
@@ -34,7 +67,7 @@ struct RootView: View {
         }
         .ignoresSafeArea(.container, edges: .bottom)
         .ignoresSafeArea(.keyboard, edges: .bottom)
-        .background(Color("CanvasBackground").ignoresSafeArea())
+        .background(MapCanvasColor.color(theme: portal.shell.map.theme).ignoresSafeArea())
         .environment(portal.shell)
         .environment(\.portalAppearance, portal.shell.appearance)
         .tint(Color(hex: portal.shell.appearance.button) ?? .accentColor)

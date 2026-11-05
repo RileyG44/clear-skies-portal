@@ -312,18 +312,34 @@ function studioStack(style,options){ return style&&style!=="off"&&lidarStudio?li
    queue); a result for a view or size that has since changed is dropped, and
    the change schedules a fresh fit. */
 let studioFitChain=Promise.resolve(false);
+let studioFitEpoch=0,studioFitOwner=null,studioFrozenFit="";
 const studioFitView=()=>{const c=map.getCenter(),size=map.getSize();return [c.lat,c.lng,map.getZoom(),map.getBearing?.()||0,size.x,size.y].join()};
+const studioFitKey=()=>studioFitView()+"|"+(lidarStudio?.fitKey?.()||"");
+/* The first picture owns ALL range fits until publication. Freeze its ranges
+   for that camera and mix; later camera or control changes get fresh fits.
+   In-flight and queued ordinary fits share the same invalidation epoch. */
+function beginStudioPublication(){
+  const owner={};studioFitOwner=owner;studioFitEpoch++;clearTimeout(studioFitTimer);
+  return succeeded=>{
+    if(studioFitOwner!==owner)return;
+    // A failed or abandoned fit must not freeze the camera on default colours.
+    if(succeeded)studioFrozenFit=studioFitKey();
+    studioFitOwner=null;studioFitEpoch++;clearTimeout(studioFitTimer);
+  };
+}
 function fitStudio(isCurrent){
-  const view=studioFitView(),current=()=>studioFitView()===view&&(!isCurrent||isCurrent());
+  const key=studioFitKey(),epoch=studioFitEpoch;
+  const current=()=>epoch===studioFitEpoch&&studioFitKey()===key&&(!isCurrent||isCurrent());
   return studioFitChain=studioFitChain.catch(()=>false).then(()=>{
     if(!current()||!lidarStudio)return false;
     return lidarStudio.fitFromViewAsync?lidarStudio.fitFromViewAsync(false,current):!!lidarStudio.fitFromView();
   }).catch(()=>false);
 }
 function scheduleStudioFit(){
-  if(!lidarStudio?.needsFit())return;
+  const key=studioFitKey(),epoch=studioFitEpoch;
+  if(studioFitOwner||key===studioFrozenFit||!lidarStudio?.needsFit())return;
   clearTimeout(studioFitTimer);
-  studioFitTimer=setTimeout(()=>fitStudio(),450);
+  studioFitTimer=setTimeout(()=>{if(epoch===studioFitEpoch&&!studioFitOwner&&key!==studioFrozenFit)fitStudio()},450);
 }
 function initGpuTerrain(){
   if(gpuTerrainDecided)return gpuTerrainEnabled;
@@ -419,7 +435,14 @@ function syncGpuTerrain(){
 function terrainLayerSummary(layer){
   if(!gpuTerrainEnabled||layer&&layer!==gpuTerrainLayer)return CSPPublicTerrain.summarize(Object.values(layer?._tiles||{}));
   if(!map.hasLayer(gpuTerrainLayer))return {sources:[],coverage:0,total:0,ready:0,refining:false,failed:false};
-  const status=gpuTerrainLayer.settled(),provenance=gpuTerrainLayer.provenance()||{},ranks=provenance.ranks||{};
+  const status=gpuTerrainLayer.settled();
+  // Store winners name a fully valid ancestor for the whole view. While the
+  // picture is hidden, name nothing. Once a frame has been read back, name
+  // the ranks in that frame rather than the ancestor.
+  const picturePending=!!document.documentElement?.classList?.contains?.("csp-terrain-pending");
+  const shown=gpuTerrainLayer.shownProvenance;
+  const provenance=picturePending?{ranks:{}}:(shown?.ranks?shown:(gpuTerrainLayer.provenance()||{}));
+  const ranks=provenance.ranks||{};
   const total=Object.values(ranks).reduce((sum,n)=>sum+n,0);
   const sources=Object.entries(ranks).filter(([rank,n])=>n>0&&CSPPublicTerrain.SOURCES[rank]).sort((a,b)=>b[0]-a[0])
     .map(([rank,n])=>({...CSPPublicTerrain.SOURCES[rank],rank:+rank,pixels:n,percent:total?100*n/total:0,

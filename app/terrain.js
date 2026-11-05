@@ -315,18 +315,23 @@ function paintTerrainStatus(){
   terrainLoadStatus.hidden=false;
   const layer=terrainSwap?terrainSwap.displayedLayer:(!terLayer?elevLayer:terLayer),tiles=Object.values(layer?._tiles||{});
   const summary=terrainLayerSummary(layer),{refining,failed,coverage,sources}=summary;
-  const loading=!!terrainSwap||coverage<100||refining;
+  // Tile overlap can read complete while the first GPU picture is still hidden.
+  const picturePending=!is3d&&!!document.documentElement?.classList.contains("csp-terrain-pending");
+  const loading=!!terrainSwap||coverage<100||refining||picturePending;
   const source3d=is3d?public3dSourceText():"";
   const offline=typeof navigator!=="undefined"&&navigator.onLine===false;
+  const pictureHeld=picturePending&&!(failed&&coverage===0);
   terrainLoadStatus.dataset.state=offline?"offline":terrainSwapMessage||failed&&coverage===0?"partial":is3d?(source3d.includes("waiting for data")?"loading":"ready"):loading?"loading":failed?"partial":"ready";
-  const label=terrainSwap?"Preparing terrain":failed&&coverage===0?"Terrain unavailable · check your connection or source":coverage<100?"Loading terrain":refining?"Refining terrain":failed?"Terrain available · some detail unavailable":"Terrain ready";
-  const detail=sources.length?sources.map(source=>source.label).join(" + "):"Waiting for elevation";
+  const label=terrainSwap?"Preparing terrain":pictureHeld?"Preparing the terrain picture":failed&&coverage===0?"Terrain unavailable · check your connection or source":coverage<100?"Loading terrain":refining?"Refining terrain":failed?"Terrain available · some detail unavailable":"Terrain ready";
+  const named=pictureHeld?[]:sources;
+  const detail=named.length?named.map(source=>source.label).join(" + "):"Waiting for elevation";
   const requested=dnrAreas.length?`WA DNR areas: ${dnrAreas.length} · `:"";
-  const message=offline?"Offline · reconnect to load missing map and terrain data.":is3d?source3d:terrainSwapMessage||`${requested}${label} · ${coverage}% of loaded tile positions · ${detail}${dnrAcquisitionText()?` · ${dnrAcquisitionText()}`:""}`;
+  const progress=pictureHeld?"visible picture still settling":`${coverage}% of loaded tile positions`;
+  const message=offline?"Offline · reconnect to load missing map and terrain data.":is3d?source3d:terrainSwapMessage||`${requested}${label} · ${progress} · ${detail}${dnrAcquisitionText()?` · ${dnrAcquisitionText()}`:""}`;
   if(terrainLoadStatus.textContent!==message)terrainLoadStatus.textContent=message;
   const output=$("#terrainSourceSummary");
-  output.innerHTML='<p><b>Currently displayed in 2D</b></p>'+sources.map(source=>`<p><a href="${source.url}" target="_blank" rel="noopener noreferrer">${esc(source.label)}</a> · ${source.percent<1?"<1":Math.round(source.percent)}% of rendered terrain pixels<br><span class="terrain-resolution-note">${esc(sourceResolutionText(source))}</span></p>`).join("")+
-    (!sources.length?'<p>No terrain pixels displayed yet.</p>':'')+
+  output.innerHTML='<p><b>Currently displayed in 2D</b></p>'+named.map(source=>`<p><a href="${source.url}" target="_blank" rel="noopener noreferrer">${esc(source.label)}</a> · ${source.percent<1?"<1":Math.round(source.percent)}% of rendered terrain pixels<br><span class="terrain-resolution-note">${esc(sourceResolutionText(source))}</span></p>`).join("")+
+    (!named.length?'<p>No terrain pixels displayed yet.</p>':'')+
     '<p>Percentages describe the current loaded tile samples, not survey footprint area. USGS 3DEP mixes resolutions; a 3.3 ft service capability does not mean every location has 3.3 ft data. Zooming past a source’s detail does not create new information.</p>'+
     (is3d?'<p><b>3D</b> '+esc(public3dSourceText())+'</p>':'')+
     (layer instanceof CompositeTerrainLayer||layer instanceof PublishedHillshadeLayer?'<p>Published WA DNR hillshade has fixed provider lighting. Cached numeric DNR takes priority. Listed nearby projects are coverage candidates; the export does not identify which individual project supplies every pixel.</p>':'');
@@ -360,15 +365,30 @@ function installTerrain(nextBase,nextLayer){
     layer._cspPending=true;
     layer.setOpacity(0);                    // preload without double-compositing
   }
+  // The new tiles were staged at opacity 0. Bring them in as one fade and
+  // keep the picture they replace until that fade has finished.
+  function fadeTerrainOpacity(layer,done){
+    const target=layer._cspTargetOpacity;
+    const box=typeof layer.getContainer==="function"?layer.getContainer():null;
+    const reduce=(typeof document!=="undefined"&&!!document.documentElement?.classList?.contains?.("csp-reduce-motion"))||(typeof matchMedia==="function"&&matchMedia("(prefers-reduced-motion: reduce)").matches);
+    if(!box||reduce){layer.setOpacity(target);done();return}
+    box.style.transition="opacity .32s cubic-bezier(.2,.7,.2,1)";
+    layer.setOpacity(target);
+    setTimeout(()=>{box.style.transition="none";done()},320);
+  }
   let loaded=0, finished=false, timer=null,settleTimer=null;
   const finish=ok=>{
     if(finished) return; finished=true; if(timer) clearTimeout(timer); if(settleTimer) clearTimeout(settleTimer);
     ready.off("tileload",onLoad); ready.off("tilerefine",onLoad); ready.off("load",onComplete); ready.off("tileerror",onError);
     terrainSwap=null;scheduleTerrainStatus();
     if(ok){
-      if(oldLayer&&map.hasLayer(oldLayer)) map.removeLayer(oldLayer);
-      if(oldBase&&map.hasLayer(oldBase)) map.removeLayer(oldBase);
-      for(const layer of pending){ layer._cspPending=false; layer.setOpacity(layer._cspTargetOpacity) }
+      let left=pending.length;
+      const retire=()=>{
+        if(--left>0)return;
+        if(oldLayer&&map.hasLayer(oldLayer)) map.removeLayer(oldLayer);
+        if(oldBase&&map.hasLayer(oldBase)) map.removeLayer(oldBase);
+      };
+      for(const layer of pending){ layer._cspPending=false; fadeTerrainOpacity(layer,retire) }
     }else{
       if(nextLayer&&map.hasLayer(nextLayer)) map.removeLayer(nextLayer);
       if(nextBase&&map.hasLayer(nextBase)) map.removeLayer(nextBase);

@@ -1012,7 +1012,9 @@
     const visible = id => { const el = document.getElementById(id); return !!el && !el.hidden; };
     return {
       mode: currentMode(),
-      theme: document.documentElement.dataset.uiTheme || "",
+      // The saved choice only. A shared link paints its own theme on the page
+      // and must not become the next launch's cover colour.
+      theme: document.documentElement.dataset.uiThemeSaved || "",
       pointCloud: body.classList.contains("point-cloud-open"),
       terrain3d: body.classList.contains("terrain-3d"),
       selecting: body.classList.contains("dnr-selecting") || visible("snapSel") || visible("dnrSelectionBar"),
@@ -1354,10 +1356,13 @@
 
   /* -------------------------------------------------------------- watching */
   const start = async () => {
-    if (window.CSPNativeHost.resume) {
-      try { await bridge()?.restoreSession?.(window.CSPNativeHost.resume); }
-      catch (error) { console.warn("Map recovery could not restore 3D", error); }
+    if (!bridge()) {
+      handler.postMessage({type: "startup.failed", message: "The map could not start. Reload to try again."}).catch(() => {});
+      return;
     }
+    // The saved camera was applied before the first picture (bridge.js).
+    // Restoring it again as the cover lifts drops that still, and the
+    // hillshade of the recovered place then pops in underneath.
     // The web panel stays collapsed for good inside the app.
     if (!document.body.classList.contains("collapsed")) $("#sideToggle")?.click();
     // These controls have native equivalents. Moving them off screen keeps
@@ -1407,7 +1412,8 @@
     handler.postMessage({type: "ready"}).catch(() => {});
   };
   /* Lift the native cover when the page reveals its shell, not at csp:ready:
-     a shared link holds the reveal until its view is in place. */
+     a shared link holds the reveal until its view is in place. The saved
+     camera is already applied by then, so this start does not move the map. */
   if (document.documentElement.classList.contains("csp-boot")) {
     document.documentElement.addEventListener("csp:reveal", start, { once: true });
   } else {

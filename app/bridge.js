@@ -1,3 +1,8 @@
+function cspTerrainSourceMeta(){
+  const summary=terrainLayerSummary(terLayer);
+  return summary.sources.length?summary.sources.map(source=>source.label).join(" + "):
+    summary.failed?"Terrain source unavailable":"Terrain · source pending";
+}
 function cspActiveLayers(){
   const layers=[];
   if(overlay||overlayPending||footprint){
@@ -7,7 +12,7 @@ function cspActiveLayers(){
   }
   if($("#terStyle").value!=="off"){
     layers.push({id:"terrain",name:$("#terStyle").selectedOptions[0]?.textContent||"Terrain",
-      meta:`${$("#terSrc").selectedOptions[0]?.textContent||"Best available"} · LiDAR`,
+      meta:cspTerrainSourceMeta(),
       opacity:+$("#terOp").value,visible:true,kind:"terrain"});
   }
   if($("#elevSh").checked){
@@ -305,10 +310,8 @@ async function cspRestoreShareState(state){
   PREV_DAYS=+$("#days").value;syncDateUI();syncChecks();
   setMapTheme(state.theme,false);
   await B.restoreSession({...state.view,mode:"2d"});
-  // Theme, controls and camera are in place: the shell may now fade in.
-  cspShareShown?.();
-  // Terrain layers and the GPU warning below depend on the renderer, which
-  // start-up decides once the shell has faded in.
+  // Imagery can move the camera, and overlays are not on the map yet. The
+  // shell stays up until those are applied and the final camera is written.
   await cspRendererDecided;
   applyTerrain(true);applyElev();
   if(state.controls.terStyle!=="off"){
@@ -326,6 +329,11 @@ async function cspRestoreShareState(state){
   else{map.setView(state.view.center,state.view.zoom,{animate:false});map.setBearing?.(state.view.bearing)}
   if(state.pointCloud)try{await pointCloudPanel.restoreDisplay(state.pointCloud)}catch(error){warnings.push(error.message)}
   await cspAwaitSharedOverlays(state,warnings);
+  // Overlays, imagery and the final camera are in place. The map pane can
+  // leave the canvas colour, and the shell may fade in. A stalled link still
+  // fades at the shell's 1.6 s cap, from index.html, not from here.
+  cspMarkShareCamera();
+  cspShareShown?.();
   const order=state.order.map(id=>markupIds[id]||id);
   localStorage.setItem("clearskies.active-layer-order.v1",JSON.stringify(order));cspSetLayerOrder(order);
   clearTimeout(researchLiveTimer);$("#researchLive").checked=state.research.live;
@@ -339,9 +347,18 @@ async function cspRestoreShareState(state){
 Object.assign(window.ClearSkiesPortalBridge,{shareURL:cspShareURL,captureShareState:cspCaptureShareState,restoreShareState:cspRestoreShareState});
 let cspShareReady=false,cspShareRunning=false,cspShareRequested,cspShareLast,cspShareShown=null,cspRendererReady;
 const cspRendererDecided=new Promise(resolve=>cspRendererReady=resolve);
-/* A shared link opens straight into its view: index.html holds the shell's
-   fade-in (for at most 1.5 s) until the link's theme and camera are applied. */
-if(new URLSearchParams(location.hash.slice(1)).has("csp")&&window.CSPBoot)
+/* A shared link opens straight into its view. The shell's fade-in waits
+   (for at most 1.6 s) until the link's overlays, imagery and final camera
+   are applied. The map pane stays on the canvas colour until that same
+   moment, or until the link fails, so the opening view cannot flash through.
+   A restarted iOS session has the same hold: the map is created on North
+   America, and the pane stays there until the saved camera is applied. */
+var cspShareCameraPending=false;
+try{cspShareCameraPending=new URLSearchParams(location.hash.slice(1)).has("csp")}catch(e){}
+function cspMarkShareCamera(){cspShareCameraPending=false}
+var cspNativeCameraPending=false;
+try{cspNativeCameraPending=!!window.CSPNativeHost?.resume&&!cspShareCameraPending}catch(e){}
+if(cspShareCameraPending&&window.CSPBoot)
   window.CSPBoot.hold=new Promise(resolve=>cspShareShown=()=>{cspShareShown=null;resolve()});
 function cspReceiveShare(){
   const params=new URLSearchParams(location.hash.slice(1));
@@ -365,7 +382,8 @@ function cspReceiveShare(){
         result={complete:false,warnings:[message]};
       }
     }
-    cspShareShown?.();   // a failed link must not keep the shell hidden
+    cspMarkShareCamera(); // a failed link must not keep the map on the canvas colour
+    cspShareShown?.();
     cspShareRunning=false;return result;
   })();
 }
@@ -391,32 +409,46 @@ document.documentElement.addEventListener("csp:ready", () => {
    on cspMapReady), so this work never runs under a visible fade. A
    device-specific GPU failure must never abort the shell's initialization. */
 document.documentElement.addEventListener("csp:ready",()=>requestAnimationFrame(()=>{
-  try{initGpuTerrain()}catch(error){
-    gpuTerrainEnabled=false;
-    try{gpuTerrainLayer?.destroy();gpuTerrainStore?.destroy()}catch(_){}
-    gpuTerrainLayer=null;gpuTerrainStore=null;
-    document.documentElement.dataset.gpu2d="off";lidarStudio?.refresh();
-    console.warn("Terrain GPU unavailable; using the CPU renderer",error);
+  const begin=()=>{
+    try{initGpuTerrain()}catch(error){
+      gpuTerrainEnabled=false;
+      try{gpuTerrainLayer?.destroy();gpuTerrainStore?.destroy()}catch(_){}
+      gpuTerrainLayer=null;gpuTerrainStore=null;
+      document.documentElement.dataset.gpu2d="off";lidarStudio?.refresh();
+      console.warn("Terrain GPU unavailable; using the CPU renderer",error);
+    }
+    if(gpuTerrainLayer)gpuTerrainLayer.on("tilerefine",()=>{scheduleTerrainStatus();paintElevOut()});
+    try{
+      if($("#terStyle").value!=="off")applyTerrain(true);
+      if(elevationActive())applyElev();else syncElevationChecks();
+      cspStageFirstPicture();
+    }catch(error){console.warn("Initial terrain rendering failed",error);cspReleaseMap()}
+    /* Shared views wait for the renderer to be settled: a deferred GPU engine
+       is either ready or has handed terrain to the CPU renderer. */
+    const engine=gpuTerrainEnabled&&gpuTerrainLayer?.getEngine?.();
+    if(engine&&!engine.ready){
+      let settled=false;const settle=()=>{if(!settled){settled=true;cspRendererReady()}};
+      gpuTerrainLayer.once("engineready",settle);gpuTerrainLayer.once("enginefailed",settle);
+      // A driver that never finishes compiling must not leave terrain pending.
+      setTimeout(()=>{
+        if(!settled&&gpuTerrainEnabled&&gpuTerrainLayer?.getEngine?.()&&!gpuTerrainLayer.getEngine().ready)
+          gpuTerrainFailedLate(new Error("GPU terrain start-up timed out"));
+        settle();
+      },8000);
+    }else cspRendererReady();
+  };
+  /* The map is born on North America. A restarted session already has a
+     camera: move there before the first picture can publish. A shared link
+     owns the launch instead, and applies its own camera. */
+  const resume=window.CSPNativeHost?.resume;
+  const sharePending=typeof cspShareCameraPending!=="undefined"&&!!cspShareCameraPending;
+  if(resume&&!sharePending){
+    const restore=window.ClearSkiesPortalBridge?.restoreSession?.(resume);
+    Promise.resolve(restore).then(()=>{cspNativeCameraPending=false;begin()},()=>{cspNativeCameraPending=false;begin()});
+    return;
   }
-  if(gpuTerrainLayer)gpuTerrainLayer.on("tilerefine",()=>{scheduleTerrainStatus();paintElevOut()});
-  try{
-    if($("#terStyle").value!=="off")applyTerrain(true);
-    if(elevationActive())applyElev();else syncElevationChecks();
-    cspStageFirstPicture();
-  }catch(error){console.warn("Initial terrain rendering failed",error);cspReleaseMap()}
-  /* Shared views wait for the renderer to be settled: a deferred GPU engine
-     is either ready or has handed terrain to the CPU renderer. */
-  const engine=gpuTerrainEnabled&&gpuTerrainLayer?.getEngine?.();
-  if(engine&&!engine.ready){
-    let settled=false;const settle=()=>{if(!settled){settled=true;cspRendererReady()}};
-    gpuTerrainLayer.once("engineready",settle);gpuTerrainLayer.once("enginefailed",settle);
-    // A driver that never finishes compiling must not leave terrain pending.
-    setTimeout(()=>{
-      if(!settled&&gpuTerrainEnabled&&gpuTerrainLayer?.getEngine?.()&&!gpuTerrainLayer.getEngine().ready)
-        gpuTerrainFailedLate(new Error("GPU terrain start-up timed out"));
-      settle();
-    },8000);
-  }else cspRendererReady();
+  cspNativeCameraPending=false;
+  begin();
 }),{once:true});
 
 /* The first map picture appears whole rather than tile by tile.
@@ -426,14 +458,23 @@ document.documentElement.addEventListener("csp:ready",()=>requestAnimationFrame(
 let cspMapShown;
 const cspMapReady=new Promise(resolve=>cspMapShown=resolve);
 if(window.CSPBoot)(window.CSPBoot.holds||(window.CSPBoot.holds=[])).push(cspMapReady);
-function cspReleaseMap(){document.documentElement.classList.remove("csp-map-staging");cspMapShown()}
-/* Staging gives way only when the person takes the map. Programmatic camera
-   moves (a shared link's view, the fresh-view fit) keep it waiting for the
-   picture of the view they land on. */
+function cspReleaseMap(){
+  const root=document.documentElement;
+  root.classList.remove("csp-map-staging");cspMapShown();
+  if(!root.classList.contains?.("csp-terrain-pending"))globalThis.CSPBoot?.settlePicture?.();
+}
+/* Staging gives way only when the person takes the map. A tap on the dock,
+   the sidebar toggle, or another control is not the map: Leaflet stops
+   mousedown on those, but pointerdown still bubbles to this container.
+   Programmatic camera moves keep waiting for the picture of the view they land on. */
 function cspUserInput(fn,on){
   const el=map.getContainer();
+  if(!fn._cspMapInput)fn._cspMapInput=event=>{
+    if(event?.target?.closest?.("#mapDock,#sideToggle,#sideToggleDock,#pointCloudPanel,#mkCapture,button,a,input,textarea,select,label,.leaflet-control,.map-tool"))return;
+    fn(event);
+  };
   for(const name of ["pointerdown","wheel","keydown","touchstart"])
-    on?el.addEventListener(name,fn,{passive:true}):el.removeEventListener(name,fn,{passive:true});
+    on?el.addEventListener(name,fn._cspMapInput,{passive:true}):el.removeEventListener(name,fn._cspMapInput,{passive:true});
 }
 /* One coordinator for the first picture. Which renderer draws it settles over
    the first moments (a shared link's restored controls can add the GPU layer a
@@ -441,67 +482,341 @@ function cspUserInput(fn,on){
    renderer; WA DNR published hillshade is a CPU tile layer). Every 50 ms:
    terrain is ready when the GPU picture is covered and fitted, or when no CPU
    tile layer or terrain swap is busy; the basemap is ready when it has loaded
-   its first view. Release the map when both are (after a 200 ms grace). At the
-   1.5 s deadline the map is shown anyway, but an unfinished GPU picture stays
-   hidden on its own and fades in whole when it is ready. Taking the map shows
-   everything at once. */
+   its first view. A fresh visit also waits for Rivers & lakes. Release the
+   map when those are ready (after a 200 ms grace). At the 1.5 s deadline an
+   unfinished GPU picture hides itself. The pane stays on the canvas colour
+   until that picture has published, or until CPU terrain tiles have finished,
+   and until the basemap and a fresh visit's rivers are idle. A shared link
+   keeps it there until the final camera is written, and a recovered session
+   until its saved camera is applied. A picture deferred across that deadline
+   publishes before the pane opens. The deadline itself does not open the pane:
+   a camera that lands inside the 1.5 s window sets launchHold, and the poll
+   stays armed until that resampled picture is ready. Taking the map shows
+   everything at once.
+   A picture that is still withheld after the shell is up keeps the recovery
+   watch armed in index.html. */
+/* After the first picture, one readback when the camera has been still names
+   the frame that is actually on screen. It is never a synchronous read on the
+   draw path, and it stays quiet while the first picture is still hidden. */
+function cspWatchShownProvenance(layer){
+  if(!layer||layer._cspProvenanceWatch)return;
+  layer._cspProvenanceWatch=true;
+  let reading=false,timer=0,ticket=0;
+  layer.on("render",()=>{
+    if(layer._cspHoldStill||document.documentElement.classList.contains("csp-terrain-pending"))return;
+    clearTimeout(timer);const id=++ticket;
+    timer=setTimeout(()=>{
+      if(reading||id!==ticket)return;
+      const engine=layer.getEngine?.();
+      if(!engine?.readProvenance)return;
+      reading=true;
+      engine.readProvenance().then(result=>{
+        reading=false;
+        if(id!==ticket||!(result?.coverage>=.98)||!Object.values(result.ranks||{}).some(n=>n>0))return;
+        layer.shownProvenance=result;scheduleTerrainStatus();
+      }).catch(()=>{reading=false});
+    },240);
+  });
+}
+function startupCameraPending(){
+  return (typeof cspShareCameraPending!=="undefined"&&!!cspShareCameraPending)
+    ||(typeof cspNativeCameraPending!=="undefined"&&!!cspNativeCameraPending);
+}
 function cspStageFirstPicture(){
   let done=false,gpu=null;const started=performance.now();
   const cpuBusy=()=>!!terrainSwap||[terBase,terLayer,elevLayer].some(layer=>layer&&map.hasLayer(layer)&&layer.isLoading?.());
   const baseBusy=()=>!!(baseLayer&&map.hasLayer(baseLayer)&&baseLayer.isLoading?.());
+  /* A new visit turns Rivers & lakes on before this gate. Those tiles are
+     part of the first picture, same as the basemap. */
+  const waterBusy=()=>{
+    if(typeof cspFreshView==="undefined"||!cspFreshView)return false;
+    if(typeof ovOn==="undefined"||!ovOn?.water)return false;
+    const layer=typeof ovLayers!=="undefined"?ovLayers?.water:null;
+    return !!(layer&&map.hasLayer(layer)&&layer.isLoading?.());
+  };
   const stop=()=>{done=true;clearInterval(poll);clearTimeout(timer);cspUserInput(onInput,false)};
-  const release=()=>{if(done)return;stop();cspReleaseMap()};
-  const onInput=()=>{gpu?.show();release()};
-  const deadline=()=>{gpu?.hideUntilReady();release()};
+  const release=force=>{if(done||(!force&&startupCameraPending()))return;stop();cspReleaseMap()};
+  const onInput=()=>{
+    // A tap before the shared or recovered camera is written would uncover
+    // North America, or an intermediate fitBounds, and then jump.
+    if(startupCameraPending())return;
+    gpu?.show();release(true);
+  };
+  const deadline=()=>{
+    // Hide the unfinished hillshade. Opening the pane here shows the basemap
+    // alone while that picture, or CPU terrain tiles, are still loading.
+    gpu?.hideUntilReady();
+    // A share can land inside this window. step() has set launchHold and
+    // asked for a resample, or it is about to. release() would stop the poll,
+    // so the pane would open on the basemap and never see that picture.
+    if(gpu?.launchHold&&!gpu.ready)return;
+  };
   const step=()=>{
     if(done)return;
+    let pictureDue=false;
+    if(gpu?.defer&&!startupCameraPending()){
+      gpu.defer=false;gpu.launchHold=true;pictureDue=true;gpu.resample?.();
+    }
     const gpuOn=gpuTerrainEnabled&&gpuTerrainLayer&&map.hasLayer(gpuTerrainLayer);
     if(gpu&&(!gpuOn||gpu.layer!==gpuTerrainLayer)){gpu.stop();gpu=null}
     if(gpuOn&&!gpu)gpu=cspGpuPicture(gpuTerrainLayer);
     const terrainReady=gpu?gpu.ready:!cpuBusy();
-    if(terrainReady&&!baseBusy()&&performance.now()-started>=200)release();
+    // The deadline may already have hidden the terrain. The resampled picture
+    // of the launch camera has to publish before the base map is uncovered.
+    if(pictureDue||(gpu?.launchHold&&!terrainReady))return;
+    if(!baseBusy()&&!waterBusy()&&performance.now()-started>=200&&terrainReady)release(false);
   };
   const poll=setInterval(step,50),timer=setTimeout(deadline,1500);
   cspUserInput(onInput,true);step();
 }
-/* The GPU picture is ready once the terrain covers the view and its automatic
-   colour ranges are fitted (the frame after the fit carries the fitted
-   colours, so the picture does not re-colour after it appears). If the map
-   had to be shown first, the terrain canvas waits hidden and fades in whole
-   when ready, at the latest 8 s later. */
+/* The GPU picture is ready once one whole frame covers the view and its
+   automatic colour ranges are fitted (the frame after the fit carries the
+   fitted colours). That frame is copied from the WebGL canvas, the child of
+   the layer container, and held until the view's own tiles settle. A copy
+   taken before the fit lands is discarded. If the bitmap cannot be held, the
+   picture waits for those tiles. Once they have settled, rank 0 is nodata, so
+   a coast or any finished frame publishes even when the coarse sample is
+   under 0.98. The loading announcement stays until the fade ends.
+   Resident tile overlap is only a cheap precheck: a fenced readback checks
+   valid pixels, so a sparse tile cannot count as a complete picture. */
 function cspGpuPicture(layer){
   const el=layer.getContainer(),root=document.documentElement;
-  const picture={layer,ready:false};
-  let phase="cover",stopped=false,hidden=false,cap=0;
-  const fadeIn=()=>{
-    if(!hidden)return;hidden=false;
-    const still=root.classList.contains("csp-reduce-motion")||matchMedia("(prefers-reduced-motion: reduce)").matches;
-    el.style.transition=still?"none":"opacity .32s cubic-bezier(.2,.7,.2,1)";el.style.opacity="";
-    if(!still)setTimeout(()=>{el.style.transition="none"},400);
+  const closeFit=beginStudioPublication();
+  const picture={layer,ready:false,cover:null};
+  let stopped=false,hidden=false,reading=false,fitting=false,fitted=false;
+  let revision=0,viewKey="",latest=null,fitTimer=0,fitToken=0,retryTimer=0,fadeTimer=0;
+  const motionStill=()=>root.classList.contains("csp-reduce-motion")||matchMedia("(prefers-reduced-motion: reduce)").matches;
+  const clearPending=()=>{
+    root.classList.remove("csp-terrain-pending");scheduleTerrainStatus();
+    if(!root.classList.contains?.("csp-map-staging"))globalThis.CSPBoot?.settlePicture?.();
   };
-  const detach=()=>{layer.off("render",check);clearTimeout(cap);cspUserInput(finish,false);root.removeEventListener("csp:reveal",onShell)};
-  function finish(){if(picture.ready||stopped)return;picture.ready=true;detach();fadeIn()}
+  /* One rank covering the frame is one picture. A second rank that is more
+     than a sliver is a finer tile arriving through the overview. */
+  const onePicture=result=>{
+    const counts=Object.values(result?.ranks||{}).filter(n=>n>0);
+    if(!counts.length)return false;
+    const total=counts.reduce((sum,n)=>sum+n,0);
+    return total>0&&Math.max(...counts)/total>=.98;
+  };
+  const ownTilesSettled=()=>{
+    if(typeof layer.settled!=="function")return true;
+    const status=layer.settled();
+    return !!status?.total&&!status.refining;
+  };
+  /* The container is a transformed div. The bitmap is its canvas child. */
+  function frameCanvas(){
+    const canvas=el?.querySelector?.("canvas");
+    return canvas&&canvas.width>0?canvas:null;
+  }
+  /* Copy once, in this turn, while the WebGL buffer still holds the frame.
+     A readback runs after the browser has cleared that buffer, so it cannot
+     take the still itself. The pre-fit stretch is the wrong picture. */
+  /* Water and a cleared buffer are transparent in the middle. A coast still
+     has shore somewhere in the frame, so look past the center before deciding
+     the copy is empty. An empty copy does not latch the view: the next draw
+     can hold the hillshade once it has ink. */
+  function frameHasInk(ctx,width,height){
+    const n=8,places=[
+      [0,0],[width-n,0],[0,height-n],[width-n,height-n],
+      [(width>>1)-(n>>1),(height>>1)-(n>>1)],
+      [width>>2,height>>2],[(width*3)>>2,height>>2],
+      [width>>2,(height*3)>>2],[(width*3)>>2,(height*3)>>2]
+    ];
+    for(const [sx,sy] of places){
+      const x=Math.max(0,Math.min(width-1,sx|0)),y=Math.max(0,Math.min(height-1,sy|0));
+      const w=Math.min(n,width-x),h=Math.min(n,height-y);
+      if(w<1||h<1)continue;
+      const data=ctx.getImageData(x,y,w,h).data;
+      for(let i=0;i<data.length;i++)if(data[i])return true;
+    }
+    return false;
+  }
+  function rememberFrame(){
+    if(picture.still||picture.ready||picture.cover)return;
+    if(lidarStudio?.needsFit?.()&&!fitted)return;
+    if(ownTilesSettled()||picture.snapKey===viewKey)return;
+    if(!(latest?.coverage?.coverage>=.98))return;
+    const canvas=frameCanvas();
+    if(typeof document?.createElement!=="function"||!canvas?.parentNode)return;
+    const copy=document.createElement("canvas");
+    copy.width=canvas.width;copy.height=canvas.height;
+    let ink=false;
+    try{
+      const ctx=copy.getContext("2d");
+      ctx.drawImage(canvas,0,0);
+      ink=frameHasInk(ctx,copy.width,copy.height);
+    }catch(e){return}
+    if(!ink)return;
+    picture.snapKey=viewKey;
+    picture.still=copy;picture.stillRevision=revision;
+  }
+  /* The old hillshade cannot stay on a new place. Drop it at once; the
+     settled fade is only for the same view. */
+  function dropHeldStill(){
+    const cover=picture.cover;
+    if(!cover)return;
+    picture.cover=null;layer._cspHoldStill=false;
+    cover.remove?.();
+    const canvas=frameCanvas();
+    if(canvas){canvas.style.transition="none";canvas.style.opacity=""}
+    el.style.transition="none";el.style.opacity="";
+  }
+  /* Keep that still inside the transformed container, over the live canvas.
+     Finer tiles draw underneath it, and it fades away once they have settled. */
+  function holdShownPicture(){
+    if(picture.cover)return true;
+    const copy=picture.still,host=frameCanvas()?.parentNode;
+    if(!copy||!host?.appendChild)return false;
+    picture.still=null;
+    copy.className="csp-gpu-terrain-hold";copy.setAttribute("aria-hidden","true");
+    copy.style.cssText="position:absolute;inset:0;width:100%;height:100%;z-index:1;pointer-events:none;opacity:0";
+    host.appendChild(copy);picture.cover=copy;layer._cspHoldStill=true;
+    const heldKey=viewKey;
+    const reveal=event=>{
+      if(stopped||picture.cover!==copy)return;
+      if(JSON.stringify(event?.view||{})!==heldKey){dropHeldStill();layer.off("render",reveal);return}
+      if(layer.settled?.()?.refining)return;
+      picture.cover=null;layer._cspHoldStill=false;layer.off("render",reveal);
+      const canvas=frameCanvas();
+      if(canvas){canvas.style.transition="none";canvas.style.opacity=""}
+      el.style.transition="none";el.style.opacity="";
+      const engine=layer.getEngine?.();
+      engine?.readProvenance?.().then(next=>{
+        if(stopped||!next?.ranks)return;
+        layer.shownProvenance=next;scheduleTerrainStatus();
+      }).catch(()=>{});
+      if(motionStill()){copy.remove();return}
+      copy.style.transition="opacity .32s cubic-bezier(.2,.7,.2,1)";copy.style.opacity="0";
+      setTimeout(()=>copy.remove(),320);
+    };
+    layer.on("render",reveal);
+    return true;
+  }
+  function commitFrame(result){
+    if(!ownTilesSettled()){
+      if(!onePicture(result)||!holdShownPicture())return false;
+    }else picture.still=null;
+    if(result?.ranks)layer.shownProvenance=result;
+    return true;
+  }
+  const fadeIn=()=>{
+    const still=motionStill(),cover=picture.cover;
+    if(!hidden&&!cover){clearPending();return}
+    hidden=false;
+    if(cover){
+      /* The still lives in the container, so the container has to show.
+         Only the live canvas stays hidden until the view's own tiles settle. */
+      const canvas=frameCanvas();
+      if(canvas){canvas.style.transition="none";canvas.style.opacity="0"}
+      el.style.transition="none";el.style.opacity="";
+      if(still){cover.style.opacity="1";clearPending();return}
+      clearTimeout(fadeTimer);
+      fadeTimer=setTimeout(()=>{
+        if(stopped||picture.cover!==cover){clearPending();return}
+        cover.style.transition="opacity .32s cubic-bezier(.2,.7,.2,1)";cover.style.opacity="1";
+        fadeTimer=setTimeout(clearPending,320);
+      },0);
+      return;
+    }
+    el.style.transition=still?"none":"opacity .32s cubic-bezier(.2,.7,.2,1)";el.style.opacity="";
+    if(still)clearPending();
+    else{clearTimeout(fadeTimer);fadeTimer=setTimeout(()=>{el.style.transition="none";clearPending()},320)}
+  };
+  const detach=(freeze)=>{layer.off("render",check);layer.off("remove",picture.stop);clearTimeout(fitTimer);clearTimeout(retryTimer);fitToken++;closeFit(freeze===true);cspUserInput(finish,false);root.removeEventListener("csp:reveal",onShell)};
+  function finish(force){
+    if(picture.ready||stopped)return;
+    // The camera in this frame may be the placeholder or the pre-imagery
+    // share view. Keep listening until the launch camera is the one on screen.
+    if(force!==true&&typeof startupCameraPending==="function"&&startupCameraPending()){picture.defer=true;return}
+    const freeze=fitted||!lidarStudio?.needsFit();
+    picture.ready=true;picture.defer=false;detach(freeze);fadeIn();
+    if(typeof cspWatchShownProvenance==="function")cspWatchShownProvenance(layer);
+  }
+  picture.resample=()=>{if(!stopped&&!picture.ready&&!reading&&!fitting)sample()};
   function check(event){
-    if(phase==="refitted"){finish();return}
-    if(phase!=="cover"||!(event.coverage?.coverage>=.98))return;
-    if(!lidarStudio?.needsFit()){finish();return}
-    phase="fitting";
-    const fallback=setTimeout(finish,600);   // a fenced readback, bounded
-    // Once the picture is out (cap, input), a late fit is dropped.
-    fitStudio(()=>!picture.ready&&!stopped)
-      .then(refit=>{if(refit)phase="refitted";else{clearTimeout(fallback);finish()}})   // a refit re-renders; that frame finishes
-      .catch(error=>{console.warn("Initial range fit failed",error);clearTimeout(fallback);finish()});
+    const key=JSON.stringify(event.view);
+    const viewChanged=key!==viewKey;
+    if(viewChanged){viewKey=key;fitted=false;fitting=false;fitToken++;clearTimeout(fitTimer);picture.still=null;picture.snapKey="";dropHeldStill()}
+    // The unfitted stretch cannot be shown. Redrawing it is not a new frame,
+    // and counting it would keep Reload from appearing while the hillshade stays hidden.
+    const canPublish=fitted||!lidarStudio?.needsFit?.();
+    if(!picture.ready&&(viewChanged||canPublish))globalThis.CSPBoot?.notePictureProgress?.();
+    latest=event;revision++;rememberFrame();sample();
+  }
+  function sample(){
+    if(stopped||picture.ready||reading||fitting||!(latest?.coverage?.coverage>0))return;
+    clearTimeout(retryTimer);retryTimer=0;
+    const engine=layer.getEngine(),ticket=revision,key=viewKey;
+    if(!engine?.readProvenance)return;
+    reading=true;
+    engine.readProvenance().then(result=>{
+      reading=false;
+      if(stopped||picture.ready)return;
+      if(ticket!==revision){
+        // A later draw may already be mixing in finer tiles. The still taken
+        // with this read is the whole picture those tiles would break up.
+        if(picture.still&&picture.stillRevision===ticket&&result.coverage>=.98&&!ownTilesSettled()&&onePicture(result)&&(fitted||!lidarStudio?.needsFit())&&holdShownPicture()){
+          if(result?.ranks&&Object.values(result.ranks).some(n=>n>0))layer.shownProvenance=result;
+          finish();return;
+        }
+        sample();return;
+      }
+      // Rank 0 is both "not drawn yet" and real nodata. Only a settled view
+      // can tell them apart, so a short sample waits for the next frame
+      // instead of being read again until it clears 0.98.
+      const settledReport=typeof layer.settled==="function"&&!!layer.settled()?.total&&!layer.settled().refining;
+      if(!(result.coverage>=.98)&&!settledReport)return;
+      // An overview with a few finer tiles in it is not a picture yet. A whole
+      // overview can publish only when that bitmap is held for one later fade.
+      if(result.coverage>=.98&&!ownTilesSettled()&&!onePicture(result))return;
+      if(fitted||!lidarStudio?.needsFit()){if(!commitFrame(result))return;finish();return}
+      // A missed colour range is not the picture. Keep fitting so a slow
+      // readback can still land. Never publish or freeze the default stretch.
+      fitting=true;const token=++fitToken;
+      const current=()=>!stopped&&!picture.ready&&token===fitToken&&key===viewKey;
+      const landed=changed=>{
+        if(!current())return;
+        clearTimeout(fitTimer);fitToken++;fitting=false;
+        if(!changed){
+          // A missed fit must not mark the picture fitted or freeze this camera.
+          clearTimeout(retryTimer);
+          retryTimer=setTimeout(()=>{retryTimer=0;if(!stopped&&!picture.ready&&!reading&&!fitting)sample()},400);
+          return;
+        }
+        fitted=true;
+        // The pre-fit snapshot is the wrong still. The redraw is the frame to copy.
+        picture.still=null;picture.snapKey="";
+        layer.redraw();
+      };
+      fitTimer=setTimeout(()=>landed(false),600);
+      fitStudio(current).then(landed,()=>landed(false));
+    }).catch(()=>{
+      reading=false;
+      if(stopped||picture.ready)return;
+      if(ticket!==revision){sample();return}
+      // A fence timeout does not itself render again. Retry the same frame
+      // once the GPU is quiet, without ever publishing the failed read.
+      clearTimeout(retryTimer);
+      retryTimer=setTimeout(()=>{retryTimer=0;if(!stopped&&!picture.ready&&ticket===revision&&!reading&&!fitting)sample()},400);
+    });
   }
   picture.hideUntilReady=()=>{
     if(picture.ready||stopped||hidden)return;
     hidden=true;el.style.transition="none";el.style.opacity="0";
-    cspUserInput(finish,true);cap=setTimeout(finish,8000);
+    root.classList.add("csp-terrain-pending");scheduleTerrainStatus();
+    cspUserInput(finish,true);
   };
   // The shell can appear (its 1.6 s cap) before the 1.5 s deadline fires.
   function onShell(){picture.hideUntilReady()}
-  picture.show=finish;
-  picture.stop=()=>{if(stopped)return;stopped=true;detach();if(hidden){hidden=false;el.style.opacity=""}};
-  layer.on("render",check);root.addEventListener("csp:reveal",onShell,{once:true});
+  picture.show=()=>finish(true);
+  picture.stop=()=>{
+    if(stopped)return;stopped=true;clearTimeout(fadeTimer);
+    const cover=picture.cover;picture.cover=null;layer._cspHoldStill=false;cover?.remove?.();
+    const canvas=frameCanvas();if(canvas){canvas.style.transition="none";canvas.style.opacity=""}
+    detach(false);if(hidden){hidden=false;el.style.opacity=""}
+    clearPending();
+  };
+  layer.on("render",check);layer.on("remove",picture.stop);root.addEventListener("csp:reveal",onShell,{once:true});
   return picture;
 }
 /* The shell's visible icons arrive with it (bounded by the same cap). */

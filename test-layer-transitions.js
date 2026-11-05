@@ -42,6 +42,17 @@ async function main(){
   assert.equal(published.opacity,0);
   published._tiles.a.el._cspHasContent=true;published._tiles.a.el._cspRefining=false;published.emit('load');
   assert.equal(map.hasLayer(gpu),false);assert.equal(published.opacity,.7);assert.equal(syncs,1);
+  const box={style:{}},fading=new Layer(),previous=new Layer();
+  fading.getContainer=()=>box;
+  context.gpuTerrainEnabled=false;context.terLayer=previous;context.terrainSwap=null;
+  map.layers.add(previous);
+  context.installTerrain(null,fading);
+  fading._tiles.a.el._cspHasContent=true;fading.emit('load');
+  assert.equal(fading.opacity,.7);
+  assert.match(box.style.transition,/opacity/,'a CPU terrain swap fades instead of jumping');
+  assert(map.hasLayer(previous),'the previous picture stays up while the new one fades in');
+  [...timers].at(-1)[1]();
+  assert.equal(map.hasLayer(previous),false);assert.equal(box.style.transition,'none');
   Object.assign(context,{gpuTerrainEnabled:false,gpuTerrainLayer:null});
   // The CPU fallback must replace the image subclass when intent becomes
   // numeric. Reusing it through instanceof AnalyticTerrainLayer leaks images
@@ -166,17 +177,44 @@ async function main(){
   const status={document:{body:{classList:{contains:()=>is3d}}},navigator:{onLine:true},$:id=>statusControls[id],
     terrainLoadStatus:{hidden:false,dataset:{},textContent:''},terrainSwap:null,terrainSwapMessage:'Requested terrain unavailable · previous map preserved.',
     terLayer:null,elevLayer:null,dnrAreas:[],terrainLayerSummary:()=>summary,elevationActive:()=>false,
-    public3dSourceText:()=>text3d,dnrAcquisitionText:()=>'',esc:value=>value,renderTerrainSourcePanel:()=>{},CompositeTerrainLayer:class{},PublishedHillshadeLayer:class{}};
+    public3dSourceText:()=>text3d,dnrAcquisitionText:()=>'',esc:value=>value,sourceResolutionText:()=>'native',renderTerrainSourcePanel:()=>{},CompositeTerrainLayer:class{},PublishedHillshadeLayer:class{}};
   vm.createContext(status);
   vm.runInContext(section('function paintTerrainStatus(','\nmap.on("moveend",scheduleTerrainStatus);'),status);
   status.paintTerrainStatus();assert.equal(status.terrainLoadStatus.dataset.state,'partial','failed replacement stays partial after repaint');
   status.terrainSwapMessage='';status.paintTerrainStatus();assert.equal(status.terrainLoadStatus.dataset.state,'ready');
+  summary={sources:[{label:'WA DNR bare-earth elevation',percent:100,url:'#',nativeLabel:'lidar'}],coverage:100,refining:false,failed:false};
+  status.document.documentElement={classList:{contains:name=>name==="csp-terrain-pending"}};
+  status.paintTerrainStatus();
+  assert.equal(status.terrainLoadStatus.dataset.state,'loading','tile overlap must not call a hidden first picture ready');
+  assert.match(status.terrainLoadStatus.textContent,/Preparing the terrain picture/);
+  assert.match(status.terrainLoadStatus.textContent,/visible picture still settling/);
+  assert.doesNotMatch(status.terrainLoadStatus.textContent,/WA DNR/,'a hidden picture does not name a source');
+  status.document.documentElement={classList:{contains:()=>false}};
+  status.paintTerrainStatus();assert.equal(status.terrainLoadStatus.dataset.state,'ready','a published picture can report ready');
+  assert.match(status.terrainLoadStatus.textContent,/WA DNR/);
   is3d=true;status.paintTerrainStatus();assert.equal(status.terrainLoadStatus.dataset.state,'loading','3D readiness cannot come from the ready 2D layer');
   text3d='3D mesh: USGS. Analytical drape: USGS.';status.paintTerrainStatus();assert.equal(status.terrainLoadStatus.dataset.state,'ready');
   status.navigator.onLine=false;status.paintTerrainStatus();assert.equal(status.terrainLoadStatus.dataset.state,'offline');
   assert(status.terrainLoadStatus.textContent.includes('reconnect'));
   status.navigator.onLine=true;is3d=false;summary={sources:[],coverage:0,refining:true,failed:true};
   status.paintTerrainStatus();assert.equal(status.terrainLoadStatus.dataset.state,'partial','failed empty terrain stops the indefinite loading status');
+
+  const ranks={1:{label:'AWS global terrain (overview)',url:'#',nativeLabel:'overview'},5:{label:'WA DNR bare-earth elevation',url:'#',nativeLabel:'lidar'}};
+  let pictureHidden=false;
+  const shownLayer={
+    settled:()=>({ratio:1,total:4,complete:4,refining:false,failed:false}),
+    provenance:()=>({ranks:{5:100},surveys:[],sampleMeters:{}}),
+    shownProvenance:{ranks:{1:100},coverage:1}
+  };
+  const summaryContext={gpuTerrainEnabled:true,gpuTerrainLayer:shownLayer,map:{hasLayer:()=>true},
+    document:{documentElement:{classList:{contains:()=>pictureHidden}}},
+    CSPPublicTerrain:{SOURCES:ranks,summarize:()=>({sources:[],coverage:0,total:0,ready:0,refining:false,failed:false})}};
+  vm.createContext(summaryContext);
+  vm.runInContext(html.slice(html.indexOf('function terrainLayerSummary('),html.indexOf('\nlet probeToken',html.indexOf('function terrainLayerSummary(')))+'\nthis.summary=terrainLayerSummary;',summaryContext);
+  const shown=summaryContext.summary(shownLayer);
+  assert.equal(shown.sources.length,1);assert.match(shown.sources[0].label,/overview/,'the visible frame names the read-back rank, not the store winner');
+  pictureHidden=true;
+  assert.equal(summaryContext.summary(shownLayer).sources.length,0,'a hidden picture does not inherit the store tile winner');
 
   console.log('layer transition checks passed (staging, rollback, mosaic cleanup, scene Off, late responses, search without auto-selection, explicit best imagery)');
 }

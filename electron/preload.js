@@ -21,15 +21,16 @@ if(location.protocol==="file:" && /\/setup\/(index|guide)\.html$/.test(location.
 // Seed preferences before page scripts run; the engine's free port can change.
 if(location.protocol==="http:" && location.hostname==="127.0.0.1"){
   const {ipcRenderer}=require("electron");
-  // Report the map theme so the next launch's window opens in its colour.
+  // The saved choice only. A shared link changes the live map colour and
+  // must not repaint the next window.
   let sentTheme="";
   const sendTheme=()=>{
-    const theme=document.documentElement?.dataset.uiTheme;
+    const theme=document.documentElement?.dataset.uiThemeSaved;
     if((theme==="dark"||theme==="light")&&theme!==sentTheme){sentTheme=theme;ipcRenderer.send("csp:map-theme",theme);}
   };
   document.addEventListener("DOMContentLoaded",()=>{
     sendTheme();
-    new MutationObserver(sendTheme).observe(document.documentElement,{attributes:true,attributeFilter:["data-ui-theme"]});
+    new MutationObserver(sendTheme).observe(document.documentElement,{attributes:true,attributeFilter:["data-ui-theme-saved"]});
   },{once:true});
   const preferences=ipcRenderer.sendSync("csp:map-preferences");
   if(preferences){
