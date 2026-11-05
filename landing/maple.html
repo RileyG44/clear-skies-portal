@@ -112,6 +112,7 @@ a{color:inherit}
 .lbl.sp-l{text-align:left}
 .lbl.lr{text-align:right}
 .nav a::after{background:var(--accent)}
+.crow{position:fixed;left:0;top:0;z-index:6;pointer-events:none;display:none;will-change:transform}
 .fig.nogl::after{content:"This sketch needs WebGL to draw.";position:absolute;inset:auto 0 50% 0;text-align:center;font-family:var(--note);font-size:24px;color:var(--sepia)}
 
 @media (max-width:860px){
@@ -183,6 +184,7 @@ a{color:inherit}
 import { createSketch } from "./sketch.js";
 import { buildMaple, VIEW } from "./maple.js";
 import { pageDate } from "./phenology.js";
+import { startCrow } from "./crow.js";
 import { WIN, MAC, FILES, RELEASES_PAGE, refresh } from "./releases.js";
 function links() {
   for (const a of document.querySelectorAll("[data-file]")) a.href = FILES[a.dataset.file];
@@ -226,7 +228,7 @@ window.__sketch = createSketch(document.getElementById("tree"), document.getElem
   onNoWebGL() { document.getElementById("fig").classList.add("nogl"); },
   onLayout: align
 });
-Promise.all([document.fonts.load("450 60px Newsreader"), document.fonts.load("600 60px Caveat")]).then(() => align());
+Promise.all([document.fonts.load("450 60px Newsreader"), document.fonts.load("600 60px Caveat")]).then(() => { align(); window.__crow = startCrow(title); });
 wide.addEventListener("change", () => align());
 </script>
 </body>

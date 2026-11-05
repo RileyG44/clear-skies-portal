@@ -800,5 +800,6 @@ export function buildMaple(date = new Date(), seed = 20261104) {
   T.leaves = out.length;
   T.leafAtlas = () => leafAtlas(seed + 1);
   T.leafPen = PEN;
+  T.loadFlex = { trunk: 0.005, branch: 0.0035 };   // the trunk and limbs bend under the load of the crown (see sketch.js)
   return T;
 }

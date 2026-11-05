@@ -917,6 +917,25 @@ export function createSketch(canvas, layer, opts = {}) {
   }
   const P = { gain: opts.gain ?? 2.4, breeze: opts.breeze ?? 0.16, decay: 0.72 };
 
+  /* load-bearing wood (a tree that sets T.loadFlex): a trunk or limb bends under the
+     whole load of everything it holds up, not only the nearest twigs' pushes. Each force
+     is summed into its bone and on down to the root, so a joint feels the moment of the
+     wind and the cursor on all the wood beyond it. That moment is scaled against what a
+     steady breeze would put on the same joint, so a joint leans by about `flex` radians in
+     an average gust whatever its size: the trunk sways slowly at its own pace as gusts
+     cross the crown, and the limbs carry the twigs' motion down into it */
+  const LF = T.loadFlex, aX = new Float32Array(LF ? n : 0), aY = new Float32Array(LF ? n : 0), aM = new Float32Array(LF ? n : 0);
+  const flex = new Float32Array(LF ? n : 0), mref = new Float32Array(LF ? n : 0), load = new Float32Array(LF ? n : 0);
+  if (LF) {
+    const Sm = new Float64Array(n), Sy = new Float64Array(n);
+    for (let b = 1; b < n; b++) if (Bn.kind[b] === KIND.TWIG) { Sm[b] = Bn.m[b]; Sy[b] = Bn.m[b] * (Bn.oy[b] + Bn.ey[b]) / 2; }
+    for (let b = n - 1; b > 0; b--) { const p = Bn.par[b]; if (p > 0) { Sm[p] += Sm[b]; Sy[p] += Sy[b]; } }
+    for (let b = 1; b < n; b++) {
+      flex[b] = Bn.kind[b] === KIND.TRUNK ? LF.trunk : Bn.kind[b] === KIND.BRANCH ? LF.branch : 0;
+      mref[b] = 0.16 * Math.max(1e-5, Sy[b] - Bn.oy[b] * Sm[b]);
+    }
+  }
+
   /* falling leaves: FALL bones drift down from where they hang, tumbling, then start over.
      ext says where one lands (y is a ground height, within a few hundredths of 0): near 0,
      the default ground; 1 + y, at height y; 2 + y, at height y, and it starts out hanging
@@ -959,6 +978,7 @@ export function createSketch(canvas, layer, opts = {}) {
   }
   // a force F at point (px, py) turns the bone it touches and, more weakly, its ancestors
   function push(b, px, py, fx, fy) {
+    if (LF) { aX[b] += fx; aY[b] += fy; aM[b] += px * fy - py * fx; }
     let f = 1;
     while (b > 0 && f > 0.03) {
       const ox = C[b] * Bn.ox[b] - S[b] * Bn.oy[b] + TX[b], oy = S[b] * Bn.ox[b] + C[b] * Bn.oy[b] + TY[b];
@@ -999,11 +1019,22 @@ export function createSketch(canvas, layer, opts = {}) {
         push(b, qx, qy, vx * F, vy * F);
       }
     }
+    if (LF) {
+      for (let b = n - 1; b > 0; b--) { const p = Bn.par[b]; if (p > 0) { aX[p] += aX[b]; aY[p] += aY[b]; aM[p] += aM[b]; } }
+      for (let b = 1; b < n; b++) {
+        if (!flex[b]) continue;
+        const ox = C[b] * Bn.ox[b] - S[b] * Bn.oy[b] + TX[b], oy = S[b] * Bn.ox[b] + C[b] * Bn.oy[b] + TY[b];
+        let x = (aM[b] - (ox * aY[b] - oy * aX[b])) / mref[b];
+        x = x / (1 + Math.abs(x) / 4);            // a hard sweep saturates rather than snapping the limb
+        load[b] = k[b] * flex[b] * x;
+      }
+      aX.fill(0); aY.fill(0); aM.fill(0);
+    }
     const steps = 3, h = dt / steps;
     for (let s = 0; s < steps; s++) {
       for (let b = 1; b < n; b++) {
         if (Bn.kind[b] === KIND.STATIC || Bn.kind[b] === KIND.FALL) continue;
-        vel[b] += (-k[b] * ang[b] - c[b] * vel[b] + tau[b] * Bn.invI[b]) * h;
+        vel[b] += (-k[b] * ang[b] - c[b] * vel[b] + tau[b] * Bn.invI[b] + (LF ? load[b] : 0)) * h;
         const a = ang[b] + vel[b] * h;
         if (a > lim[b] || a < -lim[b]) { ang[b] = Math.sign(a) * lim[b]; vel[b] *= -0.3; } else ang[b] = a;
       }
@@ -1078,7 +1109,7 @@ export function createSketch(canvas, layer, opts = {}) {
     play();
   }
   return {
-    params: P, strokes: T.count, bones: n, anchors, pageY, relayout: () => layout(),
+    params: P, angles: ang, poseOf: b => [TX[b], TY[b], A[b]], strokes: T.count, bones: n, anchors, pageY, relayout: () => layout(),
     state: () => ({ maxTwig: Math.max(...[...ang].filter((_, b) => Bn.kind[b] === KIND.TWIG).map(Math.abs)), maxBranch: Math.max(...[...ang].filter((_, b) => Bn.kind[b] === KIND.BRANCH).map(Math.abs)) }),
     finish() { start = performance.now() - DRAW_SECONDS * 1200; },
     setDraw(v) { U.uDraw.value = v; updateLabels(v); render(); },
