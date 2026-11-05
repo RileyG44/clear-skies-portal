@@ -85,24 +85,41 @@ export function buildMaple(date = new Date(), seed = 20261104) {
   const lr = mulberry32(seed + 3), LR = (a, b) => a + (b - a) * lr();
   const dr = mulberry32(seed + 11 + Math.floor(S.doy)), DR = (a, b) => a + (b - a) * dr();
   const leaves = [];
+  /* each leaf grows from a node on its own stalk. A maple's leaves are opposite, a pair
+     at each node, and each pair is turned a quarter turn from the one before (decussate).
+     They crowd this year's and last year's wood near the tips; older wood inside the
+     crown carries the odd pair, so the centre is not hollow */
+  const cross3 = (a, b) => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
+  const norm3 = v => { const l = Math.hypot(v[0], v[1], v[2]) || 1; return [v[0] / l, v[1] / l, v[2] / l]; };
   for (let k = 1; k < n; k++) {
     if (G.Sc[k]) continue;
-    // most leaves crowd the last few nodes of each shoot; older wood inside the crown
-    // carries a sparser spray of its own, so the centre is not hollow
-    // leaves crowd the last nodes of each shoot (a maple's are on this year's and last
-    // year's wood); older wood inside the crown carries the odd spray of its own
-    const deep = G.hTip[k] > 3;
-    if (deep && r[k] > 0.0045) continue;
-    const tip = Kids[k].length === 0, cnt = deep ? (lr() < 0.12 ? 1 : 0) : tip ? 2 : lr() < 0.6 ? 1 : 0;
-    for (let j = 0; j < cnt; j++) {
-      const a = LR(0, 6.283), d = 0.011 * Math.sqrt(lr());
-      const x = X[k] + Math.cos(a) * d, y = Y[k] + Math.sin(a) * d - 0.002;
+    const h = G.hTip[k];
+    if (h > 3 && r[k] > 0.0045) continue;
+    const pairs = h === 0 ? 1 : h === 1 ? 0.4 : h <= 3 ? 0.1 : 0.04;
+    if (lr() >= pairs) continue;
+    const p = Par[k], d = norm3([X[k] - X[p], Y[k] - Y[p], Z[k] - Z[p]]);
+    const ref = Math.abs(d[1]) < 0.9 ? [0, 1, 0] : [1, 0, 0];
+    const q0 = norm3(cross3(d, ref)), q1 = cross3(d, q0);
+    const tw = LR(-0.35, 0.35), q = h % 2 ? q0 : q1, o = h % 2 ? q1 : q0;
+    const ax = norm3([q[0] * Math.cos(tw) + o[0] * Math.sin(tw), q[1] * Math.cos(tw) + o[1] * Math.sin(tw), q[2] * Math.cos(tw) + o[2] * Math.sin(tw)]);
+    const sz = LR(0.0072, 0.0115);   // bigleaf: a blade up to a foot across
+    for (const side of [1, -1]) {
+      // the stalk leaves the twig at about 50 degrees, leaning forward, and the leaf's
+      // weight bends it down a little
+      const st = norm3([side * ax[0] * 0.65 + d[0] * 0.55, side * ax[1] * 0.65 + d[1] * 0.55 - 0.35, side * ax[2] * 0.65 + d[2] * 0.55]);
+      const pl = sz * LR(0.7, 1.0);
+      const jx = X[k] + st[0] * pl, jy = Y[k] + st[1] * pl;
+      // the blade carries on from its stalk, hanging a little more
+      let bx = st[0], by = st[1] - 0.25;
+      if (Math.hypot(bx, by) < 0.25) { bx = side * 0.5; by = -0.4; }   // a stalk aimed at the viewer: the blade faces us
+      const th = Math.atan2(by, bx) + LR(-0.2, 0.2);
+      const x = jx + Math.cos(th) * sz * 0.5, y = jy + Math.sin(th) * sz * 0.5;   // the blade's middle
       const e = clamp(env(x, y), 0, 1.15);
       const ux = x - C.x, uy = y - C.y, ul = Math.hypot(ux, uy) || 1;
       const lit = clamp(0.5 + 0.5 * ((ux * LIGHT[0] + uy * LIGHT[1]) / ul) * (0.4 + 0.6 * e), 0, 1) * (0.45 + 0.55 * e);
       const off = LR(-0.17, 0.17) + 0.12 * (e - 0.7);
       const drop = 3.0 + LR(0, 0.75) - 0.1 * (e - 0.7);
-      leaves.push({ k, x, y, e, lit, off, drop, sz: LR(0.0058, 0.0095), th: LR(0, 6.283), jit: LR(-0.04, 0.04),
+      leaves.push({ k, x, y, jx, jy, e, lit, off, drop, sz: sz * LR(0.9, 1.1), th, jit: LR(-0.04, 0.04),
         v: [LR(0.92, 1.06), LR(0.93, 1.05), LR(0.9, 1.06)], keep: lr(), wash: lr(), shade: lr() });
     }
   }
@@ -444,7 +461,10 @@ export function buildMaple(date = new Date(), seed = 20261104) {
     c = L.lit > 0.5 ? mix(c, WHITE, (L.lit - 0.5) * 0.32) : mix(mul(c, [0.84, 0.85, 0.9]), c, L.lit * 2);
     c = c.map(v => clamp(v, 0, 1));
     accent = accent.map((v, i) => v + c[i]); aw++;
-    const b = boneOf[L.k], s = L.sz * g, t = Math.min(0.93, tNode(L.k) + 0.07 + DR(0, 0.08));
+    const b = boneOf[L.k], s = L.sz * g, t0 = Math.min(0.91, tNode(L.k) + 0.05 + DR(0, 0.05)), t = t0 + 0.012;
+    // the stalk first, from the twig, then the blade unfolds from its end
+    const nx = X[L.k], ny = Y[L.k], jx = lerp(nx, L.jx, 0.55 + 0.45 * g), jy = lerp(ny, L.jy, 0.55 + 0.45 * g);
+    line(nx, ny, b, jx, jy, b, 0.75, 0.5, t0, 0.012, mix(c, PEN, 0.35));
     const ink = lerp(0.66, 0.48, L.lit);
     const lobes = DR(0, 1) < 0.55 ? [-1.75, -0.85, 0, 0.85, 1.75] : [-0.85, 0, 0.85];
     // a leaf held at a slant is foreshortened along one axis
@@ -453,11 +473,11 @@ export function buildMaple(date = new Date(), seed = 20261104) {
       const a = L.th + o, l = s * (o === 0 ? 1 : Math.abs(o) > 1 ? 0.6 : 0.85);
       let vx = Math.cos(a) * l, vy = Math.sin(a) * l;
       const pr = (vx * ux + vy * uy) * (1 - tilt); vx -= pr * ux; vy -= pr * uy;
-      line(L.x, L.y, b, L.x + vx, L.y + vy, b, DR(2.1, 2.9) * (0.7 + 0.3 * g), ink * DR(0.88, 1.04), t, 0.012, c);
+      line(jx, jy, b, jx + vx, jy + vy, b, DR(1.9, 2.5) * (0.7 + 0.3 * g), ink * DR(0.88, 1.04), t, 0.028, c);
     }
     if (L.shade < 0.14 && L.lit < 0.5) { // a few pen touches in the shadowed leaves
       const a = L.th + DR(-1, 1);
-      line(L.x, L.y, b, L.x + Math.cos(a) * s * 0.9, L.y + Math.sin(a) * s * 0.9, b, 0.8, 0.4, t + 0.01, 0.01, PEN);
+      line(jx, jy, b, jx + Math.cos(a) * s * 0.9, jy + Math.sin(a) * s * 0.9, b, 0.8, 0.4, t + 0.02, 0.01, PEN);
     }
     if (L.wash < 0.17 && L.e < 0.86) {         // no wash past the crown's edge
       const rr = DR(0.01, 0.017) * (0.45 + 0.55 * g), a = DR(0, 3.14), l = DR(0.002, 0.006);
