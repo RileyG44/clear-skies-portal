@@ -435,6 +435,8 @@ $("#elevSpectrumReset").onclick=()=>{
   $("#elevSh").checked=false;$("#elevSpectrumMore").open=false;
   elevRefM=1100*0.3048;setElevSpanFt(300);$("#elevVal").value=Math.round(elevRefM/elevUnitFactor());showElevReference();syncElevSpanSlider();$("#elevAlpha").value=48;$("#elevAlphaOut").textContent="48%";
   saveTerrainPrefs();applyElev();announceLayers();
+  // The button just folded away with its editor; return to the editor's toggle.
+  $("#elevSpectrumMore > summary")?.focus({preventScroll:true});
 };
 $("#elevBandsReset").onclick=()=>{
   // Defaults are physical heights (1,000 ft, 1,500 ft, 40 ft) in either unit.

@@ -433,7 +433,10 @@ body.csp-redesign[data-csp-route="satellite"] #ovList > .ovgrp[data-csp-group="i
 body.csp-redesign[data-csp-route="conditions"] #ovList > .ovgrp[data-csp-group="conditions"],
 body.csp-redesign[data-csp-route="geology"] #ovList > .ovgrp[data-csp-group="geology"],
 body.csp-redesign[data-csp-route="past"] #ovList > .ovgrp[data-csp-group="past"],
-body.csp-redesign[data-csp-route="labels"] #ovList > .ovgrp[data-csp-group="labels"]{display:block!important}
+body.csp-redesign[data-csp-route="labels"] #ovList > .ovgrp[data-csp-group="labels"],
+body.csp-redesign[data-csp-route="satellite"] #ovList > .ovsub[data-csp-group="imagery"]{display:block!important}
+body.csp-redesign .ovsub{margin:10px 0 4px;color:var(--ink-3);font-size:11.5px;font-weight:600}
+body.csp-redesign .ovsub:first-of-type{margin-top:2px}
 body.csp-redesign[data-csp-route="satellite"] #ovList > .ovrow[data-csp-group="imagery"],
 body.csp-redesign[data-csp-route="conditions"] #ovList > .ovrow[data-csp-group="conditions"],
 body.csp-redesign[data-csp-route="geology"] #ovList > .ovrow[data-csp-group="geology"],
@@ -3544,6 +3547,7 @@ body.csp-redesign .ls-layer-label .menu-section-title{margin:0}
 .csp-glass body.csp-redesign.csp-redesign #cspWorkspace .csp-sat-filterbox[open] > summary::after{transform:rotate(90deg)}
 .csp-glass body.csp-redesign.csp-redesign #cspWorkspace .csp-sat-filterbox > summary:focus-visible{outline:2px solid var(--ui-accent);outline-offset:2px;border-radius:6px}
 .csp-glass body.csp-redesign.csp-redesign #cspWorkspace .csp-sat-filter-sum{flex:1 1 auto;min-width:0;text-align:right;color:var(--t3-desc);font-size:12.5px;font-weight:400;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.csp-glass body.csp-redesign.csp-redesign #cspWorkspace .csp-sat-filter-help{margin:8px 2px 2px;color:var(--t3-desc);font-size:12px;line-height:1.4}
 .csp-glass body.csp-redesign.csp-redesign #cspWorkspace .csp-sat-filterbox:not([open]) > :not(summary){display:none}
 .csp-glass body.csp-redesign.csp-redesign #cspWorkspace .csp-sat-filterbox .csp-sat-filters{margin-top:0}
 .csp-glass body.csp-redesign.csp-redesign #cspWorkspace .csp-sat-filterbox .csp-sat-filters > .toggles{border-top:1px solid var(--t3-divider)}

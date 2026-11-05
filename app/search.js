@@ -1,5 +1,5 @@
 /* ---------------------------------------------------------------- state */
-let LOC=null, ITEMS=[], SEL=null, searchToken=0, searchAbort=null;
+let LOC=null, ITEMS=[], SEL=null, searchToken=0, searchAbort=null, searchPending=false;
 let committedLocation=null, locationVersion=0, resultEntryTimer=0;
 const $=s=>document.querySelector(s);
 const statusEl=$("#status"), resEl=$("#results");
@@ -260,7 +260,7 @@ function norm(f,src){
 
 function gibsItems(win){
   const out=[];
-  const push=(g,ds)=>{
+  const push=(g,ds,fixed=false)=>{
     const tms=g.tms||"GoogleMapsCompatible_Level9";
     const fmt=g.vis==="night"?"png":"jpg";
     out.push({ id:g.id+"/"+ds, src:"NASA GIBS (near real-time)", srcKey:"gibs", props:{},
@@ -268,7 +268,7 @@ function gibsItems(win){
       date:ds+"T12:00:00Z", cloud:null, thumb:null,
       tiles:{type:"xyz", url:`https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/${g.id}/default/${ds}/${tms}/{z}/{y}/{x}.${fmt}`},
       link:`https://worldview.earthdata.nasa.gov/?v=-180,-90,180,90&t=${ds}`, bbox:null, geom:null,
-      nativeMax:+((tms.match(/Level(\d+)/)||[])[1]||9) });
+      nativeMax:+((tms.match(/Level(\d+)/)||[])[1]||9), fixedDate:fixed });
   };
   // GIBS near-real-time layers are one tile set per day, generated client-side
   // rather than searched, so the window has to be applied here. Anchor on the end
@@ -289,7 +289,7 @@ function gibsItems(win){
         const t=+new Date(g.fixed+"T12:00:00Z");
         if(t<start || t>end) continue;
       }
-      push(g, g.fixed); continue;
+      push(g, g.fixed, true); continue;
     }
     for(let d=0; d<3; d++){
       const t=completeEnd-d*864e5;
@@ -313,7 +313,7 @@ async function run(){
   const drawn=typeof displayedScene==="function"?displayedScene():null;
   const covers=it=>!!it&&(it.geom||it.bbox?CSPMosaic.itemContains(it,loc.lng,loc.lat):true);
   if(drawn&&covers(drawn)) releaseSelection(); else clearScene(false);
-  ITEMS=[]; RESULT_SHOWN={}; render();
+  ITEMS=[]; RESULT_SHOWN={}; searchPending=true; render();
   statusEl.dataset.kind="scenes",statusEl.innerHTML='<span class="spin"></span> Querying sources…';
   const chips={};
   SOURCES.forEach(s=>chips[s.key]=`<span class="chip" id="c_${s.key}">${s.name.split(" ")[0]} …</span>`);
@@ -336,7 +336,7 @@ async function run(){
   paint();
   await Promise.all(jobs);
   if(token!==searchToken) return;
-  searchAbort=null;
+  searchAbort=null; searchPending=false;
   // Arrival order is kept, so a scene chosen while others load keeps its index.
   ITEMS.push(...gibsItems(win));
   const n=ITEMS.length;

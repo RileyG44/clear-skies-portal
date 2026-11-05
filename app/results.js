@@ -146,7 +146,11 @@ function render(enter=false){
   clearTimeout(resultEntryTimer);
   resEl.classList.toggle("csp-results-enter",enter===true&&ITEMS.length>0);
   if(!ITEMS.length){
-    resEl.innerHTML = LOC ? '<div class="empty">No imagery found.<br>Widen the date range or cloud filter.</div>'
+    /* Until every catalog has answered, an empty list means "not yet", not
+       "nothing here". */
+    const pending=typeof searchPending!=="undefined"&&searchPending;
+    resEl.innerHTML = LOC&&pending ? '<div class="empty"><span class="spin"></span> Searching imagery catalogs…</div>'
+                    : LOC ? '<div class="empty">No imagery found.<br>Widen the date range or cloud filter.</div>'
                           : `<div class="empty">No search yet.<br>Try <b>Moses Lake</b>, <b>Zermatt</b>, or double-${MAP_TAP} the map.</div>`;
     setCount("results","");summarise([]);
     return;
@@ -154,9 +158,16 @@ function render(enter=false){
   const mode=$("#sort").value, pool=resultPool();
   if(!pool.length){
     summarise(pool);
-    resEl.innerHTML=`<div class="empty">None of the ${ITEMS.length.toLocaleString()} scenes match these list filters.<br><button type="button" class="linkbtn" data-show-all>Show all scene types</button></div>`;
+    const still=typeof searchPending!=="undefined"&&searchPending?" More catalogs are still answering.":"";
+    resEl.innerHTML=`<div class="empty">None of the ${ITEMS.length.toLocaleString()} scenes so far match these list filters.${still}<br><button type="button" class="linkbtn" data-show-all>Show all scene types</button></div>`;
     setCount("results","0 of "+ITEMS.length);
-    resEl.querySelector("[data-show-all]").onclick=()=>{$("#vis").value="all";$("#viewable").checked=false;$("#viewable").dispatchEvent(new Event("change"));$("#vis").dispatchEvent(new Event("change"))};
+    resEl.querySelector("[data-show-all]").onclick=()=>{
+      $("#vis").value="all";$("#viewable").checked=false;
+      $("#viewable").dispatchEvent(new Event("change"));$("#vis").dispatchEvent(new Event("change"));
+      /* The button that was pressed is gone; keep keyboard users in the list. */
+      const first=resEl.querySelector(".item[tabindex]");
+      (first||$("#vis")).focus({preventScroll:true});
+    };
     return;
   }
   /* Sort applies to the whole list. Grouping by source is a separate choice;
@@ -186,6 +197,7 @@ function render(enter=false){
             ${it.vis&&it.vis!=="rgb"?`<span class="tag">${esc(VIS_LABEL[it.vis]||it.vis)}</span>`:""}
             ${it.cloud!=null?`<span class="tag cloud">${it.cloud.toFixed(0)}% cloud</span>`:""}
             ${!it.tiles?`<span class="tag">outline only</span>`:""}
+            ${it.fixedDate?`<span class="tag" title="This composite has one fixed date. It is listed for every preset time window; a custom range excludes it unless the range includes that date.">Fixed-date composite</span>`:""}
           </div>
         </div>
       </div>`;

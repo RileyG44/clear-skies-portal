@@ -31,7 +31,7 @@ side.style.width="660px";
 
 const ROUTES={
   layers:{title:"Layers",description:"Everything currently drawn on the map, in render order.",icon:"layers",panes:[],custom:"layers"},
-  satellite:{title:"Satellite imagery",description:"Search a place, show the best clear image, then fine-tune what is on the map.",icon:"satellite",panes:["results","overlays","passes"],open:["results"],overlayGroup:"Imagery",overlayTitle:"Satellite base layers",custom:"satellite"},
+  satellite:{title:"Satellite imagery",description:"Search a place, show the best clear image, then fine-tune what is on the map.",icon:"satellite",panes:["results","overlays","passes"],open:["results"],overlayGroup:"Imagery",overlayTitle:"Reference imagery & coverage",custom:"satellite"},
   terrain:{title:"LiDAR",description:"Draw LiDAR terrain layers, fetch WA DNR surveys, and save areas for offline use.",icon:"radar",panes:["terrain"],open:["terrain"]},
   elevation:{title:"Elevation",description:"Color the ground by height or highlight it above and below a threshold.",icon:"mountain-snow",panes:["elevation"],open:["elevation"]},
   analyze:{title:"Analyze",description:"Measure landform patterns or reveal features in the current view.",icon:"scan-search",panes:["research"],open:["research"],researchMode:"analyze"},
@@ -514,8 +514,14 @@ function availableLayersCard(){
   return card;
 }
 
+let pendingLayerFocus=null;
 function renderLayersView(){
   const stack=$("#cspActiveLayerStack",customView),before=stack?layerCardTops(stack):null;
+  /* A background refresh rebuilds the cards; keep keyboard focus on the same
+     control of the same layer instead of dropping it to the page. */
+  const focused=document.activeElement,focusedCard=focused?.closest?.("#cspActiveLayerStack .csp-layer-card");
+  const want=pendingLayerFocus||(focusedCard?{id:focusedCard.dataset.layerId,selector:focused.dataset.action?`[data-action="${focused.dataset.action}"]`:"."+[...focused.classList].join(".")}:null);
+  pendingLayerFocus=null;
   clearCustom();
   const activeLabel=document.createElement("div");activeLabel.className="csp-section-label";activeLabel.textContent="Active layers";
   const active=document.createElement("div");active.className="csp-card";active.id="cspActiveLayerStack";
@@ -523,6 +529,11 @@ function renderLayersView(){
   renderLayerStack(active,false,before);
   const availableLabel=document.createElement("div");availableLabel.className="csp-section-label";availableLabel.textContent="Add layers";
   customView.append(availableLabel,availableLayersCard());
+  if(want){
+    const card=$(`.csp-layer-card[data-layer-id="${CSS.escape(want.id)}"]`,active);
+    const target=card&&(want.selector&&$(want.selector,card)||$(".csp-layer-handle,.csp-layer-range,button,input",card));
+    target?.focus({preventScroll:!!focusedCard});
+  }
 }
 
 /* Satellite: a scene search built for imagery. A place, address or pasted
@@ -548,6 +559,7 @@ function buildSatelliteSearch(){
       <details class="csp-sat-filterbox" id="cspSatFilterBox">
         <summary><span>Search filters</span><span class="csp-sat-filter-sum" id="cspSatFilterSum"></span></summary>
         <div class="csp-sat-filters"></div>
+        <p class="csp-sat-filter-help">Preset windows also list fixed-date composites, such as the 2016 night lights; a custom range includes them only when it covers their date.</p>
       </details>
     </div>
     <section class="csp-sat-best" id="cspSatBest" aria-labelledby="cspSatBestLabel" hidden>
@@ -663,7 +675,19 @@ function buildSatelliteSearch(){
     saveLayerOrder(["scene",...ids]);syncSatelliteCurrent();
     $("#cspSatNowName",wrap)?.closest(".csp-sat-current-card")?.querySelector("#op")?.focus({preventScroll:true});
   });
-  $("[data-open-layers]",wrap).addEventListener("click",()=>activateRoute("layers"));
+  /* Both of these remove the pressed button from view, so focus moves to
+     where the person's next step is rather than falling back to the page. */
+  $("[data-open-layers]",wrap).addEventListener("click",()=>{
+    pendingLayerFocus={id:"scene",selector:".csp-layer-handle"};
+    activateRoute("layers");
+    if(!document.activeElement?.closest?.(".csp-layer-card")){const title=$("#cspWorkspaceTitle");title.setAttribute("tabindex","-1");title.focus({preventScroll:true})}
+  });
+  $("#clr")?.addEventListener("click",()=>{
+    if(currentRoute!=="satellite") return;
+    syncSatelliteCurrent();
+    const next=$("#summary .csp-best-main")||$("#results .item[tabindex]")||$("#cspSatQuery",wrap);
+    next?.focus({preventScroll:true});
+  });
   return wrap;
 }
 /* The closed filter row still says what the search is limited to. */
@@ -705,12 +729,16 @@ function syncSatelliteCurrent(){
   const ordered=layerSort(bridge.activeLayers()),sceneAt=ordered.findIndex(layer=>layer.id==="scene");
   let savedOrder=[];try{savedOrder=JSON.parse(localStorage.getItem("clearskies.active-layer-order.v1"))||[]}catch(error){}
   const sceneRanked=savedOrder.includes("scene");
-  const above=shown&&sceneAt>=0?ordered.filter((layer,index)=>layer.visible!==false&&layer.opacity>=70&&
-    (layer.kind==="terrain"||layer.id==="elevation-spectrum"||layer.id.startsWith("analysis:"))&&(index<sceneAt||!sceneRanked)):[];
+  const surface=layer=>layer.kind==="terrain"||layer.id==="elevation-spectrum"||layer.id==="elevation-bands"||layer.id.startsWith("analysis:");
+  const above=shown&&sceneAt>=0?ordered.filter((layer,index)=>layer.visible!==false&&layer.opacity>=30&&
+    surface(layer)&&(index<sceneAt||!sceneRanked)):[];
   covers.hidden=!above.length;
   if(above.length){
     const names=above.map(layer=>`${layer.name} (${Math.round(layer.opacity)}%)`).join(", ");
-    $("[data-covered-text]",covers).textContent=`${names} ${above.length===1?"is":"are"} drawn above this image, so it is hidden on the map.`;
+    /* Highlights only paint the chosen heights, and a translucent surface
+       still lets the image through; only a near-opaque full surface hides it. */
+    const hides=above.some(layer=>layer.id!=="elevation-bands"&&layer.opacity>=95);
+    $("[data-covered-text]",covers).textContent=`${names} ${above.length===1?"is":"are"} drawn above this image, so ${hides?"it is hidden on the map":"it is partly obscured"}.`;
   }
   const fill=$("#fillNow");if(fill) fill.disabled=!shown;
 }
