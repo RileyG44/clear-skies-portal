@@ -186,10 +186,11 @@ html[data-ui-theme="dark"] #cspStartup{background:#111416;color:#ebebeb}
      that has only just come up has time to draw before the transition.
      splash.lifted settles as the fade begins; the iOS shell shows its native
      controls with it (native-shell.js). */
-  var splash=boot.splash={done:false,dispose:null,freeze:null,treeAt:0,treeHold:0};
+  var splash=boot.splash={done:false,dispose:null,freeze:null,treeAt:0,treeHold:0,treePending:true,treeDeadline:Date.now()+1500};
   splash.lifted=new Promise(function(resolve){splash.lift=resolve});
   var shellUp=false,splashWait=0,splashCap=0;
-  splash.tree=function(hold){if(!splash.done){splash.treeAt=Date.now();splash.treeHold=hold||500}};
+  splash.tree=function(hold){if(!splash.done){splash.treePending=false;splash.treeAt=Date.now();splash.treeHold=hold||500;splash.check()}};
+  splash.skipTree=function(){splash.treePending=false;splash.check()};
   splash.finish=function(){
     if(splash.done)return;splash.done=true;clearTimeout(splashWait);clearTimeout(splashCap);
     var theme=(root.dataset||{}).uiTheme,color=theme==="dark"?"#111416":"#dbe6eb";
@@ -215,6 +216,12 @@ html[data-ui-theme="dark"] #cspStartup{background:#111416;color:#ebebeb}
     if(splash.done)return;
     if(boot.failed){splash.finish();return}
     if(!shellUp||root.classList.contains("csp-map-staging")||root.classList.contains("csp-terrain-pending"))return;
+    /* A cached map can beat the optional drawing. Give it a short, bounded
+       chance to paint, so a fast launch still carries the maple. Failures
+       skip this immediately; a missing script cannot hold a ready map. */
+    if(!splash.treeAt&&splash.treePending&&Date.now()<splash.treeDeadline){
+      clearTimeout(splashWait);splashWait=setTimeout(splashCheck,splash.treeDeadline-Date.now());return;
+    }
     var still=root.classList.contains("csp-reduce-motion")||!!(window.matchMedia&&matchMedia("(prefers-reduced-motion: reduce)").matches);
     var wait=splash.treeAt?(still?500:splash.treeHold)-(Date.now()-splash.treeAt):0;
     if(wait>0){clearTimeout(splashWait);splashWait=setTimeout(splashCheck,wait);return}
@@ -222,11 +229,16 @@ html[data-ui-theme="dark"] #cspStartup{background:#111416;color:#ebebeb}
   };
   splash.check=splashCheck;
   root.addEventListener("csp:reveal",function(){shellUp=true;splashCheck()},{once:true});
-  /* The inactivity watch still offers recovery after 12 s. Bound even a
-     request that never settles, without treating its empty pane as success. */
-  splashCap=setTimeout(function(){
+  /* The inactivity watch offers recovery after 12 s. At 15 s, give a map
+     still fetching one bounded extension: a slow connection may yet finish.
+     Even a never-settling request offers recovery by 30 s. */
+  var expireSplash=function(){
     if(boot.done)boot.failPicture("The map is taking longer to start. Check your connection, then reload.");
     else boot.fail("The portal is taking longer to start. Check your connection, then reload.");
+  };
+  splashCap=setTimeout(function(){
+    if(boot.done&&boot.pictureStillMoving()){splashCap=setTimeout(expireSplash,15000);return}
+    expireSplash();
   },15000);
   /* The shell and the map arrive together. boot.holds are promises the app
      registers before csp:ready (the first map picture; a shared link's view,
@@ -250,8 +262,9 @@ html[data-ui-theme="dark"] #cspStartup{background:#111416;color:#ebebeb}
 <!-- Prepare the optional drawing during parse; only create its GL context
      once the map has requested its first tiles. Nothing here holds the map. -->
 <script type="module" async>
-var drawing=import("./startup-tree.js?build=2026-11-05q").then(function(m){m.prepareStartupTree(window.CSPBoot.splash);return m});
-var start=function(){drawing.then(function(m){return m.drawStartupTree(window.CSPBoot.splash)}).catch(function(error){console.warn("Start-up tree unavailable",error)})};
+var unavailable=function(error){window.CSPBoot.splash.skipTree();console.warn("Start-up tree unavailable",error);return null};
+var drawing=import("./startup-tree.js?build=2026-11-05q").then(function(m){m.prepareStartupTree(window.CSPBoot.splash);return m}).catch(unavailable);
+var start=function(){drawing.then(function(m){if(m)return m.drawStartupTree(window.CSPBoot.splash)}).catch(unavailable)};
 if(window.CSPBoot.done)setTimeout(start,0);else document.documentElement.addEventListener("csp:ready",function(){setTimeout(start,0)},{once:true});
 </script>
 

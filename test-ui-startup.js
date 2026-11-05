@@ -864,9 +864,30 @@ async function nativeResume(){
   assert.equal(failed.pending,false);
 }
 /* The white start-up screen with the maple holds until the shell is up and the
-   first picture is whole, then lifts once; a failure or the 8 s cap lifts it too. */
+   first picture is whole, then lifts once. A stalled picture offers recovery. */
 async function startupScreen(){
-  const settle=f=>f.context.window.CSPBoot.settlePicture();
+  const settle=f=>{f.context.window.CSPBoot.splash.skipTree();f.context.window.CSPBoot.settlePicture()};
+  {
+    const f=fixture(),boot=f.context.window.CSPBoot,s=boot.splash;let now=1000;
+    f.context.Date={now:()=>now};s.treeDeadline=2500;
+    f.classes.delete('csp-map-staging');f.rootEvents['csp:ready']();
+    assert(!s.done,'a cached map cannot dismiss the cover before the tree can paint');
+    now=1400;s.tree(1800);
+    assert(!s.done,'the fast-map path gives the drawing its normal growth hold');
+    now=3200;s.check();assert(s.done,'the finished drawing dissolves to the cached map');
+  }
+  {
+    const f=fixture(),s=f.context.window.CSPBoot.splash;let now=1000;
+    f.context.Date={now:()=>now};s.treeDeadline=2500;
+    f.classes.delete('csp-map-staging');f.rootEvents['csp:ready']();
+    now=2500;s.check();assert(s.done,'a missing tree module cannot hold a ready map beyond the short grace');
+  }
+  {
+    const f=fixture(),s=f.context.window.CSPBoot.splash;
+    f.classes.delete('csp-map-staging');f.rootEvents['csp:ready']();
+    assert(!s.done);s.skipTree();
+    assert(s.done,'a failed optional renderer skips the grace immediately');
+  }
   {
     const f=fixture(),s=f.context.window.CSPBoot.splash;let lifted=false,events=0;s.lifted.then(()=>lifted=true);
     assert(f.classes.has('csp-splash')&&f.classes.has('csp-map-staging'),'the start-up screen is up from the first frame');
@@ -938,6 +959,27 @@ async function startupScreen(){
     assert(!s.done&&f.classes.has('csp-map-staging'),'a slow picture stays behind the drawing');
     [...f.timers.values()].find(t=>t.ms===15000).fn();
     assert(s.done&&f.nodes.cspStartup.classes.has('failed'),'an endless request offers recovery instead of an empty map');
+  }
+  {
+    const f=fixture(),boot=f.context.window.CSPBoot,s=boot.splash;
+    boot.pictureStillMoving=()=>true;f.rootEvents['csp:ready']();
+    const [id,cap]=[...f.timers].find(([,t])=>t.ms===15000);
+    f.timers.delete(id);cap.fn();
+    assert(!s.done&&!boot.failed,'a slow connection still fetching at 15 s keeps the tree instead of a false error');
+    const extension=[...f.timers].find(([,t])=>t.ms===15000);
+    assert(extension,'pending requests get a bounded extension');
+    f.classes.delete('csp-map-staging');settle(f);
+    assert(s.done&&!boot.failed,'the whole picture reveals normally when the slow request finishes');
+    assert(!f.timers.has(extension[0]),'a finished map clears the extended cap');
+  }
+  {
+    const f=fixture(),boot=f.context.window.CSPBoot,s=boot.splash;
+    boot.pictureStillMoving=()=>true;f.rootEvents['csp:ready']();
+    const [id,cap]=[...f.timers].find(([,t])=>t.ms===15000);
+    f.timers.delete(id);cap.fn();
+    [...f.timers.values()].find(t=>t.ms===15000).fn();
+    assert(s.done&&boot.failed,'an in-flight request that never settles still offers recovery at 30 s');
+    assert(f.classes.has('csp-map-staging'),'a timeout cannot publish an unfinished map');
   }
   const nativeShell=fs.readFileSync('ios/Resources/native-shell.js','utf8');
   assert.match(nativeShell,/splash\?\.lifted\)\.then\(\(\) => handler\.postMessage\(\{type: "ready"\}\)/,'the native controls appear as the start-up screen lifts');

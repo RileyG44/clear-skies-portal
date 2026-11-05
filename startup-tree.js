@@ -39,7 +39,8 @@ export async function drawStartupTree(splash) {
   if (!canvas || !splash || splash.done) return;
   prepareStartupTree(splash);
   const [prepared, { createSketch }] = await Promise.all([splash.prepared, import("./sketch.js")]);
-  if (!prepared || splash.done) return;
+  if (splash.done) return;
+  if (!prepared) { splash.skipTree(); return; }
   const { tree, atlas } = prepared;
   tree.leafAtlas = () => atlas;
   const v = tree.view, room = 1.04;
@@ -51,7 +52,7 @@ export async function drawStartupTree(splash) {
     drawSeconds: 1.5, interactive: false,
     still: document.documentElement.classList.contains("csp-reduce-motion")
   });
-  if (!sketch) return;
+  if (!sketch) { splash.skipTree(); return; }
   splash.freeze = () => sketch.freeze();
   splash.dispose = () => sketch.dispose();
   if (splash.done) { sketch.dispose(); return; }

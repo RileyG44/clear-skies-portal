@@ -735,7 +735,13 @@ export function createSketch(canvas, layer, opts = {}) {
   catch (e) { opts.onNoWebGL && opts.onNoWebGL(); return null; }
   renderer.setClearColor(0xffffff, 1);
 
-  const T = opts.build ? opts.build() : buildTree(opts.seed);
+  // A failed builder or atlas must release the context even though the
+  // sketch has not yet returned its normal dispose callback.
+  let T, atlas;
+  try {
+    T = opts.build ? opts.build() : buildTree(opts.seed);
+    atlas = T.leafCount && T.leafAtlas ? T.leafAtlas() : null;
+  } catch (error) { renderer.dispose(); renderer.forceContextLoss(); throw error; }
   const VIEW = opts.view || FIR_VIEW;
   const n = T.nb, BW = 64, BH = Math.ceil(n / BW), Bn = T.bones;
   const data = new Float32Array(BW * BH * 4);
@@ -779,8 +785,8 @@ export function createSketch(canvas, layer, opts = {}) {
   // the leaves, if this drawing has any, lie over the ink and under the paper and the
   // ink laid over it (pass 2 and 3)
   let leafU = null;
-  if (T.leafCount && T.leafAtlas) {
-    const A = T.leafAtlas();
+  if (atlas) {
+    const A = atlas;
     const atex = new THREE.DataTexture(A.data, A.size, A.size, THREE.RGBAFormat, THREE.UnsignedByteType);
     atex.magFilter = THREE.LinearFilter; atex.minFilter = THREE.LinearMipmapLinearFilter; atex.generateMipmaps = true;
     atex.needsUpdate = true;
@@ -806,7 +812,8 @@ export function createSketch(canvas, layer, opts = {}) {
   const cam = new THREE.OrthographicCamera();
 
   /* labels */
-  const els = T.labels.map(l => {
+  const labels = layer ? T.labels : [];
+  const els = labels.map(l => {
     const el = document.createElement("div");
     el.className = "lbl " + l.cls; el.innerHTML = l.html; layer.appendChild(el);
     return el;
@@ -956,7 +963,7 @@ export function createSketch(canvas, layer, opts = {}) {
     renderer.setPixelRatio(dpr); renderer.setSize(w, h, false);
     U.uRes.value.set(w * dpr, h * dpr); U.uDpr.value = dpr; U.uScale.value = scale;
     layer?.style.setProperty("--u", scale + "px");
-    T.labels.forEach((l, i) => {
+    labels.forEach((l, i) => {
       const x = w / 2 + (l.x - VIEW.cx) * scale, y = h / 2 - (l.y - VIEW.cy) * scale;
       const tx = l.anchor === "r" ? "-100%" : l.anchor === "c" ? "-50%" : "0";
       els[i].style.left = x + "px"; els[i].style.top = y + "px";
@@ -984,7 +991,7 @@ export function createSketch(canvas, layer, opts = {}) {
   }
 
   function render() { renderer.render(scene, cam); }
-  function updateLabels(draw) { T.labels.forEach((l, i) => els[i].classList.toggle("on", draw >= l.t)); }
+  function updateLabels(draw) { labels.forEach((l, i) => els[i].classList.toggle("on", draw >= l.t)); }
 
   if (reduce) for (const f of fall) { f.t = 3 + Math.random() * 6; falling(0); }
   pose();
