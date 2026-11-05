@@ -156,6 +156,10 @@ struct ShellItem: Decodable, Hashable {
     /// A web section the app shows as a row that opens and closes it,
     /// rather than as a section of the list (the LiDAR page's disclosures).
     var disclosure: Bool? = nil
+    /// A task card the app lets a person fold to its title and summary.
+    var collapsible: Bool? = nil
+    /// What a control does beyond its name (a reset's scope).
+    var hint: String? = nil
     var items: [ShellItem]? = nil
     var stops: [GradientStop]? = nil
     var id: String? = nil

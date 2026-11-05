@@ -10,32 +10,52 @@ struct ItemList: View {
     var description: String?
     var route: String?
 
+    @State private var folded = SectionFolds()
+
     var body: some View {
-        let sections = PageLayout.sections(items, route: route)
+        // A page's search and filters (Satellite) stay above the list, so
+        // the field sits straight on the sheet rather than in a card.
+        let pinned = Array(items.prefix { ["scenesearch", "chips"].contains($0.kind) || ($0.kind == "text" && $0.style == "status") })
+        let sections = PageLayout.sections(Array(items.dropFirst(pinned.count)), route: route)
+        let compact = sections.contains { $0.collapsible }
         ScrollViewReader { proxy in
         List {
-            if let description, !description.isEmpty {
-                // A plain row rather than a header: header vibrancy on the
-                // glass sheet washes the text out.
-                Text(description)
-                    .portalFont(.subheadline)
-                    .foregroundStyle(MenuSecondary())
-                    .listRowBackground(Color.clear)
-                    .listRowInsets(EdgeInsets(top: 2, leading: 4, bottom: 2, trailing: 4))
-                    .listSectionSeparator(.hidden)
-            }
             ForEach(sections) { section in
-                Section {
-                    ItemRows(items: section.items, prefix: section.id)
-                } header: {
-                    if let title = section.title { SectionTitle(text: title, detail: section.detail) }
+                if section.collapsible, let title = section.title {
+                    let key = folded.key(route: route, title: title)
+                    let open = !folded.isFolded(key, startsFolded: section.startsFolded)
+                    Section {
+                        FoldHeader(title: title, detail: section.detail, open: open, toggle: section.toggle) {
+                            folded.toggle(key, startsFolded: section.startsFolded)
+                        }
+                            .listRowBackground(SheetRowBackground())
+                            .listRowInsets(MenuMetrics.rowInsets)
+                            .id(section.id)
+                        if open { ItemRows(items: section.items, prefix: section.id) }
+                    }
+                } else {
+                    Section {
+                        ItemRows(items: section.items, prefix: section.id)
+                    } header: {
+                        if let title = section.title { SectionTitle(text: title, detail: section.detail) }
+                    }
                 }
             }
         }
         .listStyle(.insetGrouped)
         .contentMargins(.horizontal, MenuMetrics.pageInset, for: .scrollContent)
-        .contentMargins(.top, 8, for: .scrollContent)
-        .listSectionSpacing(MenuMetrics.sectionSpacing)
+        .contentMargins(.top, pinned.isEmpty ? 4 : 2, for: .scrollContent)
+        .listSectionSpacing(compact ? MenuMetrics.compactSectionSpacing : MenuMetrics.sectionSpacing)
+        .safeAreaInset(edge: .top, spacing: 0) {
+            if !pinned.isEmpty {
+                VStack(alignment: .leading, spacing: 8) {
+                    ItemRowsPinned(items: pinned)
+                }
+                .padding(.horizontal, MenuMetrics.pageInset)
+                .padding(.top, 2)
+                .padding(.bottom, 8)
+            }
+        }
         .scrollContentBackground(.hidden)
         .onSheetGlass()
         .modifier(SheetScrollTracking())
@@ -61,6 +81,108 @@ struct PageSection: Identifiable {
     var title: String?
     var detail: String?
     var items: [ShellItem] = []
+    var collapsible = false
+    /// The card's on/off switch, shown in its first row.
+    var toggle: SubControl?
+    /// An unused task (coloring that is off) starts folded to its first row
+    /// until the person opens it.
+    var startsFolded = false
+}
+
+/// Which task cards a person folded, per page, kept across launches. A card
+/// the app starts folded (rarely changed settings) is listed in `initial`.
+@Observable final class SectionFolds {
+    private static let storageKey = "clearskies.foldedSections.v1"
+    private static let initial: Set<String> = ["elevation:Units", "satellite:Custom dates"]
+    private var folded: Set<String>
+    private var opened: Set<String>
+
+    init() {
+        let defaults = UserDefaults.standard
+        folded = Set(defaults.stringArray(forKey: Self.storageKey) ?? [])
+        opened = Set(defaults.stringArray(forKey: Self.storageKey + ".opened") ?? [])
+    }
+
+    func key(route: String?, title: String) -> String { "\(route ?? ""):\(title)" }
+
+    func isFolded(_ key: String, startsFolded: Bool = false) -> Bool {
+        folded.contains(key) || ((startsFolded || Self.initial.contains(key)) && !opened.contains(key))
+    }
+
+    func toggle(_ key: String, startsFolded: Bool = false) {
+        withAnimation(.snappy(duration: 0.25)) {
+            if isFolded(key, startsFolded: startsFolded) { folded.remove(key); opened.insert(key) } else { folded.insert(key); opened.remove(key) }
+        }
+        UserDefaults.standard.set(Array(folded), forKey: Self.storageKey)
+        UserDefaults.standard.set(Array(opened), forKey: Self.storageKey + ".opened")
+    }
+}
+
+/// The first row of a task card: its name, what it is set to, and a chevron
+/// that folds the card to this one row.
+struct FoldHeader: View {
+    @Environment(ShellModel.self) private var shell
+    let title: String
+    var detail: String?
+    let open: Bool
+    var toggle: SubControl?
+    let action: () -> Void
+    @State private var pending: Bool?
+
+    var body: some View {
+        HStack(spacing: 10) {
+            label
+            if let toggle {
+                // The task's switch stays reachable while the card is folded.
+                Toggle(toggle.title ?? title, isOn: Binding(get: { pending ?? toggle.value?.bool ?? false }, set: { value in
+                    pending = value
+                    shell.act(toggle.ref, .toggle, value)
+                }))
+                .labelsHidden()
+                .tint(Color(hex: shell.appearance.toggle) ?? .green)
+                .disabled(toggle.disabled ?? false)
+                .accessibilityLabel(toggle.title ?? title)
+            }
+        }
+        .onChange(of: toggle?.value) { pending = nil }
+    }
+
+    private var label: some View {
+        Button(action: action) {
+            HStack(spacing: 8) {
+                Text(title).fontWeight(.semibold).foregroundStyle(PortalPrimary())
+                    .layoutPriority(1)
+                Spacer(minLength: 8)
+                if let detail, !detail.isEmpty {
+                    Text(detail).portalFont(.footnote).foregroundStyle(MenuSecondary())
+                        .lineLimit(1).truncationMode(.tail)
+                }
+                Image(systemName: "chevron.right")
+                    .portalFont(.caption, weight: .semibold)
+                    .foregroundStyle(.tertiary)
+                    .rotationEffect(.degrees(open ? 90 : 0))
+            }
+            .frame(minHeight: MenuMetrics.minimumTarget)
+            .contentShape(.rect)
+        }
+        .buttonStyle(.plain)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(title)
+        .accessibilityValue([open ? "Expanded" : "Collapsed", detail ?? ""].filter { !$0.isEmpty }.joined(separator: ", "))
+        .accessibilityHint(open ? "Folds this section" : "Shows this section")
+        .accessibilityAddTraits([.isButton, .isHeader])
+    }
+}
+
+/// Rows pinned above a page's list, drawn on the sheet itself.
+struct ItemRowsPinned: View {
+    let items: [ShellItem]
+
+    var body: some View {
+        ForEach(ItemRows.keyed(items, prefix: "pinned"), id: \.0) { key, item in
+            ItemView(item: item, key: key)
+        }
+    }
 }
 
 /// How the app groups a page. Every web section becomes a section of the
@@ -78,11 +200,6 @@ enum PageLayout {
     static func parts(for route: String?) -> [Part] {
         switch route {
         // Terrain arrives as task sections from the native adapter.
-        case "elevation": [
-            Part(names: ["Reference & color range", "Spectrum opacity"]),
-            Part(names: ["#elevPaletteBox"]),
-            Part(names: ["#elevBandsBox"])
-        ]
         default: []
         }
     }
@@ -94,6 +211,9 @@ enum PageLayout {
         var title: String?
         var detail: String?
         var items: [ShellItem] = []
+        var collapsible = false
+        var toggle: SubControl?
+        var startsFolded = false
     }
 
     static func sections(_ items: [ShellItem], route: String?) -> [PageSection] {
@@ -138,7 +258,8 @@ enum PageLayout {
                 placedParts = true
                 result += parts.compactMap { section(for: $0, from: blocks) }
             } else if !block.items.isEmpty {
-                result.append(PageSection(id: block.id, title: block.title, detail: block.detail, items: block.items))
+                result.append(PageSection(id: block.id, title: block.title, detail: block.detail, items: block.items, collapsible: block.collapsible,
+                                          toggle: block.toggle, startsFolded: block.startsFolded))
             }
         }
         var used = Set<String>()
@@ -155,7 +276,8 @@ enum PageLayout {
     /// draw under subheadings (InlineGroup).
     static func blocks(of group: ShellItem, named: Set<String>) -> [Block] {
         var block = Block(id: "g:\(group.title ?? group.ref ?? "")", names: [group.ref, group.title].compactMap { $0 },
-                          title: group.title, detail: group.detail)
+                          title: group.title, detail: group.detail, collapsible: group.collapsible == true && !(group.title ?? "").isEmpty,
+                          toggle: group.toggle, startsFolded: group.open == false)
         var children = group.items ?? []
         // A heading that opens a section repeats its title; keep what it adds.
         if let first = children.first, first.kind == "header" {
@@ -243,6 +365,11 @@ struct ItemView: View {
         case "layer": LayerCard(item: item)
         case "scene": SceneRow(item: item)
         case "scenesearch": SceneSearchRow(item: item)
+        case "chips": FilterChipsRow(item: item)
+        case "wells": ColorWellsRow(item: item)
+        case "actions": ActionsRow(item: item)
+        case "threshold": ThresholdRow(item: item)
+        case "recommendation": RecommendationRow(item: item)
         case "looks": LooksRow(item: item)
         case "palettes": PalettesRow(item: item)
         case "ramp": RampEditor(item: item)
@@ -405,7 +532,7 @@ struct SceneSearchRow: View {
                     .autocorrectionDisabled()
                     .onSubmit { submit() }
                     .onChange(of: text) { suggest() }
-                Button { shell.searchMapCenter(); text = "" } label: {
+                Button { focused = false; places = []; shell.searchMapCenter() } label: {
                     Image(systemName: "scope").foregroundStyle(MenuSecondary()).frame(width: 44, height: 44)
                 }
                 .buttonStyle(.borderless)
@@ -428,6 +555,8 @@ struct SceneSearchRow: View {
             }
         }
         .onAppear { if text.isEmpty { text = item.value?.string ?? "" } }
+        .onChange(of: item.value) { if !focused { text = item.value?.string ?? "" } }
+        .onChange(of: focused) { if !focused, places.isEmpty, let value = item.value?.string, !value.isEmpty, text.isEmpty { text = value } }
     }
 
     private func suggest() {
@@ -456,6 +585,7 @@ struct SceneSearchRow: View {
         guard !query.isEmpty else { return }
         task?.cancel()
         places = []
+        focused = false
         shell.searchText(query)
     }
 }
@@ -489,6 +619,8 @@ enum MenuMetrics {
     static let rowInset: CGFloat = 16
     static let minimumTarget: CGFloat = 44
     static let sectionSpacing: CGFloat = 20
+    /// Between folding task cards, whose titles sit inside the card.
+    static let compactSectionSpacing: CGFloat = 12
     static let labelSpacing: CGFloat = 4
     static let rowInsets = EdgeInsets(top: 10, leading: rowInset, bottom: 10, trailing: rowInset)
 }

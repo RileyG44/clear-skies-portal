@@ -162,7 +162,7 @@
     if (tag === "input" && type === "range") {
       const output = context.output || (el.id && $(`output[for~="${CSS.escape(el.id)}"]`)) || (el.nextElementSibling?.matches("output") ? el.nextElementSibling : null);
       return { kind: "slider", ...base, value: Number(el.value), min: Number(el.min || 0), max: Number(el.max === "" ? 100 : el.max),
-        step: el.step === "any" ? 0 : Number(el.step || 1), display: output ? clean(output.textContent) : undefined };
+        step: el.step === "any" ? 0 : Number(el.step || 1), accessibility: clean(el.getAttribute("aria-valuetext")) || undefined, display: output ? clean(output.textContent) : undefined };
     }
     if (tag === "input" && type === "color") return { kind: "color", ...base, value: el.value };
     if (tag === "select") return { kind: "picker", ...base, value: el.value,
@@ -179,7 +179,7 @@
   function controlItem(el, context = {}) {
     const tag = el.tagName.toLowerCase(), type = (el.getAttribute("type") || "").toLowerCase();
     const title = context.title ?? labelFor(el);
-    const base = { ref: refOf(el), title, detail: context.detail || undefined, disabled: !!el.disabled || el.getAttribute("aria-disabled") === "true" };
+    const base = { ref: refOf(el), title, detail: context.detail || undefined, hint: clean(el.title) || undefined, disabled: !!el.disabled || el.getAttribute("aria-disabled") === "true" };
     const field = fieldItem(el, tag, type, base, context);
     if (field) return field;
     if (el.getAttribute("role") === "slider") return { kind: "text", style: "hint", title: clean(el.getAttribute("aria-valuetext") || el.getAttribute("aria-label")) };
@@ -340,7 +340,11 @@
      anything matching none is read as text or walked into. */
   const skip = () => true;
   function menuSection(el, out) {
-    const heading = $(":scope > .csp-section-label", el), card = $(":scope > .csp-menu-card", el), items = [];
+    const head = $(":scope > .ev-section-head", el);
+    const heading = $(":scope > .csp-section-label", el) || (head && $(".csp-section-label", head));
+    const card = $(":scope > .csp-menu-card", el), items = [];
+    // Controls in a section's heading (Elevation's units) are its first rows.
+    if (head) for (const control of $$(FORM, head).filter(shown)) items.push(controlItem(control));
     if (card) walk(card, items);
     out.push({kind: "group", ref: refOf(el), title: clean(heading?.textContent), items});
   }
@@ -362,25 +366,94 @@
        whole section, so it ends the section's rows. */
     if (summary) for (const button of $$("button", summary).filter(shown)) items.push(controlItem(button));
     const swatch = summary && $(".ls-swatch", summary);
-    out.push({ kind: "group", ref: refOf(el), title: summary ? textWithout(summary, ".pane-n,button,.ls-disclosure-value,.ls-preset-status,.ls-swatch,.terrain-disclosure-description") : "",
-      detail: summary ? clean((description || $(".pane-n,.ls-disclosure-value,.ls-preset-status", summary))?.textContent) || undefined : undefined,
+    const VALUE = ".pane-n,.ls-disclosure-value,.ls-preset-status,.ev-more-value,.csp-sat-filter-sum";
+    out.push({ kind: "group", ref: refOf(el), title: summary ? textWithout(summary, VALUE + ",button,.ls-swatch,.terrain-disclosure-description") : "",
+      detail: summary ? clean((description || $(VALUE, summary))?.textContent) || undefined : undefined,
       stops: swatch ? gradientOf(swatch) : undefined, open: el.open, items });
   }
   function header(el, out) {
     const count = $(".pane-n", el);
     out.push({ kind: "header", title: count ? textWithout(el, ".pane-n") : clean(el.textContent), detail: count ? clean(count.textContent) || undefined : undefined });
   }
+  /* Satellite: one search field with its filters as compact chips under it,
+     then what the search found (Best match) and what is drawn (On the map).
+     Custom dates only appear while a custom range is chosen. */
   function sceneSearch(el, out) {
     const input = $("#cspSatQuery", el);
     out.push({ kind: "scenesearch", ref: input ? refOf(input) : refOf(el), placeholder: input?.placeholder, value: input?.value || undefined });
     const note = $("#cspSatNote", el);
     if (note && shown(note)) out.push({ kind: "text", style: "status", title: clean(note.textContent) });
+    const box = $("#cspSatFilterBox", el), chips = [], custom = [];
+    for (const id of ["#days", "#cloud", "#vis"]) { const control = $(id, el); if (control) chips.push(controlItem(control)); }
+    out.push({ kind: "chips", ref: box ? refOf(box) : "satellite:filters", title: "Search filters",
+      detail: clean($("#cspSatFilterSum", el)?.textContent) || undefined, items: chips });
+    const filters = $(".csp-sat-filters", el);
+    for (const child of filters?.children || []) {
+      if (!shown(child) || child.matches("label[for='days'],label[for='cloud'],label[for='vis']") || child.querySelector("#days,#cloud,#vis") || child.matches("#days,#cloud,#vis")) continue;
+      if (!handle(child, custom)) walk(child, custom);
+    }
+    if (custom.length) out.push({ kind: "group", ref: "satellite:dates", title: "Custom dates", collapsible: true, items: custom });
     for (const child of $(".csp-sat-card", el)?.children || []) {
-      if (child.matches("form,.csp-sat-filters,#cspSatNote") || !shown(child)) continue;
+      if (child.matches("form,#cspSatNote,#cspSatFilterBox") || !shown(child)) continue;
       if (!handle(child, out)) walk(child, out);
     }
-    const filters = $(".csp-sat-filters", el);
-    if (filters && shown(filters)) walk(filters, out);
+    const best = sceneBest($("#cspSatBest", el)), current = sceneCurrent($("#cspSatCurrent", el));
+    if (best) out.push(best);
+    if (current) out.push(current);
+  }
+  // Reuse the web's coverage warning; accepted pixels and visible pixels
+  // are different states. Do not infer coverage from the selected record.
+  function sceneVisibility() {
+    const covered = $("#cspSatCovered");
+    if (!covered || !shown(covered)) return "";
+    return /it is hidden on the map/.test(clean(covered.textContent)) ? "Hidden by layers" : "Partly obscured";
+  }
+  function sceneBest(section) {
+    if (!section || !shown(section)) return null;
+    const items = [], main = $(".csp-best-main", section), none = $(".csp-best-none", section);
+    const visibility = sceneVisibility();
+    if (main) {
+      const action = controlItem(main), selected = /Showing/.test(clean($(".csp-best-k", main)?.textContent));
+      items.push({ kind: "recommendation", ref: "satellite:recommendation", title: clean($("strong", main)?.textContent),
+        detail: clean($(".csp-best-meta", main)?.textContent), badge: selected ? (visibility || "Shown") : undefined,
+        // The card's own text already names the scene; the button only acts.
+        edit: {ref: action.ref, title: "Show on map", disabled: action.disabled},
+        selected, accessibility: visibility ? `Selected · ${visibility.toLowerCase()}` : undefined });
+    }
+    if (none) items.push({ kind: "text", style: "hint", title: clean(none.textContent) });
+    const alternatives = $$(".csp-best-chip", section).filter(shown).map(chip =>
+      ({ ...controlItem(chip, { title: clean($("span", chip)?.textContent) + " · " + clean($("b", chip)?.textContent) }),
+        role: "option", detail: clean($("small", chip)?.textContent) || undefined }));
+    if (alternatives.length) items.push(localDisclosure("satellite:alternatives", "Other recommendations", alternatives));
+    const count = clean($(".csp-best-cover", section)?.textContent).match(/^(\d+) matching scenes/);
+    return { kind: "group", ref: "#cspSatBest", title: "Best match", collapsible: true,
+      detail: count ? `${count[1]} scenes` : undefined, items };
+  }
+  function sceneCurrent(section) {
+    if (!section || !shown(section)) return null;
+    const items = [], name = clean($("#cspSatNowName", section)?.textContent);
+    if (name) items.push({ kind: "text", style: "row", ref: "#cspSatNowName", title: name,
+      detail: clean($("#cspSatNowDate", section)?.textContent) || undefined, badge: sceneVisibility() || clean($("#cspSatNowBadge", section)?.textContent) || undefined });
+    const note = $("#cspSatNowNote", section);
+    if (note && shown(note)) items.push({ kind: "text", style: "status", ref: "#cspSatNowNote", title: clean(note.textContent), markdown: tidyMarkdown(markdownOf(note)) || undefined });
+    const covered = $("#cspSatCovered", section);
+    if (covered && shown(covered)) {
+      items.push({ kind: "text", style: "warning", ref: "#cspSatCovered", title: clean($("[data-covered-text]", covered)?.textContent) });
+      items.push({ kind: "actions", ref: "satellite:covered", items: $$("button", covered).filter(shown).map(button => controlItem(button)) });
+    }
+    const opacity = $("#op");
+    if (opacity && section.contains(opacity) && shown(opacity)) items.push(controlItem(opacity, { title: "Opacity", output: $("#cspSatOpOut") }));
+    const fill = $(".csp-sat-fill", section);
+    if (fill && shown(fill)) { const rows = []; walk(fill, rows); items.push(...rows); }
+    const actions = [...$$(".csp-sat-actions button", section), ...$$(".csp-sat-opacity button", section)].filter(shown);
+    if (actions.length) items.push({ kind: "actions", ref: "satellite:actions", items: actions.map(button => {
+      const item = controlItem(button);
+      if (button.id === "ctlReset") item.title = "Reset opacity";
+      return item;
+    }) });
+    const link = $(".csp-sat-link", section);
+    if (link && shown(link)) { const rows = []; walk(link, rows); items.push(...rows); }
+    return items.length ? { kind: "group", ref: "#cspSatCurrent", title: "On the map", collapsible: true, detail: sceneVisibility() || clean($("#cspSatNowBadge", section)?.textContent) || undefined, items } : null;
   }
   /* The web puts Save current in the card's heading. In the app's list it
      follows the presets it would add to. */
@@ -426,7 +499,7 @@
       const head = $(".elev-label-row", el), entry = $$("input[type=number]", el).find(shown);
       const slider = controlItem(range, { title: head ? textWithout(head, "output,.elev-value," + CONTROLS) : entry ? labelFor(entry) : labelFor(range),
         output: $("output", el) || $(".elev-value", el) });
-      if (entry) slider.entry = { ref: refOf(entry), value: entry.value, unit: unitOf(entry) || $("select", el)?.value || undefined,
+      if (entry) slider.entry = { ref: refOf(entry), title: labelFor(entry), value: entry.value, unit: unitOf(entry) || $("select", el)?.value || undefined,
         disabled: entry.disabled || undefined };
       out.push(slider);
       for (const extra of $$(CONTROLS, el).filter(c => c !== range && c !== entry && shown(c))) out.push(controlItem(extra));
@@ -631,6 +704,94 @@
     return items;
   }
 
+  const flatItems = rows => (rows || []).flatMap(item => [item, ...flatItems(item.items)]);
+  const textOf = selector => { try { return clean($(selector)?.textContent); } catch (error) { return ""; } };
+  const stripUnit = title => clean(String(title || "").replace(/[±]/g, "").replace(/\b(ft|m|feet|metres)\b\s*$/i, ""));
+
+  /* Elevation as two tasks, each one card that folds to a summary line.
+     Coloring reads top to bottom: switch, the two heights, then the scale bar
+     directly above the colors it shows, then opacity. Each highlight is one
+     row (switch, height, color). Built from control ids, so every described
+     control appears exactly once; anything unrecognised follows its task. */
+  function elevationLayout(items) {
+    const all = flatItems(items).filter(item => item.kind !== "group" && item.kind !== "header");
+    const byRef = new Map(all.filter(item => item.ref).map(item => [item.ref, item]));
+    if (!byRef.has("#elevSh") && !byRef.has("#elevBelowVal")) return items;
+    const used = new Set();
+    const take = ref => { const item = byRef.get(ref); if (item) used.add(item); return item; };
+    const spanHint = textOf("#elevSpanHint"), featherHint = textOf("#elevBandFeatherHint");
+    for (const item of all) if (!item.ref && item.kind === "text" && (item.title === spanHint || item.title === featherHint)) used.add(item);
+    const slider = (ref, title, detail) => { const item = take(ref); return item && {...item, title: title || stripUnit(item.title), detail: detail || item.detail}; };
+    const on = take("#elevSh"), reference = slider("#elevSlide", "Reference elevation"), span = slider("#elevSpanSlide", "Color span ±", spanHint || undefined);
+    const gradient = take("#elevRangePreview") || all.find(item => item.kind === "gradient" && !used.has(item));
+    if (gradient) used.add(gradient);
+    const palette = take("#elevPalette");
+    const wells = ["#elevLowColor", "#elevMidColor", "#elevHighColor"].map((ref, index) => {
+      const item = take(ref); return item && {...item, title: ["Low", "Reference", "High"][index]};
+    }).filter(Boolean);
+    const reverse = take("#elevPaletteReverse");
+    const alpha = slider("#elevAlpha", "Opacity");
+    const status = take("#elevOut");
+    const resets = ["#elevPaletteReset", "#elevSpectrumReset"].map(take).filter(Boolean);
+    const color = [reference, {...span, detail: undefined}, gradient, palette && {...palette, title: "Color preset"},
+      wells.length ? {kind: "wells", ref: "elevation:wells", title: "Colors", items: [...wells, ...(reverse ? [{...reverse, title: "Reverse colors"}] : [])]} : null,
+      alpha, status, spanHint ? localDisclosure("elevation:range-help", "How the color range works", [{kind: "text", style: "hint", title: spanHint}]) : null, resets.length ? {kind: "actions", ref: "elevation:color-actions", items: resets} : null].filter(Boolean);
+
+    const threshold = (toggleRef, colorRef, valueRef, title) => {
+      const toggle = take(toggleRef), well = take(colorRef), value = take(valueRef);
+      if (!value) return [toggle, well].filter(Boolean);
+      return [{...value, kind: "threshold", title, detail: toggle?.title || undefined,
+        toggle: toggle ? {ref: toggle.ref, value: toggle.value, title: toggle.title, disabled: toggle.disabled} : undefined,
+        well: well ? {ref: well.ref, value: well.value, title: well.title, disabled: well.disabled} : undefined}];
+    };
+    const bandStatus = take("#elevBandOut");
+    const edges = [slider("#elevBandAlpha", "Opacity"), (() => { const item = take("#elevBandFeather"); return item && {...item, title: "Soft edge", detail: featherHint || item.detail}; })(),
+      take("#elevBandOutline")].filter(Boolean);
+    const bandReset = take("#elevBandsReset");
+    const bands = [...threshold("#elevBelowOn", "#elevBelowColor", "#elevBelowVal", "Below"),
+      ...threshold("#elevAboveOn", "#elevAboveColor", "#elevAboveVal", "Above"), bandStatus,
+      edges.length ? localDisclosure("elevation:edges", "Edges & opacity", edges, textOf("#elevBandMoreValue") || undefined) : null,
+      bandReset ? {kind: "actions", ref: "elevation:band-actions", items: [bandReset]} : null].filter(Boolean);
+    const unit = take("#elevUnit");
+    // Nothing described is dropped: unknown rows follow the coloring task.
+    const rest = all.filter(item => !used.has(item) && item.kind !== "gradient" && !(item.kind === "text" && !item.ref && /^(Paint ground|Low|Ref|High)/.test(item.title || "")));
+    const onValue = on?.value === true, below = byRef.get("#elevBelowOn")?.value === true, above = byRef.get("#elevAboveOn")?.value === true;
+    const summary = textOf("#elevSpectrumMoreValue");
+    const bandSummary = [below && `Below ${byRef.get("#elevBelowVal")?.value} ${byRef.get("#elevBelowVal")?.unit || ""}`.trim(),
+      above && `Above ${byRef.get("#elevAboveVal")?.value} ${byRef.get("#elevAboveVal")?.unit || ""}`.trim()].filter(Boolean).join(" · ");
+    return [
+      {kind: "group", ref: "elevation:color", title: "Color by elevation", collapsible: true,
+        detail: onValue ? (summary || "On") : "Off", open: onValue, toggle: on ? {ref: on.ref, title: "Color by elevation on map", value: on.value, disabled: on.disabled} : undefined, items: [...color, ...rest]},
+      {kind: "group", ref: "elevation:bands", title: "Highlight elevations", collapsible: true,
+        detail: bandSummary || "Off", items: bands},
+      unit ? {kind: "group", ref: "elevation:units", title: "Units", collapsible: true, detail: unit.options?.find(o => o.value === unit.value)?.title,
+        items: [{...unit, title: "Heights shown in"}]} : null
+    ].filter(Boolean);
+  }
+
+  /* Satellite reads in the order of the task: search and filters, the best
+     match, the scene on the map, then every result, then reference layers
+     and acquisition estimates. */
+  function satelliteLayout(items) {
+    const ORDER = ["Satellite scenes", "Reference imagery & coverage", "Estimated next acquisitions"];
+    const rank = item => item.pane ? 1 + (ORDER.indexOf(item.title) < 0 ? ORDER.length : ORDER.indexOf(item.title)) : 0;
+    return items.map((item, index) => [item, index]).sort((a, b) => rank(a[0]) - rank(b[0]) || a[1] - b[1]).map(([item]) => {
+      if (item.pane && item.title === "Satellite scenes") {
+        const settings = (item.items || []).filter(row => ["#sort", "#viewable", "#groupSrc"].includes(row.ref));
+        const rows = (item.items || []).filter(row => !settings.includes(row)).map(row => row.role === "group"
+          ? {...row, expanded: /hide/i.test(row.detail || ""), detail: undefined} : row);
+        const sort = settings.find(row => row.ref === "#sort");
+        const summary = [sort?.options?.find(option => option.value === sort.value)?.title,
+          settings.find(row => row.ref === "#viewable")?.value && "Drawable only",
+          settings.find(row => row.ref === "#groupSrc")?.value && "By source"].filter(Boolean).join(" · ");
+        const help = textOf(".csp-sat-filter-help");
+        if (help) settings.push({kind: "text", style: "hint", title: help});
+        return {...item, items: [settings.length ? localDisclosure("satellite:list-settings", "Result options", settings, summary) : null,
+          !rows.length ? {kind: "text", style: "hint", title: "Search a place or use the map centre to find dated imagery."} : null, ...rows].filter(Boolean)};
+      }      return item;
+    });
+  }
+
   // Credits are always at the end, behind a consistently named disclosure.
   // Status, scientific warnings and control-specific units stay by the control.
   function nativePageItems(route, items) {
@@ -661,15 +822,8 @@
       if (sources.length) result.push(nativeSection("settings:sources", "About the map", [localDisclosure("settings:credits", "Sources & scale", sources)]));
       return result;
     }
-    if (route === "elevation") {
-      const spectrum = items.find(item => item.kind === "group" && item.title === "Elevation spectrum");
-      const palette = items.find(item => item.kind === "group" && item.title === "Palette & colors");
-      if (spectrum && palette) {
-        items = items.filter(item => item !== palette).map(item => item === spectrum
-          ? {...item, items: [...(item.items || []), localDisclosure("elevation:palette", "Spectrum colors", palette.items || [])]}
-          : item);
-      }
-    }
+    if (route === "elevation") items = elevationLayout(items);
+    if (route === "satellite") items = satelliteLayout(items);
     const provenance = [];
     const customWells = new Set();
     const findWells = rows => { for (const item of rows) {
@@ -687,7 +841,7 @@
         provenance.push({kind: "text", style: "row", title: next.title, detail: next.provenance});
         delete next.provenance;
       }
-      const titles = {"#elevSpectrumReset": "Reset spectrum", "#elevBandsReset": "Reset highlights"};
+      const titles = {"#elevSpectrumReset": "Reset coloring", "#elevBandsReset": "Reset highlights"};
       if (titles[next.ref]) { next.title = titles[next.ref]; next.accessibility = next.title; }
       if (next.items) next.items = tidy(next.items);
       return next;

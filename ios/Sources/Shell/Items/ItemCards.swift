@@ -314,3 +314,259 @@ struct SceneRow: View {
         .buttonStyle(.plain)
     }
 }
+
+/// Search filters as one line of chips under the search field. Each chip
+/// names its current choice and opens the same choices as the web select.
+struct FilterChipsRow: View {
+    let item: ShellItem
+
+    var body: some View {
+        ScrollView(.horizontal) {
+            HStack(spacing: 8) {
+                ForEach(item.items ?? [], id: \.stableID) { picker in
+                    FilterChip(item: picker)
+                }
+            }
+        }
+        .scrollIndicators(.hidden)
+        .scrollClipDisabled()
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel(item.text.isEmpty ? "Search filters" : item.text)
+    }
+}
+
+struct FilterChip: View {
+    @Environment(ShellModel.self) private var shell
+    let item: ShellItem
+    @State private var pending: String?
+
+    var body: some View {
+        let options = item.options ?? []
+        let selection = Binding(get: { pending ?? item.value?.string ?? "" }, set: { value in
+            pending = value
+            shell.act(item.ref, .select, value)
+        })
+        let current = options.first { ($0.value ?? $0.label) == selection.wrappedValue }?.label ?? selection.wrappedValue
+        Menu {
+            Picker(item.text, selection: selection) {
+                ForEach(options) { option in
+                    Text(option.label).tag(option.value ?? option.label)
+                }
+            }
+            .pickerStyle(.inline)
+        } label: {
+            HStack(spacing: 4) {
+                Text(Self.label(for: item.ref, current: current)).lineLimit(1)
+                Image(systemName: "chevron.down").portalFont(.caption2, weight: .semibold)
+            }
+            .portalFont(.footnote, weight: .medium)
+            .foregroundStyle(PortalPrimary())
+            .padding(.horizontal, 12)
+            .frame(minHeight: 34)
+            .background(.fill.tertiary, in: .capsule)
+            // A compact pill with a full 44-point target around it.
+            .frame(minHeight: MenuMetrics.minimumTarget)
+            .contentShape(.rect)
+        }
+        .menuStyle(.button)
+        .buttonStyle(.plain)
+        .accessibilityLabel(item.text)
+        .accessibilityValue(current)
+        .onChange(of: item.value) { pending = nil }
+    }
+
+    /// "Any" alone does not say what it filters.
+    static func label(for ref: String?, current: String) -> String {
+        switch (ref, current) {
+        case ("#cloud", "Any"): "Any cloud"
+        case ("#cloud", _): current.replacingOccurrences(of: "Under ", with: "Cloud < ")
+        default: current
+        }
+    }
+}
+
+/// The three colors of a scale side by side, captioned by role, with the
+/// action that swaps the ends.
+struct ColorWellsRow: View {
+    @Environment(ShellModel.self) private var shell
+    @Environment(\.dynamicTypeSize) private var typeSize
+    let item: ShellItem
+
+    var body: some View {
+        let rows = item.items ?? []
+        let layout = typeSize.isAccessibilitySize
+            ? AnyLayout(VStackLayout(alignment: .leading, spacing: 8))
+            : AnyLayout(HStackLayout(spacing: 10))
+        layout {
+            Text(item.text.isEmpty ? "Colors" : item.text)
+            if !typeSize.isAccessibilitySize { Spacer(minLength: 4) }
+            HStack(spacing: 10) {
+            ForEach(rows.filter { $0.kind == "color" }, id: \.stableID) { well in
+                VStack(spacing: 1) {
+                    ColorPicker(selection: Binding(get: { Color(hex: well.value?.string) ?? .white }, set: { color in
+                        shell.act(well.ref, .commit, color.hexString)
+                    }), supportsOpacity: false) { Text(well.text) }
+                    .labelsHidden()
+                    .frame(minWidth: MenuMetrics.minimumTarget, minHeight: 32)
+                    .contentShape(.rect)
+                    .disabled(well.isDisabled)
+                    Text(well.text).portalFont(.caption2).foregroundStyle(MenuSecondary()).lineLimit(1).fixedSize()
+                }
+                .accessibilityElement(children: .combine)
+                .accessibilityLabel("\(well.text) color")
+            }
+            ForEach(rows.filter { $0.kind == "button" }, id: \.stableID) { button in
+                Button { shell.act(button.ref) } label: {
+                    Image(systemName: "arrow.left.arrow.right")
+                        .portalFont(.footnote, weight: .semibold)
+                        .frame(width: 36, height: 36)
+                        .background(.fill.tertiary, in: .circle)
+                        .contentShape(.circle)
+                }
+                .buttonStyle(.plain)
+                .foregroundStyle(PortalPrimary())
+                .frame(minWidth: 44, minHeight: 44)
+                .contentShape(.rect)
+                .accessibilityLabel(button.text.isEmpty ? "Reverse colors" : button.text)
+            }
+            }
+        }
+    }
+}
+
+/// A card's closing actions (resets, fill and remove) side by side as quiet
+/// capsules rather than one full-width plate each.
+struct ActionsRow: View {
+    @Environment(ShellModel.self) private var shell
+    @Environment(\.dynamicTypeSize) private var typeSize
+    let item: ShellItem
+
+    var body: some View {
+        let buttons = item.items ?? []
+        let stacked = typeSize.isAccessibilitySize || buttons.count > 2
+        let layout = stacked ? AnyLayout(VStackLayout(spacing: 8)) : AnyLayout(HStackLayout(spacing: 8))
+        VStack(alignment: .leading, spacing: 6) {
+            layout { ForEach(buttons, id: \.stableID) { action($0) } }
+            // Say what each reset puts back, as the web's tooltips do.
+            // With several buttons, name each one so the hints stay apart.
+            let hinted = buttons.filter { !($0.hint ?? "").isEmpty }
+            let hints = hinted.map { button -> String in
+                let hint = button.hint ?? ""
+                guard hinted.count > 1 else { return hint }
+                let sentence = hint.prefix(1).lowercased() + hint.dropFirst()
+                return "\(button.title ?? ""): \(sentence.hasSuffix(".") ? sentence : sentence + ".")"
+            }
+            if !hints.isEmpty {
+                Text(hints.joined(separator: "\n"))
+                    .portalFont(.caption).foregroundStyle(MenuSecondary())
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+        .listRowSeparator(.hidden, edges: .top)
+    }
+
+    private func action(_ button: ShellItem) -> some View {
+        Button(role: button.role == "destructive" ? .destructive : nil) { shell.act(button.ref) } label: {
+            Text(button.text).portalFont(.footnote, weight: .semibold)
+                .multilineTextAlignment(.center)
+                .frame(maxWidth: .infinity, minHeight: 36)
+        }
+        .buttonStyle(.glass)
+        .buttonBorderShape(.capsule)
+        .frame(minHeight: MenuMetrics.minimumTarget)
+        .disabled(button.isDisabled)
+        .accessibilityLabel(button.accessibility ?? button.text)
+        .accessibilityHint(button.hint ?? "")
+    }
+}
+
+/// One elevation highlight: its color, the height, and whether it is on.
+struct ThresholdRow: View {
+    @Environment(ShellModel.self) private var shell
+    @Environment(\.dynamicTypeSize) private var typeSize
+    let item: ShellItem
+    @State private var pending: Bool?
+
+    var body: some View {
+        let layout = typeSize.isAccessibilitySize
+            ? AnyLayout(VStackLayout(alignment: .leading, spacing: 8))
+            : AnyLayout(HStackLayout(spacing: 12))
+        layout {
+            HStack(spacing: 12) {
+                if let well = item.well {
+                    ColorPicker(selection: Binding(get: { Color(hex: well.value?.string) ?? .white }, set: { color in
+                        shell.act(well.ref, .commit, color.hexString)
+                    }), supportsOpacity: false) { Text(well.title ?? "Color") }
+                    .labelsHidden()
+                    .frame(minWidth: MenuMetrics.minimumTarget, minHeight: MenuMetrics.minimumTarget)
+                    .contentShape(.rect)
+                    .disabled(well.disabled ?? false)
+                    .accessibilityLabel("\(item.text) color")
+                }
+                Text(item.text)
+            }
+            if !typeSize.isAccessibilitySize { Spacer(minLength: 8) }
+            HStack(spacing: 12) {
+            NumberEntry(control: SubControl(ref: item.ref ?? "", value: item.value, disabled: item.disabled,
+                                            title: "\(item.text) height", unit: item.unit))
+            if let toggle = item.toggle {
+                Toggle(toggle.title ?? item.text, isOn: Binding(get: { pending ?? toggle.value?.bool ?? false }, set: { value in
+                    pending = value
+                    shell.act(toggle.ref, .toggle, value)
+                }))
+                .labelsHidden()
+                .tint(Color(hex: shell.appearance.toggle) ?? .green)
+                .disabled(toggle.disabled ?? false)
+                .accessibilityLabel(toggle.title ?? "Highlight \(item.text.lowercased())")
+            }
+            }
+        }
+        .frame(minHeight: MenuMetrics.minimumTarget)
+        .onChange(of: item.toggle?.value) { pending = nil }
+    }
+}
+
+/// Satellite's recommendation: the scene, why it was chosen, and one action.
+/// A selected scene says whether it can actually be seen on the map.
+struct RecommendationRow: View {
+    @Environment(ShellModel.self) private var shell
+    let item: ShellItem
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                Text(item.text).fontWeight(.semibold).foregroundStyle(PortalPrimary())
+                    .fixedSize(horizontal: false, vertical: true)
+                Spacer(minLength: 4)
+                if let badge = item.badge, !badge.isEmpty {
+                    Text(badge)
+                        .portalFont(.caption2, weight: .semibold)
+                        .padding(.horizontal, 7).padding(.vertical, 2)
+                        .background(badge == "Shown" ? AnyShapeStyle(.green.opacity(0.22)) : AnyShapeStyle(.orange.opacity(0.25)), in: .capsule)
+                        .foregroundStyle(PortalPrimary())
+                }
+            }
+            if let detail = item.detail, !detail.isEmpty {
+                Text(detail).portalFont(.caption, digits: true).foregroundStyle(MenuSecondary())
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            if let action = item.edit, item.selected != true {
+                Button { shell.act(action.ref) } label: {
+                    Text(action.title ?? "Show").fontWeight(.semibold).frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.glassProminent)
+                .controlSize(.large)
+                .buttonBorderShape(.capsule)
+                .disabled(action.disabled ?? false)
+            }
+        }
+        .padding(.vertical, 2)
+        .accessibilityElement(children: .contain)
+        .accessibilityValue(item.accessibility ?? item.badge ?? "")
+    }
+}
+
+extension ShellItem {
+    /// Identity that survives value changes, so an open picker is not rebuilt.
+    var stableID: String { ref ?? "\(kind):\(title ?? "")" }
+}
