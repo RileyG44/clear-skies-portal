@@ -44,7 +44,7 @@ for(const [name,lon,lat,expected] of [
   const y=(1-Math.asinh(Math.tan(lat*Math.PI/180))/Math.PI)/2;
   assert.equal(G.waterAtMercator((lon+180)/360,y),expected,name+' Mercator');
 }
-assert.equal(G.bytes().byteLength,16*1024*1024,'packed geography has a bounded CPU/GPU footprint');
+assert.equal(G.bytes().byteLength,32*1024*1024,'packed geography has a bounded CPU/GPU footprint');
 assert.equal(G.waterAt(NaN,0),false);
 assert.equal(G.waterAt(0,91),false);
 
@@ -86,3 +86,22 @@ for(let i=0;i<mask.length;i++)if(!mask[i])assert.equal(floorA[i],floorB[i],'coas
 const pixelsA=R.renderStack(remStack,shallow),pixelsB=R.renderStack(remStack,deep);
 for(let i=0;i<mask.length;i++)if(!mask[i])assert.deepEqual(pixelsA.slice(i*4,i*4+4),pixelsB.slice(i*4,i*4+4),'land colors are independent of ocean extremes');
 console.log('Relative elevation: separate fits, missing bases, inland contrast and coastal-floor isolation passed');
+
+// Arbitrarily deep inland water must never expand land fitting. Land outliers
+// remain, including below-sea-level dry land. Lakes have an independent key.
+{
+ const types=Uint8Array.from([0,0,0,1,2,2]);
+ const h=[-86,100,4200,-11000,-1600,-200];
+ const fit=R.fitElevation(h,types);
+ assert.deepEqual(fit,{land:[-90,4200],water:[-11000,-10999],inland:[-1600,-200]});
+ const deeper=h.map((v,i)=>types[i]===2?v-10000:v);
+ assert.deepEqual(R.fitElevation(deeper,types).land,fit.land);
+ const relative=[2,10,200,10000,9000,9500];
+ assert.deepEqual(R.fitRelative(relative,h,types).land,R.fitRelative(relative,deeper,types).land);
+ const mask=Uint8Array.from({length:13*9},(_,i)=>i%13<6?2:0);
+ const dem=depth=>({width:13,height:9,water:mask,grid:Float32Array.from(mask,(kind,i)=>kind?depth:-86+i%13*3)});
+ const a=R.relativeBase(dem(-1600),2,true),b=R.relativeBase(dem(-11600),2,true);
+ for(let i=0;i<mask.length;i++)if(!mask[i])assert.equal(a[i],b[i],'deepening only lakebed cannot affect land floor');
+ for(const [lon,lat] of [[33,-1],[-87,47.5],[-112.5,41.2],[35.47,31.5],[50,42]])assert.equal(G.classAt(lon,lat),2);
+ assert.equal(G.classAt(-130,40),1);assert.equal(G.classAt(-116.8258,36.24),0);
+}

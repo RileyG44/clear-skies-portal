@@ -78,7 +78,7 @@ async function regression(){
         const baseField={...field,valid:field.valid.slice()};
         if(maskLand)for(let y=0;y<h;y++)for(let x=0;x<w;x++){
           const merc=CSPGpuTerrainShaders.screenToMercator(view,[(x+.5)/w,1-(y+.5)/h]);
-          if(CSPWaterGeography.waterAtMercator(...merc))baseField.valid[y*w+x]=0;
+          if(CSPWaterGeography.classAtMercator(...merc)>0)baseField.valid[y*w+x]=0;
         }
         const base=reference(baseField,radius,true);
         for(let y=0;y<h;y++)for(let x=0;x<w;x++)if(field.valid[y*w+x]){

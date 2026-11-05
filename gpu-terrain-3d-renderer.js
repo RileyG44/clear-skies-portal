@@ -88,7 +88,7 @@
     const cache = new Map(), owned = new Set(), targets = new WeakMap(), uniforms = new Map();
     const counters = { inputTextures: 0, inputBytes: 0, uploads: 0, draws: 0, evictions: 0, batches: 0,
       cacheHits: 0, uniformUpdates: 0 };
-    let waterTexture = null;
+    let waterTexture = null, emptyWaterTexture = null;
     let program = null, fbo = null, vao = null, dead = false, selfTestError = null;
     let maxSize, sizeLocation, heightLocation, locations;
     function remove(key) {
@@ -103,6 +103,7 @@
       if (dead) return;
       dead = true; clear();
       if(waterTexture)gl.deleteTexture(waterTexture);waterTexture=null;
+      if(emptyWaterTexture)gl.deleteTexture(emptyWaterTexture);emptyWaterTexture=null;
       if (fbo) gl.deleteFramebuffer(fbo);
       if (vao) gl.deleteVertexArray(vao);
       if (program) gl.deleteProgram(program);
@@ -169,8 +170,8 @@
           throw new TypeError("Invalid 3D terrain job or input/output feedback");
         if (job.grid.byteLength > maxBytes) throw new RangeError("3D terrain input exceeds GPU byte budget");
       }
-      const needsWater=jobs.some(job=>job.state?.terrain?.stack?.layers?.some(layer=>layer.water));
-      const saved = snapshot(gl,needsWater), beforeUploads = counters.uploads, beforeEvictions = counters.evictions;
+      const needsWater=jobs.some(job=>job.state?.terrain?.stack?.layers?.some(layer=>layer.water||layer.inland));
+      const saved = snapshot(gl,true), beforeUploads = counters.uploads, beforeEvictions = counters.evictions;
       counters.batches++;
       try {
         gl.activeTexture(gl.TEXTURE0); gl.bindSampler(0, null);
@@ -183,11 +184,15 @@
         gl.colorMask(true, true, true, true); gl.useProgram(program); gl.bindVertexArray(vao);
         gl.bindFramebuffer(gl.DRAW_FRAMEBUFFER, fbo);
         uniform("u_height", 0, true);
+        gl.activeTexture(gl.TEXTURE0+3);gl.bindSampler(3,null);
         if(needsWater){
-          gl.activeTexture(gl.TEXTURE0+3);gl.bindSampler(3,null);
           if(!waterTexture)waterTexture=geography.upload(gl);
-          gl.bindTexture(gl.TEXTURE_2D,waterTexture);gl.activeTexture(gl.TEXTURE0);
+          gl.bindTexture(gl.TEXTURE_2D,waterTexture);
+        }else{
+          if(!emptyWaterTexture)emptyWaterTexture=geography.allocate(gl,true);
+          gl.bindTexture(gl.TEXTURE_2D,emptyWaterTexture);
         }
+        gl.activeTexture(gl.TEXTURE0);
         for (const job of jobs) {
           const entry = input(job);
           gl.bindTexture(gl.TEXTURE_2D, entry.texture);
@@ -203,7 +208,7 @@
           const values = shaders.uniformValues(Object.assign({}, job.state, {groundResOverride: job.groundRes}),
             job.coord?{bearing:0,zoom:job.coord.z,centerMerc:[(job.coord.x+.5)/2**job.coord.z,(job.coord.y+.5)/2**job.coord.z],cssSize:[256,256],dpr:job.size/256}:
             {bearing: 0, zoom: 0, centerMerc: [0.5, 0.5], cssSize: [job.size, job.size], dpr: 1});
-          if(!needsWater)values.u_waterMask=0;
+          values.u_waterMask=3;
           for (const name of shaders.SHADE_UNIFORMS) uniform(name, values[name], name === "u_style" || name === "u_waterMask");
           gl.drawArrays(gl.TRIANGLES, 0, 3);
           counters.draws++; result.drawn++;
@@ -300,7 +305,7 @@
     } catch (_) { destroy(); return null; }
     finally { if (saved) restore(gl, saved); }
     return Object.freeze({renderBatch, remove, clear, destroy,
-      stats: () => Object.assign({}, counters, {maxBytes, waterMaskBytes:waterTexture?16777216:0, selfTestMaxError: selfTestError})});
+      stats: () => Object.assign({}, counters, {maxBytes, waterMaskBytes:waterTexture?geography.BYTES:0, selfTestMaxError: selfTestError})});
   }
   return Object.freeze({create});
 }));

@@ -469,15 +469,15 @@
         advancedBody.append(field("Range",range,"ls-field-wide"));
         if(layer.style==="tint"||layer.style==="rem"){
           const select=el("select","ls-select");select.setAttribute("aria-label","Elevation scale");
-          for(const [value,label] of (layer.style==="rem"?[["separate","Land & ocean separately"],["full","Single relative scale"]]:[["separate","Land & ocean separately"],["full","Full elevation range"],["robust","Trim extremes (2–98%)"]])){
+          for(const [value,label] of (layer.style==="rem"?[["separate","Land & water separately"],["full","Single relative scale"]]:[["separate","Land & water separately"],["full","Full elevation range"],["robust","Trim extremes (2–98%)"]])){
             const option=el("option","",esc(label));option.value=value;select.append(option);
           }
           select.value=layer.style==="rem"&&layer.rangeMode!=="separate"?"full":layer.rangeMode;select.disabled=!layer.auto;
           select.onchange=()=>{updateLayer(key,{rangeMode:select.value},{rerender:true});fitFromView(true)};
           advancedBody.append(field("Elevation scale",select));
           advancedBody.append(el("p","control-hint",!layer.auto?
-            "Manual range uses one continuous elevation scale. Enable Fit to view to scale land and ocean separately.":layer.rangeMode==="separate"?
-            (layer.style==="rem"?"Land and inland lakes keep local terrain relief. Ocean elevation uses a separate blue scale. Shorelines are generalized (~2 km).":"Land and inland lakes keep their sampled elevation range. Ocean uses a separate blue scale. Shorelines are generalized; measurements stay unchanged."):
+            "Manual range uses one continuous elevation scale. Enable Fit to view to scale land, lakes and ocean independently.":layer.rangeMode==="separate"?
+            (layer.style==="rem"?"Land keeps local terrain relief. Lakes fit independently using your terrain colors; ocean elevation uses a separate blue scale. Shorelines are generalized (~2 km).":"Land, lakes and ocean fit independently. Lakes keep your terrain colors; ocean uses blue. Shorelines are generalized; measurements stay unchanged."):
             layer.style!=="rem"&&layer.rangeMode==="robust"?"Trims the lowest and highest 2% of samples for color fitting. Measurements stay unchanged.":
             (layer.style==="rem"?"One relative-relief scale fits land and seabed together, using the original valley-focused contrast.":"One continuous color scale includes all sampled land elevations and water depths.")));
         }
@@ -723,7 +723,7 @@
     }
     /* Reads the visible terrain and re-stretches auto layers. Small changes
        are ignored so panning does not make colors shimmer. */
-    const displayRange=fit=>fit&&fit.land!==undefined?(fit.land||fit.water):fit;
+    const displayRange=fit=>fit&&fit.land!==undefined?(fit.land||fit.water||fit.inland):fit;
     const sampleOptions=keys=>({water:keys.some(key=>{const layer=layerFor(key);return (layer.style==="tint"||layer.style==="rem")&&layer.rangeMode==="separate"})});
     /* sampled: view values already read (fitFromViewAsync), or read now. */
     function fitFromView(force,sampled){
@@ -733,7 +733,7 @@
       const previousFloors=[remFloor,remLandFloor],previousFlat=JSON.stringify(flatFitted);
       if(values.heights&&values.heights.length){const h=R.fitRange(values.heights,"tint","robust");if(h) remFloor=h[0]}
       // 3D has no local-floor field. Keep its legacy continuous floor and
-      // give separated REM layers a terrestrial floor, including inland lakes.
+      // give separated REM layers a land-only floor, excluding lakebeds and ocean.
       const landHeights=values.water?.length===values.heights?.length?Array.from(values.heights).filter((h,i)=>!values.water[i]):null;
       remLandFloor=landHeights?R.fitRange(landHeights,"tint","robust")?.[0]??null:null;
       if(remFloor!==null&&values.heights) for(const key of keys) if(layerFor(key).style==="rem"){
@@ -807,11 +807,15 @@
         else if(spec.family==="lines")ticks=["intermediate","index"];
         else ticks=[R.formatValue(style,range[0]),R.formatValue(style,(range[0]+range[1])/2),R.formatValue(style,range[1])+(layer.auto?(fit?" · fitted":" · waiting for terrain"):"")];
         const bar=(style==="tint"||style==="rem")?R.elevationGradient(layer,range):R.gradientCss(R.paletteStops(layer),layer.reverse);
-        const land={caption:caption+(fit?.land&&fit?.water?" · land":""),bar,ticks};
-        if(!fit?.water)return [land];
-        const water={caption:(style==="rem"?"Ocean · absolute elevation · separate scale":"Ocean · elevation · separate scale")+(overlays.length?` + ${overlays.join(" + ")}`:""),bar:R.elevationGradient(layer,fit.water,true),
-          ticks:[fit.water[0],(fit.water[0]+fit.water[1])/2,fit.water[1]].map((v,i)=>R.formatValue("tint",v)+(i===2?" · fitted":""))};
-        return fit.land?[land,water]:[water];
+        const land={caption:caption+(fit?.land&&(fit?.water||fit?.inland)?" · land":""),bar,ticks};
+        if(!fit?.water&&!fit?.inland)return [land];
+        const result=fit.land?[land]:[];
+        if(fit.water)result.push({caption:(style==="rem"?"Ocean · absolute elevation · separate scale":"Ocean · elevation · separate scale")+(overlays.length?` + ${overlays.join(" + ")}`:""),bar:R.elevationGradient(layer,fit.water,true),
+          ticks:[fit.water[0],(fit.water[0]+fit.water[1])/2,fit.water[1]].map((v,i)=>R.formatValue("tint",v)+(i===2?" · fitted":""))});
+        if(fit.inland)result.push({caption:"Inland water · absolute elevation · separate scale"+(overlays.length?` + ${overlays.join(" + ")}`:""),
+          bar:R.elevationGradient({...layer,style:"tint"},fit.inland),
+          ticks:[fit.inland[0],(fit.inland[0]+fit.inland[1])/2,fit.inland[1]].map((v,i)=>R.formatValue("tint",v)+(i===2?" · fitted":""))});
+        return result;
       }
       const overlays=visible.slice(1).map(entry=>(R.STYLES[entry.layer.style]||{}).label).filter(Boolean);
       const scales=keysFor(visible[0],overlays);

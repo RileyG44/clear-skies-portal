@@ -13,7 +13,7 @@ assert.equal(crypto.createHash('sha256').update(sliced.bytes()).digest('hex'),ha
 assert.equal(sliced.decodeStep(0),true,'a decoded mask stays decoded');
 
 const calls=[];
-const gl={TEXTURE_2D:1,RGBA8:2,RGBA:3,UNSIGNED_BYTE:4,TEXTURE_MIN_FILTER:5,TEXTURE_MAG_FILTER:6,NEAREST:7,TEXTURE_WRAP_S:8,TEXTURE_WRAP_T:9,CLAMP_TO_EDGE:10,
+const gl={TEXTURE_2D:1,RGBA16UI:2,RGBA_INTEGER:3,UNSIGNED_SHORT:4,TEXTURE_MIN_FILTER:5,TEXTURE_MAG_FILTER:6,NEAREST:7,TEXTURE_WRAP_S:8,TEXTURE_WRAP_T:9,CLAMP_TO_EDGE:10,
   createTexture:()=>({}),bindTexture(){},texParameteri(){},deleteTexture(){},
   texStorage2D:(_t,_l,_f,w,h)=>calls.push(['storage',w,h]),
   texSubImage2D:(_t,_l,x,y,w,h,_f,_ty,data)=>calls.push(['rows',y,h,data.length,w])};

@@ -1,10 +1,10 @@
 # Elevation color scaling
 
-Absolute and relative elevation layers fitted to the view default to **Land & ocean separately**.
+Absolute and relative elevation layers fitted to the view default to **Land & water separately**.
 For absolute elevation, the land palette uses the minimum and maximum finite land samples, including
-negative elevations and isolated peaks/pits. Inland lakes retain this terrain
-palette and local relief. Ocean has its own blue elevation
-ramp and fitted range. Neither fitting nor coloring changes the elevation
+negative elevations and isolated peaks/pits. Inland lakes use the selected terrain
+palette on their own absolute elevation range, preserving tile detail without
+stretching the land range. Ocean has its own blue elevation ramp and fitted range. Neither fitting nor coloring changes the elevation
 field, measurements, contours, slope, data-source labels, or loading priority.
 
 Classic relief retains its existing fixed colors and absolute elevation domain.
@@ -24,12 +24,14 @@ Scale settings and fitted ranges survive presets, storage and share links;
 pre-existing links with continuous fitted ranges remain supported.
 
 Relative elevation (including Missoula/Ember) keeps its existing valley-focused
-contrast: zero to the 60th percentile of terrestrial relative heights. Ocean is excluded
-from the local valley-floor minimum and smoothing calculation, then colored from
-its own absolute elevation range. Its key reads **Ocean · absolute elevation ·
-separate scale**. Inland lakes and basins participate in the normal terrain
-fit and valley-floor filter, preserving any relief supplied by the elevation
-tiles rather than replacing it with a saturated ocean color. **Single relative scale**
+contrast: zero to the 60th percentile of terrestrial relative heights. Ocean and inland water are excluded
+from the land valley-floor minimum, smoothing calculation and range fit. Ocean is
+colored from its own absolute elevation range. Its key reads **Ocean · absolute elevation ·
+separate scale**. Inland lakes have a third independent absolute elevation range using the selected
+terrain palette, curve, bands and transparency; the key reads **Inland water ·
+absolute elevation · separate scale**. This shows detail supplied by the tiles
+without letting deep lakebeds alter adjacent land relief. Dry inland basins,
+including those below sea level, retain the normal land fit and valley-floor filter. **Single relative scale**
 restores the original combined relative fit. Manual ranges remain continuous.
 In 3D, which has no local valley-floor field, separate REM uses a land-only view
 floor and matching fitted legend. Mixed manual/automatic layers retain independent
@@ -39,8 +41,8 @@ overview views without a local floor use the land-only view floor.
 ## Geography and practical limits
 
 `water-geography-data.js` is a bundled, display-only mask made from Natural
-Earth's public-domain 1:10m land polygons. Only exterior marine coastlines
-set the mask; interior rings (lakes and inland seas) remain terrain. The reproducible generator
+Earth's public-domain 1:10m land and lake polygons. Exterior marine coastlines
+separate ocean from land; interior rings and lake polygons identify inland water. The reproducible generator
 is `scripts/data/build-water-geography.py`; it pins the source revision and
 requires Pillow. Attribution and terms: <https://www.naturalearthdata.com/about/terms-of-use/>.
 There are no live shoreline requests or new elevation providers.
@@ -51,22 +53,22 @@ cell centers from the polygon geometry, with no extra shoreline erosion.
 Small islands, narrow inlets and modern shoreline changes may not
 be resolved. This is not survey-grade
 shoreline or flood mapping. Coast cells can represent the opposite side of a
-shoreline away from the cell center. Coastal water represented as land can
+shoreline away from the cell center. Ocean or lake water represented as land can
 affect the land fit; users can adjust the manual range or use the explicit trimmed mode.
 The ocean key reports absolute elevation. This display mask does not infer
 water from negative heights or flatten the actual elevation field. Inland
 water detail still depends on the source: a flat lake-surface DEM cannot
 provide missing lakebed bathymetry.
 
-One-bit geography is packed into a 2,048-square RGBA8 texture, within WebGL2's
-guaranteed texture dimensions. The module decodes once (16 MiB CPU, only when
-separate elevation fitting requests geography); each active renderer uploads one 16 MiB texture lazily and reports its allocation in stats.
+Two-bit geography is packed into a 2,048-square RGBA16UI integer texture, within WebGL2's
+guaranteed texture dimensions. The module decodes once (32 MiB CPU, only when
+separate elevation fitting requests geography); each active renderer uploads one 32 MiB texture lazily and reports its allocation in stats.
 Renderer cleanup and context restoration follow the existing texture lifecycle.
 
 Fitting retains the existing coarse GPU readback limit of 128 by 128 samples.
 It preserves every finite sampled land extreme; it does not promise to find
 an unsampled narrow peak or pit. Relative elevation retains its existing local
-valley-floor filter and fitting percentile, excluding only marine water in separate mode.
+valley-floor filter and fitting percentile, excluding both ocean and inland water in separate mode.
 CPU fallback terrain continues to
 use its existing fixed relief palette; the studio controls require WebGL2.
 
@@ -76,7 +78,9 @@ use its existing fixed relief palette; the studio controls require WebGL2.
 - `node scripts/gpu2d/water-scaling.js chrome` and `webkit`: numerical 3D
   GPU/CPU comparison with coastlines, transparency and curves; real 2D sampling
   at four bearings; export rendering; mode changes and single-domain views;
-  native picker description, actions and dual gradient keys.
+  native picker description, actions and three independent gradient keys;
+  deep lakebed changes leave dry-land fits and local floors unchanged away from
+  the generalized shoreline footprint.
 - Existing shader parity in Chrome and WebKit, native menu/adapter tests,
   desktop packaging checks, static checks and site assembly.
 

@@ -2,7 +2,7 @@ Windows 10/11 x64. Download **ClearSkies-Setup-1.0.8-x64.exe** for one-click ins
 
 **ClearSkies-Guided-Setup-1.0.8-x64.exe** provides a branded wizard and location selection. The ZIP is an optional portable alternative; extract the entire folder before launching.
 
-- New in 1.0.8: inland lakes and basins retain their terrain colors and relief instead of being covered by the ocean blue scale. Separate ocean/land fitting stays enabled; includes the latest startup improvements. Bundled map build 2026-11-04f.
+- New in 1.0.8: inland lakes retain terrain palette detail on an independent elevation scale. Deep lakebeds are excluded from land color fitting and valley-floor calculations; dry basins retain their land scale. Separate ocean/land fitting stays enabled; includes the latest startup improvements. Bundled map build 2026-11-04g.
 - Optional **Advanced configuration** on the welcome page lets you set terrain tile, WA DNR and memory cache limits, free disk-space reserve, terrain workers, and smoother panning (Off / Auto / On). Skip it to use the default setup. Reopen the welcome with the Start setup shortcut to change these later.
 - Includes the **Missoula** LiDAR preset and the Missoula scablands startup view near Medical Lake, WA.
 - ClearSkies icon, full-bleed map, overlaid window controls, no standard title/menu bars.

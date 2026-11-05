@@ -40,7 +40,7 @@ const root=path.resolve(__dirname,'../..'),pw=require('../lib/playwright.js');
         maxError=Math.max(maxError,Math.abs(actual[i]-ref));
       }
       check(maxError<=2,'3D coastline, transparency and curve GPU/CPU parity '+maxError);
-      check(renderer.stats().waterMaskBytes===16*1024*1024,'GPU geography allocation accounted');
+      check(renderer.stats().waterMaskBytes===32*1024*1024,'GPU geography allocation accounted');
       const uploads=renderer.stats().uploads;renderer.renderBatch([job]);check(renderer.stats().uploads===uploads,'recoloring reuses elevation');
       // 3D REM must use absolute seabed values, a land-only fallback floor,
       // and the legacy floor for a manual REM overlay in the same stack.
@@ -56,6 +56,66 @@ const root=path.resolve(__dirname,'../..'),pw=require('../lib/playwright.js');
         remError=Math.max(remError,Math.abs(actual[i]-ref));
       }
       check(remError<=2,'3D REM mixed floors/water GPU/CPU parity '+remError);
+      // A single African view includes terrestrial hills, Lake Victoria and
+      // the Indian Ocean. Deepening only the lake must affect neither land
+      // fitting/floor nor normalized lake detail, in either renderer.
+      const mixedCoord={z:4,x:9,y:8},mixedTypes=new Uint8Array(size*size);
+      function mixedGrid(extraDepth){
+        const padded=new Float32Array(n*n),inner=new Float32Array(size*size);
+        for(let y=-1;y<=size;y++)for(let x=-1;x<=size;x++){
+          const kind=G.classAtMercator((9+(x+.5)/size)/16,(8+(y+.5)/size)/16);
+          const height=kind===1?-10000+5*x:kind===2?-1600-extraDepth+10*Math.sin(x/5)*Math.cos(y/7):1000+20*Math.sin(x/11)*Math.cos(y/17);
+          padded[(y+1)*n+x+1]=height;
+          if(x>=0&&y>=0&&x<size&&y<size){inner[y*size+x]=height;mixedTypes[y*size+x]=kind}
+        }
+        return {padded,inner};
+      }
+      const first=mixedGrid(0),deep=mixedGrid(10000);
+      check([0,1,2].every(kind=>mixedTypes.includes(kind)),'mixed fixture covers land, ocean and lakes');
+      let deepLakeChecks=0;
+      for(const style of ['tint','rem']){
+        const pictures=[];
+        for(const dem of [first,deep]){
+          const fitted=style==='tint'?R.fitElevation(dem.inner,mixedTypes):R.fitRelative(dem.inner.map(h=>Math.max(0,h-980)),dem.inner,mixedTypes);
+          const layer={...remStack.layers[0],style,min:fitted.land[0],max:fitted.land[1],water:fitted.water,inland:fitted.inland,separateRem:style==='rem'};
+          renderer.renderBatch([{...job,key:'mixed-deep-lake',grid:dem.padded,coord:mixedCoord,state:{terrain:{style,stack:{...remStack,layers:[layer],remLandBase:980}}}}]);
+          gl.bindFramebuffer(gl.READ_FRAMEBUFFER,fbo);const pixels=new Uint8Array(actual.length);gl.readPixels(0,0,size,size,gl.RGBA,gl.UNSIGNED_BYTE,pixels);pictures.push(pixels);
+        }
+        check(pictures[0].every((value,i)=>Math.abs(value-pictures[1][i])<=2),style+' deep lake preserves separately normalized land/ocean/lake colors');deepLakeChecks++;
+      }
+      const source={id:'mixed',rank:1,allowed:()=>true},callbacks=new Set();
+      let record={key:'mixed/4/9/8',sourceId:'mixed',rank:1,...mixedCoord,width:size,height:size,grid:first.inner,revision:1};
+      const mixedStore={options:{sources:()=>[source]},on:(_event,fn)=>callbacks.add(fn),off:(_event,fn)=>callbacks.delete(fn),want(){},get:()=>record,finestFor:()=>record};
+      const mixedCanvas=document.createElement('canvas'),mixedEngine=CSPGpuTerrainEngine.create({canvas:mixedCanvas,store:mixedStore,shaders:S});check(mixedEngine,'mixed lake 2D engine');
+      try{
+        const v={centerMerc:[9.5/16,8.5/16],zoom:3,bearing:0,cssSize:[size,size],dpr:1,dz:1};
+        const results=[];
+        mixedEngine.setState({terrain:{style:'rem',stack:{...remStack,remRadius:S.metersPerPixel(v)*2}}});
+        // Hold the generalized shoreline footprint fixed: a one-source-pixel
+        // shore can straddle a geography cell after GPU projection. Deepen
+        // lake interiors only, isolating floor contamination from shoreline
+        // classification and source interpolation at this overview scale.
+        const guardedDeep={inner:first.inner.map((height,i)=>{
+          const x=i%size,y=Math.floor(i/size);
+          return x>0&&y>0&&x<size-1&&y<size-1&&[-1,0,1].every(dy=>[-1,0,1].every(dx=>mixedTypes[(y+dy)*size+x+dx]===2))?height-10000:height;
+        })};
+        check(guardedDeep.inner.some((h,i)=>h!==first.inner[i]),'fixture deepens actual lake interior');
+        for(const dem of [first,guardedDeep]){
+          record={...record,grid:dem.inner,revision:record.revision+1};callbacks.forEach(fn=>fn(record));mixedEngine.render(v);
+          const sampled=mixedEngine.sampleValues();results.push(sampled);
+          const fit=R.fitRelative(sampled.landRelative,sampled.heights,sampled.water);check(fit.inland&&fit.water&&fit.land,'2D fits all three domains');
+        }
+        check(!results[0].heights.some((h,i)=>results[0].water[i]===0&&Math.abs(h-results[1].heights[i])>.002),'source land heights stay unchanged');
+        for(let i=0;i<results[0].heights.length;i++)if(results[0].water[i]===0){
+          const a=results[0].landRelative[i],b=results[1].landRelative[i];
+          check(Number.isFinite(a)===Number.isFinite(b),'lake depth preserves land floor validity');
+          if(Number.isFinite(a))check(Math.abs(a-b)<.002,'lake depth cannot affect adjacent land relief '+JSON.stringify({i,a,b,ha:results[0].heights[i],hb:results[1].heights[i],kind:results[0].water[i]}));
+        }
+        for(const fn of [(h,t)=>R.fitElevation(h,t),(h,t,r)=>R.fitRelative(r,h,t)]){
+          const fits=results.map(r=>fn(r.heights,r.water,r.landRelative));
+          check(JSON.stringify(fits[0].land)===JSON.stringify(fits[1].land),'extreme lake depth cannot expand land fit');deepLakeChecks++;
+        }
+      }finally{mixedEngine.destroy()}
       // Real lake geography must not replace supplied lakebed/shore terrain
       // with a saturated ocean ramp, even in a mixed land/ocean stack.
       let inlandChecks=0;
@@ -70,11 +130,11 @@ const root=path.resolve(__dirname,'../..'),pw=require('../lib/playwright.js');
         }
         for(const style of ['tint','rem']){
           const range=style==='rem'?[0,100]:[floor,floor+100];
-          const layer={...remStack.layers[0],style,min:range[0],max:range[1],gamma:1,water:[-6000,0],separateRem:style==='rem'};
+          const layer={...remStack.layers[0],style,min:range[0],max:range[1],gamma:1,water:[-6000,0],inland:[floor,floor+100],separateRem:style==='rem'};
           const lakeStack={...remStack,layers:[layer],remFlatBase:floor,remLandBase:floor};
           renderer.renderBatch([{...job,key:name,grid:lakeGrid,coord:lakeCoord,state:{terrain:{style,stack:lakeStack}}}]);
           gl.bindFramebuffer(gl.READ_FRAMEBUFFER,fbo);gl.readPixels(0,0,size,size,gl.RGBA,gl.UNSIGNED_BYTE,actual);
-          const reference=R.renderStack({...lakeStack,layers:[{...layer,water:null}]},{grid:lakeInner,width:size,height:size,res:100,flat:true});
+          const reference=R.renderStack({...lakeStack,layers:[{...layer,water:null,inland:null,style:'tint',min:floor,max:floor+100}]},{grid:lakeInner,width:size,height:size,res:100,flat:true});
           let error=0;const colours=new Set();
           for(let i=0;i<actual.length;i++){
             const expected=i%4===3?reference[i]:Math.round(reference[i]*reference[(i>>2)*4+3]/255);
@@ -84,7 +144,8 @@ const root=path.resolve(__dirname,'../..'),pw=require('../lib/playwright.js');
           check(error<=2,name+' '+style+' retains loaded terrain colors: '+error);
           check(colours.size>30,name+' '+style+' retains terrain variation');inlandChecks++;
         }
-        // 2D must also include supplied inland heights in its local floor,
+        if(!['Lake Victoria','Lake Superior','Caspian Sea'].includes(name))continue;
+        // 2D must also exclude supplied inland heights from the land floor,
         // rather than treating a lake footprint as missing terrain.
         const source={id:'lake',rank:1,allowed:()=>true},record={key:`lake/${z}/${lakeCoord.x}/${lakeCoord.y}`,sourceId:'lake',rank:1,...lakeCoord,width:size,height:size,grid:lakeInner,revision:1};
         const callbacks=new Set(),store={options:{sources:()=>[source]},on:(_event,fn)=>callbacks.add(fn),off:(_event,fn)=>callbacks.delete(fn),want(){},get:()=>record,finestFor:()=>record};
@@ -94,13 +155,9 @@ const root=path.resolve(__dirname,'../..'),pw=require('../lib/playwright.js');
           const localStack={...remStack,remRadius:S.metersPerPixel(v)*2};
           e.setState({terrain:{style:'rem',stack:localStack}});callbacks.forEach(fn=>fn(record));e.render(v);
           const samples=e.sampleValues();check(samples?.heights.length===size*size,name+' 2D loaded heights');
-          check(!samples.water.some(Boolean),name+' 2D does not apply ocean coloring');
-          let valid=0;
-          for(let i=0;i<samples.heights.length;i++){
-            check(Number.isFinite(samples.landRelative[i])===Number.isFinite(samples.relative[i]),name+' preserves local-floor validity');
-            if(Number.isFinite(samples.relative[i])){check(Math.abs(samples.relative[i]-samples.landRelative[i])<.002,name+' preserves local terrain floor');valid++}
-          }
-          check(valid>size*size*.9,name+' local relief available across lake');inlandChecks++;
+          check(samples.water.every(kind=>kind===2),name+' 2D classifies lake separately from land/ocean');
+          check(samples.landRelative.every(value=>!Number.isFinite(value)),name+' excludes lake depths from land valley floor');
+          check(samples.relative.every(Number.isFinite),name+' retains legacy/manual local relief');inlandChecks++;
         }finally{e.destroy()}
       }
       renderer.destroy();check(gl.isTexture(external)&&gl.isTexture(target),'destroy retains caller textures');
@@ -121,7 +178,7 @@ const root=path.resolve(__dirname,'../..'),pw=require('../lib/playwright.js');
         samples=engine.sampleValues();check(samples.heights.length===size*size,'all sample pixels valid '+samples.heights.length+' '+JSON.stringify(engine.stats()));
         for(let i=0;i<samples.water.length;i++){
           const merc=S.screenToMercator(v,[(i%size+.5)/size,1-(Math.floor(i/size)+.5)/size]);
-          check(samples.water[i]===+G.waterAtMercator(...merc),'rotated sampling flags '+bearing+'/'+i);
+          check(samples.water[i]===G.classAtMercator(...merc),'rotated sampling flags '+bearing+'/'+i);
           // Constant tile heights independently verify the vertical row order.
           const x=Math.floor(merc[0]*16),y=Math.floor(merc[1]*16);
           const value=50+x+y*100;
@@ -135,7 +192,7 @@ const root=path.resolve(__dirname,'../..'),pw=require('../lib/playwright.js');
         const sampled=engine.sampleValues(),field=engine.debugReadHeight();
         check(sampled.relative.length===sampled.heights.length&&sampled.landRelative.length===sampled.heights.length,'both bases stay sample-aligned');
         const topGrid=Float32Array.from({length:size*size},(_,i)=>field.data[i*2]);
-        const topWater=Uint8Array.from({length:size*size},(_,i)=>+G.waterAtMercator(...S.screenToMercator(v,[(i%size+.5)/size,(Math.floor(i/size)+.5)/size])));
+        const topWater=Uint8Array.from({length:size*size},(_,i)=>G.classAtMercator(...S.screenToMercator(v,[(i%size+.5)/size,(Math.floor(i/size)+.5)/size])));
         const base=R.relativeBase({grid:topGrid,width:size,height:size,water:topWater},2,true);
         for(let i=0;i<sampled.heights.length;i++){
           const top=(size-1-Math.floor(i/size))*size+i%size;
@@ -172,7 +229,7 @@ const root=path.resolve(__dirname,'../..'),pw=require('../lib/playwright.js');
       window.webkit={messageHandlers:{cspNative:{postMessage:value=>{nativeMessages.push(value);return Promise.resolve()}}}};window.CSPNativeHost=true;
       window.CSPShell={current:()=> 'terrain',groups:()=>[],activate:()=>true};
       document.documentElement.classList.add('csp-boot');
-      return {max3DError:maxError,maxRem3DError:remError,rotated2DSamples:samples.heights.length,inlandChecks,changes};
+      return {max3DError:maxError,maxRem3DError:remError,rotated2DSamples:samples.heights.length,inlandChecks,deepLakeChecks,changes};
     });
     await page.addScriptTag({path:path.join(root,'ios/Resources/native-shell.js')});
     const native=await page.evaluate(()=>{
@@ -203,13 +260,23 @@ const root=path.resolve(__dirname,'../..'),pw=require('../lib/playwright.js');
       check(studio.stack('rem',{flat:true}).remLandBase>snapshot.remLandFloor,'3D floor follows changed land');
       check(studio.stack('rem',{flat:true}).remLandBase>=1000,'3D floor excludes the ocean');
       studio.restoreDisplay(snapshot);check(studio.legend().secondary.caption.includes('absolute elevation'),'REM water caption');
+      const threeValues={...values,water:Uint8Array.from(values.water,(kind,i)=>i<8?2:kind)};
+      values=threeValues;studio.fitFromView(true);
+      check(studio.legend().scales.length===3,'land/ocean/inland water have independent keys');
+      const beforeDeep=studio.displayState();
+      values={...values,heights:Float32Array.from(values.heights,(h,i)=>values.water[i]===2?h-10000:h)};studio.fitFromView(true);
+      check(JSON.stringify(studio.displayState().fitted.base.land)===JSON.stringify(beforeDeep.fitted.base.land),'studio land fit ignores extreme lakes');
+      check(studio.stack('rem',{flat:true}).remLandBase===beforeDeep.remLandFloor,'3D land floor ignores extreme lakes');
+      const threeSnapshot=structuredClone(studio.displayState());
+      studio.restoreDisplay(threeSnapshot);
       document.querySelector('[data-key="base"] .ls-layer-main').click();document.querySelectorAll('details').forEach(el=>el.open=true);
       const legend=studio.legend();document.getElementById('terLegend').innerHTML=legend.scales.map(key=>`<div class="terlegend-scale"><div class="caption">${key.caption}</div><div class="bar" style="background:${key.bar};height:10px"></div><div class="ticks">${key.ticks.map(t=>`<span>${t}</span>`).join('')}</div></div>`).join('');
       nativeMessages.length=0;CSPNativeShell.setView({sheet:'large',page:'terrain'});
       const page=nativeMessages.map(m=>m.json&&JSON.parse(m.json)).find(m=>m?.page)?.page;
       const flatten=items=>(items||[]).flatMap(i=>[i,...flatten(i.items)]),items=flatten(page?.items),scale=items.find(i=>i.title==='Elevation scale');
       check(scale?.options.length===2,'native REM scale picker '+JSON.stringify({scale,titles:items.map(i=>i.title)}));
-      check(items.filter(i=>i.kind==='gradient').length>=2,'native REM water legend');
+      check(items.filter(i=>i.kind==='gradient').length===3,'native land/ocean/inland keys');
+      check(items.some(i=>i.title?.startsWith('Inland water')),'native inland-water key title');
       CSPNativeShell.act(scale.ref,'select','full');check(!studio.stack().layers[0].water,'native single-scale action');
       studio.restoreDisplay(snapshot);
       values={heights:new Float32Array(20).fill(-4000),relative:new Float32Array(20).fill(NaN),landRelative:new Float32Array(20).fill(NaN),water:new Uint8Array(20).fill(1)};

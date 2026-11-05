@@ -298,10 +298,13 @@ function pageSetup(uniformNames) {
     gl.bindTexture(gl.TEXTURE_2D, tex);
     gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA32F, width, height, 0, gl.RGBA, gl.FLOAT, data);
     gl.uniform1i(gl.getUniformLocation(program, "u_heightTex"), 0);
+    gl.activeTexture(gl.TEXTURE3);const dummy=gl.createTexture();gl.bindTexture(gl.TEXTURE_2D,dummy);
+    gl.texStorage2D(gl.TEXTURE_2D,1,gl.RGBA16UI,1,1);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MIN_FILTER,gl.NEAREST);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MAG_FILTER,gl.NEAREST);
+    gl.texSubImage2D(gl.TEXTURE_2D,0,0,0,1,1,gl.RGBA_INTEGER,gl.UNSIGNED_SHORT,new Uint16Array(4));gl.activeTexture(gl.TEXTURE0);
     for (const name of uniformNames) {
       const loc = locations[name], value = values[name];
       if (!loc) continue;
-      if (name === "u_style" || name === "u_waterMask") gl.uniform1i(loc, name === "u_waterMask" ? 0 : value);
+      if (name === "u_style" || name === "u_waterMask") gl.uniform1i(loc, name === "u_waterMask" ? 3 : value);
       else if(CSPGpuTerrainShaders.UNIFORM_ARRAYS[name]===4)gl.uniform4fv(loc,value);
       else if (Array.isArray(value) && value.length === 2) gl.uniform2f(loc, value[0], value[1]);
       else if (Array.isArray(value) && value.length === 3) gl.uniform3f(loc, value[0], value[1], value[2]);
@@ -310,6 +313,7 @@ function pageSetup(uniformNames) {
     gl.clearColor(0, 0, 0, 0);
     gl.clear(gl.COLOR_BUFFER_BIT);
     gl.drawArrays(gl.TRIANGLES, 0, 3);
+    gl.deleteTexture(dummy);
     const px = new Uint8Array(width * height * 4);
     gl.readPixels(0, 0, width, height, gl.RGBA, gl.UNSIGNED_BYTE, px);
     /* readPixels row 0 is the canvas bottom; flip to top-first rows. */
