@@ -3,6 +3,7 @@
    travel, a unit switch or a reload never changes the physical height. */
 const ELEV_UNIT={m:1, ft:0.3048};
 const ELEV_REF_MIN_M=-500, ELEV_REF_MAX_M=8850;
+const ELEV_SPAN_MIN_M=10*0.3048, ELEV_SPAN_MAX_M=20000*0.3048, ELEV_FEATHER_MAX_M=10000*0.3048;
 let elevLayer=null, elevRefM=1100*0.3048, elevShownUnit="ft";
 /* The spectrum and the below/above highlights for one tile of heights, as
    straight (not premultiplied) RGBA. The 2D layer's CPU path and the 3D
@@ -19,18 +20,32 @@ function elevFormat(metres){
   const unit=elevUnitKey();
   return `${Math.round(metres/ELEV_UNIT[unit]).toLocaleString()} ${unit}`;
 }
+/* Height fields show whole units, but each remembers the exact metres it was
+   last converted from. While the shown number is unchanged that exact height
+   is used, so feet → metres → feet never moves a threshold, span or edge. */
+const ELEV_HEIGHT_FIELDS=["#elevSpan","#elevBelowVal","#elevAboveVal","#elevBandFeather"];
+function heightMetres(input,unit=elevUnitFactor()){
+  const value=+input.value,exact=input.dataset?.m;
+  if(input.value===""||!Number.isFinite(value)) return NaN;
+  if(exact!=null&&exact!==""&&Number.isFinite(+exact)&&Math.round(+exact/unit)===value) return +exact;
+  return value*unit;
+}
+function setHeightMetres(input,metres,unit=elevUnitFactor()){
+  if(input.dataset) input.dataset.m=String(metres);
+  input.value=Math.round(metres/unit);
+}
 /* Restate every height field in the newly chosen unit. */
 function convertElevationUnit(next){
   const from=ELEV_UNIT[elevShownUnit]||ELEV_UNIT.ft,to=ELEV_UNIT[next]||ELEV_UNIT.ft;
-  for(const id of ["#elevSpan","#elevBelowVal","#elevAboveVal","#elevBandFeather"]){
-    const input=$(id),value=+input.value;
-    if(input.value!==""&&Number.isFinite(value)) input.value=Math.round(value*from/to);
+  for(const id of ELEV_HEIGHT_FIELDS){
+    const input=$(id),metres=heightMetres(input,from);
+    if(Number.isFinite(metres)) setHeightMetres(input,metres,to);
   }
   elevShownUnit=ELEV_UNIT[next]?next:"ft";
-  $("#elevSpan").min=Math.ceil(elevSpanLimitsFt()[0]*0.3048/to);$("#elevSpan").max=Math.floor(elevSpanLimitsFt()[1]*0.3048/to);
+  $("#elevSpan").min=Math.ceil(ELEV_SPAN_MIN_M/to);$("#elevSpan").max=Math.floor(ELEV_SPAN_MAX_M/to);
   $("#elevVal").min=Math.ceil(ELEV_REF_MIN_M/to);$("#elevVal").max=Math.floor(ELEV_REF_MAX_M/to);
-  $("#elevBandFeather").max=Math.floor(3048/to);
-  $("#elevVal").step=$("#elevBelowVal").step=$("#elevAboveVal").step=elevShownUnit==="m"?"5":"10";
+  $("#elevBandFeather").max=Math.floor(ELEV_FEATHER_MAX_M/to);
+  for(const id of ["#elevVal",...ELEV_HEIGHT_FIELDS]) $(id).step="any";
   for(const suffix of document.querySelectorAll("[data-elev-unit]")) suffix.textContent=elevShownUnit;
   showElevReference();
 }
@@ -51,12 +66,14 @@ function showElevReference(){
 // Both the menu and map panel use the same logarithmic span range, in feet.
 function elevSpanLimitsFt(){ return [10,20000] }
 function elevSpanFt(){
-  const value=+$("#elevSpan").value,feet=value>0?value*elevUnitFactor()/0.3048:300;
+  const metres=heightMetres($("#elevSpan")),feet=metres>0?metres/0.3048:300;
   return Math.max(10,Math.min(20000,feet));
 }
 function setElevSpanFt(feet){
-  const unit=elevUnitFactor();
-  $("#elevSpan").value=unit===ELEV_UNIT.ft?Math.round(feet):Math.max(3,Math.round(feet*0.3048));
+  const input=$("#elevSpan"),metres=Math.max(10,Math.min(20000,feet))*0.3048,unit=elevUnitFactor();
+  setHeightMetres(input,metres,unit);
+  // Whole metres can round below the 10 ft floor; never show less than the minimum.
+  if(+input.value*unit<ELEV_SPAN_MIN_M) input.value=Math.ceil(ELEV_SPAN_MIN_M/unit);
 }
 function elevSpanPosition(feet){
   return Math.round(Math.log(Math.max(10,Math.min(20000,+feet||300))/10)/Math.log(2000)*1000);
@@ -72,7 +89,12 @@ function syncElevSpanSlider(){
   input.setAttribute("aria-valuetext",elevFormat(feet*0.3048));
 }
 function elevSpanMetres(){ return Math.max(3,elevSpanFt()*0.3048) }
-function elevFeatherValue(){ return Math.max(0,+$("#elevBandFeather").value||0) }
+/* Soft edge in metres, clamped to the field's stated range. */
+function elevFeatherMetres(){
+  const metres=heightMetres($("#elevBandFeather"));
+  return Math.max(0,Math.min(ELEV_FEATHER_MAX_M,Number.isFinite(metres)?metres:0));
+}
+function elevFeatherValue(){ return Math.round(elevFeatherMetres()/elevUnitFactor()) }
 function inputPercent(id,fallback){
   const value=+$(id).value;
   return Math.max(0,Math.min(100,Number.isFinite(value)?value:fallback));
@@ -80,14 +102,14 @@ function inputPercent(id,fallback){
 function elevAlpha(){ return Math.round(255*inputPercent("#elevAlpha",48)/100) }
 function elevationBandState(){
   const opacity=inputPercent("#elevBandAlpha",52)/100;
-  const unit=elevUnitKey(),feather=elevFeatherValue();
+  const unit="m",feather=elevFeatherMetres(),height=id=>{const m=heightMetres($(id));return Number.isFinite(m)?m:0};
   const outline={enabled:$("#elevBandOutline").checked,color:"#ffffff",opacity:.88,width:8,unit:"ft"};
   return ElevationBands.sanitizeState({unit,bands:[
     {id:"below",label:"Below elevation",enabled:$("#elevBelowOn").checked,operator:"below",
-     max:+$("#elevBelowVal").value||0,unit,color:$("#elevBelowColor").value,
+     max:height("#elevBelowVal"),unit,color:$("#elevBelowColor").value,
      opacity,feather,outline,order:0},
     {id:"above",label:"Above elevation",enabled:$("#elevAboveOn").checked,operator:"above",
-     min:+$("#elevAboveVal").value||0,unit,color:$("#elevAboveColor").value,
+     min:height("#elevAboveVal"),unit,color:$("#elevAboveColor").value,
      opacity,feather,outline,order:1}
   ]},{defaults:false,defaultUnit:unit});
 }
@@ -98,16 +120,16 @@ function restoreElevationBands(saved){
   const below=byId.below,above=byId.above;
   if(below){
     $("#elevBelowOn").checked=!!below.enabled; $("#elevBelowColor").value=below.color.slice(0,7);
-    $("#elevBelowVal").value=Math.round(ElevationBands.fromMeters(below.maxM,unit));
+    setHeightMetres($("#elevBelowVal"),below.maxM);
   }
   if(above){
     $("#elevAboveOn").checked=!!above.enabled; $("#elevAboveColor").value=above.color.slice(0,7);
-    $("#elevAboveVal").value=Math.round(ElevationBands.fromMeters(above.minM,unit));
+    setHeightMetres($("#elevAboveVal"),above.minM);
   }
   const exemplar=below||above;
   if(exemplar){
     $("#elevBandAlpha").value=Math.round(exemplar.opacity*100);
-    $("#elevBandFeather").value=Math.round(ElevationBands.fromMeters(exemplar.featherM,unit));
+    setHeightMetres($("#elevBandFeather"),exemplar.featherM);
     $("#elevBandOutline").checked=!!(exemplar.outline&&exemplar.outline.enabled);
   }
 }
@@ -123,7 +145,7 @@ function elevationRenderSettings(){
     below:{enabled:!!(below&&below.enabled),level:below?below.maxM:0,color:below?rgb(below):[1,0,0]},
     above:{enabled:!!(above&&above.enabled),level:above?above.minM:0,color:above?rgb(above):[0,0,1]},
     bandAlpha:inputPercent("#elevBandAlpha",52)/100,
-    bandFeather:elevFeatherValue()*elevUnitFactor(),
+    bandFeather:elevFeatherMetres(),
     outline:$("#elevBandOutline").checked,outlineWidth:8*0.3048,
     bandCompiled:ElevationBands.compileBands(state)};
 }
@@ -145,10 +167,17 @@ function paintElevLegend(){
   set("#elevKeyLow",elevFormat(m-span));set("#elevKeyMid",elevFormat(m));set("#elevKeyHigh",elevFormat(m+span));
   $("#elevKey")?.setAttribute("aria-label",`Color scale from ${elevFormat(m-span)} through ${elevFormat(m)} to ${elevFormat(m+span)}`);
 }
+function paintElevSpectrumSummary(){
+  const out=$("#elevSpectrumMoreValue");if(!out) return;
+  const palette=$("#elevPalette").selectedOptions[0]?.textContent||"Custom";
+  const text=`${elevFormat(elevMetres())} ± ${elevFormat(elevSpanMetres())} · ${palette}${$("#elevSh").checked?` · ${$("#elevAlpha").value}%`:""}`;
+  if(out.textContent!==text) out.textContent=text;
+}
 function paintElevOut(){
   paintElevLegend();
   const o=$("#elevOut"); if(!o) return;
-  if(!$("#elevSh").checked){ o.textContent=""; o.dataset.state="off"; return }
+  paintElevSpectrumSummary();
+  if(!$("#elevSh").checked){ o.textContent="Coloring is off. These settings are kept and apply when you switch it on."; o.dataset.state="off"; return }
   const loaded=terrainLayerSummary(elevLayer);
   o.dataset.state="on";
   o.textContent=loaded.sources.length?`On the map from ${loaded.sources.map(s=>s.label).join(" + ")}.`:"On. Elevation is loading; its source appears once tiles render.";
@@ -308,7 +337,8 @@ function applySpectrumColors(colors){
   SPECTRUM_COLOR_IDS.forEach((id,i)=>$(id).value=colors[i]);
   syncSpectrumPalette();saveTerrainPrefs();scheduleElevPaint();
 }
-$("#elevPalette").addEventListener("change",()=>{const colors=SPECTRUM_PALETTES[$("#elevPalette").value];if(colors){$("#elevSh").checked=true;applySpectrumColors(colors)}});
+// Color edits never switch coloring on or off; Show on map alone does that.
+$("#elevPalette").addEventListener("change",()=>{const colors=SPECTRUM_PALETTES[$("#elevPalette").value];if(colors) applySpectrumColors(colors)});
 for(const id of SPECTRUM_COLOR_IDS){
   $(id).addEventListener("input",()=>{syncSpectrumPalette();scheduleElevPaint()});
   $(id).addEventListener("change",()=>{syncSpectrumPalette();saveTerrainPrefs();scheduleElevPaint()});
@@ -351,7 +381,10 @@ syncTerrainOpacity();
 syncTerrainLookControls();
 syncTerrainLighting();
 syncElevationChecks();
-$("#elevSh").addEventListener("change",()=>{ saveTerrainPrefs(); applyElev() });
+/* The editor opens with the overlay and folds away when it is switched off,
+   so an inactive editor never stands between the person and Highlights. */
+$("#elevSh").addEventListener("change",()=>{ $("#elevSpectrumMore").open=$("#elevSh").checked; saveTerrainPrefs(); applyElev() });
+$("#elevSpectrumMore").open=$("#elevSh").checked;
 $("#elevSlide").addEventListener("input", syncElevFromSlider);
 $("#elevVal").addEventListener("input", syncElevFromBox);
 $("#elevVal").addEventListener("change",commitElevFromBox);
@@ -370,7 +403,7 @@ $("#elevUnit").addEventListener("change", ()=>{        // keep every height, res
   convertElevationUnit(elevUnitKey());$("#elevVal").value=Math.round(elevRefM/elevUnitFactor());
   syncElevSpanSlider();saveTerrainPrefs();applyElev();
 });
-$("#elevBandFeather").addEventListener("change",()=>{ $("#elevBandFeather").value=elevFeatherValue() },true);
+$("#elevBandFeather").addEventListener("change",()=>{ setHeightMetres($("#elevBandFeather"),elevFeatherMetres()) },true);
 for(const id of ["#elevBelowOn","#elevAboveOn","#elevBandOutline"])
   $(id).addEventListener("change",()=>{ saveTerrainPrefs(); applyElev() });
 for(const id of ["#elevBelowColor","#elevAboveColor","#elevBelowVal","#elevAboveVal","#elevBandFeather"]){

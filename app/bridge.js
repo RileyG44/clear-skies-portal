@@ -6,8 +6,11 @@ function cspTerrainSourceMeta(){
 function cspActiveLayers(){
   const layers=[];
   if(overlay||overlayPending||footprint){
-    layers.push({id:"scene",name:$("#ctlName").textContent||"Satellite scene",
-      meta:[$("#ctlDate").textContent,"Satellite imagery"].filter(Boolean).join(" · "),
+    // Name only what is drawn: accepted imagery, else a loading request or an outline.
+    const state=$("#ctlName").dataset.state||"",drawn=!!(overlay&&$("#ctlName").textContent);
+    const name=drawn?$("#ctlName").textContent:state==="loading"?($("#ctlName").dataset.pending||"Satellite scene"):"Scene outline";
+    const meta=drawn?[$("#ctlDate").textContent,state==="partial"?"Partial coverage":"Satellite imagery"]:state==="loading"?["Loading imagery"]:["Outline only · no imagery drawn"];
+    layers.push({id:"scene",name,meta:meta.filter(Boolean).join(" · "),
       opacity:+$("#op").value,visible:+$("#op").value>0,kind:"imagery"});
   }
   if($("#terStyle").value!=="off"){

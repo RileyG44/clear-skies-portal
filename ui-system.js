@@ -681,6 +681,12 @@ function syncSatelliteCurrent(){
   badge.textContent=badgeText;badge.dataset.state=state;badge.hidden=!badgeText;
   const note=$("#cspSatNowNote"),noteText=loading&&shown?`Loading ${nameEl.dataset.pending.replace(/\s+·\s+/," · ")}; the scene above stays until it is ready.`:nameEl?.dataset.note||"";
   note.textContent=noteText;note.hidden=!noteText;
+  // A record that could not replace the drawn scene keeps its own viewer link.
+  const recordLink=shown&&nameEl.dataset.link&&!loading?nameEl.dataset.link:"";
+  if(recordLink&&noteText){
+    const link=document.createElement("a");link.href=recordLink;link.target="_blank";link.rel="noopener";link.textContent="Open this record in its provider viewer →";
+    note.append(" ",link);
+  }
   const op=$("#op");if(op) $("#cspSatOpOut").textContent=op.value+"%";
   const fill=$("#fillNow");if(fill) fill.disabled=!shown;
 }
@@ -699,7 +705,7 @@ function renderSatelliteView(){
     // Sort and Map-viewable only shape the list, so they sit on top of it.
     const resultsBody=$(".pane[data-pane='results'] .pane-b",panes),bar=document.createElement("div");
     bar.id="cspSatResultsBar";bar.className="csp-sat-results-bar";resultsBody?.prepend(bar);
-    hostNode($("#sort")?.closest(".csp-field-row"),bar);hostNode($("#lb_viewable"),bar);
+    hostNode($("#sort")?.closest(".csp-field-row"),bar);hostNode($("#lb_viewable"),bar);hostNode($("#lb_groupSrc"),bar);
     hostNode($("#summary"),$(".csp-sat-best-card",satelliteSearch));
     const current=$(".csp-sat-current-card",satelliteSearch);
     hostNode($("#op"),current,$(".csp-sat-fill",current));

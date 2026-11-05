@@ -3522,6 +3522,10 @@ body.csp-redesign .ls-layer-label .menu-section-title{margin:0}
 /* Satellite: find → best match → on the map → every scene → base layers and
    pass estimates. Panes keep their DOM order elsewhere; this page reorders. */
 .csp-glass body.csp-redesign[data-csp-route="satellite"] #panes{display:flex;flex-direction:column}
+/* The redesigned page scrolls as a whole; the legacy scene-list flex (grow,
+   240 px minimum, inner scroller) would clip the list and let later sections
+   paint over it once #panes becomes a flex column. */
+.csp-glass body.csp-redesign[data-csp-route="satellite"] #panes > .pane{flex:0 0 auto;min-height:0}
 .csp-glass body.csp-redesign[data-csp-route="satellite"] #panes > .pane[data-pane="results"]{order:1}
 .csp-glass body.csp-redesign[data-csp-route="satellite"] #panes > .pane[data-pane="overlays"]{order:2}
 .csp-glass body.csp-redesign[data-csp-route="satellite"] #panes > .pane[data-pane="passes"]{order:3}
@@ -3608,3 +3612,10 @@ body.csp-redesign .ls-layer-label .menu-section-title{margin:0}
 /* The list's own controls sit on top of the list. */
 .csp-glass body.csp-redesign.csp-redesign #cspWorkspace .csp-sat-results-bar{display:grid;margin:0 0 8px;padding:0 var(--t3-row-x,14px);border-bottom:1px solid var(--t3-divider)}
 .csp-glass body.csp-redesign.csp-redesign #cspWorkspace .csp-sat-results-bar > :is(.csp-field-row,label.csp-switch-row){min-height:42px;padding:4px 0}
+.csp-glass body.csp-redesign.csp-grouped-menus #cspWorkspace #panes .ev-card > label.ev-toggle + .ev-spectrum-more{border-top:0;margin-top:-10px}
+.csp-glass body.csp-redesign.csp-grouped-menus #cspWorkspace #panes .ev-spectrum-more > .ev-body{padding:4px 0 0}
+.csp-glass body.csp-redesign.csp-grouped-menus #cspWorkspace #panes .ev-spectrum-more > summary .ev-more-value{max-width:66%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.csp-glass body.csp-redesign.csp-redesign #cspWorkspace #results .item:focus-visible,
+.csp-glass body.csp-redesign.csp-redesign #cspWorkspace #results .grp:focus-visible{outline:2px solid var(--ui-accent);outline-offset:-2px;border-radius:10px}
+.csp-glass body.csp-redesign.csp-redesign #cspWorkspace #results .on-map-tag{margin-left:6px;vertical-align:1px;background:color-mix(in srgb,var(--ui-control) 18%,transparent);color:var(--ui-text);font-weight:600}
+.csp-glass body.csp-redesign.csp-redesign #cspWorkspace .csp-best-main[data-state=loading]{opacity:.85}
