@@ -113,6 +113,8 @@ function markup(){
   assert(css.includes('.ls-looks{display:flex;gap:12px;padding:6px 6px 10px;min-width:0;overflow-x:auto;touch-action:manipulation;'),
     'the preset row must not use pan-x: that intersects the sheet pan-y into none and iOS drops the tap');
   assert(studioSource.includes('strip.scrollLeft'),'the preset row still scrolls sideways from the pointer, since the sheet keeps pan-y');
+  assert(studioSource.includes('classList.contains("csp-native-chrome")')&&studioSource.includes('renderScenePreview(look.scene'),
+    'iPhone preset thumbnails paint while the web panel is parked off screen');
   assert(css.includes('[data-csp-route="terrain"][data-csp-view="detail"]:not(.collapsed) #side'),
     'the open LiDAR sheet uses one surface instead of glass bands at the top and bottom');
   assert(css.includes('select:open::picker(select)')&&css.includes('background:var(--ui-surface);-webkit-backdrop-filter:none;backdrop-filter:none;'),

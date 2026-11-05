@@ -281,6 +281,18 @@
     function paintPreview(canvas,look){
       const key=JSON.stringify(look.scene),cached=previews.get(key);
       if(cached){canvas.getContext("2d").putImageData(cached,0,0);return}
+      /* The iPhone app parks #side off the screen and copies these canvases
+         into the native sheet. An intersection observer never sees them, so
+         every preset thumbnail stayed blank. Draw them before the app asks. */
+      if(document.documentElement.classList.contains("csp-native-chrome")){
+        try{
+          const terrain=dem();
+          const image=new ImageData(R.renderScenePreview(look.scene,terrain,host.lighting&&host.lighting()),terrain.width,terrain.height);
+          previews.set(key,image);
+          canvas.getContext("2d").putImageData(image,0,0);
+        }catch(_){}
+        return;
+      }
       if(previewWatch&&!canvas._cspPreview){canvas._cspPreview=()=>queuePreview(canvas,key,look.scene);previewWatch.observe(canvas);return}
       queuePreview(canvas,key,look.scene);
     }
