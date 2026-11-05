@@ -637,7 +637,7 @@ assert(index.includes('class="elev-spectrum-scale"')&&
    is the whole screen. No measurement, nothing to come up short. */
 assert(index.includes('#app{position:fixed;inset:0;width:100%;background:var(--page)}'),
        "the application shell must be sized by inset:0 against the initial containing block");
-assert(!/#app\{[^}]*height:/.test(index),
+assert(!/(?:^|\})\s*#app\{[^}]*height:/m.test(index),
        "the shell must not carry an explicit height; it over-constrains inset:0 and can fall short of the screen");
 assert(!index.includes('syncVisualViewport'),
        "the shell must never be sized from a JS-measured visual viewport");
@@ -652,17 +652,20 @@ assert(uiSystem.includes('id="cspMapSources"')&&uiSystem.includes('bridge.map?.a
        uiStyles.indexOf('body.csp-redesign .maplibregl-ctrl-attrib{display:none!important}')<uiStyles.indexOf('@media(max-width:1050px)')&&
        index.includes('id="mapSourceReferences"'),
        "attribution must be available from the toolbar and sidebar without covering the desktop or phone map");
-/* The map runs under the status bar and around the Dynamic Island. On iOS 26
-   innerHeight reads one status bar short in this mode while the page still
-   fills the screen; offsetting #app by that "gap" pushed the sheet off the
-   bottom of a real iPhone. Nothing may be sized from it, and nothing may be
-   painted behind the status bar. */
+/* The map runs under the status bar and around the Dynamic Island. In this
+   mode iOS 26+ lays the installed page out one status bar short (874 -> 812)
+   and paints white below the document; content drawn past 812 is clipped.
+   Sizing the standalone root and shell by 100vh (the large viewport, the whole
+   display) gives the document content to the bottom edge and WebKit then lays
+   out the full screen. Nothing may be offset by screen height minus
+   innerHeight, and nothing may be painted behind the status bar. */
 assert(index.includes('name="apple-mobile-web-app-status-bar-style" content="black-translucent"'),
        "the map must run under the status bar in the installed app");
 assert(index.includes('root.classList.add("csp-standalone")')&&
-       index.includes("html.csp-standalone,html.csp-standalone body{overflow:hidden}")&&
+       index.includes("html.csp-standalone,html.csp-standalone body{height:100vh;overflow:hidden}")&&
+       index.includes("html.csp-standalone #app{bottom:auto;height:100vh}")&&
        !index.includes("html.csp-standalone,html.csp-standalone body{position:fixed"),
-       "an installed web app must not pin html to the short layout viewport");
+       "an installed web app must size its root and shell by the whole display, not the short layout viewport");
 assert(!index.includes('--standalone-gap')&&!/screen\.height\s*-\s*innerHeight|screenH-innerHeight/.test(index),
        "the shell must never be offset by screen height minus innerHeight; iOS 26 misreports innerHeight");
 assert(!index.includes('statusScrim')&&!uiStyles.includes('statusScrim'),
