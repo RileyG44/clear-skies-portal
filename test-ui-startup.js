@@ -880,7 +880,7 @@ async function startupScreen(){
     assert(s.done&&f.classes.has('csp-splash-out'),'a whole first picture lifts it');
     await Promise.resolve();assert(lifted,'the lift is announced to the iOS shell');assert.equal(events,1);
     let disposed=0;s.dispose=()=>disposed++;
-    for(const [id,t] of [...f.timers])if(t.ms===380){t.fn();f.timers.delete(id)}
+    for(const [id,t] of [...f.timers])if(t.ms===680){t.fn();f.timers.delete(id)}
     assert(!f.classes.has('csp-splash')&&!f.classes.has('csp-splash-out')&&disposed===1,'after its fade the screen is gone and the tree lets go of its GL context');
     s.finish();assert.equal(events,1,'it lifts once');
   }
@@ -891,6 +891,37 @@ async function startupScreen(){
     assert(!s.done,'a tree that has only just come up is not snatched away');
     const wait=[...f.timers.values()].find(t=>t.ms===300);assert(wait,'the lift waits out the rest of half a second');
     now+=300;wait.fn();assert(s.done);
+  }
+  {
+    const f=fixture(),s=f.context.window.CSPBoot.splash;let endFade,disposed=0,removed=0;
+    f.nodes.cspSplash={parentNode:{removeChild(){removed++}},animate(frames,options){
+      assert.equal(frames[0].opacity,1);assert.equal(frames[1].opacity,0);
+      assert.equal(options.duration,650);
+      return {finished:new Promise(resolve=>endFade=resolve)};
+    }};
+    s.dispose=()=>disposed++;
+    f.rootEvents['csp:ready']();f.classes.delete('csp-map-staging');settle(f);
+    for(const [id,t] of [...f.timers])if(t.ms<12000){t.fn();f.timers.delete(id)}
+    assert(f.classes.has('csp-splash')&&removed===0&&disposed===0,'a busy first map frame cannot remove the splash before the compositor finishes its fade');
+    endFade();await Promise.resolve();
+    assert(!f.classes.has('csp-splash')&&removed===1&&disposed===1,'the completed fade removes the cover and releases the animated tree');
+  }
+  {
+    const f=fixture(),s=f.context.window.CSPBoot.splash;let now=1000;f.context.Date={now:()=>now};
+    f.rootEvents['csp:ready']();s.tree(1800);now+=600;
+    f.classes.delete('csp-map-staging');settle(f);
+    assert(!s.done,'a fast map still gives the growing tree time to draw');
+    const wait=[...f.timers.values()].find(t=>t.ms===1200);assert(wait);
+    now+=1200;wait.fn();assert(s.done,'growth finishes without adding a wait to a slower map');
+  }
+  {
+    const f=fixture(),s=f.context.window.CSPBoot.splash;let now=1000;f.context.Date={now:()=>now};
+    f.classes.add('csp-reduce-motion');
+    f.nodes.cspSplash={animate(){assert.fail('Reduce Motion skips the animated transition')}};
+    f.rootEvents['csp:ready']();s.tree(1800);now+=500;
+    f.classes.delete('csp-map-staging');settle(f);
+    assert(s.done,'Reduce Motion does not wait for the growing-tree animation');
+    assert([...f.timers.values()].some(t=>t.ms===0),'Reduce Motion removes the cover immediately');
   }
   {
     const f=fixture(),s=f.context.window.CSPBoot.splash;

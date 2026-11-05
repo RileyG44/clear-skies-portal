@@ -59,10 +59,11 @@ html.csp-reduce-motion #map>.leaflet-map-pane{transition:none}
    (startup-tree.js, drawn once it can be), over everything until the first map
    picture is whole. It then fades once to the map and its controls. */
 #cspSplash{display:none}
-html.csp-splash #cspSplash{position:fixed;inset:0;z-index:9999;display:grid;place-items:center;background:#fff;transition:opacity .35s cubic-bezier(.2,.7,.2,1)}
+html.csp-splash #cspSplash{position:fixed;inset:0;z-index:9999;display:grid;place-items:center;background:#fff;transition:opacity .65s cubic-bezier(.22,.61,.36,1)}
 html.csp-splash-out #cspSplash{opacity:0;pointer-events:none}
-#cspSplashTree{display:block;width:min(56vw,44vh,360px);aspect-ratio:1;max-height:52vh;opacity:0;transition:opacity .4s ease-out}
+#cspSplashTree{display:block;width:min(56vw,44vh,360px);aspect-ratio:1;max-height:52vh;opacity:0;transition:opacity .4s ease-out,transform .65s cubic-bezier(.22,.61,.36,1)}
 #cspSplashTree.on{opacity:1}
+html.csp-splash-out #cspSplashTree{opacity:0;transform:translateY(-3px) scale(.99);transition-duration:.25s,.65s}
 /* (over the boot colours, and the theme the worker writes into them) */
 html.csp-splash:not(.csp-splash-out),html.csp-splash:not(.csp-splash-out) body{background:#fff!important}
 html.csp-reduce-motion :is(#cspSplash,#cspSplashTree){transition:none}
@@ -182,31 +183,37 @@ html[data-ui-theme="dark"] #cspStartup{background:#111416;color:#ebebeb}
      is whole: the pane has left csp-map-staging and no terrain is held back.
      A failure lifts it at once, so its message and Reload show, and nothing
      holds it past 8 s; the picture watch above still covers a slow map. A tree
-     that has only just come up stays half a second, rather than flickering.
+     that has only just come up has time to draw before the transition.
      splash.lifted settles as the fade begins; the iOS shell shows its native
      controls with it (native-shell.js). */
-  var splash=boot.splash={done:false,dispose:null,treeAt:0};
+  var splash=boot.splash={done:false,dispose:null,treeAt:0,treeHold:0};
   splash.lifted=new Promise(function(resolve){splash.lift=resolve});
   var shellUp=false,splashWait=0,splashCap=0;
-  splash.tree=function(){if(!splash.done)splash.treeAt=Date.now()};
+  splash.tree=function(hold){if(!splash.done){splash.treeAt=Date.now();splash.treeHold=hold||500}};
   splash.finish=function(){
     if(splash.done)return;splash.done=true;clearTimeout(splashWait);clearTimeout(splashCap);
     var theme=(root.dataset||{}).uiTheme,color=theme==="dark"?"#111416":"#dbe6eb";
     if(document.querySelectorAll){var metas=document.querySelectorAll('meta[name="theme-color"]');for(var mi=0;mi<metas.length;mi++)metas[mi].setAttribute("content",color)}
-    root.classList.add("csp-splash-out");splash.lift();root.dispatchEvent(new Event("csp:splash"));
     var still=root.classList.contains("csp-reduce-motion")||!!(window.matchMedia&&matchMedia("(prefers-reduced-motion: reduce)").matches);
-    setTimeout(function(){
+    var el=document.getElementById("cspSplash"),fade;
+    /* Wait for the compositor's fade, not a wall-clock timer that may fire
+       before a busy first map frame has actually painted the transition. */
+    if(!still&&el&&el.animate)fade=el.animate([{opacity:1},{opacity:0}],{duration:650,easing:"cubic-bezier(.22,.61,.36,1)"});
+    root.classList.add("csp-splash-out");splash.lift();root.dispatchEvent(new Event("csp:splash"));
+    var remove=function(){
       root.classList.remove("csp-splash");root.classList.remove("csp-splash-out");
-      var el=document.getElementById("cspSplash");if(el&&el.parentNode)el.parentNode.removeChild(el);
+      if(el&&el.parentNode)el.parentNode.removeChild(el);
       try{if(splash.dispose)splash.dispose()}catch(e){}
-    },still?0:380);
+    };
+    if(fade)fade.finished.then(remove,remove);else setTimeout(remove,still?0:680);
   };
   /* Checked when the shell reveals and when the picture settles (below). */
   var splashCheck=function(){
     if(splash.done)return;
     if(boot.failed){splash.finish();return}
     if(!shellUp||root.classList.contains("csp-map-staging")||root.classList.contains("csp-terrain-pending"))return;
-    var wait=splash.treeAt?500-(Date.now()-splash.treeAt):0;
+    var still=root.classList.contains("csp-reduce-motion")||!!(window.matchMedia&&matchMedia("(prefers-reduced-motion: reduce)").matches);
+    var wait=splash.treeAt?(still?500:splash.treeHold)-(Date.now()-splash.treeAt):0;
     if(wait>0){clearTimeout(splashWait);splashWait=setTimeout(splashCheck,wait);return}
     splash.finish();
   };
@@ -229,7 +236,7 @@ html[data-ui-theme="dark"] #cspStartup{background:#111416;color:#ebebeb}
   },true);
 })();
 </script>
-<script type="importmap">{"imports":{"three":"./vendor/three.module.min.js?build=2026-11-05n"}}</script>
+<script type="importmap">{"imports":{"three":"./vendor/three.module.min.js?build=2026-11-05p"}}</script>
 
 </head>
 <body>
@@ -238,7 +245,7 @@ html[data-ui-theme="dark"] #cspStartup{background:#111416;color:#ebebeb}
 <div id="cspSplash" aria-hidden="true"><canvas id="cspSplashTree"></canvas></div>
 <!-- The tree is optional: a module that cannot load leaves the screen plain white. -->
 <script type="module">
-var start=function(){import("./startup-tree.js?build=2026-11-05n").then(function(m){m.drawStartupTree(window.CSPBoot.splash)}).catch(function(error){console.warn("Start-up tree unavailable",error)})};
+var start=function(){import("./startup-tree.js?build=2026-11-05p").then(function(m){m.drawStartupTree(window.CSPBoot.splash)}).catch(function(error){console.warn("Start-up tree unavailable",error)})};
 /* Drawn once the map has asked for its first tiles, while they are on their way. */
 if(window.CSPBoot.done)setTimeout(start,0);else document.documentElement.addEventListener("csp:ready",function(){setTimeout(start,0)},{once:true});
 </script>
@@ -246,10 +253,10 @@ if(window.CSPBoot.done)setTimeout(start,0);else document.documentElement.addEven
   <p id="cspStartupMessage">Loading your map and tools…</p>
   <a id="cspStartupRetry" href="?reload=2026-10-24n">Reload portal</a>
 </section>
-<link rel="stylesheet" href="vendor/leaflet.css?build=2026-11-05n">
-<link rel="stylesheet" href="ui-base.css?build=2026-11-05n">
-<link rel="stylesheet" href="ui-theme.css?build=2026-11-05n">
-<link rel="stylesheet" href="ui-system.css?build=2026-11-05n">
+<link rel="stylesheet" href="vendor/leaflet.css?build=2026-11-05p">
+<link rel="stylesheet" href="ui-base.css?build=2026-11-05p">
+<link rel="stylesheet" href="ui-theme.css?build=2026-11-05p">
+<link rel="stylesheet" href="ui-system.css?build=2026-11-05p">
 <!-- inert until csp:ready: the transparent shell must not take focus or input. -->
 <div id="app" inert>
   <div id="side">
@@ -1049,8 +1056,8 @@ if(window.CSPBoot.done)setTimeout(start,0);else document.documentElement.addEven
 </div>
 <div id="paneLive" role="status" aria-live="polite"></div>
 
-<script src="vendor/leaflet.js?build=2026-11-05n"></script>
-<script src="vendor/leaflet-rotate.umd.min.js?build=2026-11-05n"></script>
+<script src="vendor/leaflet.js?build=2026-11-05p"></script>
+<script src="vendor/leaflet-rotate.umd.min.js?build=2026-11-05p"></script>
 <script>
 /* leaflet-rotate wraps Renderer.onAdd(map) and reads map._rotate, but Leaflet's
    Canvas and SVG renderers call Renderer.prototype.onAdd.call(this) with no
@@ -1062,40 +1069,40 @@ if(window.CSPBoot.done)setTimeout(start,0);else document.documentElement.addEven
   L.Renderer.prototype.onAdd=function(map){return onAdd.call(this,map||this._map)};
 })();
 </script>
-<script src="ui-icons.js?build=2026-11-05n"></script>
-<script src="version.js?build=2026-11-05n"></script>
-<script src="mosaic-core.js?build=2026-11-05n"></script>
-<script src="png-stream.js?build=2026-11-05n"></script>
-<script src="terrain-core.js?build=2026-11-05n"></script>
-<script src="terrain-raster.js?build=2026-11-05n"></script>
-<script src="elevation-bands.js?build=2026-11-05n"></script>
-<script src="elevation-tile-core.js?build=2026-11-05n"></script>
-<script src="terrain-drape-core.js?build=2026-11-05n"></script>
-<script src="terrain-drape-pool.js?build=2026-11-05n"></script>
-<script src="public-terrain.js?build=2026-11-05n"></script>
-<script src="tile-pipeline.js?build=2026-11-05n"></script>
-<script src="water-geography-data.js?build=2026-11-05n"></script>
-<script src="water-geography.js?build=2026-11-05n"></script>
-<script src="gpu-terrain-shaders.js?build=2026-11-05n"></script>
-<script src="lidar-render.js?build=2026-11-05n"></script>
-<script src="lidar-studio.js?build=2026-11-05n"></script>
-<script src="analysis-layers.js?build=2026-11-05n"></script>
-<script src="share-state.js?build=2026-11-05n"></script>
-<script src="coordinates.js?build=2026-11-05n"></script>
-<script src="location-search.js?build=2026-11-05n"></script>
-<script src="gpu-terrain-store.js?build=2026-11-05n"></script>
-<script src="gpu-terrain-engine.js?build=2026-11-05n"></script>
-<script src="gpu-terrain-layer.js?build=2026-11-05n"></script>
-<script src="gpu-terrain-3d-cache.js?build=2026-11-05n"></script>
-<script src="gpu-terrain-3d-renderer.js?build=2026-11-05n"></script>
-<script src="gpu-terrain-3d-layer.js?build=2026-11-05n"></script>
-<script src="wa-archaeology.js?build=2026-11-05n"></script>
-<script src="research-contract.js?build=2026-11-05n"></script>
-<script src="point-cloud-core.js?build=2026-11-05n"></script>
-<script src="point-cloud-viewer.js?build=2026-11-05n"></script>
-<script src="app.js?build=2026-11-05n"></script>
-<script src="markup-3d.js?build=2026-11-05n"></script>
-<script src="markup.js?build=2026-11-05n"></script>
-<script src="ui-system.js?build=2026-11-05n"></script>
+<script src="ui-icons.js?build=2026-11-05p"></script>
+<script src="version.js?build=2026-11-05p"></script>
+<script src="mosaic-core.js?build=2026-11-05p"></script>
+<script src="png-stream.js?build=2026-11-05p"></script>
+<script src="terrain-core.js?build=2026-11-05p"></script>
+<script src="terrain-raster.js?build=2026-11-05p"></script>
+<script src="elevation-bands.js?build=2026-11-05p"></script>
+<script src="elevation-tile-core.js?build=2026-11-05p"></script>
+<script src="terrain-drape-core.js?build=2026-11-05p"></script>
+<script src="terrain-drape-pool.js?build=2026-11-05p"></script>
+<script src="public-terrain.js?build=2026-11-05p"></script>
+<script src="tile-pipeline.js?build=2026-11-05p"></script>
+<script src="water-geography-data.js?build=2026-11-05p"></script>
+<script src="water-geography.js?build=2026-11-05p"></script>
+<script src="gpu-terrain-shaders.js?build=2026-11-05p"></script>
+<script src="lidar-render.js?build=2026-11-05p"></script>
+<script src="lidar-studio.js?build=2026-11-05p"></script>
+<script src="analysis-layers.js?build=2026-11-05p"></script>
+<script src="share-state.js?build=2026-11-05p"></script>
+<script src="coordinates.js?build=2026-11-05p"></script>
+<script src="location-search.js?build=2026-11-05p"></script>
+<script src="gpu-terrain-store.js?build=2026-11-05p"></script>
+<script src="gpu-terrain-engine.js?build=2026-11-05p"></script>
+<script src="gpu-terrain-layer.js?build=2026-11-05p"></script>
+<script src="gpu-terrain-3d-cache.js?build=2026-11-05p"></script>
+<script src="gpu-terrain-3d-renderer.js?build=2026-11-05p"></script>
+<script src="gpu-terrain-3d-layer.js?build=2026-11-05p"></script>
+<script src="wa-archaeology.js?build=2026-11-05p"></script>
+<script src="research-contract.js?build=2026-11-05p"></script>
+<script src="point-cloud-core.js?build=2026-11-05p"></script>
+<script src="point-cloud-viewer.js?build=2026-11-05p"></script>
+<script src="app.js?build=2026-11-05p"></script>
+<script src="markup-3d.js?build=2026-11-05p"></script>
+<script src="markup.js?build=2026-11-05p"></script>
+<script src="ui-system.js?build=2026-11-05p"></script>
 </body>
 </html>
