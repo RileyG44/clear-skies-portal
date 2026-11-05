@@ -2,9 +2,8 @@
    An open-grown bigleaf maple (Acer macrophyllum) in pen, ink and watercolour over the
    same soil section as the Douglas-fir page. The tree is grown in three dimensions by
    maple-growth.js (buds competing for light, apical control, flowering forks, self-
-   pruning, sag under load) and drawn here as seen from the front; its limbs carry moss
-   and licorice fern the way west-slope maples do. The leaves, flowers, seed keys, epiphytes, grass
-   and litter are drawn for one day of the year (see phenology.js), so the page shows
+   pruning, sag under load) and drawn here as seen from the front. The leaves, flowers,
+   seed keys, grass and litter are drawn for one day of the year (see phenology.js), so the page shows
    the tree as it stands in its native range on the day it is opened.
 
    It shares the stroke renderer and bone physics in sketch.js: every mark is pinned to
@@ -406,48 +405,6 @@ export function buildMaple(date = new Date(), seed = 20261104) {
     }
   }
 
-  /* ---------- moss, licorice fern ---------- */
-  for (const ch of chains) {
-    if (r[ch[1] ?? ch[0]] < 0.0055) continue;
-    const mph = R(0, 6.3);
-    for (let i = 0; i < ch.length - 1; i++) {
-      const k = ch[i], q = ch[i + 1], dx = X[q] - X[k], dy = Y[q] - Y[k], L = Math.hypot(dx, dy) || 1;
-      let nx = -dy / L, ny = dx / L; if (ny < 0) { nx = -nx; ny = -ny; }
-      // moss grows in patches, thickest on the upper sides of the big limbs
-      const patch = clamp(0.15 + 1.2 * Math.sin(G.dist[q] * 38 + mph) + 0.5 * Math.sin(G.dist[q] * 97 + mph * 2), 0, 1.3);
-      const rk = r[q], damp = 1.3 - Y[q], cnt = Math.round(L / 0.0011 * Math.min(1.4, Math.sqrt(rk / 0.01)) * damp * patch);
-      const tm = tNode(q) + 0.05;
-      for (let j = 0; j < cnt; j++) {
-        const f = R(0, 1), up = R(0, 1) < 0.78 ? 1 : -1, o = rk * R(0.45, 1.18);
-        const x = X[k] + dx * f + nx * o * up, y = Y[k] + dy * f + ny * o * up, a = R(0, 6.28), l = R(0.0012, 0.0032);
-        const c = mul(R(0, 1) < 0.12 ? mix(S.moss, [0.72, 0.74, 0.32], 0.5) : S.moss, [R(0.85, 1.1), R(0.9, 1.08), R(0.85, 1.1)]);
-        line(x, y, boneOf[q], x + Math.cos(a) * l, y + Math.sin(a) * l, boneOf[q], R(1.2, 2.1), R(0.5, 0.8) * wood(q, 0.5), tm, 0.01, c);
-      }
-      if (rk > 0.0055 && R(0, 1) < 0.7 * patch) {
-        const x = X[k] + dx * 0.5 + nx * rk * 0.7, y = Y[k] + dy * 0.5 + ny * rk * 0.7;
-        line(x - dx * 0.5, y - dy * 0.5, boneOf[q], x + dx * 0.5, y + dy * 0.5, boneOf[q], -rk * 1.1, 0.3 * wood(q, 0.5), tm + 0.02, 0.01, [...S.moss, 0.5]);
-      }
-      // licorice fern fronds stand up out of the moss in the wet season
-      if (rk > 0.0075 && Math.abs(dy / L) < 0.75 && R(0, 1) < 0.11 * S.fern) {
-        const bx = X[k] + dx * 0.5 + nx * rk * 0.9, by = Y[k] + dy * 0.5 + ny * rk * 0.9;
-        const len = R(0.016, 0.03), th0 = Math.atan2(ny, nx) + R(-0.5, 0.5), pts = [];
-        let x = bx, y = by, th = th0;
-        for (let s = 0; s <= 8; s++) { pts.push([x, y]); th += R(-0.05, 0.12) * Math.sign(nx || 1); x += Math.cos(th) * len / 8; y += Math.sin(th) * len / 8; }
-        const end = pts[8], fb = bone(boneOf[q], bx, by, end[0], end[1], KIND.FERN, 5, 0.18, len * 1.5, len);
-        const fc = mix([0.55, 0.52, 0.27], [0.27, 0.5, 0.2], clamp(S.fern * 1.4 - 0.2, 0, 1));
-        poly(pts.map(p => [p[0], p[1], fb]), 0.8, 0.7, tm + 0.04, tm + 0.07, fc);
-        for (let s = 1; s < 8; s++) {
-          const p = pts[s], u = pts[s + 1], ux = u[0] - p[0], uy = u[1] - p[1], ul = Math.hypot(ux, uy) || 1;
-          const pl = 0.0055 * Math.sin(Math.PI * s / 9) * (len / 0.024) + 0.001;
-          for (const sd of [-1, 1]) {
-            const c = Math.cos(sd * 70 * DEG), sn = Math.sin(sd * 70 * DEG), vx = (ux * c - uy * sn) / ul, vy = (ux * sn + uy * c) / ul;
-            line(p[0], p[1], fb, p[0] + vx * pl, p[1] + vy * pl, fb, 1.1, 0.68, tm + 0.05 + 0.02 * s / 8, 0.01, fc);
-          }
-        }
-      }
-    }
-  }
-
   /* ---------- foliage ---------- */
   let accent = [0, 0, 0], aw = 0;
   // where the crown is many leaves deep (its middle, seen through all its depth) the
@@ -543,7 +500,7 @@ export function buildMaple(date = new Date(), seed = 20261104) {
      bright against last year's; old outer fronds brown off from autumn; winter weather
      presses the clump flat */
   const fr2 = mulberry32(seed + 17);
-  for (const [fx, nf, sc] of [[-0.11, 8, 1], [0.13, 6, 0.8], [-0.25, 4, 0.55], [0.42, 4, 0.5]]) {
+  for (const [fx, nf, sc] of [[-0.25, 4, 0.55], [0.42, 4, 0.5]]) {
     const base = groundY(fx), flat = S.fernFlat;
     for (let k = 0; k < nf; k++) {
       const f = nf === 1 ? 0 : k / (nf - 1), outer = Math.abs(f - 0.5) > 0.3, pick = fr2(), len = fr2();
@@ -597,7 +554,7 @@ export function buildMaple(date = new Date(), seed = 20261104) {
     x < xl ? 0.052 * Math.exp((x - xl) / 0.085) :
     x < xr ? lerp(0.052, 0.012, smooth(xl, xr, x)) :
     0.012 * (1 - smooth(xr, xr + 0.03, x)) - 0.006 * Math.exp(-(((x - xr - 0.04) / 0.03) ** 2)) + 0.01 * Math.exp(-(((x - xr - 0.14) / 0.08) ** 2));
-  const fernDrift = x => [-0.11, 0.13, -0.25, 0.42].reduce((a, fx) => a + 0.01 * Math.exp(-(((x - fx - 0.03) / 0.028) ** 2)) - 0.004 * Math.exp(-(((x - fx + 0.025) / 0.015) ** 2)), 0);
+  const fernDrift = x => [-0.25, 0.42].reduce((a, fx) => a + 0.01 * Math.exp(-(((x - fx - 0.03) / 0.028) ** 2)) - 0.004 * Math.exp(-(((x - fx + 0.025) / 0.015) ** 2)), 0);
   const snowY = x => groundY(x) + S.snow * Math.max(0.004, 0.017 + 0.004 * Math.sin(x * 31 + 1) + 0.0025 * Math.sin(x * 83 + 2) + driftAt(x) + fernDrift(x));
   const sway = (x, y, h) => bone(ROOT, x, y, x, y + h, KIND.FERN, 6, 0.16, h * 1.5, h);
   const late = c => [c[0], c[1], c[2], 2 + (c[3] || 0)];       // ink laid over the snow
@@ -732,7 +689,7 @@ export function buildMaple(date = new Date(), seed = 20261104) {
   // autumn mushrooms come up through the litter near the roots
   if (S.mushrooms > 0.05) for (const p of plant(8, -0.3, 0.3)) {
     // (clear of the trunk and of the sword ferns, which would hide them)
-    if (Math.abs(p.x) < 0.05 || Math.abs(p.x + 0.11) < 0.04 || Math.abs(p.x - 0.13) < 0.035 || p.r[0] > 0.8) continue;
+    if (Math.abs(p.x) < 0.05 || Math.abs(p.x + 0.25) < 0.035 || p.r[0] > 0.8) continue;
     at0(p.x, p.y);
     const h = (0.004 + 0.004 * p.r[1]) * (0.6 + 0.4 * S.mushrooms), cw = 0.003 + 0.0025 * p.r[2], top = p.y + h;
     pl(p.x, p.y, ROOT, p.x, top, ROOT, 1.6, 0.6, 0.26, 0.01, [0.86, 0.8, 0.68]);

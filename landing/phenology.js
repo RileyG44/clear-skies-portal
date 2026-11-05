@@ -82,7 +82,7 @@ export function season(date = new Date()) {
   // the wet season: October rains through May; moss and licorice fern answer to it
   const wet = doy < 150 ? 1 - smooth(130, 190, doy) : smooth(265, 300, doy);
   const note =
-    P < -0.2 ? "bare limbs, moss and seed keys" :
+    P < -0.2 ? "bare limbs and seed keys" :
     P < 0.05 ? "buds swelling" :
     P < 0.45 ? "flower tassels out, first leaves" :
     P < 1.0 ? "new leaves, bright yellow-green" :
@@ -90,7 +90,7 @@ export function season(date = new Date()) {
     P < 2.2 ? "late-summer green, keys ripening" :
     P < 2.75 ? "leaves turning yellow and gold" :
     P < 3.3 ? "gold and tan, leaves falling" :
-    P < 3.9 ? "the last leaves coming down" : "bare limbs, moss and seed keys";
+    P < 3.9 ? "the last leaves coming down" : "bare limbs and seed keys";
   return {
     date, doy, P,
     label: `${date.getDate()} ${MONTHS[date.getMonth()]}`,
