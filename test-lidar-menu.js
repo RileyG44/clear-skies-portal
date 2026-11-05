@@ -102,9 +102,12 @@ function markup(){
   const layout=fs.readFileSync('ios/Sources/Shell/Items/ItemList.swift','utf8');
   assert(!/"Looks"|#terAppearance|#terLighting/.test(layout),'native LiDAR no longer uses the obsolete layout');
   const studioSource=fs.readFileSync('lidar-studio.js','utf8');
-  assert(studioSource.includes('strip.addEventListener("pointerup"')&&studioSource.includes('applyLook(tap.id)'),
+  assert(studioSource.includes('strip.addEventListener("pointerup"')&&studioSource.includes('applyLook(tap.id,true)'),
     'a LiDAR preset tap applies on pointerup, because iOS drops the click inside the scrolling sheet');
-  assert(studioSource.includes('performance.now()-stripTapAt>700'),'a touch tap must not focus the preset and scroll the installed page');
+  assert(studioSource.includes('if(!fromPointer)')&&studioSource.includes('swallowPresetClick=false'),
+    'a touch tap must not focus the preset, and the following click is swallowed once however late it arrives');
+  assert(studioSource.includes('pointercancel",()=>{stripTap=null;swallowPresetClick=true}'),
+    'a cancelled touch still swallows the click the browser may synthesize');
   assert(ui.includes('.ls-looks,.ls-menu'),'preset and layer menus keep their own gesture so the sheet does not eat the tap');
   const css=fs.readFileSync('ui-system.css','utf8');
   assert(css.includes('.ls-looks{display:flex;gap:12px;padding:6px 6px 10px;min-width:0;overflow-x:auto;touch-action:manipulation;'),
