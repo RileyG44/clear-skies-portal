@@ -6,7 +6,7 @@
 /* Bump this on every deploy. Keeping the build literal here, plus a versioned
    page-script URL, prevents an older worker from serving a stale version.js
    while a newer HTML shell is already live. */
-const CSP_BUILD = "2026-11-05f";
+const CSP_BUILD = "2026-11-05g";
 const SHELL = `clear-skies-shell-${CSP_BUILD}`;
 const POTREE = `clear-skies-potree-${CSP_BUILD}`;
 /* Survives a shell update. The page writes "dark" or "light" here so the
@@ -65,7 +65,7 @@ async function themedDocument(response,theme){
   if(type&&!/text\/html/i.test(type))return response;
   const html=await response.text();
   headers.set("Content-Type","text/html; charset=utf-8");
-  return new Response(recolorShell(html,theme),{status:response.status||200,statusText:response.statusText||"",headers});
+  return new Response(html.includes("window.CSPBoot")?recolorShell(html,theme):html,{status:response.status||200,statusText:response.statusText||"",headers});
 }
 
 self.addEventListener("fetch", e => {
@@ -110,13 +110,19 @@ self.addEventListener("fetch", e => {
        "fresh" and still be handed a stale copy by the browser cache. */
     e.respondWith((async()=>{
       const theme=savedSplashTheme();
+      // Keep the map, landing page and supporting pages in separate entries.
+      // Query strings select a view or force reload, not a different shell.
+      const documentURL=new URL(req.url);
+      documentURL.search="";
       try{
         const response=await fetch(req,{cache:"reload"});
-        const copy=response.clone();
-        caches.open(SHELL).then(cache=>cache.put("./index.html",copy)).catch(()=>{});
+        if(response.ok){
+          const copy=response.clone();
+          e.waitUntil(caches.open(SHELL).then(cache=>cache.put(documentURL.href,copy)).catch(()=>{}));
+        }
         return themedDocument(response,await theme);
       }catch(error){
-        return themedDocument(await caches.match("./index.html"),await theme);
+        return themedDocument(await caches.match(documentURL.href),await theme);
       }
     })());
     return;

@@ -4,7 +4,10 @@ bundled into the iOS app. Copies site.json's web files, builds app.js from its
 app files exactly as site.js does, and copies the vendor directory, leaving
 out the files only the Node engine uses.
 
-    assemble-site.py <repository root> <destination directory>
+    assemble-site.py <repository root> <destination directory> [--pages]
+
+--pages adds the public landing site at the root and moves the map document to
+map.html. Native bundles keep index.html as their direct map entry point.
 """
 
 import json
@@ -14,8 +17,8 @@ import sys
 
 
 def main():
-    if len(sys.argv) != 3:
-        sys.exit("usage: assemble-site.py <repository root> <destination>")
+    if len(sys.argv) not in (3, 4) or (len(sys.argv) == 4 and sys.argv[3] != "--pages"):
+        sys.exit("usage: assemble-site.py <repository root> <destination> [--pages]")
     root = pathlib.Path(sys.argv[1]).resolve()
     destination = pathlib.Path(sys.argv[2])
     site = json.loads((root / "site.json").read_text(encoding="utf-8"))
@@ -36,6 +39,18 @@ def main():
         handle.write("(()=>{\n" + app + "})();\n")
     shutil.copytree(root / "vendor", destination / "vendor",
                     ignore=lambda folder, names: [n for n in names if pathlib.Path(folder, n) in engine_only])
+    if len(sys.argv) == 4:
+        (destination / "index.html").rename(destination / "map.html")
+        for name in site["landing"]:
+            target = destination / name
+            target.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(root / "landing" / name, target)
+        # The worker installs the same files and URLs the public site serves.
+        site["web"] += ["map.html"] + [name for name in site["landing"] if name != "index.html"]
+        (destination / "site.json").write_text(json.dumps(site, indent=2) + "\n", encoding="utf-8")
+        manifest = json.loads((destination / "manifest.json").read_text(encoding="utf-8"))
+        manifest["start_url"] = "./map.html"
+        (destination / "manifest.json").write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
     (destination / ".nojekyll").touch()
     count = sum(1 for item in destination.rglob("*") if item.is_file())
     print(f"assemble-site: {count} files in {destination}")

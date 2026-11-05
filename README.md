@@ -148,7 +148,12 @@ After installation, a LiDAR welcome page opens ClearSkies directly or leads to t
 
 ## Hosted page and the terrain engine
 
-The [GitHub Pages app](https://rileyg44.github.io/clear-skies-portal/) draws
+The [public website](https://rileyg44.github.io/clear-skies-portal/) opens the
+landing page; **Open in your browser** launches the map at `map.html`. Native
+and local engine launches still open the map directly. Existing shared links
+to the website root forward to the map with their state intact.
+
+The [GitHub Pages app](https://rileyg44.github.io/clear-skies-portal/map.html) draws
 CORS-enabled satellite imagery, basemaps, and national 3DEP directly from their
 providers. It does not host a compute backend.
 

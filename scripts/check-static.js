@@ -24,6 +24,7 @@ new vm.Script(appScript,{filename:"app.js"});
   const all=[...site.web,...site.vendor,...site.engine];
   assert.equal(new Set(all).size,all.length,"site.json lists a file twice");
   for(const file of all) assert(fs.existsSync(path.join(root,file)),`site.json lists a missing file: ${file}`);
+  for(const file of site.landing) assert(fs.existsSync(path.join(root,"landing",file)),`missing landing asset: ${file}`);
   const served=new Set([...site.web,"app.js",...site.vendor]);
   for(const file of site.app) assert(fs.existsSync(path.join(root,file)),`site.json lists a missing app file: ${file}`);
   for(const [,url] of page.matchAll(/<(?:script|link)\b[^>]*\b(?:src|href)="(?![a-z]+:|\/\/|[?#])([^"?#]+)/g))

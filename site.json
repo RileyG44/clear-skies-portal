@@ -52,5 +52,29 @@
     "engine/terrain.js", "engine/oregon.js", "engine/downloads.js", "engine/dnr-routes.js", "engine/proxies.js", "cache-budget.js", "cog.js", "usgs.js", "usgs-elwha-opr.json", "terrain-pool.js", "terrain-ranges.js", "terrain-worker.js",
     "wadnr.js", "wadnr-ingest-worker.js", "dnr-archive.js", "LICENSE",
     "vendor/dnr-runtime.cjs", "vendor/dnr-runtime-licenses.txt", "vendor/dnr-lerc-LICENSE.txt"
+  ],
+  "landing": [
+    "index.html",
+    "crow.js",
+    "download.html",
+    "explore.html",
+    "fonts/Pacifico-LICENSE.txt",
+    "fonts/Pacifico.ttf",
+    "icon.png",
+    "maple-growth.js",
+    "maple-leaves.js",
+    "maple-tree.js",
+    "maple.js",
+    "media/app-desktop.webp",
+    "media/app-phone.webp",
+    "media/capture-canyon.webp",
+    "media/capture-drainage.webp",
+    "media/capture-relative-elevation.webp",
+    "phenology.js",
+    "releases.js",
+    "scenes.js",
+    "section-maple-valley.js",
+    "site.css",
+    "sketch.js"
   ]
 }
