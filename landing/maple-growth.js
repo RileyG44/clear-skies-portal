@@ -112,8 +112,10 @@ export const VINE = {
   shed: 0.1,
   sag: 2e-5
 };
-// the tree this page draws
+// the tree this page draws, and the seed it is grown from (picked from a run of seeds
+// for a full, even crown with no lone limb standing off its side)
 export const TREE = VINE;
+export const TREE_SEED = 20451160;
 
 /* the crown volume: a broad, irregular dome, a little heavier on one side. It draws the
    seed's first six numbers, so a baked tree can rebuild it without growing again */
@@ -155,7 +157,7 @@ function finish(x, y, z, par, r, Sc, knots, crown) {
   return { n, X: x, Y: y, Z: z, Par: par, Kids, r, Sc, dist, dmax, env: crown.env, C: crown.C, forkY: y[fork], fork, hTip, knots };
 }
 
-export function growMaple(seed = 20261104, P = TREE) {
+export function growMaple(seed = TREE_SEED, P = TREE) {
   const crown = crownOf(seed, P), { rnd, R, C, env3 } = crown;
   const L = P.L;
 
@@ -446,7 +448,7 @@ export function growMaple(seed = 20261104, P = TREE) {
 const QXYZ = 20000, QR = 500000;
 const paramsKey = (seed, P) => seed + ":" + JSON.stringify(P);
 
-export function packMaple(G, seed = 20261104, P = TREE) {
+export function packMaple(G, seed = TREE_SEED, P = TREE) {
   const n = G.n, buf = new ArrayBuffer(n * 12), dv = new DataView(buf);
   for (let k = 0; k < n; k++) {
     const o = k * 12;
@@ -459,7 +461,7 @@ export function packMaple(G, seed = 20261104, P = TREE) {
   return { key: paramsKey(seed, P), n, knots, data: Buffer.from(buf).toString("base64") };
 }
 
-export function unpackMaple(B, seed = 20261104, P = TREE) {
+export function unpackMaple(B, seed = TREE_SEED, P = TREE) {
   if (!B || B.key !== paramsKey(seed, P)) return null;
   const bin = atob(B.data), n = B.n, u8 = new Uint8Array(bin.length);
   for (let i = 0; i < bin.length; i++) u8[i] = bin.charCodeAt(i);

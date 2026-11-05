@@ -12,7 +12,7 @@
 import { KIND, DEG, lerp, clamp, smooth, mulberry32, canvasAPI, pack } from "./sketch.js";
 import { drawSectionMV } from "./section-maple-valley.js";
 import { season as seasonOf } from "./phenology.js";
-import { growMaple, unpackMaple } from "./maple-growth.js";
+import { growMaple, unpackMaple, TREE_SEED } from "./maple-growth.js";
 import { BAKED } from "./maple-tree.js";
 import { leafAtlas } from "./maple-leaves.js";
 
@@ -32,7 +32,7 @@ const mul = (a, k) => [a[0] * k[0], a[1] * k[1], a[2] * k[2]];
 const LIGHT = (() => { const x = -0.55, y = 0.83, l = Math.hypot(x, y); return [x / l, y / l]; })();
 
 /* ---------- the drawing for one date ---------- */
-export function buildMaple(date = new Date(), seed = 20261104) {
+export function buildMaple(date = new Date(), seed = TREE_SEED) {
   const S = seasonOf(date);
   const K = canvasAPI(seed + 7);
   const { R, line, poly, dashed, circle, bone, ROOT, label, seg, tag } = K;
