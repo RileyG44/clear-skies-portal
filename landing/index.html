@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>ClearSkies</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<meta name="description" content="ClearSkies pairs the newest free satellite imagery with LiDAR terrain. Free on Windows, macOS and the web, with no account and no API key.">
+<meta name="theme-color" content="#000000">
+<link rel="icon" href="icon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=Inter:wght@400..700&display=swap">
+<link rel="stylesheet" href="site.css">
+<script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js"}}</script>
+</head>
+<body class="home">
+<canvas class="stage" id="stage" aria-hidden="true"></canvas>
+
+<div class="page">
+  <nav class="nav wrap" aria-label="Main">
+    <div class="nav-links">
+      <a href="https://rileyg44.github.io/clear-skies-portal/" target="_blank" rel="noopener">Web app</a>
+      <a href="https://github.com/RileyG44/clear-skies-portal" target="_blank" rel="noopener">GitHub</a>
+      <a class="pill" href="download.html">Download</a>
+    </div>
+  </nav>
+
+  <main class="hero wrap" id="hero">
+    <h1 class="wordmark">ClearSkies</h1>
+    <p class="lede">See the ground beneath everything.</p>
+    <p class="body-copy">The newest free satellite imagery, paired with LiDAR terrain sharp enough to find old roads, river terraces and trails hidden under the trees.</p>
+    <div class="actions">
+      <a class="btn btn-primary" href="explore.html">Explore ClearSkies <span class="arrow" aria-hidden="true">→</span></a>
+      <a class="btn btn-ghost" href="https://rileyg44.github.io/clear-skies-portal/" target="_blank" rel="noopener">Open in your browser <span class="arrow" aria-hidden="true">↗</span></a>
+    </div>
+  </main>
+</div>
+
+<script type="module">
+import { createStage } from "./scenes.js";
+const stage = createStage(document.getElementById("stage"), {
+  background: 0x000000,
+  // the forest starts just below the hero copy, whatever the window height
+  horizon: () => Math.min(0.8, document.getElementById("hero").getBoundingClientRect().bottom / innerHeight + 0.035),
+  onNoWebGL() { document.body.insertAdjacentHTML("afterbegin", '<div class="nogl"></div>'); }
+});
+if (stage) stage.set("autumn");
+</script>
+</body>
+</html>
