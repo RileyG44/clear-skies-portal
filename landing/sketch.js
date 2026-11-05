@@ -79,7 +79,17 @@ export function canvasAPI(seed, palette = FIR_INKS) {
   const ROOT = bone(-1, 0, 0, 0, 0, KIND.STATIC, 0, 0, 0, 1);
   const labels = [];
   const label = (x, y, html, o = {}) => labels.push({ x, y, html, anchor: o.anchor || "l", rot: o.rot || 0, t: o.t ?? 0.9, cls: o.cls || "" });
-  return { rnd, R, seg, bon, sty, col, tag, line, poly, dashed, circle, B, bone, ROOT, labels, label };
+  /* leaf sprites, for drawings that bring a leaf atlas (see createSketch): a whole leaf
+     stamped from the atlas cell `v`, its stalk end at (x, y) on bone b. rot turns the
+     leaf's main axis from straight up; sq < 0 mirrors it, and |sq| < 1 foreshortens it
+     across, as a leaf held at a slant; curl bends it. col = [r, g, b] and detail 0..1
+     (how much outline and vein it carries); it unfolds from t over dur. Sprites are laid
+     in the order they are given, later ones over earlier ones */
+  const lf = [];
+  const leaf = (x, y, b, rot, size, sq, v, curl, c, detail, t, dur, alpha = 1) => {
+    lf.push(x, y, b, rot, size, sq, v, curl, c[0], c[1], c[2], detail, t, dur, rnd() * 6.283, alpha);
+  };
+  return { rnd, R, seg, bon, sty, col, tag, line, poly, dashed, circle, B, bone, ROOT, labels, label, lf, leaf };
 }
 
 /* The ground line and the soil section under it (duff and loam, glacial till, andesite). */
@@ -205,7 +215,7 @@ export function drawSection(K, ink) {
 
 /* Physics constants and typed buffers for the renderer. */
 export function pack(K, anchors) {
-  const { seg, bon, sty, col, B, labels } = K;
+  const { seg, bon, sty, col, B, labels, lf } = K;
   const n = B.ox.length, mSub = Float32Array.from(B.m);
   for (let b = n - 1; b > 0; b--) if (B.par[b] >= 0) mSub[B.par[b]] += mSub[b];
   const invI = new Float32Array(n);
@@ -217,6 +227,7 @@ export function pack(K, anchors) {
   return {
     count: sty.length / 4, nb: n, labels, anchors,
     seg: new Float32Array(seg), bon: new Float32Array(bon), sty: new Float32Array(sty), col: new Float32Array(col),
+    leafCount: lf ? lf.length / 16 : 0, leafData: lf && lf.length ? new Float32Array(lf) : null,
     bones: {
       ox: Float32Array.from(B.ox), oy: Float32Array.from(B.oy), ex: Float32Array.from(B.ex), ey: Float32Array.from(B.ey),
       par: Int32Array.from(B.par), kind: Uint8Array.from(B.kind), w0: Float32Array.from(B.w0), zeta: Float32Array.from(B.zeta),
@@ -684,6 +695,98 @@ void main(){
   gl_FragColor = vec4(mix(vec3(1.0), ink, a), 1.0);
 }`;
 
+/* the leaf layer: one instanced quad per leaf, stamped from a texture atlas of leaf
+   shapes (R silhouette, G outline, B veins, A the silhouette eroded from its edge). The
+   leaves are laid over the ink in the order given, each covering what is under it, so a
+   deep crown reads as leaves over leaves rather than ink piling up to black */
+const LEAF_VS = /* glsl */`
+precision highp float;
+precision highp sampler2D;
+attribute vec4 aL0;   // x, y (stalk end), bone, rotation
+attribute vec4 aL1;   // size, squash (sign mirrors), atlas cell, curl
+attribute vec4 aL2;   // colour, detail
+attribute vec4 aL3;   // t, dur, phase, alpha
+uniform sampler2D uBones;
+uniform vec2 uCenter;
+uniform float uScale;
+uniform vec2 uRes;
+uniform float uDpr;
+uniform float uDraw;
+uniform float uTime;
+uniform float uFlutter;
+uniform vec4 uAtlas;  // grid, junction row, lobe length in cells, -
+varying vec2 vUV;
+varying vec2 vLocal;
+varying vec3 vRGB;
+varying float vDetail;
+varying float vAlpha;
+varying float vPx;
+vec2 xf(vec2 p, float b){
+  int i = int(b + 0.5);
+  vec4 t = texelFetch(uBones, ivec2(i % 64, i / 64), 0);
+  return vec2(t.x * p.x - t.y * p.y, t.y * p.x + t.x * p.y) + t.zw;
+}
+void main(){
+  float g = smoothstep(aL3.x, aL3.x + aL3.y, uDraw);
+  if (g <= 0.0) { gl_Position = vec4(2.0, 2.0, 0.0, 1.0); return; }
+  float grid = uAtlas.x, jy = uAtlas.y, cell = 1.0 / uAtlas.z;
+  vec2 c = position.xy;                          // 0..1 across the cell
+  vec2 loc = vec2(c.x - 0.5, jy - c.y) * cell;   // leaf units, y along the main lobe
+  float sq = aL1.y;
+  vec2 lp = vec2(loc.x * sq, loc.y);
+  lp.x += aL1.w * lp.y * lp.y * 0.18;            // a curl: the blade bends away to one side
+  // the blade turns a little on its stalk in the moving air, on top of its twig's motion
+  float ph = aL3.z;
+  float rot = aL0.w + uFlutter * (0.07 * sin(uTime * (2.1 + 0.9 * fract(ph * 7.3)) + ph) + 0.035 * sin(uTime * 5.3 + ph * 3.0));
+  float cr = cos(rot), sr = sin(rot);
+  float size = aL1.x * (0.25 + 0.75 * g);       // unfolding as it is drawn
+  vec2 p = aL0.xy + vec2(cr * lp.x - sr * lp.y, sr * lp.x + cr * lp.y) * size;
+  vec2 q = (xf(p, aL0.z) - uCenter) * uScale * uDpr;
+  gl_Position = vec4(q / (uRes * 0.5), 0.0, 1.0);
+  float v = aL1.z, cx = mod(v, grid), cy = floor(v / grid);
+  vUV = (vec2(cx, cy) + c) / grid;
+  vLocal = q;
+  vRGB = aL2.rgb;
+  vDetail = aL2.w;
+  vAlpha = aL3.w * smoothstep(0.0, 0.35, g);
+  vPx = size * uScale * uDpr;                    // a lobe's length on screen, in pixels
+}`;
+
+const LEAF_FS = /* glsl */`
+precision highp float;
+uniform sampler2D uAtlas0;
+uniform vec3 uPen;
+varying vec2 vUV;
+varying vec2 vLocal;
+varying vec3 vRGB;
+varying float vDetail;
+varying float vAlpha;
+varying float vPx;
+float hash(vec2 p){ return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+float vnoise(vec2 p){
+  vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f);
+  return mix(mix(hash(i), hash(i + vec2(1, 0)), f.x), mix(hash(i + vec2(0, 1)), hash(i + vec2(1, 1)), f.x), f.y);
+}
+void main(){
+  vec4 a = texture2D(uAtlas0, vUV);
+  float sil = smoothstep(0.3, 0.7, a.r);
+  if (sil < 0.02) discard;
+  // a watercolour wash: pigment pools at the rim and settles unevenly into the paper
+  float rim = clamp(a.r - a.a, 0.0, 1.0);
+  float tooth = 0.9 + 0.16 * vnoise(gl_FragCoord.xy * 0.45) + 0.05 * hash(floor(gl_FragCoord.xy));
+  float bloom = 0.94 + 0.1 * vnoise(vLocal * 0.05 + vRGB.xy * 30.0);
+  vec3 col = vRGB * tooth * bloom * (1.0 - 0.22 * rim);
+  // pen and graphite: the outline on every leaf, finer on the far ones; veins only where
+  // the leaf is near and big enough on screen to carry them
+  float small = smoothstep(5.0, 14.0, vPx);
+  float line = a.g * mix(0.4, 0.92, vDetail) * mix(0.65, 1.0, small);
+  float vein = a.b * mix(0.0, 0.5, vDetail * vDetail) * small;
+  float ink = clamp(max(line, vein) * (0.85 + 0.15 * hash(floor(gl_FragCoord.xy) + 3.0)), 0.0, 1.0);
+  col = mix(col, uPen, ink);
+  float al = sil * vAlpha;
+  gl_FragColor = vec4(col * al, al);
+}`;
+
 export function createSketch(canvas, layer, opts = {}) {
   const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
   let renderer;
@@ -731,6 +834,28 @@ export function createSketch(canvas, layer, opts = {}) {
       blendSrc: eq ? THREE.OneFactor : THREE.DstColorFactor, blendDst: eq ? THREE.OneFactor : THREE.ZeroFactor
     }));
     m.frustumCulled = false; m.renderOrder = pass; scene.add(m);
+  }
+  // the leaves, if this drawing has any, lie over the ink and under the paper and the
+  // ink laid over it (pass 2 and 3)
+  let leafU = null;
+  if (T.leafCount && T.leafAtlas) {
+    const A = T.leafAtlas();
+    const atex = new THREE.DataTexture(A.data, A.size, A.size, THREE.RGBAFormat, THREE.UnsignedByteType);
+    atex.magFilter = THREE.LinearFilter; atex.minFilter = THREE.LinearMipmapLinearFilter; atex.generateMipmaps = true;
+    atex.needsUpdate = true;
+    const lg = new THREE.InstancedBufferGeometry();
+    lg.setAttribute("position", new THREE.Float32BufferAttribute([0, 0, 0, 1, 0, 0, 0, 1, 0, 1, 1, 0], 3));
+    lg.setIndex([0, 1, 2, 2, 1, 3]);
+    const ib = new THREE.InstancedInterleavedBuffer(T.leafData, 16);
+    for (let i = 0; i < 4; i++) lg.setAttribute("aL" + i, new THREE.InterleavedBufferAttribute(ib, 4, i * 4));
+    lg.instanceCount = T.leafCount;
+    leafU = { ...U, uAtlas0: { value: atex }, uAtlas: { value: new THREE.Vector4(A.grid, A.jy, A.r0, 0) },
+      uTime: { value: 0 }, uFlutter: { value: reduce ? 0 : 1 }, uPen: { value: new THREE.Vector3(...(T.leafPen || [0.12, 0.13, 0.14])) } };
+    const lm = new THREE.Mesh(lg, new THREE.ShaderMaterial({
+      vertexShader: LEAF_VS, fragmentShader: LEAF_FS, uniforms: leafU, transparent: true, depthTest: false, depthWrite: false,
+      blending: THREE.CustomBlending, blendEquation: THREE.AddEquation, blendSrc: THREE.OneFactor, blendDst: THREE.OneMinusSrcAlphaFactor
+    }));
+    lm.frustumCulled = false; lm.renderOrder = 1.5; scene.add(lm);
   }
   const cam = new THREE.OrthographicCamera();
 
@@ -893,6 +1018,7 @@ export function createSketch(canvas, layer, opts = {}) {
     if (Math.abs(ptr.vx) + Math.abs(ptr.vy) < 1e-3) ptr.vx = ptr.vy = 0;
     draw = Math.min(1.2, (now - start) / 1000 / DRAW_SECONDS);
     U.uDraw.value = draw;
+    if (leafU) leafU.uTime.value = time;
     physics(dt); if (draw > 1) falling(dt); pose(); updateLabels(draw); render();
   }
   function play() { if (!raf && visible && !document.hidden) { last = performance.now(); raf = requestAnimationFrame(frame); } }
