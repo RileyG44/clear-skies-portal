@@ -174,7 +174,7 @@ a{color:inherit}
       <a class="btn btn-ghost inked" href="https://rileyg44.github.io/clear-skies-portal/" target="_blank" rel="noopener">Open in your browser</a>
     </div>
   </section>
-  <figure class="fig" id="fig" aria-label="Pen and watercolour sketch of a bigleaf maple, drawn as it looks in its native range today, above a soil section of loam, glacial till and andesite. Brush it with your cursor and the branches move.">
+  <figure class="fig" id="fig" aria-label="Pen and watercolour sketch of a vine maple, drawn as it looks near Maple Valley, Washington today, above a soil section of forest duff and gravelly loam, Vashon glacial till, outwash gravel and coal-bearing sandstone. Brush it with your cursor and the branches move.">
     <canvas id="tree"></canvas>
     <div class="labels" id="labels" aria-hidden="true"></div>
   </figure>
@@ -228,7 +228,7 @@ window.__sketch = createSketch(document.getElementById("tree"), document.getElem
   onNoWebGL() { document.getElementById("fig").classList.add("nogl"); },
   onLayout: align
 });
-Promise.all([document.fonts.load("450 60px Newsreader"), document.fonts.load("600 60px Caveat")]).then(() => { align(); window.__crow = startCrow(title, { sketch: window.__sketch, ground: T.ground }); });
+Promise.all([document.fonts.load("450 60px Newsreader"), document.fonts.load("600 60px Caveat")]).then(() => { align(); window.__crow = startCrow(title, { sketch: window.__sketch, ground: T.ground, occluders: T.occluders }); });
 wide.addEventListener("change", () => align());
 </script>
 </body>

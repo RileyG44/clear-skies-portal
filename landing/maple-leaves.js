@@ -1,5 +1,11 @@
-/* Bigleaf maple (Acer macrophyllum) leaves for the maple page, drawn once into a small
-   texture atlas that the leaf layer in sketch.js stamps across the canopy.
+/* Maple leaves for the maple page, drawn once into a small texture atlas that the leaf
+   layer in sketch.js stamps across the canopy. The page draws vine maple leaves
+   (vineOutline); the bigleaf blade it began with is kept (leafOutline).
+
+   A vine maple (Acer circinatum) blade is nearly round, a hand's breadth or less across:
+   seven to nine short, pointed lobes fan right round from the stalk, cut perhaps a third
+   of the way in, the margin doubly toothed, the base a shallow heart. A primary vein runs
+   from the stalk to each lobe tip.
 
    A bigleaf blade is palmate: five broad lobes (now and then a hint of a sixth or
    seventh at the base) spread from the top of the petiole, cut by deep rounded
@@ -73,6 +79,52 @@ export function leafOutline(seed) {
   return { pts, lobes };
 }
 
+/* the outline of one vine maple variant, in the same units and form as leafOutline */
+export function vineOutline(seed) {
+  const rnd = rng(seed), R = (a, b) => a + (b - a) * rnd(), D = Math.PI / 180;
+  const sk = R(-0.05, 0.05), N = rnd() < 0.55 ? 9 : 7, spread = R(140, 150) * D;
+  const lobes = [];
+  for (let j = 0; j < N; j++) {
+    const t = j / (N - 1) * 2 - 1, a = sk + t * spread * R(0.97, 1.03);
+    lobes.push([a, (1 - 0.22 * Math.pow(Math.abs(t), 1.5)) * R(0.95, 1.04), R(0.4, 0.46) * (N === 7 ? 1.15 : 1) * (1 - 0.2 * Math.abs(t))]);
+  }
+  const palm = R(0.58, 0.64);
+  // a lobe: broad where it leaves the palm, tapering straight in to a sharp tip
+  const inside = (x, y) => {
+    if (x * x + y * y < palm * palm) return -1;
+    let best = -2, bm = 0;
+    for (let j = 0; j < lobes.length; j++) {
+      const [a, L, W] = lobes[j], ca = Math.cos(a), sa = Math.sin(a);
+      const t = x * sa + y * ca, n = x * ca - y * sa;
+      if (t <= 0 || t >= L) continue;
+      const s = t / L, hw = W * Math.pow(1 - s, 0.95);
+      const m = hw - Math.abs(n);
+      if (m > bm) { bm = m; best = j; }
+    }
+    return best;
+  };
+  const teeth = lobes.map(() => ({ n: Math.round(R(4, 6)), ph: R(0, 1), amp: R(0.03, 0.045) }));
+  const fine = R(0, 6.3), Np = 480, pts = [];
+  for (let i = 0; i < Np; i++) {
+    const th = i / Np * 2 * Math.PI - Math.PI, sx = Math.sin(th), cy = Math.cos(th);
+    let r = 1.15, own = -1;
+    for (; r > 0.05; r -= 0.004) { const j = inside(r * sx, r * cy); if (j !== -2) { own = j; break; } }
+    // a shallow heart where the stalk joins
+    if (Math.abs(th) > Math.PI - 0.35) r = Math.min(r, lerp(0.38, r, smoothstep(0.04, 0.35, Math.PI - Math.abs(th))));
+    // doubly toothed: teeth along the lobe's outer part, each with a smaller one between
+    if (own >= 0) {
+      const [a, L] = lobes[own], tt = teeth[own];
+      const along = (r * sx * Math.sin(a) + r * cy * Math.cos(a)) / L;
+      const outer = smoothstep(0.55, 0.75, along);
+      const u = along * tt.n + tt.ph + (Math.atan2(Math.sin(th - a), Math.cos(th - a)) > 0 ? 0.5 : 0);
+      const big = ((u % 1) + 1) % 1 - 0.5, small = (((u * 2 + fine) % 1) + 1) % 1 - 0.5;
+      r *= 1 + outer * (tt.amp * big + 0.018 * small);
+    }
+    pts.push([r * Math.sin(th), r * Math.cos(th)]);
+  }
+  return { pts, lobes };
+}
+
 const lerp = (a, b, t) => a + (b - a) * t;
 const smoothstep = (a, b, x) => { const t = Math.max(0, Math.min(1, (x - a) / (b - a))); return t * t * (3 - 2 * t); };
 
@@ -83,7 +135,7 @@ export function leafAtlas(seed = 20261105) {
   const [cR, gR] = mk(), [cG, gG] = mk(), [cB, gB] = mk(), [cA, gA] = mk();
   for (let v = 0; v < LEAF_GRID * LEAF_GRID; v++) {
     const ox = (v % LEAF_GRID) * S, oy = Math.floor(v / LEAF_GRID) * S;
-    const { pts, lobes } = leafOutline(seed + v * 977);
+    const { pts, lobes } = vineOutline(seed + v * 977);
     const P = ([x, y]) => [ox + S * (0.5 + x * LEAF_R0), oy + S * (LEAF_JY - y * LEAF_R0)];
     const path = g => { g.beginPath(); pts.forEach((p, i) => { const [x, y] = P(p); i ? g.lineTo(x, y) : g.moveTo(x, y); }); g.closePath(); };
     const jx = ox + S * 0.5, jy = oy + S * LEAF_JY;

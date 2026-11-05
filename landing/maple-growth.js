@@ -1,5 +1,6 @@
-/* The architecture of an open-grown bigleaf maple (Acer macrophyllum), grown in three
-   dimensions and then flattened onto the page by maple.js.
+/* The architecture of an open-grown maple, grown in three dimensions and then flattened
+   onto the page by maple.js. The page draws a vine maple (Acer circinatum, VINE below);
+   the bigleaf maple it began with (Acer macrophyllum, MAPLE) is kept as a second form.
 
    It is a self-organising tree model in the manner of Palubicki et al. (2009), "Self-
    organizing tree models for image synthesis", reduced to what a drawing needs:
@@ -84,6 +85,36 @@ export const MAPLE = {
   sag: 0.9e-5           // how much a limb bends per unit of load moment over r^4
 };
 
+/* A vine maple (Acer circinatum) grown in the open: a clump of slender stems from one
+   base, leaning out and arching as they go, under a broad, low, layered crown. Its
+   leaders give way to their laterals sooner than a bigleaf's (lower apical control),
+   it forks more often, and its thin wood bends further under its load */
+export const VINE = {
+  L: 0.0085,
+  years: 24,
+  markers: 15000,
+  crown: { x: 0.0, y: 0.57, z: 0, rx: 0.36, ry: 0.43, rz: 0.3, yMin: 0.13, under: 1.12 },
+  stems: 6,             // stems from the clump
+  stemLean: [8, 32],    // degrees from upright at the base
+  stemLen: [0.06, 0.14],// before each stem starts to branch freely
+  baseR: 0.022,         // the clump's radius at the ground
+  boleTop: 0.18,
+  cone: 50 * DEG,
+  occupy: 2.1,
+  maxShoot: 6,
+  free: 0.12,
+  vigour: 0.45,
+  apical: 0.57,
+  flower: 0.08,
+  flowerY: 0.18,
+  up: [0.075, 0.05],    // the pull upwards on leaders and on side shoots
+  out: 0.03,            // and outwards from the crown's centre
+  shed: 0.1,
+  sag: 2e-5
+};
+// the tree this page draws
+export const TREE = VINE;
+
 /* the crown volume: a broad, irregular dome, a little heavier on one side. It draws the
    seed's first six numbers, so a baked tree can rebuild it without growing again */
 function crownOf(seed, P) {
@@ -124,7 +155,7 @@ function finish(x, y, z, par, r, Sc, knots, crown) {
   return { n, X: x, Y: y, Z: z, Par: par, Kids, r, Sc, dist, dmax, env: crown.env, C: crown.C, forkY: y[fork], fork, hTip, knots };
 }
 
-export function growMaple(seed = 20261104, P = MAPLE) {
+export function growMaple(seed = 20261104, P = TREE) {
   const crown = crownOf(seed, P), { rnd, R, C, env3 } = crown;
   const L = P.L;
 
@@ -162,6 +193,26 @@ export function growMaple(seed = 20261104, P = MAPLE) {
   };
   const decussate = (d, a) => norm(cross(d, a));
 
+  /* a clump of stems from one base, each its own leader, leaning out and arching a
+     little further as it rises */
+  if (P.stems) {
+    const root = node(0, 0, 0, -1, [0, 1, 0], [1, 0, 0], 0, 1), n = P.stems, az0 = R(0, 6.3);
+    for (let s = 0; s < n; s++) {
+      // (spread round the clump, a little more across the page than into it, so the arching shows)
+      let az = az0 + (s + R(-0.3, 0.3)) / n * 2 * Math.PI; az = Math.atan2(Math.sin(az) * 0.7, Math.cos(az));
+      const lean0 = R(P.stemLean[0], P.stemLean[1]) * DEG, m = Math.round(R(P.stemLen[0], P.stemLen[1]) / L);
+      let p = root, x = 0.004 * Math.cos(az), y = 0, z = 0.004 * Math.sin(az), a = norm([-Math.sin(az), 0, Math.cos(az)]);
+      for (let i = 1; i <= m; i++) {
+        const lean = lean0 + 12 * DEG * i / m;
+        const d = norm([Math.sin(lean) * Math.cos(az), Math.cos(lean), Math.sin(lean) * Math.sin(az)]);
+        x += d[0] * L; y += d[1] * L; z += d[2] * L;
+        a = decussate(d, a);
+        p = node(x, y, z, p, d, a, 0, 1);
+        if (i > 3) pairAt(p, R(45, 60) * DEG);
+      }
+      bud(p, Dir[p], 1, 0);
+    }
+  } else
   /* the bole: grown in its first years as a single leader. It starts with a slight lean
      and rights itself towards the light, the way a tree recovers from a lean */
   {
@@ -194,7 +245,7 @@ export function growMaple(seed = 20261104, P = MAPLE) {
 
     // terminal buds of mature shoots flower now and then; the shoot stops and forks
     if (year >= 3) for (let b = 0; b < nb; b++) {
-      if (!bA[b] || !bT[b] || bO[b] < 1 || Y[bN[b]] < 0.32) continue;
+      if (!bA[b] || !bT[b] || bO[b] < 1 || Y[bN[b]] < (P.flowerY ?? 0.32)) continue;
       if (rnd() < P.flower) bA[b] = 0;
     }
 
@@ -224,13 +275,14 @@ export function growMaple(seed = 20261104, P = MAPLE) {
     vIn[0] = Qn[0];
     for (let k = 0; k < n; k++) {
       if (dead[k] || vIn[k] <= 0) continue;
-      let mainKid = -1, mainBud = -1, Qm = 0, Ql = 0;
-      for (const c of kids[k]) if (!dead[c]) { if (IsMain[c]) { mainKid = c; Qm += Qn[c]; } else Ql += Qn[c]; }
+      let mainBud = -1, Qm = 0, Ql = 0;
+      const mains = [];                          // (a clump's base has several leaders)
+      for (const c of kids[k]) if (!dead[c]) { if (IsMain[c]) { mains.push(c); Qm += Qn[c]; } else Ql += Qn[c]; }
       for (const b of budsAt[k]) if (bA[b]) { if (bT[b]) { mainBud = b; Qm += bQ[b]; } else Ql += bQ[b]; }
       if (Qm + Ql <= 0) continue;
       const lam = Ord[k] <= 1 ? P.apical : P.apical - 0.03, den = lam * Qm + (1 - lam) * Ql;
       const vm = vIn[k] * lam * Qm / den, vl = vIn[k] - vm;
-      if (mainKid >= 0) vIn[mainKid] += Qm > 0 ? vm * Qn[mainKid] / Qm : 0;
+      for (const c of mains) vIn[c] += Qm > 0 ? vm * Qn[c] / Qm : 0;
       if (mainBud >= 0) bRes[mainBud] += Qm > 0 ? vm * bQ[mainBud] / Qm : 0;
       if (Ql > 0) {
         for (const c of kids[k]) if (!dead[c] && !IsMain[c]) vIn[c] += vl * Qn[c] / Ql;
@@ -253,7 +305,7 @@ export function growMaple(seed = 20261104, P = MAPLE) {
         const hx = X[p] - C.x, hz = Z[p] - C.z, hl = Math.hypot(hx, hz) || 1;
         // (each pull is small per metamer, so a shoot turns in a curve along its length
         // rather than with an elbow at the start of each season's growth)
-        const up = ord <= 1 ? 0.085 : 0.05, out = 0.025;
+        const up = ord <= 1 ? (P.up ? P.up[0] : 0.085) : (P.up ? P.up[1] : 0.05), out = P.out ?? 0.025;
         d = norm([d[0] + P.free * free[0] + out * hx / hl, d[1] + P.free * free[1] + up, d[2] + P.free * free[2] + out * hz / hl]);
         a = decussate(d, a);
         const q = node(X[p] + d[0] * L, Y[p] + d[1] * L, Z[p] + d[2] * L, p, d, a, ord, bT[b] || i > 0 ? 1 : 0);
@@ -317,7 +369,8 @@ export function growMaple(seed = 20261104, P = MAPLE) {
     r[k] = acc[k] > 0 ? Math.pow(acc[k], 1 / E) : r0;
     if (par[k] >= 0) acc[par[k]] += Math.pow(r[k], E);
   }
-  const fk = id[fork], gam = Math.log(0.035 / 0.0006) / Math.log(r[fk] / r0);
+  // (scaled so the bigleaf's fork, or the vine maple's clump at the ground, has its girth)
+  const fk = P.stems ? 0 : id[fork], gam = Math.log((P.stems ? P.baseR : 0.035) / 0.0006) / Math.log(r[fk] / r0);
   for (let k = 0; k < n; k++) r[k] = 0.0006 * Math.pow(r[k] / r0, gam);
 
   /* ---- sag: each node bends the wood beyond it down by its load moment over r^4 ---- */
@@ -393,7 +446,7 @@ export function growMaple(seed = 20261104, P = MAPLE) {
 const QXYZ = 20000, QR = 500000;
 const paramsKey = (seed, P) => seed + ":" + JSON.stringify(P);
 
-export function packMaple(G, seed = 20261104, P = MAPLE) {
+export function packMaple(G, seed = 20261104, P = TREE) {
   const n = G.n, buf = new ArrayBuffer(n * 12), dv = new DataView(buf);
   for (let k = 0; k < n; k++) {
     const o = k * 12;
@@ -406,7 +459,7 @@ export function packMaple(G, seed = 20261104, P = MAPLE) {
   return { key: paramsKey(seed, P), n, knots, data: Buffer.from(buf).toString("base64") };
 }
 
-export function unpackMaple(B, seed = 20261104, P = MAPLE) {
+export function unpackMaple(B, seed = 20261104, P = TREE) {
   if (!B || B.key !== paramsKey(seed, P)) return null;
   const bin = atob(B.data), n = B.n, u8 = new Uint8Array(bin.length);
   for (let i = 0; i < bin.length; i++) u8[i] = bin.charCodeAt(i);
