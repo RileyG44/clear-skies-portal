@@ -570,8 +570,6 @@ allDockButtons().forEach(el=>{
   });
   el.addEventListener("pointerdown",e=>{
     if(e.button!==0) return;
-    // A constrained phone dock scrolls by touch; dragging must not reorder it.
-    if(e.pointerType==="touch"&&dockEl.scrollHeight>dockEl.clientHeight+1) return;
     const r=el.getBoundingClientRect();
     dockDrag={el,pointerId:e.pointerId,x0:e.clientX,y0:e.clientY,grabY:e.clientY-r.top,moved:false};
     try{ el.setPointerCapture(e.pointerId) }catch(err){}

@@ -29,7 +29,7 @@
     "vendor/leaflet.js", "vendor/leaflet.css", "vendor/maplibre-gl.mjs", "vendor/maplibre-gl-shared.mjs", "vendor/maplibre-gl-worker.mjs",
     "vendor/maplibre-gl.css", "vendor/leaflet-rotate.umd.min.js", "vendor/lerc/LercDecode.js",
     "vendor/lerc/LercDecode.es.js", "vendor/lerc/lerc-wasm.wasm", "vendor/three.module.min.js",
-    "vendor/fonts/inter-latin-wght-normal.woff2", "vendor/icons/arrow-down.svg",
+    "vendor/fonts/inter-latin-wght-normal.woff2", "vendor/fonts/pacifico-regular.ttf", "vendor/icons/arrow-down.svg",
     "vendor/icons/arrow-left.svg", "vendor/icons/arrow-right.svg", "vendor/icons/arrow-up.svg",
     "vendor/icons/blend.svg", "vendor/icons/check.svg", "vendor/icons/chevron-down.svg",
     "vendor/icons/chevron-right.svg", "vendor/icons/chevron-up.svg", "vendor/icons/circle.svg",

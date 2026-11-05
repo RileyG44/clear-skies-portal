@@ -650,7 +650,7 @@ function lidarRouteIsolation(){
       return nodes.get(selector);
     };
     let rendered;
-    const context={ROUTES:routes,routesShown:0,currentRoute:null,overlayGroup:null,
+    const context={ROUTES:routes,PHONE_ROUTES:vm.runInNewContext(ui.slice(ui.indexOf("const PHONE_ROUTES="),ui.indexOf("const PHONE_GROUPS="))+";PHONE_ROUTES"),phoneHome:{matches:compact},routesShown:0,currentRoute:null,overlayGroup:null,
       document:{body:{classList,dataset:{}}},workspace:{classList,offsetWidth:660},compactShell:{matches:compact},
       $:node,$$:()=>[],panes:{},filterResearch(){},annotateOverlayGroups(){},bridge:{},
       renderCustom:route=>rendered=route,openDefaultPanes(){},workspaceScroll:{scrollTop:80},updateCounts(){}};

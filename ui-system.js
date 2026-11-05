@@ -86,6 +86,54 @@ settingsNav.innerHTML=`<button class="csp-nav-button" type="button" data-route="
 settingsNav.querySelector("button").addEventListener("click",()=>activateRoute("settings"));
 foot.prepend(appearanceNav,settingsNav);
 
+// The phone home uses the native app's sections and two-line task names.
+const PHONE_ROUTES={
+  layers:["Map layers","Manage visibility, order and opacity"],
+  satellite:["Satellite imagery","Find and compare dated images"],
+  terrain:["Terrain & LiDAR","Style terrain, adjust lighting and download data"],
+  elevation:["Elevation colors","Color heights and highlight elevation ranges"],
+  analyze:["Terrain analysis","Measure and reveal landform patterns"],
+  markup:["Draw & annotate","Add drawings, labels and notes"],
+  export:["Export image","Save the map view or a selected area"],
+  conditions:["Live conditions","Weather, fire, snow and recent events"],
+  geology:["Geology & hazards","Explore geology, faults and landslides"],
+  past:["Past landscapes","Explore ice-age and historical landscapes"],
+  labels:["Labels & reference","Add roads, places and boundaries"],
+  appearance:["App appearance","Choose the app theme, text and colors"],
+  settings:["App settings","Connection, accessibility and device preferences"]
+};
+const PHONE_GROUPS=[["Explore the map",["layers","satellite","terrain","elevation"]],
+  ["Study & share",["analyze","markup","export"]],
+  ["Reference layers",["conditions","geology","past","labels"]],
+  ["App",["appearance","settings"]]];
+const wordmark=document.createElement("h1");wordmark.className="csp-wordmark";wordmark.textContent="ClearSkies";nav.prepend(wordmark);
+const phoneHome=matchMedia("(max-width:760px) and (orientation:portrait)");
+let phoneHomeActive=null;
+const syncPhoneHome=()=>{
+  if(phoneHomeActive===phoneHome.matches) return;
+  phoneHomeActive=phoneHome.matches;
+  const buttons=new Map($$(".csp-nav-button[data-route]").map(button=>[button.dataset.route,button]));
+  navScroll.replaceChildren();
+  for(const [label,keys] of phoneHomeActive?PHONE_GROUPS:NAV_GROUPS){
+    const group=document.createElement("section"),heading=document.createElement("div"),rows=document.createElement("div");
+    group.className="csp-home-group";heading.className="csp-nav-label";heading.textContent=label;
+    rows.className="csp-home-rows";group.append(heading,rows);
+    for(const key of keys){
+      const button=buttons.get(key);if(!button) continue;
+      const title=button.querySelector("span:not(.csp-nav-count)");
+      title.replaceChildren();
+      const name=document.createElement("span");name.textContent=phoneHomeActive?PHONE_ROUTES[key][0]:ROUTES[key].title;title.append(name);
+      if(phoneHomeActive){const detail=document.createElement("small");detail.textContent=PHONE_ROUTES[key][1];title.append(detail)}
+      rows.append(button);
+    }
+    navScroll.append(group);
+  }
+  if(!phoneHomeActive){appearanceNav.append(buttons.get("appearance"));settingsNav.append(buttons.get("settings"))}
+  foot.hidden=phoneHomeActive;
+};
+phoneHome.addEventListener("change",syncPhoneHome);syncPhoneHome();
+
+
 /* Source references are the last group on the Settings page; the toolbar's
    Layers popover carries the same credits. The card is built once and kept, so
    the attribution observer below can update it while it is detached. */
@@ -1184,7 +1232,7 @@ function activateRoute(key,options={}){
   document.body.classList.toggle("csp-grouped-menus",key!=="terrain");
   if(compactShell.matches&&!options.stayOnNav) document.body.dataset.cspView="detail";
   $$(".csp-nav-button[data-route]").forEach(button=>button.setAttribute("aria-current",button.dataset.route===key?"page":"false"));
-  $("#cspWorkspaceTitle").textContent=route.title;const descriptionEl=$("#cspWorkspaceDescription");descriptionEl.textContent=route.description;descriptionEl.hidden=!route.description;
+  $("#cspWorkspaceTitle").textContent=phoneHome.matches?PHONE_ROUTES[key][0]:route.title;const descriptionEl=$("#cspWorkspaceDescription");descriptionEl.textContent=route.description;descriptionEl.hidden=!route.description;
   $$(".pane",panes).forEach(pane=>pane.classList.toggle("csp-route-hidden",!route.panes.includes(pane.dataset.pane)));
   filterResearch(route.researchMode);
   annotateOverlayGroups();
@@ -1197,7 +1245,7 @@ function activateRoute(key,options={}){
   updateCounts();
 }
 
-navScroll.addEventListener("click",event=>{const route=event.target.closest("[data-route]")?.dataset.route;if(route) activateRoute(route)});
+navScroll.addEventListener("click",event=>{const route=event.target.closest("[data-route]")?.dataset.route;if(route&&!["appearance","settings"].includes(route)) activateRoute(route)});
 
 /* The navigation pane's light. A soft disc trails the pointer on a slightly
    underdamped spring - it lags, overshoots a touch, and stretches along its
@@ -1473,20 +1521,42 @@ grabber.id="cspGrabber";grabber.type="button";
 side.prepend(grabber);
 const currentDetent=()=>isCollapsed()?"peek":document.body.dataset.cspDetent||"medium";
 const sheetTools=$("#mapDock");
-// Leaflet disables native touch panning on #map. Keep the scrollable toolbar
-// in the app overlay so that restriction does not swallow its swipe gestures.
-if(sheetTools) $("#app").append(sheetTools);
-// Observe the actual sheet edge so safe areas, detents and interactive resizing
-// all reserve the same 12px gap below the tools.
+// Reserve space by lowering the medium sheet, never by clipping the dock.
+// Native MapTools uses balanced columns only when the viewport itself is short.
+const sheetMetric=document.createElement("div");
+sheetMetric.style.cssText="position:absolute;visibility:hidden;pointer-events:none";
+const sheetPixels=variable=>{
+  sheetMetric.style.height=`var(${variable})`;document.body.append(sheetMetric);
+  const value=sheetMetric.offsetHeight;sheetMetric.remove();return value;
+};
+const setSheetStyle=(element,name,value)=>{
+  if(element.style.getPropertyValue(name)!==value) element.style.setProperty(name,value);
+};
 const placeSheetTools=()=>{
   if(!sheetTools) return;
-  if(sheetMode()) sheetTools.style.setProperty("--csp-sheet-top",`${side.offsetTop}px`);
-  else sheetTools.style.removeProperty("--csp-sheet-top");
+  if(!sheetMode()){
+    document.body.style.removeProperty("--sheet-medium");
+    delete sheetTools.dataset.columns;sheetTools.style.removeProperty("--csp-dock-rows");return;
+  }
+  const appHeight=$("#app").clientHeight,top=sheetTools.offsetTop;
+  const count=$$(".map-tool",sheetTools).filter(button=>!button.hidden).length;
+  const ideal=Math.min(appHeight*.5+sheetPixels("--safe-bottom"),sheetPixels("--sheet-large"));
+  const singleHeight=count*48+Math.max(0,count-1);
+  const columns=appHeight-4-top-singleHeight-12<200?2:1;
+  const rows=Math.ceil(count/columns),dockHeight=rows*48+Math.max(0,rows-1);
+  const medium=Math.max(160,Math.min(ideal,appHeight-4-top-dockHeight-12));
+  sheetTools.dataset.columns=String(columns);
+  setSheetStyle(sheetTools,"--csp-dock-rows",String(rows));
+  setSheetStyle(document.body,"--sheet-medium",`${Math.round(medium)}px`);
 };
+// No sheet-size observer: detent animations and finger movement need no extra
+// layout reads or writes. Recompute only when the viewport or tools change.
 const sheetToolsObserver=new ResizeObserver(placeSheetTools);
-sheetToolsObserver.observe(side);
 sheetToolsObserver.observe($("#app"));
+new MutationObserver(placeSheetTools).observe(sheetTools,{attributes:true,subtree:true,attributeFilter:["hidden"],childList:true});
+new MutationObserver(placeSheetTools).observe(document.documentElement,{attributes:true,attributeFilter:["class","style"]});
 peekLayout.addEventListener("change",placeSheetTools);
+placeSheetTools();
 const syncSheetTools=(progress=null)=>{
   if(!sheetTools) return;
   const dragProgress=sheetTools.style.getPropertyValue("--csp-dock-hide");

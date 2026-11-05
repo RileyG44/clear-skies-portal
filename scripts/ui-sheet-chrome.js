@@ -36,14 +36,9 @@ const base=process.argv[2]||'http://127.0.0.1:8765/';
         document.getElementById('cspGrabber').click();
         return getComputedStyle(dock).opacity;
       });
-      const footer=await page.locator('#cspNav').evaluate(nav=>{
-        const settings=document.getElementById('cspSettingsNav'),foot=nav.querySelector('.foot');
-        return {gap:nav.getBoundingClientRect().bottom-settings.getBoundingClientRect().bottom,
-          sheetGap:document.getElementById('side').getBoundingClientRect().bottom-settings.getBoundingClientRect().bottom,
-          meta:foot.querySelector('.foot-meta')?getComputedStyle(foot.querySelector('.foot-meta')).display:'absent',height:foot.getBoundingClientRect().height};
-      });
-      assert(footer.gap<=10&&['none','absent'].includes(footer.meta)&&footer.height<130,'Settings sits at the bottom without a metadata shelf');
-      assert(footer.sheetGap<45,'the home-indicator inset is reserved once');
+      assert.equal(await page.locator('.csp-wordmark').textContent(),'ClearSkies','native wordmark is present');
+      assert.equal(await page.locator('#cspNavScroll .csp-home-group').count(),4,'native task grouping');
+      assert(await page.locator('#cspSettingsNav').evaluate(el=>el.parentElement.hidden),'utilities move into the native scrolling App group');
       await step();await page.waitForTimeout(90);let mid=await state();
       if(reduced) assert.equal(mid.opacity,0,'Reduce Motion hides without a spatial transition');
       else assert(mid.opacity>0&&mid.opacity<1,`toolbar fades out rather than snapping: ${JSON.stringify(mid)}`);
@@ -86,7 +81,7 @@ const base=process.argv[2]||'http://127.0.0.1:8765/';
       assert(await page.locator('[data-reset-layout]').isVisible(),'desktop retains layout reset in Settings');
       assert(!(await state()).inert,'leaving the phone layout restores tool accessibility');
       assert.deepEqual(errors,[],`${label} has no page errors`);
-      console.log(`PASS ${label}: compact footer, hide/reveal motion, drag tracking, accessibility and Settings utilities`);
+      console.log(`PASS ${label}: native home groups, hide/reveal motion, drag tracking, accessibility and Settings utilities`);
       await context.close();
     }
   }finally{await browser.close()}
