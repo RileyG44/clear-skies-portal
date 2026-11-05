@@ -170,8 +170,11 @@ window.ClearSkiesPortalBridge={
     if(state.mode==="3d"){
       await enterTerrain3d();
       const camera={center:[state.center[1],state.center[0]],zoom:state.zoom,bearing:Number(state.bearing)||0,pitch:Number(state.pitch)||0};
-      map3d.jumpTo(camera);
-      map3d.once("load",()=>{map3d.stop();map3d.jumpTo(camera)});
+      const view=map3d;if(!view)return true;
+      view.jumpTo(camera);
+      // Land the saved camera when the view appears. A flat pitch still eases
+      // to the default tilt afterwards, so a stuck top-down session opens tilted.
+      whenMap3dShown(()=>{if(map3d!==view)return;view.stop();view.jumpTo(camera)});
     }
     return true;
   },

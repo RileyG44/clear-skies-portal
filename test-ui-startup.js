@@ -796,7 +796,16 @@ function map3dTheme(){
   assert(enter.indexOf("paintMap3dTheme()")<enter.indexOf("new module.Map"));
   assert(enter.indexOf("map3dFrameReady=false")<enter.indexOf("new module.Map"));
   const revealed=enter.indexOf("map3dFrameReady=true");
-  assert(revealed>enter.indexOf('view.on("load"'),"terrain-3d waits for MapLibre's first frame");
+  assert(revealed>0&&enter.includes('view.once("load",reveal)'),"terrain-3d shows at MapLibre's load");
+  assert(enter.includes('view.once("render",reveal)'),"terrain-3d shows on the first drawn frame");
+  /* load waits for every tile in view. A slow tile must not leave 3D hidden
+     over the 2D map, which pans and rotates but cannot tilt. */
+  assert(enter.includes("revealTimer=setTimeout(reveal,MAP3D_REVEAL_MS)"),"a slow tile cannot hold the 3D view hidden");
+  assert(enter.indexOf("map3dShownWaiters.splice(0)")<enter.indexOf("easeTo({pitch:MAP3D_PITCH"),"a restored flat camera cannot cancel the opening tilt");
+  assert(/const MAP3D_REVEAL_MS=\d+;/.test(src)&&+src.match(/const MAP3D_REVEAL_MS=(\d+);/)[1]<=2000);
+  const bridgeSrc=fs.readFileSync("app/bridge.js","utf8");
+  assert(!/map3d\.once\("load"/.test(bridgeSrc),"a restored 3D camera is reapplied when the view appears, not at a late load");
+  assert(bridgeSrc.includes("whenMap3dShown("));
   const prelude=src.slice(src.indexOf("function paintMap3dTheme"),src.indexOf("function webgl2Capable"));
   const run=extra=>{
     const classes=new Set(),nodes=new Map();
