@@ -172,6 +172,9 @@ function paintElevSpectrumSummary(){
   const text=`${elevFormat(elevMetres())} ± ${elevFormat(elevSpanMetres())} · ${palette}${$("#elevSh").checked?` · ${$("#elevAlpha").value}%`:""}`;
   if(out.textContent!==text) out.textContent=text;
 }
+/* Both task statuses name the data behind them, so they refresh together
+   whenever tiles change what is drawn. */
+function paintElevationStatus(){ paintElevOut();paintElevationBandOut() }
 function paintElevOut(){
   paintElevLegend();
   const o=$("#elevOut"); if(!o) return;
@@ -188,7 +191,10 @@ function elevSourceText(){
   if(!loaded.sources.length) return "";
   return loaded.sources.map(source=>{
     const spacing=Number.isFinite(source.sampleMeters)&&source.sampleMeters>0?`~${res(source.sampleMeters)} samples`:"sample spacing not reported";
-    return [source.label,loaded.sources.length>1?Math.round(source.percent)+"% of view":"",spacing].filter(Boolean).join(" · ");
+    // Survey metadata names its vertical datum; other sources do not publish one here.
+    const datums=[...new Set((source.surveys||[]).map(survey=>survey.verticalDatum).filter(Boolean))];
+    const vertical=datums.length?`vertical reference ${datums.join(" / ")}`:"vertical reference not reported";
+    return [source.label,loaded.sources.length>1?Math.round(source.percent)+"% of view":"",spacing,vertical].filter(Boolean).join(" · ");
   }).join(" + ");
 }
 function paintElevationBandOut(){
@@ -255,7 +261,7 @@ function applyElev(){
     elevLayer=new ElevLayer({...elevationSourceOptions(),
                              fallbackNativeZoom:15,nationalNativeZoom:17,render,maxZoom:VIEW_MAX,maxNativeZoom:TERRAIN_OVERZOOM,rawNativeZoom:18,
                              zIndex:450,keepBuffer:1,updateWhenIdle:true,updateWhenZooming:false,maxRetries:0});
-    elevLayer.on("tileload tilerefine tileerror load",()=>{scheduleTerrainStatus();paintElevOut()});
+    elevLayer.on("tileload tilerefine tileerror load",()=>{scheduleTerrainStatus();paintElevationStatus()});
     elevLayer.addTo(map);
   }else{
     elevLayer.setSourceOptions(elevationSourceOptions());

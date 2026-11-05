@@ -108,6 +108,7 @@ async function main(){
   assert.equal(scene.imageryNativeZoom({nativeMax:null,gsd:.6}),18,"a null native zoom must never freeze imagery at z0");
   assert.equal(scene.imageryNativeZoom({nativeMax:9,gsd:250}),9,"coarse context retains its actual ceiling");
   await scene.select(0);const failed=scene.overlayPending;failed.emit("tileerror");failed.emit("tileerror");failed.emit("load");
+  await null; // rejected layers leave the map once Leaflet's load handling has finished
   assert.equal(scene.overlay,first);assert(map.hasLayer(first));assert(!map.hasLayer(failed),"a failed scene keeps useful previous imagery");
   scene.tileUrl=()=>new Promise(resolve=>{resolveMetadata=resolve;});const obsolete=scene.select(0);
   const stale=resolveMetadata;

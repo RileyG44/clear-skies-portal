@@ -420,7 +420,7 @@ document.documentElement.addEventListener("csp:ready",()=>requestAnimationFrame(
       document.documentElement.dataset.gpu2d="off";lidarStudio?.refresh();
       console.warn("Terrain GPU unavailable; using the CPU renderer",error);
     }
-    if(gpuTerrainLayer)gpuTerrainLayer.on("tilerefine",()=>{scheduleTerrainStatus();paintElevOut()});
+    if(gpuTerrainLayer)gpuTerrainLayer.on("tilerefine",()=>{scheduleTerrainStatus();paintElevationStatus()});
     try{
       if($("#terStyle").value!=="off")applyTerrain(true);
       if(elevationActive())applyElev();else syncElevationChecks();

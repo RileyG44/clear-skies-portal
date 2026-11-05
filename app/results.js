@@ -50,12 +50,13 @@ function renderPasses(){
   showPane("passes", rows.length>0);
   setCount("passes", rows.length ? rows.length+" sats" : "");
   if(!rows.length){ el.innerHTML=""; return }
+  // Every counted satellite is listed; the estimate is only as good as the history behind it.
   el.innerHTML=
-    rows.slice(0,6).map(r=>
+    rows.map(r=>
       `<div class="pr"><span><b>${esc(r.plat)}</b> <span style="color:var(--ink-3)">${r.cycle.toFixed(1)}-day cycle</span></span>
-       <span class="w">in ${until(r.next)}</span></div>`).join("")+
-    `<div class="fine">Projected from the ${rows.reduce((a,r)=>a+r.n,0)} past acquisitions over this point,
-     not from orbital elements. Accurate to a few hours; acquisition is not guaranteed on every pass.</div>`;
+       <span class="w">about ${until(r.next)}</span></div>`).join("")+
+    `<div class="fine">Estimated from the ${rows.reduce((a,r)=>a+r.n,0)} past acquisitions over this point, not from orbital elements.
+     Treat these as approximate; a pass does not guarantee a usable or cloud-free image.</div>`;
 }
 
 /* Best match: one obvious first choice, two quick alternatives, and the size
@@ -281,7 +282,11 @@ async function select(i){
     const ratio=expected?loaded/expected:0;
     next._cspLoadStats={loaded,errors,total,expected,ratio};
     if(!loaded||ratio<0.9){
-      map.removeLayer(next);
+      /* Leaflet fires "load" mid-way through its own tile bookkeeping; removing
+         the layer inside that callback leaves it reading a detached map. Hide
+         it now and remove it once the event has finished. */
+      next.setOpacity(0);
+      Promise.resolve().then(()=>{ if(map.hasLayer(next)) map.removeLayer(next) });
       recordProviderOutcome(it.srcKey,performance.now()-started,false);
       sceneState(shown()?"shown":"failed",`${label} loaded too few tiles to show${shown()?"; the scene above stays on the map":""}.`);
       render();
@@ -291,6 +296,8 @@ async function select(i){
     if(previous&&map.hasLayer(previous)) map.removeLayer(previous);
     clearMosaic();
     next.setOpacity(+$("#op").value/100);next.setZIndex(400); overlay=next; next._cspItem=it;
+    // A person's chosen stack (for example imagery above terrain) applies to every new scene.
+    try{ const order=JSON.parse(localStorage.getItem("clearskies.active-layer-order.v1")||"null"); if(Array.isArray(order)&&order.includes("scene")) cspSetLayerOrder(order) }catch(error){}
     nameEl.textContent=label;$("#ctlDate").textContent=it.date.slice(0,10)+"  ("+ago(it.date)+")";
     $("#ctlLink").innerHTML=linkHtml;nameEl.dataset.link="";
     sceneState(errors||loaded<expected?"partial":"shown",errors||loaded<expected?"Some tiles are missing; the basemap shows through the gaps.":"");

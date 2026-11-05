@@ -165,7 +165,7 @@ $("#q")?.addEventListener("keydown",event=>{
   event.preventDefault();event.stopImmediatePropagation();
 },true);
 
-const PANE_TITLES={filters:"Search filters",alerts:"Live conditions",summary:"Best available",passes:"Acquisition timing",terrain:"LiDAR",elevation:"Elevation",research:"Analysis tools",overlays:"Layer catalog",results:"Satellite scenes"};
+const PANE_TITLES={filters:"Search filters",alerts:"Live conditions",summary:"Best available",passes:"Estimated next acquisitions",terrain:"LiDAR",elevation:"Elevation",research:"Analysis tools",overlays:"Layer catalog",results:"Satellite scenes"};
 for(const [name,title] of Object.entries(PANE_TITLES)){
   const pane=$(`.pane[data-pane="${name}"]`,panes),label=$(".pane-t",pane),head=$(".pane-h",pane);
   if(label) label.textContent=title;
@@ -562,6 +562,10 @@ function buildSatelliteSearch(){
           <span class="csp-sat-now-badge" id="cspSatNowBadge"></span>
         </div>
         <p class="csp-sat-now-note" id="cspSatNowNote" role="status" aria-live="polite" hidden></p>
+        <div class="csp-sat-covered" id="cspSatCovered" role="status" hidden>
+          <p data-covered-text></p>
+          <div class="csp-sat-covered-actions"><button type="button" data-imagery-top>Show imagery on top</button><button type="button" data-open-layers>Adjust layers</button></div>
+        </div>
         <div class="csp-sat-opacity"><label for="op">Opacity</label><output id="cspSatOpOut" for="op">100%</output></div>
         <div class="csp-sat-fill"></div>
         <div class="csp-sat-actions"></div>
@@ -654,6 +658,12 @@ function buildSatelliteSearch(){
   const summary=$("#summary");
   if(summary) new MutationObserver(()=>{$("#cspSatBest",wrap).hidden=!summary.children.length}).observe(summary,{childList:true});
   $("#op")?.addEventListener("input",syncSatelliteCurrent);
+  $("[data-imagery-top]",wrap).addEventListener("click",()=>{
+    const ids=layerSort(bridge.activeLayers()).filter(layer=>!layer.locked).map(layer=>layer.id).filter(id=>id!=="scene");
+    saveLayerOrder(["scene",...ids]);syncSatelliteCurrent();
+    $("#cspSatNowName",wrap)?.closest(".csp-sat-current-card")?.querySelector("#op")?.focus({preventScroll:true});
+  });
+  $("[data-open-layers]",wrap).addEventListener("click",()=>activateRoute("layers"));
   return wrap;
 }
 /* The closed filter row still says what the search is limited to. */
@@ -688,6 +698,20 @@ function syncSatelliteCurrent(){
     note.append(" ",link);
   }
   const op=$("#op");if(op) $("#cspSatOpOut").textContent=op.value+"%";
+  /* Accepted imagery can sit beneath an opaque terrain or analysis layer and be
+     invisible. Say which, and offer the one-step fix. Terrain and elevation
+     shading draw above imagery unless the person's layer order says otherwise. */
+  const covers=$("#cspSatCovered");
+  const ordered=layerSort(bridge.activeLayers()),sceneAt=ordered.findIndex(layer=>layer.id==="scene");
+  let savedOrder=[];try{savedOrder=JSON.parse(localStorage.getItem("clearskies.active-layer-order.v1"))||[]}catch(error){}
+  const sceneRanked=savedOrder.includes("scene");
+  const above=shown&&sceneAt>=0?ordered.filter((layer,index)=>layer.visible!==false&&layer.opacity>=70&&
+    (layer.kind==="terrain"||layer.id==="elevation-spectrum"||layer.id.startsWith("analysis:"))&&(index<sceneAt||!sceneRanked)):[];
+  covers.hidden=!above.length;
+  if(above.length){
+    const names=above.map(layer=>`${layer.name} (${Math.round(layer.opacity)}%)`).join(", ");
+    $("[data-covered-text]",covers).textContent=`${names} ${above.length===1?"is":"are"} drawn above this image, so it is hidden on the map.`;
+  }
   const fill=$("#fillNow");if(fill) fill.disabled=!shown;
 }
 /* Satellite reads top to bottom as the task runs: find a place (filters fold
