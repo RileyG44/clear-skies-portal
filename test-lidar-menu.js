@@ -117,6 +117,8 @@ function markup(){
     'iPhone preset thumbnails paint while the web panel is parked off screen');
   assert(css.includes('[data-csp-route="terrain"][data-csp-view="detail"]:not(.collapsed) #side'),
     'the open LiDAR sheet uses one surface instead of glass bands at the top and bottom');
+  assert(!css.includes('padding-bottom:var(--sheet-lift)'),
+    'the phone sheet must not pad its own bottom; that padding clips the last card and leaves a gray band');
   assert(css.includes('select:open::picker(select)')&&css.includes('background:var(--ui-surface);-webkit-backdrop-filter:none;backdrop-filter:none;'),
     'an open menu picker is one opaque colour, including its top and bottom edges');
   const adapter=fs.readFileSync('ios/Resources/native-shell.js','utf8');
