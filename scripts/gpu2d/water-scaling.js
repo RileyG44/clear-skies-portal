@@ -56,6 +56,53 @@ const root=path.resolve(__dirname,'../..'),pw=require('../lib/playwright.js');
         remError=Math.max(remError,Math.abs(actual[i]-ref));
       }
       check(remError<=2,'3D REM mixed floors/water GPU/CPU parity '+remError);
+      // Real lake geography must not replace supplied lakebed/shore terrain
+      // with a saturated ocean ramp, even in a mixed land/ocean stack.
+      let inlandChecks=0;
+      for(const [name,lon,lat] of [['Lake Victoria',33,-1],['Lake Superior',-87,47.5],['Great Salt Lake',-112.5,41.2],['Dead Sea',35.47,31.5],['Caspian Sea',50,42]]){
+        const z=9,scale=2**z,mx=(lon+180)/360,my=(1-Math.asinh(Math.tan(lat*Math.PI/180))/Math.PI)/2;
+        const lakeCoord={z,x:Math.floor(mx*scale),y:Math.floor(my*scale)},lakeGrid=new Float32Array(n*n),lakeInner=new Float32Array(size*size),floor=name==='Dead Sea'?-500:lat>35?100:1050;
+        check(!G.waterAt(lon,lat),name+' keeps terrestrial relief even below sea level');
+        for(let y=-1;y<=size;y++)for(let x=-1;x<=size;x++){
+          const value=floor+50+50*Math.sin(x/11)*Math.cos(y/17);
+          lakeGrid[(y+1)*n+x+1]=value;
+          if(x>=0&&y>=0&&x<size&&y<size)lakeInner[y*size+x]=value;
+        }
+        for(const style of ['tint','rem']){
+          const range=style==='rem'?[0,100]:[floor,floor+100];
+          const layer={...remStack.layers[0],style,min:range[0],max:range[1],gamma:1,water:[-6000,0],separateRem:style==='rem'};
+          const lakeStack={...remStack,layers:[layer],remFlatBase:floor,remLandBase:floor};
+          renderer.renderBatch([{...job,key:name,grid:lakeGrid,coord:lakeCoord,state:{terrain:{style,stack:lakeStack}}}]);
+          gl.bindFramebuffer(gl.READ_FRAMEBUFFER,fbo);gl.readPixels(0,0,size,size,gl.RGBA,gl.UNSIGNED_BYTE,actual);
+          const reference=R.renderStack({...lakeStack,layers:[{...layer,water:null}]},{grid:lakeInner,width:size,height:size,res:100,flat:true});
+          let error=0;const colours=new Set();
+          for(let i=0;i<actual.length;i++){
+            const expected=i%4===3?reference[i]:Math.round(reference[i]*reference[(i>>2)*4+3]/255);
+            error=Math.max(error,Math.abs(actual[i]-expected));
+            if(i%4===0)colours.add(actual.slice(i,i+3).join(','));
+          }
+          check(error<=2,name+' '+style+' retains loaded terrain colors: '+error);
+          check(colours.size>30,name+' '+style+' retains terrain variation');inlandChecks++;
+        }
+        // 2D must also include supplied inland heights in its local floor,
+        // rather than treating a lake footprint as missing terrain.
+        const source={id:'lake',rank:1,allowed:()=>true},record={key:`lake/${z}/${lakeCoord.x}/${lakeCoord.y}`,sourceId:'lake',rank:1,...lakeCoord,width:size,height:size,grid:lakeInner,revision:1};
+        const callbacks=new Set(),store={options:{sources:()=>[source]},on:(_event,fn)=>callbacks.add(fn),off:(_event,fn)=>callbacks.delete(fn),want(){},get:()=>record,finestFor:()=>record};
+        const cv=document.createElement('canvas'),e=CSPGpuTerrainEngine.create({canvas:cv,store,shaders:S});check(e,name+' 2D engine');
+        try{
+          const v={centerMerc:[(lakeCoord.x+.5)/scale,(lakeCoord.y+.5)/scale],zoom:z-1,bearing:0,cssSize:[size,size],dpr:1,dz:1};
+          const localStack={...remStack,remRadius:S.metersPerPixel(v)*2};
+          e.setState({terrain:{style:'rem',stack:localStack}});callbacks.forEach(fn=>fn(record));e.render(v);
+          const samples=e.sampleValues();check(samples?.heights.length===size*size,name+' 2D loaded heights');
+          check(!samples.water.some(Boolean),name+' 2D does not apply ocean coloring');
+          let valid=0;
+          for(let i=0;i<samples.heights.length;i++){
+            check(Number.isFinite(samples.landRelative[i])===Number.isFinite(samples.relative[i]),name+' preserves local-floor validity');
+            if(Number.isFinite(samples.relative[i])){check(Math.abs(samples.relative[i]-samples.landRelative[i])<.002,name+' preserves local terrain floor');valid++}
+          }
+          check(valid>size*size*.9,name+' local relief available across lake');inlandChecks++;
+        }finally{e.destroy()}
+      }
       renderer.destroy();check(gl.isTexture(external)&&gl.isTexture(target),'destroy retains caller textures');
       check(gl.getError()===gl.NO_ERROR,'3D GL error');
       // Real 2D engine: sampling flags must follow readback row order and bearing.
@@ -114,7 +161,7 @@ const root=path.resolve(__dirname,'../..'),pw=require('../lib/playwright.js');
       const next=document.querySelector('[aria-label="Elevation scale"]');next.value='separate';next.dispatchEvent(new Event('change',{bubbles:true}));
       check(studio.legend('tint').secondary,'separate mode restored');
       values={heights:new Float32Array(20).fill(-1200),water:new Uint8Array(20).fill(1)};studio.fitFromView(true);
-      check(!studio.legend('tint').secondary&&studio.legend('tint').caption.startsWith('Water'),'all-water legend');
+      check(!studio.legend('tint').secondary&&studio.legend('tint').caption.startsWith('Ocean'),'all-water legend');
       values={heights:new Float32Array(20).fill(-86),water:new Uint8Array(20)};studio.fitFromView(true);
       check(!studio.stack('tint').layers[0].water,'all-land view drops previous water range');
       values={heights:inner,water};studio.fitFromView(true);
@@ -125,7 +172,7 @@ const root=path.resolve(__dirname,'../..'),pw=require('../lib/playwright.js');
       window.webkit={messageHandlers:{cspNative:{postMessage:value=>{nativeMessages.push(value);return Promise.resolve()}}}};window.CSPNativeHost=true;
       window.CSPShell={current:()=> 'terrain',groups:()=>[],activate:()=>true};
       document.documentElement.classList.add('csp-boot');
-      return {max3DError:maxError,maxRem3DError:remError,rotated2DSamples:samples.heights.length,changes};
+      return {max3DError:maxError,maxRem3DError:remError,rotated2DSamples:samples.heights.length,inlandChecks,changes};
     });
     await page.addScriptTag({path:path.join(root,'ios/Resources/native-shell.js')});
     const native=await page.evaluate(()=>{
@@ -166,7 +213,7 @@ const root=path.resolve(__dirname,'../..'),pw=require('../lib/playwright.js');
       CSPNativeShell.act(scale.ref,'select','full');check(!studio.stack().layers[0].water,'native single-scale action');
       studio.restoreDisplay(snapshot);
       values={heights:new Float32Array(20).fill(-4000),relative:new Float32Array(20).fill(NaN),landRelative:new Float32Array(20).fill(NaN),water:new Uint8Array(20).fill(1)};
-      studio.fitFromView(true);check(studio.legend().caption.startsWith('Water')&&!studio.legend().secondary,'REM water-only without a base');
+      studio.fitFromView(true);check(studio.legend().caption.startsWith('Ocean')&&!studio.legend().secondary,'REM water-only without a base');
       values={heights:new Float32Array(20).fill(1200),relative:new Float32Array(20).fill(5),landRelative:new Float32Array(20).fill(5),water:new Uint8Array(20)};
       studio.fitFromView(true);check(!studio.legend().secondary&&!studio.stack().layers[0].water,'REM land-only clears water');
       values={...values,landRelative:new Float32Array(20).fill(NaN)};studio.fitFromView(true);

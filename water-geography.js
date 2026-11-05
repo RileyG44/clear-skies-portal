@@ -1,5 +1,6 @@
-/* Display-only land/water geography shared by range sampling, 2D and 3D.
- * Natural Earth's generalized shoreline includes major bays and inland lakes.
+/* Display-only land/ocean geography shared by range sampling, 2D and 3D.
+ * Natural Earth's generalized shoreline includes marine bays. Inland lakes and
+ * basins retain the terrain palette, including below-sea-level inland seas.
  * Narrow coastlines remain limited by the display mask's cell spacing.
  * Never infer water from negative elevation.
  * No network request, elevation mutation, or new scientific source is involved. */
@@ -35,6 +36,7 @@
     while(!decodeStep(Infinity));
     return packed;
   }
+  // Legacy API name: true selects the separate ocean scale, not inland water.
   function waterAt(lon,lat){
     if(!Number.isFinite(lon)||!Number.isFinite(lat)||lat < -90||lat > 90)return false;
     const x=Math.min(WIDTH-1,Math.floor(((lon+180)%360+360)%360/360*WIDTH));

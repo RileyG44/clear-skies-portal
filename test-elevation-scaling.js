@@ -30,7 +30,10 @@ assert.equal(R.toHex(R._test.paletteColour({...classic,stops:R.resolveStops(clas
 for(const [name,lon,lat,expected] of [
   ['Death Valley',-116.8258,36.24,false],['Zuidplaspolder',4.65,51.99,false],['Flevoland',5.65,52.5,false],['Seattle',-122.33,47.61,false],
   ['Fiji',178.4,-18.1,false],['Mariana Trench',142.2,11.35,true],['Pacific',-130,40,true],
-  ['Lake Superior',-87,47.5,true],['Dead Sea',35.47,31.5,true],['Caspian Sea',50,42,true],
+  ['Lake Victoria',33,-1,false],['Lake Tanganyika',29.6,-6.2,false],
+  ['Lake Superior',-87,47.5,false],['Lake Erie',-81.5,42.2,false],
+  ['Great Salt Lake',-112.5,41.2,false],['Salton Sea',-115.8,33.3,false],
+  ['Dead Sea',35.47,31.5,false],['Caspian Sea',50,42,false],
   ['San Francisco Bay',-122.35,37.8,true],['San Pablo Bay',-122.4,37.98,true],
   ['Puget Sound',-122.45,47.6,true],['Puget Sound north',-122.45,47.8,true],
   ['Hood Canal',-122.88,47.67,true],['Bosphorus',29.06,41.1,true],
