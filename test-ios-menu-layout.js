@@ -8,7 +8,7 @@ function fixture(){
   vm.createContext(context);vm.runInContext(source,context);
   return context;
 }
-const flat=items=>items.flatMap(item=>[item,...flat(item.items||[])]);
+const flat=items=>items.flatMap(item=>[item,...(item.toggle?[{kind:'toggle',...item.toggle}]:[]),...flat(item.items||[])]);
 test('a layer source moves to the final disclosure while scientific warnings stay beside controls',()=>{
   const c=fixture(),input=[{kind:'header',title:'Geology'},
     {kind:'toggle',ref:'#faults',title:'Faults',value:true,provenance:'USGS · 1:24,000'},
@@ -29,9 +29,49 @@ test('spectrum colors stay with spectrum controls without losing either reset or
   ];
   const original=JSON.stringify(input),result=c.nativePageItems('elevation',input),rows=flat(result);
   assert.equal(JSON.stringify(input),original);
-  assert.deepEqual(rows.filter(i=>i.ref?.startsWith('#')).map(i=>i.ref).sort(),flat(input).filter(i=>i.ref).map(i=>i.ref).sort());
+  assert.deepEqual([...rows.filter(i=>i.ref?.startsWith('#')).map(i=>i.ref)].sort(),flat(input).filter(i=>i.ref).map(i=>i.ref).sort());
   assert(flat(result[0].items).some(i=>i.ref==='#elevPalette'));
   assert.notEqual(rows.find(i=>i.ref==='#elevSpectrumReset').title,rows.find(i=>i.ref==='#elevBandsReset').title,'reset scope must be distinguishable');
+});
+test('elevation reads as two folding tasks with the scale beside its colors and one row per highlight',()=>{
+  const c=fixture(),input=[
+    {kind:'group',title:'Color by elevation',items:[
+      {kind:'picker',ref:'#elevUnit',value:'ft',options:[{value:'ft',title:'feet'},{value:'m',title:'metres'}]},
+      {kind:'toggle',ref:'#elevSh',title:'Show on map',value:true},
+      {kind:'gradient',ref:'#elevRangePreview',stops:[]},
+      {kind:'slider',ref:'#elevSlide',title:'Reference elevation ft'},{kind:'slider',ref:'#elevSpanSlide',title:'Color span ± ft'},
+      {kind:'picker',ref:'#elevPalette'},{kind:'color',ref:'#elevLowColor'},{kind:'color',ref:'#elevMidColor'},{kind:'color',ref:'#elevHighColor'},
+      {kind:'button',ref:'#elevPaletteReverse'},{kind:'slider',ref:'#elevAlpha'},
+      {kind:'button',ref:'#elevPaletteReset'},{kind:'button',ref:'#elevSpectrumReset'}]},
+    {kind:'group',title:'Highlight elevations',items:[
+      {kind:'toggle',ref:'#elevBelowOn',title:'Highlight ground below',value:true},{kind:'color',ref:'#elevBelowColor',value:'#f85c6c'},
+      {kind:'field',ref:'#elevBelowVal',value:'1000',unit:'ft'},
+      {kind:'toggle',ref:'#elevAboveOn',value:false},{kind:'color',ref:'#elevAboveColor'},{kind:'field',ref:'#elevAboveVal',value:'1500',unit:'ft'},
+      {kind:'slider',ref:'#elevBandAlpha'},{kind:'field',ref:'#elevBandFeather'},{kind:'toggle',ref:'#elevBandOutline'},
+      {kind:'button',ref:'#elevBandsReset'}]}];
+  const result=c.nativePageItems('elevation',input),color=result[0].items,bands=result[1].items;
+  assert(result.slice(0,2).every(section=>section.collapsible),'both tasks fold');
+  assert.equal(result[0].detail.length>0,true,'a folded task still says its state');
+  assert.equal(result[0].toggle.ref,'#elevSh','the coloring switch stays in the folded row');
+  const at=ref=>color.findIndex(i=>i.ref===ref);
+  assert(at('#elevSlide')<at('#elevRangePreview')&&at('#elevSpanSlide')<at('#elevRangePreview'),'heights come before the scale');
+  assert.equal(at('#elevPalette'),at('#elevRangePreview')+1,'the scale sits directly above the colors it shows');
+  assert.equal(color[at('#elevPalette')+1].kind,'wells');
+  assert.equal(color.find(i=>i.ref==='#elevSlide').title,'Reference elevation','units are shown once, beside the value');
+  const below=bands.find(i=>i.ref==='#elevBelowVal');
+  assert.equal(below.kind,'threshold');assert.equal(below.toggle.ref,'#elevBelowOn');assert.equal(below.well.ref,'#elevBelowColor');
+  assert(!bands.some(i=>i.ref==='#elevBelowOn'||i.ref==='#elevBelowColor'),'one row per highlight');
+  assert(flat(result).some(i=>i.ref==='#elevUnit'),'units stay reachable');
+});
+test('satellite puts results before reference layers and acquisition estimates',()=>{
+  const c=fixture(),result=c.nativePageItems('satellite',[
+    {kind:'scenesearch',ref:'#cspSatQuery'},{kind:'chips',ref:'@filters',items:[{kind:'picker',ref:'#days'}]},
+    {kind:'group',pane:true,title:'Estimated next acquisitions',items:[]},
+    {kind:'group',pane:true,title:'Reference imagery & coverage',items:[]},
+    {kind:'group',pane:true,title:'Satellite scenes',items:[{kind:'button',role:'group',title:'AWS · 44',detail:'▾ hide'}]}]);
+  assert.deepEqual(result.map(i=>i.title||i.kind).join('|'),'scenesearch|chips|Satellite scenes|Reference imagery & coverage|Estimated next acquisitions');
+  const group=flat(result[2].items).find(i=>i.role==='group');
+  assert.equal(group.expanded,true,'provider groups read as open or closed');assert.equal(group.detail,undefined);
 });
 test('one custom color editor is retained when its swatch row already owns the same input',()=>{
   const c=fixture(),result=c.nativePageItems('appearance',[

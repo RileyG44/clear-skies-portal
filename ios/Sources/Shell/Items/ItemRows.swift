@@ -157,7 +157,7 @@ struct SliderRow: View {
     }
 
     private var stacked: some View {
-        VStack(alignment: .leading, spacing: 10) {
+        VStack(alignment: .leading, spacing: 4) {
             if let trailing {
                 // A wide value control moves under its title rather than
                 // squeezing it (a number field keeps one stable place).
@@ -191,7 +191,7 @@ struct SliderRow: View {
                 Text(detail).portalFont(.caption).foregroundStyle(MenuSecondary())
             }
         }
-        .padding(.vertical, 6)
+        .padding(.vertical, 2)
         .disabled(disabled)
         .onChange(of: value) { if !editing { local = nil } }
     }
@@ -425,10 +425,14 @@ struct NumberEntry: View {
                 .keyboardType(.numbersAndPunctuation)
                 .submitLabel(.done)
                 .focused($focused)
-                .frame(width: 64)
-                .padding(.vertical, 4)
-                .padding(.horizontal, 7)
-                .background(.fill.tertiary, in: .rect(cornerRadius: 7))
+                .frame(minWidth: 56, maxWidth: 96)
+                .fixedSize(horizontal: true, vertical: false)
+                .padding(.vertical, 7)
+                .padding(.horizontal, 8)
+                .background(.fill.tertiary, in: .rect(cornerRadius: 8))
+                .frame(minHeight: MenuMetrics.minimumTarget)
+                .contentShape(.rect)
+                .accessibilityLabel(control.title ?? "Value")
                 .onSubmit(commit)
                 .onChange(of: focused) { if !focused { commit() } }
             if let unit = control.unit, !unit.isEmpty {
@@ -475,6 +479,8 @@ struct ButtonRow: View {
             actionCapsule(.glassProminent)
         } else if isCapsule {
             actionCapsule(.glass)
+        } else if item.role == "group", item.expanded != nil {
+            disclosureRow(chevron: nil, showsState: true)
         } else if item.role == "navigate" || item.role == "group" || item.role == "option" {
             disclosureRow(chevron: item.role == "option" ? nil : (item.role == "group" ? "chevron.up.chevron.down" : "chevron.right"))
         } else {
@@ -508,6 +514,7 @@ struct ButtonRow: View {
             .buttonBorderShape(.capsule)
             .disabled(item.isDisabled)
             .accessibilityLabel(item.accessibility ?? item.text)
+            .accessibilityHint(item.hint ?? "")
             .accessibilityValue(item.pressed.map { $0 ? "On" : "Off" } ?? "")
             .accessibilityAddTraits(item.pressed == true ? .isSelected : [])
             if let detail = item.detail, !detail.isEmpty {
@@ -576,7 +583,7 @@ struct TextRow: View {
         switch item.style {
         case "row":
             HStack(alignment: .firstTextBaseline) {
-                RowLabel(title: item.text, detail: item.detail)
+                RowLabel(title: item.text, detail: item.detail, badge: item.badge)
                 Spacer(minLength: 8)
                 if let value = item.value?.string, !value.isEmpty {
                     Text(value).foregroundStyle(MenuSecondary()).multilineTextAlignment(.trailing)

@@ -382,7 +382,7 @@ struct RoutePageView: View {
                 if route == "export" {
                     ToolbarPanelContent(panel: ShellPanel(id: "export", title: page.title, state: nil, items: page.items))
                 } else {
-                    ItemList(items: page.items, description: page.description, route: route)
+                    ItemList(items: page.items, route: route)
                 }
             } else {
                 ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -393,9 +393,21 @@ struct RoutePageView: View {
         .navigationBarTitleDisplayMode(.inline)
         .toolbarVisibility(.visible, for: .navigationBar)
         .toolbar {
+            // The page's purpose is a subtitle in the bar, not a row of its
+            // own: the controls start right under the title.
             ToolbarItem(placement: .principal) {
-                Text(shell.title(for: route)).portalFont(.subheadline, weight: .semibold)
-                    .foregroundStyle(Color(hex: shell.appearance.fontColor) ?? (scheme == .dark ? .white : .black))
+                let subtitle = shell.info(for: route)?.description ?? ""
+                VStack(spacing: 1) {
+                    Text(shell.title(for: route)).portalFont(.subheadline, weight: .semibold)
+                        .foregroundStyle(Color(hex: shell.appearance.fontColor) ?? (scheme == .dark ? .white : .black))
+                    if !subtitle.isEmpty {
+                        Text(subtitle).portalFont(.caption2)
+                            .foregroundStyle((scheme == .dark ? Color.white : Color.black).opacity(0.7))
+                            .lineLimit(1).minimumScaleFactor(0.85)
+                    }
+                }
+                .accessibilityElement(children: .combine)
+                .accessibilityAddTraits(.isHeader)
             }
             ToolbarItem(placement: .topBarTrailing) { CloseSheetButton() }
         }
