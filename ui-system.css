@@ -1707,12 +1707,15 @@ body.csp-redesign #cspGrabber{display:none}
     border-radius:38px;
     transition:height .45s var(--spring),background-color .35s ease,transform .42s var(--spring),opacity .25s ease;
   }
-  /* Touch ownership follows the detent, as in Maps: at peek and medium a
-     vertical drag moves the sheet, so nothing inside it pans; at large the
-     content scrolls (ui-system.js takes the drag back once it is at the top). */
-  .csp-glass body.csp-redesign #side,
-  .csp-glass body.csp-redesign #side :is(#cspNav,#cspNavScroll,#cspWorkspaceScroll){touch-action:none}
-  .csp-glass body.csp-redesign[data-csp-detent="large"]:not(.collapsed) #side :is(#cspNav,#cspNavScroll,#cspWorkspaceScroll){touch-action:pan-y}
+  /* touch-action:none on the sheet intersects every control. iOS then keeps
+     the touch for itself and a button inside the open menu needs a pile of
+     taps before a click arrives. #side stays pan-y (a horizontal value here
+     would also be the dismiss axis). Descendants must not name only pan-x:
+     pan-x intersected with pan-y is none, and the taps disappear again. The
+     gesture code claims a vertical drag before the browser scrolls. The
+     grabber is the one control that must not pan. */
+  .csp-glass body.csp-redesign #cspGrabber{touch-action:none}
+  .csp-glass body.csp-redesign #side :is(#cspNav,#cspNavScroll,#cspWorkspaceScroll){touch-action:manipulation}
   .csp-glass body.csp-redesign #side #ac{touch-action:pan-y}
   .csp-glass body.csp-redesign #side input[type=range]{touch-action:none}
   .csp-glass body.csp-redesign.collapsed #side{
@@ -2945,6 +2948,16 @@ body.csp-redesign .csp-setting-foot[hidden]{display:none}
   .csp-glass body.csp-redesign.csp-redesign :is(#side,#pointCloudPanel,#snapshotPanel) select option:checked{background:var(--t3-menu-selected);font-weight:500}
   @media (max-width:760px),(pointer:coarse){
     .csp-glass body.csp-redesign.csp-redesign :is(#side,#pointCloudPanel,#snapshotPanel) select option{min-height:44px;padding:10px 12px;font-size:16px}
+    /* A translucent blurred picker clips a different colour along its top and
+       bottom on iPhone, and the open animation leaves the hit target off the
+       rows. The open menu is one opaque surface, unmoved. */
+    .csp-glass body.csp-redesign.csp-redesign :is(#side,#pointCloudPanel,#snapshotPanel) select:open::picker(select){
+      background:var(--ui-surface);-webkit-backdrop-filter:none;backdrop-filter:none;
+      transform:none;opacity:1;transition:none;
+    }
+    @starting-style{
+      .csp-glass body.csp-redesign.csp-redesign :is(#side,#pointCloudPanel,#snapshotPanel) select:open::picker(select){opacity:1;transform:none}
+    }
   }
 }
 
@@ -3043,7 +3056,7 @@ body.csp-redesign .csp-setting-foot[hidden]{display:none}
   height:0;opacity:0;overflow:clip;
   transition:height .34s var(--ease-mac),opacity .24s ease,content-visibility .34s allow-discrete;
 }
-.csp-glass body.csp-redesign.csp-redesign #cspWorkspace details[open]::details-content{height:auto;opacity:1}
+.csp-glass body.csp-redesign.csp-redesign #cspWorkspace details[open]::details-content{height:auto;opacity:1;overflow:visible}
 
 /* Menus that are shown by toggling display replay this when they appear. */
 .csp-glass body.csp-redesign.csp-redesign :is(#ac,.coord-menu){animation:csp-menu-in .2s var(--ease-menu) both;transform-origin:top center}
@@ -3108,12 +3121,16 @@ body.csp-redesign .csp-layer-source-meta{color:var(--ink-3);font-size:11px;line-
 .ls-preset-carousel{min-width:0}
 .ls-preset-previous img{transform:rotate(90deg)}
 .ls-preset-next img{transform:rotate(-90deg)}
-.ls-looks{display:flex;gap:12px;padding:6px 6px 10px;min-width:0;overflow-x:auto;
+/* manipulation, not pan-x. The phone sheet is touch-action:pan-y, and the used
+   value is the intersection with every ancestor: pan-x ∩ pan-y is none, which
+   is the state where iOS drops the click. Sideways movement is applied in
+   lidar-studio.js. */
+.ls-looks{display:flex;gap:12px;padding:6px 6px 10px;min-width:0;overflow-x:auto;touch-action:manipulation;
   overscroll-behavior-x:contain;scroll-snap-type:x proximity;scroll-padding-inline:6px;scrollbar-width:none}
 .ls-looks::-webkit-scrollbar{display:none}
 .ls-preset-option{position:relative;flex:0 0 88px;min-width:0;scroll-snap-align:start}
 .ls-look{position:relative;display:grid;gap:6px;justify-items:stretch;padding:0;border:0;background:transparent;color:inherit;
-  font:inherit;font-size:11.5px;font-weight:500;text-align:center;cursor:pointer;width:100%;min-width:0;min-height:44px;align-content:start}
+  font:inherit;font-size:11.5px;font-weight:500;text-align:center;cursor:pointer;width:100%;min-width:0;min-height:44px;align-content:start;touch-action:manipulation}
 .ls-look-preview{display:block;width:100%;height:auto;aspect-ratio:3/2;border-radius:var(--ls-radius);background:var(--ui-sunken);
   box-shadow:inset 0 0 0 1px var(--ui-shadow-3);transition:box-shadow .16s ease,transform .16s cubic-bezier(.2,.8,.2,1)}
 .ls-look:hover .ls-look-preview{transform:translateY(-1px)}
@@ -3226,6 +3243,20 @@ body.csp-redesign .csp-layer-source-meta{color:var(--ink-3);font-size:11px;line-
    scrolls with the workspace, including the preset carousel. */
 body.csp-redesign #panes .lidar-studio{display:block;margin:0;padding:0;border:0}
 .csp-glass body.csp-redesign.csp-redesign[data-csp-route="terrain"] #cspWorkspace{background:var(--ui-sunken)}
+/* Phone: the open LiDAR page is one sunken surface, the same colour the
+   workspace already uses behind its cards. That fill used to stop at the
+   workspace box, so the glass sheet (and the map through it) showed as a
+   different band above the title and below the last card. Cards stay
+   --ui-surface. The collapsed search capsule is excluded. */
+@media (max-width:760px){
+  .csp-glass body.csp-redesign.csp-redesign[data-csp-route="terrain"][data-csp-view="detail"]:not(.collapsed) #side{
+    background:var(--ui-sunken);-webkit-backdrop-filter:none;backdrop-filter:none;
+  }
+  .csp-glass body.csp-redesign.csp-redesign[data-csp-route="terrain"][data-csp-view="detail"]:not(.collapsed) #side::before{display:none}
+  .csp-glass body.csp-redesign.csp-redesign[data-csp-route="terrain"] #cspWorkspace,
+  .csp-glass body.csp-redesign.csp-redesign[data-csp-route="terrain"] #cspWorkspaceHeader,
+  .csp-glass body.csp-redesign.csp-redesign[data-csp-route="terrain"] #cspWorkspaceScroll{background:var(--ui-sunken)}
+}
 .csp-glass body.csp-redesign.csp-redesign #cspWorkspace #panes .pane[data-pane="terrain"] > .pane-b{
   display:grid;gap:14px;padding:0!important;border:0;border-radius:0;background:transparent;box-shadow:none;min-width:0;
 }

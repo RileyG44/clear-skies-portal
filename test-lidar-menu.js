@@ -101,6 +101,19 @@ function markup(){
   assert(/CSPLidarStudio\?\.sunDial\?\.\(\{azimuth,altitude/.test(ui),'the web mounts the shared dial on the original inputs');
   const layout=fs.readFileSync('ios/Sources/Shell/Items/ItemList.swift','utf8');
   assert(!/"Looks"|#terAppearance|#terLighting/.test(layout),'native LiDAR no longer uses the obsolete layout');
+  const studioSource=fs.readFileSync('lidar-studio.js','utf8');
+  assert(studioSource.includes('strip.addEventListener("pointerup"')&&studioSource.includes('applyLook(tap.id)'),
+    'a LiDAR preset tap applies on pointerup, because iOS drops the click inside the scrolling sheet');
+  assert(studioSource.includes('performance.now()-stripTapAt>700'),'a touch tap must not focus the preset and scroll the installed page');
+  assert(ui.includes('.ls-looks,.ls-menu'),'preset and layer menus keep their own gesture so the sheet does not eat the tap');
+  const css=fs.readFileSync('ui-system.css','utf8');
+  assert(css.includes('.ls-looks{display:flex;gap:12px;padding:6px 6px 10px;min-width:0;overflow-x:auto;touch-action:manipulation;'),
+    'the preset row must not use pan-x: that intersects the sheet pan-y into none and iOS drops the tap');
+  assert(studioSource.includes('strip.scrollLeft'),'the preset row still scrolls sideways from the pointer, since the sheet keeps pan-y');
+  assert(css.includes('[data-csp-route="terrain"][data-csp-view="detail"]:not(.collapsed) #side'),
+    'the open LiDAR sheet uses one surface instead of glass bands at the top and bottom');
+  assert(css.includes('select:open::picker(select)')&&css.includes('background:var(--ui-surface);-webkit-backdrop-filter:none;backdrop-filter:none;'),
+    'an open menu picker is one opaque colour, including its top and bottom edges');
   const adapter=fs.readFileSync('ios/Resources/native-shell.js','utf8');
   assert(/closest\("\.ls-preset-option"\)/.test(adapter),'native preset delete is read beside the preset button');
   assert(!/Delete Look/.test(fs.readFileSync('ios/Sources/Shell/Items/LidarViews.swift','utf8')));

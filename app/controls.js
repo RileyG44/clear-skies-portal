@@ -263,9 +263,15 @@ console.log("ClearSkies build "+CSP_BUILD);
     root.classList.toggle("csp-standalone",on);
     root.style.setProperty("--screen-radius",radius+"px");
     root.classList.toggle("csp-round-screen",on&&radius>0);
+    /* A focused control can still scroll the standalone document. Put it back.
+       This does not measure the viewport or size the shell from that number. */
+    if(on&&(scrollX||scrollY)) scrollTo(0,0);
   }
   apply();
   addEventListener("resize",apply);
+  addEventListener("scroll",apply,{passive:true});
+  visualViewport?.addEventListener("scroll",apply);
+  visualViewport?.addEventListener("resize",apply);
 })();
 (function stamp(){
   const el=document.getElementById("buildStamp");

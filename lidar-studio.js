@@ -43,7 +43,7 @@
     host=host||{};
     const storage=host.storage!==undefined?host.storage:(()=>{try{return globalThis.localStorage}catch(_){return null}})();
     let state=load(),fitted={},flatFitted={},remFloor=null,remLandFloor=null,expanded=null,selectedStop=0,saveTimer=0,commitFrame=0,destroyed=false,previousMix=null;
-    let presetOrigin=state.look,presetScroll=0;
+    let presetOrigin=state.look,presetScroll=0,stripTap=null,stripTapAt=0;
     const disclosures=new Set(["customize"]);
     const previews=new Map();let previewQueue=[],previewTimer=0;
     /* The gallery's synthetic terrain is built when the first preview is
@@ -187,6 +187,40 @@
         container.querySelector(`[data-look="${id}"]`)?.focus();
         revealPreset(id);
       };
+      /* iOS delivers a click on a button inside this horizontal scroller only
+         after many taps: the sheet gesture and the scroll view eat the click.
+         pointerup is the tap. A click that follows the same tap must not apply
+         the preset a second time, or Undo would point at the look just chosen. */
+      strip.addEventListener("pointerdown",event=>{
+        if(event.button) return;
+        const button=event.target.closest(".ls-look");
+        stripTap={id:button?button.dataset.look:"",x:event.clientX,y:event.clientY,pointer:event.pointerId,scroll:strip.scrollLeft,drag:false};
+      });
+      /* The sheet's touch-action is pan-y, so the browser will not pan this
+         row sideways. A clearly horizontal move scrolls it; a vertical move is
+         left to the sheet. */
+      strip.addEventListener("pointermove",event=>{
+        const tap=stripTap;
+        if(!tap||event.pointerId!==tap.pointer) return;
+        const dx=event.clientX-tap.x,dy=event.clientY-tap.y;
+        if(tap.drag){strip.scrollLeft=tap.scroll-dx;return}
+        if(Math.abs(dx)<12&&Math.abs(dy)<12) return;
+        /* Past the tap slop this is a drag. Swallow the click that follows,
+           or a vertical scroll would also select the preset under the finger. */
+        stripTapAt=performance.now();
+        if(Math.abs(dx)<=Math.abs(dy)){stripTap=null;return}
+        tap.drag=true;
+        strip.scrollLeft=tap.scroll-dx;
+      });
+      strip.addEventListener("pointerup",event=>{
+        const tap=stripTap;stripTap=null;
+        if(!tap||tap.drag||event.pointerId!==tap.pointer) return;
+        if(Math.hypot(event.clientX-tap.x,event.clientY-tap.y)>12) return;
+        if(!tap.id||event.target.closest("[data-remove-look]")) return;
+        stripTapAt=performance.now();
+        applyLook(tap.id);
+      });
+      strip.addEventListener("pointercancel",()=>{stripTap=null});
       strip.addEventListener("click",event=>{
         const remove=event.target.closest("[data-remove-look]");
         if(remove){
@@ -194,7 +228,9 @@
           if(presetOrigin===remove.dataset.removeLook)presetOrigin=null;
           commit({rerender:true});container.querySelector('.ls-look[tabindex="0"]')?.focus({preventScroll:true});return;
         }
-        const button=event.target.closest(".ls-look");if(button) applyLook(button.dataset.look);
+        const button=event.target.closest(".ls-look");
+        if(!button||performance.now()-stripTapAt<700) return;
+        applyLook(button.dataset.look);
       });
       strip.addEventListener("keydown",event=>{
         const buttons=[...strip.querySelectorAll(".ls-look")],index=buttons.indexOf(event.target.closest(".ls-look"));
@@ -205,7 +241,7 @@
         const target=event.key==="Home"?0:event.key==="End"?buttons.length-1:
           (index+step+buttons.length)%buttons.length;
         event.preventDefault();const next=buttons[target];
-        next.focus();applyLook(next.dataset.look);
+        next.focus({preventScroll:true});applyLook(next.dataset.look);
       });
       return wrap;
     }
@@ -227,7 +263,9 @@
          usual see-through terrain. */
       if(Number.isFinite(look.opacity)&&host.setOpacity) host.setOpacity(look.opacity);
       render();
-      container.querySelector(`[data-look="${id}"]`)?.focus({preventScroll:true});
+      /* A touch tap must not focus the new button. iOS scrolls the standalone
+         page to reveal a focused control and leaves a gap along the bottom. */
+      if(performance.now()-stripTapAt>700) container.querySelector(`[data-look="${id}"]`)?.focus({preventScroll:true});
       revealPreset(id);
       host.onChange&&host.onChange();
     }

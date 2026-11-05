@@ -1530,7 +1530,7 @@ if(sheetMode()&&!isCollapsed()){
   const detentHeights=()=>({peek:probeHeight("--sheet-peek"),medium:probeHeight("--sheet-medium"),large:probeHeight("--sheet-large")});
   /* Controls that own their own drags. A slider, a picker, the layer reorder
      handle and the suggestion list keep the gesture. */
-  const OWN_GESTURE='input[type="range"],select,textarea,[contenteditable="true"],.csp-layer-handle,#ac,.csp-sat-suggest';
+  const OWN_GESTURE='input[type="range"],select,textarea,[contenteditable="true"],.csp-layer-handle,#ac,.csp-sat-suggest,.ls-looks,.ls-menu';
   const scrollerFor=target=>{
     for(let el=target;el&&el!==side;el=el.parentElement){
       const overflow=getComputedStyle(el).overflowY;

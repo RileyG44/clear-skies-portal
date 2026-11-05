@@ -651,6 +651,9 @@ assert(uiSystem.includes('id="cspMapSources"')&&uiSystem.includes('bridge.map?.a
    painted behind the status bar. */
 assert(index.includes('name="apple-mobile-web-app-status-bar-style" content="black-translucent"'),
        "the map must run under the status bar in the installed app");
+assert(index.includes('root.classList.add("csp-standalone")')&&
+       index.includes("html.csp-standalone,html.csp-standalone body{position:fixed;inset:0;width:100%;height:auto;overflow:hidden}"),
+       "an installed web app must pin the document to the viewport instead of the short dvh height");
 assert(!index.includes('--standalone-gap')&&!/screen\.height\s*-\s*innerHeight|screenH-innerHeight/.test(index),
        "the shell must never be offset by screen height minus innerHeight; iOS 26 misreports innerHeight");
 assert(!index.includes('statusScrim')&&!uiStyles.includes('statusScrim'),
