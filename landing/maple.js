@@ -33,26 +33,25 @@ function growSkeleton(seed) {
   const D = 0.0095;
 
   /* the scaffold, the way an open-grown bigleaf maple holds it: a short leaning bole
-     (Sc 2), one low limb that sweeps out sideways, then two leaders that each throw a
-     side limb and fork again, so the big forks are staggered up the tree (Sc 1) */
-  const path = (from, a0, a1, L, sc, wob = 0.06) => {
+     (Sc 2), then two leaders that each throw a side limb and fork again, so the big forks are staggered up the tree (Sc 1) */
+  const path = (from, a0, a1, L, sc, wob = 0.11) => {
     const out = []; let x = X[from], y = Y[from], q = from;
-    const n = Math.max(1, Math.round(L / D)), ph = R(0, 6.3);
+    const n = Math.max(1, Math.round(L / D)), ph = R(0, 6.3), ph2 = R(0, 6.3), f1 = R(0.3, 0.45), f2 = R(0.75, 1.05);
     for (let i = 1; i <= n; i++) {
-      const th = lerp(a0 * DEG, a1 * DEG, smooth(0, 1, i / n)) + wob * Math.sin(i * 0.38 + ph) + R(-0.02, 0.02);
+      // a limb bends one way and then another as it grows: two slow waves and a little jitter
+      const th = lerp(a0 * DEG, a1 * DEG, smooth(0, 1, i / n)) + wob * Math.sin(i * f1 + ph) + wob * 0.45 * Math.sin(i * f2 + ph2) + R(-0.03, 0.03);
       x += Math.cos(th) * D; y += Math.sin(th) * D; q = add(x, y, q, sc); out.push(q);
     }
     return out;
   };
-  const bole = path(add(0, 0, -1, 2), 86, 97, 0.175, 2, 0.035);
+  const bole = path(add(0, 0, -1, 2), 86, 97, 0.175, 2, 0.04);
   const fork = bole[bole.length - 1], forkY = Y[fork];
-  path(bole[Math.round(bole.length * 0.7)], 30 + R(-3, 3), 56, 0.215, 1, 0.08);
   const lft = path(fork, 117 + R(-3, 3), 101, 0.15, 1);
   const rgt = path(fork, 70 + R(-3, 3), 80, 0.125, 1);
-  path(lft[Math.round(lft.length * 0.5)], 152, 130, 0.165, 1, 0.08);
+  path(lft[Math.round(lft.length * 0.5)], 152, 130, 0.165, 1, 0.14);
   path(lft[lft.length - 1], 127, 114, 0.12, 1);
   path(lft[lft.length - 1], 97, 88, 0.13, 1);
-  path(rgt[Math.round(rgt.length * 0.45)], 44, 62, 0.14, 1, 0.08);
+  path(rgt[Math.round(rgt.length * 0.45)], 44, 62, 0.14, 1, 0.14);
   path(rgt[rgt.length - 1], 93, 101, 0.13, 1);
   path(rgt[rgt.length - 1], 66, 73, 0.105, 1);
 
@@ -90,6 +89,12 @@ function growSkeleton(seed) {
   const ins = k => { const g = key(Math.floor(X[k] / cs), Math.floor(Y[k] / cs)); (grid.get(g) || grid.set(g, []).get(g)).push(k); };
   for (let k = 0; k < X.length; k++) ins(k);
   const kids = new Int32Array(60000);
+  /* each shoot has its own way of wandering: a heading that swings slowly from side to side
+     as it grows (amplitude, phase), so limbs snake, kink and cross instead of running
+     straight out to the light. A shoot's leader keeps its parent's wander; a new side
+     shoot starts its own */
+  const WA = new Float32Array(60000), WP = new Float32Array(60000), WL = new Float32Array(60000);
+  for (let k = 0; k < X.length; k++) { WA[k] = R(0.24, 0.42); WP[k] = R(0, 6.3); }
 
   for (let it = 0; it < 220; it++) {
     const sx = new Map();
@@ -114,13 +119,25 @@ function growSkeleton(seed) {
       if (kids[k] >= 3) continue;
       // a little phototropism, and limbs that lean out from the centre of the crown
       let dx = v[0] / v[2] + 0.06 * Math.sign(X[k] - C.x), dy = v[1] / v[2] + 0.03;
-      const l = Math.hypot(dx, dy) || 1; dx /= l; dy /= l;
+      let l = Math.hypot(dx, dy) || 1; dx /= l; dy /= l;
+      // momentum: a shoot carries on roughly the way it was going
+      const pk = Par[k];
+      if (pk >= 0) {
+        let px = X[k] - X[pk], py = Y[k] - Y[pk]; const pl = Math.hypot(px, py) || 1;
+        dx = 0.58 * dx + 0.42 * px / pl; dy = 0.58 * dy + 0.42 * py / pl;
+      }
+      // the wander: the leader inherits it, a new side shoot gets its own
+      const side = kids[k] > 0, wa = side ? R(0.22, 0.5) : WA[k], wp = side ? R(0, 6.3) : WP[k] + (rnd() < 0.06 ? R(1.2, 2.6) : 0);
+      const wl = side ? 0 : WL[k] + D;
+      const th = Math.atan2(dy, dx) + wa * Math.sin(wl * 36 + wp) + R(-0.12, 0.12);
+      dx = Math.cos(th); dy = Math.sin(th);
       const nx = X[k] + dx * D, ny = Y[k] + dy * D;
       // don't stack a second shoot right on top of an existing one
       let dup = false;
       for (const f of fresh) if (Math.abs(X[f] - nx) < D * 0.4 && Math.abs(Y[f] - ny) < D * 0.4) { dup = true; break; }
       if (dup) continue;
       const q = add(nx, ny, k, 0); kids[k]++; fresh.push(q); ins(q);
+      WA[q] = wa; WP[q] = wp; WL[q] = wl;
     }
     if (!fresh.length) break;
     for (const q of fresh) {
@@ -143,7 +160,7 @@ function growSkeleton(seed) {
       let th = Math.atan2(ty, tx) + rot, x = X[k], y = Y[k], q = k;
       const steps = 1 + Math.floor(R(1, 4));
       for (let i = 0; i < steps; i++) {
-        th += (-Math.PI / 2 - th) * 0.06 + R(-0.15, 0.15);   // side shoots droop a little
+        th += (-Math.PI / 2 - th) * 0.06 + (i % 2 ? 1 : -1) * R(0.12, 0.35);   // side shoots droop a little and zigzag node to node
         x += Math.cos(th) * D * 0.85; y += Math.sin(th) * D * 0.85; q = add(x, y, q, 0);
       }
     }
@@ -605,30 +622,64 @@ export function buildMaple(date = new Date(), seed = 20261104) {
   }
 
   /* ---------- the ground: grass, sword fern and the year's fallen leaves ---------- */
+  /* sword fern: evergreen, but it changes. New fronds unroll from fiddleheads in spring,
+     bright against last year's; old outer fronds brown off from autumn; winter weather
+     presses the clump flat */
+  const fr2 = mulberry32(seed + 17);
   for (const [fx, nf, sc] of [[-0.11, 8, 1], [0.13, 6, 0.8], [-0.25, 4, 0.55], [0.42, 4, 0.5]]) {
-    const base = groundY(fx);
+    const base = groundY(fx), flat = S.fernFlat;
     for (let k = 0; k < nf; k++) {
-      const f = nf === 1 ? 0 : k / (nf - 1), a = (lerp(-72, 72, f) + R(-8, 8)) * DEG, L = R(0.05, 0.085) * sc * (1 - 0.35 * Math.abs(f - 0.5));
+      const f = nf === 1 ? 0 : k / (nf - 1), outer = Math.abs(f - 0.5) > 0.3, pick = fr2(), len = fr2();
+      const a = (lerp(-72, 72, f) * (1 + 0.22 * flat) + R(-8, 8)) * DEG;
+      const L = lerp(0.05, 0.085, len) * sc * (1 - 0.35 * Math.abs(f - 0.5)) * (1 - 0.22 * flat);
+      // this frond's colour today: browning if it is an old outer one, bright if it is new
+      const old = outer && pick < 0.75 * S.fernOld, fresh = !outer && pick < 0.8 * Math.max(S.fernNew, S.fiddle);
+      const fc = old ? mix(FERN, [0.56, 0.46, 0.28], 0.45 + 0.35 * S.fernOld) : fresh ? mix(FERN, [0.5, 0.66, 0.28], 0.65) : FERN;
+      if (!outer && pick < 0.8 * S.fiddle && S.fernNew < 0.3) continue;    // still coiled: drawn as a fiddlehead below
       const pts = [];
       let x = fx + R(-0.004, 0.004), y = base, th = Math.PI / 2 - a;
-      for (let i = 0; i <= 12; i++) { pts.push([x, y]); th += (Math.sign(a) || 1) * -0.035 * (1 + Math.abs(a)); x += Math.cos(th) * L / 12; y += Math.sin(th) * L / 12; }
+      for (let i = 0; i <= 12; i++) { pts.push([x, y]); th += (Math.sign(a) || 1) * -0.035 * (1 + Math.abs(a)) * (1 + 0.6 * flat + (old ? 0.4 : 0)); x += Math.cos(th) * L / 12; y = Math.max(groundY(x) + 0.0006, y + Math.sin(th) * L / 12); }   // a frond that bends to the ground lies along it
       const end = pts[12], b = bone(ROOT, pts[0][0], pts[0][1], end[0], end[1], KIND.FERN, 5.5, 0.16, L * 1.5, L);
       const t0 = 0.22 + 0.05 * f;
-      poly(pts.map(p => [p[0], p[1], b]), 0.85, 0.7, t0, t0 + 0.03, mul(FERN, [0.8, 0.85, 0.8]));
+      poly(pts.map(p => [p[0], p[1], b]), 0.85, 0.7, t0, t0 + 0.03, mul(fc, [0.8, 0.85, 0.8]));
       for (let i = 2; i < 12; i++) {
         const p = pts[i], q = pts[i + 1], dx = q[0] - p[0], dy = q[1] - p[1], dl = Math.hypot(dx, dy);
-        const ux = dx / dl, uy = dy / dl, pl = 0.0065 * sc * Math.sin(Math.PI * (i - 1) / 12) + 0.0015;
+        const ux = dx / dl, uy = dy / dl, pl = (0.0065 * sc * Math.sin(Math.PI * (i - 1) / 12) + 0.0015) * (old ? 0.85 : 1);
         for (const sd of [-1, 1]) {
+          // a browning frond loses some pinnae
+          if (old && R(0, 1) < 0.25) continue;
           const c = Math.cos(sd * 62 * DEG), sn = Math.sin(sd * 62 * DEG), vx = ux * c - uy * sn, vy = ux * sn + uy * c;
-          line(p[0], p[1], b, p[0] + vx * pl, p[1] + vy * pl, b, 1.15, 0.62, t0 + 0.03 * i / 12, 0.01, FERN);
+          line(p[0], p[1], b, p[0] + vx * pl, p[1] + vy * pl, b, 1.15, 0.62, t0 + 0.03 * i / 12, 0.01, fc);
         }
       }
+    }
+    // fiddleheads: tight coils on short stalks, unrolling as spring goes on
+    if (S.fiddle > 0.05) for (let k = 0; k < Math.round(2 + 2 * sc); k++) {
+      const x0 = fx + R(-0.006, 0.006), h = (0.008 + 0.012 * S.fiddle) * sc * R(0.8, 1.2), lean = R(-0.35, 0.35);
+      const b = bone(ROOT, x0, base, x0 + Math.sin(lean) * h, base + h, KIND.FERN, 6, 0.16, h * 1.5, h);
+      const tx = x0 + Math.sin(lean) * h, ty = base + Math.cos(lean) * h, coil = [];
+      line(x0, base, b, tx, ty, b, 0.9, 0.7, 0.24, 0.01, [0.42, 0.56, 0.26]);
+      const turns = 1.6 - 0.6 * S.fernNew, rc = 0.0034 * sc + 0.001;
+      for (let i = 0; i <= 10; i++) {
+        const u = i / 10, ang = Math.PI / 2 - lean - u * turns * 6.283 * Math.sign(lean || 1), rr = rc * (1 - 0.75 * u);
+        coil.push([tx + Math.sign(lean || 1) * rc + Math.cos(ang + Math.PI) * rr * Math.sign(lean || 1), ty + Math.sin(ang) * rr, b]);
+      }
+      poly(coil, 1.2, 0.72, 0.245, 0.26, [0.48, 0.62, 0.27]);
     }
   }
   /* grass and wildflowers. Plants stand in the same places every year (their own random
      stream); the date decides which are up, in leaf or in flower */
   const gr = mulberry32(seed + 13), GR = (a, b) => a + (b - a) * gr();
-  const snowY = x => groundY(x) + S.snow * (0.011 + 0.003 * Math.sin(x * 37 + 1) + 0.002 * Math.sin(x * 93 + 2) + 0.005 * Math.exp(-Math.abs(x) / 0.06));
+  /* the snow's surface: a lying depth that undulates, a drift the west wind piles against
+     the trunk's windward side (left), the hollow it scoops in the lee, and little tails of
+     drift behind the fern clumps */
+  const xl = X[0] - r[0] * 0.95, xr = X[0] + r[0] * 0.95;
+  const driftAt = x =>
+    x < xl ? 0.052 * Math.exp((x - xl) / 0.085) :
+    x < xr ? lerp(0.052, 0.012, smooth(xl, xr, x)) :
+    0.012 * (1 - smooth(xr, xr + 0.03, x)) - 0.006 * Math.exp(-(((x - xr - 0.04) / 0.03) ** 2)) + 0.01 * Math.exp(-(((x - xr - 0.14) / 0.08) ** 2));
+  const fernDrift = x => [-0.11, 0.13, -0.25, 0.42].reduce((a, fx) => a + 0.01 * Math.exp(-(((x - fx - 0.03) / 0.028) ** 2)) - 0.004 * Math.exp(-(((x - fx + 0.025) / 0.015) ** 2)), 0);
+  const snowY = x => groundY(x) + S.snow * Math.max(0.004, 0.017 + 0.004 * Math.sin(x * 31 + 1) + 0.0025 * Math.sin(x * 83 + 2) + driftAt(x) + fernDrift(x));
   const sway = (x, y, h) => bone(ROOT, x, y, x, y + h, KIND.FERN, 6, 0.16, h * 1.5, h);
   const late = c => [c[0], c[1], c[2], 2 + (c[3] || 0)];       // ink laid over the snow
   // wildflowers are drawn a little larger than life, as a field sketch would, about their base
@@ -790,19 +841,41 @@ export function buildMaple(date = new Date(), seed = 20261104) {
       poly(snowLine.slice(i, j + 1), 1, 0.62 * S.snow, 0.31, 0.33, late(GRAPHITE));
       i = j + (R(0, 1) < 0.6 ? 1 : 2);
     }
+    // the drift's wind-carved face: a few broken lines following its surface, and a cool
+    // shadow in the scoop on the lee side of the trunk
+    for (let j = 0; j < 4; j++) {
+      const u = 0.25 + 0.17 * j, x0 = xl - R(0.04, 0.2), x1 = xl - R(0, 0.02), pts = [];
+      for (let x = x0; x <= x1; x += 0.004) pts.push([x, lerp(groundY(x), snowY(x), 1 - u * R(0.9, 1.1)), ROOT]);
+      for (let i = 0; i < pts.length - 1;) {
+        const k = Math.min(pts.length - 1, i + Math.floor(R(3, 8)));
+        poly(pts.slice(i, k + 1), 0.7, 0.3 * S.snow, 0.33, 0.35, late(GRAPHITE));
+        i = k + Math.floor(R(1, 4));
+      }
+    }
+    for (let x = xr; x < xr + 0.09; x += 0.006) line(x, snowY(x) - 0.003, ROOT, x + 0.008, snowY(x + 0.008) - 0.003, ROOT, -0.007, 0.12 * S.snow, 0.33, 0.02, late([0.62, 0.68, 0.82, 0.6]));
+    for (let x = xl - 0.1; x < xl; x += 0.008) line(x, snowY(x) - 0.006, ROOT, x + 0.01, snowY(x + 0.01) - 0.006, ROOT, -0.009, 0.06 * S.snow, 0.33, 0.02, late([0.62, 0.68, 0.82, 0.6]));
     if (S.snow > 0.4) for (const ch of chains) {
       if (ch.length < 3 || r[ch[1]] < 0.0042) continue;
       for (let i = 1; i < ch.length - 1; i++) {
         const k = ch[i], q = ch[i + 1], dx = X[q] - X[k], dy = Y[q] - Y[k], L = Math.hypot(dx, dy) || 1;
         if (Math.abs(dy / L) > 0.72 || Y[k] < 0.1) continue;
         let nx = -dy / L, ny = dx / L; if (ny < 0) { nx = -nx; ny = -ny; }
-        const c = Math.min(0.0045, r[k] * 0.45) * (1 - Math.abs(dy / L) / 0.72) * S.snow, b = boneOf[q];
+        const c = Math.min(0.006, r[k] * 0.55) * (1 - Math.abs(dy / L) / 0.72) * S.snow, b = boneOf[q];
         const o0 = r[k] * 0.55, o1 = r[k] + c, mid = (o0 + o1) / 2;
         line(X[k] + nx * mid, Y[k] + ny * mid, b, X[q] + nx * mid, Y[q] + ny * mid, b, -(o1 - o0), 1, tNode(q) + 0.12, 0.01, [1, 1, 1, -2]);
         line(X[k] + nx * o1, Y[k] + ny * o1, b, X[q] + nx * o1, Y[q] + ny * o1, b, 0.8, 0.55, tNode(q) + 0.13, 0.01, late(GRAPHITE));
         line(X[k] + nx * r[k] * 0.6, Y[k] + ny * r[k] * 0.6, b, X[q] + nx * r[k] * 0.6, Y[q] + ny * r[k] * 0.6, b, -r[k] * 0.12, 0.1, tNode(q) + 0.13, 0.01, late([0.62, 0.68, 0.82, 0.6]));
       }
     }
+  }
+
+  /* snow still coming down: a slow fall of flakes, each a speck of bare paper with a
+     graphite tick, so they show white against the bark and grey against the page */
+  if (S.snow > 0.55) for (let i = 0; i < 48; i++) {
+    const x = DR(-0.6, 0.64), y = DR(0.08, 1.14);
+    const fb = bone(ROOT, x, y, x, y + 0.01, KIND.FALL, 1, 0, 0.01, 1 + groundY(x) + 0.02 * S.snow);
+    line(x, y, fb, x + 0.0002, y, fb, -0.0032, 1, 0.95, 0.01, [1, 1, 1, -2]);
+    for (let q = 0; q < 3; q++) { const a = q * 1.05 + DR(0, 1); line(x - Math.cos(a) * 0.0013, y - Math.sin(a) * 0.0013, fb, x + Math.cos(a) * 0.0013, y + Math.sin(a) * 0.0013, fb, 0.6, 0.42, 0.95, 0.01, late(GRAPHITE)); }
   }
 
   /* ---------- annotations, in graphite ---------- */

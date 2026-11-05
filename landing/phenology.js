@@ -129,7 +129,13 @@ export function season(date = new Date()) {
     camas: bump(doy, 104, 116, 140, 154),      // common camas, blue-violet
     buttercup: bump(doy, 100, 116, 160, 182),  // western buttercup, yellow
     yarrow: bump(doy, 150, 170, 228, 255),     // yarrow, white
-    mushrooms: bump(doy, 280, 292, 325, 342)   // autumn mushrooms in the litter
+    mushrooms: bump(doy, 280, 292, 325, 342),  // autumn mushrooms in the litter
+    // sword fern is evergreen but not unchanging: fiddleheads unroll in spring, the old
+    // fronds brown off through autumn and winter, and winter rain and snow press them flat
+    fiddle: bump(doy, 80, 90, 104, 116),
+    fernNew: bump(doy, 98, 114, 150, 178),
+    fernOld: doy < 140 ? 1 - smooth(95, 140, doy) : smooth(250, 300, doy),
+    fernFlat: doy < 90 ? 1 - smooth(55, 90, doy) : smooth(315, 350, doy)
   };
 }
 

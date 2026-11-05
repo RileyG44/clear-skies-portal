@@ -45,6 +45,13 @@ a{color:inherit}
     linear-gradient(180deg,rgb(255 255 255 / .16),transparent 40%,rgb(60 64 70 / .05));
 }
 
+/* an e-ink panel's full refresh as the page arrives: one black flash, one white, then the page */
+.refresh{position:fixed;inset:0;z-index:20;pointer-events:none;opacity:0}
+@media (prefers-reduced-motion:no-preference){
+  .refresh{animation:refresh .62s steps(1,end) .05s both}
+  @keyframes refresh{0%{opacity:1;background:#1d1e20}22%{opacity:1;background:#c9cac5}38%{opacity:1;background:#f1f1ed}62%{opacity:.55;background:#e3e4df}100%{opacity:0}}
+}
+
 /* everything inked shares one roughening filter and multiplies into the paper */
 .inked{filter:url(#ink);mix-blend-mode:multiply}
 
@@ -133,6 +140,7 @@ a{color:inherit}
   </filter>
 </svg>
 <div class="paper" aria-hidden="true"></div>
+<div class="refresh" aria-hidden="true"></div>
 
 <nav class="nav inked" aria-label="Main">
   <a href="https://github.com/RileyG44/clear-skies-portal" target="_blank" rel="noopener">GitHub</a>

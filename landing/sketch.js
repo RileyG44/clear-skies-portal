@@ -220,7 +220,7 @@ export function pack(K, anchors) {
     bones: {
       ox: Float32Array.from(B.ox), oy: Float32Array.from(B.oy), ex: Float32Array.from(B.ex), ey: Float32Array.from(B.ey),
       par: Int32Array.from(B.par), kind: Uint8Array.from(B.kind), w0: Float32Array.from(B.w0), zeta: Float32Array.from(B.zeta),
-      m: Float32Array.from(B.m), invI
+      m: Float32Array.from(B.m), ext: Float32Array.from(B.ext), invI
     }
   };
 }
@@ -764,7 +764,8 @@ export function createSketch(canvas, layer, opts = {}) {
       if (f.rest > 0) { f.rest -= dt; if (f.rest <= 0) f.t = 0; continue; }
       f.t += dt;
       let y = -f.v * f.t;
-      const land = 0.004 - oy;              // the ground sits near y = 0
+      // the ground sits near y = 0; a bone may name its own landing height as 1 + y in ext
+      const land = (Bn.ext[f.b] >= 1 ? Bn.ext[f.b] - 1 : 0.004) - oy;
       if (y < land) { y = land; f.rest = 2.5 + Math.random() * 4; }
       offY[f.b] = y;
       offX[f.b] = f.drift * f.t + f.amp * Math.sin(f.t * f.w + f.ph);
