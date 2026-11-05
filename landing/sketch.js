@@ -575,6 +575,7 @@ uniform float uScale;
 uniform vec2 uRes;
 uniform float uDpr;
 uniform float uDraw;
+uniform float uPass;
 varying float vAlong;
 varying float vDist;
 varying float vHalf;
@@ -591,6 +592,13 @@ vec2 xf(vec2 p, float b){
   return vec2(t.x * p.x - t.y * p.y, t.y * p.x + t.x * p.y) + t.zw;
 }
 void main(){
+  // aCol.w picks the pass and the kind of mark (see PASSES below):
+  //   0..1 ink or wash (pass 1, soft = w)    -1 / -0.5 body colour, round / square ended (pass 0)
+  //   -2 bare paper laid over the ink (pass 2)   2..3 ink laid over that paper (pass 3, soft = w - 2)
+  float w4 = aCol.w;
+  float pass = w4 < -1.5 ? 2.0 : w4 < 0.0 ? 0.0 : w4 >= 2.0 ? 3.0 : 1.0;
+  if (abs(pass - uPass) > 0.5) { gl_Position = vec4(2.0, 2.0, 0.0, 1.0); return; }
+  float soft = w4 >= 2.0 ? w4 - 2.0 : w4;
   vec2 a = (xf(aSeg.xy, aBone.x) - uCenter) * uScale * uDpr;
   vec2 b = (xf(aSeg.zw, aBone.y) - uCenter) * uScale * uDpr;
   vec2 d = b - a;
@@ -600,8 +608,9 @@ void main(){
   float w = (aStyle.x < 0.0 ? -aStyle.x * uScale : aStyle.x) * uDpr;
   float halfW = max(w, 0.9 * uDpr) * 0.5;
   float pad = halfW + 1.0;
-  // a wash has round ends, so its quad reaches past both end points by the half width
-  float cap = aCol.w > 0.0 ? pad : 0.0;
+  // a wash or a body has round ends, so its quad reaches past both end points by the half width
+  // (-0.5 and -2.5 are the square-ended body and paper)
+  float cap = soft > 0.0 || (soft <= -1.0 && soft > -2.25) ? pad : 0.0;
   vec2 pos = a - dir * cap + (d + 2.0 * dir * cap) * position.x + nrm * position.y * pad;
   gl_Position = vec4(pos / (uRes * 0.5), 0.0, 1.0);
   vAlong = position.x;
@@ -611,7 +620,7 @@ void main(){
   vHalf = halfW;
   vInk = aStyle.y * min(1.0, w / (0.9 * uDpr));
   vRGB = aCol.rgb;
-  vSoft = aCol.w;
+  vSoft = soft;
   float since = uDraw - aStyle.z;
   vReveal = since / max(aStyle.w, 1e-4);
   vWet = clamp(1.0 - (since - aStyle.w) / 0.07, 0.0, 1.0);
@@ -639,7 +648,24 @@ void main(){
   float grain = hash(floor(gl_FragCoord.xy));
   float a;
   vec3 ink = vRGB;
-  if (vSoft > 0.0) {
+  if (vSoft < -1.5) {
+    // bare paper: lifts everything under it back to white (this pass keeps the lighter)
+    float ex = max(0.0, max(-vAlongPx, vAlongPx - vLen));
+    float d = length(vec2(ex, vDist)) / max(vHalf, 0.5);
+    float wob = 0.12 * (vnoise(gl_FragCoord.xy * 0.06) - 0.5);
+    gl_FragColor = vec4(vec3(vInk * (1.0 - smoothstep(0.9 + wob, 1.0 + wob, d))), 1.0);
+    return;
+  }
+  if (vSoft < 0.0) {
+    // body colour: a round-ended capsule with a firm, faintly hand-cut edge. This pass
+    // keeps the darker of what is there and what is laid, so where pieces overlap (along a
+    // bending limb, at a fork) the colour stays even instead of doubling up
+    float ex = max(0.0, max(-vAlongPx, vAlongPx - vLen));
+    float d = length(vec2(ex, vDist)) / max(vHalf, 0.5);
+    float wob = 0.05 * (vnoise(gl_FragCoord.xy * 0.08) - 0.5);
+    float cov = 1.0 - smoothstep(0.93 + wob, 1.0 + wob, d);
+    a = vInk * cov * (0.9 + 0.14 * vnoise(gl_FragCoord.xy * 0.5) + 0.04 * grain);
+  } else if (vSoft > 0.0) {
     // watercolour: a soft-edged capsule whose pigment pools a little at the rim and
     // settles into the paper's tooth
     float ex = max(0.0, max(-vAlongPx, vAlongPx - vLen));
@@ -654,7 +680,7 @@ void main(){
     a = vInk * cov * (0.86 + 0.14 * grain);
     ink *= 1.0 - 0.3 * vWet;           // fresh ink is darker, then dries
   }
-  a = min(1.0, a * (1.0 + 0.4 * vWet * (1.0 - step(0.001, vSoft))));
+  a = min(1.0, a * (1.0 + 0.4 * vWet * (1.0 - step(0.001, abs(vSoft)))));
   gl_FragColor = vec4(mix(vec3(1.0), ink, a), 1.0);
 }`;
 
@@ -683,15 +709,29 @@ export function createSketch(canvas, layer, opts = {}) {
 
   const U = {
     uBones: { value: tex }, uCenter: { value: new THREE.Vector2(VIEW.cx, VIEW.cy) }, uScale: { value: 600 },
-    uRes: { value: new THREE.Vector2(1, 1) }, uDpr: { value: 1 }, uDraw: { value: reduce ? 1.2 : 0 }
+    uRes: { value: new THREE.Vector2(1, 1) }, uDpr: { value: 1 }, uDraw: { value: reduce ? 1.2 : 0 }, uPass: { value: 1 }
   };
   const mat = new THREE.ShaderMaterial({
     vertexShader: VS, fragmentShader: FS, uniforms: U, transparent: true, depthTest: false, depthWrite: false,
     blending: THREE.CustomBlending, blendEquation: THREE.AddEquation, blendSrc: THREE.DstColorFactor, blendDst: THREE.ZeroFactor
   });
   const mesh = new THREE.Mesh(geo, mat);
-  mesh.frustumCulled = false;
+  mesh.frustumCulled = false; mesh.renderOrder = 1;
   const scene = new THREE.Scene(); scene.add(mesh);
+  /* the other passes, for drawings that use them: body colour goes down first, darkest
+     wins, under the multiplied ink; then bare paper (snow, say), lightest wins, over it;
+     then ink over that paper, multiplied again */
+  const used = new Set();
+  for (let i = 3; i < T.col.length; i += 4) { const w = T.col[i]; used.add(w < -1.5 ? 2 : w < 0 ? 0 : w >= 2 ? 3 : 1); }
+  for (const [pass, eq] of [[0, THREE.MinEquation], [2, THREE.MaxEquation], [3, null]]) {
+    if (!used.has(pass)) continue;
+    const m = new THREE.Mesh(geo, new THREE.ShaderMaterial({
+      vertexShader: VS, fragmentShader: FS, uniforms: { ...U, uPass: { value: pass } }, transparent: true, depthTest: false, depthWrite: false,
+      blending: THREE.CustomBlending, blendEquation: eq ?? THREE.AddEquation,
+      blendSrc: eq ? THREE.OneFactor : THREE.DstColorFactor, blendDst: eq ? THREE.OneFactor : THREE.ZeroFactor
+    }));
+    m.frustumCulled = false; m.renderOrder = pass; scene.add(m);
+  }
   const cam = new THREE.OrthographicCamera();
 
   /* labels */

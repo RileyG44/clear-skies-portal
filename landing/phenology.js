@@ -111,7 +111,25 @@ export function season(date = new Date()) {
     litter: doy >= 270 ? smooth(278, 330, doy) : 1 - smooth(15, 135, doy),
     litterFresh: doy >= 270 ? 1 - 0.6 * smooth(300, 366, doy) : 0.4 * (1 - smooth(0, 90, doy)),
     // leaves in the air at any moment
-    falling: Math.round(9 * bump(P, 2.45, 2.8, 3.4, 3.85))
+    falling: Math.round(9 * bump(P, 2.45, 2.8, 3.4, 3.85)),
+    /* the ground layer, by day of year */
+    // a light snow lying in the depth of winter
+    snow: doy < 60 ? 1 - smooth(38, 62, doy) : smooth(343, 360, doy),
+    // grass: short and flattened in winter, lush in spring, tall and seeding in summer
+    grassLen: 0.65 + 0.85 * bump(doy, 80, 165, 235, 300),
+    seedHeads: bump(doy, 155, 178, 245, 275),
+    // wildflowers of the lowland forest edge, each in its own weeks
+    grape: bump(doy, 62, 78, 112, 128),        // Oregon grape, yellow sprays
+    grapeBerry: bump(doy, 205, 228, 300, 330), // and its dusty blue berries
+    trillium: bump(doy, 72, 86, 118, 136),     // western trillium, white, ageing pink
+    trilliumAge: smooth(100, 130, doy),
+    trilliumLeaf: bump(doy, 62, 75, 175, 200),
+    bleeding: bump(doy, 92, 106, 150, 172),    // Pacific bleeding heart, pink
+    bleedingLeaf: bump(doy, 72, 90, 205, 235),
+    camas: bump(doy, 104, 116, 140, 154),      // common camas, blue-violet
+    buttercup: bump(doy, 100, 116, 160, 182),  // western buttercup, yellow
+    yarrow: bump(doy, 150, 170, 228, 255),     // yarrow, white
+    mushrooms: bump(doy, 280, 292, 325, 342)   // autumn mushrooms in the litter
   };
 }
 

@@ -5,26 +5,29 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>ClearSkies</title>
 <meta name="description" content="ClearSkies pairs the newest free satellite imagery with LiDAR terrain. Free on Windows, macOS and the web, with no account and no API key.">
-<meta name="theme-color" content="#efe6d1">
+<meta name="theme-color" content="#e3e4df">
 <link rel="icon" href="icon.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Caveat:wght@400..700&family=Kalam:wght@300;400;700&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Caveat:wght@400..700&family=Fraunces:opsz,wght,SOFT@9..144,300..600,0..100&family=Kalam:wght@300;400;700&display=swap">
 <script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js"}}</script>
 <style>
-/* A page from an old field sketchbook. The paper is CSS; the maple and the section are
-   one three.js canvas multiplied onto it, drawn for today's date; the words are inked
-   with an SVG filter so they sit in the paper rather than on it. The page's accent is
-   taken from the colour the canopy is today (set by the script below). */
+/* A field-sketchbook page shown on an e-ink screen: a matte, cool grey ground with the
+   fine grain of the display's microcapsules, and near-black text. The maple and the
+   section are one three.js canvas multiplied onto it, drawn for today's date. The page's
+   accent is taken from the colour the canopy is today (set by the script below), muted
+   the way a colour e-ink panel mutes it. */
 :root{
   color-scheme:light;
-  --paper:#efe6d1;
-  --ink:#3a2a1c;            /* iron-gall ink, the same brown-black as the drawing */
-  --ink-2:#4f4033;
-  --accent:#b98a2e;         /* replaced with today's canopy colour */
-  --accent-deep:#7d5a1c;
+  --paper:#e3e4df;          /* e-ink white: a matte, faintly cool grey */
+  --ink:#1d1e20;            /* e-ink black, the same as the drawing's pen */
+  --ink-2:#383a3d;
+  --grey:#55585c;
+  --accent:#7d8a5a;         /* replaced with today's canopy colour */
+  --accent-deep:#4c5638;
   --emerald:var(--accent-deep);
-  --sepia:#6b5644;
+  --sepia:var(--grey);
+  --brand:Fraunces,"Iowan Old Style",Georgia,serif;
   --hand:Kalam,"Segoe Print","Bradley Hand",cursive;
   --note:Caveat,Kalam,"Segoe Print",cursive;
 }
@@ -34,19 +37,13 @@ body{background:var(--paper);color:var(--ink);font-family:var(--hand);-webkit-fo
 a{color:inherit}
 :focus-visible{outline:2px dashed var(--emerald);outline-offset:5px;border-radius:6px}
 
-/* paper: fine tooth, a few long fibres and some slow tonal mottling */
+/* the screen: a fine, even grain from the ink capsules and a soft fall-off of the front light */
 .paper{position:fixed;inset:0;z-index:-1;pointer-events:none;background-color:var(--paper);
   background-image:
-    url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='280' height='280'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='3' seed='4' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 .32  0 0 0 0 .27  0 0 0 0 .2  0 0 0 .14 -.02'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>"),
-    url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='600' height='600'><filter id='f'><feTurbulence type='fractalNoise' baseFrequency='.004 .09' numOctaves='2' seed='9' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 .4  0 0 0 0 .34  0 0 0 0 .25  0 0 0 .05 -.02'/></filter><rect width='100%' height='100%' filter='url(%23f)'/></svg>"),
-    url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='900' height='900'><filter id='m'><feTurbulence type='fractalNoise' baseFrequency='.003' numOctaves='3' seed='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 .55  0 0 0 0 .48  0 0 0 0 .36  0 0 0 .3 -.07'/></filter><rect width='100%' height='100%' filter='url(%23m)'/></svg>");
+    url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='240' height='240'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='1.1' numOctaves='2' seed='4' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 .2  0 0 0 0 .21  0 0 0 0 .22  0 0 0 .16 -.03'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>"),
+    url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='900' height='900'><filter id='m'><feTurbulence type='fractalNoise' baseFrequency='.004' numOctaves='2' seed='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 .4  0 0 0 0 .41  0 0 0 0 .42  0 0 0 .12 -.03'/></filter><rect width='100%' height='100%' filter='url(%23m)'/></svg>"),
+    linear-gradient(180deg,rgb(255 255 255 / .16),transparent 40%,rgb(60 64 70 / .05));
 }
-/* age: foxing spots, a darkened edge, and the shadow of the binding along the left */
-.paper::before,.paper::after{content:"";position:absolute;inset:0}
-.paper::before{background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='1100' height='1100'><filter id='x'><feTurbulence type='fractalNoise' baseFrequency='.07' numOctaves='2' seed='17' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 .52  0 0 0 0 .36  0 0 0 0 .2  0 0 0 16 -12.2'/><feGaussianBlur stdDeviation='.6'/></filter><rect width='100%' height='100%' filter='url(%23x)' opacity='.22'/></svg>");mix-blend-mode:multiply}
-.paper::after{background:
-  linear-gradient(90deg,rgb(92 70 44 / .2),rgb(92 70 44 / .06) 2.2%,transparent 6%),
-  radial-gradient(130% 120% at 55% 45%,transparent 58%,rgb(120 92 56 / .1) 82%,rgb(110 82 48 / .24));mix-blend-mode:multiply}
 
 /* everything inked shares one roughening filter and multiplies into the paper */
 .inked{filter:url(#ink);mix-blend-mode:multiply}
@@ -61,20 +58,20 @@ a{color:inherit}
 /* letterhead: the title's top sits level with the tree's tip and the buttons' bottom with the
    foot of the andesite; the script below sets --head-top and --foot from the drawing */
 .copy{--title-drop:0px;--title-fs:clamp(52px,5.98vw,100px);display:flex;flex-direction:column;align-items:flex-start;padding:var(--head-top,96px) clamp(16px,2vw,32px) var(--foot,72px) max(24px,min(7.5vw,130px));max-width:640px}
-.title{display:inline-block;white-space:nowrap;font-family:var(--note);font-weight:600;color:var(--ink);margin:var(--title-drop,0px) 0 .12em -.04em;
-  padding:0 .12em .06em .02em;font-size:calc(1.3 * var(--title-fs));line-height:calc(1.15 * var(--title-fs));letter-spacing:0}
+.title{display:inline-block;white-space:nowrap;font-family:var(--brand);font-weight:420;font-variation-settings:"opsz" 144,"SOFT" 50;color:var(--ink);margin:var(--title-drop,0px) 0 .12em -.05em;
+  padding:0 .08em .06em .02em;font-size:calc(1.02 * var(--title-fs));line-height:calc(1.15 * var(--title-fs));letter-spacing:-.012em}
 /* downloads: notebook entries in the space between the letterhead and the buttons */
 /* sits about 3/4 inch (72px) under the title; the rest of the gap stays below it */
 .dl{margin:calc(24px - clamp(14px,3.4vh,36px) + clamp(26px,5vh,56px) - .15*var(--title-fs)) 0 auto;display:grid;gap:0;width:min(100%,32em)}
 .dl-row{display:flex;flex-wrap:wrap;align-items:baseline;gap:4px .45em;padding:clamp(14px,3.4vh,36px) 0}
 .dl-k{margin:0;font-size:clamp(16px,1.32vw,20px);font-weight:300;color:var(--ink-2)}
 .dl-links{display:inline-flex;flex-wrap:wrap;align-items:baseline;gap:4px 0}
-.dl-comma{font-size:calc(.72 * clamp(20px,1.6vw,24px));font-weight:300;color:#5a5048;margin-right:.45em}
+.dl-comma{font-size:calc(.72 * clamp(20px,1.6vw,24px));font-weight:300;color:var(--grey);margin-right:.45em}
 .dl-sep{color:var(--ink-2);font-weight:300;font-size:clamp(16px,1.32vw,20px)}
 .dl-link{display:inline-flex;align-items:baseline;gap:.45em;font-size:clamp(20px,1.6vw,24px);font-weight:700;color:var(--emerald);text-decoration:none}
 
 /* the platform line is the link: same small grey hand, lightly underlined */
-.dl-meta{font-size:.72em;font-weight:300;color:#5a4a3a;text-decoration:underline;text-decoration-thickness:1px;text-underline-offset:3px;text-decoration-color:color-mix(in srgb,var(--accent) 60%,transparent);transition:text-decoration-color .25s}
+.dl-meta{font-size:.72em;font-weight:300;color:var(--ink-2);text-decoration:underline;text-decoration-thickness:1px;text-underline-offset:3px;text-decoration-color:color-mix(in srgb,var(--accent) 60%,transparent);transition:text-decoration-color .25s}
 .dl-link:hover .dl-meta{text-decoration-color:var(--accent-deep)}
 .actions{margin-top:0;display:flex;flex-wrap:wrap;gap:14px clamp(12px,1.2vw,18px);align-items:center}
 .btn{display:inline-flex;align-items:center;gap:.5em;font-family:var(--hand);font-weight:700;font-size:clamp(16px,1.25vw,18px);line-height:1;
@@ -97,14 +94,14 @@ a{color:inherit}
 
 .fig{position:relative;margin:0;height:100svh;min-height:600px;touch-action:pan-y}
 .fig canvas{position:absolute;inset:0;width:100%;height:100%;display:block;mix-blend-mode:multiply}
-.labels{position:absolute;inset:0;pointer-events:none;font-family:var(--note);color:#4d4338}
+.labels{position:absolute;inset:0;pointer-events:none;font-family:var(--note);color:#3e4144}
 .lbl{position:absolute;white-space:nowrap;font-size:max(12px,calc(var(--u) * .027));line-height:1.05;opacity:0;transition:opacity 1.2s ease;filter:url(#ink);mix-blend-mode:multiply}
 .lbl.on{opacity:.92}
-.lbl.sec{color:#6b5644;font-size:max(12px,calc(var(--u) * .024))}
+.lbl.sec{color:var(--grey);font-size:max(12px,calc(var(--u) * .024))}
 .lbl.sec b{font-weight:700;margin-right:.2em}
 .lbl.sp{text-align:right;font-size:max(13px,calc(var(--u) * .03))}
 .lbl.sp i{font-weight:600}
-.lbl.cap{font-size:max(12px,calc(var(--u) * .025));color:#5a5048}
+.lbl.cap{font-size:max(12px,calc(var(--u) * .025));color:var(--grey)}
 .lbl.dim{font-size:max(12px,calc(var(--u) * .026))}
 .lbl.season{color:var(--accent-deep)}
 .lbl.sp-l{text-align:left}
@@ -129,9 +126,9 @@ a{color:inherit}
 <svg width="0" height="0" style="position:absolute" aria-hidden="true">
   <filter id="ink" x="-4%" y="-20%" width="108%" height="140%">
     <feTurbulence type="fractalNoise" baseFrequency=".9" numOctaves="2" seed="7" result="tooth"/>
-    <feDisplacementMap in="SourceGraphic" in2="tooth" scale="1.6" xChannelSelector="R" yChannelSelector="G" result="rough"/>
+    <feDisplacementMap in="SourceGraphic" in2="tooth" scale=".7" xChannelSelector="R" yChannelSelector="G" result="rough"/>
     <feTurbulence type="fractalNoise" baseFrequency=".55" numOctaves="1" seed="3" result="grain"/>
-    <feColorMatrix in="grain" type="matrix" values="0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 -.5 1.17" result="mask"/>
+    <feColorMatrix in="grain" type="matrix" values="0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 -.3 1.12" result="mask"/>
     <feComposite in="rough" in2="mask" operator="in"/>
   </filter>
 </svg>
@@ -210,8 +207,10 @@ function align(pageY, a) {
 /* today's tree; its canopy colour becomes the page accent */
 const T = buildMaple(pageDate());
 {
-  const c = T.accent.map(v => Math.round(Math.min(1, v) * 255));
-  const deep = T.accent.map(v => Math.round(Math.min(1, v) * 255 * 0.62));
+  // a colour e-ink panel shows colour muted, towards its grey
+  const g = (T.accent[0] + T.accent[1] + T.accent[2]) / 3, muted = T.accent.map(v => v + (g - v) * 0.35);
+  const c = muted.map(v => Math.round(Math.min(1, v) * 255));
+  const deep = muted.map(v => Math.round(Math.min(1, v) * 255 * 0.6));
   document.documentElement.style.setProperty("--accent", `rgb(${c.join(" ")})`);
   document.documentElement.style.setProperty("--accent-deep", `rgb(${deep.join(" ")})`);
 }
@@ -221,7 +220,7 @@ window.__sketch = createSketch(document.getElementById("tree"), document.getElem
   onNoWebGL() { document.getElementById("fig").classList.add("nogl"); },
   onLayout: align
 });
-document.fonts.load("600 60px Caveat").then(() => align());
+Promise.all([document.fonts.load("420 60px Fraunces"), document.fonts.load("600 60px Caveat")]).then(() => align());
 wide.addEventListener("change", () => align());
 </script>
 </body>
