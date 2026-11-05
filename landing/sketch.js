@@ -83,7 +83,8 @@ export function canvasAPI(seed, palette = FIR_INKS) {
      stamped from the atlas cell `v`, its stalk end at (x, y) on bone b. rot turns the
      leaf's main axis from straight up; sq < 0 mirrors it, and |sq| < 1 foreshortens it
      across, as a leaf held at a slant; curl bends it. col = [r, g, b] and detail 0..1
-     (how much outline and vein it carries); it unfolds from t over dur. Sprites are laid
+     (how much outline and vein it carries); it unfolds from t over dur. alpha 2 + a
+     marks a falling leaf (opacity a), which tumbles as its bone turns. Sprites are laid
      in the order they are given, later ones over earlier ones */
   const lf = [];
   const leaf = (x, y, b, rot, size, sq, v, curl, c, detail, t, dur, alpha = 1) => {
@@ -714,7 +715,10 @@ uniform float uDpr;
 uniform float uDraw;
 uniform float uTime;
 uniform float uFlutter;
+uniform float uBreeze;   // the ambient wind, 1 = the page's usual breeze
+uniform vec3 uGust;      // the cursor: x, y and how hard it is moving (0..1)
 uniform vec4 uAtlas;  // grid, junction row, lobe length in cells, -
+varying float vBack;
 varying vec2 vUV;
 varying vec2 vLocal;
 varying vec3 vRGB;
@@ -727,19 +731,46 @@ vec2 xf(vec2 p, float b){
   return vec2(t.x * p.x - t.y * p.y, t.y * p.x + t.x * p.y) + t.zw;
 }
 void main(){
-  float g = smoothstep(aL3.x, aL3.x + aL3.y, uDraw);
-  if (g <= 0.0) { gl_Position = vec4(2.0, 2.0, 0.0, 1.0); return; }
+  float gr = smoothstep(aL3.x, aL3.x + aL3.y, uDraw);
+  if (gr <= 0.0) { gl_Position = vec4(2.0, 2.0, 0.0, 1.0); return; }
   float grid = uAtlas.x, jy = uAtlas.y, cell = 1.0 / uAtlas.z;
   vec2 c = position.xy;                          // 0..1 across the cell
   vec2 loc = vec2(c.x - 0.5, jy - c.y) * cell;   // leaf units, y along the main lobe
-  float sq = aL1.y;
-  vec2 lp = vec2(loc.x * sq, loc.y);
-  lp.x += aL1.w * lp.y * lp.y * 0.18;            // a curl: the blade bends away to one side
-  // the blade turns a little on its stalk in the moving air, on top of its twig's motion
+  /* the blade is a plane in 3D, seen straight on (orthographic). It hangs at a twist
+     about its own midrib (the stalk's line) and a pitch towards or away from us; the
+     page shows it foreshortened by both, and from underneath once it twists past
+     edge-on. A leaf laid mirrored is one seen from below to begin with. */
   float ph = aL3.z;
-  float rot = aL0.w + uFlutter * (0.07 * sin(uTime * (2.1 + 0.9 * fract(ph * 7.3)) + ph) + 0.035 * sin(uTime * 5.3 + ph * 3.0));
+  float twist0 = acos(clamp(aL1.y, -1.0, 1.0));
+  float pitch0 = (fract(ph * 3.71) - 0.5) * 1.1;
+  // the air here: the same travelling gusts that move the twigs, plus the cursor's wake
+  vec2 at = aL0.xy;
+  float g = 0.25 + 0.75 * pow(0.5 + 0.5 * sin(2.1 * at.x - 0.85 * uTime + 0.7 * sin(0.29 * uTime + 2.3 * at.y)), 3.0);
+  vec2 dp = at - uGust.xy;
+  float near = uGust.z * exp(-dot(dp, dp) / (0.07 * 0.07));
+  float air = uFlutter * (uBreeze * g + 2.2 * near);
+  float f1 = 2.6 + 2.2 * fract(ph * 5.13), f2 = 1.7 + 1.3 * fract(ph * 9.7);
+  // leaves twist on their stalks far more than they swing: a flicker about the midrib,
+  // bigger in a gust, enough near a passing cursor to flip them over
+  float twist = twist0 + air * (0.55 * sin(uTime * f1 + ph) + 0.3 * sin(uTime * f1 * 2.3 + ph * 2.0));
+  float pitch = pitch0 + air * 0.35 * sin(uTime * f2 + ph * 1.7);
+  float swing = air * 0.12 * sin(uTime * f2 * 0.8 + ph * 3.0);
+  // a falling leaf tumbles: its bone's turn sets how far over it has gone
+  if (aL3.w >= 2.0) {
+    int bi = int(aL0.z + 0.5);
+    vec4 bt = texelFetch(uBones, ivec2(bi % 64, bi / 64), 0);
+    float spin = atan(bt.y, bt.x);
+    twist += 3.2 * spin; pitch += 1.4 * sin(2.0 * spin + ph);
+  }
+  float ct = cos(twist), cp = cos(pitch);
+  vBack = ct < 0.0 ? 1.0 : 0.0;
+  // (edge-on, a leaf is still a sliver of a line, not nothing)
+  float sx = sign(ct) * max(abs(ct), 0.1);
+  vec2 lp = vec2(loc.x * sx, loc.y * max(abs(cp), 0.25));
+  lp.x += aL1.w * lp.y * lp.y * 0.18 * abs(sx);  // a curl: the blade bends away to one side
+  float rot = aL0.w + swing;
   float cr = cos(rot), sr = sin(rot);
-  float size = aL1.x * (0.25 + 0.75 * g);       // unfolding as it is drawn
+  float size = aL1.x * (0.25 + 0.75 * gr);      // unfolding as it is drawn
   vec2 p = aL0.xy + vec2(cr * lp.x - sr * lp.y, sr * lp.x + cr * lp.y) * size;
   vec2 q = (xf(p, aL0.z) - uCenter) * uScale * uDpr;
   gl_Position = vec4(q / (uRes * 0.5), 0.0, 1.0);
@@ -748,7 +779,7 @@ void main(){
   vLocal = q;
   vRGB = aL2.rgb;
   vDetail = aL2.w;
-  vAlpha = aL3.w * smoothstep(0.0, 0.35, g);
+  vAlpha = (aL3.w >= 2.0 ? aL3.w - 2.0 : aL3.w) * smoothstep(0.0, 0.35, gr);
   vPx = size * uScale * uDpr;                    // a lobe's length on screen, in pixels
 }`;
 
@@ -756,6 +787,7 @@ const LEAF_FS = /* glsl */`
 precision highp float;
 uniform sampler2D uAtlas0;
 uniform vec3 uPen;
+varying float vBack;
 varying vec2 vUV;
 varying vec2 vLocal;
 varying vec3 vRGB;
@@ -776,11 +808,14 @@ void main(){
   float tooth = 0.9 + 0.16 * vnoise(gl_FragCoord.xy * 0.45) + 0.05 * hash(floor(gl_FragCoord.xy));
   float bloom = 0.94 + 0.1 * vnoise(vLocal * 0.05 + vRGB.xy * 30.0);
   vec3 col = vRGB * tooth * bloom * (1.0 - 0.22 * rim);
+  // the underside of a bigleaf blade is paler and duller, with its veins standing out pale
+  col = mix(col, mix(col, vec3(0.86, 0.87, 0.8), 0.3), vBack);
+  col = mix(col, col + 0.14, a.b * 0.6 * vBack);
   // pen and graphite: the outline on every leaf, finer on the far ones; veins only where
   // the leaf is near and big enough on screen to carry them
   float small = smoothstep(5.0, 14.0, vPx);
   float line = a.g * mix(0.4, 0.92, vDetail) * mix(0.65, 1.0, small);
-  float vein = a.b * mix(0.0, 0.5, vDetail * vDetail) * small;
+  float vein = a.b * mix(0.0, 0.5, vDetail * vDetail) * small * (1.0 - vBack);
   float ink = clamp(max(line, vein) * (0.85 + 0.15 * hash(floor(gl_FragCoord.xy) + 3.0)), 0.0, 1.0);
   col = mix(col, uPen, ink);
   float al = sil * vAlpha;
@@ -846,13 +881,18 @@ export function createSketch(canvas, layer, opts = {}) {
     const lg = new THREE.InstancedBufferGeometry();
     lg.setAttribute("position", new THREE.Float32BufferAttribute([0, 0, 0, 1, 0, 0, 0, 1, 0, 1, 1, 0], 3));
     lg.setIndex([0, 1, 2, 2, 1, 3]);
-    const ib = new THREE.InstancedInterleavedBuffer(T.leafData, 16);
-    for (let i = 0; i < 4; i++) lg.setAttribute("aL" + i, new THREE.InterleavedBufferAttribute(ib, 4, i * 4));
+    const N = T.leafCount, D = T.leafData;
+    for (let i = 0; i < 4; i++) {
+      const a = new Float32Array(N * 4);
+      for (let j = 0; j < N; j++) for (let q = 0; q < 4; q++) a[j * 4 + q] = D[j * 16 + i * 4 + q];
+      lg.setAttribute("aL" + i, new THREE.InstancedBufferAttribute(a, 4));
+    }
     lg.instanceCount = T.leafCount;
     leafU = { ...U, uAtlas0: { value: atex }, uAtlas: { value: new THREE.Vector4(A.grid, A.jy, A.r0, 0) },
-      uTime: { value: 0 }, uFlutter: { value: reduce ? 0 : 1 }, uPen: { value: new THREE.Vector3(...(T.leafPen || [0.12, 0.13, 0.14])) } };
+      uTime: { value: 0 }, uFlutter: { value: reduce ? 0 : 1 }, uBreeze: { value: 1 }, uGust: { value: new THREE.Vector3(0, 0, 0) }, uPen: { value: new THREE.Vector3(...(T.leafPen || [0.12, 0.13, 0.14])) } };
     const lm = new THREE.Mesh(lg, new THREE.ShaderMaterial({
-      vertexShader: LEAF_VS, fragmentShader: LEAF_FS, uniforms: leafU, transparent: true, depthTest: false, depthWrite: false,
+      // (double-sided: a leaf mirrored, or twisted past edge-on, turns its quad over)
+      vertexShader: LEAF_VS, fragmentShader: LEAF_FS, uniforms: leafU, transparent: true, depthTest: false, depthWrite: false, side: THREE.DoubleSide,
       blending: THREE.CustomBlending, blendEquation: THREE.AddEquation, blendSrc: THREE.OneFactor, blendDst: THREE.OneMinusSrcAlphaFactor
     }));
     lm.frustumCulled = false; lm.renderOrder = 1.5; scene.add(lm);
@@ -1018,7 +1058,12 @@ export function createSketch(canvas, layer, opts = {}) {
     if (Math.abs(ptr.vx) + Math.abs(ptr.vy) < 1e-3) ptr.vx = ptr.vy = 0;
     draw = Math.min(1.2, (now - start) / 1000 / DRAW_SECONDS);
     U.uDraw.value = draw;
-    if (leafU) leafU.uTime.value = time;
+    if (leafU) {
+      leafU.uTime.value = time; leafU.uBreeze.value = P.breeze / 0.16;
+      // the cursor's wake: strong while it moves through the crown, dying away after
+      const sp = ptr.in ? Math.min(1, Math.hypot(ptr.vx, ptr.vy) / 1.2) : 0, gz = leafU.uGust.value;
+      gz.z = Math.max(sp, gz.z * Math.exp(-dt / 0.6)); if (sp > 0.05) { gz.x = ptr.x; gz.y = ptr.y; }
+    }
     physics(dt); if (draw > 1) falling(dt); pose(); updateLabels(draw); render();
   }
   function play() { if (!raf && visible && !document.hidden) { last = performance.now(); raf = requestAnimationFrame(frame); } }

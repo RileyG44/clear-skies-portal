@@ -121,8 +121,9 @@ export function buildMaple(date = new Date(), seed = 20261104) {
       const drop = 3.0 + LR(0, 0.75) - 0.1 * (e - 0.7);
       leaves.push({ k, x, y, jx, jy, jz: Z[k] + st[2] * pl, e, lit, off, drop, sz: sz * LR(0.9, 1.1), th, jit: LR(-0.04, 0.04),
         v: [LR(0.92, 1.06), LR(0.93, 1.05), LR(0.9, 1.06)], keep: lr(), wash: lr(), shade: lr(),
-        // which of the atlas's leaves, mirrored or not, how slanted to us, how curled
-        cell: Math.floor(lr() * 16), sq: (lr() < 0.5 ? -1 : 1) * (lr() < 0.35 ? LR(0.45, 0.75) : LR(0.8, 1)), curl: LR(-1, 1) });
+        // which of the atlas's leaves; how far it is twisted on its stalk (cos of the twist:
+        // below 0 we see its underside); how curled
+        cell: Math.floor(lr() * 16), sq: (lr() < 0.28 ? -1 : 1) * (lr() < 0.35 ? LR(0.4, 0.75) : LR(0.8, 1)), curl: LR(-1, 1) });
     }
   }
   const P = S.P, out = [];
@@ -489,7 +490,8 @@ export function buildMaple(date = new Date(), seed = 20261104) {
     const x = L.jx, y = L.jy;
     const fb = bone(ROOT, x, y, x, y + 0.01, KIND.FALL, 1, 0, 0.01, 2 + groundY(x) + 0.006);
     const c = S.leaf(L.A + DR(0, 0.25));
-    K.leaf(x, y, fb, L.th - Math.PI / 2, L.sz * LEAF_SIZE, L.sq, L.cell, L.curl, c, 1, Math.min(0.95, tNode(L.k) + 0.07), 0.05);
+    // (alpha 2 + 1 marks it as a falling leaf, which tumbles with its bone)
+    K.leaf(x, y, fb, L.th - Math.PI / 2, L.sz * LEAF_SIZE, L.sq, L.cell, L.curl, c, 1, Math.min(0.95, tNode(L.k) + 0.07), 0.05, 3);
   }
 
   /* ---------- the ground: grass, sword fern and the year's fallen leaves ---------- */
