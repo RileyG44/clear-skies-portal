@@ -469,7 +469,7 @@ async function ensureMosaicBackdrop(primary,token){
       maxNativeZoom:item.nativeMax,zIndex:110,keepBuffer:1,tileRetries:1,className:"mosaic-context"}));
     const result=await waitForLayerTiles(layer,token,6500);
     if(!result.ready||token!==mosToken){ if(map.hasLayer(layer)) map.removeLayer(layer); return false }
-    const old=MOSAIC_BACKDROP; MOSAIC_BACKDROP={item,layer}; layer.setZIndex(110);layer.setOpacity(+$("#op").value/100);
+    const old=MOSAIC_BACKDROP; MOSAIC_BACKDROP={item,layer}; layer.setZIndex(110);layer.setOpacity(+$("#op").value/100);applySavedSceneOrder();
     if(old&&old.layer&&map.hasLayer(old.layer)) map.removeLayer(old.layer);
     return true;
   }catch(e){ if(layer&&map.hasLayer(layer)) map.removeLayer(layer); return false }
@@ -597,6 +597,7 @@ async function publishNeighbours(use,token){
   for(const old of NEIGH.slice()) if(staged.every(Boolean)&&!want.has(old.key)){
     map.removeLayer(old.layer); NEIGH=NEIGH.filter(x=>x!==old);
   }
+  applySavedSceneOrder();
   return true;
 }
 /* How much of the view the published scenes cover, and how much of it has drawn. */
@@ -680,5 +681,6 @@ async function swapNeighbour(key, it){
   next.layer.setOpacity(+$("#op").value/100);
   if(n&&map.hasLayer(n.layer)) map.removeLayer(n.layer);
   NEIGH=NEIGH.filter(x=>x!==n); NEIGH.push(next);
+  applySavedSceneOrder();
 }
 

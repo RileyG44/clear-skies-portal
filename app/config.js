@@ -47,8 +47,11 @@ const GIBS = [
 ];
 
 const SOURCES = [
+  /* Planetary Computer serves its collections from more than one backend and
+     rejects a cross-backend search (HTTP 400). Query each backend group apart. */
   {key:"pc",   name:"Microsoft Planetary Computer", api:PC,
-   colls:["sentinel-2-l2a","sentinel-1-grd","landsat-c2-l2","naip","hls2-s30","hls2-l30","aster-l1t","cop-dem-glo-30"]},
+   colls:["sentinel-2-l2a","sentinel-1-grd","landsat-c2-l2","naip","hls2-s30","hls2-l30","aster-l1t","cop-dem-glo-30"],
+   collGroups:[["sentinel-2-l2a","sentinel-1-grd","landsat-c2-l2","hls2-s30","hls2-l30"],["naip","aster-l1t","cop-dem-glo-30"]]},
   {key:"es",   name:"AWS Earth Search (Element 84)", api:ES,
    colls:["sentinel-2-l2a","sentinel-1-grd","landsat-c2-l2","naip","cop-dem-glo-30"]},
   {key:"cdse", name:"Copernicus Data Space", api:CDSE,

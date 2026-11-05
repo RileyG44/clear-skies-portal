@@ -10,10 +10,18 @@ $("#ctlReset").onclick=()=>{
 };
 $("#mosaic").onchange=()=>{
   MOSAIC_ON=$("#mosaic").checked;
-  if(MOSAIC_ON && SEL!=null) fillMosaic(ITEMS[SEL]);
+  if(MOSAIC_ON && displayedScene()) fillMosaic(displayedScene());
   else { clearMosaic(); const s2=$("#mosStat"); if(s2) s2.textContent="" }
 };
-$("#fillNow").onclick=()=>{ if(SEL!=null) fillMosaic(ITEMS[SEL], true) };
+/* Surroundings match the scene actually drawn, not a selected catalog record
+   that could not be displayed. */
+function displayedScene(){ return overlay&&overlay._cspItem||null }
+/* A person's chosen stack (for example imagery above terrain) applies to every
+   imagery layer published later: replacements, auto-fill, manual fill, swaps. */
+function applySavedSceneOrder(){
+  try{ const order=JSON.parse(localStorage.getItem("clearskies.active-layer-order.v1")||"null"); if(Array.isArray(order)&&order.includes("scene")) cspSetLayerOrder(order) }catch(error){}
+}
+$("#fillNow").onclick=()=>{ if(displayedScene()) fillMosaic(displayedScene(), true) };
 
 /* The layer list, counts and the iPhone shell redraw from csp:layers-changed.
    Code that changes several layer controls at once without the input events
@@ -34,12 +42,25 @@ function clearScene(renderResults=true){
   MOSAIC_ON=$("#mosaic").checked;
   const status=$("#mosStat"); if(status) status.textContent="";
   hideMenu(); hideSceneControls(); SEL=null;
+  const name=$("#ctlName"); if(name){ name.textContent="";name.dataset.state="";name.dataset.note="";name.dataset.pending="";$("#ctlDate").textContent="" }
   if(renderResults) render();
   announceLayers();
+}
+/* A new list replaces the selection but keeps accepted imagery, its mosaic
+   and its On the map card. Only an unfinished request is abandoned. */
+function releaseSelection(){
+  sceneToken++;
+  sceneAbort?.abort(); sceneAbort=null;
+  if(overlayPending){clearTimeout(overlayPending._cspReadyTimer);map.removeLayer(overlayPending);overlayPending=null}
+  if(footprint&&footprint._cspItem!==displayedScene()){map.removeLayer(footprint);footprint=null}
+  const name=$("#ctlName");
+  if(name&&name.dataset.state!=="partial"){name.dataset.state="shown";name.dataset.note="";name.dataset.pending="";name.dataset.link=""}
+  SEL=null; announceLayers();
 }
 $("#clr").onclick=()=>clearScene();
 $("#sort").onchange=render;
 $("#viewable").onchange=render;
+$("#groupSrc").onchange=render;
 $("#vis").onchange=render;
 /* ---- date window UI ---------------------------------------------------- */
 let PREV_DAYS=365;                       // last preset used, to seed a custom range
@@ -117,7 +138,10 @@ function loadSearchPrefs(){
     if(/^\d{4}-\d{2}-\d{2}$/.test(p.dFrom||"")) $("#dFrom").value=p.dFrom;
     if(/^\d{4}-\d{2}-\d{2}$/.test(p.dTo||"")) $("#dTo").value=p.dTo;
     if(Number.isFinite(+p.opacity)) $("#op").value=Math.max(10,Math.min(100,+p.opacity));
-    for(const id of ["viewable","fire"]) if(typeof p[id]==="boolean") $("#"+id).checked=p[id];
+    if(typeof p.fire==="boolean") $("#fire").checked=p.fire;
+    // Map-drawable scenes became the default list in prefs version 3; older
+    // prefs always recorded the previous off default.
+    if(p.prefs>=3){ for(const id of ["viewable","groupSrc"]) if(typeof p[id]==="boolean") $("#"+id).checked=p[id] }
     // Auto-fill surroundings became on by default in prefs version 2. Older
     // saved prefs recorded it off whenever a new search reset the switch, so
     // only a choice saved since then is restored.
@@ -126,9 +150,9 @@ function loadSearchPrefs(){
 }
 function saveSearchPrefs(){
   try{ localStorage.setItem(SEARCH_PREF_KEY,JSON.stringify({
-    prefs:2,days:$("#days").value,dFrom:$("#dFrom").value,dTo:$("#dTo").value,
+    prefs:3,days:$("#days").value,dFrom:$("#dFrom").value,dTo:$("#dTo").value,
     cloud:$("#cloud").value,vis:$("#vis").value,sort:$("#sort").value,
-    viewable:$("#viewable").checked,
+    viewable:$("#viewable").checked,groupSrc:$("#groupSrc").checked,
     mosaic:$("#mosaic").checked,fire:$("#fire").checked,opacity:+$("#op").value
   })) }catch(error){}
 }
@@ -136,7 +160,7 @@ loadSearchPrefs();if(cspFreshView) $("#fire").checked=false;MOSAIC_ON=$("#mosaic
 initAlerts();
 syncDateUI();
 $("#cloud").onchange=()=>LOC&&run();
-for(const id of ["days","dFrom","dTo","cloud","vis","sort","viewable","mosaic","fire"])
+for(const id of ["days","dFrom","dTo","cloud","vis","sort","viewable","groupSrc","mosaic","fire"])
   $("#"+id).addEventListener("change",saveSearchPrefs);
 $("#op").addEventListener("change",saveSearchPrefs);
 

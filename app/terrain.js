@@ -246,7 +246,7 @@ function renderTerrainSourcePanel(summaryArg,is3dArg,layerArg){
       const row=input.closest("[data-id]"),id=row.dataset.id;
       if(input.dataset.tsp==="opacity"){ window.ClearSkiesPortalBridge.setLayerOpacity(id,+input.value); input.nextElementSibling.textContent=input.value+"%"; }
       else if(input.dataset.tsp==="elevation"){ const slide=$("#elevSlide"); slide.value=input.value; slide.dispatchEvent(new Event("input",{bubbles:true})); input.nextElementSibling.textContent=elevationLabel(); }
-      else if(input.dataset.tsp==="span"){ const span=$("#elevSpan"); span.value=elevSpanFromPosition(input.value); span.dispatchEvent(new Event("input",{bubbles:true})); input.nextElementSibling.textContent=Number(span.value).toLocaleString()+" ft";input.setAttribute("aria-valuetext",Number(span.value).toLocaleString()+" feet"); }
+      else if(input.dataset.tsp==="span"){ const span=$("#elevSpan"); setElevSpanFt(elevSpanFromPosition(input.value)); span.dispatchEvent(new Event("input",{bubbles:true})); input.nextElementSibling.textContent="±"+elevFormat(elevSpanMetres());input.setAttribute("aria-valuetext",elevFormat(elevSpanMetres())); }
     });
     rows.addEventListener("change",e=>{
       const input=e.target.closest("input[data-tsp]");if(!input)return;
@@ -272,7 +272,7 @@ function renderTerrainSourcePanel(summaryArg,is3dArg,layerArg){
       const row=document.createElement("div");row.className="terrain-source-panel-row";row.dataset.id=item.id;
       row.innerHTML='<div class="terrain-source-panel-name"></div><div class="terrain-source-panel-meta"></div>'+
         (item.noOpacity?"":'<label class="tsp-control"><span>Opacity</span><input type="range" min="0" max="100" step="1" data-tsp="opacity"><output></output></label>')+
-        (item.id==="elevation-spectrum"?'<label class="tsp-control"><span>Elevation</span><input type="range" min="-500" max="4500" step="1" data-tsp="elevation"><output></output></label>'+
+        (item.id==="elevation-spectrum"?'<label class="tsp-control"><span>Elevation</span><input type="range" min="-500" max="8850" step="1" data-tsp="elevation"><output></output></label>'+
           '<label class="tsp-control"><span>Color span</span><input type="range" min="0" max="1000" step="1" data-tsp="span" title="Distance in feet from the reference where colors reach full strength"><output></output></label>':"");
       row.querySelectorAll("input").forEach(input=>input.setAttribute("aria-label",`${item.name} ${input.dataset.tsp==="span"?"color span in feet":input.dataset.tsp}`));
       rows.append(row);
@@ -296,13 +296,10 @@ function renderTerrainSourcePanel(summaryArg,is3dArg,layerArg){
     const elevation=row.querySelector('[data-tsp="elevation"]');
     if(elevation&&document.activeElement!==elevation){ elevation.value=$("#elevSlide").value;elevation.nextElementSibling.textContent=elevationLabel() }
     const span=row.querySelector('[data-tsp="span"]');
-    if(span&&document.activeElement!==span){ span.value=elevSpanPosition($("#elevSpan").value);span.setAttribute("aria-valuetext",Number($("#elevSpan").value).toLocaleString()+" feet");span.nextElementSibling.textContent=Number($("#elevSpan").value).toLocaleString()+" ft" }
+    if(span&&document.activeElement!==span){ span.value=elevSpanPosition(elevSpanFt());span.setAttribute("aria-valuetext",elevFormat(elevSpanMetres()));span.nextElementSibling.textContent="±"+elevFormat(elevSpanMetres()) }
   }
 }
-function elevationLabel(){
-  const unit=$("#elevUnit").value;
-  return `${Math.round(+$("#elevSlide").value/ELEV_UNIT[unit]).toLocaleString()} ${unit}`;
-}
+function elevationLabel(){ return elevFormat(elevMetres()) }
 let terrainStatusFrame=0,terrainSwapMessage="";
 function scheduleTerrainStatus(){
   scheduleAutomaticDnr();

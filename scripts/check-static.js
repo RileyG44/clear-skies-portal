@@ -616,7 +616,7 @@ assert(index.includes('<option value="ft" selected>feet</option>'),"elevation mu
 assert(index.includes('id="elevAlpha"'),"elevation spectrum needs a user-controlled shader strength");
 assert(index.includes('class="elev-spectrum-scale"')&&
        index.indexOf('class="elevKey"')<index.indexOf('id="elevAlpha"')&&
-       index.includes('for="elevAlpha">Spectrum opacity'),
+       index.includes('for="elevAlpha">Opacity'),
        "the elevation legend must sit below its ramp and remain separate from spectrum opacity");
 /* The shell must never be sized from a measurement that can come up short of
    the screen. That was first a JS visual-viewport offset; replacing it with

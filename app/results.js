@@ -50,34 +50,57 @@ function renderPasses(){
   showPane("passes", rows.length>0);
   setCount("passes", rows.length ? rows.length+" sats" : "");
   if(!rows.length){ el.innerHTML=""; return }
+  // Every counted satellite is listed; the estimate is only as good as the history behind it.
   el.innerHTML=
-    rows.slice(0,6).map(r=>
+    rows.map(r=>
       `<div class="pr"><span><b>${esc(r.plat)}</b> <span style="color:var(--ink-3)">${r.cycle.toFixed(1)}-day cycle</span></span>
-       <span class="w">in ${until(r.next)}</span></div>`).join("")+
-    `<div class="fine">Projected from the ${rows.reduce((a,r)=>a+r.n,0)} past acquisitions over this point,
-     not from orbital elements. Accurate to a few hours; acquisition is not guaranteed on every pass.</div>`;
+       <span class="w">about ${until(r.next)}</span></div>`).join("")+
+    `<div class="fine">Estimated from the ${rows.reduce((a,r)=>a+r.n,0)} past acquisitions over this point, not from orbital elements.
+     Treat these as approximate; a pass does not guarantee a usable or cloud-free image.</div>`;
 }
 
+/* Best match: one obvious first choice, two quick alternatives, and the size
+   of the catalog behind them. Real buttons, so keyboards reach them too. */
 function summarise(pool){
   const el=$("#summary");
   showPane("summary", pool.length>0);
-  if(!pool.length){ el.innerHTML=""; return }
+  if(!pool.length){ el.innerHTML=""; setCount("summary",""); return }
   const byDate=pool.slice().sort((a,b)=>new Date(b.date)-new Date(a.date));
   const newest=byDate[0];
   const photo=bestPhoto(pool);
-  const sharp=pool.slice().sort((a,b)=>(a.gsd??1e9)-(b.gsd??1e9))[0];
+  const sharp=pool.slice().sort((a,b)=>(a.gsd??1e9)-(b.gsd??1e9)||(new Date(b.date)-new Date(a.date)))[0];
   const srcs=new Set(pool.map(x=>x.src)).size;
-  const row=(k,it,extra)=> it
-    ? `<div class="srow" data-id="${esc(it.id)}"><span class="k">${k}</span> <b>${esc(it.label)}</b> &middot; ${ago(it.date)}${extra||""}</div>`
+  /* "Showing" means accepted pixels on the map; a requested scene that is
+     still loading, or that failed, never claims it. */
+  const same=(a,b)=>!!(a&&b&&a.id===b.id&&a.src===b.src);
+  const shownItem=typeof displayedScene==="function"?displayedScene():null;
+  const loadingItem=$("#ctlName")?.dataset.state==="loading"&&SEL!=null?ITEMS[SEL]:null;
+  const isCurrent=it=>same(it,shownItem),stateOf=it=>isCurrent(it)?"showing":same(it,loadingItem)?"loading":"";
+  const provider=it=>esc(it.src.split(" ")[0]);
+  const meta=it=>[ago(it.date),res(it.gsd),it.cloud!=null?it.cloud.toFixed(0)+"% cloud":"",provider(it)].filter(Boolean).join(" &middot; ");
+  const main=photo
+    ? `<button type="button" class="csp-best-main" data-id="${esc(photo.id)}" data-src="${esc(photo.src)}" aria-pressed="${isCurrent(photo)}" data-state="${stateOf(photo)}">
+        <span class="csp-best-k">${{showing:"Showing best clear image",loading:"Loading best clear image…"}[stateOf(photo)]||"Show best clear image"}</span>
+        <strong>${esc(photo.label)} &middot; ${esc(photo.date.slice(0,10))}</strong>
+        <span class="csp-best-meta">${meta(photo)}</span>
+      </button>`
+    : `<p class="csp-best-none">No clear daylight photo matches these filters. Try a wider time window or Any cloud.</p>`;
+  const chip=(k,it,detail)=>it&&it!==photo
+    ? `<button type="button" class="csp-best-chip" data-id="${esc(it.id)}" data-src="${esc(it.src)}" aria-pressed="${isCurrent(it)}" data-state="${stateOf(it)}"><span>${k}${{showing:" · showing",loading:" · loading…"}[stateOf(it)]||""}</span><b>${esc(it.label)}</b><small>${detail}${it.tiles?"":" &middot; outline only"}</small></button>`
     : "";
-  el.innerHTML =
-    row("Newest", newest, ` &middot; ${res(newest.gsd)} <span style="color:var(--ink-3)">(${esc(newest.src.split(" ")[0])})</span>`)+
-    row("Best photo", photo, photo ? ` &middot; ${res(photo.gsd)}${photo.cloud!=null?" &middot; "+photo.cloud.toFixed(0)+"% cloud":""}` : "")+
-    row("Sharpest", sharp, ` &middot; ${res(sharp.gsd)}`)+
-    `<div><span class="k">Coverage</span> ${pool.length} scenes across ${srcs} sources</div>`;
-  el.querySelectorAll(".srow").forEach(r=>r.onclick=()=>{
-    const i=ITEMS.findIndex(x=>x.id===r.dataset.id); if(i>=0) select(i);
+  const chips=chip("Newest",newest,`${ago(newest.date)} &middot; ${provider(newest)}`)+chip("Sharpest",sharp,`${res(sharp.gsd)} &middot; ${ago(sharp.date)}`);
+  const focused=document.activeElement?.closest?.("#summary button[data-id]");
+  const focusKey=focused?(focused.classList.contains("csp-best-main")?"main":focused.querySelector("span")?.textContent.split(" ")[0]):"";
+  el.innerHTML=main+(chips?`<div class="csp-best-alt">${chips}</div>`:"")+
+    `<div class="csp-best-cover">${pool.length.toLocaleString()} matching scenes from ${srcs} ${srcs===1?"source":"sources"}, listed below</div>`;
+  el.querySelectorAll("button[data-id]").forEach(button=>button.onclick=()=>{
+    const i=ITEMS.findIndex(x=>x.id===button.dataset.id&&x.src===button.dataset.src); if(i>=0) select(i);
   });
+  // Keep keyboard focus on the same choice when the card is rebuilt.
+  if(focusKey){
+    const next=focusKey==="main"?el.querySelector(".csp-best-main"):[...el.querySelectorAll(".csp-best-chip")].find(b=>b.querySelector("span")?.textContent.startsWith(focusKey));
+    (next||el.querySelector("button[data-id]"))?.focus({preventScroll:true});
+  }
   setCount("summary", pool.length+" scenes");
 }
 
@@ -123,63 +146,88 @@ function render(enter=false){
   clearTimeout(resultEntryTimer);
   resEl.classList.toggle("csp-results-enter",enter===true&&ITEMS.length>0);
   if(!ITEMS.length){
-    resEl.innerHTML = LOC ? '<div class="empty">No imagery found.<br>Widen the date range or cloud filter.</div>'
+    /* Until every catalog has answered, an empty list means "not yet", not
+       "nothing here". */
+    const pending=typeof searchPending!=="undefined"&&searchPending;
+    resEl.innerHTML = LOC&&pending ? '<div class="empty"><span class="spin"></span> Searching imagery catalogs…</div>'
+                    : LOC ? '<div class="empty">No imagery found.<br>Widen the date range or cloud filter.</div>'
                           : `<div class="empty">No search yet.<br>Try <b>Moses Lake</b>, <b>Zermatt</b>, or double-${MAP_TAP} the map.</div>`;
-    setCount("results","");
+    setCount("results","");summarise([]);
     return;
   }
   const mode=$("#sort").value, pool=resultPool();
-  const groups={};
-  for(const it of pool) (groups[it.src] ||= []).push(it);
+  if(!pool.length){
+    summarise(pool);
+    const still=typeof searchPending!=="undefined"&&searchPending?" More catalogs are still answering.":"";
+    resEl.innerHTML=`<div class="empty">None of the ${ITEMS.length.toLocaleString()} scenes so far match these list filters.${still}<br><button type="button" class="linkbtn" data-show-all>Show all scene types</button></div>`;
+    setCount("results","0 of "+ITEMS.length);
+    resEl.querySelector("[data-show-all]").onclick=()=>{
+      $("#vis").value="all";$("#viewable").checked=false;
+      $("#viewable").dispatchEvent(new Event("change"));$("#vis").dispatchEvent(new Event("change"));
+      /* The button that was pressed is gone; keep keyboard users in the list. */
+      const first=resEl.querySelector(".item[tabindex]");
+      (first||$("#vis")).focus({preventScroll:true});
+    };
+    return;
+  }
+  /* Sort applies to the whole list. Grouping by source is a separate choice;
+     when on, sources are ordered by their best match for the chosen sort. */
   const itemIndex=new Map(ITEMS.map((it,i)=>[it,i]));
   summarise(pool);
-  const order=Object.keys(groups).sort((a,b)=>{
-    const na=Math.min(...groups[a].map(x=>+new Date(x.date)));
-    const xa=Math.max(...groups[a].map(x=>+new Date(x.date)));
-    const xb=Math.max(...groups[b].map(x=>+new Date(x.date)));
-    return xb-xa;
-  });
-
-  let h="";
-  for(const g of order){
-    const list=groups[g].slice().sort((a,b)=>
-      mode==="res" ? ((a.gsd??1e9)-(b.gsd??1e9)) || (new Date(b.date)-new Date(a.date))
-                   : (new Date(b.date)-new Date(a.date)));
-    const col=!!COLLAPSED[g];
-    h+=`<div class="grp" data-g="${encodeURIComponent(g)}">${esc(g)} &middot; ${list.length}<span class="car">${col?"\u25B8 show":"\u25BE hide"}</span></div>`;
-    if(col) continue;
-    const selectedAt=list.findIndex(it=>itemIndex.get(it)===SEL);
-    const shown=Math.max(RESULT_SHOWN[g]||RESULT_PAGE, selectedAt>=0?selectedAt+1:0);
-    for(const it of list.slice(0,shown)){
-      const i=itemIndex.get(it);
-      h+=`<div class="item ${SEL===i?'sel':''}" data-i="${i}">
-        ${it.thumb?`<img class="thumb" loading="lazy" src="${esc(it.thumb)}" onerror="this.style.visibility='hidden'">`
+  const compare=(a,b)=>mode==="res"
+    ? ((a.gsd??1e9)-(b.gsd??1e9)) || (new Date(b.date)-new Date(a.date))
+    : (new Date(b.date)-new Date(a.date)) || ((a.gsd??1e9)-(b.gsd??1e9));
+  const sorted=pool.slice().sort(compare),grouped=$("#groupSrc")?.checked!==false;
+  const groups=new Map();
+  for(const it of sorted){ const key=grouped?it.src:"__all"; if(!groups.has(key)) groups.set(key,[]); groups.get(key).push(it) }
+  const shownItem=typeof displayedScene==="function"?displayedScene():null;
+  const card=(it,flat)=>{
+    const i=itemIndex.get(it),onMap=shownItem&&shownItem.id===it.id&&shownItem.src===it.src;
+    const name=`${it.label}, ${it.date.slice(0,10)}${flat?", "+it.src:""}${onMap?", on the map":""}`;
+    return `<div class="item ${SEL===i?'sel':''} ${onMap?'on-map':''}" data-i="${i}" data-g="${encodeURIComponent(grouped?it.src:"__all")}" role="button" tabindex="0" aria-pressed="${SEL===i}" aria-label="${esc(name)}">
+        ${it.thumb?`<img class="thumb" loading="lazy" alt="" src="${esc(it.thumb)}" onerror="this.style.visibility='hidden'">`
                   :`<div class="thumb"></div>`}
         <div class="meta">
-          <div class="ttl">${esc(it.label)}</div>
-          <div class="dt">${esc(it.date.slice(0,10))} &nbsp;<span style="color:var(--dim)">${esc(it.date.slice(11,16))}Z</span></div>
+          <div class="ttl">${esc(it.label)}${onMap?' <span class="tag on-map-tag">On map</span>':""}</div>
+          <div class="dt">${esc(it.date.slice(0,10))} &nbsp;<span style="color:var(--dim)">${esc(it.date.slice(11,16))}Z</span>${flat?` &middot; <span style="color:var(--dim)">${esc(it.src.split(" (")[0])}</span>`:""}</div>
           <div class="tags">
             <span class="tag ${freshClass(it.date)}">${ago(it.date)}</span>
             ${it.gsd!=null?`<span class="tag res">${res(it.gsd)}</span>`:""}
             ${it.kind?`<span class="tag">${esc(it.kind)}</span>`:""}
             ${it.vis&&it.vis!=="rgb"?`<span class="tag">${esc(VIS_LABEL[it.vis]||it.vis)}</span>`:""}
             ${it.cloud!=null?`<span class="tag cloud">${it.cloud.toFixed(0)}% cloud</span>`:""}
-            ${!it.tiles?`<span class="tag">no map tiles</span>`:""}
+            ${!it.tiles?`<span class="tag">outline only</span>`:""}
+            ${it.fixedDate?`<span class="tag" title="This composite has one fixed date. It is listed for every preset time window; a custom range excludes it unless the range includes that date.">Fixed-date composite</span>`:""}
           </div>
         </div>
       </div>`;
-    }
+  };
+  let h="";
+  for(const [g,list] of groups){
+    const col=grouped&&!!COLLAPSED[g];
+    if(grouped) h+=`<div class="grp" data-g="${encodeURIComponent(g)}" role="button" tabindex="0" aria-expanded="${!col}">${esc(g)} &middot; ${list.length}<span class="car">${col?"\u25B8 show":"\u25BE hide"}</span></div>`;
+    if(col) continue;
+    const selectedAt=list.findIndex(it=>itemIndex.get(it)===SEL);
+    const shown=Math.max(RESULT_SHOWN[g]||RESULT_PAGE, selectedAt>=0?selectedAt+1:0);
+    for(const it of list.slice(0,shown)) h+=card(it,!grouped);
     if(shown<list.length)
       h+=`<button type="button" class="more-items" data-more="${encodeURIComponent(g)}">Show ${Math.min(RESULT_PAGE,list.length-shown)} more · ${list.length-shown} remaining</button>`;
   }
+  const focused=document.activeElement?.closest?.("#results .item")?.dataset.i;
   resEl.innerHTML=h;
+  if(focused!=null) resEl.querySelector(`.item[data-i="${focused}"]`)?.focus({preventScroll:true});
   if(enter===true) resultEntryTimer=setTimeout(()=>{resEl.classList.remove("csp-results-enter");resultEntryTimer=0},500);
   setCount("results", pool.length ? pool.length+" of "+ITEMS.length : "");
-  resEl.querySelectorAll(".item").forEach(el=>el.onclick=()=>select(+el.dataset.i));
-  resEl.querySelectorAll(".grp").forEach(el=>el.onclick=()=>{
-    const k=decodeURIComponent(el.dataset.g); COLLAPSED[k]=!COLLAPSED[k]; render(); });
+  const activate=(el,run)=>{ el.onclick=run; el.onkeydown=event=>{ if(event.key==="Enter"||event.key===" "){ event.preventDefault(); run() } } };
+  resEl.querySelectorAll(".item").forEach(el=>activate(el,()=>select(+el.dataset.i)));
+  resEl.querySelectorAll(".grp").forEach(el=>activate(el,()=>{
+    const k=decodeURIComponent(el.dataset.g); COLLAPSED[k]=!COLLAPSED[k]; render();
+    resEl.querySelector(`.grp[data-g="${CSS.escape(el.dataset.g)}"]`)?.focus({preventScroll:true}); }));
   resEl.querySelectorAll(".more-items").forEach(el=>el.onclick=()=>{
-    const k=decodeURIComponent(el.dataset.more); RESULT_SHOWN[k]=(RESULT_SHOWN[k]||RESULT_PAGE)+RESULT_PAGE; render(); });
+    const k=decodeURIComponent(el.dataset.more),before=resEl.querySelectorAll(`.item[data-g="${CSS.escape(el.dataset.more)}"]`).length;
+    RESULT_SHOWN[k]=(RESULT_SHOWN[k]||RESULT_PAGE)+RESULT_PAGE; render();
+    // Continue from the first newly revealed scene.
+    resEl.querySelectorAll(`.item[data-g="${CSS.escape(el.dataset.more)}"]`)[before]?.focus({preventScroll:false}); });
 }
 
 async function select(i){
@@ -187,26 +235,36 @@ async function select(i){
   sceneAbort?.abort();
   const controller=new AbortController(); sceneAbort=controller;
   if(overlayPending){ clearTimeout(overlayPending._cspReadyTimer); map.removeLayer(overlayPending); overlayPending=null }
-  SEL=i; render();
+  SEL=i;
   const it=ITEMS[i];
-  if(!it) return;
+  if(!it){ render(); return }
   if(+$("#op").value===0) $("#op").value=+$("#op").dataset.lastVisible||100;
   showSceneControls();
-  $("#ctlName").textContent=it.label+"  ·  "+it.src;
-  $("#ctlDate").textContent=it.date.slice(0,10)+"  ("+ago(it.date)+")";
+  /* #ctlName/#ctlDate name only what is actually drawn. The request being
+     loaded, and why it could not replace the picture, live in its dataset. */
+  const nameEl=$("#ctlName"),label=it.label+"  ·  "+it.src,shown=()=>!!(overlay&&map.hasLayer(overlay));
+  const sceneState=(state,note="")=>{nameEl.dataset.state=state;nameEl.dataset.note=note;nameEl.dataset.pending=state==="loading"?label:""};
+  sceneState("loading");render();
   const providerLink=safeHttpUrl(it.link);
-  $("#ctlLink").innerHTML = providerLink?`<a href="${esc(providerLink)}" target="_blank" rel="noopener">Open in provider viewer &rarr;</a>`:"";
+  // The card's viewer link belongs to the scene it names; a record that could
+  // not be drawn offers its own link inside its note.
+  const linkHtml=providerLink?`<a href="${esc(providerLink)}" target="_blank" rel="noopener">Open in provider viewer &rarr;</a>`:"";
+  nameEl.dataset.link=providerLink||"";
+  if(!shown()) $("#ctlLink").innerHTML=linkHtml;
 
   if(footprint){map.removeLayer(footprint);footprint=null}
   mosToken++;mosAbort?.abort();cancelPendingNeighbours(); hideMenu();
 
   if(it.geom){
     footprint=L.geoJSON(it.geom,{style:{color:"#4a9eff",weight:1.5,fill:false,dashArray:"4 3"}}).addTo(map);
+    footprint._cspItem=it;
   }
   if(!it.tiles){
-    clearMosaic();
-    if(overlay){ map.removeLayer(overlay); overlay=null }
-    $("#ctlName").textContent += "  (no map tiles)";
+    /* A catalog record without map tiles cannot replace useful imagery; draw
+       its outline and point to the provider instead. */
+    sceneState(shown()?"shown":"footprint",`${label} has no map tiles, so only its outline is drawn.${shown()?" The scene above stays on the map.":""}`);
+    nameEl.dataset.link=providerLink||"";
+    render();
     return;
   }
 
@@ -218,7 +276,7 @@ async function select(i){
   let url;
   try{ url=await tileUrl(it,controller.signal) }
   catch(e){
-    if(token===sceneToken) $("#ctlName").textContent+="  (imagery unavailable — kept previous scene)";
+    if(token===sceneToken){ sceneState(shown()?"shown":"failed",`${label} is unavailable from its provider right now${shown()?"; the scene above stays on the map":""}.`); render() }
     return;
   }
   if(token!==sceneToken) return;
@@ -236,16 +294,25 @@ async function select(i){
     const ratio=expected?loaded/expected:0;
     next._cspLoadStats={loaded,errors,total,expected,ratio};
     if(!loaded||ratio<0.9){
-      map.removeLayer(next);
+      /* Leaflet fires "load" mid-way through its own tile bookkeeping; removing
+         the layer inside that callback leaves it reading a detached map. Hide
+         it now and remove it once the event has finished. */
+      next.setOpacity(0);
+      Promise.resolve().then(()=>{ if(map.hasLayer(next)) map.removeLayer(next) });
       recordProviderOutcome(it.srcKey,performance.now()-started,false);
-      $("#ctlName").textContent+="  (imagery was too incomplete — kept previous scene)";
+      sceneState(shown()?"shown":"failed",`${label} loaded too few tiles to show${shown()?"; the scene above stays on the map":""}.`);
+      render();
       return;
     }
     recordProviderOutcome(it.srcKey,performance.now()-started,true);
     if(previous&&map.hasLayer(previous)) map.removeLayer(previous);
     clearMosaic();
-    next.setOpacity(+$("#op").value/100);next.setZIndex(400); overlay=next;
-    if(errors||loaded<expected) $("#ctlName").textContent+="  (partial footprint; basemap preserved beneath)";
+    next.setOpacity(+$("#op").value/100);next.setZIndex(400); overlay=next; next._cspItem=it;
+    if(typeof applySavedSceneOrder==="function") applySavedSceneOrder();
+    nameEl.textContent=label;$("#ctlDate").textContent=it.date.slice(0,10)+"  ("+ago(it.date)+")";
+    $("#ctlLink").innerHTML=linkHtml;nameEl.dataset.link="";
+    sceneState(errors||loaded<expected?"partial":"shown",errors||loaded<expected?"Some tiles are missing; the basemap shows through the gaps.":"");
+    render();
     if(MOSAIC_ON||$("#mosaic").checked) fillMosaic(it);
   };
   next.on("tileload",()=>{ loaded++ });

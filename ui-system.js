@@ -31,7 +31,7 @@ side.style.width="660px";
 
 const ROUTES={
   layers:{title:"Layers",description:"Everything currently drawn on the map, in render order.",icon:"layers",panes:[],custom:"layers"},
-  satellite:{title:"Satellite imagery",description:"Find dated scenes, tune the search, and control the image already on the map.",icon:"satellite",panes:["summary","passes","results","overlays"],open:["results"],overlayGroup:"Imagery",overlayTitle:"Satellite base layers",custom:"satellite"},
+  satellite:{title:"Satellite imagery",description:"Search a place, show the best clear image, then fine-tune what is on the map.",icon:"satellite",panes:["results","overlays","passes"],open:["results"],overlayGroup:"Imagery",overlayTitle:"Reference imagery & coverage",custom:"satellite"},
   terrain:{title:"LiDAR",description:"Draw LiDAR terrain layers, fetch WA DNR surveys, and save areas for offline use.",icon:"radar",panes:["terrain"],open:["terrain"]},
   elevation:{title:"Elevation",description:"Color the ground by height or highlight it above and below a threshold.",icon:"mountain-snow",panes:["elevation"],open:["elevation"]},
   analyze:{title:"Analyze",description:"Measure landform patterns or reveal features in the current view.",icon:"scan-search",panes:["research"],open:["research"],researchMode:"analyze"},
@@ -165,7 +165,7 @@ $("#q")?.addEventListener("keydown",event=>{
   event.preventDefault();event.stopImmediatePropagation();
 },true);
 
-const PANE_TITLES={filters:"Search filters",alerts:"Live conditions",summary:"Best available",passes:"Acquisition timing",terrain:"LiDAR",elevation:"Elevation",research:"Analysis tools",overlays:"Layer catalog",results:"Satellite scenes"};
+const PANE_TITLES={filters:"Search filters",alerts:"Live conditions",summary:"Best available",passes:"Estimated next acquisitions",terrain:"LiDAR",elevation:"Elevation",research:"Analysis tools",overlays:"Layer catalog",results:"Satellite scenes"};
 for(const [name,title] of Object.entries(PANE_TITLES)){
   const pane=$(`.pane[data-pane="${name}"]`,panes),label=$(".pane-t",pane),head=$(".pane-h",pane);
   if(label) label.textContent=title;
@@ -325,9 +325,20 @@ $("#resetPanes")?.addEventListener("click",()=>{
    search on any page) always finds them in the document. */
 const filtersBody=$(".pane[data-pane='filters'] .pane-b",panes);
 const filterParts=[$(".fgrid",filtersBody),$(".toggles",filtersBody)].filter(Boolean);
+/* Live controls the Satellite page borrows from their legacy homes. Each
+   remembers where it came from and returns there, in reverse order, before
+   any other page is drawn. Nodes move with their listeners; never clone. */
+const hostedNodes=[];
+function hostNode(node,target,before=null){
+  if(!node||!target) return;
+  if(!hostedNodes.some(entry=>entry[0]===node)) hostedNodes.push([node,node.parentNode,node.nextSibling]);
+  target.insertBefore(node,before);
+}
 function restoreFilters(){
+  for(const [node,parent,next] of hostedNodes.splice(0).reverse()) parent?.insertBefore(node,next&&next.parentNode===parent?next:null);
   if(filtersBody&&filterParts.some(part=>part.parentElement!==filtersBody)) filtersBody.append(...filterParts);
   if(status.parentElement!==workspaceScroll) workspaceScroll.insertBefore(status,panes);
+  $("#cspSatResultsBar",panes)?.remove();
 }
 function clearCustom(){
   satelliteSearch?.dispatchEvent(new Event("csp:search-dismiss"));
@@ -503,8 +514,14 @@ function availableLayersCard(){
   return card;
 }
 
+let pendingLayerFocus=null;
 function renderLayersView(){
   const stack=$("#cspActiveLayerStack",customView),before=stack?layerCardTops(stack):null;
+  /* A background refresh rebuilds the cards; keep keyboard focus on the same
+     control of the same layer instead of dropping it to the page. */
+  const focused=document.activeElement,focusedCard=focused?.closest?.("#cspActiveLayerStack .csp-layer-card");
+  const want=pendingLayerFocus||(focusedCard?{id:focusedCard.dataset.layerId,selector:focused.dataset.action?`[data-action="${focused.dataset.action}"]`:"."+[...focused.classList].join(".")}:null);
+  pendingLayerFocus=null;
   clearCustom();
   const activeLabel=document.createElement("div");activeLabel.className="csp-section-label";activeLabel.textContent="Active layers";
   const active=document.createElement("div");active.className="csp-card";active.id="cspActiveLayerStack";
@@ -512,6 +529,11 @@ function renderLayersView(){
   renderLayerStack(active,false,before);
   const availableLabel=document.createElement("div");availableLabel.className="csp-section-label";availableLabel.textContent="Add layers";
   customView.append(availableLabel,availableLayersCard());
+  if(want){
+    const card=$(`.csp-layer-card[data-layer-id="${CSS.escape(want.id)}"]`,active);
+    const target=card&&(want.selector&&$(want.selector,card)||$(".csp-layer-handle,.csp-layer-range,button,input",card));
+    target?.focus({preventScroll:!!focusedCard});
+  }
 }
 
 /* Satellite: a scene search built for imagery. A place, address or pasted
@@ -534,8 +556,34 @@ function buildSatelliteSearch(){
         <div class="csp-sat-suggest" id="cspSatSuggest" role="listbox" aria-label="Places" hidden></div>
       </form>
       <p class="csp-sat-note" id="cspSatNote" role="status" hidden></p>
-      <div class="csp-sat-filters"></div>
-    </div>`;
+      <details class="csp-sat-filterbox" id="cspSatFilterBox">
+        <summary><span>Search filters</span><span class="csp-sat-filter-sum" id="cspSatFilterSum"></span></summary>
+        <div class="csp-sat-filters"></div>
+        <p class="csp-sat-filter-help">Preset windows also list fixed-date composites, such as the 2016 night lights; a custom range includes them only when it covers their date.</p>
+      </details>
+    </div>
+    <section class="csp-sat-best" id="cspSatBest" aria-labelledby="cspSatBestLabel" hidden>
+      <div class="csp-section-label" id="cspSatBestLabel">Best match</div>
+      <div class="csp-card csp-sat-best-card"></div>
+    </section>
+    <section class="csp-sat-current" id="cspSatCurrent" aria-labelledby="cspSatCurrentLabel" hidden>
+      <div class="csp-section-label" id="cspSatCurrentLabel">On the map</div>
+      <div class="csp-card csp-sat-current-card">
+        <div class="csp-sat-now">
+          <div class="csp-sat-now-text"><strong id="cspSatNowName"></strong><span id="cspSatNowDate"></span></div>
+          <span class="csp-sat-now-badge" id="cspSatNowBadge"></span>
+        </div>
+        <p class="csp-sat-now-note" id="cspSatNowNote" role="status" aria-live="polite" hidden></p>
+        <div class="csp-sat-covered" id="cspSatCovered" role="status" hidden>
+          <p data-covered-text></p>
+          <div class="csp-sat-covered-actions"><button type="button" data-imagery-top>Show imagery on top</button><button type="button" data-open-layers>Adjust layers</button></div>
+        </div>
+        <div class="csp-sat-opacity"><label for="op">Opacity</label><output id="cspSatOpOut" for="op">100%</output></div>
+        <div class="csp-sat-fill"></div>
+        <div class="csp-sat-actions"></div>
+        <div class="csp-sat-link"></div>
+      </div>
+    </section>`;
   const form=$(".csp-sat-field",wrap),input=$("#cspSatQuery",wrap),list=$("#cspSatSuggest",wrap);
   const message=$("#cspSatNote",wrap),note=text=>{message.textContent=text;message.hidden=!text};
   let places=[],active=-1,timer=0,request=null,generation=0,draft=false,draftLocationChanged=false,committedVersion=-1,committedLabel="";
@@ -615,24 +663,114 @@ function buildSatelliteSearch(){
     const text=input.value.trim();if(text){draft=false;draftLocationChanged=false;bridge.searchText?.(text)}
   });
   $(".csp-sat-center",wrap).addEventListener("click",()=>{draft=false;draftLocationChanged=false;hide();bridge.searchMapCenter?.();input.value=bridge.searchLabel?.()||""});
+  const filterBox=$("#cspSatFilterBox",wrap);
+  try{filterBox.open=localStorage.getItem("clearskies.satFilters.v1")==="1"}catch(error){}
+  filterBox.addEventListener("toggle",()=>{try{localStorage.setItem("clearskies.satFilters.v1",filterBox.open?"1":"0")}catch(error){}});
+  for(const id of ["days","cloud","vis","dFrom","dTo"]) $("#"+id)?.addEventListener("change",syncSatelliteFilterSummary);
+  const summary=$("#summary");
+  if(summary) new MutationObserver(()=>{$("#cspSatBest",wrap).hidden=!summary.children.length}).observe(summary,{childList:true});
+  $("#op")?.addEventListener("input",syncSatelliteCurrent);
+  $("[data-imagery-top]",wrap).addEventListener("click",()=>{
+    const ids=layerSort(bridge.activeLayers()).filter(layer=>!layer.locked).map(layer=>layer.id).filter(id=>id!=="scene");
+    saveLayerOrder(["scene",...ids]);syncSatelliteCurrent();
+    $("#cspSatNowName",wrap)?.closest(".csp-sat-current-card")?.querySelector("#op")?.focus({preventScroll:true});
+  });
+  /* Both of these remove the pressed button from view, so focus moves to
+     where the person's next step is rather than falling back to the page. */
+  $("[data-open-layers]",wrap).addEventListener("click",()=>{
+    pendingLayerFocus={id:"scene",selector:".csp-layer-handle"};
+    activateRoute("layers");
+    if(!document.activeElement?.closest?.(".csp-layer-card")){const title=$("#cspWorkspaceTitle");title.setAttribute("tabindex","-1");title.focus({preventScroll:true})}
+  });
+  $("#clr")?.addEventListener("click",()=>{
+    if(currentRoute!=="satellite") return;
+    syncSatelliteCurrent();
+    const next=$("#summary .csp-best-main")||$("#results .item[tabindex]")||$("#cspSatQuery",wrap);
+    next?.focus({preventScroll:true});
+  });
   return wrap;
 }
+/* The closed filter row still says what the search is limited to. */
+function syncSatelliteFilterSummary(){
+  const out=$("#cspSatFilterSum");if(!out) return;
+  const text=id=>$("#"+id)?.selectedOptions?.[0]?.textContent.trim()||"";
+  const days=$("#days")?.value==="custom"?[$("#dFrom")?.value,$("#dTo")?.value].filter(Boolean).join(" → ")||"Custom range":text("days");
+  const cloud=$("#cloud")?.value==="101"?"any cloud":text("cloud").replace(/^Under/,"cloud under");
+  const type=$("#vis")?.value==="all"?"all types":text("vis");
+  out.textContent=[days,cloud,type].filter(Boolean).join(" · ");
+}
+/* What is drawn, separate from what was last requested. #ctlName only ever
+   names pixels on the map; its dataset carries the pending request and why a
+   request could not replace the picture (see select() in app/results.js). */
+function syncSatelliteCurrent(){
+  const section=$("#cspSatCurrent");if(!section) return;
+  const nameEl=$("#ctlName"),state=nameEl?.dataset.state||"",shown=!!nameEl?.textContent.trim()&&state!=="footprint";
+  const hasScene=bridge.activeLayers().some(layer=>layer.id==="scene")||!!state;
+  section.hidden=!hasScene;
+  if(!hasScene) return;
+  const loading=state==="loading";
+  $("#cspSatNowName").textContent=shown?nameEl.textContent.replace(/\s+·\s+/," · "):loading?nameEl.dataset.pending.replace(/\s+·\s+/," · "):"No scene drawn";
+  $("#cspSatNowDate").textContent=shown?$("#ctlDate").textContent.replace(/\s{2,}/g," "):loading?"Loading…":"";
+  const badge=$("#cspSatNowBadge"),badgeText={loading:shown?"Replacing…":"Loading…",shown:"Shown",partial:"Partial",failed:shown?"Shown":"Not shown",footprint:"Outline only"}[state]||"";
+  badge.textContent=badgeText;badge.dataset.state=state;badge.hidden=!badgeText;
+  const note=$("#cspSatNowNote"),noteText=loading&&shown?`Loading ${nameEl.dataset.pending.replace(/\s+·\s+/," · ")}; the scene above stays until it is ready.`:nameEl?.dataset.note||"";
+  note.textContent=noteText;note.hidden=!noteText;
+  // A record that could not replace the drawn scene keeps its own viewer link.
+  const recordLink=shown&&nameEl.dataset.link&&!loading?nameEl.dataset.link:"";
+  if(recordLink&&noteText){
+    const link=document.createElement("a");link.href=recordLink;link.target="_blank";link.rel="noopener";link.textContent="Open this record in its provider viewer →";
+    note.append(" ",link);
+  }
+  const op=$("#op");if(op) $("#cspSatOpOut").textContent=op.value+"%";
+  /* Accepted imagery can sit beneath an opaque terrain or analysis layer and be
+     invisible. Say which, and offer the one-step fix. Terrain and elevation
+     shading draw above imagery unless the person's layer order says otherwise. */
+  const covers=$("#cspSatCovered");
+  const ordered=layerSort(bridge.activeLayers()),sceneAt=ordered.findIndex(layer=>layer.id==="scene");
+  let savedOrder=[];try{savedOrder=JSON.parse(localStorage.getItem("clearskies.active-layer-order.v1"))||[]}catch(error){}
+  const sceneRanked=savedOrder.includes("scene");
+  const surface=layer=>layer.kind==="terrain"||layer.id==="elevation-spectrum"||layer.id==="elevation-bands"||layer.id.startsWith("analysis:");
+  const above=shown&&sceneAt>=0?ordered.filter((layer,index)=>layer.visible!==false&&layer.opacity>=30&&
+    surface(layer)&&(index<sceneAt||!sceneRanked)):[];
+  covers.hidden=!above.length;
+  if(above.length){
+    const names=above.map(layer=>`${layer.name} (${Math.round(layer.opacity)}%)`).join(", ");
+    /* Highlights only paint the chosen heights, and a translucent surface
+       still lets the image through; only a near-opaque full surface hides it. */
+    const hides=above.some(layer=>layer.id!=="elevation-bands"&&layer.opacity>=95);
+    $("[data-covered-text]",covers).textContent=`${names} ${above.length===1?"is":"are"} drawn above this image, so ${hides?"it is hidden on the map":"it is partly obscured"}.`;
+  }
+  const fill=$("#fillNow");if(fill) fill.disabled=!shown;
+}
+/* Satellite reads top to bottom as the task runs: find a place (filters fold
+   away under one summary row), take the best match, adjust what is on the
+   map, then browse every scene. Base layers and pass estimates come last. */
 function renderSatelliteView(){
   if(!satelliteSearch) satelliteSearch=buildSatelliteSearch();
   if(satelliteSearch.parentElement!==customView){
     clearCustom();
     customView.append(satelliteSearch);
-    $(".csp-sat-filters",satelliteSearch).append(...filterParts);
-    $(".csp-sat-card",satelliteSearch).insertBefore(status,$(".csp-sat-filters",satelliteSearch));
+    const filters=$(".csp-sat-filters",satelliteSearch);
+    filters.append(...filterParts);
+    $(".csp-sat-card",satelliteSearch).insertBefore(status,$("#cspSatFilterBox",satelliteSearch));
+    $("#fillNow").textContent="Fill this view";$("#clr").textContent="Remove scene";$("#ctlReset").textContent="Reset";$("#ctlReset").setAttribute("aria-label","Reset imagery opacity");
+    // Sort and Map-viewable only shape the list, so they sit on top of it.
+    const resultsBody=$(".pane[data-pane='results'] .pane-b",panes),bar=document.createElement("div");
+    bar.id="cspSatResultsBar";bar.className="csp-sat-results-bar";resultsBody?.prepend(bar);
+    hostNode($("#sort")?.closest(".csp-field-row"),bar);hostNode($("#lb_viewable"),bar);hostNode($("#lb_groupSrc"),bar);
+    hostNode($("#summary"),$(".csp-sat-best-card",satelliteSearch));
+    const current=$(".csp-sat-current-card",satelliteSearch);
+    hostNode($("#op"),current,$(".csp-sat-fill",current));
+    hostNode($("#lb_mosaic"),$(".csp-sat-fill",current));
+    hostNode($("#mosStat"),$(".csp-sat-fill",current));
+    hostNode($("#fillNow"),$(".csp-sat-actions",current));
+    hostNode($("#ctlReset"),$(".csp-sat-opacity",current));
+    hostNode($("#clr"),$(".csp-sat-actions",current));
+    hostNode($("#ctlLink"),$(".csp-sat-link",current));
   }
   satelliteSearch?.dispatchEvent(new Event("csp:search-sync"));
-  let shown=$("#cspSatelliteShown",customView);
-  if(!shown){shown=document.createElement("div");shown.id="cspSatelliteShown";customView.append(shown)}
-  const entries=bridge.activeLayers().filter(layer=>layer.id==="scene");
-  shown.replaceChildren();
-  if(!entries.length) return;
-  const label=document.createElement("div");label.className="csp-section-label";label.textContent="Displayed now";
-  const card=document.createElement("div");card.className="csp-card";shown.append(label,card);renderLayerStack(card,true);
+  $("#cspSatBest").hidden=!$("#summary")?.children.length;
+  syncSatelliteFilterSummary();syncSatelliteCurrent();
 }
 
 function renderExportView(){
@@ -890,20 +1028,10 @@ function organizeAppearance(card){
 }
 function organizeSidebarMenus(){
   // LiDAR owns its two-card workflow in index.html and lidar-studio.js.
-  // Never lift its live controls into the shared menu organizer.
-  const elevation=$(".pane[data-pane=elevation] > .pane-b",panes),spectrum=$("#elevSpectrumBox");
-  if(elevation&&spectrum){
-    elevation.classList.add("csp-menu-page");
-    const palette=$("#elevPaletteBox"),settings=$$(":scope > details",spectrum).filter(node=>node!==palette);
-    // Reference and range before color choices, matching native PageLayout.
-    for(const node of settings){openMenuSection(node);spectrum.append(node)}
-    const anchor=document.createComment("Elevation groups");spectrum.before(anchor);
-    if(palette){openMenuSection(palette);spectrum.after(menuSection("Palette & colors",[palette]))}
-    anchor.replaceWith(menuSection("Elevation spectrum",[spectrum]));
-    const bands=$("#elevBandsBox");
-    if(bands){openMenuSection(bands);elevation.append(menuSection("Elevation highlights",[bands]))}
-  }
-  for(const label of $$("#panes .alert-sources > .check,#panes .alert-options > .check,#panes .research-live-toggle,#panes .elev-highlight-toggles > .check")) toSwitchRow(label);
+  // Elevation's two task cards are authored directly in index.html; never
+  // lift live controls from either page into the shared menu organizer.
+  $(".pane[data-pane=elevation] > .pane-b",panes)?.classList.add("csp-menu-page");
+  for(const label of $$("#panes .alert-sources > .check,#panes .alert-options > .check,#panes .research-live-toggle")) toSwitchRow(label);
 }
 
 /* Settings: the terrain engine (its controls keep their home in the map dock
@@ -1232,6 +1360,7 @@ function scheduleLayerRefresh(delay=80){
   clearTimeout(refreshTimer);refreshTimer=setTimeout(()=>{
     if(document.activeElement?.classList.contains("csp-layer-range")) return;
     const signature=JSON.stringify([currentRoute,layerSort(bridge.activeLayers())]);
+    if(currentRoute==="satellite") syncSatelliteCurrent();
     if(signature!==lastLayerSignature){
       lastLayerSignature=signature;
       if(currentRoute==="layers")renderLayersView();else if(currentRoute==="satellite")renderSatelliteView();

@@ -312,11 +312,11 @@ function readoutColourKeys(){
   if($("#elevSh").checked&&elevAlpha()>0){
     const level=elevMetres(),span=elevSpanMetres();
     const stops=Array.from({length:17},(_,i)=>`rgb(${elevRampRgb(level-span+i*span/8,level,span,spectrumHexColors().map(hex=>ElevationBands.parseColor(hex).slice(0,3))).join(",")}) ${i/16*100}%`);
-    keys.push({name:"Elevation spectrum",bar:`linear-gradient(90deg,${stops.join(",")})`,labels:[level-span,level,level+span].map(v=>`${Math.round(v/.3048).toLocaleString()} ft`)});
+    keys.push({name:"Color by elevation",bar:`linear-gradient(90deg,${stops.join(",")})`,labels:[level-span,level,level+span].map(elevFormat)});
   }
   if(elevationActive()&&+$("#elevBandAlpha").value>0){
     for(const side of ["Below","Above"])if($("#elev"+side+"On").checked){
-      keys.push({name:`${side} ${(+$("#elev"+side+"Val").value||0).toLocaleString()} ft`,bar:`linear-gradient(90deg,${$("#elev"+side+"Color").value},${$("#elev"+side+"Color").value})`,labels:[]});
+      keys.push({name:`${side} ${(+$("#elev"+side+"Val").value||0).toLocaleString()} ${elevUnitKey()}`,bar:`linear-gradient(90deg,${$("#elev"+side+"Color").value},${$("#elev"+side+"Color").value})`,labels:[]});
     }
   }
   if(!is3d)for(const entry of researchStack.slice().reverse())if(entry.overlay&&entry.legend&&entry.style.visible&&entry.style.opacity>0)keys.push(entry.legend);

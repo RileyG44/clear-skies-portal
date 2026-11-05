@@ -352,8 +352,8 @@ function saveTerrainPrefs(){
   try{ localStorage.setItem(TERRAIN_PREF_KEY,JSON.stringify({
     style:$("#terStyle").value,source:$("#terSrc").value,opacity:+$("#terOp").value,
     depth:$("#terDepth").value,extent:$("#terExtent").value,fabric:$("#fabBand").value,
-    elevationOn:$("#elevSh").checked,elevationM:+$("#elevSlide").value,
-    elevationUnit:$("#elevUnit").value,elevationSpanFt:+$("#elevSpan").value,
+    elevationOn:$("#elevSh").checked,elevationM:Math.round(elevRefM*10)/10,
+    elevationUnit:elevUnitKey(),elevationSpanM:elevSpanMetres(),elevationSpanFt:Math.round(elevSpanFt()),
     elevationAlpha:+$("#elevAlpha").value,elevationSpectrumColors:spectrumHexColors(),elevationBands:elevationBandState(),lighting:terrainLighting()
   })) }catch(e){}
 }
@@ -362,13 +362,17 @@ function loadTerrainPrefs(){
     const p=JSON.parse(localStorage.getItem(TERRAIN_PREF_KEY)||"null"); if(!p) return;
     const set=(id,value)=>{ const el=$(id); if(el&&value!=null&&[...el.options||[]].some(o=>o.value===String(value))) el.value=String(value) };
     set("#terStyle",p.style); set("#terSrc",p.source); set("#terDepth",p.depth); set("#terExtent",p.extent);
-    set("#fabBand",p.fabric); $("#elevUnit").value="ft";
-    const spanFt=Number.isFinite(+p.elevationSpanFt) ? +p.elevationSpanFt
+    set("#fabBand",p.fabric);
+    // Feet or metres for the whole page; the retired yards option reads as feet.
+    $("#elevUnit").value=p.elevationUnit==="m"?"m":"ft";convertElevationUnit($("#elevUnit").value);
+    // Exact metres since build 2026-11-05c; whole feet before that.
+    const spanFt=Number.isFinite(+p.elevationSpanM)&&+p.elevationSpanM>0 ? +p.elevationSpanM/0.3048
+      : Number.isFinite(+p.elevationSpanFt) ? +p.elevationSpanFt
       : Number.isFinite(+p.elevationSpan) ? +p.elevationSpan/0.3048 : 300;
-    $("#elevSpan").value=Math.round(Math.max(10,Math.min(20000,spanFt)));
+    setElevSpanFt(Math.max(10,Math.min(20000,spanFt)));
     if(Number.isFinite(+p.opacity)) $("#terOp").value=Math.max(0,Math.min(100,+p.opacity));
     if(Number.isFinite(+p.elevationAlpha)) $("#elevAlpha").value=Math.max(0,Math.min(100,+p.elevationAlpha));
-    if(Number.isFinite(+p.elevationM)) $("#elevSlide").value=Math.max(-500,Math.min(4500,+p.elevationM));
+    if(Number.isFinite(+p.elevationM)) elevRefM=Math.max(ELEV_REF_MIN_M,Math.min(ELEV_REF_MAX_M,+p.elevationM));
     $("#elevSh").checked=!!p.elevationOn;
     if(p.lighting){
       if(Number.isFinite(+p.lighting.azimuth)) $("#terSunAz").value=Math.max(0,Math.min(359,+p.lighting.azimuth));
@@ -381,8 +385,7 @@ function loadTerrainPrefs(){
     }
     syncSpectrumPalette();
     restoreElevationBands(p.elevationBands);
-    const m=+$("#elevSlide").value;
-    $("#elevVal").value=Math.round(m/ELEV_UNIT[$("#elevUnit").value]);
+    $("#elevVal").value=Math.round(elevRefM/elevUnitFactor());showElevReference();
     $("#elevAlphaOut").textContent=$("#elevAlpha").value+"%";
     $("#elevBandAlphaOut").textContent=$("#elevBandAlpha").value+"%";
     syncTerrainLighting();

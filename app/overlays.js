@@ -11,7 +11,7 @@ const OVERLAY_GROUP_ROUTES={"Imagery":"satellite","Labels & reference":"labels",
 const OVERLAYS = [
   /* Drawn low so the analytical terrain shaders still composite above imagery,
      which is the ordering check-static already pins. */
-  { id:"imagery", group:"Imagery", name:"Satellite imagery", via:"Esri", sw:"#7d8f6a", z:20,
+  { id:"imagery", group:"Imagery", subhead:"Reference mosaics · drawn beneath a selected scene", name:"Satellite imagery", via:"Esri", sw:"#7d8f6a", z:20,
     url:ESRI_IMAGERY, attr:ESRI_IMAGERY_ATTR, maxZoom:19, sharp:true,
     note:"Best-available global mosaic, sub-metre over most populated land. Display only under Esri's terms: not cached or re-served." },
 
@@ -24,10 +24,10 @@ const OVERLAYS = [
      rather than pretending to be a layer. Footprints, dates and a link to the
      COGs - the pixels are JPEG-compressed GeoTIFFs in per-scene UTM zones,
      which needs a warp the portal does not have yet. */
-  { id:"maxarvhr", group:"Imagery", name:"Maxar VHR coverage", via:"Maxar Open Data", sw:"#c88fb0", z:560,
+  { id:"maxarvhr", group:"Imagery", subhead:"Coverage footprints · outlines drawn above imagery", name:"Maxar VHR coverage", via:"Maxar Open Data", sw:"#c88fb0", z:560,
     geoLoader:()=>loadMaxarFootprints(), popupKind:"maxar", nonCommercial:true,
     attr:"Maxar Open Data Program (CC-BY-NC-4.0)",
-    note:"Where 12–20 inch disaster imagery exists, with dates. Licensed CC-BY-NC-4.0 \u2014 non-commercial use only." },
+    note:"Outlines where 12–20 inch disaster imagery exists. Click one for its dates and the download collection. Licensed CC-BY-NC-4.0 \u2014 non-commercial use only." },
 
   { id:"roads", group:"Labels & reference", name:"Roads & streets", via:"Esri", sw:"#e0a060", z:520,
     url:"https://services.arcgisonline.com/ArcGIS/rest/services/Reference/World_Transportation/MapServer/tile/{z}/{y}/{x}",
@@ -791,7 +791,10 @@ function paintOverlayNote(){
     lines.push("NOHRSC depth and SWE are current modeled conditions in <b>inches</b>. The connected M2 serves its warm cache first; the browser falls back directly to NOAA without blanking the layer.");
   if(inCatalog("snowcover")&&ovOn.snowcover&&ovLayers.snowcover) lines.push(`Snow cover is the completed MODIS pass for <b>${gibsDay()}</b>; it stretches its last 1,640 ft native level instead of disappearing when you zoom farther in.`);
   if(notices.length) lines.push(notices.map(o=>`<b>${esc(o.name)}:</b> ${esc(o.note)}`).join("<br>"));
-  if(!lines.length) lines.push(n
+  if(!lines.length) lines.push(group==="Imagery"
+    ? (n ? "Reference mosaics fill in beneath a selected scene; coverage footprints are outlines above it."
+         : "Nothing on. Reference mosaics fill in beneath a selected scene; coverage footprints draw outlines above it.")
+    : n
     ? "Drawn over the imagery. Drag the opacity slider if labels compete with the scene."
     : "Nothing on. These draw over whatever imagery is selected.");
   $("#ovNote").innerHTML=lines.join("<br>");
@@ -928,7 +931,8 @@ function ovRender(){
   const ordered=OVERLAY_GROUPS.flatMap(group=>OVERLAYS.filter(o=>o.group===group))
     .concat(OVERLAYS.filter(o=>!OVERLAY_GROUPS.includes(o.group)));
   $("#ovList").innerHTML = ordered.map(o=>{
-    const head = o.group && o.group!==last ? `<div class="ovgrp">${esc(o.group)}</div>` : "";
+    const head = (o.group && o.group!==last ? `<div class="ovgrp">${esc(o.group)}</div>` : "")
+      + (o.subhead ? `<div class="ovsub">${esc(o.subhead)}</div>` : "");
     last = o.group || last;
     const dead = o.needsProxy && !PROXY;
     const lineControl=o.lineWidth ? `<div class="ov-line-control" data-id="${o.id}"${ovOn[o.id]&&!dead?"":" hidden"}>
