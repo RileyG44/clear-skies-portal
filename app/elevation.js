@@ -353,7 +353,7 @@ function saveTerrainPrefs(){
     style:$("#terStyle").value,source:$("#terSrc").value,opacity:+$("#terOp").value,
     depth:$("#terDepth").value,extent:$("#terExtent").value,fabric:$("#fabBand").value,
     elevationOn:$("#elevSh").checked,elevationM:Math.round(elevRefM*10)/10,
-    elevationUnit:elevUnitKey(),elevationSpanFt:Math.round(elevSpanFt()),
+    elevationUnit:elevUnitKey(),elevationSpanM:elevSpanMetres(),elevationSpanFt:Math.round(elevSpanFt()),
     elevationAlpha:+$("#elevAlpha").value,elevationSpectrumColors:spectrumHexColors(),elevationBands:elevationBandState(),lighting:terrainLighting()
   })) }catch(e){}
 }
@@ -365,7 +365,9 @@ function loadTerrainPrefs(){
     set("#fabBand",p.fabric);
     // Feet or metres for the whole page; the retired yards option reads as feet.
     $("#elevUnit").value=p.elevationUnit==="m"?"m":"ft";convertElevationUnit($("#elevUnit").value);
-    const spanFt=Number.isFinite(+p.elevationSpanFt) ? +p.elevationSpanFt
+    // Exact metres since build 2026-11-05c; whole feet before that.
+    const spanFt=Number.isFinite(+p.elevationSpanM)&&+p.elevationSpanM>0 ? +p.elevationSpanM/0.3048
+      : Number.isFinite(+p.elevationSpanFt) ? +p.elevationSpanFt
       : Number.isFinite(+p.elevationSpan) ? +p.elevationSpan/0.3048 : 300;
     setElevSpanFt(Math.max(10,Math.min(20000,spanFt)));
     if(Number.isFinite(+p.opacity)) $("#terOp").value=Math.max(0,Math.min(100,+p.opacity));

@@ -184,8 +184,19 @@ async function stacSearch(src, lat, lng, win, cloudMax, signal){
   }
   const post=async (bd)=>{
     const r=await fetch(src.api,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(bd),signal});
-    if(!r.ok) throw new Error(src.name+" HTTP "+r.status);
+    if(!r.ok){ const error=new Error(src.name+" HTTP "+r.status); error.status=r.status; throw error }
     return ((await r.json()).features||[]).map(f=>norm(f,src)).filter(Boolean);
+  };
+  /* A catalog that rejects a multi-collection search (a backend split it has
+     not announced) still answers per collection; merge those answers. */
+  const postGroup=async (bd)=>{
+    try{ return await post(bd) }
+    catch(error){
+      if(error.status!==400||bd.collections.length<2||signal?.aborted) throw error;
+      const parts=await Promise.allSettled(bd.collections.map(c=>post({...bd,collections:[c]})));
+      if(!parts.some(part=>part.status==="fulfilled")) throw error;
+      return parts.flatMap(part=>part.status==="fulfilled"?part.value:[]);
+    }
   };
   // Static products (the DEM is stamped 2021) must bypass the date window or they
   // vanish whenever the user narrows it.
@@ -196,7 +207,9 @@ async function stacSearch(src, lat, lng, win, cloudMax, signal){
   body.collections = win.mode==="abs" ? src.colls : src.colls.filter(c=>!STATIC.includes(c));
 
   const jobs=[];
-  if(body.collections.length) jobs.push(post(body));
+  const groups=(src.collGroups||[src.colls]).map(group=>group.filter(c=>body.collections.includes(c))).filter(group=>group.length);
+  for(const extra of body.collections.filter(c=>!groups.some(group=>group.includes(c)))) groups.push([extra]);
+  for(const group of groups) jobs.push(postGroup({...body,collections:group}));
   if(statics.length && src.key!=="nisar")
     jobs.push(post({collections:statics, intersects:{type:"Point",coordinates:[lng,lat]}, limit:2}).catch(()=>[]));
 
@@ -294,17 +307,25 @@ async function run(){
   const controller=new AbortController(); searchAbort=controller;
   const loc={...LOC};
   const win=dateWindow(), cloudMax=+$("#cloud").value;
-  clearScene(false);
+  /* A refresh at the same place (a date or cloud change) keeps the image being
+     inspected; only the pending request and the selection are released. A
+     search somewhere the drawn scene does not cover starts clean. */
+  const drawn=typeof displayedScene==="function"?displayedScene():null;
+  const covers=it=>!!it&&(it.geom||it.bbox?CSPMosaic.itemContains(it,loc.lng,loc.lat):true);
+  if(drawn&&covers(drawn)) releaseSelection(); else clearScene(false);
   ITEMS=[]; RESULT_SHOWN={}; render();
   statusEl.dataset.kind="scenes",statusEl.innerHTML='<span class="spin"></span> Querying sources…';
   const chips={};
   SOURCES.forEach(s=>chips[s.key]=`<span class="chip" id="c_${s.key}">${s.name.split(" ")[0]} …</span>`);
   const paint=()=>{ if(token===searchToken) statusEl.dataset.kind="scenes",statusEl.innerHTML=Object.values(chips).join(" ") };
 
+  /* Each provider's scenes join the list as soon as they arrive, so one slow
+     catalog never holds back the others. */
   const jobs=SOURCES.map(async s=>{
     try{
       const r=await stacSearch(s,loc.lat,loc.lng,win,cloudMax,controller.signal);
       chips[s.key]=`<span class="chip on" >${s.name.split(" ")[0]} ${r.length}</span>`; paint();
+      if(token===searchToken&&r.length){ ITEMS.push(...r); render() }
       return r;
     }catch(e){
       if(controller.signal.aborted) return [];
@@ -313,10 +334,11 @@ async function run(){
     }
   });
   paint();
-  const got=await Promise.all(jobs);
+  await Promise.all(jobs);
   if(token!==searchToken) return;
   searchAbort=null;
-  ITEMS=[].concat(...got, gibsItems(win));
+  // Arrival order is kept, so a scene chosen while others load keeps its index.
+  ITEMS.push(...gibsItems(win));
   const n=ITEMS.length;
   statusEl.dataset.kind="scenes",statusEl.innerHTML=Object.values(chips).join(" ")+` <span class="chip">${n} results</span>`;
   render(true);

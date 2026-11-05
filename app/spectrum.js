@@ -42,7 +42,8 @@ function convertElevationUnit(next){
     if(Number.isFinite(metres)) setHeightMetres(input,metres,to);
   }
   elevShownUnit=ELEV_UNIT[next]?next:"ft";
-  $("#elevSpan").min=Math.ceil(ELEV_SPAN_MIN_M/to);$("#elevSpan").max=Math.floor(ELEV_SPAN_MAX_M/to);
+  // Whole-unit bounds that contain the exact 10 ft floor (3.048 m shows as 3 m).
+  $("#elevSpan").min=Math.floor(ELEV_SPAN_MIN_M/to);$("#elevSpan").max=Math.floor(ELEV_SPAN_MAX_M/to);
   $("#elevVal").min=Math.ceil(ELEV_REF_MIN_M/to);$("#elevVal").max=Math.floor(ELEV_REF_MAX_M/to);
   $("#elevBandFeather").max=Math.floor(ELEV_FEATHER_MAX_M/to);
   for(const id of ["#elevVal",...ELEV_HEIGHT_FIELDS]) $(id).step="any";
@@ -72,8 +73,6 @@ function elevSpanFt(){
 function setElevSpanFt(feet){
   const input=$("#elevSpan"),metres=Math.max(10,Math.min(20000,feet))*0.3048,unit=elevUnitFactor();
   setHeightMetres(input,metres,unit);
-  // Whole metres can round below the 10 ft floor; never show less than the minimum.
-  if(+input.value*unit<ELEV_SPAN_MIN_M) input.value=Math.ceil(ELEV_SPAN_MIN_M/unit);
 }
 function elevSpanPosition(feet){
   return Math.round(Math.log(Math.max(10,Math.min(20000,+feet||300))/10)/Math.log(2000)*1000);
@@ -178,9 +177,19 @@ function paintElevOut(){
   const o=$("#elevOut"); if(!o) return;
   paintElevSpectrumSummary();
   if(!$("#elevSh").checked){ o.textContent="Coloring is off. These settings are kept and apply when you switch it on."; o.dataset.state="off"; return }
-  const loaded=terrainLayerSummary(elevLayer);
   o.dataset.state="on";
-  o.textContent=loaded.sources.length?`On the map from ${loaded.sources.map(s=>s.label).join(" + ")}.`:"On. Elevation is loading; its source appears once tiles render.";
+  const source=elevSourceText();
+  o.textContent=source?`On the map from ${source}.`:"On. Elevation is loading; its source appears once tiles render.";
+}
+/* Which elevation data is drawn and how finely it is sampled here, so a
+   precise threshold can be judged against the data behind it. */
+function elevSourceText(){
+  const loaded=terrainLayerSummary(elevLayer);
+  if(!loaded.sources.length) return "";
+  return loaded.sources.map(source=>{
+    const spacing=Number.isFinite(source.sampleMeters)&&source.sampleMeters>0?`~${res(source.sampleMeters)} samples`:"sample spacing not reported";
+    return [source.label,loaded.sources.length>1?Math.round(source.percent)+"% of view":"",spacing].filter(Boolean).join(" · ");
+  }).join(" + ");
 }
 function paintElevationBandOut(){
   const out=$("#elevBandOut"),unit=elevUnitKey(),parts=[];
@@ -189,6 +198,7 @@ function paintElevationBandOut(){
   if(belowOn) parts.push(`below ${below.toLocaleString()} ${unit}`);
   if(aboveOn) parts.push(`above ${above.toLocaleString()} ${unit}`);
   let text=parts.length?`Highlighting ground ${parts.join(" and ")}.`:"";
+  if(parts.length){ const source=elevSourceText(); if(source) text+=` Heights from ${source}.` }
   if(belowOn&&aboveOn&&above<below) text+=` Between ${above.toLocaleString()} and ${below.toLocaleString()} ${unit} both apply, so their colors mix.`;
   out.textContent=text;out.dataset.state=parts.length?"on":"off";
   const feather=elevFeatherValue(),more=$("#elevBandMoreValue");
@@ -416,15 +426,15 @@ $("#elevBandAlpha").addEventListener("input",()=>{
 $("#elevBandAlpha").addEventListener("change",saveTerrainPrefs);
 $("#elevSpectrumReset").onclick=()=>{
   SPECTRUM_COLOR_IDS.forEach((id,i)=>$(id).value=SPECTRUM_PALETTES.classic[i]);syncSpectrumPalette();
-  $("#elevSh").checked=false;
+  $("#elevSh").checked=false;$("#elevSpectrumMore").open=false;
   elevRefM=1100*0.3048;setElevSpanFt(300);$("#elevVal").value=Math.round(elevRefM/elevUnitFactor());showElevReference();syncElevSpanSlider();$("#elevAlpha").value=48;$("#elevAlphaOut").textContent="48%";
   saveTerrainPrefs();applyElev();announceLayers();
 };
 $("#elevBandsReset").onclick=()=>{
-  const u=elevUnitFactor()/0.3048;
-  $("#elevBelowOn").checked=false;$("#elevBelowColor").value="#f85c6c";$("#elevBelowVal").value=Math.round(1000/u);
-  $("#elevAboveOn").checked=false;$("#elevAboveColor").value="#46a0ff";$("#elevAboveVal").value=Math.round(1500/u);
-  $("#elevBandFeather").value=Math.round(40/u);$("#elevBandAlpha").value=52;$("#elevBandAlphaOut").textContent="52%";
+  // Defaults are physical heights (1,000 ft, 1,500 ft, 40 ft) in either unit.
+  $("#elevBelowOn").checked=false;$("#elevBelowColor").value="#f85c6c";setHeightMetres($("#elevBelowVal"),1000*0.3048);
+  $("#elevAboveOn").checked=false;$("#elevAboveColor").value="#46a0ff";setHeightMetres($("#elevAboveVal"),1500*0.3048);
+  setHeightMetres($("#elevBandFeather"),40*0.3048);$("#elevBandAlpha").value=52;$("#elevBandAlphaOut").textContent="52%";
   $("#elevBandOutline").checked=false;
   saveTerrainPrefs();applyElev();announceLayers();
 };

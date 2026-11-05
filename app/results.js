@@ -88,11 +88,18 @@ function summarise(pool){
     ? `<button type="button" class="csp-best-chip" data-id="${esc(it.id)}" data-src="${esc(it.src)}" aria-pressed="${isCurrent(it)}" data-state="${stateOf(it)}"><span>${k}${{showing:" · showing",loading:" · loading…"}[stateOf(it)]||""}</span><b>${esc(it.label)}</b><small>${detail}${it.tiles?"":" &middot; outline only"}</small></button>`
     : "";
   const chips=chip("Newest",newest,`${ago(newest.date)} &middot; ${provider(newest)}`)+chip("Sharpest",sharp,`${res(sharp.gsd)} &middot; ${ago(sharp.date)}`);
+  const focused=document.activeElement?.closest?.("#summary button[data-id]");
+  const focusKey=focused?(focused.classList.contains("csp-best-main")?"main":focused.querySelector("span")?.textContent.split(" ")[0]):"";
   el.innerHTML=main+(chips?`<div class="csp-best-alt">${chips}</div>`:"")+
     `<div class="csp-best-cover">${pool.length.toLocaleString()} matching scenes from ${srcs} ${srcs===1?"source":"sources"}, listed below</div>`;
   el.querySelectorAll("button[data-id]").forEach(button=>button.onclick=()=>{
     const i=ITEMS.findIndex(x=>x.id===button.dataset.id&&x.src===button.dataset.src); if(i>=0) select(i);
   });
+  // Keep keyboard focus on the same choice when the card is rebuilt.
+  if(focusKey){
+    const next=focusKey==="main"?el.querySelector(".csp-best-main"):[...el.querySelectorAll(".csp-best-chip")].find(b=>b.querySelector("span")?.textContent.startsWith(focusKey));
+    (next||el.querySelector("button[data-id]"))?.focus({preventScroll:true});
+  }
   setCount("summary", pool.length+" scenes");
 }
 
@@ -165,7 +172,7 @@ function render(enter=false){
   const card=(it,flat)=>{
     const i=itemIndex.get(it),onMap=shownItem&&shownItem.id===it.id&&shownItem.src===it.src;
     const name=`${it.label}, ${it.date.slice(0,10)}${flat?", "+it.src:""}${onMap?", on the map":""}`;
-    return `<div class="item ${SEL===i?'sel':''} ${onMap?'on-map':''}" data-i="${i}" role="button" tabindex="0" aria-pressed="${SEL===i}" aria-label="${esc(name)}">
+    return `<div class="item ${SEL===i?'sel':''} ${onMap?'on-map':''}" data-i="${i}" data-g="${encodeURIComponent(grouped?it.src:"__all")}" role="button" tabindex="0" aria-pressed="${SEL===i}" aria-label="${esc(name)}">
         ${it.thumb?`<img class="thumb" loading="lazy" alt="" src="${esc(it.thumb)}" onerror="this.style.visibility='hidden'">`
                   :`<div class="thumb"></div>`}
         <div class="meta">
@@ -204,7 +211,10 @@ function render(enter=false){
     const k=decodeURIComponent(el.dataset.g); COLLAPSED[k]=!COLLAPSED[k]; render();
     resEl.querySelector(`.grp[data-g="${CSS.escape(el.dataset.g)}"]`)?.focus({preventScroll:true}); }));
   resEl.querySelectorAll(".more-items").forEach(el=>el.onclick=()=>{
-    const k=decodeURIComponent(el.dataset.more); RESULT_SHOWN[k]=(RESULT_SHOWN[k]||RESULT_PAGE)+RESULT_PAGE; render(); });
+    const k=decodeURIComponent(el.dataset.more),before=resEl.querySelectorAll(`.item[data-g="${CSS.escape(el.dataset.more)}"]`).length;
+    RESULT_SHOWN[k]=(RESULT_SHOWN[k]||RESULT_PAGE)+RESULT_PAGE; render();
+    // Continue from the first newly revealed scene.
+    resEl.querySelectorAll(`.item[data-g="${CSS.escape(el.dataset.more)}"]`)[before]?.focus({preventScroll:false}); });
 }
 
 async function select(i){
@@ -212,16 +222,16 @@ async function select(i){
   sceneAbort?.abort();
   const controller=new AbortController(); sceneAbort=controller;
   if(overlayPending){ clearTimeout(overlayPending._cspReadyTimer); map.removeLayer(overlayPending); overlayPending=null }
-  SEL=i; render();
+  SEL=i;
   const it=ITEMS[i];
-  if(!it) return;
+  if(!it){ render(); return }
   if(+$("#op").value===0) $("#op").value=+$("#op").dataset.lastVisible||100;
   showSceneControls();
   /* #ctlName/#ctlDate name only what is actually drawn. The request being
      loaded, and why it could not replace the picture, live in its dataset. */
   const nameEl=$("#ctlName"),label=it.label+"  ·  "+it.src,shown=()=>!!(overlay&&map.hasLayer(overlay));
   const sceneState=(state,note="")=>{nameEl.dataset.state=state;nameEl.dataset.note=note;nameEl.dataset.pending=state==="loading"?label:""};
-  sceneState("loading");
+  sceneState("loading");render();
   const providerLink=safeHttpUrl(it.link);
   // The card's viewer link belongs to the scene it names; a record that could
   // not be drawn offers its own link inside its note.
@@ -234,6 +244,7 @@ async function select(i){
 
   if(it.geom){
     footprint=L.geoJSON(it.geom,{style:{color:"#4a9eff",weight:1.5,fill:false,dashArray:"4 3"}}).addTo(map);
+    footprint._cspItem=it;
   }
   if(!it.tiles){
     /* A catalog record without map tiles cannot replace useful imagery; draw

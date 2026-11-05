@@ -41,6 +41,17 @@ function clearScene(renderResults=true){
   if(renderResults) render();
   announceLayers();
 }
+/* A new list replaces the selection but keeps accepted imagery, its mosaic
+   and its On the map card. Only an unfinished request is abandoned. */
+function releaseSelection(){
+  sceneToken++;
+  sceneAbort?.abort(); sceneAbort=null;
+  if(overlayPending){clearTimeout(overlayPending._cspReadyTimer);map.removeLayer(overlayPending);overlayPending=null}
+  if(footprint&&footprint._cspItem!==displayedScene()){map.removeLayer(footprint);footprint=null}
+  const name=$("#ctlName");
+  if(name&&name.dataset.state!=="partial"){name.dataset.state="shown";name.dataset.note="";name.dataset.pending="";name.dataset.link=""}
+  SEL=null; announceLayers();
+}
 $("#clr").onclick=()=>clearScene();
 $("#sort").onchange=render;
 $("#viewable").onchange=render;
