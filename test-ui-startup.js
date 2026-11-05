@@ -880,7 +880,7 @@ async function startupScreen(){
     assert(s.done&&f.classes.has('csp-splash-out'),'a whole first picture lifts it');
     await Promise.resolve();assert(lifted,'the lift is announced to the iOS shell');assert.equal(events,1);
     let disposed=0;s.dispose=()=>disposed++;
-    for(const [id,t] of [...f.timers])if(t.ms===680){t.fn();f.timers.delete(id)}
+    for(const [id,t] of [...f.timers])if(t.ms===750){t.fn();f.timers.delete(id)}
     assert(!f.classes.has('csp-splash')&&!f.classes.has('csp-splash-out')&&disposed===1,'after its fade the screen is gone and the tree lets go of its GL context');
     s.finish();assert.equal(events,1,'it lifts once');
   }
@@ -896,15 +896,18 @@ async function startupScreen(){
     const f=fixture(),s=f.context.window.CSPBoot.splash;let endFade,disposed=0,removed=0;
     f.nodes.cspSplash={parentNode:{removeChild(){removed++}},animate(frames,options){
       assert.equal(frames[0].opacity,1);assert.equal(frames[1].opacity,0);
-      assert.equal(options.duration,650);
+      assert.equal(options.duration,720);
       return {finished:new Promise(resolve=>endFade=resolve)};
     }};
-    s.dispose=()=>disposed++;
+    let frozen=0;s.freeze=()=>frozen++;s.dispose=()=>disposed++;
+    let inert=true;f.nodes.app={removeAttribute(name){if(name==='inert')inert=false}};
     f.rootEvents['csp:ready']();f.classes.delete('csp-map-staging');settle(f);
     for(const [id,t] of [...f.timers])if(t.ms<12000){t.fn();f.timers.delete(id)}
     assert(f.classes.has('csp-splash')&&removed===0&&disposed===0,'a busy first map frame cannot remove the splash before the compositor finishes its fade');
+    assert(inert&&frozen===1,'covered controls stay inert and the tree freezes for the compositor');
     endFade();await Promise.resolve();
     assert(!f.classes.has('csp-splash')&&removed===1&&disposed===1,'the completed fade removes the cover and releases the animated tree');
+    assert(!inert,'controls become available once the cover is gone');
   }
   {
     const f=fixture(),s=f.context.window.CSPBoot.splash;let now=1000;f.context.Date={now:()=>now};
@@ -931,8 +934,10 @@ async function startupScreen(){
   {
     const f=fixture(),s=f.context.window.CSPBoot.splash;
     f.rootEvents['csp:ready']();
-    [...f.timers.values()].find(t=>t.ms===8000).fn();
-    assert(s.done,'nothing holds it past 8 s');
+    assert(![...f.timers.values()].some(t=>t.ms===8000),'a slow map cannot success-fade into an empty pane at 8 s');
+    assert(!s.done&&f.classes.has('csp-map-staging'),'a slow picture stays behind the drawing');
+    [...f.timers.values()].find(t=>t.ms===15000).fn();
+    assert(s.done&&f.nodes.cspStartup.classes.has('failed'),'an endless request offers recovery instead of an empty map');
   }
   const nativeShell=fs.readFileSync('ios/Resources/native-shell.js','utf8');
   assert.match(nativeShell,/splash\?\.lifted\)\.then\(\(\) => handler\.postMessage\(\{type: "ready"\}\)/,'the native controls appear as the start-up screen lifts');
