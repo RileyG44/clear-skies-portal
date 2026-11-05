@@ -1,8 +1,9 @@
-Download **ClearSkies-Setup-1.0.9-arm64.dmg** for Apple Silicon (M1 and newer), or **ClearSkies-Setup-1.0.9-x64.dmg** for an Intel Mac.
+Download **ClearSkies-Setup-1.0.10-arm64.dmg** for Apple Silicon (M1 and newer), or **ClearSkies-Setup-1.0.10-x64.dmg** for an Intel Mac.
 
 Open the disk image, drag **ClearSkies** into **Applications**, then open it from Applications. The app and terrain engine are included together; no Node.js or terminal setup is needed. ZIP downloads are also available.
 
-- New in 1.0.9: reorganized Satellite imagery and Elevation menus. Satellite search shows the best clear image first, an "On the map" card with opacity, fill and remove controls, and warns when terrain hides the image with a one-click fix; Microsoft Planetary Computer results work again. Elevation has two task cards (Color by elevation, Highlight elevations) with one unit setting and exact heights. Right-click Identify surface geology opens its result again. Bundled map build 2026-11-05f.
+- New in 1.0.10: 3D terrain opens tilted and responds to two-finger tilt again. The 3D view now appears on its first drawn frame, so one slow elevation tile can no longer hold it hidden behind the flat map. The startup splash shows a growing tree until the map is ready. Bundled map build 2026-11-05m.
+- From 1.0.9: reorganized Satellite imagery and Elevation menus with Planetary Computer results and exact heights; right-click Identify surface geology works again.
 - First launch shows the same terrain welcome page and Pacifico ClearSkies wordmark as Windows. Choose **Open ClearSkies** to start exploring, or **Learn about Tailscale** for the optional remote-access guide.
 - Optional **Advanced configuration** on the welcome page sets terrain tile, WA DNR and memory cache limits, free disk-space reserve, terrain workers, and smoother panning (Off / Auto / On). Skip it to use the default setup.
 - The guide includes the official Tailscale for Mac download, engine capabilities, and Dock instructions. Reopen the welcome or guide from the **Help** menu.

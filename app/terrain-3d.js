@@ -716,9 +716,17 @@ function paintMap3dTheme(){
   const dark=document.documentElement.dataset.uiTheme==="dark"||document.getElementById("map")?.dataset.basemapTheme==="dark";
   node.style.background=dark?"#111416":"#dbe6eb";
 }
-/* terrain-3d reveals #map3d. It stays off until MapLibre's load, which is its
-   first complete frame, so a dark open does not flash the empty canvas. */
+/* terrain-3d reveals #map3d on the first drawn frame, on load, or at the
+   latest MAP3D_REVEAL_MS after the map starts. load waits for every tile in
+   view, and one slow elevation tile held it back indefinitely: the 3D view
+   never appeared, and touches went to the 2D map beneath, which pans and
+   rotates but cannot tilt. The canvas is already painted the map colour
+   (paintMap3dTheme), so the early reveal does not flash; tiles stream in. */
 var map3dFrameReady=false;
+const MAP3D_REVEAL_MS=1200;
+let map3dShownWaiters=[];
+/* Runs fn once the 3D view is on screen. */
+function whenMap3dShown(fn){ if(map3d&&map3dFrameReady) fn(); else map3dShownWaiters.push(fn) }
 function setTerrainModeUi(on,status){
   if(!on) reset3dGlassMotion();
   if(!on) map3dFrameReady=false;
@@ -826,10 +834,19 @@ async function enterTerrain3d(){
     map3d.on("rotate",syncBearingButton);map3d.on("pitch",syncBearingButton);
     map3d.on("moveend",scheduleTerrainStatus);map3d.on("idle",scheduleTerrainStatus);
     const view=map3d;
-    view.on("load",()=>{
-      if(map3d!==view||!map3dWanted)return;
+    let revealTimer=0;
+    const reveal=()=>{
+      clearTimeout(revealTimer);
+      if(map3d!==view||!map3dWanted||map3dFrameReady)return;
       map3dFrameReady=true;setTerrainModeUi(true);view.resize();
-      if(view.getPitch()<1) view.easeTo({pitch:MAP3D_PITCH,duration:matchMedia("(prefers-reduced-motion: reduce)").matches?0:1100})});
+      /* A restored camera lands first. Pitch near 0 is the opening pose, so
+         the default tilt still runs and a flat session cannot cancel it. */
+      for(const fn of map3dShownWaiters.splice(0)) fn();
+      if(view.getPitch()<1) view.easeTo({pitch:MAP3D_PITCH,duration:matchMedia("(prefers-reduced-motion: reduce)").matches?0:1100});
+    };
+    view.once("render",reveal);
+    view.once("load",reveal);
+    revealTimer=setTimeout(reveal,MAP3D_REVEAL_MS);
     map3d.on("error",event=>{if(event?.error) console.warn("3D terrain:",event.error)});
     /* Overview tiles that come back into view, or finish decoding after their
        3DEP already landed, still need their refresh; a refined tile's load
@@ -837,14 +854,14 @@ async function enterTerrain3d(){
     meshStaleClear();map3d.on("moveend",meshRefineAgain);
     map3d.on("sourcedata",meshSourceData);
     map3d.on("moveend",pruneMeshRequests);
-    if(!map3dWanted){ map3d.remove(); map3d=null; return null }   // left 3D while loading
+    if(!map3dWanted){ clearTimeout(revealTimer); map3d.remove(); map3d=null; return null }   // left 3D while loading
     map.keyboard?.disable();return map3d;
   })().catch(error=>{console.warn(error);map3d?.remove();map3d=null;setTerrainModeUi(false,error.message||"3D terrain could not start.");throw error})
     .finally(()=>{map3dLoading=null});
   return map3dLoading;
 }
 function exitTerrain3d(){
-  reset3dGlassMotion();map3dWanted=false;
+  reset3dGlassMotion();map3dWanted=false;map3dShownWaiters=[];
   map3dStylePending=null;
   clearTimeout(map3dLightTimer);
   elevCacheClear();
