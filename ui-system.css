@@ -1553,6 +1553,7 @@ body.csp-redesign #cspGrabber{display:none}
 
 @media (max-width:760px){
   .csp-glass body.csp-redesign{
+    --map-controls-top:calc(12px + var(--safe-top));
     --sheet-w:auto;
     --sheet-medium:min(56dvh,520px);
     --sheet-large:calc(100dvh - 64px - var(--safe-top));
@@ -1629,7 +1630,7 @@ body.csp-redesign #cspGrabber{display:none}
   .csp-glass body.csp-redesign:not(.collapsed) #sideToggleDock{left:calc(12px + var(--safe-left));top:calc(12px + var(--safe-top))}
   .csp-glass body.csp-redesign #mapDock,
   .csp-glass body.csp-redesign:not(.collapsed) #mapDock{
-    top:calc(12px + var(--safe-top));pointer-events:auto;
+    top:var(--map-controls-top);pointer-events:auto;
     opacity:calc(1 - var(--csp-dock-hide,0));
     transform:translate3d(calc(12px * var(--csp-dock-hide,0)),0,0) scale(calc(1 - .04 * var(--csp-dock-hide,0)));
     transform-origin:top right;
@@ -1779,8 +1780,7 @@ body.csp-redesign:not([data-csp-route="satellite"]) #status[data-kind="scenes"]{
    lays its own Liquid Glass fade over roughly the top 40pt of an installed web
    app and offers no way to turn it off, so the map buttons start below it. */
 @media (max-width:760px) and (orientation:portrait){
-  .csp-glass.csp-standalone body.csp-redesign #mapDock,
-  .csp-glass.csp-standalone body.csp-redesign:not(.collapsed) #mapDock{top:calc(var(--safe-top) + 40px)}
+  .csp-glass.csp-standalone body.csp-redesign{--map-controls-top:calc(var(--safe-top) + 40px)}
 }
 
 /* ---- phone sheet concentric with the screen corners ------------------------
@@ -2247,7 +2247,17 @@ body:not(.collapsed) #mapReadout{visibility:hidden}
 #mapReadout .key-swatch{display:flex;align-items:center;gap:3px}
 #mapReadout .key-swatch img{width:12px;height:9px;object-fit:fill}
 body.point-cloud-open #mapReadout{display:none}
-@media(max-width:760px){#mapReadout{top:max(12px,env(safe-area-inset-top));bottom:auto;left:max(12px,env(safe-area-inset-left))}}
+@media(max-width:760px){#mapReadout{top:var(--map-controls-top,calc(12px + var(--safe-top)));bottom:auto;left:calc(12px + var(--safe-left))}}
+/* Keep every tool reachable above the phone sheet, including on short
+   installed-app screens. The measured edge follows sheet drags and springs. */
+@media(max-width:760px) and (orientation:portrait){
+  .csp-glass body.csp-redesign #mapDock{
+    max-height:max(0px,calc(var(--csp-sheet-top,100%) - var(--map-controls-top) - 12px));
+    overflow-y:auto;overflow-x:hidden;scrollbar-width:none;
+    overscroll-behavior:contain;touch-action:pan-y;
+  }
+  .csp-glass body.csp-redesign #mapDock::-webkit-scrollbar{display:none}
+}
 /* Camera panel: map info as a switch row, then Capture (the whole view) and
    Select Area side by side, the primary action first. */
 .snapshot-readout-option{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:2px 0;cursor:pointer}
