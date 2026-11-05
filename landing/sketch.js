@@ -1110,6 +1110,9 @@ export function createSketch(canvas, layer, opts = {}) {
   }
   return {
     params: P, angles: ang, poseOf: b => [TX[b], TY[b], A[b]], strokes: T.count, bones: n, anchors, pageY, relayout: () => layout(),
+    // a point of the drawing in viewport pixels, and the pixels in one drawing unit
+    toPage(x, y) { const r = canvas.getBoundingClientRect(); return [r.left + r.width / 2 + (x - VIEW.cx) * view.scale, r.top + r.height / 2 - (y - VIEW.cy) * view.scale]; },
+    unit: () => view.scale,
     state: () => ({ maxTwig: Math.max(...[...ang].filter((_, b) => Bn.kind[b] === KIND.TWIG).map(Math.abs)), maxBranch: Math.max(...[...ang].filter((_, b) => Bn.kind[b] === KIND.BRANCH).map(Math.abs)) }),
     finish() { start = performance.now() - DRAW_SECONDS * 1200; },
     setDraw(v) { U.uDraw.value = v; updateLabels(v); render(); },

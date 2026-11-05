@@ -1,7 +1,7 @@
 /* An American crow that visits the maple page. After 30 to 60 seconds with nobody touching
    the page it flies in from an edge, lands on a letter of the ClearSkies wordmark and sits
    there fidgeting: quick head turns and tilts, blinks of the pale third eyelid, bowing
-   silent caws, tail flicks, a ruffle and shake, shuffles along the letter and the odd hop
+   tail flicks, a ruffle and shake, shuffles along the letter and the odd hop
    round to face the other way. The moment the visitor moves the pointer, touches, scrolls
    or types, it crouches, pushes off and flies away from them.
 
@@ -18,7 +18,7 @@
 
 const INK = "#1d1e20", FAR = "#34363a", EYE = "rgba(196,198,192,1)";
 const HI = a => `rgba(214,216,210,${a})`;
-const KX = 0.1, KY = -0.3;                   // how a point's depth (towards the viewer) shows on screen
+const KX = 0.24, KY = -0.36;                  // how a point's depth (towards the viewer) shows on screen
 const SPAN = 0.95, CHORD = 0.5;              // one wing, beak-to-tail lengths
 // one wing's outline in (along the span, back along the chord), leading edge first, five fingers at the tip
 const WING = [[0, 0], [0.22, 0.012], [0.44, 0.0], [0.58, 0.03], [0.74, 0.06],
@@ -31,22 +31,41 @@ const rot = ([x, y], a) => { const c = Math.cos(a), s = Math.sin(a); return [x *
 const lerp = (a, b, t) => a + (b - a) * t;
 const smooth = (a, b, x) => { const t = Math.max(0, Math.min(1, (x - a) / (b - a))); return t * t * (3 - 2 * t); };
 
-/* one wing's outline points on screen (frame units), side +1 near, -1 far */
+/* one wing's outline points on screen (frame units), side +1 near, -1 far. Open, the wing
+   is two pieces hinged at the wrist: the arm, and the hand with the five fingers, which
+   lags the arm through the beat and on the upstroke swings back, shortens and turns its
+   feathers edge-on, so the wing comes up half folded and goes down full */
 function wingPts(P, side) {
-  const { pitch, open, phi, flex, sweep, droop } = P;
-  const ds = [sweep, Math.sin(phi), side * Math.cos(phi)], n = Math.hypot(...ds);
-  ds[0] /= n; ds[1] /= n; ds[2] /= n;
+  const { pitch, open, phiA, phiH, fold, sweep, droop, tilt = 0 } = P;
+  const unit = v => { const n = Math.hypot(...v); return [v[0] / n, v[1] / n, v[2] / n]; };
+  const dA = unit([sweep + tilt, Math.sin(phiA), side * Math.cos(phiA)]);
+  const dH = unit([(sweep + tilt) * 1.3 - fold * 1.2 - 0.12, Math.sin(phiH), side * Math.cos(phiH)]);
+  const arm = 0.45 * SPAN * (1 - 0.18 * fold), W = [SH[0] + dA[0] * arm, SH[1] + dA[1] * arm, dA[2] * arm];
   return WING.map(([u, v]) => {
-    const hand = Math.max(0, (u - 0.45) / 0.55);
-    // open: out along the span, back along the chord; the hand tucks back on the upstroke
-    const uu = u * SPAN * (1 - 0.28 * flex * hand), vv = v * CHORD + flex * hand * 0.24;
-    const o = [SH[0] + ds[0] * uu - vv, SH[1] + ds[1] * uu, ds[2] * uu];
+    const hand = smooth(0.38, 0.7, u);
+    const vv = v * CHORD * (1 - 0.5 * fold * hand);
+    const o = u <= 0.45 ? [SH[0] + dA[0] * u / 0.45 * arm - vv, SH[1] + dA[1] * u / 0.45 * arm, dA[2] * u / 0.45 * arm]
+      : (() => { const h = (u - 0.45) * SPAN * (1 - 0.4 * fold); return [W[0] + dH[0] * h - vv, W[1] + dH[1] * h, W[2] + dH[2] * h]; })();
     // folded: laid back along the body, the primaries stacked over the tail
     const f = [SH[0] + 0.02 - u * 0.5 - v * 0.06, SH[1] + 0.012 - v * 0.36 * (1 - 0.62 * u) - u * 0.1 - droop * 0.05 * u, side * (0.07 + droop * 0.04)];
     const x = lerp(f[0], o[0], open), y = lerp(f[1], o[1], open), z = lerp(f[2], o[2], open);
     const [rx, ry] = rot([x, y], pitch);
     return [rx + z * KX, ry + z * KY];
   });
+}
+
+/* the wingbeat: c runs 0..1 through one beat; a long downstroke, then a quicker upstroke.
+   Returns -1 at the bottom of the stroke and 1 at the top */
+const DOWN = 0.57;
+export function beat(c) {
+  c -= Math.floor(c);
+  return c < DOWN ? Math.cos(Math.PI * c / DOWN) : -Math.cos(Math.PI * (c - DOWN) / (1 - DOWN));
+}
+export function wingPose(c, mid, amp) {
+  c -= Math.floor(c);
+  const up = c >= DOWN ? Math.sin(Math.PI * (c - DOWN) / (1 - DOWN)) : 0;
+  // the stroke plane leans: the wings beat down and forward, then come up and back
+  return { phiA: mid + amp * beat(c), phiH: mid + 0.04 + amp * 1.22 * beat(c - 0.07), fold: Math.min(1, amp / 0.75) * Math.pow(up, 0.8), tilt: -0.5 * amp * beat(c - 0.04) };
 }
 
 function fillPath(g, pts) { g.beginPath(); pts.forEach(([x, y], i) => i ? g.lineTo(x, y) : g.moveTo(x, y)); g.closePath(); g.fill(); }
@@ -96,7 +115,7 @@ export function drawCrow(g, P) {
 
   // tail: a long, slightly rounded fan from the rump
   const tb = B([-0.17, -0.045]), ta = Math.PI + 0.17 + 0.22 * (1 - P.open) + pitch + tail;
-  const L = 0.3, w0 = 0.042, w1 = 0.052 * (1 + fan * 1.3), cx = Math.cos(ta), cy = Math.sin(ta), px = -cy, py = cx;
+  const L = 0.3 - 0.04 * P.open, w0 = 0.042 - 0.008 * P.open, w1 = 0.052 * (1 + fan * 1.3) * (1 + 0.15 * P.open), cx = Math.cos(ta), cy = Math.sin(ta), px = -cy, py = cx;
   g.beginPath();
   g.moveTo(tb[0] + px * w0, tb[1] + py * w0);
   g.lineTo(tb[0] + cx * L + px * w1, tb[1] + cy * L + py * w1);
@@ -104,8 +123,9 @@ export function drawCrow(g, P) {
   g.lineTo(tb[0] - px * w0, tb[1] - py * w0); g.closePath(); g.fill();
 
   // body
-  g.beginPath(); g.ellipse(0, 0, 0.215 * sc, 0.13 * sc, pitch, 0, 7); g.fill();
-  const ch = B([0.1, 0.0]); g.beginPath(); g.ellipse(ch[0], ch[1], 0.13 * sc, 0.115 * sc, pitch, 0, 7); g.fill();
+  const sl = P.open;                       // in the air the body draws out long and slim
+  g.beginPath(); g.ellipse(0, 0, 0.215 * sc * (1 + 0.07 * sl), 0.13 * sc * (1 - 0.14 * sl), pitch, 0, 7); g.fill();
+  const ch = B([0.1, 0.0]); g.beginPath(); g.ellipse(ch[0], ch[1], 0.13 * sc, 0.115 * sc * (1 - 0.12 * sl), pitch, 0, 7); g.fill();
 
   // neck and head
   const hc = B([0.235 + 0.075 * neck, 0.072 + 0.02 * neck - 0.035 * crouch]);
@@ -140,6 +160,9 @@ export function drawCrow(g, P) {
   const wp = wingPts(P, 1);
   fillPath(g, wp);
   featherLines(g, wp, 0.3, 0.0075);
+  if (P.open > 0.3) {                      // a pale edge along the spread wing, so it reads against the body
+    g.strokeStyle = HI(0.3 * P.open); g.lineWidth = 0.008; g.beginPath(); g.moveTo(...wp[0]); for (let i = 1; i <= 4; i++) g.lineTo(...wp[i]); g.stroke();
+  }
   // a little sheen along the back and tail
   g.strokeStyle = HI(0.16); g.lineWidth = 0.008;
   g.beginPath(); const b0 = B([0.12, 0.1]), b1 = B([-0.05, 0.11]); g.moveTo(...b0); g.quadraticCurveTo(...B([0.03, 0.125]), ...b1); g.stroke();
@@ -169,23 +192,49 @@ export function startCrow(title, opts = {}) {
 
   let state = "away", timer = 0, raf = 0, last = 0, clock = 0;
   let face = spring(1, 260, 0.9), flap = 0, Bw = [0, 0], fly = null, perch = null, todo = [], blinkUntil = 0, nextBlink = 0, nextIdle = 0, nextLook = 0;
-  let pointer = null;
+  let pointer = null, hop = null, nextHop = 0, nextGround = 0, groundEnd = 0;
+  const hopGap = () => now ? R(5, 9) : R(15, 30), groundGap = () => now ? R(8, 12) : R(90, 150);
+  const sk = opts.sketch && opts.sketch.toPage ? opts.sketch : null, GR = sk && opts.ground;
+  const restPitch = () => perch && perch.ground ? 0.24 : REST.pitch;   // on the ground a crow stands more level
 
-  /* where the crow stands: the top of one letter of the wordmark */
-  function choosePerch() {
+  /* where the crow stands: the top of one letter of the wordmark. It flies in to a tall
+     letter (l, k, S or C); hopping about, it will stand on any of them but the i */
+  function letter(i) {
     const tn = title.firstChild, text = tn.textContent, cs = getComputedStyle(title), fs = parseFloat(cs.fontSize);
+    if (i < 0 || i >= text.length) return null;
     meter.font = `${cs.fontWeight} ${fs}px ${cs.fontFamily}`;
-    const pick = Math.random(), ch = pick < 0.38 ? "l" : pick < 0.7 ? "k" : pick < 0.88 ? "S" : "C";
-    const i = text.indexOf(ch); if (i < 0) return null;
     const r = document.createRange(); r.setStart(tn, i); r.setEnd(tn, i + 1);
-    const m = meter.measureText(ch);
-    return { r, fs, dx: (m.actualBoundingBoxRight - m.actualBoundingBoxLeft) / 2, top: m.actualBoundingBoxAscent, desc: m.fontBoundingBoxDescent };
+    const m = meter.measureText(text[i]);
+    return { i, r, fs, dx: (m.actualBoundingBoxRight - m.actualBoundingBoxLeft) / 2, top: m.actualBoundingBoxAscent, desc: m.fontBoundingBoxDescent };
   }
+  function choosePerch() {
+    const text = title.firstChild.textContent, pick = Math.random(), ch = pick < 0.38 ? "l" : pick < 0.7 ? "k" : pick < 0.88 ? "S" : "C";
+    return letter(text.indexOf(ch));
+  }
+  const spot = o => {
+    if (o.ground) { const p = sk.toPage(o.tx, GR.y(o.tx)); return [p[0], p[1] + 0.5]; }
+    const b = o.r.getBoundingClientRect(); return [b.left + o.dx, b.bottom - o.desc - o.top + 1.5];
+  };
+  /* a place on the ground under the branches, if it's on screen */
+  function groundSpot() {
+    const sp = GR.spans[Math.floor(Math.random() * GR.spans.length)], o = { ground: true, tx: R(sp[0], sp[1]), fs: perch.fs };
+    const p = spot(o);
+    return p[0] > 20 && p[0] < innerWidth - 20 && p[1] > 60 && p[1] < innerHeight - 8 ? o : null;
+  }
+  // the point the feet stand on; during a hop, a point travelling in an arc between letters
   function perchAt() {
-    const b = perch.r.getBoundingClientRect();
-    return [b.left + perch.dx, b.bottom - perch.desc - perch.top + 1.5];
+    if (state !== "hop" || hop.t <= 0) return spot(perch);
+    const a = spot(perch), b = spot(hop.to), t = Math.min(1, hop.t), s = t * t * (3 - 2 * t) * 0.6 + t * 0.4;
+    return [lerp(a[0], b[0], s), lerp(a[1], b[1], s) - hop.h * 4 * t * (1 - t)];
   }
-  const size = () => perch.fs * 1.0;           // the crow's length in px
+  // the crow's length in px: the wordmark's size on a letter; on the ground, a size that sits
+  // with the drawing, and in between it changes along the flight
+  const sizeOf = o => o.ground ? Math.max(22, Math.min(o.fs * 0.6, sk.unit() * 0.06)) : o.fs;
+  function size() {
+    if (fly && state === "arrive" && fly.L0) return lerp(fly.L0, sizeOf(perch), smooth(0, 1, fly.t));
+    if (fly && state === "leave" && fly.L0) return fly.L0;
+    return sizeOf(perch);
+  }
 
   // the body's centre when standing on the perch, from the pose
   function seat(L, P) {
@@ -212,27 +261,28 @@ export function startCrow(title, opts = {}) {
     const dist = Math.hypot(P[0] - p0[0], P[1] - p0[1]);
     fly = { kind: "in", p0, dir, t: 0, dur: Math.max(1.8, Math.min(4.2, dist / (7.5 * L))), glide: Math.random() < 0.6 ? R(0.25, 0.45) : -1 };
     for (const k in REST) { S[k].x = S[k].t = REST[k]; S[k].v = 0; }
-    T({ open: 1, amp: 0.95, phiMid: 0.25, pitch: 0.05 }); S.open.x = 1; S.amp.x = 0.95; S.pitch.x = 0.05;
-    face.x = face.t = dir; flap = R(0, 6.3);
+    T({ open: 1, amp: 0.8, phiMid: 0.2, pitch: 0.05, neck: 0.35 }); S.open.x = 1; S.amp.x = 0.8; S.pitch.x = 0.05; S.neck.x = 0.35;
+    face.x = face.t = dir; flap = Math.random();
     state = "arrive"; cv.style.display = "block"; Bw = p0.slice();
     last = performance.now(); raf = requestAnimationFrame(frame);
   }
 
   function leave() {
     if (state === "leave" || state === "away") return;
+    if (state === "arrive" && fly.t < 0) { perch = fly.from; state = "perch"; }   // still crouched to fly
     const vw = innerWidth, vh = innerHeight, L = size();
     const dir = pointer ? (pointer[0] < Bw[0] ? 1 : -1) : (Math.random() < 0.5 ? 1 : -1);
     const E = Math.random() < 0.55 ? [Math.max(-2 * L, Math.min(vw + 2 * L, Bw[0] + dir * R(0.3, 0.7) * vw)), -2.2 * L] : [dir > 0 ? vw + 2.2 * L : -2.2 * L, R(0.02, 0.3) * vh];
-    const fromPerch = state === "perch";
-    const v = fly && fly.vel ? fly.vel : [0, 0];
-    fly = { kind: "out", p0: Bw.slice(), E, dir, t: fromPerch ? -R(0.22, 0.42) : 0, dur: Math.max(1.5, Math.min(3.2, Math.hypot(E[0] - Bw[0], E[1] - Bw[1]) / (7 * L))), c1: [Bw[0] + v[0] * 0.3 + dir * 0.4 * L, Bw[1] + v[1] * 0.3 - 1.7 * L], fromPerch, feet0: fromPerch ? feetWorld(L) : null };
+    const fromPerch = state === "perch", hopping = state === "hop" && hop.t > 0;
+    const v = hopping ? hop.vel : fly && fly.vel ? fly.vel : [0, 0];
+    fly = { kind: "out", p0: Bw.slice(), E, dir, t: fromPerch || (state === "hop" && !hopping) ? -R(0.22, 0.42) : 0, dur: Math.max(1.5, Math.min(3.2, Math.hypot(E[0] - Bw[0], E[1] - Bw[1]) / (7 * L))), c1: [Bw[0] + v[0] * 0.3 + dir * 0.4 * L, Bw[1] + v[1] * 0.3 - 1.7 * L], fromPerch: fromPerch || (state === "hop" && !hopping), feet0: fromPerch || state === "hop" ? feetWorld(L) : null, L0: L };
     todo = [];
     if (fromPerch) T({ crouch: 0, gape: 0, yaw: 0, hp: 0.1, neck: 0, puff: 0 });
     state = "leave";
   }
 
-  function feetWorld(L) {
-    const P = perchAt(), fx = face.x;
+  function feetWorld(L, P = perchAt()) {
+    const fx = face.x;
     return [[P[0] + fx * L * (0.012 + S.f0.x), P[1] - L * S.l0.x], [P[0] + fx * L * (-0.03 + S.f1.x), P[1] - L * S.l1.x]];
   }
 
@@ -240,54 +290,105 @@ export function startCrow(title, opts = {}) {
   function seq(steps) { let t = clock; for (const [dt, fn] of steps) { t += dt; todo.push([t, fn]); } }
   function fidget() {
     const p = Math.random();
-    if (p < 0.24) {                                // bowing, silent caws
-      const n = 2 + Math.floor(Math.random() * 3), st = [];
-      for (let i = 0; i < n; i++) st.push([i ? 0.36 : 0, () => T({ pitch: 0.2, neck: 0.7, hp: -0.18, gape: 0.5, droop: 0.5, fan: 0.5, tail: -0.22, puff: 0.6 })],
-        [0.2, () => T({ pitch: 0.44, neck: 0.15, hp: 0, gape: 0, droop: 0.05, fan: 0.1, tail: 0.05 })]);
-      st.push([0.3, () => T({ pitch: REST.pitch, neck: 0, fan: 0, tail: 0, droop: 0, puff: 0 })]);
-      seq(st);
-    } else if (p < 0.38) {                         // ruffle and shake
+    if (p < 0.16) {                                // ruffle and shake
       const st = [[0, () => T({ puff: 1, droop: 0.3 })]];
       for (let i = 0; i < 6; i++) st.push([i ? 0.05 : 0.45, () => { T({ hp: i % 2 ? 0.12 : -0.12, tail: i % 2 ? 0.12 : -0.12 }); }]);
       st.push([0.06, () => T({ hp: 0, tail: 0 })], [0.25, () => T({ puff: 0, droop: 0 })]);
       seq(st);
-    } else if (p < 0.56) {                         // a flick of tail and wings
+    } else if (p < 0.4) {                          // a flick of tail and wings
       seq([[0, () => T({ tail: -0.32, droop: 0.6, fan: 0.4 })], [0.09, () => T({ tail: 0.06, droop: 0, fan: 0 })], [0.12, () => T({ tail: 0 })]]);
-    } else if (p < 0.72) {                         // a shuffle along the letter, one foot then the other
+    } else if (p < 0.6) {                          // a shuffle along the letter, one foot then the other
       const d = R(0.025, 0.05) * (Math.random() < 0.5 ? -1 : 1), s = S.shift.t + d > 0.06 || S.shift.t + d < -0.06 ? -d : d;
       seq([[0, () => T({ l0: 0.03, crouch: 0.15 })], [0.1, () => T({ f0: S.f0.t + s, shift: S.shift.t + s / 2 })], [0.1, () => T({ l0: 0 })],
         [0.14, () => T({ l1: 0.03 })], [0.1, () => T({ f1: S.f1.t + s, shift: S.shift.t + s / 2 })], [0.1, () => T({ l1: 0, crouch: 0 })]]);
-    } else if (p < 0.84) {                         // hop round to face the other way
+    } else if (p < 0.76) {                         // hop round to face the other way
       seq([[0, () => T({ crouch: 0.5 })], [0.14, () => { T({ crouch: 0, hop: 0.07 }); face.t = -face.t; }], [0.12, () => T({ hop: 0, crouch: 0.35 })], [0.14, () => T({ crouch: 0 })]]);
-    } else if (p < 0.93) {                         // look back over the shoulder
+    } else if (p < 0.9) {                          // look back over the shoulder
       seq([[0, () => T({ yaw: Math.PI * 0.94, hp: 0.1 })], [R(0.8, 1.6), () => T({ yaw: 0, hp: 0 })]]);
     } else {                                       // a long look up at the sky
       seq([[0, () => T({ hp: 0.55, neck: 0.2 })], [R(1, 1.8), () => T({ hp: 0, neck: 0 })]]);
     }
   }
 
+  /* a flight from where it stands to somewhere else: down to the ground, or back up to a letter */
+  function flyTo(to) {
+    const L = size(), from = perch, a = spot(from), b = spot(to), L1 = sizeOf(to);
+    const dir = Math.sign(b[0] - a[0]) || Math.sign(face.t);
+    fly = { kind: "in", p0: Bw.slice(), dir, t: -1, prep: R(0.25, 0.4), dur: Math.max(1.4, Math.min(3.6, Math.hypot(b[0] - a[0], b[1] - a[1]) / (3.2 * (L + L1)))),
+      glide: Math.random() < 0.5 ? R(0.3, 0.45) : -1, from, feet0: null, L0: L, takeoff: true };
+    perch = to; todo = []; state = "arrive";
+  }
+
+  /* on the ground: it walks about, head bobbing, and stops to peck */
+  function groundFidget(L) {
+    const p = Math.random();
+    if (p < 0.45) {
+      const n = 1 + Math.floor(Math.random() * 4), st = [[0, () => T({ pitch: -0.32, neck: 0.55, hp: -1.05, crouch: 0.35, tail: -0.05, yaw: 0 })]];
+      for (let i = 0; i < n; i++) st.push([i ? 0.17 : 0.3, () => T({ hp: -1.4, neck: 0.75 })], [0.09, () => T({ hp: -1.0, neck: 0.5 })]);
+      st.push([R(0.2, 0.7), () => T({ pitch: restPitch(), neck: 0.05, hp: 0, crouch: 0 })]);
+      seq(st);
+    } else if (p < 0.82) {
+      const span = GR.spans.find(s => perch.tx >= s[0] - 1e-6 && perch.tx <= s[1] + 1e-6) || GR.spans[0];
+      const steps = 2 + Math.floor(Math.random() * 4), stride = R(0.07, 0.1), d = steps * stride * L / sk.unit(), dir = Math.sign(face.t);
+      if (perch.tx + dir * d > span[1] || perch.tx + dir * d < span[0]) {     // the end of the open ground: turn round
+        seq([[0, () => T({ crouch: 0.45 })], [0.13, () => { T({ crouch: 0, hop: 0.06 }); face.t = -face.t; }], [0.12, () => T({ hop: 0, crouch: 0.3 })], [0.14, () => T({ crouch: 0 })]]);
+        return;
+      }
+      const st = [];
+      for (let k = 0; k < steps; k++) {
+        const f = k % 2 ? "f1" : "f0", l = k % 2 ? "l1" : "l0";
+        st.push([k ? 0.12 : 0, () => T({ [l]: 0.035, neck: 0.28 })],
+          [0.13, () => T({ [f]: S[f].t + stride, shift: S.shift.t + stride / 2, [l]: 0, neck: -0.04 })]);
+      }
+      st.push([0.2, () => {                      // move the spot it stands on up to where it walked to
+        const a = S.shift.t; perch.tx += Math.sign(face.x) * a * L / sk.unit();
+        for (const k of ["shift", "f0", "f1"]) { S[k].x -= a; S[k].t -= a; }
+        T({ neck: 0 });
+      }]);
+      seq(st);
+    } else if (p < 0.9) {
+      seq([[0, () => T({ tail: -0.32, droop: 0.6, fan: 0.4 })], [0.09, () => T({ tail: 0.06, droop: 0, fan: 0 })], [0.12, () => T({ tail: 0 })]]);
+    } else {
+      seq([[0, () => T({ hp: 0.3, neck: 0.3, yaw: R(0.5, 1) })], [R(0.6, 1.4), () => T({ hp: 0, neck: 0, yaw: 0 })]]);
+    }
+  }
+
   function frame(ms) {
-    const dt = Math.min(1 / 30, (ms - last) / 1000); last = ms; clock += dt;
+    const dt = Math.max(0, Math.min(1 / 30, (ms - last) / 1000)); last = ms; clock += dt;   // (a frame stamp can be a little before the call that started it)
     const L = size();
     for (let i = 0; i < 2; i++) { for (const k in S) step(S[k], dt / 2); step(face, dt / 2); }
     let feet, grip = 1, tuck = 0;
     const B = (p) => rot(p, S.pitch.x);
 
     if (state === "arrive" || state === "leave") {
-      const f = fly; f.t += dt / f.dur;
+      const f = fly; f.t += dt / (f.t < 0 ? f.prep || 0.3 : f.dur);
       let s, pos;
-      if (f.kind === "in") {
+      if (f.kind === "in" && f.t < 0) {           // crouching to spring off where it stands
+        const a = spot(f.from);
+        pos = seat(L, a);
+        if (f.t > -0.6) { T({ crouch: 0.9, pitch: 0.3, neck: -0.2, hp: 0, yaw: 0 }); face.t = f.dir; }
+        feet = feetWorld(L, a);
+      } else if (f.kind === "in") {
+        if (f.takeoff && !f.launched) {
+          f.launched = true; f.p0 = Bw.slice(); f.feet0 = feetWorld(L, spot(f.from));
+          T({ crouch: 0, shift: 0, f0: 0, f1: 0, l0: 0, l1: 0, open: 1, amp: 1, phiMid: 0.32, sweep: 0.3, pitch: 0.25, neck: 0.2, fan: 0.5 }); S.open.k = 600; flap = 0;
+        }
         const t = Math.min(1, f.t); s = t + 0.85 * t * (1 - t);
-        const P3 = seat(L, perchAt()), c2 = [P3[0] - f.dir * 2.2 * L, P3[1] - 1.0 * L], c1 = [f.p0[0] + f.dir * 0.35 * Math.abs(P3[0] - f.p0[0]), lerp(f.p0[1], c2[1], 0.3)];
+        const P3 = seat(L, perchAt()), c2 = [P3[0] - f.dir * 2.2 * L, P3[1] - 1.0 * L], c1 = [f.p0[0] + f.dir * 0.35 * Math.abs(P3[0] - f.p0[0]), f.takeoff ? f.p0[1] - 1.6 * f.L0 : lerp(f.p0[1], c2[1], 0.3)];
         pos = bezier(f.p0, c1, c2, P3, s);
         const gl = f.glide > 0 && t > f.glide && t < f.glide + 0.12;
-        if (t < 0.72) T({ amp: gl ? 0.05 : 0.95, phiMid: gl ? 0.22 : 0.25, sweep: 0, fan: 0, tail: 0 });
-        else if (t < 0.85) T({ amp: 0.06, phiMid: 0.3, sweep: 0.05, fan: 0.3 });
-        else T({ amp: 0.6, phiMid: 0.45, sweep: 0.45, fan: 1, tail: 0.35, pitch: 0.95, neck: 0.3 });
+        if (f.takeoff && t > 0.2) S.open.k = STIFF.open;
+        // rowing beats, now and then a short glide; a long glide in, then a braking flare
+        if (f.takeoff && t < 0.2) { /* the first deep beats of the take-off */ }
+        else if (t < 0.72) T({ amp: gl ? 0.03 : 0.8, phiMid: gl ? 0.16 : 0.2, sweep: 0, fan: 0, tail: 0, neck: 0.35 });
+        else if (t < 0.85) T({ amp: 0.04, phiMid: 0.2, sweep: 0.08, fan: 0.35, tail: 0.1, neck: 0.25 });
+        else T({ amp: 0.75, phiMid: 0.42, sweep: 0.5, fan: 1, tail: 0.35, pitch: 0.95, neck: 0.1 });
         tuck = 1 - smooth(0.74, 0.9, t);
         if (f.t >= 1) {                          // touchdown
-          state = "perch"; T({ open: 0, amp: 0, sweep: 0, fan: 0, tail: 0, pitch: REST.pitch, neck: 0 });
-          S.crouch.v = 2.6; nextIdle = clock + R(1.2, 3); nextLook = clock + 0.4; nextBlink = clock + R(0.8, 3);
+          state = "perch"; fly = null; T({ open: 0, amp: 0, sweep: 0, fan: 0, tail: 0, pitch: restPitch(), neck: 0 });
+          if (perch.ground) groundEnd = clock + (now ? R(8, 12) : R(12, 25));
+          else if (nextGround < clock) nextGround = clock + groundGap();
+          S.crouch.v = 2.6; nextHop = clock + hopGap(); nextIdle = clock + R(1.2, 3); nextLook = clock + 0.4; nextBlink = clock + R(0.8, 3);
         }
       } else {
         if (f.t < 0) {                           // the moment before take-off: a startle and a crouch
@@ -295,31 +396,69 @@ export function startCrow(title, opts = {}) {
           if (f.t > -0.16) { T({ crouch: 1, pitch: 0.3, neck: -0.3 }); face.t = f.dir; }
           feet = feetWorld(L);
         } else {
-          if (f.feet0 && !f.launched) { f.launched = true; T({ crouch: 0, open: 1, amp: 1, phiMid: 0.25, sweep: 0.2, pitch: 0.15, neck: 0.2, fan: 0.4 }); S.open.k = 600; flap = -Math.PI / 2; }
-          if (!f.fromPerch && !f.launched) { f.launched = true; face.t = f.dir; T({ amp: 1, open: 1, phiMid: 0.25, pitch: 0.1, sweep: 0, fan: 0, tail: 0 }); }
+          if (f.feet0 && !f.launched) { f.launched = true; T({ crouch: 0, open: 1, amp: 1, phiMid: 0.32, sweep: 0.3, pitch: 0.25, neck: 0.2, fan: 0.5 }); S.open.k = 600; flap = 0; }
+          if (!f.fromPerch && !f.launched) { f.launched = true; face.t = f.dir; T({ amp: 0.9, open: 1, phiMid: 0.22, pitch: 0.1, sweep: 0, fan: 0, tail: 0, neck: 0.35 }); }
           const t = Math.min(1, f.t); s = 0.45 * t + 0.55 * t * t;
           const c2 = [lerp(f.p0[0], f.E[0], 0.62), lerp(f.p0[1], f.E[1], 0.62) + 0.4 * L];
           pos = bezier(f.p0, f.c1, c2, f.E, s);
-          if (t > 0.25) { T({ sweep: 0, fan: 0, pitch: 0.12 }); S.open.k = STIFF.open; }
+          if (t > 0.25) { T({ sweep: 0, fan: 0, amp: 0.85, phiMid: 0.2, neck: 0.35 }); S.open.k = STIFF.open; }
           tuck = f.feet0 ? smooth(0.0, 0.22, t) : 1;
           if (f.t >= 1) { state = "away"; cv.style.display = "none"; cancelAnimationFrame(raf); S.open.k = STIFF.open; schedule(); return; }
         }
       }
       const vel = [(pos[0] - Bw[0]) / Math.max(dt, 1e-3), (pos[1] - Bw[1]) / Math.max(dt, 1e-3)];
       f.vel = vel; Bw = pos;
-      if (state !== "perch" && !(f.kind === "out" && f.t < 0)) {
+      if (state !== "perch" && f.t >= 0) {
         if (!(f.kind === "in" && f.t > 0.85)) T({ pitch: Math.max(-0.4, Math.min(0.5, 0.08 + 0.5 * Math.atan2(-vel[1], Math.abs(vel[0]) + 1))) });
         if (Math.abs(vel[0]) > 40) face.t = Math.sign(vel[0]);
-        const hz = f.kind === "out" && f.t < 0.3 ? 4.6 : f.kind === "in" && f.t > 0.85 ? 4.2 : 2.7;
-        flap += 2 * Math.PI * hz * dt;
-        Bw = [Bw[0], Bw[1] - L * 0.03 * S.amp.x * Math.sin(flap)];
+        S.hp.t = -0.35 * S.pitch.x;              // the head stays level while the body pitches
+        const hz = f.kind === "out" && f.t < 0.3 ? 4.4 : f.kind === "in" && f.t > 0.85 ? 4 : 2.9;
+        flap += hz * dt;
+        // each downstroke lifts the body a little; it sinks as the wings come up
+        Bw = [Bw[0], Bw[1] + L * 0.024 * S.amp.x * beat(flap - 0.12)];
+      }
+    }
+
+    if (state === "hop") {
+      const h = hop; h.t += dt / (h.t < 0 ? 0.2 : h.dur);
+      if (h.t < 0) { T({ crouch: 0.65, pitch: 0.4, neck: 0, hp: 0, yaw: 0 }); face.t = h.dir; }
+      else {
+        if (!h.up) {                             // spring off: a beat or two of the wings if it's far
+          h.up = true; flap = 0;
+          T({ crouch: 0, shift: 0, f0: 0, f1: 0, l0: 0.04, l1: 0.04, open: h.far ? 1 : 0.55, amp: h.far ? 0.75 : 0.55, phiMid: 0.32, pitch: 0.32, fan: 0.4, neck: 0.15 });
+        }
+        flap += 3.4 * dt;
+        if (h.t > 0.55) T({ amp: 0, open: h.far ? 0.5 : 0.2, phiMid: 0.4, l0: 0, l1: 0, fan: 0.6, pitch: 0.6 });
+        if (h.t >= 1) {                          // and settle on the new letter
+          perch = h.to; state = "perch"; hop = null;
+          T({ open: 0, amp: 0, phiMid: REST.phiMid, pitch: restPitch(), fan: 0, neck: 0 });
+          S.crouch.v = 1.8; nextHop = clock + hopGap(); nextIdle = clock + R(1, 2.5); nextLook = clock + 0.3;
+        }
+      }
+      const p = seat(L, perchAt());
+      if (hop) hop.vel = [(p[0] - Bw[0]) / Math.max(dt, 1e-3), (p[1] - Bw[1]) / Math.max(dt, 1e-3)];
+      Bw = p;
+    }
+
+    if (state === "perch" && !todo.length && GR && !perch.ground && nextGround && clock > nextGround) {
+      const o = groundSpot(); if (o) flyTo(o); else nextGround = clock + 20;
+    }
+    if (state === "perch" && !todo.length && perch.ground && clock > groundEnd) flyTo(choosePerch());
+    if (state === "perch" && !todo.length && !perch.ground && clock > nextHop) {
+      const text = title.firstChild.textContent, opts = [];
+      for (let i = 0; i < text.length; i++) if (i !== perch.i && text[i] !== "i" && text[i] !== " ") opts.push(i);
+      const to = letter(opts[Math.floor(Math.random() * opts.length)]);
+      if (to) {
+        const a = spot(perch), b = spot(to), d = Math.abs(b[0] - a[0]), far = d > 1.3 * L;
+        hop = { to, t: -1e-6 - 1, dir: Math.sign(b[0] - a[0]) || face.t, far, dur: far ? 0.5 + d / (6 * L) : 0.42, h: L * (far ? 0.45 : 0.25) + Math.max(0, a[1] - b[1]) * 0.6 };
+        hop.t = -1; state = "hop";
       }
     }
 
     if (state === "perch") {
       Bw = seat(L, perchAt());
       while (todo.length && todo[0][0] <= clock) todo.shift()[1]();
-      if (!todo.length && clock > nextIdle) { fidget(); nextIdle = clock + R(2.5, 7.5); }
+      if (!todo.length && clock > nextIdle) { if (perch.ground) { groundFidget(L); nextIdle = clock + R(0.6, 2.6); } else { fidget(); nextIdle = clock + R(2.5, 7.5); } }
       if (!todo.length && clock > nextLook) {
         const r = Math.random();
         T({ hp: R(-0.3, 0.32), yaw: r < 0.22 ? R(0.6, 1.15) : r < 0.3 ? R(-0.3, 0.3) : 0, neck: R(-0.1, 0.25) });
@@ -331,21 +470,23 @@ export function startCrow(title, opts = {}) {
     // feet: tucked under the tail in flight, reaching forward to land, gripping the letter when down
     const fx = Math.sign(face.x) * Math.max(Math.abs(face.x), 0.03);
     const toFrame = w => [(w[0] - Bw[0]) / (L * fx), -(w[1] - Bw[1]) / L];
-    const tucked = [B([-0.14, -0.1]), B([-0.17, -0.09])];
-    if (state === "perch") { feet = feetWorld(L).map(toFrame); }
+    const tucked = [B([-0.09, -0.075]), B([-0.11, -0.07])];   // drawn up into the belly feathers
+    if (state === "perch" || state === "hop") { feet = feetWorld(L).map(toFrame); }
     else if (feet) feet = feet.map(toFrame);
     else {
       let down = null;
-      if (fly.kind === "in") { const t = fly.t, reach = [[0.11, -0.25], [0.08, -0.25]]; down = tucked.map((p, i) => [lerp(reach[i][0], p[0], tuck), lerp(reach[i][1], p[1], tuck)]); if (t > 0.93) { const w = smooth(0.93, 1, t), pw = feetWorld(L).map(toFrame); down = down.map((p, i) => [lerp(p[0], pw[i][0], w), lerp(p[1], pw[i][1], w)]); } }
+      if (fly.kind === "in") { const t = fly.t, reach = [[0.11, -0.25], [0.08, -0.25]]; down = tucked.map((p, i) => [lerp(reach[i][0], p[0], tuck), lerp(reach[i][1], p[1], tuck)]); if (t > 0.93) { const w = smooth(0.93, 1, t), pw = feetWorld(L).map(toFrame); down = down.map((p, i) => [lerp(p[0], pw[i][0], w), lerp(p[1], pw[i][1], w)]); }
+        if (fly.feet0 && t < 0.25) { const w = smooth(0, 0.22, t), pw = fly.feet0.map(toFrame); down = down.map((p, i) => [lerp(pw[i][0], p[0], w), lerp(pw[i][1], p[1], w)]); } }
       else { const pw = fly.feet0 ? fly.feet0.map(toFrame) : tucked; down = tucked.map((p, i) => [lerp(pw[i][0], p[0], tuck), lerp(pw[i][1], p[1], tuck)]); }
       feet = down; grip = 1 - tuck * 0.8;
     }
 
-    const amp = S.amp.x, phi = S.phiMid.x + amp * Math.sin(flap);
+    const amp = Math.max(0, S.amp.x), wing = wingPose(flap, S.phiMid.x, amp);
     const P = {
-      pitch: S.pitch.x, crouch: S.crouch.x, neck: S.neck.x, hp: S.hp.x, yaw: S.yaw.x, gape: Math.max(0, S.gape.x), tail: S.tail.x,
-      fan: Math.max(0, S.fan.x), puff: S.puff.x + (state === "perch" ? 0.12 * Math.sin(clock * 4.2) : 0), droop: S.droop.x,
-      open: Math.max(0, Math.min(1, S.open.x)), phi, flex: amp > 0.2 ? Math.max(0, Math.cos(flap)) * 0.85 : 0, sweep: S.sweep.x,
+      pitch: S.pitch.x, crouch: S.crouch.x, neck: S.neck.x, hp: S.hp.x, yaw: S.yaw.x, gape: Math.max(0, S.gape.x), tail: S.tail.x - (perch && perch.ground && state === "perch" ? 0.22 : 0),   // on the ground the tail is held clear of it
+     
+      fan: Math.max(0, S.fan.x), puff: S.puff.x + (state === "perch" || state === "hop" ? 0.12 * Math.sin(clock * 4.2) : 0), droop: S.droop.x,
+      open: Math.max(0, Math.min(1, S.open.x)), ...wing, sweep: S.sweep.x,
       blink: clock < blinkUntil, feet, grip
     };
     draw(L, P);

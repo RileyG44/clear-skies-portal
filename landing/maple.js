@@ -800,6 +800,12 @@ export function buildMaple(date = new Date(), seed = 20261104) {
   T.leaves = out.length;
   T.leafAtlas = () => leafAtlas(seed + 1);
   T.leafPen = PEN;
+  {
+    // where a crow can come down to forage: bare ground under the spread of the crown, clear of the trunk
+    const xs = leaves.map(l => l.jx).sort((a, b) => a - b), q = f => xs.length ? xs[Math.floor(f * (xs.length - 1))] : 0;
+    const x0 = X[0], lo = Math.min(x0 - 0.12, x0 + (q(0.1) - x0) * 0.85), hi = Math.max(x0 + 0.12, x0 + (q(0.9) - x0) * 0.85);
+    T.ground = { y: groundY, spans: [[lo, x0 - 0.09], [x0 + 0.09, hi]] };
+  }
   T.loadFlex = { trunk: 0.005, branch: 0.0035 };   // the trunk and limbs bend under the load of the crown (see sketch.js)
   return T;
 }

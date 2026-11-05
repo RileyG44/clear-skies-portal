@@ -228,7 +228,7 @@ window.__sketch = createSketch(document.getElementById("tree"), document.getElem
   onNoWebGL() { document.getElementById("fig").classList.add("nogl"); },
   onLayout: align
 });
-Promise.all([document.fonts.load("450 60px Newsreader"), document.fonts.load("600 60px Caveat")]).then(() => { align(); window.__crow = startCrow(title); });
+Promise.all([document.fonts.load("450 60px Newsreader"), document.fonts.load("600 60px Caveat")]).then(() => { align(); window.__crow = startCrow(title, { sketch: window.__sketch, ground: T.ground }); });
 wide.addEventListener("change", () => align());
 </script>
 </body>
