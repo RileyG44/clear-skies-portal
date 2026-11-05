@@ -6,21 +6,22 @@
 /* Bump this on every deploy. Keeping the build literal here, plus a versioned
    page-script URL, prevents an older worker from serving a stale version.js
    while a newer HTML shell is already live. */
-const CSP_BUILD = "2026-11-05k";
+const CSP_BUILD = "2026-11-05l";
 const SHELL = `clear-skies-shell-${CSP_BUILD}`;
 const POTREE = `clear-skies-potree-${CSP_BUILD}`;
 /* Survives a shell update. The page writes "dark" or "light" here so the
    next installed launch's splash matches the saved map, not the light file. */
 const THEME = "clear-skies-map-theme";
 /* site.json is the one list of shell files: web, app.js (built from its app
-   list) and vendor. Scripts and styles are cached under the same versioned
-   URLs the page requests. */
+   list), vendor and the start-up tree's modules (also among the public site's
+   web files). Scripts and styles are cached under the same versioned URLs the
+   page requests. */
 const versioned = asset => /\.(?:js|css)$/.test(asset) ? `./${asset}?build=${CSP_BUILD}` : `./${asset}`;
 
 self.addEventListener("install", e => {
   e.waitUntil(fetch("./site.json", {cache:"reload"})
     .then(r => { if(!r.ok) throw new Error(`site.json HTTP ${r.status}`); return r.json() })
-    .then(site => caches.open(SHELL).then(c => c.addAll(["./", ...[...site.web, "app.js", ...site.vendor].filter(a => a !== "sw.js").map(versioned)])))
+    .then(site => caches.open(SHELL).then(c => c.addAll(["./", ...[...new Set([...site.web, "app.js", ...site.vendor, ...(site.tree || [])])].filter(a => a !== "sw.js").map(versioned)])))
     .then(() => self.skipWaiting()));
 });
 
@@ -75,16 +76,18 @@ self.addEventListener("fetch", e => {
   if (url.origin !== self.location.origin) return;   // tiles and STAC go straight out
   if (url.pathname.startsWith("/api/")) return;      // never serve stale data
 
-  // The installed splash is painted from this file before any page script.
+  // Installed chrome is painted from this file before any page script.
   // Recolour it from the theme the last session stored. The static file stays
-  // the light map colour for a first launch that has no saved theme.
+  // the light map colour for a first launch that has no saved theme. The
+  // installed splash (background_color) stays white, as the page's start-up
+  // screen is.
   if(url.pathname.endsWith("/manifest.json")){
     e.respondWith((async()=>{
       const color=splashColor(await savedSplashTheme());
       const response=await fetch(req);
       if(!color||!response.ok)return response;
       const manifest=await response.json();
-      manifest.background_color=color;manifest.theme_color=color;
+      manifest.theme_color=color;
       const headers=new Headers(response.headers);
       headers.set("Content-Type","application/manifest+json");
       return new Response(JSON.stringify(manifest),{status:response.status,headers});

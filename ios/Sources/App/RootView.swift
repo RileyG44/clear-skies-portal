@@ -50,7 +50,9 @@ struct RootView: View {
                 MapChrome(toolbarHideProgress: toolbarVisibility.progress)
                     .padding(.bottom, portal.host.webView.window?.safeAreaInsets.bottom ?? 0)
                     .opacity(portal.ready ? 1 : 0)
-                if !portal.ready || portal.startupFailure != nil {
+                // White until the page's own white start-up screen has painted
+                // under it; that screen holds the map until it is whole.
+                if (!portal.ready && !portal.splashUp) || portal.startupFailure != nil {
                     LaunchCover(restoring: portal.restoring, failure: portal.startupFailure,
                                 retry: portal.host.retryStartup)
                         .padding(.bottom, portal.host.webView.window?.safeAreaInsets.bottom ?? 0)
@@ -74,8 +76,9 @@ struct RootView: View {
         .foregroundStyle(PortalPrimary())
         .portalFont(.body)
         .preferredColorScheme(appearance)
-        // The launch cover's single fade to the map; instant with Reduce Motion.
-        // index.html waits 360 ms (this duration) before starting GPU work.
+        // The native controls' single fade in, alongside the page's start-up
+        // screen fading to the map; instant with Reduce Motion. index.html
+        // waits 360 ms (this duration) after its shell reveal before GPU work.
         .animation(reducedMotion ? nil : .easeOut(duration: 0.35), value: portal.ready)
         .animation(reducedMotion ? nil : .spring(duration: 0.35, bounce: 0.12), value: portal.shell.activeSheet)
         .sensoryFeedback(.selection, trigger: portal.shell.feedback)

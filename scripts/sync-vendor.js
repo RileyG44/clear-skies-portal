@@ -16,7 +16,9 @@ const SOURCES=[
   ["vendor/leaflet-rotate","node_modules/@tomickigrzegorz/leaflet-rotate/dist/leaflet-rotate"],
   ["vendor/lerc/","node_modules/lerc/"],
   ["vendor/icons/","node_modules/lucide-static/icons/"],
-  ["vendor/fonts/","node_modules/@fontsource-variable/inter/files/"]
+  ["vendor/fonts/","node_modules/@fontsource-variable/inter/files/"],
+  // the start-up screen's maple (startup-tree.js) is drawn with three.js
+  ["vendor/three","node_modules/three/build/three"]
 ];
 // Leaflet 1.9.4 itself is pinned as committed, like Potree below.
 const synced=require("../site.json").vendor.filter(file=>!/^vendor\/leaflet\.(js|css)$/.test(file));

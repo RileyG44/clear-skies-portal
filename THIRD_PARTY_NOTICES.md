@@ -5,6 +5,7 @@ Clear Skies Portal vendors browser-ready distribution files during `npm run vend
 - Leaflet 1.9.4 — BSD-2-Clause — https://github.com/Leaflet/Leaflet. Pinned as `vendor/leaflet.js` and `vendor/leaflet.css`.
 - MapLibre GL JS 6.6.0 — BSD-3-Clause — https://github.com/maplibre/maplibre-gl-js
 - @tomickigrzegorz/leaflet-rotate 0.2.4 — MIT — https://github.com/tomickigrzegorz/leaflet-rotate
+- three.js r170 (three 0.170.0) — MIT — https://github.com/mrdoob/three.js. `vendor/three.module.min.js` draws the map's start-up maple; its licence header is kept in the file.
 - Potree 1.8.2 — BSD-2-Clause — https://github.com/potree/potree
 - Inter 4 (via @fontsource-variable/inter 5.3.0) — SIL Open Font License 1.1 — https://github.com/rsms/inter. The fallback interface face where the system has no SF Pro; its licence ships beside it as `vendor/fonts/Inter-LICENSE.txt`.
 - Pacifico (google/fonts `ofl/pacifico/Pacifico-Regular.ttf`) — SIL Open Font License 1.1 — https://github.com/googlefonts/Pacifico. The iPhone app's menu wordmark only; its licence ships beside it as `ios/Resources/Fonts/Pacifico-LICENSE.txt`.

@@ -52,6 +52,10 @@ final class NativeBridge: NSObject, WKScriptMessageHandlerWithReply {
             if let id = body["id"] as? Int { location.clear(id: id) }
             return (true, nil)
 
+        case "splash":
+            host?.splashShown()
+            return (true, nil)
+
         case "ready":
             host?.pageReady()
             return (true, nil)

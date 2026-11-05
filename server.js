@@ -46,9 +46,12 @@ usgs.init(CACHE);
 const dnr=new DnrStore(CACHE);
 fs.mkdirSync(AREAS, {recursive:true});
 
-/* Everything the browser may load; see site.json. app.js is built from app/. */
+/* Everything the browser may load; see site.json. app.js is built from app/.
+   The start-up tree's modules live in landing/ and are served at the top level,
+   as the public site serves them. */
 const APP_SCRIPT = path.join(ROOT,"app.js");
-const PUBLIC_FILES = new Set([...SITE.web,"app.js",...SITE.vendor]);
+const PUBLIC_FILES = new Set([...SITE.web,"app.js",...SITE.vendor,...SITE.tree]);
+const TREE_FILES = new Set(SITE.tree);
 
 /* app.js is rebuilt only when one of its files changes. */
 let appBuilt=null;
@@ -151,7 +154,7 @@ const server = http.createServer(async (req,res)=>{
     const publicRel=rel.split(path.sep).join("/");
     if(!PUBLIC_FILES.has(publicRel)&&!publicRel.startsWith("vendor/potree/"))
       return send(res,404,"text/plain",Buffer.from("not found"));
-    return sendStatic(req,res,f,f===APP_SCRIPT?appScript():null);
+    return sendStatic(req,res,TREE_FILES.has(publicRel)?path.join(ROOT,"landing",publicRel):f,f===APP_SCRIPT?appScript():null);
   }catch(err){
     const status=Number(err&&err.status)||500;
     if(status>=500) console.error(err);
