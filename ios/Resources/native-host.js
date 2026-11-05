@@ -108,6 +108,8 @@
          launch); false after iOS ended the page's process and it reloads. */
       sessionStart: config.sessionStart === true,
       appVersion: String(config.appVersion || ""),
+      startupFailed: message => post("startup.failed", { message: String(message || "") }).catch(() => {}),
+      startupSettled: () => post("startup.settled", {}).catch(() => {}),
       /* The engine address belongs to the app. The page keeps its requests
          relative and the app forwards them, so nothing is cross-origin. */
       engineBase: () => engineBase,

@@ -1082,14 +1082,30 @@ struct Toasts: View {
 /// launch screen and the page's first frame, so startup has no loading
 /// animation and no color change: the map and its controls fade in over it.
 struct LaunchCover: View {
+    @Environment(ShellModel.self) private var shell
     var restoring = false
+    var failure: String?
+    var retry: () -> Void = {}
 
     var body: some View {
-        Color("CanvasBackground")
-            .ignoresSafeArea()
-            .accessibilityElement()
-            .accessibilityLabel(restoring ? "Restoring your map" : "Loading your map and tools")
-            .transition(.opacity)
+        ZStack {
+            MapCanvasColor.color(theme: shell.map.theme).ignoresSafeArea()
+            if let failure {
+                VStack(spacing: 16) {
+                    Text(failure).multilineTextAlignment(.center)
+                    Button("Reload map", action: retry)
+                        .buttonStyle(.borderedProminent)
+                        .frame(minHeight: 44)
+                }
+                .padding(24)
+                .frame(maxWidth: 420)
+                .accessibilityElement(children: .contain)
+            } else {
+                Color.clear.accessibilityElement()
+                    .accessibilityLabel(restoring ? "Restoring your map" : "Loading your map and tools")
+            }
+        }
+        .transition(.opacity)
     }
 }
 

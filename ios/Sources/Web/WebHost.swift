@@ -9,6 +9,7 @@ import os
 final class WebHost: NSObject {
     let webView: WKWebView
     var onReady: (() -> Void)?
+    var onStartupFailure: ((String?) -> Void)?
     /// Updates from native-shell.js, as JSON text.
     var onShell: ((String) -> Void)?
     /// iOS ended the page's process; the page is reloading.
@@ -24,6 +25,8 @@ final class WebHost: NSObject {
     // The first page load of this app process starts a session; the page
     // opens it on the launch view. Reloads after a WebContent crash do not.
     private var sessionStart = true
+    private var startupWatchdog: Task<Void, Never>?
+    private var waitingForStartup = false
     private var downloads: [ObjectIdentifier: URL] = [:]
     #if DEBUG
     var debugNavigation: (() -> [String: Any])?
@@ -66,14 +69,53 @@ final class WebHost: NSObject {
         // Touches reach the map at once; the page never scrolls as a document.
         webView.scrollView.delaysContentTouches = false
         webView.isOpaque = false
-        // Before the page paints, show the map canvas color rather than black.
-        webView.backgroundColor = UIColor(named: "CanvasBackground") ?? .black
-        webView.scrollView.backgroundColor = webView.backgroundColor
-        webView.underPageBackgroundColor = webView.backgroundColor
+        // Before the page paints, show the saved map colour rather than the
+        // system launch asset or a black frame.
+        useMapCanvas(MapCanvasColor.theme())
+    }
+
+    func useMapCanvas(_ theme: String?) {
+        let color = MapCanvasColor.uiColor(theme: theme, style: webView.traitCollection.userInterfaceStyle)
+        webView.backgroundColor = color
+        webView.scrollView.backgroundColor = color
+        webView.underPageBackgroundColor = color
     }
 
     func load() {
+        startupWatchdog?.cancel()
+        waitingForStartup = true
+        onStartupFailure?(nil)
+        // Independent of JavaScript: even a missing document or bootstrap
+        // must offer recovery above the native launch cover.
+        startupWatchdog = Task { [weak self] in
+            do { try await Task.sleep(for: .seconds(12)) } catch { return }
+            guard !Task.isCancelled else { return }
+            self?.pageFailed("The map is taking longer to start. Check your connection, then reload.")
+        }
         webView.load(URLRequest(url: SiteSchemeHandler.startURL))
+    }
+
+    func pageFailed(_ message: String) {
+        guard waitingForStartup else { return }
+        startupWatchdog?.cancel()
+        onStartupFailure?(message)
+    }
+
+    /// The shell can be up while the first picture is still withheld.
+    /// This recovery stays available after `pageReady()`.
+    func pictureFailed(_ message: String) {
+        startupWatchdog?.cancel()
+        onStartupFailure?(message)
+    }
+
+    func clearStartupFailure() {
+        onStartupFailure?(nil)
+    }
+
+    func retryStartup() {
+        // Use the existing in-memory checkpoint when recovering a session.
+        installBootstrap()
+        load()
     }
 
     func shellMessage(_ json: String) {
@@ -84,6 +126,9 @@ final class WebHost: NSObject {
     }
 
     func pageReady() {
+        waitingForStartup = false
+        startupWatchdog?.cancel()
+        onStartupFailure?(nil)
         onReady?()
         #if DEBUG
         debugReadyGeneration += 1
@@ -322,6 +367,14 @@ final class WebHost: NSObject {
 // MARK: - Navigation
 
 extension WebHost: WKNavigationDelegate {
+    func webView(_ webView: WKWebView, didFailProvisionalNavigation navigation: WKNavigation!, withError error: Error) {
+        if (error as NSError).code != NSURLErrorCancelled { pageFailed("The map could not start. Reload to try again.") }
+    }
+
+    func webView(_ webView: WKWebView, didFail navigation: WKNavigation!, withError error: Error) {
+        if (error as NSError).code != NSURLErrorCancelled { pageFailed("The map could not start. Reload to try again.") }
+    }
+
     func webView(_ webView: WKWebView, decidePolicyFor action: WKNavigationAction,
                  preferences: WKWebpagePreferences) async -> (WKNavigationActionPolicy, WKWebpagePreferences) {
         if action.shouldPerformDownload { return (.download, preferences) }

@@ -769,8 +769,8 @@ const resilientLayer=(url,options)=>new ResilientTileLayer(url,options);
 const trackLayerHealth=layer=>{
   const h=layer._cspHealth={started:0,loaded:0,errors:0,pending:true};
   layer.on("loading",()=>{ h.started=0; h.loaded=0; h.errors=0; h.pending=true });
-  layer.on("tileloadstart",()=>{ h.started++ });
-  layer.on("tileload",()=>{ h.loaded++ });
+  layer.on("tileloadstart",()=>{ h.started++; globalThis.CSPBoot?.notePictureProgress?.() });
+  layer.on("tileload",()=>{ h.loaded++; globalThis.CSPBoot?.notePictureProgress?.() });
   layer.on("tileerror",()=>{ h.errors++ });
   layer.on("load",()=>{ h.pending=false });
   return layer;
@@ -831,7 +831,8 @@ function useBasemap(i){
   if(baseLayer) map.removeLayer(baseLayer);
   const b=BASEMAPS[i];
   baseLayer=resilientLayer(b.url,{attribution:b.attr,maxZoom:VIEW_MAX,maxNativeZoom:b.max,tileRetries:2})
-    .on("tileload",()=>{ baseOK++; hideBlocked() })
+    .on("tileloadstart",()=>{ globalThis.CSPBoot?.notePictureProgress?.() })
+    .on("tileload",()=>{ baseOK++; hideBlocked(); globalThis.CSPBoot?.notePictureProgress?.() })
     .on("tileerror",()=>{
       baseErr++;
       /* Removing the layer synchronously inside Leaflet's tileerror dispatch
@@ -866,13 +867,21 @@ function setMapTheme(theme,persist){
      bright white beside a dark map. ui-theme.css supplies the values; this is
      the only place that decides which set is live. */
   document.documentElement.dataset.uiTheme=theme;
+  if(typeof paintMap3dTheme==="function")paintMap3dTheme();
   button.dataset.theme=theme; button.innerHTML=mapThemeIcon(theme);
   button.setAttribute("aria-pressed",String(theme==="dark"));
   button.setAttribute("aria-label",`Switch to ${next} map`); button.title=`Switch to ${next} map`;
   useBasemap(theme==="dark"?1:0);
   ovRefreshThemed();                                            // labels follow the base
   if(map3d) refresh3dStyle();
-  if(persist!==false) try{ localStorage.setItem(MAP_THEME_KEY,theme) }catch(e){}
+  if(persist!==false){
+    try{ localStorage.setItem(MAP_THEME_KEY,theme) }catch(e){}
+    /* The saved choice, not the live paint. A shared link sets the live
+       theme only, so the next iOS cover and desktop window stay put. */
+    document.documentElement.dataset.uiThemeSaved=theme;
+    /* The next installed launch paints this colour before the page is parsed. */
+    try{if(globalThis.caches?.open)caches.open("clear-skies-map-theme").then(cache=>cache.put(new URL("csp-map-theme",location.href),new Response(theme,{headers:{"Content-Type":"text/plain"}}))).catch(()=>{})}catch(e){}
+  }
 }
 /* Seed from the operating system the first time only. After that the saved
    choice wins outright: the map is the subject here and people pick its theme
@@ -881,8 +890,10 @@ function setMapTheme(theme,persist){
 let initialMapTheme="light";
 try{
   const saved=localStorage.getItem(MAP_THEME_KEY);
-  initialMapTheme = saved==="dark"||saved==="light" ? saved
-    : (matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
+  if(saved==="dark"||saved==="light"){
+    initialMapTheme=saved;
+    document.documentElement.dataset.uiThemeSaved=saved;
+  }else initialMapTheme=matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light";
 }catch(e){}
 /* A shared link opens in its own theme (its URL carries a theme hint; the
    restored state applies the same value). Not saved, as before. */
@@ -898,9 +909,34 @@ mapThemeButton.addEventListener("click",event=>{
 });
 L.DomEvent.disableClickPropagation(mapThemeButton);
 L.DomEvent.disableScrollPropagation(mapThemeButton);
-// if nothing at all has drawn after 12 s, say so plainly
-setTimeout(()=>{ if(baseOK===0) showBlocked() }, 12000);
+// A slow first tile is the map arriving. Say the basemap is blocked only once
+// that layer has stopped fetching and nothing has drawn.
+function considerBasemapBlocked(){
+  if(baseOK>0)return;
+  if(typeof baseLayer?.isLoading==="function"&&baseLayer.isLoading()){
+    setTimeout(considerBasemapBlocked,12000);
+    return;
+  }
+  showBlocked();
+}
+setTimeout(considerBasemapBlocked,12000);
 let marker=null, overlay=null, overlayPending=null, footprint=null, sceneToken=0, sceneAbort=null;
+if(window.CSPBoot)window.CSPBoot.pictureStillMoving=function(){
+  if(typeof baseLayer?.isLoading==="function"&&baseLayer.isLoading())return true;
+  /* The first-picture gate already waits on these. Reload must not cover a
+     fetch that is still drawing them. */
+  if(typeof terrainSwap!=="undefined"&&terrainSwap)return true;
+  const cpu=[typeof terBase!=="undefined"?terBase:null,typeof terLayer!=="undefined"?terLayer:null,typeof elevLayer!=="undefined"?elevLayer:null];
+  if(cpu.some(layer=>layer&&map.hasLayer(layer)&&layer.isLoading?.()))return true;
+  if(typeof cspFreshView!=="undefined"&&cspFreshView&&typeof ovOn!=="undefined"&&ovOn?.water){
+    const water=typeof ovLayers!=="undefined"?ovLayers?.water:null;
+    if(water&&map.hasLayer(water)&&water.isLoading?.())return true;
+  }
+  if(overlayPending?.isLoading?.())return true;
+  /* pending starts true before any tile is requested. That is not a frame. */
+  const health=overlayPending&&overlayPending._cspHealth;
+  return !!(health?.pending&&health.started>0);
+};
 function stageMapLocation(e){
   if(document.body.classList.contains("dnr-selecting"))return;
   acHide(); setLoc(e.latlng.lat,e.latlng.lng);
