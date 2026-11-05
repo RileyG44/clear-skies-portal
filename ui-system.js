@@ -1473,6 +1473,20 @@ grabber.id="cspGrabber";grabber.type="button";
 side.prepend(grabber);
 const currentDetent=()=>isCollapsed()?"peek":document.body.dataset.cspDetent||"medium";
 const sheetTools=$("#mapDock");
+// Leaflet disables native touch panning on #map. Keep the scrollable toolbar
+// in the app overlay so that restriction does not swallow its swipe gestures.
+if(sheetTools) $("#app").append(sheetTools);
+// Observe the actual sheet edge so safe areas, detents and interactive resizing
+// all reserve the same 12px gap below the tools.
+const placeSheetTools=()=>{
+  if(!sheetTools) return;
+  if(sheetMode()) sheetTools.style.setProperty("--csp-sheet-top",`${side.offsetTop}px`);
+  else sheetTools.style.removeProperty("--csp-sheet-top");
+};
+const sheetToolsObserver=new ResizeObserver(placeSheetTools);
+sheetToolsObserver.observe(side);
+sheetToolsObserver.observe($("#app"));
+peekLayout.addEventListener("change",placeSheetTools);
 const syncSheetTools=(progress=null)=>{
   if(!sheetTools) return;
   const dragProgress=sheetTools.style.getPropertyValue("--csp-dock-hide");
