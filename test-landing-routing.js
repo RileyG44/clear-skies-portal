@@ -34,6 +34,9 @@ async function main(){
       const html=read(name);
       assert(html.includes('href="map.html"'),`${name} links to the map`);
       assert(!html.includes('https://rileyg44.github.io/clear-skies-portal/'),`${name} cannot link the web app back to the landing page`);
+      assert(html.includes('rel=manifest')||html.includes('rel="manifest"'),`${name} links the manifest so Add to Home Screen launches the map`);
+      assert(html.includes('apple-mobile-web-app-status-bar-style')&&html.includes('black-translucent'),
+        `${name} asks for a full-screen installed web app, including when iOS keeps this page as the start document`);
     }
 
     // Exercise the real production minifier: import maps are JSON, not JS.

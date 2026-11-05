@@ -43,7 +43,7 @@
     host=host||{};
     const storage=host.storage!==undefined?host.storage:(()=>{try{return globalThis.localStorage}catch(_){return null}})();
     let state=load(),fitted={},flatFitted={},remFloor=null,remLandFloor=null,expanded=null,selectedStop=0,saveTimer=0,commitFrame=0,destroyed=false,previousMix=null;
-    let presetOrigin=state.look,presetScroll=0;
+    let presetOrigin=state.look,presetScroll=0,stripTap=null,swallowPresetClick=false;
     const disclosures=new Set(["customize"]);
     const previews=new Map();let previewQueue=[],previewTimer=0;
     /* The gallery's synthetic terrain is built when the first preview is
@@ -187,14 +187,53 @@
         container.querySelector(`[data-look="${id}"]`)?.focus();
         revealPreset(id);
       };
+      /* iOS delivers a click on a button inside this horizontal scroller only
+         after many taps: the sheet gesture and the scroll view eat the click.
+         pointerup is the tap. The click that follows, however late, must not
+         apply the preset a second time, or Undo would point at the look just
+         chosen. One flag, cleared by that click, matches the sheet. */
+      strip.addEventListener("pointerdown",event=>{
+        if(event.button) return;
+        const button=event.target.closest(".ls-look");
+        stripTap={id:button?button.dataset.look:"",x:event.clientX,y:event.clientY,pointer:event.pointerId,scroll:strip.scrollLeft,drag:false};
+      });
+      /* The sheet's touch-action is pan-y, so the browser will not pan this
+         row sideways. A clearly horizontal move scrolls it; a vertical move is
+         left to the sheet. */
+      strip.addEventListener("pointermove",event=>{
+        const tap=stripTap;
+        if(!tap||event.pointerId!==tap.pointer) return;
+        const dx=event.clientX-tap.x,dy=event.clientY-tap.y;
+        if(tap.drag){strip.scrollLeft=tap.scroll-dx;return}
+        if(Math.abs(dx)<12&&Math.abs(dy)<12) return;
+        /* Past the tap slop this is a drag. Swallow the click that follows,
+           or a vertical scroll would also select the preset under the finger. */
+        swallowPresetClick=true;
+        if(Math.abs(dx)<=Math.abs(dy)){stripTap=null;return}
+        tap.drag=true;
+        strip.scrollLeft=tap.scroll-dx;
+      });
+      strip.addEventListener("pointerup",event=>{
+        const tap=stripTap;stripTap=null;
+        if(!tap||tap.drag||event.pointerId!==tap.pointer) return;
+        if(Math.hypot(event.clientX-tap.x,event.clientY-tap.y)>12){swallowPresetClick=true;return}
+        if(!tap.id||event.target.closest("[data-remove-look]")) return;
+        swallowPresetClick=true;
+        applyLook(tap.id,true);
+      });
+      strip.addEventListener("pointercancel",()=>{stripTap=null;swallowPresetClick=true});
       strip.addEventListener("click",event=>{
         const remove=event.target.closest("[data-remove-look]");
         if(remove){
+          swallowPresetClick=false;
           event.stopPropagation();state.userLooks=state.userLooks.filter(l=>l.id!==remove.dataset.removeLook);
           if(presetOrigin===remove.dataset.removeLook)presetOrigin=null;
           commit({rerender:true});container.querySelector('.ls-look[tabindex="0"]')?.focus({preventScroll:true});return;
         }
-        const button=event.target.closest(".ls-look");if(button) applyLook(button.dataset.look);
+        if(swallowPresetClick){swallowPresetClick=false;return}
+        const button=event.target.closest(".ls-look");
+        if(!button) return;
+        applyLook(button.dataset.look);
       });
       strip.addEventListener("keydown",event=>{
         const buttons=[...strip.querySelectorAll(".ls-look")],index=buttons.indexOf(event.target.closest(".ls-look"));
@@ -205,7 +244,7 @@
         const target=event.key==="Home"?0:event.key==="End"?buttons.length-1:
           (index+step+buttons.length)%buttons.length;
         event.preventDefault();const next=buttons[target];
-        next.focus();applyLook(next.dataset.look);
+        next.focus({preventScroll:true});applyLook(next.dataset.look);
       });
       return wrap;
     }
@@ -217,7 +256,7 @@
       else if(inner.right>outer.right-6)strip.scrollLeft+=inner.right-outer.right+6;
       presetScroll=strip.scrollLeft;
     }
-    function applyLook(id){
+    function applyLook(id,fromPointer){
       const look=allLooks().find(l=>l.id===id);if(!look) return;
       previousMix={state:JSON.parse(JSON.stringify(state)),style:host.getStyle?host.getStyle():style(),opacity:host.getOpacity?host.getOpacity():undefined,origin:presetOrigin};
       const result=R.applyScene(state,look.scene,look.id);
@@ -227,7 +266,10 @@
          usual see-through terrain. */
       if(Number.isFinite(look.opacity)&&host.setOpacity) host.setOpacity(look.opacity);
       render();
-      container.querySelector(`[data-look="${id}"]`)?.focus({preventScroll:true});
+      /* A finger tap must not focus the new button. iOS scrolls the standalone
+         page to reveal a focused control and leaves a gap along the bottom.
+         Keyboard and click activation still focus, and they pass preventScroll. */
+      if(!fromPointer) container.querySelector(`[data-look="${id}"]`)?.focus({preventScroll:true});
       revealPreset(id);
       host.onChange&&host.onChange();
     }
@@ -239,6 +281,18 @@
     function paintPreview(canvas,look){
       const key=JSON.stringify(look.scene),cached=previews.get(key);
       if(cached){canvas.getContext("2d").putImageData(cached,0,0);return}
+      /* The iPhone app parks #side off the screen and copies these canvases
+         into the native sheet. An intersection observer never sees them, so
+         every preset thumbnail stayed blank. Draw them before the app asks. */
+      if(document.documentElement.classList.contains("csp-native-chrome")){
+        try{
+          const terrain=dem();
+          const image=new ImageData(R.renderScenePreview(look.scene,terrain,host.lighting&&host.lighting()),terrain.width,terrain.height);
+          previews.set(key,image);
+          canvas.getContext("2d").putImageData(image,0,0);
+        }catch(_){}
+        return;
+      }
       if(previewWatch&&!canvas._cspPreview){canvas._cspPreview=()=>queuePreview(canvas,key,look.scene);previewWatch.observe(canvas);return}
       queuePreview(canvas,key,look.scene);
     }
