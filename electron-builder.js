@@ -9,7 +9,7 @@ module.exports={
   productName:"ClearSkies",
   directories:{buildResources:"build",output:"dist"},
   files:["electron/**/*","package.json"],
-  extraResources:[{from:".",to:"app",filter:[...site.web,...site.app,...site.engine,"vendor/**/*"]},
+  extraResources:[{from:".",to:"app",filter:[...site.web,...site.app,...site.engine,...site.tree.map(file=>`landing/${file}`),"vendor/**/*"]},
     {from:"build/startup-cache",to:"startup-cache"},
     {from:"build/startup-terrain-LICENSE.txt",to:"startup-terrain-LICENSE.txt"},
     {from:"build/icon.ico",to:"ClearSkies.ico"}],

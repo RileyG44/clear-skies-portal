@@ -6,12 +6,11 @@ struct ClearSkiesApp: App {
     @State private var portal = PortalModel()
 
     init() {
-        // The system draws LaunchBackground from the device appearance before
-        // this process exists, so that asset cannot read the saved theme.
-        // The first window can. Paint it before SwiftUI creates the scene so
-        // the cover does not open on the other colour.
+        // Launch is white in every theme: the system's LaunchBackground, this
+        // window, the native cover and then the page's start-up screen with
+        // the maple on it. The saved theme still sets the window's appearance.
         let theme = MapCanvasColor.theme()
-        UIWindow.appearance().backgroundColor = MapCanvasColor.uiColor(theme: theme)
+        UIWindow.appearance().backgroundColor = .white
         switch theme {
         case "dark": UIWindow.appearance().overrideUserInterfaceStyle = .dark
         case "light": UIWindow.appearance().overrideUserInterfaceStyle = .light
@@ -30,6 +29,8 @@ struct ClearSkiesApp: App {
 @MainActor @Observable
 final class PortalModel {
     var ready = false
+    /// The page's start-up screen is up: the native cover gives way to it.
+    var splashUp = false
     var startupFailure: String?
     /// True while the page reloads after iOS ended its process.
     var restoring = false
@@ -44,6 +45,7 @@ final class PortalModel {
             self?.ready = true
             self?.restoring = false
         }
+        host.onSplash = { [weak self] up in self?.splashUp = up }
         host.onShell = { [weak self] json in self?.shell.apply(json: json) }
         host.onStartupFailure = { [weak self] message in self?.startupFailure = message }
         #if DEBUG

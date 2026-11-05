@@ -32,11 +32,16 @@ const mul = (a, k) => [a[0] * k[0], a[1] * k[1], a[2] * k[2]];
 const LIGHT = (() => { const x = -0.55, y = 0.83, l = Math.hypot(x, y); return [x / l, y / l]; })();
 
 /* ---------- the drawing for one date ---------- */
-export function buildMaple(date = new Date(), seed = TREE_SEED) {
+/* opts.treeOnly keeps the tree and what grows at its foot: no soil section, margin
+   notes or labels. The marks are made exactly as for the page (the section still
+   advances the pen's random stream) and then left out, so the tree is the same
+   drawing; T.view frames what is left. */
+export function buildMaple(date = new Date(), seed = TREE_SEED, opts = {}) {
   const S = seasonOf(date);
   const K = canvasAPI(seed + 7);
   const { R, line, poly, dashed, circle, bone, ROOT, label, seg, tag } = K;
   const { groundY, yBot, xR } = drawSectionMV(K, SEPIA);
+  const sectionEnd = tag.length;
   const occ = [];   // what of the tree is solid enough to hide a bird behind it: blades and wood, as discs [x, y, r]
   // the tree is baked ahead of time (scripts/bake-maple.mjs); it is grown here only if
   // the bake is stale or another seed is asked for
@@ -503,6 +508,7 @@ export function buildMaple(date = new Date(), seed = TREE_SEED) {
   }
 
   /* ---------- the ground: grass, sword fern and the year's fallen leaves ---------- */
+  const groundStart = tag.length, groundLeaf = K.lf.length;
   /* sword fern: evergreen, but it changes. New fronds unroll from fiddleheads in spring,
      bright against last year's; old outer fronds brown off from autumn; winter weather
      presses the clump flat */
@@ -763,7 +769,23 @@ export function buildMaple(date = new Date(), seed = TREE_SEED) {
 
   /* ---------- annotations, in graphite ---------- */
   const treeEnd = tag.length;
-  {
+  if (opts.treeOnly) {
+    /* the section goes; the ground under the tree stays, as far as the crown spreads */
+    let x0 = Infinity, x1 = -Infinity;
+    for (let i = sectionEnd; i < groundStart; i++) for (const q of [0, 2]) { const x = seg[i * 4 + q]; x0 = Math.min(x0, x); x1 = Math.max(x1, x); }
+    for (let i = 0; i < groundLeaf; i += 16) { const x = K.lf[i], h = K.lf[i + 4]; x0 = Math.min(x0, x - h); x1 = Math.max(x1, x + h); }
+    const within = x => x >= x0 - 0.01 && x <= x1 + 0.01;
+    const keep = i => i >= sectionEnd && (i < groundStart || (within(seg[i * 4]) && within(seg[i * 4 + 2])));
+    for (const [a, w] of [[K.seg, 4], [K.bon, 2], [K.sty, 4], [K.col, 4], [K.tag, 1]]) {
+      let o = 0;
+      for (let i = 0; i < treeEnd; i++) if (keep(i)) { for (let q = 0; q < w; q++) a[o * w + q] = a[i * w + q]; o++; }
+      a.length = o * w;
+    }
+    let o = groundLeaf;
+    for (let i = groundLeaf; i < K.lf.length; i += 16) if (within(K.lf[i])) { for (let q = 0; q < 16; q++) K.lf[o + q] = K.lf[i + q]; o += 16; }
+    K.lf.length = o;
+    K.labels.length = 0;
+  } else {
     const xd = 0.6, ta = 0.82, top = tipY;
     poly([[xd, groundY(xd), ROOT], [xd, top, ROOT]], 0.8, 0.55, ta, ta + 0.04, GRAPHITE);
     for (const y of [groundY(xd), top]) line(xd - 0.012, y, ROOT, xd + 0.012, y, ROOT, 0.8, 0.6, ta, 0.01, GRAPHITE);
@@ -803,6 +825,14 @@ export function buildMaple(date = new Date(), seed = TREE_SEED) {
   }
 
   const T = pack(K, { tip: tipY, rock: yBot });
+  if (opts.treeOnly) {
+    // the frame of what is drawn: every mark's ends, every leaf by its size
+    let x0 = Infinity, x1 = -Infinity, y0 = Infinity, y1 = -Infinity;
+    const grow = (x, y, p) => { x0 = Math.min(x0, x - p); x1 = Math.max(x1, x + p); y0 = Math.min(y0, y - p); y1 = Math.max(y1, y + p); };
+    for (let i = 0; i < T.seg.length; i += 4) { grow(T.seg[i], T.seg[i + 1], 0); grow(T.seg[i + 2], T.seg[i + 3], 0); }
+    for (let i = 0; i < K.lf.length; i += 16) grow(K.lf[i], K.lf[i + 1], K.lf[i + 4]);
+    T.view = { cx: (x0 + x1) / 2, cy: (y0 + y1) / 2, w: x1 - x0, h: y1 - y0 };
+  }
   T.occluders = new Float32Array(occ);
   T.season = S;
   T.accent = accent;

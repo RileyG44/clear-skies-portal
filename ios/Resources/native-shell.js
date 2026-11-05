@@ -1409,9 +1409,15 @@
     send({ groups: window.CSPNativeShell.groups(), ready: true });
     forceNext = true;
     flush();
-    handler.postMessage({type: "ready"}).catch(() => {});
+    /* The native controls appear as the page's start-up screen lifts, in its fade. */
+    Promise.resolve(window.CSPBoot?.splash?.lifted).then(() => handler.postMessage({type: "ready"}).catch(() => {}));
   };
-  /* Lift the native cover when the page reveals its shell, not at csp:ready:
+  /* The page's start-up screen (index.html) is plain white with the maple
+     drawn on it. Once it has painted, the white native cover gives way to it. */
+  if (window.CSPBoot?.splash && !window.CSPBoot.splash.done) {
+    requestAnimationFrame(() => requestAnimationFrame(() => handler.postMessage({type: "splash"}).catch(() => {})));
+  }
+  /* Start the native shell when the page reveals its shell, not at csp:ready:
      a shared link holds the reveal until its view is in place. The saved
      camera is already applied by then, so this start does not move the map. */
   if (document.documentElement.classList.contains("csp-boot")) {

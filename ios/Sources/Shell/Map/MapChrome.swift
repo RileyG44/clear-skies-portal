@@ -1077,10 +1077,10 @@ struct Toasts: View {
     }
 }
 
-/// Shown until the map engine is ready, and again while it restores itself
-/// after iOS ends its process. It is the map's own canvas color, matching the
-/// launch screen and the page's first frame, so startup has no loading
-/// animation and no color change: the map and its controls fade in over it.
+/// Shown from launch until the page's start-up screen has painted, and again
+/// while the page restores itself after iOS ends its process. It is white,
+/// matching the launch screen and that start-up screen, which draws the maple
+/// and holds the map until it is whole. A startup failure shows here too.
 struct LaunchCover: View {
     @Environment(ShellModel.self) private var shell
     var restoring = false
@@ -1089,7 +1089,9 @@ struct LaunchCover: View {
 
     var body: some View {
         ZStack {
-            MapCanvasColor.color(theme: shell.map.theme).ignoresSafeArea()
+            // White, as the launch screen and the page's start-up screen are;
+            // a failure shows on the map colour.
+            (failure == nil ? Color.white : MapCanvasColor.color(theme: shell.map.theme)).ignoresSafeArea()
             if let failure {
                 VStack(spacing: 16) {
                     Text(failure).multilineTextAlignment(.center)

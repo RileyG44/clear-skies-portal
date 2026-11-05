@@ -594,9 +594,7 @@ async function retryBeforeLoad(){
   assert(!nativeShell.slice(startAt,listenAt).includes('CSPNativeHost.resume'),'the cover does not move the camera after the first picture');
   assert.match(nativeShell,/dataset\.uiThemeSaved/,'the native shell reports the saved theme, not a shared link');
   assert(!/theme:\s*document\.documentElement\.dataset\.uiTheme\b/.test(nativeShell),'a live shared theme is not the next launch colour');
-  const preload=fs.readFileSync('electron/preload.js','utf8');
-  assert.match(preload,/data-ui-theme-saved/,'the desktop window stores the saved theme');
-  assert(!/dataset\.uiTheme(?!Saved)/.test(preload),'a shared link does not repaint the next desktop window');
+  assert.match(fs.readFileSync('electron/main.js','utf8'),/backgroundColor: "#ffffff"/,'the desktop window opens on the start-up screen\'s white');
   assert.match(html,/dataset\.uiThemeSaved=theme/,'choosing a theme records it separately from the live paint');
   const restoreAt=html.indexOf('async function cspRestoreShareState'),restoreEnd=html.indexOf('Object.assign(window.ClearSkiesPortalBridge,{shareURL:cspShareURL',restoreAt);
   const restoreBody=html.slice(restoreAt,restoreEnd);
@@ -609,11 +607,12 @@ async function retryBeforeLoad(){
   const pictureCall=html.indexOf('cspStageFirstPicture()',resumed);
   assert(resumed>0&&pictureCall>resumed,'a recovered camera is applied before the first picture can publish');
   const manifest=JSON.parse(fs.readFileSync('manifest.json','utf8'));
-  assert.equal(manifest.background_color,'#dbe6eb');assert.equal(manifest.theme_color,'#dbe6eb','the splash and the browser chrome use the map colour');
-  assert.match(html,/theme==="dark"\?"#111416":"#dbe6eb"/,'the page paints its saved map colour before the first frame');
+  assert.equal(manifest.background_color,'#ffffff','the installed splash is the start-up screen\'s white');assert.equal(manifest.theme_color,'#dbe6eb','the browser chrome uses the map colour');
+  assert.match(html,/themeMetas\[ti\]\.setAttribute\("content","#ffffff"\)/,'browser chrome is white under the start-up screen');
+  assert.match(html,/theme==="dark"\?"#111416":"#dbe6eb"/,'the map colour returns to the chrome as the start-up screen lifts');
   const rootView=fs.readFileSync('ios/Sources/App/RootView.swift','utf8'),host=fs.readFileSync('ios/Sources/Web/WebHost.swift','utf8'),cover=fs.readFileSync('ios/Sources/Shell/Map/MapChrome.swift','utf8'),app=fs.readFileSync('ios/Sources/App/ClearSkiesApp.swift','utf8');
   assert(rootView.includes('MapCanvasColor')&&host.includes('useMapCanvas')&&cover.includes('MapCanvasColor.color'),'the iOS cover and the web view use the saved map colour');
-  assert(app.includes('MapCanvasColor.uiColor')&&app.includes('overrideUserInterfaceStyle'),'the iOS window opens on the saved map colour');
+  assert(app.includes('UIWindow.appearance().backgroundColor = .white')&&app.includes('overrideUserInterfaceStyle'),'the iOS window opens white, under the start-up screen, in the saved appearance');
   const scripts=[...html.matchAll(/<script src="([^"]+)"/g)].map(m=>m[1]);
   assert(scripts.length>25);assert(scripts.every(url=>/\?build=\d{4}-\d{2}-\d{2}[a-z]$/.test(url)),'every startup script must bypass older unversioned worker entries');
 }
@@ -758,14 +757,14 @@ async function splashManifest(){
   vm.runInNewContext(fs.readFileSync("sw.js","utf8"),context);
   const ask=()=>new Promise(resolve=>events.fetch({request:{method:"GET",url:"https://portal.test/manifest.json",mode:"cors"},respondWith:p=>resolve(p)}));
   const plain=await (await ask()).json();
-  assert.equal(plain.background_color,"#dbe6eb");assert.equal(plain.theme_color,"#dbe6eb");
+  assert.equal(plain.background_color,"#ffffff");assert.equal(plain.theme_color,"#dbe6eb");
   themeText="dark";
   const dark=await (await ask()).json();
-  assert.equal(dark.background_color,"#111416","a saved dark map recolours the installed splash");
-  assert.equal(dark.theme_color,"#111416");
+  assert.equal(dark.background_color,"#ffffff","the installed splash stays the start-up screen's white");
+  assert.equal(dark.theme_color,"#111416","a saved dark map recolours the installed chrome");
   themeText="light";
   const light=await (await ask()).json();
-  assert.equal(light.background_color,"#dbe6eb");assert.equal(light.theme_color,"#dbe6eb");
+  assert.equal(light.background_color,"#ffffff");assert.equal(light.theme_color,"#dbe6eb");
   const open=()=>new Promise(resolve=>events.fetch({request:{method:"GET",url:"https://portal.test/",mode:"navigate"},waitUntil:()=>{},respondWith:p=>resolve(p)}));
   themeText="";
   const first=await (await open()).text();
@@ -855,5 +854,51 @@ async function nativeResume(){
   assert.deepEqual(failed.order,["resume","gpu","terrain","picture","renderer"],"a failed recovery still starts the picture");
   assert.equal(failed.pending,false);
 }
+/* The white start-up screen with the maple holds until the shell is up and the
+   first picture is whole, then lifts once; a failure or the 8 s cap lifts it too. */
+async function startupScreen(){
+  const settle=f=>f.context.window.CSPBoot.settlePicture();
+  {
+    const f=fixture(),s=f.context.window.CSPBoot.splash;let lifted=false,events=0;s.lifted.then(()=>lifted=true);
+    assert(f.classes.has('csp-splash')&&f.classes.has('csp-map-staging'),'the start-up screen is up from the first frame');
+    f.rootEvents['csp:splash']=()=>events++;
+    settle(f);assert(!s.done,'nothing lifts it before the shell is up');
+    f.rootEvents['csp:ready']();assert(f.classes.has('csp-reveal'),'the shell reveals under the start-up screen');
+    assert(!s.done,'a staged map keeps the start-up screen up after the shell reveal');
+    f.classes.delete('csp-map-staging');f.classes.add('csp-terrain-pending');settle(f);
+    assert(!s.done,'held-back terrain keeps it up');
+    f.classes.delete('csp-terrain-pending');settle(f);
+    assert(s.done&&f.classes.has('csp-splash-out'),'a whole first picture lifts it');
+    await Promise.resolve();assert(lifted,'the lift is announced to the iOS shell');assert.equal(events,1);
+    let disposed=0;s.dispose=()=>disposed++;
+    for(const [id,t] of [...f.timers])if(t.ms===380){t.fn();f.timers.delete(id)}
+    assert(!f.classes.has('csp-splash')&&!f.classes.has('csp-splash-out')&&disposed===1,'after its fade the screen is gone and the tree lets go of its GL context');
+    s.finish();assert.equal(events,1,'it lifts once');
+  }
+  {
+    const f=fixture(),s=f.context.window.CSPBoot.splash;let now=1000;f.context.Date={now:()=>now};
+    f.rootEvents['csp:ready']();s.tree();now+=200;
+    f.classes.delete('csp-map-staging');settle(f);
+    assert(!s.done,'a tree that has only just come up is not snatched away');
+    const wait=[...f.timers.values()].find(t=>t.ms===300);assert(wait,'the lift waits out the rest of half a second');
+    now+=300;wait.fn();assert(s.done);
+  }
+  {
+    const f=fixture(),s=f.context.window.CSPBoot.splash;
+    f.context.window.CSPBoot.fail('broken');
+    assert(s.done,'a start-up failure lifts it at once, so the message and Reload show');
+  }
+  {
+    const f=fixture(),s=f.context.window.CSPBoot.splash;
+    f.rootEvents['csp:ready']();
+    [...f.timers.values()].find(t=>t.ms===8000).fn();
+    assert(s.done,'nothing holds it past 8 s');
+  }
+  const nativeShell=fs.readFileSync('ios/Resources/native-shell.js','utf8');
+  assert.match(nativeShell,/splash\?\.lifted\)\.then\(\(\) => handler\.postMessage\(\{type: "ready"\}\)/,'the native controls appear as the start-up screen lifts');
+  assert.match(nativeShell,/postMessage\(\{type: "splash"\}\)/,'the native cover gives way once the start-up screen has painted');
+  const rootView=fs.readFileSync('ios/Sources/App/RootView.swift','utf8');
+  assert(rootView.includes('(!portal.ready && !portal.splashUp) || portal.startupFailure != nil'),'the white native cover stays only until the page\'s start-up screen is up');
+}
 map3dTheme();
-Promise.all([retryBeforeLoad(),workerCache(),revealHold(),gpuStartup(),gpuPicture(),studioPublication(),splashManifest(),nativeResume()]).then(()=>console.log('UI startup checks passed (recovery, coherent valid terrain, stale readbacks, bounded shell, exact offline assets, LiDAR menu isolation)')).catch(e=>{console.error(e);process.exitCode=1});
+Promise.all([startupScreen(),retryBeforeLoad(),workerCache(),revealHold(),gpuStartup(),gpuPicture(),studioPublication(),splashManifest(),nativeResume()]).then(()=>console.log('UI startup checks passed (recovery, coherent valid terrain, stale readbacks, bounded shell, exact offline assets, LiDAR menu isolation)')).catch(e=>{console.error(e);process.exitCode=1});

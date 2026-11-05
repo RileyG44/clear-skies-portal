@@ -12,9 +12,16 @@ const page = read("index.html");
 const appScript = require("../site.js").appSource(root);
 /* Most checks below read the page as it once was: markup, base styles and app. */
 const index = [page,read("ui-base.css"),appScript].join("\n");
-const inline = [...page.matchAll(/<script(?![^>]*\bsrc=)[^>]*>([\s\S]*?)<\/script>/gi)];
+const inline = [...page.matchAll(/<script(?![^>]*\bsrc=)(?![^>]*type="importmap")[^>]*>([\s\S]*?)<\/script>/gi)];
 assert(inline.length>=2,"expected the startup and Leaflet-patch inline scripts");
 inline.forEach((match,i)=>new vm.Script(match[1],{filename:`index.html#inline-${i+1}`}));
+/* The start-up tree's three.js comes from the vendored build, at this build. */
+{
+  const map=JSON.parse(page.match(/<script type="importmap">([\s\S]*?)<\/script>/)[1]);
+  const version=/CSP_BUILD = "([^"]+)"/.exec(read("version.js"))[1];
+  assert.equal(map.imports.three,`./vendor/three.module.min.js?build=${version}`,"the import map serves the vendored three.js at this build");
+  assert(page.includes(`import("./startup-tree.js?build=${version}")`),"index.html loads the start-up tree at this build");
+}
 new vm.Script(appScript,{filename:"app.js"});
 
 /* site.json is the one list of shipped files; every consumer reads it, so the
@@ -25,7 +32,8 @@ new vm.Script(appScript,{filename:"app.js"});
   assert.equal(new Set(all).size,all.length,"site.json lists a file twice");
   for(const file of all) assert(fs.existsSync(path.join(root,file)),`site.json lists a missing file: ${file}`);
   for(const file of site.landing) assert(fs.existsSync(path.join(root,"landing",file)),`missing landing asset: ${file}`);
-  const served=new Set([...site.web,"app.js",...site.vendor]);
+  for(const file of site.tree) assert(site.landing.includes(file)&&!all.includes(file),`site.json tree file ${file} must be a landing file, not a web file`);
+  const served=new Set([...site.web,"app.js",...site.vendor,...site.tree]);
   for(const file of site.app) assert(fs.existsSync(path.join(root,file)),`site.json lists a missing app file: ${file}`);
   for(const [,url] of page.matchAll(/<(?:script|link)\b[^>]*\b(?:src|href)="(?![a-z]+:|\/\/|[?#])([^"?#]+)/g))
     assert(served.has(url),`index.html loads ${url}, which site.json does not ship`);

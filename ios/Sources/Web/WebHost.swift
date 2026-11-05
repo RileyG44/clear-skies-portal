@@ -9,6 +9,9 @@ import os
 final class WebHost: NSObject {
     let webView: WKWebView
     var onReady: (() -> Void)?
+    /// The page's white start-up screen has painted (true), or a new load
+    /// has not painted it yet (false).
+    var onSplash: ((Bool) -> Void)?
     var onStartupFailure: ((String?) -> Void)?
     /// Updates from native-shell.js, as JSON text.
     var onShell: ((String) -> Void)?
@@ -84,6 +87,7 @@ final class WebHost: NSObject {
     func load() {
         startupWatchdog?.cancel()
         waitingForStartup = true
+        onSplash?(false)
         onStartupFailure?(nil)
         // Independent of JavaScript: even a missing document or bootstrap
         // must offer recovery above the native launch cover.
@@ -123,6 +127,10 @@ final class WebHost: NSObject {
            let update = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
            let state = update["session"] as? [String: Any] { session = state }
         onShell?(json)
+    }
+
+    func splashShown() {
+        onSplash?(true)
     }
 
     func pageReady() {

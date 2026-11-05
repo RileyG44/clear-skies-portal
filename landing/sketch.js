@@ -822,8 +822,11 @@ void main(){
   gl_FragColor = vec4(col * al, al);
 }`;
 
+/* opts.still draws the finished drawing once, as reduced motion does, and leaves the
+   pointer alone: a picture to hold up while something else loads. layer, for the
+   labels, may then be null. */
 export function createSketch(canvas, layer, opts = {}) {
-  const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
+  const still = !!opts.still, reduce = still || matchMedia("(prefers-reduced-motion: reduce)").matches;
   let renderer;
   try { renderer = new THREE.WebGLRenderer({ canvas, antialias: false, alpha: false, powerPreference: "high-performance" }); }
   catch (e) { opts.onNoWebGL && opts.onNoWebGL(); return null; }
@@ -1049,7 +1052,7 @@ export function createSketch(canvas, layer, opts = {}) {
     view = { w, h, scale, dpr, left: r.left, top: r.top };
     renderer.setPixelRatio(dpr); renderer.setSize(w, h, false);
     U.uRes.value.set(w * dpr, h * dpr); U.uDpr.value = dpr; U.uScale.value = scale;
-    layer.style.setProperty("--u", scale + "px");
+    layer?.style.setProperty("--u", scale + "px");
     T.labels.forEach((l, i) => {
       const x = w / 2 + (l.x - VIEW.cx) * scale, y = h / 2 - (l.y - VIEW.cy) * scale;
       const tx = l.anchor === "r" ? "-100%" : l.anchor === "c" ? "-50%" : "0";
@@ -1067,11 +1070,13 @@ export function createSketch(canvas, layer, opts = {}) {
     const r = canvas.getBoundingClientRect();
     return [VIEW.cx + (cx - r.left - r.width / 2) / view.scale, VIEW.cy - (cy - r.top - r.height / 2) / view.scale];
   };
-  addEventListener("pointermove", e => {
-    const [x, y] = toTree(e.clientX, e.clientY);
-    ptr.x = x; ptr.y = y; ptr.in = Math.abs(x - VIEW.cx) < VIEW.w / 2 + 0.1 && y > -0.05 && y < 1.1; ptr.fresh = true;
-  }, { passive: true });
-  addEventListener("pointerdown", e => { const [x, y] = toTree(e.clientX, e.clientY); ptr.x = ptr.px = x; ptr.y = ptr.py = y; }, { passive: true });
+  if (!still) {
+    addEventListener("pointermove", e => {
+      const [x, y] = toTree(e.clientX, e.clientY);
+      ptr.x = x; ptr.y = y; ptr.in = Math.abs(x - VIEW.cx) < VIEW.w / 2 + 0.1 && y > -0.05 && y < 1.1; ptr.fresh = true;
+    }, { passive: true });
+    addEventListener("pointerdown", e => { const [x, y] = toTree(e.clientX, e.clientY); ptr.x = ptr.px = x; ptr.y = ptr.py = y; }, { passive: true });
+  }
 
   function render() { renderer.render(scene, cam); }
   function updateLabels(draw) { T.labels.forEach((l, i) => els[i].classList.toggle("on", draw >= l.t)); }
@@ -1100,7 +1105,8 @@ export function createSketch(canvas, layer, opts = {}) {
   function play() { if (!raf && visible && !document.hidden) { last = performance.now(); raf = requestAnimationFrame(frame); } }
   function pause() { cancelAnimationFrame(raf); raf = 0; }
   addEventListener("resize", layout);
-  new ResizeObserver(layout).observe(canvas);
+  const resized = new ResizeObserver(layout);
+  resized.observe(canvas);
   layout();
   if (reduce) { updateLabels(1.2); render(); }
   else {
@@ -1109,6 +1115,11 @@ export function createSketch(canvas, layer, opts = {}) {
     play();
   }
   return {
+    // stop drawing and give the GL context back
+    dispose() {
+      pause(); visible = false; removeEventListener("resize", layout); resized.disconnect();
+      renderer.dispose(); renderer.forceContextLoss();
+    },
     params: P, angles: ang, poseOf: b => [TX[b], TY[b], A[b]], strokes: T.count, bones: n, anchors, pageY, relayout: () => layout(),
     // a point of the drawing in viewport pixels, and the pixels in one drawing unit
     toPage(x, y) { const r = canvas.getBoundingClientRect(); return [r.left + r.width / 2 + (x - VIEW.cx) * view.scale, r.top + r.height / 2 - (y - VIEW.cy) * view.scale]; },
