@@ -151,8 +151,8 @@
     };
     check(state.studio.state&&same(withScaleDefaults(state.studio.state),env.lidarRender.normalizeState(state.studio.state)),"unsupported terrain mix settings");
     const range=r=>Array.isArray(r)&&r.length===2&&r.every(Number.isFinite)&&r[1]>r[0];
-    const fitValue=f=>range(f)||f&&typeof f==="object"&&!Array.isArray(f)&&Object.keys(f).length===2&&
-      Object.hasOwn(f,"land")&&Object.hasOwn(f,"water")&&(f.land===null||range(f.land))&&(f.water===null||range(f.water))&&!!(f.land||f.water);
+    const fitValue=f=>range(f)||f&&typeof f==="object"&&!Array.isArray(f)&&(Object.keys(f).length===2||Object.keys(f).length===3&&Object.hasOwn(f,"inland"))&&
+      Object.hasOwn(f,"land")&&Object.hasOwn(f,"water")&&(f.land===null||range(f.land))&&(f.water===null||range(f.water))&&(f.inland==null||range(f.inland))&&!!(f.land||f.water||f.inland);
     for(const fit of [state.studio.fitted,state.studio.flatFitted])check(fit&&typeof fit==="object"&&Object.values(fit).every(fitValue),"terrain display range");
     check(state.studio.remFloor===null||Number.isFinite(state.studio.remFloor),"relative elevation floor");
     check(state.studio.remLandFloor==null||Number.isFinite(state.studio.remLandFloor),"land relative elevation floor");

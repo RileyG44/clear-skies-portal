@@ -257,10 +257,11 @@
     for(const [key,layer] of list){
       if(!layer.visible||layers.length>=MAX_LAYERS) continue;
       let min=layer.min,max=layer.max;
-      const rawFit=fitted&&fitted[key],fit=rawFit&&rawFit.land!==undefined?(rawFit.land||rawFit.water):rawFit;
+      const rawFit=fitted&&fitted[key],fit=rawFit&&rawFit.land!==undefined?(rawFit.land||rawFit.water||rawFit.inland):rawFit;
       if(layer.auto&&Array.isArray(fit)&&fit.every(Number.isFinite)&&fit[1]>fit[0]){min=fit[0];max=fit[1]}
       layers.push({style:layer.style,opacity:layer.opacity,blend:layer.blend,stops:resolveStops(layer),
         min,max,water:(layer.style==="tint"||layer.style==="rem")&&layer.auto&&layer.rangeMode==="separate"&&rawFit?.water?rawFit.water:null,
+        inland:(layer.style==="tint"||layer.style==="rem")&&layer.auto&&layer.rangeMode==="separate"&&rawFit?.inland?rawFit.inland:null,
         separateRem:layer.style==="rem"&&layer.auto&&layer.rangeMode==="separate",gamma:layer.gamma,steps:layer.steps,param:layer.style==="contour"||STYLES[layer.style].param?layer.param:0});
     }
     // An explicitly empty mix must stay transparent, not fall back to the
@@ -289,23 +290,25 @@
     // Classification must align with every height. Without geography, retain
     // a full continuous scale instead of guessing from the height's sign.
     if(!water||water.length!==values.length)return fitRange(values,"tint");
-    const land=[],depths=[];
-    for(let i=0;i<values.length;i++)if(Number.isFinite(values[i]))(water[i]?depths:land).push(values[i]);
+    const land=[],depths=[],inland=[];
+    for(let i=0;i<values.length;i++)if(Number.isFinite(values[i]))(water[i]===2?inland:water[i]?depths:land).push(values[i]);
     const fit={land:fitRange(land,"tint"),water:fitRange(depths,"tint")};
-    return fit.land||fit.water?fit:null;
+    if(inland.length)fit.inland=fitRange(inland,"tint");
+    return fit.land||fit.water||fit.inland?fit:null;
   }
   // REM keeps its near-valley contrast, fitted exclusively over land. Water
   // has an absolute elevation key even when its local floor is unavailable.
   function fitRelative(relative,heights,water,mode="separate"){
     if(mode!=="separate"||!heights||!water||water.length!==heights.length||!relative||relative.length!==heights.length)
       return fitRange(relative,"rem");
-    const land=[],depths=[];
+    const land=[],depths=[],inland=[];
     for(let i=0;i<heights.length;i++){
-      if(water[i]){if(Number.isFinite(heights[i]))depths.push(heights[i])}
+      if(water[i]){if(Number.isFinite(heights[i]))(water[i]===2?inland:depths).push(heights[i])}
       else if(Number.isFinite(relative[i]))land.push(relative[i]);
     }
     const fit={land:fitRange(land,"rem"),water:fitRange(depths,"tint")};
-    return fit.land||fit.water?fit:null;
+    if(inland.length)fit.inland=fitRange(inland,"tint");
+    return fit.land||fit.water||fit.inland?fit:null;
   }
   /* Ignore small inward endpoint changes while always admitting a newly
      sampled extreme. A pan to a materially different range still refits. */
@@ -318,7 +321,9 @@
     };
     if(Array.isArray(next))return stabilize(next,Array.isArray(previous)?previous:null);
     if(!next)return next;
-    return {land:stabilize(next.land,previous.land),water:stabilize(next.water,previous.water)};
+    const fit={land:stabilize(next.land,previous.land),water:stabilize(next.water,previous.water)};
+    if(next.inland)fit.inland=stabilize(next.inland,previous.inland);
+    return fit;
   }
   const WATER_STOPS=Object.freeze([[0,3/255,4/255,94/255,1],[.5,0,119/255,182/255,1],[1,144/255,224/255,239/255,1]]);
   function waterColour(value,range,layer){
@@ -559,7 +564,9 @@
           }
         }
         if(!(coverage>0)) continue;
-        const color=layer.water&&dem.water?.[y*w+x]?waterColour(height,layer.water,layer):paletteColour(layer,value);
+        const kind=dem.water?.[y*w+x];
+        const color=kind===2&&layer.inland?paletteColour({...layer,min:layer.inland[0],max:layer.inland[1]},height):
+          kind===1&&layer.water?waterColour(height,layer.water,layer):paletteColour(layer,value);
         if((layer.style==="tint"||layer.style==="rem")&&layer.param>0){
           const shade=light.ambient+(1-light.ambient)*directShade(sdx,sdy,light.azimuth,light.altitude),m=1+(.33+.82*shade-1)*clamp(layer.param,0,1);
           for(let i=0;i<3;i++) color[i]=Math.min(1,color[i]*m);

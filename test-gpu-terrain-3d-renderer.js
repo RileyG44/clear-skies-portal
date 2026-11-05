@@ -17,7 +17,7 @@ class GL {
       "UNPACK_IMAGE_HEIGHT", "UNPACK_SKIP_IMAGES", "PACK_ALIGNMENT", "PACK_ROW_LENGTH", "PACK_SKIP_PIXELS", "PACK_SKIP_ROWS",
       "TEXTURE_BINDING_2D", "SAMPLER_BINDING", "MAX_TEXTURE_SIZE", "BLEND", "DEPTH_TEST", "STENCIL_TEST", "SCISSOR_TEST",
       "CULL_FACE", "RASTERIZER_DISCARD", "DITHER", "SAMPLE_ALPHA_TO_COVERAGE", "SAMPLE_COVERAGE", "TEXTURE0", "TEXTURE_2D",
-      "DRAW_FRAMEBUFFER", "READ_FRAMEBUFFER", "FRAMEBUFFER", "PIXEL_UNPACK_BUFFER", "PIXEL_PACK_BUFFER", "R32F", "RGBA8",
+      "DRAW_FRAMEBUFFER", "READ_FRAMEBUFFER", "FRAMEBUFFER", "PIXEL_UNPACK_BUFFER", "PIXEL_PACK_BUFFER", "R32F", "RGBA8", "RGBA16UI", "RGBA_INTEGER", "UNSIGNED_SHORT",
       "TEXTURE_MIN_FILTER", "TEXTURE_MAG_FILTER", "TEXTURE_WRAP_S", "TEXTURE_WRAP_T", "NEAREST", "CLAMP_TO_EDGE", "RED", "FLOAT",
       "COLOR_ATTACHMENT0", "FRAMEBUFFER_COMPLETE", "TRIANGLES", "RGBA", "UNSIGNED_BYTE", "VERTEX_SHADER", "FRAGMENT_SHADER",
       "COMPILE_STATUS", "LINK_STATUS"];
@@ -30,6 +30,7 @@ class GL {
       "PIXEL_UNPACK_BUFFER_BINDING", "PIXEL_PACK_BUFFER_BINDING"]) this.p.set(this[name], {external: name});
     for (const name of ["UNPACK_ROW_LENGTH", "UNPACK_SKIP_PIXELS", "PACK_ROW_LENGTH", "PACK_SKIP_ROWS"]) this.p.set(this[name], 9);
     this.textures.set(this.TEXTURE0, {external: "texture0"}); this.samplers.set(this.TEXTURE0, {external: "sampler0"});
+    this.textures.set(this.TEXTURE0+3,null);this.samplers.set(this.TEXTURE0+3,null);
     this.enables.add(this.BLEND); this.enables.add(this.SCISSOR_TEST); this.enables.add(this.RASTERIZER_DISCARD);
   }
   count(name) { this.calls[name] = (this.calls[name] || 0) + 1; }
@@ -66,6 +67,7 @@ class GL {
   texParameteri() {}
   texSubImage2D(_, __, ___, ____, w, h, format, type, data) {
     this.count("uploads"); assert.equal(this.p.get(this.PIXEL_UNPACK_BUFFER_BINDING), null);
+    if(format===this.RGBA_INTEGER){assert.equal(type,this.UNSIGNED_SHORT);return;}
     assert.equal(format, this.RED); assert.equal(type, this.FLOAT);
     this.textures.get(this.p.get(this.ACTIVE_TEXTURE)).grid = data.slice();
   }
@@ -104,7 +106,7 @@ function focusedChecks() {
   const uniformBefore = renderer.stats().uniformUpdates;
   renderer.renderBatch([job, {...job, targetTexture: {}}]);
   assert.equal(renderer.stats().uniformUpdates, uniformBefore, "identical uniform values stay on GPU");
-  assert.equal(gl.calls.queries - queries, 46, "exactly one 23-query snapshot per whole batch");
+  assert.equal(gl.calls.queries - queries, 50, "one 25-query snapshot per whole batch, including the integer mask binding");
   job.revision = 2; renderer.renderBatch([job]);
   assert.equal(gl.calls.storage, storage, "revision updates reuse immutable allocation");
   assert.deepEqual(renderer.renderBatch([{...job, grid: grid.slice()}]), {drawn: 1, uploaded: 1, evicted: 0}, "identity change uploads even at same revision");

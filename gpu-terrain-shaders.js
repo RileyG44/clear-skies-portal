@@ -91,13 +91,13 @@
     "u_spectrumOpacity",
     "u_centerMerc", "u_zoom", "u_bearingRad", "u_cssSize", "u_dpr",
     "u_groundResOverride",
-    "u_stackOn", "u_stackGradient", "u_layerCount", "u_layerA", "u_layerB", "u_layerC", "u_layerPos", "u_layerColors",
+    "u_stackOn", "u_stackGradient", "u_layerCount", "u_layerA", "u_layerB", "u_layerC", "u_layerD", "u_layerPos", "u_layerColors",
     "u_detail", "u_reliefExag", "u_remFlatBase", "u_remLandBase", "u_waterMask"
   ]);
   /* Array uniforms and their component count; every other uniform is a
    * scalar or the fixed vectors above. Renderers that set uniforms by hand
    * (the 3D drape) use this to choose uniform4fv. */
-  var UNIFORM_ARRAYS = Object.freeze({u_layerA: 4, u_layerB: 4, u_layerC: 4, u_layerPos: 4, u_layerColors: 4});
+  var UNIFORM_ARRAYS = Object.freeze({u_layerA: 4, u_layerB: 4, u_layerC: 4, u_layerD: 4, u_layerPos: 4, u_layerColors: 4});
 
   var EARTH_RADIUS = 6378137;
   var WORLD_METRES = 2 * Math.PI * EARTH_RADIUS; /* 40075016.68557849 */
@@ -260,7 +260,7 @@
       u_dpr: Math.max(1e-6, finiteOr(v.dpr, 1)),
       u_groundResOverride: finiteOr(s.groundResOverride, 0),
       u_stackOn: stack.on, u_stackGradient: stack.gradient, u_layerCount: stack.count,
-      u_layerA: stack.a, u_layerB: stack.b, u_layerC: stack.c, u_layerPos: stack.pos, u_layerColors: stack.colors,
+      u_layerA: stack.a, u_layerB: stack.b, u_layerC: stack.c, u_layerD: stack.d, u_layerPos: stack.pos, u_layerColors: stack.colors,
       u_waterMask: 3, u_detail: stack.detail, u_reliefExag: stack.reliefExag, u_remFlatBase: stack.remFlatBase, u_remLandBase: stack.remLandBase
     };
   }
@@ -270,7 +270,7 @@
    * An absent stack uses legacy rendering; an empty stack is transparent. */
   function stackUniforms(stack) {
     var layers = stack && Array.isArray(stack.layers) ? stack.layers : [];
-    var a = new Array(MAX_LAYERS * 4).fill(0), b = new Array(MAX_LAYERS * 4).fill(0), c = new Array(MAX_LAYERS * 4).fill(0);
+    var a = new Array(MAX_LAYERS * 4).fill(0), b = new Array(MAX_LAYERS * 4).fill(0), c = new Array(MAX_LAYERS * 4).fill(0), d = new Array(MAX_LAYERS * 4).fill(0);
     var pos = new Array(MAX_LAYERS * STOP_VECS * 4).fill(1), colors = new Array(MAX_LAYERS * MAX_STOPS * 4).fill(0);
     var count = 0, gradient = 0;
     for (var i = 0; i < layers.length && count < MAX_LAYERS; i++) {
@@ -288,7 +288,8 @@
       var blend = Object.prototype.hasOwnProperty.call(BLEND_IDS, layer.blend) ? BLEND_IDS[layer.blend] : 0;
       a.splice(count * 4, 4, id, clamp(finiteOr(layer.opacity, 1), 0, 1), blend, stops.length);
       b.splice(count * 4, 4, min, max, clamp(finiteOr(layer.gamma, 1), 0.1, 10), Math.max(0, Math.round(finiteOr(layer.steps, 0))));
-      c.splice(count * 4, 4, finiteOr(layer.param, 0), (layer.water ? 1 : 0)+(layer.separateRem ? 2 : 0), finiteOr(layer.water && layer.water[0], 0), finiteOr(layer.water && layer.water[1], 1));
+      c.splice(count * 4, 4, finiteOr(layer.param, 0), (layer.water ? 1 : 0)+(layer.separateRem ? 2 : 0)+(layer.inland ? 4 : 0), finiteOr(layer.water && layer.water[0], 0), finiteOr(layer.water && layer.water[1], 1));
+      d.splice(count*4,4,finiteOr(layer.inland&&layer.inland[0],0),finiteOr(layer.inland&&layer.inland[1],1),0,0);
       // Unshaded elevation/relative-elevation ramps use only height/base.
       // Other built-ins and registered analysis styles need the gradient.
       if ((id !== 5 && id !== 10) || finiteOr(layer.param, 0) > 0) gradient = 1;
@@ -299,7 +300,7 @@
       count++;
     }
     var on = stack && Array.isArray(stack.layers) ? 1 : 0;
-    return {on: on, count: count, gradient: gradient, a: a, b: b, c: c, pos: pos, colors: colors,
+    return {on: on, count: count, gradient: gradient, a: a, b: b, c: c, d: d, pos: pos, colors: colors,
       detail: on ? clamp(finiteOr(stack.detail, 0), -1, 4) : 0,
       reliefExag: on ? clamp(finiteOr(stack.reliefExag, 1), 0.1, 20) : 1,
       remFlatBase: finiteOr(stack && stack.remFlatBase, 0),remLandBase: finiteOr(stack && stack.remLandBase,finiteOr(stack && stack.remFlatBase,0))};
@@ -354,13 +355,14 @@
       "uniform vec4 u_layerA[" + MAX_LAYERS + "];",
       "uniform vec4 u_layerB[" + MAX_LAYERS + "];",
       "uniform vec4 u_layerC[" + MAX_LAYERS + "];",
+      "uniform vec4 u_layerD[" + MAX_LAYERS + "];",
       "uniform vec4 u_layerPos[" + (MAX_LAYERS * STOP_VECS) + "];",
       "uniform vec4 u_layerColors[" + (MAX_LAYERS * MAX_STOPS) + "];",
       "uniform float u_detail;",
       "uniform float u_reliefExag;",
       "uniform float u_remFlatBase;",
       "uniform float u_remLandBase;",
-      "uniform highp sampler2D u_waterMask;",
+      "uniform highp usampler2D u_waterMask;",
       "in vec2 v_screenUv;",
       "out vec4 fragColor;",
       "const float CSP_PI = 3.141592653589793;",
@@ -594,14 +596,15 @@
    * struct, ramps, blend modes, per-style values and the compositor. */
   function waterMaskSource(){
     return [
-      "bool cspWater(vec2 merc){",
+      "uint cspWaterClass(vec2 merc){",
       "  float latitude = degrees(atan(sinh(3.141592653589793 * (1.0 - 2.0 * merc.y))));",
       "  ivec2 q = ivec2(min(16383.0, floor(fract(merc.x) * 16384.0)), clamp(floor((90.0 - latitude) / 180.0 * 8192.0), 0.0, 8191.0));",
       // Integer extraction avoids exp2/division rounding flipping packed bits
       // on ANGLE/Metal, even when projected mask coordinates match exactly.
-      "  vec4 packed = texelFetch(u_waterMask, ivec2(q.x / 8, q.y / 4), 0); uint bits = uint(round(packed[q.y % 4] * 255.0));",
-      "  return (bits & (128u >> uint(q.x % 8))) != 0u;",
-      "}"
+      "  uvec4 packed = texelFetch(u_waterMask, ivec2(q.x / 8, q.y / 4), 0);",
+      "  return (packed[q.y % 4] >> uint(14 - 2 * (q.x % 8))) & 3u;",
+      "}",
+      "bool cspWater(vec2 merc){return cspWaterClass(merc)==1u;}"
     ].join("\n");
   }
   function stackSource() {
@@ -648,13 +651,14 @@
       "  }",
       "  return u_layerColors[base + count - 1];",
       "}",
-      "vec4 cspPalette(int layer, float value){",
+      "vec4 cspPaletteRange(int layer, float value, vec2 range){",
       "  vec4 r = u_layerB[layer];",
-      "  float t = clamp((value - r.x) / (r.y - r.x), 0.0, 1.0);",
+      "  float t = clamp((value - range.x) / max(range.y - range.x,1.0e-6), 0.0, 1.0);",
       "  t = pow(max(t, 0.0), r.z);",
       "  if(r.w >= 2.0) t = min(floor(t * r.w), r.w - 1.0) / (r.w - 1.0);",
       "  return cspRampAt(layer, t);",
       "}",
+      "vec4 cspPalette(int layer, float value){return cspPaletteRange(layer,value,u_layerB[layer].xy);}",
       /* W3C Compositing Level 1 blend modes on straight colour. */
       "float cspLum(vec3 c){ return dot(c, vec3(0.3, 0.59, 0.11)); }",
       "vec3 cspClipColour(vec3 c){",
@@ -780,7 +784,9 @@
       "    c.base = (flags & 2) != 0 ? landBase : legacyBase;",
       "    vec2 v = cspLayerValue(style, param, c);",
       "    if(v.y <= 0.0) continue;",
-      "    vec4 colour = (style == 5 || style == 10) && (flags & 1) != 0 && cspWater(merc) ? cspWaterColour(i, c.height, u_layerC[i].zw) : cspPalette(i, v.x);",
+      "    uint waterClass = (style == 5 || style == 10) && (flags & 5) != 0 ? cspWaterClass(merc) : 0u;",
+      "    vec4 colour = waterClass == 1u && (flags & 1) != 0 ? cspWaterColour(i, c.height, u_layerC[i].zw) :",
+      "      waterClass == 2u && (flags & 4) != 0 ? cspPaletteRange(i,c.height,u_layerD[i].xy) : cspPalette(i, v.x);",
       /* Built-in relief shading for elevation-like layers (legacy tint look). */
       "    if((style == 5 || style == 10) && param > 0.0){",
       "      float shade = u_ambient + (1.0 - u_ambient) * cspDirectShade(c.sdx, c.sdy, u_sunAzimuth);",

@@ -39,7 +39,7 @@ assert.match(SRC, /out vec4 fragColor;/);
 
 /* Every declared uniform is listed in SHADE_UNIFORMS and vice versa. */
 {
-  const declared = [...SRC.replace(PRELUDE, "").matchAll(/uniform\s+(?:highp\s+)?(?:int|float|vec2|vec3|vec4|sampler2D)\s+(u_\w+)\s*(?:\[\d+\])?\s*;/g)].map((m) => m[1]);
+  const declared = [...SRC.replace(PRELUDE, "").matchAll(/uniform\s+(?:highp\s+)?(?:int|float|vec2|vec3|vec4|sampler2D|usampler2D)\s+(u_\w+)\s*(?:\[\d+\])?\s*;/g)].map((m) => m[1]);
   assert.deepEqual([...declared].sort(), [...shaders.SHADE_UNIFORMS].sort(),
     "SHADE_UNIFORMS must list every uniform the shader declares");
   assert.equal(new Set(shaders.SHADE_UNIFORMS).size, shaders.SHADE_UNIFORMS.length,

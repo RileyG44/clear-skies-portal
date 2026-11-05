@@ -27,6 +27,13 @@ vm.runInContext(html.slice(html.indexOf('const CSP_SHARE_WEB_URL='),html.indexOf
  for(const fit of [{land:null,water:null},{land:[5,2],water:[-500,0]},{land:[0,50],water:[-500,0],extra:true}]){
   const bad=structuredClone(mixed);bad.studio.fitted.base=fit;assert.throws(()=>ctx.cspValidateShareState(bad),/Invalid share link/);
  }
+ for(const fit of [{land:[-90,150],water:[-4500,0],inland:[-1600,1200]},{land:null,water:null,inland:[-1600,1200]},{land:[-90,150],water:null,inland:null}]){
+  const lake=structuredClone(mixed);lake.studio.fitted.base=fit;ctx.cspValidateShareState(lake);
+  const roundtrip=await C.decode(await C.encode(lake));ctx.cspValidateShareState(roundtrip);assert.deepEqual(roundtrip.studio.fitted,lake.studio.fitted);
+ }
+ for(const fit of [{land:null,water:null,inland:null},{land:[0,10],water:null,inland:[20,-20]},{land:[0,10],water:null,inland:[0,Infinity]},{land:[0,10],water:null,inland:"lake"},{inland:[-1600,0]}]){
+  const bad=structuredClone(mixed);bad.studio.fitted.base=fit;assert.throws(()=>ctx.cspValidateShareState(bad),/Invalid share link/);
+ }
  const restored=await C.decode(await C.encode(mixed));ctx.cspValidateShareState(restored);
  assert.deepEqual(restored.studio.fitted,mixed.studio.fitted);
  assert.equal(restored.studio.remLandFloor,-86);

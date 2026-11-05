@@ -159,8 +159,8 @@
     'for(int k=-u_radius;k<=u_radius;k++){ivec2 q=o+u_dir*k;if(q.x<0||q.y<0||q.x>=s.x||q.y>=s.y)continue;vec2 v=texelFetch(u_src,q,0).rg;if(!ok(v))continue;' +
     'if(u_mode==3){acc=min(acc,v.r);w=1.;}else{float g=u_weights[abs(k)];acc+=v.r*g;w+=g;}}\n' +
     'if(w<=0.){result=vec2(0.);return;}result=vec2(u_mode==3?acc:acc/w,1.);}\n';
-  var LAND_FILTER = 'uniform bool u_landOnly; uniform highp sampler2D u_waterMask; uniform vec2 u_geoOrigin,u_geoX,u_geoY;\n/*CSP_WATER*/\n' +
-    'bool land(ivec2 q){return !u_landOnly || !cspWater(u_geoOrigin+(float(q.x)+.5)*u_geoX+(float(q.y)+.5)*u_geoY); }\n';
+  var LAND_FILTER = 'uniform bool u_landOnly; uniform highp usampler2D u_waterMask; uniform vec2 u_geoOrigin,u_geoX,u_geoY;\n/*CSP_WATER*/\n' +
+    'bool land(ivec2 q){return !u_landOnly || cspWaterClass(u_geoOrigin+(float(q.x)+.5)*u_geoX+(float(q.y)+.5)*u_geoY)==0u; }\n';
   /* Block minimum along u_dir: output texel o covers source texels o*factor ..
    * o*factor+factor-1 on that axis. A horizontal then a vertical pass equals
    * the 2D block minimum of FILTER mode 1 exactly (same skipped edges and
@@ -210,7 +210,7 @@
     var canvas = options.canvas, store = options.store, shaders = options.shaders, gl;
     var root = typeof globalThis !== 'undefined' ? globalThis : {};
     var core = options.elevationCore || root.ElevationTileCore;
-    var geography = root.CSPWaterGeography || (typeof require === 'function' ? require('./water-geography.js') : null), waterTexture = null;
+    var geography = root.CSPWaterGeography || (typeof require === 'function' ? require('./water-geography.js') : null), waterTexture = null, emptyWaterTexture = null;
     var raster = root.CSPTerrainRaster, drape = root.CSPTerrainDrape, bands = root.ElevationBands;
     if (!core && typeof require === 'function') core = require('./elevation-tile-core.js');
     var now = function () { return root.performance ? root.performance.now() : Date.now(); };
@@ -296,7 +296,7 @@
         resources.framebuffers.forEach(function (f) { gl.deleteFramebuffer(f); }); resources.textures.forEach(function (t) { gl.deleteTexture(t); });
         resources.programs.forEach(function (p) { gl.deleteProgram(p); }); resources.vaos.forEach(function (v) { gl.deleteVertexArray(v); });
       }
-      waterTexture = null;
+      waterTexture = emptyWaterTexture = null;
       Object.keys(resources).forEach(function (k) { resources[k].clear(); }); field = null; gesture = null; liveAux = {}; auxKey = '';
     }
     function setters(p) {
@@ -316,7 +316,7 @@
         if (v === undefined) throw new Error('Missing terrain uniform ' + u.name);
         if (l === null) continue;
         switch (u.type) {
-          case gl.BOOL: case gl.INT: case gl.SAMPLER_2D: case gl.SAMPLER_2D_ARRAY: if (u.size > 1 || typeof v !== 'number') gl.uniform1iv(l, v); else gl.uniform1i(l, v); break;
+          case gl.BOOL: case gl.INT: case gl.SAMPLER_2D: case gl.UNSIGNED_INT_SAMPLER_2D: case gl.SAMPLER_2D_ARRAY: if (u.size > 1 || typeof v !== 'number') gl.uniform1iv(l, v); else gl.uniform1i(l, v); break;
           case gl.INT_VEC2: case gl.BOOL_VEC2: gl.uniform2iv(l, v); break;
           case gl.INT_VEC3: case gl.BOOL_VEC3: gl.uniform3iv(l, v); break;
           case gl.INT_VEC4: case gl.BOOL_VEC4: gl.uniform4iv(l, v); break;
@@ -384,6 +384,7 @@
       shadeField = gl.getUniformLocation(shadeProgram, 'u_cspField'); provenanceField = gl.getUniformLocation(provenanceProgram, 'u_cspField');
       gl.disable(gl.BLEND); gl.disable(gl.DEPTH_TEST); gl.disable(gl.CULL_FACE); gl.disable(gl.SCISSOR_TEST); gl.disable(gl.DITHER);
       gl.pixelStorei(gl.UNPACK_ALIGNMENT, 1); gl.pixelStorei(gl.PACK_ALIGNMENT, 1);
+      emptyWaterTexture=geography.allocate(gl,true);resources.textures.add(emptyWaterTexture);
       selfTest();
       ready = true; error = null; heightDirty = dirty = planDirty = true;
       }
@@ -652,7 +653,7 @@
         gl.activeTexture(gl.TEXTURE0 + 3);
         if(!waterTexture){waterTexture=geography.upload(gl);resources.textures.add(waterTexture);}
         gl.bindTexture(gl.TEXTURE_2D,waterTexture);
-      }else{gl.activeTexture(gl.TEXTURE0 + 3);gl.bindTexture(gl.TEXTURE_2D,t.texture);}
+      }else{gl.activeTexture(gl.TEXTURE0 + 3);gl.bindTexture(gl.TEXTURE_2D,emptyWaterTexture);}
       gl.activeTexture(gl.TEXTURE0);
       shadeUniforms(settings);
       gl.drawArrays(gl.TRIANGLES, 0, 3); drawCalls++;
@@ -660,7 +661,7 @@
     function filterGeography(f,src,view){
       gl.uniform1i(f.landOnly,view?1:0);gl.uniform1i(f.waterMask,3);
       gl.activeTexture(gl.TEXTURE0+3);
-      if(!view){gl.bindTexture(gl.TEXTURE_2D,src.texture);gl.activeTexture(gl.TEXTURE0);return;}
+      if(!view){gl.bindTexture(gl.TEXTURE_2D,emptyWaterTexture);gl.activeTexture(gl.TEXTURE0);return;}
       if(!waterTexture){waterTexture=geography.upload(gl);resources.textures.add(waterTexture);}
       gl.bindTexture(gl.TEXTURE_2D,waterTexture);gl.activeTexture(gl.TEXTURE0);
       var origin=shaders.screenToMercator(view,[0,1]),x=shaders.screenToMercator(view,[1,1]),y=shaders.screenToMercator(view,[0,0]);
@@ -1092,7 +1093,7 @@
         // readPixels rows grow from the south; sampling and shading must
         // use the same geographic pixel centres, including map rotation.
         var cell=i/4, merc=options?.water===false?null:shaders.screenToMercator(sampleView,[(cell%w+.5)/w,1-(Math.floor(cell/w)+.5)/ht]);
-        if(merc)water.push(geography ? +geography.waterAtMercator(merc[0],merc[1]) : 0);
+        if(merc)water.push(geography ? geography.classAtMercator(merc[0],merc[1]) : 0);
         relative.push(Number.isFinite(raw[i+2])&&raw[i+2]>-1e20?Math.max(0,raw[i]-raw[i+2]):NaN);
         landRelative.push(Number.isFinite(raw[i+3])&&raw[i+3]>-1e20?Math.max(0,raw[i]-raw[i+3]):NaN);
       }
@@ -1235,7 +1236,7 @@
       invalidate: invalidate, render: render, createSnapshot: createSnapshot,
       releaseGestureTargets: function () { if (!lost) releaseGesture(); },
       releaseExport: releaseExport, exportDetail: exportDetail, neededTiles: function (view) { return coverageTiles(view, 0); }, renderToCanvas: renderToCanvas, readProvenance: readProvenance, sampleValues: sampleValues, sampleValuesAsync: sampleValuesAsync,
-      stats: function () { return {textures: lru.size, textureBytes: lru.bytes, waterMaskBytes: waterTexture ? 16777216 : 0, frames: frames, drawCalls: drawCalls, lastFrameMs: lastFrameMs,
+      stats: function () { return {textures: lru.size, textureBytes: lru.bytes, waterMaskBytes: waterTexture ? geography.BYTES : 0, frames: frames, drawCalls: drawCalls, lastFrameMs: lastFrameMs,
         ready: ready, queuedUploads: queue.size,
         exportTextures: Array.from(snapshots).reduce(function (n, capture) { return n + capture.tiles.size; }, 0),
         exportTextureBytes: Array.from(snapshots).reduce(function (n, capture) { return n + capture.bytes; }, 0), uploads: uploads, evictions: evictions, generation: generation, error: error,

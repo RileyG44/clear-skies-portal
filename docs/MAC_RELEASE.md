@@ -1,8 +1,8 @@
-Download **ClearSkies-Setup-1.0.7-arm64.dmg** for Apple Silicon (M1 and newer), or **ClearSkies-Setup-1.0.7-x64.dmg** for an Intel Mac.
+Download **ClearSkies-Setup-1.0.8-arm64.dmg** for Apple Silicon (M1 and newer), or **ClearSkies-Setup-1.0.8-x64.dmg** for an Intel Mac.
 
 Open the disk image, drag **ClearSkies** into **Applications**, then open it from Applications. The app and terrain engine are included together; no Node.js or terminal setup is needed. ZIP downloads are also available.
 
-- New in 1.0.7: Relative elevation, including Missoula/Ember, now separates land relief from absolute seabed elevation. Coastal valley floors exclude water, and native menus, 3D and export keys show matching scales. Bundled map build 2026-11-04c.
+- New in 1.0.8: inland lakes retain terrain palette detail on an independent elevation scale. Deep lakebeds are excluded from land color fitting and valley-floor calculations; dry basins retain their land scale. Separate ocean/land fitting stays enabled; includes the latest startup improvements. Bundled map build 2026-11-04g.
 - First launch shows the same terrain welcome page and Pacifico ClearSkies wordmark as Windows. Choose **Open ClearSkies** to start exploring, or **Learn about Tailscale** for the optional remote-access guide.
 - Optional **Advanced configuration** on the welcome page sets terrain tile, WA DNR and memory cache limits, free disk-space reserve, terrain workers, and smoother panning (Off / Auto / On). Skip it to use the default setup.
 - The guide includes the official Tailscale for Mac download, engine capabilities, and Dock instructions. Reopen the welcome or guide from the **Help** menu.
