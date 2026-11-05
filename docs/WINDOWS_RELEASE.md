@@ -1,8 +1,9 @@
-Windows 10/11 x64. Download **ClearSkies-Setup-1.0.9-x64.exe** for one-click installation. It permanently installs ClearSkies and its terrain engine into your user profile, creates Desktop and Start shortcuts, and registers an uninstaller in Windows Settings. No Node.js or terminal setup needed.
+Windows 10/11 x64. Download **ClearSkies-Setup-1.0.10-x64.exe** for one-click installation. It permanently installs ClearSkies and its terrain engine into your user profile, creates Desktop and Start shortcuts, and registers an uninstaller in Windows Settings. No Node.js or terminal setup needed.
 
-**ClearSkies-Guided-Setup-1.0.9-x64.exe** provides a branded wizard and location selection. The ZIP is an optional portable alternative; extract the entire folder before launching.
+**ClearSkies-Guided-Setup-1.0.10-x64.exe** provides a branded wizard and location selection. The ZIP is an optional portable alternative; extract the entire folder before launching.
 
-- New in 1.0.9: reorganized Satellite imagery and Elevation menus. Satellite search shows the best clear image first, an "On the map" card with opacity, fill and remove controls, and warns when terrain hides the image with a one-click fix; Microsoft Planetary Computer results work again. Elevation has two task cards (Color by elevation, Highlight elevations) with one unit setting and exact heights. Right-click Identify surface geology opens its result again. Bundled map build 2026-11-05f.
+- New in 1.0.10: 3D terrain opens tilted and responds to two-finger tilt again. The 3D view now appears on its first drawn frame, so one slow elevation tile can no longer hold it hidden behind the flat map. The startup splash shows a growing tree until the map is ready. Bundled map build 2026-11-05m.
+- From 1.0.9: reorganized Satellite imagery and Elevation menus with Planetary Computer results and exact heights; right-click Identify surface geology works again.
 - Optional **Advanced configuration** on the welcome page lets you set terrain tile, WA DNR and memory cache limits, free disk-space reserve, terrain workers, and smoother panning (Off / Auto / On). Skip it to use the default setup. Reopen the welcome with the Start setup shortcut to change these later.
 - Includes the **Missoula** LiDAR preset and the Missoula scablands startup view near Medical Lake, WA.
 - ClearSkies icon, full-bleed map, overlaid window controls, no standard title/menu bars.
