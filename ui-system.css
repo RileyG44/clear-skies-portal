@@ -1803,8 +1803,13 @@ body.csp-redesign:not([data-csp-route="satellite"]) #status[data-kind="scenes"]{
     right:calc(var(--sheet-inset) + var(--safe-right));
     bottom:var(--sheet-inset);
     border-radius:var(--sheet-radius);
-    padding-bottom:var(--sheet-lift);
+    /* The lift used to be padding on the sheet. #cspWorkspace is height:100%
+       of the border box, so the padding clipped the last card and the sunken
+       fill showed through as a gray band under it. The scroller's own bottom
+       padding clears the home indicator. */
+    padding-bottom:0;
   }
+  .csp-glass.csp-round-screen body.csp-redesign :is(#cspWorkspace,#cspNav){height:auto}
 }
 
 /* ---- phone, collapsed: a floating search capsule ---------------------------

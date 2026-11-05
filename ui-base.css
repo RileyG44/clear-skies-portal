@@ -59,12 +59,12 @@
    with no way to reach it. viewport-fit=cover makes the safe-area strips part
    of the map canvas; controls choose their own safe-area inset. */
 html,body{height:100%;height:100dvh}
-/* An installed web app must not use that dvh height. iOS reports 100dvh short
-   of the screen, and an explicit height on a fixed element wins over the
-   bottom offset, so the page would stop above the home indicator. height:auto
-   lets inset:0 stretch to the viewport. Overflow stays hidden so a focused
-   control cannot scroll the document up into a browser-bar gap. */
-html.csp-standalone,html.csp-standalone body{position:fixed;inset:0;width:100%;height:auto;overflow:hidden}
+/* An installed web app must not pin html or body. iOS 26's layout viewport is
+   one status bar short of the display. A fixed root is sized to that short
+   viewport, and #app (fixed inside it) stops there, leaving the webview's own
+   white below the sheet. #app's inset:0 already fills the screen. Overflow
+   stays hidden so a focused control cannot scroll the document up. */
+html.csp-standalone,html.csp-standalone body{overflow:hidden}
 body{
   font:400 13px/1.5 -apple-system,BlinkMacSystemFont,"SF Pro Text","Helvetica Neue",Arial,sans-serif;
   background:var(--page); color:var(--ink);
