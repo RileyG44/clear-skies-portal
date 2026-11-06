@@ -606,7 +606,8 @@ pub fn layer_title(state: &AppState, id: &str) -> Option<(String, String)> {
         "terrain" => {
             let t = &state.terrain;
             let title = catalog().style(&t.style).map_or("Terrain".to_string(), |s| s.label.clone());
-            let detail = if t.source == "usgs1m" { "USGS 3.3 ft LiDAR" } else { "USGS 3DEP elevation" };
+            let detail =
+                if t.source == "usgs1m" { "Elevation · prefers USGS 3.3 ft detail" } else { "USGS 3DEP elevation" };
             Some((title, detail.into()))
         }
         _ => None,
@@ -707,19 +708,59 @@ fn overlay_page(route: &str, group: crate::overlays::Group, state: &AppState) ->
     json!({"route": route, "title": title, "description": description, "items": items})
 }
 
+/// Pages that do not have a native implementation in this demo.
+pub fn unavailable(route: &str) -> Option<Value> {
+    let (title, description) = route_info(route)?;
+    Some(json!({"route":route,"title":title,"description":description,"items":[
+        hint(&format!("{title} isn't in this build yet.")), hint(&description)
+    ]}))
+}
+
+/// Sources for the map content that is actually enabled. Terrain attribution
+/// covers its source tiers without claiming the overview is survey detail.
+pub fn map_sources(state: &AppState) -> Value {
+    let mut items = vec![
+        json!({"kind":"text","style":"row","title":"Reference basemap","detail":"Esri Canvas · Esri, HERE, Garmin, OpenStreetMap contributors"}),
+    ];
+    if state.terrain.style != "off" || state.elevation.on || state.elevation.bands_on() {
+        items.push(json!({"kind":"text","style":"row","title":"Elevation sources","detail":"USGS 3DEP · AWS Terrain Tiles overview"}));
+        if state.terrain.source == "auto" {
+            items.push(json!({"kind":"text","style":"row","title":"Regional detail where available","detail":"Washington DNR · Oregon DOGAMI"}));
+        }
+    }
+    for o in crate::overlays::OVERLAYS.iter().filter(|o| o.raster.is_some() && state.overlay(o.id).on) {
+        items.push(json!({"kind":"text","style":"row","title":o.name,"detail":o.via}));
+        if let Some(note) = o.note {
+            items.push(hint(note));
+        }
+    }
+    json!({"kind":"disclosure","ref":"settings:sources","title":"Map sources","items":items})
+}
+
+fn settings_page(state: &AppState) -> Value {
+    let (title, description) = route_info("settings").unwrap_or_default();
+    json!({"route":"settings","title":title,"description":description,"items":[
+        {"kind":"group","ref":"settings:engine","title":"Terrain engine","items":[
+            {"kind":"text","style":"row","title":"Secure terrain engine · built into this app"}
+        ]},
+        {"kind":"group","ref":"settings:sources:group","title":"About the map","items":[map_sources(state)]}
+    ]})
+}
+
 /// A page for `route`, from native state.
 pub fn page(route: &str, state: &AppState, fitted: &Fitted) -> Option<Value> {
-    let (title, description) = route_info(route)?;
+    route_info(route)?;
     Some(match route {
         "terrain" => terrain_page(state, fitted),
         "layers" => layers_page(state),
         "elevation" => crate::elevation::page(&state.elevation),
         "appearance" => crate::appearance::page(&state.appearance),
+        "settings" => settings_page(state),
         "labels" | "geology" | "conditions" | "past" => {
             let group = crate::overlays::Group::for_route(route)?;
             overlay_page(route, group, state)
         }
-        _ => json!({"route": route, "title": title, "description": description, "items": []}),
+        _ => unavailable(route)?,
     })
 }
 
@@ -732,6 +773,27 @@ pub fn colour_hex(value: &str) -> Option<String> {
 mod tests {
     use super::*;
 
+    #[test]
+    fn every_route_has_content_and_settings_only_advertises_supported_controls() {
+        let mut state = AppState::default();
+        state.set_overlay("wafaults", true);
+        for route in groups().as_array().unwrap().iter().flat_map(|g| g["routes"].as_array().unwrap()) {
+            let p = page(route["key"].as_str().unwrap(), &state, &Fitted::default()).unwrap();
+            assert!(!p["items"].as_array().unwrap().is_empty(), "{route}");
+        }
+        for route in ["satellite", "analyze", "markup", "export"] {
+            let p = page(route, &state, &Fitted::default()).unwrap();
+            assert_eq!(p["items"][0]["style"], "hint");
+            assert!(p["items"][0]["title"].as_str().unwrap().contains("isn't in this build yet"));
+        }
+        let p = page("settings", &state, &Fitted::default()).unwrap().to_string();
+        assert!(p.contains("built into this app") && p.contains("WA active faults"));
+        for unsupported in ["Manage terrain engine", "Smoother panning", "Reduce motion", "Image export"] {
+            assert!(!p.contains(unsupported));
+        }
+        state.terrain.source = "usgs1m".into();
+        assert!(!layer_title(&state, "terrain").unwrap().1.contains("LiDAR"));
+    }
     #[test]
     fn overlay_pages_keep_sources_defaults_and_unavailable_rows_honest() {
         let mut state = AppState::default();
