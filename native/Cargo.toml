@@ -1,6 +1,6 @@
 [workspace]
 resolver = "3"
-members = ["crates/csk-core", "crates/csk-store", "crates/csk-engine", "crates/csk-cli", "crates/csk-ffi", "crates/csk-science", "crates/csk-gpu", "crates/csk-shader-tool"]
+members = ["crates/csk-core", "crates/csk-store", "crates/csk-engine", "crates/csk-cli", "crates/csk-ffi", "crates/csk-science", "crates/csk-gpu", "crates/csk-map", "crates/csk-shader-tool"]
 
 [workspace.package]
 edition = "2024"

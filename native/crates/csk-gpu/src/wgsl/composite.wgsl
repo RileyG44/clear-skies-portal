@@ -15,7 +15,7 @@ struct Draw {
     // store texel (<1 magnifies a coarser ancestor, >1 averages finer data).
     origin: vec2<f32>,
     scale: f32,
-    rank: f32,
+    pad: f32,
     // Covered slot texels [x0,x1) x [y0,y1).
     rect: vec4<u32>,
     layer: u32,
@@ -32,7 +32,7 @@ struct Job {
 }
 
 @group(0) @binding(0) var pool: texture_2d_array<f32>;
-@group(0) @binding(1) var store: texture_storage_2d<rg32float, write>;
+@group(0) @binding(1) var store: texture_storage_2d<r32float, write>;
 @group(0) @binding(2) var<storage, read> jobs: array<Job>;
 @group(0) @binding(3) var<storage, read> draws: array<Draw>;
 
@@ -115,7 +115,7 @@ fn sample(d: Draw, t: vec2<u32>) -> vec2<f32> {
 fn main(@builtin(global_invocation_id) id: vec3<u32>) {
     let job = jobs[id.z];
     let t = id.xy;
-    var result = vec2<f32>(INVALID, 0.0);
+    var result = INVALID;
     for (var i = job.count; i > 0u; i--) {
         let d = draws[job.first + i - 1u];
         if any(t < d.rect.xy) || any(t >= d.rect.zw) {
@@ -123,9 +123,9 @@ fn main(@builtin(global_invocation_id) id: vec3<u32>) {
         }
         let s = sample(d, t);
         if s.y > 0.0 {
-            result = vec2<f32>(s.x, d.rank);
+            result = s.x;
             break;
         }
     }
-    textureStore(store, vec2<i32>(job.origin + t), vec4<f32>(result, 0.0, 0.0));
+    textureStore(store, vec2<i32>(job.origin + t), vec4<f32>(result, 0.0, 0.0, 0.0));
 }

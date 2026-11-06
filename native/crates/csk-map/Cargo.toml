@@ -1,0 +1,17 @@
+[package]
+name = "csk-map"
+version = "0.1.0"
+description = "The native map: camera, terrain tile scheduling, and presentation"
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+publish = false
+
+[dependencies]
+csk-core = { path = "../csk-core" }
+csk-engine = { path = "../csk-engine" }
+csk-gpu = { path = "../csk-gpu" }
+tokio = { version = "1", features = ["rt", "time"] }
+
+[lints]
+workspace = true

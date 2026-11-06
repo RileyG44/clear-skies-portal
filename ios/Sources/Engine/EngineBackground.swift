@@ -114,8 +114,9 @@ final class EngineBackground {
 
     private func applyExecution() {
         guard let runtime else { return }
+        // Zero where unsupported (the simulator): keep the engine's own cap.
         let available = os_proc_available_memory()
-        csk_engine_set_memory_limit(runtime.handle, min(256 << 20, available / 2))
+        if available > 0 { csk_engine_set_memory_limit(runtime.handle, available / 2) }
         let granted = foreground || grace != .invalid || !grants.isEmpty
         csk_engine_set_work_allowed(runtime.handle, granted && !memoryLimited && ProcessInfo.processInfo.thermalState != .critical)
     }

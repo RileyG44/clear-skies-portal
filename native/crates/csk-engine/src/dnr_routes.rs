@@ -113,63 +113,95 @@ fn run(engine: &Arc<Engine>) {
 }
 
 /// `/api/wadnr/elev/<z>/<x>/<y>.png` or `/api/elev32/wadnr/<z>/<x>/<y>`.
+/// A DNR elevation tile from local prepared rasters (or the derived cache).
+pub struct Lookup {
+    pub state: Ensure,
+    pub revision: i64,
+    pub result: Found,
+}
+
+pub enum Found {
+    /// 256x256 metres, NaN where invalid, with coverage/groundRes/sources.
+    Grid { grid: Vec<f32>, meta: Value, hit: bool },
+    /// Local rasters exist but sampling them failed; retryable.
+    SampleFailed(String),
+    /// No local raster answers this tile (see `state` for acquisition).
+    Missing,
+}
+
+/// Looks a tile up locally. `acquire` starts acquisition for its cell when
+/// the catalogue has coverage; the map passes false, since automatic DNR
+/// acquisition needs an estimate and consent (ARCHITECTURE §4.4).
+pub async fn lookup(engine: &Arc<Engine>, acquire: bool, z: u8, x: u32, y: u32) -> Lookup {
+    let state = if acquire { engine.dnr_ensure(z, x, y).await } else { Ensure::Ready };
+    let revision = engine.dnr_local.revision();
+    let key = format!("dnr:v2:{revision}:{z}/{x}/{y}");
+    let hit = engine.store.get(&key, TILE_TTL).ok().flatten();
+    let cached: Option<(Vec<f32>, Value)> = hit.as_ref().and_then(|e| {
+        let (_, _, grid) = unpack_elevation(&e.body).ok()?;
+        Some((grid, e.meta.as_deref().and_then(|m| serde_json::from_str(m).ok()).unwrap_or(Value::Null)))
+    });
+    if let Some((grid, meta)) = cached {
+        return Lookup { state, revision, result: Found::Grid { grid, meta, hit: true } };
+    }
+    if engine.dnr_local.files().is_empty() {
+        return Lookup { state, revision, result: Found::Missing };
+    }
+    let result = match engine.dnr_sample(z, x, y).await {
+        Err(e) => Found::SampleFailed(e),
+        Ok(None) => Found::Missing,
+        Ok(Some((grid, coverage, ground, sources))) => {
+            let meta = json!({"coverage": (coverage * 1000.0).round() / 1000.0, "groundRes": (ground * 100.0).round() / 100.0, "sources": sources});
+            let packed = pack_elevation(256, 256, &grid);
+            let _ = engine.store.put(&key, Kind::Derived, 200, elev32::MEDIA_TYPE, Some(&meta.to_string()), &packed);
+            Found::Grid { grid, meta, hit: false }
+        }
+    };
+    Lookup { state, revision, result }
+}
+
 pub async fn elevation(engine: &Arc<Engine>, req: &Request, z: u8, x: u32, y: u32, float32: bool) -> Response {
     if z > 18 {
         return Response::json(400, &json!({"error": "bad tile coordinates"}));
     }
-    let state = if req.param("acquire") == Some("0") { Ensure::Ready } else { engine.dnr_ensure(z, x, y).await };
-    let revision = engine.dnr_local.revision();
-    let key = format!("dnr:v2:{revision}:{z}/{x}/{y}");
-    let hit = engine.store.get(&key, TILE_TTL).ok().flatten();
-    let mut out: Option<(Vec<f32>, Value)> = hit.as_ref().and_then(|e| {
-        let (_, _, grid) = unpack_elevation(&e.body).ok()?;
-        Some((grid, e.meta.as_deref().and_then(|m| serde_json::from_str(m).ok()).unwrap_or(Value::Null)))
-    });
-    if out.is_none() && !engine.dnr_local.files().is_empty() {
-        let sampled = match engine.dnr_sample(z, x, y).await {
-            Ok(v) => v,
-            Err(e) => {
-                return Response::json(503, &json!({"state": "error", "error": e}))
-                    .header("Cache-Control", "no-store")
-                    .header("Retry-After", "5");
-            }
-        };
-        out = sampled.map(|(grid, coverage, ground, sources)| {
-            let meta = json!({"coverage": (coverage * 1000.0).round() / 1000.0, "groundRes": (ground * 100.0).round() / 100.0, "sources": sources});
-            let packed = pack_elevation(256, 256, &grid);
-            let _ = engine.store.put(&key, Kind::Derived, 200, elev32::MEDIA_TYPE, Some(&meta.to_string()), &packed);
-            (grid, meta)
-        });
-    }
+    let Lookup { state, revision, result } = lookup(engine, req.param("acquire") != Some("0"), z, x, y).await;
     let base = |r: Response, source: &str| {
         r.header("Cache-Control", "no-store")
             .header("X-DNR-Status", state.name())
             .header("X-DNR-Revision", revision.to_string())
             .header("X-Elevation-Source", source)
     };
-    let Some((grid, meta)) = out else {
-        return match &state {
-            Ensure::Pending => base(
-                Response::json(
-                    202,
-                    &json!({"state": "pending", "revision": revision, "acquisition": engine.dnr_status()}),
-                ),
-                "pending",
-            )
-            .header("Retry-After", "5"),
-            Ensure::Error(e) => {
-                base(Response::json(503, &json!({"state": "error", "error": e, "revision": revision})), "unknown")
-                    .header("Retry-After", "30")
-            }
-            _ => {
-                let r = if float32 {
-                    Response::new(204, elev32::MEDIA_TYPE, Vec::new())
-                } else {
-                    Response::new(200, "image/png", raster::transparent_png().to_vec())
-                };
-                base(r, "none").header("X-Coverage", "none")
-            }
-        };
+    let (grid, meta, hit) = match result {
+        Found::Grid { grid, meta, hit } => (grid, meta, hit),
+        Found::SampleFailed(e) => {
+            return Response::json(503, &json!({"state": "error", "error": e}))
+                .header("Cache-Control", "no-store")
+                .header("Retry-After", "5");
+        }
+        Found::Missing => {
+            return match &state {
+                Ensure::Pending => base(
+                    Response::json(
+                        202,
+                        &json!({"state": "pending", "revision": revision, "acquisition": engine.dnr_status()}),
+                    ),
+                    "pending",
+                )
+                .header("Retry-After", "5"),
+                Ensure::Error(e) => {
+                    base(Response::json(503, &json!({"state": "error", "error": e, "revision": revision})), "unknown")
+                        .header("Retry-After", "30")
+                }
+                _ => {
+                    let r = if float32 {
+                        Response::new(204, elev32::MEDIA_TYPE, Vec::new())
+                    } else {
+                        Response::new(200, "image/png", raster::transparent_png().to_vec())
+                    };
+                    base(r, "none").header("X-Coverage", "none")
+                }
+            };
+        }
     };
     let body = if float32 {
         Response::new(200, elev32::MEDIA_TYPE, elev32::encode(256, 256, &grid))
@@ -180,7 +212,7 @@ pub async fn elevation(engine: &Arc<Engine>, req: &Request, z: u8, x: u32, y: u3
         .header("X-Coverage", meta["coverage"].to_string())
         .header("X-Ground-Res", meta["groundRes"].to_string())
         .header("X-DNR-Sources", encode_component(&meta["sources"].to_string()))
-        .header("X-Cache", if hit.is_some() { "hit" } else { "miss" })
+        .header("X-Cache", if hit { "hit" } else { "miss" })
 }
 
 /// `POST /api/wadnr/warm {bbox}`: acquire every z16 cell of a view.

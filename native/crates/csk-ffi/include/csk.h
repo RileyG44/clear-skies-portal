@@ -41,6 +41,8 @@ typedef struct CskEngine CskEngine;
  */
 typedef struct CskFetch CskFetch;
 
+typedef struct CskMap CskMap;
+
 /**
  * A request the platform should make.
  */
@@ -130,6 +132,60 @@ typedef struct CskResponse {
 } CskResponse;
 
 typedef void (*CskRespond)(void *context, const struct CskResponse *response, struct CskBody *owner);
+
+/**
+ * The camera, in degrees.
+ */
+typedef struct CskCamera {
+  double lon;
+  double lat;
+  double zoom;
+  /**
+   * Clockwise from north.
+   */
+  double bearing;
+} CskCamera;
+
+/**
+ * The platform's frame loop.
+ */
+typedef struct CskWake {
+  void *context;
+  void (*wake)(void *context);
+  void (*release)(void *context);
+} CskWake;
+
+/**
+ * What a frame did.
+ */
+typedef struct CskMapFrame {
+  /**
+   * A new frame was presented.
+   */
+  bool presented;
+  /**
+   * Keep the display link running: an animation is in progress or the
+   * frame was skipped. Otherwise it may pause until `wake`.
+   */
+  bool again;
+  /**
+   * The frame failed (e.g. memory unavailable); the next may succeed.
+   */
+  bool failed;
+  /**
+   * Share of visible display tiles with terrain, 0-1.
+   */
+  double coverage;
+  /**
+   * Source tiles resident on the GPU, and tile requests in flight.
+   */
+  uint32_t resident;
+  uint32_t in_flight;
+  /**
+   * Why the frame failed, NUL-terminated (empty unless `failed`).
+   */
+  char error[128];
+} CskMapFrame;
 
 #ifdef __cplusplus
 extern "C" {
@@ -229,6 +285,87 @@ void csk_fetch_fail(struct CskFetch *token, int32_t code, const char *message);
  * The engine version, static.
  */
 const char *csk_version(void);
+
+/**
+ * Creates a map presenting into `metal_layer` (a `CAMetalLayer *`, which
+ * the map retains) sized `css_width` x `css_height` points at `dpr` pixels
+ * per point. Returns NULL (and releases `wake`) if no GPU can drive the
+ * layer or memory is unavailable, writing why into `error` (`error_len`
+ * bytes, NUL-terminated; may be NULL).
+ */
+struct CskMap *csk_map_new(const struct CskEngine *engine,
+                           void *metal_layer,
+                           struct CskCamera camera,
+                           double css_width,
+                           double css_height,
+                           double dpr,
+                           struct CskWake wake,
+                           char *error,
+                           size_t error_len);
+
+/**
+ * Frees the map. Call before `csk_engine_free`.
+ */
+void csk_map_free(struct CskMap *map);
+
+/**
+ * The layer's size in points and its scale.
+ */
+void csk_map_resize(const struct CskMap *map, double css_width, double css_height, double dpr);
+
+/**
+ * A finger touched down: momentum and animations stop.
+ */
+void csk_map_stop(const struct CskMap *map);
+
+/**
+ * The content follows a finger by (dx, dy) points.
+ */
+void csk_map_pan(const struct CskMap *map, double dx, double dy);
+
+/**
+ * Zooms by `levels` (log2 of the pinch scale) about a point.
+ */
+void csk_map_zoom(const struct CskMap *map, double levels, double x, double y);
+
+/**
+ * Turns the content clockwise by `degrees` about a point.
+ */
+void csk_map_rotate(const struct CskMap *map, double degrees, double x, double y);
+
+/**
+ * Momentum as fingers lift: pan points/s and zoom levels/s about (x, y).
+ */
+void csk_map_fling(const struct CskMap *map,
+                   double now,
+                   double vx,
+                   double vy,
+                   double zoom_per_second,
+                   double x,
+                   double y);
+
+/**
+ * Eases the camera to `to` over `duration` seconds (0 jumps).
+ */
+void csk_map_ease_to(const struct CskMap *map, double now, struct CskCamera to, double duration);
+
+/**
+ * Eases zoom and bearing to `to`'s while the world point under (x, y)
+ * stays there (double-tap zoom); `to`'s centre is ignored.
+ */
+void csk_map_ease_around(const struct CskMap *map,
+                         double now,
+                         struct CskCamera to,
+                         double duration,
+                         double x,
+                         double y);
+
+struct CskCamera csk_map_camera(const struct CskMap *map);
+
+/**
+ * One display-link tick for the frame shown at `now`.
+ */
+struct CskMapFrame csk_map_frame(const struct CskMap *map, double now);
 
 #ifdef __cplusplus
 }  // extern "C"

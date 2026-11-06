@@ -12,7 +12,7 @@ struct _mslBufferSizes {
 struct Draw {
     metal::float2 origin;
     float scale;
-    float rank;
+    float pad;
     metal::uint4 rect;
     uint layer;
     uint pad0_;
@@ -276,7 +276,7 @@ struct main_Input {
 , device type_9 const& draws [[buffer(3)]]
 , constant _mslBufferSizes& _buffer_sizes [[buffer(30)]]
 ) {
-    metal::float2 result = metal::float2(-300000000000000000000000000000000000000.0, 0.0);
+    float result = INVALID;
     uint i = {};
     bool local = {};
     Job job = jobs[id.z];
@@ -288,35 +288,35 @@ struct main_Input {
         if (metal::all(loop_bound_6 == uint2(0u))) { break; }
         loop_bound_6 -= uint2(loop_bound_6.y == 0u, 1u);
         if (!loop_init_6) {
-            uint _e44 = i;
-            i = _e44 - 1u;
+            uint _e40 = i;
+            i = _e40 - 1u;
         }
         loop_init_6 = false;
-        uint _e12 = i;
-        if (_e12 > 0u) {
+        uint _e10 = i;
+        if (_e10 > 0u) {
         } else {
             break;
         }
         {
-            uint _e17 = i;
-            Draw d_1 = draws[(job.first + _e17) - 1u];
+            uint _e15 = i;
+            Draw d_1 = draws[(job.first + _e15) - 1u];
             if (!(metal::any(t_2 < d_1.rect.xy))) {
                 local = metal::any(t_2 >= d_1.rect.zw);
             } else {
                 local = true;
             }
-            bool _e35 = local;
-            if (_e35) {
+            bool _e33 = local;
+            if (_e33) {
                 continue;
             }
-            metal::float2 _e36 = sample(d_1, t_2, pool);
-            if (_e36.y > 0.0) {
-                result = metal::float2(_e36.x, d_1.rank);
+            metal::float2 _e34 = sample(d_1, t_2, pool);
+            if (_e34.y > 0.0) {
+                result = _e34.x;
                 break;
             }
         }
     }
-    metal::float2 _e50 = result;
-    store.write(metal::float4(_e50, 0.0, 0.0), metal::uint2(static_cast<metal::int2>(job.origin + t_2)));
+    float _e46 = result;
+    store.write(metal::float4(_e46, 0.0, 0.0, 0.0), metal::uint2(static_cast<metal::int2>(job.origin + t_2)));
     return;
 }
