@@ -178,6 +178,7 @@ version = "0.1.0"
 dependencies = [
  "cbindgen",
  "csk-engine",
+ "csk-store",
  "tokio",
 ]
 
@@ -193,6 +194,7 @@ name = "csk-store"
 version = "0.1.0"
 dependencies = [
  "csk-core",
+ "fs2",
  "rusqlite",
  "tempfile",
  "thiserror",

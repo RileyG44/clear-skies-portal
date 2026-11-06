@@ -622,7 +622,7 @@ mod tests {
             }
         }
         let dir = tempfile::tempdir().unwrap();
-        let engine = Engine::new(
+        let engine = Engine::for_test(
             crate::Config {
                 cache_dir: dir.path().into(),
                 data_dir: None,

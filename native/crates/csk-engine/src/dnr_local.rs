@@ -228,6 +228,14 @@ fn download_url(dataset: i64, shape: &str) -> String {
     )
 }
 
+fn transfer_claim(url: &str) -> String {
+    use sha2::{Digest, Sha256};
+    format!(
+        "transfer:{}",
+        Sha256::digest(format!("GET\n{url}").as_bytes()).iter().map(|b| format!("{b:02x}")).collect::<String>()
+    )
+}
+
 impl DnrLocal {
     pub fn open(dir: PathBuf, store: &csk_store::Store) -> Self {
         let _ = std::fs::create_dir_all(&dir);
@@ -508,7 +516,8 @@ impl Engine {
                 return Err("engine stopped".into());
             }
             match self.dnr_download_plan(job, &shape).await? {
-                Some(bytes) => bytes.saturating_mul(2),
+                // A compressed query estimate cannot bound ZIP expansion.
+                Some(_) => MAX_ARCHIVE,
                 None => {
                     let _ = std::fs::remove_dir_all(&staging);
                     return Ok(());
@@ -516,23 +525,24 @@ impl Engine {
             }
         };
         let protected: u64 = local.files().iter().filter(|f| intersects(&f.bounds, &job.bbox)).map(|f| f.bytes).sum();
-        if restored.is_some() && protected.saturating_add(output_bytes) > MAX_STORE {
+        if protected.saturating_add(output_bytes) > MAX_STORE {
             return Err("DNR source preparation exceeds the local store budget".into());
         }
-        let available = fs2::available_space(&local.dir).map_err(|e| e.to_string())?;
-        let volume = fs2::total_space(&local.dir).map_err(|e| e.to_string())?;
-        let reserve = (volume / 20).clamp(2 << 30, 8 << 30);
-        if available < output_bytes.saturating_add(reserve) {
-            let _ = std::fs::remove_dir_all(&staging);
-            return Err("Not enough device storage to prepare this DNR area".into());
+        let output = self.disk.claim(output_bytes).map_err(|e| e.to_string())?;
+        let transfer = transfer_claim(&download_url);
+        if restored.is_none() {
+            // The platform journal uses this exact URL identity, so Rust and
+            // URLSession update one archive claim rather than claiming twice.
+            self.disk.budget.reserve(&transfer, MAX_ARCHIVE).map_err(|e| e.to_string())?;
         }
-        let outcome = self.dnr_stage(job, &shape, &staging, &known, restored).await;
+        let outcome = self.dnr_stage(job, &shape, &staging, &known, restored, output).await;
         let _ = std::fs::remove_dir_all(&staging);
         let added = match outcome {
             Ok(files) => files,
             Err(e) => {
                 if !self.work.is_stopped() {
                     self.upstream.download_consumed(&download_url);
+                    let _ = self.disk.budget.reserve(&transfer, 0);
                 }
                 return Err(e);
             }
@@ -571,6 +581,7 @@ impl Engine {
         local.state.lock().unwrap_or_else(|e| e.into_inner()).revision = revision;
         self.dnr_evict(&job.bbox);
         self.upstream.download_consumed(&download_url);
+        let _ = self.disk.budget.reserve(&transfer, 0);
         Ok(())
     }
 
@@ -624,6 +635,7 @@ impl Engine {
         staging: &Path,
         known: &[LocalFile],
         restored: Option<FetchResponse>,
+        output: Arc<csk_store::disk::Lease>,
     ) -> Result<Vec<LocalFile>, String> {
         let local = &self.dnr_local;
         let zip_path = staging.join("download.zip");
@@ -658,6 +670,7 @@ impl Engine {
         if r.status != 200 || !(media.contains("zip") || media.contains("octet-stream")) {
             return Err(format!("DNR elevation download HTTP {}", r.status));
         }
+        self.disk.budget.reserve(&transfer_claim(&download_url(job.dataset, shape)), 0).map_err(|e| e.to_string())?;
         if !self.work.checkpoint().await {
             return Err("engine stopped".into());
         }
@@ -665,9 +678,15 @@ impl Engine {
         let known_paths: Vec<String> = known.iter().map(|f| f.archive_path.clone()).collect();
         let dir = staging.to_path_buf();
         let work = self.work.clone();
-        let extracted = tokio::task::spawn_blocking(move || extract_controlled(&zip_path, &dir, &known_paths, &work))
-            .await
-            .map_err(|_| "DNR extraction stopped".to_owned())??;
+        let extracted = tokio::task::spawn_blocking(move || {
+            let result = extract_controlled(&zip_path, &dir, &known_paths, &work);
+            // Every output byte now occupies the volume; only future growth
+            // belongs in the ledger. Keep the lease until blocking I/O ends.
+            output.materialized().map_err(|e| e.to_string())?;
+            result
+        })
+        .await
+        .map_err(|_| "DNR extraction stopped".to_owned())??;
         if extracted.is_empty() && known.is_empty() {
             return Err("DNR download contained no readable elevation files".into());
         }
@@ -1247,7 +1266,7 @@ mod tests {
             usgs_scope: Some(vec![]),
         };
         let bytes = archive(&[("offline.tif", include_bytes!("../../../fixtures/tiff/usgs-tiled-lzw-fp.tif"))]);
-        let engine = Engine::new(config.clone(), Arc::new(RestoredArchive(bytes.clone()))).unwrap();
+        let engine = Engine::for_test(config.clone(), Arc::new(RestoredArchive(bytes.clone()))).unwrap();
         let job = Job {
             id: "offline".into(),
             bbox: [-124.0, 46.0, -121.0, 49.0],
@@ -1263,7 +1282,7 @@ mod tests {
             })
             .unwrap();
         drop(engine);
-        let engine = Engine::new(config, Arc::new(RestoredArchive(bytes))).unwrap();
+        let engine = Engine::for_test(config, Arc::new(RestoredArchive(bytes))).unwrap();
         let restored = engine.dnr_local.state.lock().unwrap().queue.pop().unwrap();
         assert_eq!(restored.id, job.id);
         // Exercise the exact restore and ingest boundary without depending on
@@ -1280,7 +1299,10 @@ mod tests {
             .unwrap()
             .unwrap();
         assert!(archive_output_size(&staging.join("download.zip")).unwrap() > 0);
-        let files = engine.dnr_stage(&restored, "{}", &staging, &[], Some(response)).await.unwrap();
+        let files = engine
+            .dnr_stage(&restored, "{}", &staging, &[], Some(response), engine.disk.claim(MAX_ARCHIVE).unwrap())
+            .await
+            .unwrap();
         assert_eq!(files.len(), 1);
         assert_eq!(files[0].project, "Offline");
     }
@@ -1295,9 +1317,11 @@ mod tests {
             cache_budget: 1 << 20,
             usgs_scope: Some(vec![]),
         };
-        let engine =
-            Engine::new(config.clone(), Arc::new(Portal(archive(&[("valid.tif", fixture), ("bad.tif", b"bad TIFF")]))))
-                .unwrap();
+        let engine = Engine::for_test(
+            config.clone(),
+            Arc::new(Portal(archive(&[("valid.tif", fixture), ("bad.tif", b"bad TIFF")]))),
+        )
+        .unwrap();
         let job = Job {
             id: "test".into(),
             bbox: [-124.0, 46.0, -121.0, 49.0],
@@ -1308,13 +1332,16 @@ mod tests {
         };
         let staging = engine.dnr_local.dir.join("staging-test");
         std::fs::create_dir(&staging).unwrap();
-        assert!(engine.dnr_stage(&job, "{}", &staging, &[], None).await.is_err());
+        assert!(
+            engine.dnr_stage(&job, "{}", &staging, &[], None, engine.disk.claim(MAX_ARCHIVE).unwrap()).await.is_err()
+        );
         assert!(std::fs::read_dir(&engine.dnr_local.dir).unwrap().all(|e| e.unwrap().path().is_dir()));
         drop(engine);
 
-        let engine = Engine::new(config, Arc::new(Portal(archive(&[("valid.tif", fixture)])))).unwrap();
+        let engine = Engine::for_test(config, Arc::new(Portal(archive(&[("valid.tif", fixture)])))).unwrap();
         std::fs::create_dir_all(&staging).unwrap();
-        let files = engine.dnr_stage(&job, "{}", &staging, &[], None).await.unwrap();
+        let files =
+            engine.dnr_stage(&job, "{}", &staging, &[], None, engine.disk.claim(MAX_ARCHIVE).unwrap()).await.unwrap();
         let f = &files[0];
         assert_eq!(f.vertical_meters, US_FOOT);
         assert!(f.vertical_basis.contains("1607"));
