@@ -15,9 +15,9 @@ const base=process.argv[2]||'http://127.0.0.1:8765/';
   await page.locator('[data-route="terrain"]').click();await page.waitForTimeout(500);
   const sample=()=>page.evaluate(()=>new Promise(resolve=>requestAnimationFrame(()=>{
    const sheet=document.getElementById('side'),s=getComputedStyle(sheet),r=sheet.getBoundingClientRect();
-   const clip=s.clipPath.startsWith('inset(')?parseFloat(s.clipPath.slice(6))||0:0;
+   const viewport=document.getElementById('cspSheetViewport'),v=viewport?.classList.contains('csp-sheet-viewport')?viewport.getBoundingClientRect():r;
    const head=document.getElementById('cspWorkspaceHeader').getBoundingClientRect();
-   resolve({height:r.height,visible:r.height-clip,top:r.top+clip,bottom:r.bottom,head:head.top,holding:sheet.classList.contains('csp-sheet-clip')});
+   resolve({height:r.height,visible:v.bottom-r.top,top:r.top,bottom:v.bottom,head:head.top,holding:sheet.classList.contains('csp-sheet-clip')});
   })));
   const action=label=>page.evaluate(label=>[...document.querySelectorAll('.csp-sheet-actions button')].find(b=>b.textContent===label).click(),label);
   await action('Expand');await page.waitForTimeout(70);const first=await sample();
@@ -31,7 +31,7 @@ const base=process.argv[2]||'http://127.0.0.1:8765/';
   // Reversing while moving must start from the painted position.
   const reverse=await page.evaluate(()=>{
    const sheet=document.getElementById('side');
-   const visible=()=>{const clip=getComputedStyle(sheet).clipPath;return sheet.offsetHeight-(clip.startsWith('inset(')?parseFloat(clip.slice(6))||0:0)};
+   const visible=()=>document.getElementById('cspSheetViewport').getBoundingClientRect().bottom-sheet.getBoundingClientRect().top;
    const before=visible();[...document.querySelectorAll('.csp-sheet-actions button')].find(b=>b.textContent==='Collapse').click();
    return {before,after:visible()};
   });

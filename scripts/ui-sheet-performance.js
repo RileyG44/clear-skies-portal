@@ -60,8 +60,9 @@ const base=process.argv[2]||'http://127.0.0.1:8765/';
     });
     performance.mark(`sheet-${i}-end`);
     const sheet=document.getElementById('side'),s=getComputedStyle(sheet),r=sheet.getBoundingClientRect();
-    const clip=s.clipPath.startsWith('inset(')?parseFloat(s.clipPath.slice(6)):0;
-    results.push({action,gaps:samples,visibleHeight:r.height-(clip||0),boxHeight:r.height,clip:s.clipPath,holding:sheet.classList.contains('csp-sheet-clip')});
+    const viewport=document.getElementById('cspSheetViewport');
+    const bottom=viewport?.classList.contains('csp-sheet-viewport')?viewport.getBoundingClientRect().bottom:r.bottom;
+    results.push({action,gaps:samples,visibleHeight:bottom-r.top,boxHeight:r.height,holding:sheet.classList.contains('csp-sheet-clip')});
    }
    return results;
   });

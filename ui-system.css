@@ -3722,6 +3722,8 @@ body.csp-redesign .ls-layer-label .menu-section-title{margin:0}
    bar and retain the same glass through home and pushed pages.
    Detent motion clips a frozen sheet. Animating height or bottom under the
    backdrop filter relayouts the map blur on every frame. */
+#cspSheetViewport{display:contents}
+@media(max-width:760px){html{-webkit-text-size-adjust:100%;text-size-adjust:100%}}
 .csp-close-menu{display:none}
 @media(max-width:760px) and (orientation:portrait){
   .csp-glass body.csp-redesign.csp-redesign #side,
@@ -3732,8 +3734,10 @@ body.csp-redesign .ls-layer-label .menu-section-title{margin:0}
     transition:transform .35s cubic-bezier(.28,.9,.32,1.08),opacity .24s ease;
   }
   .csp-glass body.csp-redesign.csp-redesign.csp-sheet-dragging #side{transition:none}
-  .csp-glass body.csp-redesign.csp-redesign #side.csp-sheet-clip{will-change:clip-path}
-  .csp-glass body.csp-redesign.csp-redesign #side.csp-sheet-clip > :is(#cspNav,#cspWorkspace){will-change:transform}
+  #cspSheetViewport.csp-sheet-viewport{display:block;position:absolute;overflow:clip;contain:strict;pointer-events:none;z-index:1200}
+  .csp-glass body.csp-redesign.csp-redesign #cspSheetViewport.csp-sheet-viewport #side.csp-sheet-clip{
+    inset:0;width:100%!important;max-width:none;min-width:0;pointer-events:auto;will-change:transform;
+  }
   .csp-glass body.csp-redesign.csp-redesign[data-csp-detent="large"] #side{
     height:max(160px,calc(var(--sheet-large) - var(--sheet-keyboard,0px)));
   }

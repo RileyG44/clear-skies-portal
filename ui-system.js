@@ -2160,67 +2160,48 @@ const syncGrabber=()=>{
   grabber.setAttribute("aria-label",peeking()?"Show panel":"Resize panel");
   grabber.setAttribute("aria-expanded",String(currentDetent()==="large"));
 };
-let sheetMotionGen=0,sheetMotionFrame=0;
+const sheetViewport=document.createElement("div");sheetViewport.id="cspSheetViewport";
+side.before(sheetViewport);sheetViewport.append(side);
+let sheetMotionGen=0,sheetAnimation=null,sheetMotionTimer=0;
 const sheetMotionReduced=()=>matchMedia("(prefers-reduced-motion: reduce)").matches||document.documentElement.classList.contains("csp-reduce-motion");
-const sheetClipPx=()=>{
-  const clip=getComputedStyle(side).clipPath;
-  return clip.startsWith("inset(")?parseFloat(clip.slice(6))||0:0;
+const sheetOffset=()=>{
+  if(!side.classList.contains("csp-sheet-clip")) return 0;
+  const transform=getComputedStyle(side).transform;
+  return transform==="none"?0:new DOMMatrixReadOnly(transform).m42;
 };
-const visibleSheetHeight=()=>side.getBoundingClientRect().height-sheetClipPx();
-const sheetContents=[nav,workspace];
-let sheetClipRadii="";
-const clipAt=px=>`inset(${Math.max(0,px)}px 0px 0px 0px round ${sheetClipRadii})`;
-const prepareSheetClip=()=>{
+const visibleSheetHeight=()=>side.getBoundingClientRect().height-sheetOffset();
+const prepareSheetClip=height=>{
   const style=getComputedStyle(side);
-  sheetClipRadii=[style.borderTopLeftRadius,style.borderTopRightRadius,style.borderBottomRightRadius,style.borderBottomLeftRadius].join(" ");
+  if(!sheetViewport.classList.contains("csp-sheet-viewport"))
+    for(const property of ["left","right","bottom"]) sheetViewport.style[property]=style[property];
+  sheetViewport.style.height=`${height}px`;
+  sheetViewport.style.borderRadius=`0 0 ${style.borderBottomRightRadius} ${style.borderBottomLeftRadius}`;
+  sheetViewport.classList.add("csp-sheet-viewport");
   side.classList.add("csp-sheet-clip");
 };
-const paintSheetClip=px=>{
-  side.style.clipPath=clipAt(px);
-  for(const content of sheetContents) content.style.transform=`translate3d(0,${px}px,0)`;
+const paintSheetClip=px=>{side.style.transform=`translate3d(0,${px}px,0)`};
+const cancelSheetAnimation=()=>{
+  clearTimeout(sheetMotionTimer);sheetAnimation?.cancel();sheetAnimation=null;
 };
-const cancelSheetAnimations=()=>{
-  cancelAnimationFrame(sheetMotionFrame);sheetMotionFrame=0;
-};
-// The same easing as the native-style CSS spring. Solve the monotonic x curve
-// once per frame; no geometry or computed-style reads are needed while moving.
-const sheetEase=progress=>{
-  const curve=(t,a,b)=>3*(1-t)*(1-t)*t*a+3*(1-t)*t*t*b+t*t*t;
-  let low=0,high=1;
-  for(let i=0;i<12;i++){
-    const mid=(low+high)/2;
-    if(curve(mid,.28,.32)<progress) low=mid;else high=mid;
-  }
-  return curve((low+high)/2,.9,1.08);
-};
-// The blurred border box stays fixed throughout a spring/drag. Only a rounded
-// top clip and the content translations move. Animate those compositor
-// properties directly: an inherited animated custom property would restyle
-// the entire control tree every frame, even with a fixed border box. One frame
-// callback writes the clip and translation together: WebKit otherwise samples
-// a compositor transform a frame ahead of its rounded clip animation.
+// A stationary rounded viewport supplies the bottom corners. The full-height
+// glass surface moves behind it, so the browser animates one transform without
+// relaying out the controls or resizing the backdrop-filter on each frame.
 const dropSheetHold=()=>{
-  cancelSheetAnimations();
-  sheetSpring=false;
+  cancelSheetAnimation();sheetSpring=false;
   side.style.transition="none";
-  side.classList.remove("csp-sheet-clip");
-  side.style.removeProperty("clip-path");
-  side.style.removeProperty("height");
-  for(const content of sheetContents) content.style.removeProperty("transform");
-  void side.offsetHeight;
-  side.style.transition="";
+  side.classList.remove("csp-sheet-clip");sheetViewport.classList.remove("csp-sheet-viewport");
+  side.style.removeProperty("height");side.style.removeProperty("transform");
+  sheetViewport.removeAttribute("style");
+  void side.offsetHeight;side.style.transition="";
   trackSheetHeight(side.offsetHeight);
 };
 const finishSheetSpring=generation=>{
   if(generation!==sheetMotionGen||document.body.classList.contains("csp-sheet-dragging")) return;
-  sheetMotionGen++;
-  dropSheetHold();
+  sheetMotionGen++;dropSheetHold();
 };
 const stopSheetSpring=()=>{
-  const clip=sheetClipPx();
-  sheetMotionGen++;
-  cancelSheetAnimations();
-  if(side.classList.contains("csp-sheet-clip")) paintSheetClip(clip);
+  const offset=sheetOffset();sheetMotionGen++;cancelSheetAnimation();
+  if(side.classList.contains("csp-sheet-clip")) paintSheetClip(offset);
   side.style.transition="none";
 };
 const targetSheetHeight=()=>{
@@ -2231,41 +2212,30 @@ const targetSheetHeight=()=>{
 const parkDock=()=>{
   if(!sheetTools||!sheetMode()) return;
   const hide=!isCollapsed()&&document.body.dataset.cspDetent==="large"?1:0;
-  setSheetStyle(sheetTools,"--csp-dock-hide",hide.toFixed(3));
-  syncSheetTools(hide);
+  setSheetStyle(sheetTools,"--csp-dock-hide",hide.toFixed(3));syncSheetTools(hide);
 };
 const settleSheetMotion=fromVisible=>{
   if(!sheetMode()){
     if(side.classList.contains("csp-sheet-clip")) dropSheetHold();
     return;
   }
-  stopSheetSpring();
-  const generation=++sheetMotionGen;
-  sheetSpring=true;
+  stopSheetSpring();const generation=++sheetMotionGen;sheetSpring=true;
+  fitMapInfo(targetSheetHeight());
   const to=targetSheetHeight();
   if(sheetMotionReduced()||Math.abs(to-fromVisible)<1){finishSheetSpring(generation);return}
-  const frozen=Math.max(side.getBoundingClientRect().height,fromVisible,to)+Math.min(24,Math.abs(to-fromVisible)*.08);
+  const frozen=Math.max(fromVisible,to)+24;
   const start=Math.max(0,frozen-fromVisible),end=Math.max(0,frozen-to);
-  prepareSheetClip();
-  side.style.height=`${frozen}px`;
-  parkDock();
-  paintSheetClip(start);
+  prepareSheetClip(frozen);side.style.height=`${frozen}px`;
+  parkDock();paintSheetClip(end);
+  sheetAnimation=side.animate([{transform:`translate3d(0,${start}px,0)`},{transform:`translate3d(0,${end}px,0)`}],
+    {duration:350,easing:"cubic-bezier(.28,.9,.32,1.08)",fill:"both"});
   side.style.transition="";
-  const started=performance.now();
-  const frame=now=>{
-    if(generation!==sheetMotionGen) return;
-    const progress=Math.min(1,(now-started)/350);
-    paintSheetClip(start+(end-start)*sheetEase(progress));
-    if(progress<1) sheetMotionFrame=requestAnimationFrame(frame);
-    else finishSheetSpring(generation);
-  };
-  sheetMotionFrame=requestAnimationFrame(frame);
+  sheetAnimation.finished.then(()=>finishSheetSpring(generation),()=>{});
+  sheetMotionTimer=setTimeout(()=>finishSheetSpring(generation),450);
 };
 const clearInterruptedSheet=()=>{
   if(!side.classList.contains("csp-sheet-clip")) return;
-  sheetMotionGen++;
-  document.body.classList.remove("csp-sheet-dragging");
-  dropSheetHold();
+  sheetMotionGen++;document.body.classList.remove("csp-sheet-dragging");dropSheetHold();
 };
 peekLayout.addEventListener("change",clearInterruptedSheet);
 window.addEventListener("resize",clearInterruptedSheet);
@@ -2383,7 +2353,7 @@ if(sheetMode()&&!isCollapsed()){
         g.frozen=Math.max(g.limits.large+96,g.startH);
         if(sheetMode()){
           sheetSpring=true;
-          prepareSheetClip();
+          prepareSheetClip(g.frozen);
           side.style.height=`${g.frozen}px`;
         }
       }
@@ -2396,7 +2366,7 @@ if(sheetMode()&&!isCollapsed()){
     if(height>large) height=large+(height-large)*.22;
     if(height<peek) height=Math.max(peek*.6,peek-(peek-height)*.22);
     if(sheetMode()){
-      if(height>g.frozen-0.5){g.frozen=height+120;side.style.height=`${g.frozen}px`}
+      if(height>g.frozen-0.5){g.frozen=height+120;sheetViewport.style.height=`${g.frozen}px`;side.style.height=`${g.frozen}px`}
       paintSheetClip(Math.max(0,g.frozen-height));
     }else side.style.height=`${height}px`;
     if(sheetMode()&&sheetTools){
@@ -2544,6 +2514,9 @@ if(sheetMode()&&!isCollapsed()){
     const focused=sheetTextField(document.activeElement);
     const covered=vv?Math.max(0,window.innerHeight-vv.height-vv.offsetTop):0;
     const inset=sheetMode()&&focused?Math.max(0,covered-sheetPixels("--safe-bottom")):0;
+    const next=inset?`${Math.round(inset)}px`:"";
+    if(document.body.style.getPropertyValue("--sheet-keyboard")===next) return;
+    if(sheetSpring) clearInterruptedSheet();
     if(inset) setSheetStyle(document.body,"--sheet-keyboard",`${Math.round(inset)}px`);
     else document.body.style.removeProperty("--sheet-keyboard");
   };
