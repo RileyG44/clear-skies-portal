@@ -196,6 +196,12 @@ void csk_fetch_complete(struct CskFetch *token,
                         size_t body_len);
 
 /**
+ * Admit receive-buffer growth before the platform appends bytes. The bound
+ * covers Data's growth and the Rust handoff copy. Serialise with completion.
+ */
+bool csk_fetch_reserve(struct CskFetch *token, size_t total_body_bytes);
+
+/**
  * Fails a fetch with a `CSK_FETCH_*` code.
  */
 void csk_fetch_fail(struct CskFetch *token, int32_t code, const char *message);

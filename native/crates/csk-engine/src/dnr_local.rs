@@ -825,6 +825,7 @@ impl Engine {
         y: u32,
     ) -> Result<Option<(Vec<f32>, f64, f64, Vec<Value>)>, String> {
         let size = TILE_SIZE as usize;
+        let _scratch = self.memory.reserve(size * size * 24).map_err(|e| e.to_string())?;
         let spec = TileSpec::new(z, x, y, TILE_SIZE);
         let bbox = tile_lonlat(z, x, y);
         let mut candidates: Vec<LocalFile> =
@@ -1203,12 +1204,14 @@ mod tests {
                         status: 200,
                         headers: vec![("Content-Type".into(), "application/zip".into())],
                         body: vec![],
+                        reservation: None,
                     })
                 } else {
                     Ok(FetchResponse {
                         status: 200,
                         headers: vec![("Set-Cookie".into(), "session=ok; Path=/".into())],
                         body: vec![],
+                        reservation: None,
                     })
                 }
             })
@@ -1228,6 +1231,7 @@ mod tests {
                     status: 200,
                     headers: vec![("Content-Type".into(), "application/zip".into())],
                     body: vec![],
+                    reservation: None,
                 }))
             })
         }

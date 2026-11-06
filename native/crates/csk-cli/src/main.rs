@@ -73,7 +73,7 @@ impl Transport for Ureq {
                         .read_to_vec()
                         .map_err(|_| FetchError::TooLarge)?,
                 };
-                Ok(FetchResponse { status, headers, body })
+                Ok(FetchResponse { status, headers, body, reservation: None })
             })
             .await
             .map_err(|_| FetchError::Cancelled)?

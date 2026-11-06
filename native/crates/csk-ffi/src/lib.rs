@@ -94,6 +94,8 @@ pub struct CskBody {
 /// A pending fetch, consumed by `csk_fetch_complete` or `csk_fetch_fail`.
 pub struct CskFetch {
     tx: oneshot::Sender<Result<FetchResponse, FetchError>>,
+    reservation: Mutex<csk_engine::MemoryReservation>,
+    max_body: usize,
 }
 
 pub struct CskEngine {
@@ -106,6 +108,7 @@ pub struct CskEngine {
 struct Platform {
     t: CskTransport,
     next: AtomicU64,
+    memory: Arc<csk_engine::MemoryBudget>,
 }
 
 // The platform promises its callbacks are thread-safe (see the module docs).
@@ -192,7 +195,11 @@ impl Bridge {
                     dest_path: dest.as_ref().map_or(std::ptr::null(), |d| d.as_ptr()),
                     restore_only,
                 };
-                let token = Box::into_raw(Box::new(CskFetch { tx }));
+                let token = Box::into_raw(Box::new(CskFetch {
+                    tx,
+                    max_body: req.max_body,
+                    reservation: Mutex::new(platform.memory.reserve(0).expect("zero-byte admission")),
+                }));
                 (platform.t.fetch)(platform.t.context, token, id, &c);
             }
             let mut guard = CancelOnDrop { platform: platform.clone(), id, armed: true };
@@ -219,7 +226,8 @@ pub unsafe extern "C" fn csk_engine_new(
     transport: CskTransport,
     work_allowed: bool,
 ) -> *mut CskEngine {
-    let platform = Arc::new(Platform { t: transport, next: AtomicU64::new(1) });
+    let memory = csk_engine::MemoryBudget::new(256 << 20);
+    let platform = Arc::new(Platform { t: transport, next: AtomicU64::new(1), memory: memory.clone() });
     // SAFETY: per the contract above.
     let Some(text) = (unsafe { str_arg(config_json) }) else { return std::ptr::null_mut() };
     let Ok(config) = serde_json_config(text) else { return std::ptr::null_mut() };
@@ -236,7 +244,7 @@ pub unsafe extern "C" fn csk_engine_new(
     };
     let engine = {
         let _enter = runtime.enter();
-        match Engine::new(config, Arc::new(Bridge(platform))) {
+        match Engine::with_memory(config, Arc::new(Bridge(platform)), memory) {
             Ok(e) => {
                 e.work.set_allowed(work_allowed);
                 e.warm();
@@ -323,13 +331,22 @@ struct Responder {
     respond: CskRespond,
     context: *mut c_void,
     done: bool,
+    memory: Option<Arc<csk_engine::MemoryBudget>>,
 }
 
 // The platform's respond callback is thread-safe by contract.
 unsafe impl Send for Responder {}
 
 impl Responder {
-    fn send(mut self, r: Response) {
+    fn send(mut self, mut r: Response) {
+        if r.reservation.is_none()
+            && let Some(memory) = &self.memory
+        {
+            match memory.reserve(r.body.capacity()) {
+                Ok(reservation) => r.reservation = Some(reservation),
+                Err(_) => r = Response::text(503, "response is waiting for memory").header("Retry-After", "2"),
+            }
+        }
         let headers: String = r
             .headers
             .iter()
@@ -374,12 +391,13 @@ pub unsafe extern "C" fn csk_engine_request(
     context: *mut c_void,
     respond: CskRespond,
 ) -> u64 {
-    let responder = Responder { respond, context, done: false };
+    let mut responder = Responder { respond, context, done: false, memory: None };
     // SAFETY: a live engine from csk_engine_new.
     let Some(e) = (unsafe { engine.as_ref() }) else {
         responder.send(Response::text(503, "engine not running"));
         return 0;
     };
+    responder.memory = Some(e.engine.memory.clone());
     // SAFETY: per the contract above.
     let (m, u, hdrs) = unsafe { (str_arg(method).unwrap_or("GET"), str_arg(url), str_arg(headers).unwrap_or("")) };
     if body_len > 32 << 20 {
@@ -452,6 +470,15 @@ pub unsafe extern "C" fn csk_fetch_complete(
     }
     // SAFETY: a token from fetch, consumed once.
     let t = unsafe { Box::from_raw(token) };
+    let mut reservation = t.reservation.into_inner().unwrap_or_else(|e| e.into_inner());
+    let Some(receive_bytes) = body_len.checked_mul(3).filter(|_| body_len <= t.max_body) else {
+        let _ = t.tx.send(Err(FetchError::TooLarge));
+        return;
+    };
+    if reservation.grow_to(receive_bytes).is_err() {
+        let _ = t.tx.send(Err(FetchError::Network("receive buffer is waiting for memory".into())));
+        return;
+    }
     // SAFETY: per the contract above.
     let headers = unsafe { str_arg(headers) }
         .unwrap_or("")
@@ -465,7 +492,20 @@ pub unsafe extern "C" fn csk_fetch_complete(
         // SAFETY: body points at body_len readable bytes for this call.
         unsafe { std::slice::from_raw_parts(body, body_len) }.to_vec()
     };
-    let _ = t.tx.send(Ok(FetchResponse { status, headers, body }));
+    let _ = t.tx.send(Ok(FetchResponse { status, headers, body, reservation: Some(reservation) }));
+}
+
+/// Admit receive-buffer growth before the platform appends bytes. The bound
+/// covers Data's growth and the Rust handoff copy. Serialise with completion.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn csk_fetch_reserve(token: *mut CskFetch, total_body_bytes: usize) -> bool {
+    let Some(token) = (unsafe { token.as_ref() }) else {
+        return false;
+    };
+    let Some(bytes) = total_body_bytes.checked_mul(3).filter(|_| total_body_bytes <= token.max_body) else {
+        return false;
+    };
+    token.reservation.lock().unwrap_or_else(|e| e.into_inner()).grow_to(bytes).is_ok()
 }
 
 /// Fails a fetch with a `CSK_FETCH_*` code.
@@ -503,6 +543,59 @@ pub extern "C" fn csk_version() -> *const c_char {
 mod tests {
     use super::*;
     use std::sync::mpsc;
+
+    #[test]
+    fn receive_growth_is_admitted_and_released_with_its_last_owner() {
+        let memory = csk_engine::MemoryBudget::new(24);
+        let (tx, mut rx) = oneshot::channel();
+        let token =
+            Box::into_raw(Box::new(CskFetch { tx, reservation: Mutex::new(memory.reserve(0).unwrap()), max_body: 16 }));
+        // SAFETY: one live test token, used serially and consumed exactly once.
+        unsafe {
+            assert!(csk_fetch_reserve(token, 8));
+            assert!(!csk_fetch_reserve(token, 9));
+            assert!(!csk_fetch_reserve(token, 17));
+            csk_fetch_complete(token, 200, c"".as_ptr(), b"12345678".as_ptr(), 8);
+        }
+        let response = rx.try_recv().unwrap().unwrap();
+        assert_eq!(memory.stats().used, 24);
+        assert_eq!(response.body, b"12345678");
+        drop(response);
+        assert_eq!(memory.stats().used, 0);
+
+        let (tx, _rx) = oneshot::channel();
+        let token =
+            Box::into_raw(Box::new(CskFetch { tx, reservation: Mutex::new(memory.reserve(0).unwrap()), max_body: 16 }));
+        unsafe {
+            assert!(csk_fetch_reserve(token, 8));
+            csk_fetch_fail(token, CSK_FETCH_CANCELLED, c"cancelled".as_ptr());
+        }
+        assert_eq!(memory.stats().used, 0);
+    }
+
+    #[test]
+    fn zero_copy_response_keeps_admission_until_platform_frees_the_body() {
+        extern "C" fn hold(ctx: *mut c_void, _: *const CskResponse, owner: *mut CskBody) {
+            // SAFETY: the test gives this callback its channel once.
+            let tx = unsafe { Box::from_raw(ctx.cast::<mpsc::Sender<usize>>()) };
+            tx.send(owner as usize).unwrap();
+        }
+        let memory = csk_engine::MemoryBudget::new(32);
+        let (tx, rx) = mpsc::channel::<usize>();
+        Responder {
+            respond: hold,
+            context: Box::into_raw(Box::new(tx)).cast(),
+            done: false,
+            memory: Some(memory.clone()),
+        }
+        .send(Response::new(200, "test", vec![0; 16]));
+        let owner = rx.recv().unwrap();
+        assert_eq!(memory.stats().used, 16);
+        unsafe {
+            csk_body_free(owner as *mut CskBody);
+        }
+        assert_eq!(memory.stats().used, 0);
+    }
 
     extern "C" fn fetch(_: *mut c_void, token: *mut CskFetch, _: u64, req: *const CskFetchRequest) {
         // SAFETY: test transport; the request is valid during this call.

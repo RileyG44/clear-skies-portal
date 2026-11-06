@@ -151,14 +151,25 @@ nonisolated final class NetworkTransport: NSObject, URLSessionDataDelegate, @unc
     }
 
     func urlSession(_ session: URLSession, dataTask: URLSessionDataTask, didReceive data: Data) {
-        let over = lock.withLock { () -> Bool in
-            guard var f = fetches[dataTask.taskIdentifier] else { return false }
+        let failure = lock.withLock { () -> (Int32, String)? in
+            // Taking the value out avoids retaining a second Data owner while
+            // appending; that otherwise copies every accumulated byte per chunk.
+            guard var f = fetches.removeValue(forKey: dataTask.taskIdentifier) else { return nil }
+            let (count, overflow) = f.body.count.addingReportingOverflow(data.count)
+            if overflow || UInt64(count) > f.maxBody {
+                fetches[dataTask.taskIdentifier] = f
+                return (CSK_FETCH_TOO_LARGE, "response too large")
+            }
+            guard csk_fetch_reserve(f.token, count) else {
+                fetches[dataTask.taskIdentifier] = f
+                return (CSK_FETCH_NETWORK, "receive buffer is waiting for memory")
+            }
             f.body.append(data)
             fetches[dataTask.taskIdentifier] = f
-            return UInt64(f.body.count) > f.maxBody
+            return nil
         }
-        if over, let f = take(dataTask) {
-            csk_fetch_fail(f.token, CSK_FETCH_TOO_LARGE, "response too large")
+        if let (code, message) = failure, let f = take(dataTask) {
+            csk_fetch_fail(f.token, code, message)
             dataTask.cancel()
         }
     }

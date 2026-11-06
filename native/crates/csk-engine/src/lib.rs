@@ -29,7 +29,7 @@ use csk_store::{Kind, Store, UserStore};
 use serde::Deserialize;
 use serde_json::json;
 
-pub use csk_core::resource::Reservation as MemoryReservation;
+pub use csk_core::resource::{Budget as MemoryBudget, Reservation as MemoryReservation};
 pub use router::{Request, Response};
 use tiles::Tiles;
 use transport::{FetchRequest, Transport};
@@ -95,6 +95,14 @@ pub const FEATURES: &[&str] =
 
 impl Engine {
     pub fn new(config: Config, transport: Arc<dyn Transport>) -> Result<Arc<Self>, EngineError> {
+        Self::with_memory(config, transport, csk_core::resource::Budget::new(256 << 20))
+    }
+
+    pub fn with_memory(
+        config: Config,
+        transport: Arc<dyn Transport>,
+        memory: Arc<MemoryBudget>,
+    ) -> Result<Arc<Self>, EngineError> {
         let data_dir = config.data_dir.clone().unwrap_or_else(|| config.cache_dir.join("user"));
         // Offline areas: in data_dir (not purgeable), under offline/ (the
         // platform excludes it from backup: it can be downloaded again).
@@ -108,7 +116,6 @@ impl Engine {
         let scope =
             config.usgs_scope.unwrap_or_else(|| usgs::catalog::DEFAULT_SCOPE.iter().map(|s| (*s).to_owned()).collect());
         let catalog = Catalog::new(store.clone(), upstream.clone(), scope);
-        let memory = csk_core::resource::Budget::new(256 << 20);
         let cog = CogReader::with_memory(store.clone(), upstream.clone(), Usgs::s3_origin(), memory.clone());
         let usgs = Arc::new(Usgs::new(catalog, cog));
         let tiles = Tiles::new(store.clone(), upstream.clone(), usgs);

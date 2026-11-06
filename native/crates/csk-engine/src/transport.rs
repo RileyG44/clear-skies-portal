@@ -87,12 +87,14 @@ impl FetchRequest {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug)]
 pub struct FetchResponse {
     pub status: u16,
     /// Header names lower-cased.
     pub headers: Vec<(String, String)>,
     pub body: Vec<u8>,
+    /// Platform receive-buffer admission, when supplied by the transport.
+    pub reservation: Option<csk_core::resource::Reservation>,
 }
 
 impl FetchResponse {
@@ -165,13 +167,14 @@ mod tests {
                 "Set-Cookie".into(),
                 "JSESSIONID=84BB; Path=/; HttpOnly, dlgate=ok; Path=/; Max-Age=7200; Expires=Wed, 21 Oct 2026 07:28:00 GMT; Secure".into(),
             )],
-            body: vec![],
+            body: vec![], reservation: None,
         };
         assert_eq!(joined.cookies(), vec!["JSESSIONID=84BB", "dlgate=ok"]);
         let separate = super::FetchResponse {
             status: 200,
             headers: vec![("set-cookie".into(), "a=1; Path=/".into()), ("set-cookie".into(), "b=2".into())],
             body: vec![],
+            reservation: None,
         };
         assert_eq!(separate.cookies(), vec!["a=1", "b=2"]);
     }

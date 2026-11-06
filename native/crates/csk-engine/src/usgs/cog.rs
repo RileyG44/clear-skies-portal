@@ -61,6 +61,15 @@ pub struct CogReader {
 }
 
 impl CogReader {
+    pub fn reserve_scratch(&self, bytes: usize) -> Result<csk_core::resource::Reservation, ReadError> {
+        match self.memory.reserve(bytes) {
+            Ok(r) => Ok(r),
+            Err(_) => {
+                self.purge_memory();
+                self.memory.reserve(bytes).map_err(|e| ReadError::Decode(e.to_string()))
+            }
+        }
+    }
     /// Existing callers retain their Arc; disposable cache ownership drops now.
     pub fn purge_memory(&self) {
         self.blocks.lock().unwrap_or_else(|e| e.into_inner()).clear();

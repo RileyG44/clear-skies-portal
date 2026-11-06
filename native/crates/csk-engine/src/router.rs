@@ -522,11 +522,16 @@ async fn fabric(engine: &Arc<Engine>, req: &Request) -> Response {
     let (min_n, max_n) = corners.iter().fold((f64::INFINITY, f64::NEG_INFINITY), |(a, z), c| (a.min(c.1), z.max(c.1)));
     let n_req = num("n") as i64;
     let n = (if n_req == 0 { 192 } else { n_req }).clamp(48, 320) as usize;
+    let scratch = match engine.memory.reserve(n * n * 64) {
+        Ok(r) => r,
+        Err(_) => return Response::text(503, "fabric measurement is waiting for memory").header("Retry-After", "2"),
+    };
     let res = ((max_e - min_e) / n as f64).max((max_n - min_n) / n as f64).max(1.0);
     let (lo, hi) = csk_science::fabric::band(res, num("lo"), num("hi"));
     match engine.tiles.usgs.sample_utm(min_e, min_n, res, n, zone).await {
         Ok(Some((grid, sources))) => {
             let v = tokio::task::spawn_blocking(move || {
+                let _scratch = scratch;
                 csk_science::fabric::measure(&grid, n, res, lo, hi, zone, &sources)
             })
             .await
