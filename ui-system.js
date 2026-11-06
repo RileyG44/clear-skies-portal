@@ -1551,11 +1551,19 @@ const syncPhoneLabels=()=>{
    presets and Customize terrain while the sheet is up. */
 function paintStyleChips(){
   const select=$("#terStyle"),row=$("#cspStyleChips");if(!select||!row) return;
+  let checked=null;
   for(const button of row.children){
     const on=button.dataset.value===select.value;
     button.setAttribute("aria-checked",on?"true":"false");
     button.tabIndex=on?0:-1;
+    if(on) checked=button;
   }
+  // ChoicesRow centers the selected style. Scroll the row only, so the sheet does not jump.
+  if(!checked) return;
+  const reduced=matchMedia("(prefers-reduced-motion: reduce)").matches||document.documentElement.classList.contains("csp-reduce-motion");
+  const rowBox=row.getBoundingClientRect(),box=checked.getBoundingClientRect();
+  const delta=(box.left+box.width/2)-(rowBox.left+rowBox.width/2);
+  if(Math.abs(delta)>1) row.scrollBy({left:delta,behavior:reduced?"instant":"smooth"});
 }
 function syncStyleChips(){
   const select=$("#terStyle");if(!select) return;
@@ -1595,6 +1603,16 @@ function syncStyleChips(){
       });
       row.append(button);
     }
+    row.addEventListener("keydown",event=>{
+      if(event.key!=="ArrowRight"&&event.key!=="ArrowLeft") return;
+      const buttons=[...row.children];
+      const index=buttons.findIndex(button=>button.getAttribute("aria-checked")==="true");
+      const next=buttons[index+(event.key==="ArrowRight"?1:-1)];
+      if(!next) return;
+      event.preventDefault();
+      next.click();
+      next.focus();
+    });
     select.addEventListener("change",paintStyleChips);
     ($("#terLidarHeading")||select).after(row);
   }
@@ -1621,12 +1639,50 @@ function wrapPhoneSection(section,title,detail,kind){
   box.querySelector(".ls-disclosure-detail").textContent=detail;
   section.before(box);box.append(section);
 }
-/* display:contents on the terrain <details> does not make its children flex
-   items, so the phone sheet moves the real nodes around the studio instead.
-   render() puts them back before it wipes #terStudio. */
+/* The phone sheet moves real nodes. render() puts them back before it wipes
+   #terStudio. Anything left inside the studio is destroyed with that wipe. */
+function phoneLabel(selector,phoneText){
+  const node=document.querySelector(selector);if(!node) return;
+  if(!node.dataset.desktopLabel) node.dataset.desktopLabel=node.textContent;
+  node.textContent=sheetMode()?phoneText:node.dataset.desktopLabel;
+  if(!sheetMode()) delete node.dataset.desktopLabel;
+}
+function phoneDisclosure(id,title,detail){
+  let box=document.getElementById(id);
+  if(!box){
+    box=document.createElement("details");
+    box.id=id;
+    box.className="ls-disclosure ls-phone-disclosure csp-phone-disclosure";
+    box.open=false;
+    box.innerHTML='<summary><span class="ls-disclosure-title"></span><span class="ls-disclosure-detail"></span></summary>';
+  }
+  const titleNode=box.querySelector(".ls-disclosure-title"),detailNode=box.querySelector(".ls-disclosure-detail");
+  if(titleNode) titleNode.textContent=title;
+  if(detailNode) detailNode.textContent=detail;
+  return box;
+}
+function phoneSectionTitle(id,text){
+  let node=document.getElementById(id);
+  if(!node){
+    node=document.createElement("h3");
+    node.id=id;
+    node.className="menu-section-title csp-phone-section";
+  }
+  node.textContent=text;
+  return node;
+}
 function restorePhoneTerrain(){
-  const body=$("#terLayerSettings > .terrain-settings-body");
   const data=$(".terrain-data-settings");
+  const grid=data?.querySelector(":scope > .fgrid")||data;
+  const opacity=$(".terrain-opacity-control");
+  if(opacity&&grid&&opacity.parentElement!==grid) grid.append(opacity);
+  const offlineBody=$("#terDataOffline .terrain-settings-body");
+  if(offlineBody){
+    for(const node of [$("#terrainDownloadBox"),$(".terrain-download-settings"),$("#terrainSourceDetails")]){
+      if(node) offlineBody.append(node);
+    }
+  }
+  const body=$("#terLayerSettings > .terrain-settings-body");
   const appearance=$(".terrain-phone-appearance");
   const lighting=$(".terrain-phone-lighting");
   if(body){
@@ -1634,6 +1690,8 @@ function restorePhoneTerrain(){
     if(lighting&&lighting.parentElement!==body) body.append(lighting);
     if(appearance&&appearance.parentElement!==body) body.insertBefore(appearance,lighting&&lighting.parentElement===body?lighting:null);
   }
+  $("#cspCustomizeGroup")?.remove();
+  for(const id of ["cspTerrainDownloads","cspTerrainAbout","cspDataKicker","cspAboutKicker","cspResetKicker"]) document.getElementById(id)?.remove();
   const lidar=$("#terLidar");
   const fields=lidar?.querySelector(":scope > .terrain-fields");
   const settings=$("#terLayerSettings");
@@ -1644,6 +1702,8 @@ function restorePhoneTerrain(){
   if(heading&&chips&&chips.parentElement!==lidar) heading.after(chips);
   if(lidar&&legend&&legend.parentElement!==lidar) lidar.insertBefore(legend,settings);
   lidar?.removeAttribute("data-phone-split");
+  phoneLabel('label[for="terOp"]',"Terrain opacity");
+  phoneLabel('label[for="terSrc"]',"Preferred terrain source");
 }
 function placePhoneTerrain(){
   const studio=$("#terStudio");
@@ -1651,18 +1711,42 @@ function placePhoneTerrain(){
   const layers=$(".ls-layers-disclosure",studio);
   if(!studio||!kicker) return;
   let marker=kicker;
-  for(const node of [$(".terrain-data-settings"),$("#terLegend"),$("#cspStyleChips"),$("#terLidarHeading")]){
+  for(const node of [$(".terrain-opacity-control"),$("#terLegend"),$("#cspStyleChips"),$("#terLidarHeading")]){
     if(!node) continue;
     marker.before(node);
     marker=node;
   }
-  let after=layers||kicker;
-  for(const node of [$(".terrain-phone-appearance"),$(".terrain-phone-lighting")]){
-    if(!node) continue;
-    after.after(node);
-    after=node;
+  let group=$("#cspCustomizeGroup");
+  if(!group){
+    group=document.createElement("div");
+    group.id="cspCustomizeGroup";
+    group.className="ls-phone-group";
   }
-  $("#terLidar")?.setAttribute("data-phone-split","1");
+  kicker.after(group);
+  for(const node of [layers,$(".terrain-phone-appearance"),$(".terrain-phone-lighting")]){
+    if(node) group.append(node);
+  }
+  const lidar=$("#terLidar");
+  if(!lidar) return;
+  const downloads=phoneDisclosure("cspTerrainDownloads","Terrain downloads","Source preference, offline areas and Washington LiDAR");
+  for(const node of [$(".terrain-data-settings"),$("#terrainDownloadBox"),$(".terrain-download-settings")]){
+    if(node) downloads.append(node);
+  }
+  const about=phoneDisclosure("cspTerrainAbout","Sources & scale","Rendered data, survey details and resolution");
+  const sources=$("#terrainSourceDetails");
+  if(sources) about.append(sources);
+  const footer=$(".terrain-card-footer");
+  lidar.append(
+    phoneSectionTitle("cspDataKicker","Data & downloads"),
+    downloads,
+    phoneSectionTitle("cspAboutKicker","About this terrain"),
+    about,
+    phoneSectionTitle("cspResetKicker","Reset")
+  );
+  if(footer) lidar.append(footer);
+  lidar.setAttribute("data-phone-split","1");
+  phoneLabel('label[for="terOp"]',"Terrain opacity");
+  phoneLabel('label[for="terSrc"]',"Preferred terrain source");
 }
 function syncPhoneTerrain(){
   if(!sheetMode()){
@@ -1696,7 +1780,7 @@ function syncPhoneElevation(){
       if(!units){
         units=document.createElement("details");
         units.id="elevUnitsDisclosure";
-        units.className="ev-units-disclosure ls-disclosure ls-phone-disclosure";
+        units.className="ev-units-disclosure ls-disclosure ls-phone-disclosure csp-fold";
         units.open=false;
         units.innerHTML='<summary><span class="ls-disclosure-title">Units</span><span class="ls-disclosure-detail"></span></summary>';
         document.querySelector('.pane[data-pane="elevation"] > .pane-b')?.append(units);
@@ -1709,22 +1793,24 @@ function syncPhoneElevation(){
           });
         }
       }
+      units.classList.add("csp-fold");
       if(unit.parentElement!==units) units.append(unit);
       const next=units.querySelector(".ls-disclosure-detail"),select=$("#elevUnit");
       if(next&&select) next.textContent=select.selectedOptions?.[0]?.textContent||"";
     }
   }
   const section=$("#elevBandsSection"),box=$("#elevBandsBox");
-  if(!section||!box) return;
+  if(!section||!box){syncColorFold();return}
   let bands=$("#elevBandsDisclosure");
   if(!sheetMode()){
     if(bands){section.querySelector(".csp-section-label")?.after(box);bands.remove()}
+    syncColorFold();
     return;
   }
   if(!bands){
     bands=document.createElement("details");
     bands.id="elevBandsDisclosure";
-    bands.className="ev-phone-disclosure ls-disclosure ls-phone-disclosure";
+    bands.className="ev-phone-disclosure ls-disclosure ls-phone-disclosure csp-fold";
     bands.open=false;
     bands.innerHTML='<summary><span class="ls-disclosure-title">Highlight elevations</span><span class="ls-disclosure-detail"></span></summary>';
     section.querySelector(".csp-section-label")?.after(bands);
@@ -1734,8 +1820,64 @@ function syncPhoneElevation(){
       section.addEventListener("input",phoneBandDetail);
     }
   }
+  bands.classList.add("csp-fold");
   if(box.parentElement!==bands) bands.append(box);
   phoneBandDetail();
+  syncColorFold();
+}
+function colorFoldDetail(){
+  const detail=$("#elevColorDisclosure .ls-disclosure-detail");if(!detail) return;
+  const on=!!$("#elevSh")?.checked;
+  detail.textContent=on?($("#elevSpectrumMoreValue")?.textContent||"On"):"Off";
+}
+function syncColorFold(){
+  const section=$("#elevSpectrumSection"),box=$("#elevSpectrumBox"),toggle=$("#lb_elevSh");
+  const body=$("#elevSpectrumMore .ev-body")||$("#elevColorDisclosure .ev-body");
+  const more=$("#elevSpectrumMore");
+  if(!section||!box||!toggle) return;
+  let fold=$("#elevColorDisclosure");
+  const input=$("#elevSh");
+  if(!sheetMode()){
+    input?.removeAttribute("aria-label");
+    if(fold){
+      if(body&&more&&body.parentElement!==more) more.append(body);
+      if(toggle.parentElement!==box) box.insertBefore(toggle,more||null);
+      fold.remove();
+    }
+    return;
+  }
+  input?.setAttribute("aria-label","Color by elevation on map");
+  if(!fold){
+    fold=document.createElement("details");
+    fold.id="elevColorDisclosure";
+    fold.className="csp-fold ev-color-disclosure ls-disclosure";
+    fold.open=!!$("#elevSh")?.checked;
+    fold.innerHTML='<summary><span class="ls-disclosure-title">Color by elevation</span><span class="ls-disclosure-detail"></span></summary>';
+    section.querySelector(".ev-section-head")?.after(fold);
+  }
+  if(!toggle.dataset.foldStop){
+    toggle.dataset.foldStop="1";
+    const stop=event=>event.stopPropagation();
+    toggle.addEventListener("click",stop);
+    toggle.addEventListener("pointerdown",stop);
+  }
+  if($("#elevSh")&&!$("#elevSh").dataset.foldWatch){
+    $("#elevSh").dataset.foldWatch="1";
+    $("#elevSh").addEventListener("change",()=>{
+      const next=$("#elevColorDisclosure");
+      if(next) next.open=!!$("#elevSh").checked;
+      colorFoldDetail();
+    });
+  }
+  if(!section.dataset.colorWatch){
+    section.dataset.colorWatch="1";
+    section.addEventListener("input",colorFoldDetail);
+    section.addEventListener("change",colorFoldDetail);
+  }
+  const summary=fold.querySelector("summary");
+  if(summary&&toggle.parentElement!==summary) summary.append(toggle);
+  if(body&&body.parentElement!==fold) fold.append(body);
+  colorFoldDetail();
 }
 function syncPhoneSatellite(){
   const bar=$("#cspSatResultsBar");if(!bar) return;

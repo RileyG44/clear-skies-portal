@@ -66,6 +66,7 @@ const base=process.argv[2]||'http://127.0.0.1:8765/';
      const chip=document.querySelector(`.csp-style-chip[data-value="${value}"]`);
      const chipBox=chip?.getBoundingClientRect();
      const layers=document.querySelector('.ls-layers-disclosure');
+     const group=document.getElementById('cspCustomizeGroup');
      const probeLayer=document.createElement('li');
      probeLayer.className='ls-layer';
      probeLayer.innerHTML='<div class="ls-layer-main"><span class="ls-swatch"></span></div>';
@@ -91,11 +92,23 @@ const base=process.argv[2]||'http://127.0.0.1:8765/';
       status:status?getComputedStyle(status).display:'',
       chip:chipBox?{w:Math.round(chipBox.width),h:Math.round(chipBox.height),on:chip.getAttribute('aria-checked')}:null,
       swatch:swatch?{w:Math.round(swatch.width),h:Math.round(swatch.height)}:null,
+      grouped:!!group&&[layers,document.querySelector('.terrain-phone-appearance'),document.querySelector('.terrain-phone-lighting')].every(node=>node&&node.parentElement===group),
+      radius:group?getComputedStyle(group).borderRadius:'',
+      rowRadius:group?getComputedStyle(group.querySelector('summary')).borderRadius:'',
+      src:document.getElementById('terSrc')?.closest('#cspTerrainDownloads')?'downloads':'',
+      downloads:document.querySelector('#cspTerrainDownloads .ls-disclosure-title')?.textContent||'',
+      about:document.querySelector('#cspTerrainAbout .ls-disclosure-title')?.textContent||'',
+      aboutKicker:document.getElementById('cspAboutKicker')?.textContent||'',
+      dataKicker:document.getElementById('cspDataKicker')?.textContent||'',
+      resetKicker:document.getElementById('cspResetKicker')?.textContent||'',
+      opacityLabel:document.querySelector('label[for="terOp"]')?.textContent||'',
+      sourceTop:top(document.getElementById('cspTerrainDownloads')),
+      lightingTop:top(document.querySelector('.terrain-phone-lighting')),
       order:[
         top(document.querySelector('.ls-preset-card')),
         top(document.getElementById('terLidarHeading')),
         top(document.getElementById('cspStyleChips')),
-        top(document.querySelector('.terrain-data-settings')),
+        top(document.querySelector('.terrain-opacity-control')),
         top(document.querySelector('.ls-phone-kicker')),
         top(layers),
         top(document.querySelector('.terrain-phone-appearance')),
@@ -116,7 +129,18 @@ const base=process.argv[2]||'http://127.0.0.1:8765/';
     assert.equal(portrait.lighting,'Lighting & 3D relief','lighting is its own disclosure');
     assert.equal(portrait.appearanceOpen,false,'color and contrast starts collapsed');
     assert.equal(portrait.lightingOpen,false,'lighting starts collapsed');
-    assert.deepEqual(portrait.order,portrait.order.slice().sort((a,b)=>a-b),'presets, map display, then customize disclosures');
+    assert.deepEqual(portrait.order,portrait.order.slice().sort((a,b)=>a-b),'presets, map display, opacity, then one customize card');
+    assert.equal(portrait.grouped,true,'the three customize disclosures share one card');
+    assert.equal(portrait.radius,'12px','the customize card has one corner radius');
+    assert.equal(portrait.rowRadius,'0px','customize rows are not separate rounded cards');
+    assert.equal(portrait.src,'downloads','the source select sits in terrain downloads');
+    assert.equal(portrait.downloads,'Terrain downloads','terrain downloads uses the native name');
+    assert.equal(portrait.dataKicker,'Data & downloads','downloads keep their own section');
+    assert.equal(portrait.about,'Sources & scale','about this terrain names sources and scale');
+    assert.equal(portrait.aboutKicker,'About this terrain','about this terrain is its own section');
+    assert.equal(portrait.resetKicker,'Reset','reset is its own section');
+    assert.equal(portrait.opacityLabel,'Terrain opacity','map display keeps the opacity row');
+    assert(portrait.sourceTop>portrait.lightingTop,'the source card follows customize');
     assert.deepEqual(portrait.chip,{w:70,h:62,on:'true'},'map display is a 70 by 62 chip row');
     assert.deepEqual(portrait.swatch,{w:30,h:12},'a closed layer swatch is the native capsule');
     assert.equal(portrait.name,portrait.accent,'a selected preset caption uses the tint');
@@ -124,6 +148,26 @@ const base=process.argv[2]||'http://127.0.0.1:8765/';
     assert.equal(portrait.status,'','the phone sheet does not render the studio status');
    }
    await page.screenshot({path:path.join(output,`terrain-${dark?'dark':'light'}.png`)});
+   await page.locator('.csp-style-chip[data-value="c25"]').click();
+   await page.waitForFunction(()=>{
+     const row=document.getElementById('cspStyleChips');
+     const chip=row?.querySelector('[data-value="c25"]');
+     if(!row||!chip) return false;
+     const mid=(chip.getBoundingClientRect().left+chip.getBoundingClientRect().right)/2;
+     const center=(row.getBoundingClientRect().left+row.getBoundingClientRect().right)/2;
+     return Math.abs(mid-center)<40;
+   });
+   const chips=await page.evaluate(()=>{
+     const row=document.getElementById('cspStyleChips');
+     const chip=row.querySelector('[data-value="c25"]');
+     const mid=(chip.getBoundingClientRect().left+chip.getBoundingClientRect().right)/2;
+     const center=(row.getBoundingClientRect().left+row.getBoundingClientRect().right)/2;
+     row.dispatchEvent(new KeyboardEvent('keydown',{key:'ArrowLeft',bubbles:true,cancelable:true}));
+     return {centered:Math.abs(mid-center)<40,value:document.getElementById('terStyle').value};
+   });
+   assert.equal(chips.centered,true,'the selected map display chip scrolls to the center');
+   assert.equal(chips.value,'c10','arrow keys move the map display choice');
+   await page.locator('.csp-style-chip[data-value="off"]').click();
    // Capture real touch events for interactive edge-pop when the browser supports CDP.
    if((process.env.CSP_UI_BROWSER||'chrome')!=='webkit'){
     const cdp=await context.newCDPSession(page),side=await page.locator('#side').boundingBox();
@@ -143,14 +187,19 @@ const base=process.argv[2]||'http://127.0.0.1:8765/';
      unitsOpen:!!document.getElementById('elevUnitsDisclosure')?.open,
      bands:document.querySelector('#elevBandsDisclosure > summary')?.innerText||'',
      bandsOpen:!!document.getElementById('elevBandsDisclosure')?.open,
+     color:document.querySelector('#elevColorDisclosure > summary')?.innerText||'',
+     colorOpen:!!document.getElementById('elevColorDisclosure')?.open,
      intro:getComputedStyle(document.querySelector('.ev-intro')).display
    }));
    assert.match(elevation.units,/Units/,'elevation units are their own disclosure');
    assert.equal(elevation.unitsOpen,false,'units starts collapsed');
    assert.match(elevation.bands,/Highlight elevations/,'highlight elevations folds to a summary');
    assert.equal(elevation.bandsOpen,false,'highlight elevations starts collapsed');
+   assert.match(elevation.color,/Color by elevation/,'color by elevation is a fold header');
+   assert.match(elevation.color,/Off/,'color by elevation reads off until the switch is on');
+   assert.equal(elevation.colorOpen,false,'color by elevation starts collapsed');
    assert.equal(elevation.intro,'none','the phone highlight card drops the studio intro');
-   await page.evaluate(()=>{document.getElementById('elevSpectrumMore').open=true});
+   await page.evaluate(()=>{document.getElementById('elevColorDisclosure').open=true});
    await page.locator('#elevVal').click();
    await page.waitForTimeout(250);
    assert.equal(await page.locator('#cspPageClose').getAttribute('aria-label'),'Dismiss keyboard','page close points at the focused field');
