@@ -64,6 +64,8 @@ pub struct Level {
     pub block_width: u32,
     pub block_height: u32,
     pub compression: u16,
+    /// LercParameters[1]: 0 = none, 1 = Deflate, 2 = Zstandard.
+    pub lerc_compression: u16,
     pub predictor: u16,
     pub bits_per_sample: u16,
     pub samples_per_pixel: u16,
@@ -364,6 +366,10 @@ pub fn parse<S: Source + ?Sized>(src: &S) -> Result<Tiff, TiffError> {
                 block_width: u32::try_from(first_int(322, 0)?).ok()?,
                 block_height: u32::try_from(first_int(323, 0)?).ok()?,
                 compression: u16::try_from(first_int(259, 1)?).ok()?,
+                lerc_compression: match tag(50674) {
+                    Some(entry) => u16::try_from(r.integers(entry)?.get(1).copied().unwrap_or(0)).ok()?,
+                    None => 0,
+                },
                 predictor: u16::try_from(first_int(317, 1)?).ok()?,
                 bits_per_sample: u16::try_from(first_int(258, 32)?).ok()?,
                 samples_per_pixel: u16::try_from(first_int(277, 1)?).ok()?,

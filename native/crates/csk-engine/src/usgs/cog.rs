@@ -240,8 +240,17 @@ impl CogReader {
                     .filter(|v| *v <= 32 << 20)
                     .ok_or_else(|| ReadError::Decode("decoded block exceeds 32 MiB".into()))?
                     as usize;
+                // LERC may retain typed output, validity masks, byte planes
+                // and conversion scratch together. Secondary decompression
+                // adds an encoded blob and a bounded 8 MiB zstd window.
+                let (scratch_per_sample, fixed_scratch) = if level.compression == 34887 {
+                    (48, 10 << 20)
+                } else {
+                    (u64::from(level.bits_per_sample).div_ceil(8), 0)
+                };
                 let scratch = samples
-                    .checked_mul(u64::from(level.bits_per_sample).div_ceil(8))
+                    .checked_mul(scratch_per_sample)
+                    .and_then(|v| v.checked_add(fixed_scratch))
                     .and_then(|v| v.checked_add(count))
                     .filter(|v| *v <= 64 << 20)
                     .ok_or_else(|| ReadError::Decode("decode scratch exceeds 64 MiB".into()))?

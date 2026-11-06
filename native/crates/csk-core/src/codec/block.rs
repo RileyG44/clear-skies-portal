@@ -16,6 +16,7 @@ pub enum DecodeError {
     /// The block's declared size is implausible (or overflows).
     Size,
     Inflate,
+    Lerc(String),
 }
 
 impl fmt::Display for DecodeError {
@@ -26,6 +27,7 @@ impl fmt::Display for DecodeError {
             Self::SampleFormat { bits, format } => write!(f, "unsupported sample format bps={bits} sf={format}"),
             Self::Size => write!(f, "block size out of range"),
             Self::Inflate => write!(f, "corrupt deflate stream"),
+            Self::Lerc(message) => write!(f, "LERC: {message}"),
         }
     }
 }
@@ -54,6 +56,54 @@ pub fn decode_block(raw: &[u8], level: &Level, little_endian: bool) -> Result<Ve
         return Err(DecodeError::Size);
     }
     let bytes = samples * bps;
+
+    if level.compression == 34887 {
+        if spp != 1 || level.predictor != 1 {
+            return Err(DecodeError::Lerc("non-scalar or predicted LERC TIFF".into()));
+        }
+        let limit = samples.checked_mul(12).and_then(|n| n.checked_add(64 << 10)).ok_or(DecodeError::Size)?;
+        let inflated;
+        let blob = match level.lerc_compression {
+            0 => raw,
+            1 => {
+                inflated = miniz_oxide::inflate::decompress_to_vec_zlib_with_limit(raw, limit)
+                    .map_err(|_| DecodeError::Inflate)?;
+                &inflated
+            }
+            2 => {
+                use std::io::Read;
+                let mut decoder = zstd::stream::read::Decoder::with_buffer(raw).map_err(|_| DecodeError::Inflate)?;
+                // Set before the first read: limiting output alone does not
+                // bound the window allocated from an untrusted frame header.
+                decoder.window_log_max(23).map_err(|_| DecodeError::Inflate)?;
+                let mut buffer = vec![0; limit + 1];
+                let mut used = 0;
+                while used < buffer.len() {
+                    let n = decoder.read(&mut buffer[used..]).map_err(|_| DecodeError::Inflate)?;
+                    if n == 0 {
+                        break;
+                    }
+                    used += n;
+                }
+                if used > limit {
+                    return Err(DecodeError::Size);
+                }
+                buffer.truncate(used);
+                inflated = buffer;
+                &inflated
+            }
+            other => return Err(DecodeError::Lerc(format!("unsupported secondary compression {other}"))),
+        };
+        let mut raster = super::lerc::decode(blob, samples)?;
+        if raster.width != level.block_width
+            || raster.height > level.block_height
+            || (!level.stripped && raster.height != level.block_height)
+        {
+            return Err(DecodeError::Size);
+        }
+        raster.values.resize(samples, f32::NAN);
+        return Ok(raster.values);
+    }
 
     let mut d = match level.compression {
         1 => raw[..raw.len().min(bytes)].to_vec(),

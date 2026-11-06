@@ -4,6 +4,7 @@
 //! `native/fixtures/goldens.json` (bit-exact decode).
 
 pub mod block;
+pub mod lerc;
 pub mod lzw;
 pub mod predictor;
 pub mod tiff;
