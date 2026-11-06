@@ -202,6 +202,21 @@ const base=process.argv[2]||'http://127.0.0.1:8765/';
    assert.equal(opened.heading,'none','terrain downloads hides the desktop heading');
    assert.equal(opened.about,'none','sources and scale hides the desktop heading');
    assert.equal(opened.label,'15px','the source row uses the list title size');
+   for(const width of [375,393,430]){
+    await page.setViewportSize({width,height:932});await page.waitForTimeout(450);
+    const picker=await page.evaluate(()=>{
+     const label=document.querySelector('label[for="terSrc"]'),select=document.getElementById('terSrc'),s=getComputedStyle(select);
+     const canvas=document.createElement('canvas'),ctx=canvas.getContext('2d');ctx.font=s.font;
+     return {labelRight:label.getBoundingClientRect().right,left:select.getBoundingClientRect().left,
+      available:select.clientWidth-parseFloat(s.paddingLeft)-parseFloat(s.paddingRight),text:ctx.measureText(select.selectedOptions[0].textContent).width};
+    });
+    assert(picker.labelRight<=picker.left,`source picker does not overlap at ${width}px: ${JSON.stringify(picker)}`);
+    assert(picker.available>=picker.text,`source picker value fits at ${width}px: ${JSON.stringify(picker)}`);
+    if(!dark&&width!==430){
+     await page.locator('#terSrc').scrollIntoViewIfNeeded();
+     await page.screenshot({path:path.join(output,`downloads-${width}.png`)});
+    }
+   }
    await page.evaluate(()=>{
      document.getElementById('cspTerrainDownloads').open=false;
      document.getElementById('cspTerrainAbout').open=false;
@@ -246,6 +261,33 @@ const base=process.argv[2]||'http://127.0.0.1:8765/';
    assert.equal(flipped.open,false,'the color fold stays closed when the switch turns on');
    await page.locator('#lb_elevSh').click();
    await page.evaluate(()=>{document.getElementById('elevColorDisclosure').open=true});
+   for(const width of [375,393,430]){
+    await page.setViewportSize({width,height:932});await page.waitForTimeout(450);
+    const color=await page.evaluate(()=>{
+     const select=document.getElementById('elevPalette'),s=getComputedStyle(select),ctx=document.createElement('canvas').getContext('2d');ctx.font=s.font;
+     const left=document.getElementById('elevColorDisclosure').getBoundingClientRect().left;
+     const top=selector=>document.querySelector(selector).getBoundingClientRect().top;
+     return {available:select.clientWidth-parseFloat(s.paddingLeft)-parseFloat(s.paddingRight),text:ctx.measureText(select.selectedOptions[0].textContent).width,
+      inset:document.getElementById('elevRangePreview').getBoundingClientRect().left-left,
+      mid:document.getElementById('elevMidColor').nextElementSibling.textContent,
+      help:document.getElementById('elevSpanHint').parentElement.id,
+      order:['#elevVal','#elevSpan','.elev-spectrum-scale','#cspColorPresetRow','#elevPaletteBox','#elevAlpha','#cspColorRangeHelp','.ev-actions'].map(top)};
+    });
+    assert(color.available>=color.text,`elevation preset fits at ${width}px: ${JSON.stringify(color)}`);
+    assert(Math.abs(color.inset-16)<1,'elevation scale has the native inset');
+    assert.equal(color.mid,'Reference');assert.equal(color.help,'cspColorRangeHelp');
+    assert.deepEqual(color.order,color.order.slice().sort((a,b)=>a-b),'elevation controls follow the native order');
+    if(!dark&&width!==430){
+     await page.locator('#elevPalette').scrollIntoViewIfNeeded();
+     await page.screenshot({path:path.join(output,`elevation-${width}.png`)});
+    }
+   }
+   await page.setViewportSize({width:844,height:430});await page.waitForTimeout(450);
+   assert.equal(await page.locator('#elevPalette').count(),1,'rotation keeps one live palette control');
+   assert(await page.locator('#elevSpectrumMore .ev-color-row #elevPalette').count(),'landscape restores the original controls');
+   await page.setViewportSize({width:430,height:932});await page.waitForTimeout(450);
+   assert.equal(await page.locator('#cspColorPresetRow #elevPalette').count(),1,'portrait restores the native picker row');
+   assert(await page.evaluate(()=>document.getElementById('elevColorDisclosure')?.open),'rotation keeps the open color fold open');
    await page.locator('#elevVal').click();
    await page.waitForTimeout(250);
    assert.equal(await page.locator('#cspPageClose').getAttribute('aria-label'),'Dismiss keyboard','page close points at the focused field');

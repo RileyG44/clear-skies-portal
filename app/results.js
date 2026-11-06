@@ -63,6 +63,7 @@ function renderPasses(){
    of the catalog behind them. Real buttons, so keyboards reach them too. */
 function summarise(pool){
   const el=$("#summary");
+  el.cspRecommendationPool=pool;
   showPane("summary", pool.length>0);
   if(!pool.length){ el.innerHTML=""; setCount("summary",""); return }
   const byDate=pool.slice().sort((a,b)=>new Date(b.date)-new Date(a.date));
@@ -111,6 +112,10 @@ function summarise(pool){
   }
   setCount("summary", pool.length+" scenes");
 }
+matchMedia("(max-width:760px) and (orientation:portrait)").addEventListener("change",()=>{
+  const pool=$("#summary")?.cspRecommendationPool;
+  if(pool) summarise(pool);
+});
 
 /* A "photo" here means a daylight true-color scene - the ordinary satellite
    view you get on a maps app. Explicitly not radar, not night lights, not

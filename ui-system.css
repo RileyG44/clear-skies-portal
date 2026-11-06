@@ -3720,9 +3720,8 @@ body.csp-redesign .ls-layer-label .menu-section-title{margin:0}
 
 /* Native phone chrome. Keep the title/subtitle inside one compact navigation
    bar and retain the same glass through home and pushed pages.
-   Detent motion clips a frozen sheet. Animating height or bottom under the
-   backdrop filter relayouts the map blur on every frame. */
-#cspSheetViewport{display:contents}
+   Retain the small height spring: profiling found that freezing and rebuilding
+   the sheet added more layout/paint work than its isolated scroller saved. */
 @media(max-width:760px){html{-webkit-text-size-adjust:100%;text-size-adjust:100%}}
 .csp-close-menu{display:none}
 @media(max-width:760px) and (orientation:portrait){
@@ -3731,13 +3730,9 @@ body.csp-redesign .ls-layer-label .menu-section-title{margin:0}
     border-radius:32px 32px max(32px,calc(var(--screen-radius,36px) - 4px)) max(32px,calc(var(--screen-radius,36px) - 4px));
     padding-top:0;
     bottom:calc(4px + var(--sheet-keyboard,0px));
-    transition:transform .35s cubic-bezier(.28,.9,.32,1.08),opacity .24s ease;
+    transition:height .35s cubic-bezier(.28,.9,.32,1.08),bottom .35s cubic-bezier(.28,.9,.32,1.08),transform .35s cubic-bezier(.28,.9,.32,1.08),opacity .24s ease;
   }
   .csp-glass body.csp-redesign.csp-redesign.csp-sheet-dragging #side{transition:none}
-  #cspSheetViewport.csp-sheet-viewport{display:block;position:absolute;overflow:clip;contain:strict;pointer-events:none;z-index:1200}
-  .csp-glass body.csp-redesign.csp-redesign #cspSheetViewport.csp-sheet-viewport #side.csp-sheet-clip{
-    inset:0;width:100%!important;max-width:none;min-width:0;pointer-events:auto;will-change:transform;
-  }
   .csp-glass body.csp-redesign.csp-redesign[data-csp-detent="large"] #side{
     height:max(160px,calc(var(--sheet-large) - var(--sheet-keyboard,0px)));
   }
@@ -4121,7 +4116,7 @@ body.csp-redesign .ls-layer-label .menu-section-title{margin:0}
   .csp-glass body.csp-redesign.csp-redesign #cspWorkspace #elevColorDisclosure .ev-colors{
     margin:0;padding:8px 16px;border-top:.5px solid var(--glass-edge);background:transparent;
   }
-  .csp-glass body.csp-redesign.csp-redesign #cspWorkspace #elevColorDisclosure .elev-spectrum-scale{margin:0;padding:8px 16px 0}
+  .csp-glass body.csp-redesign.csp-redesign #cspWorkspace #panes #elevColorDisclosure .elev-spectrum-scale{margin:0;padding:8px 16px 0}
   .csp-glass body.csp-redesign.csp-redesign #cspWorkspace #elevColorDisclosure .ev-actions{
     display:flex;min-height:44px;border-top:.5px solid var(--glass-edge);
   }
@@ -4170,9 +4165,24 @@ body.csp-redesign .ls-layer-label .menu-section-title{margin:0}
   .csp-glass body.csp-redesign.csp-redesign #cspWorkspace #elevColorDisclosure .ev-body > .ev-field:has(#elevVal){order:1}
   .csp-glass body.csp-redesign.csp-redesign #cspWorkspace #elevColorDisclosure .ev-body > .ev-field:has(#elevSpan){order:2}
   .csp-glass body.csp-redesign.csp-redesign #cspWorkspace #elevColorDisclosure .elev-spectrum-scale{order:3}
-  .csp-glass body.csp-redesign.csp-redesign #cspWorkspace #elevColorDisclosure #elevPaletteBox{order:4}
-  .csp-glass body.csp-redesign.csp-redesign #cspWorkspace #elevColorDisclosure .ev-body > .ev-field:has(#elevAlpha){order:5}
-  .csp-glass body.csp-redesign.csp-redesign #cspWorkspace #elevColorDisclosure :is(.ev-status,.ev-actions){order:6}
+  .csp-glass body.csp-redesign.csp-redesign #cspWorkspace #cspColorPresetRow{
+    order:4;display:grid;grid-template-columns:auto minmax(0,1fr);align-items:center;gap:8px;min-height:44px;padding:0 16px;border-top:.5px solid var(--glass-edge);font-size:15px;
+  }
+  .csp-glass body.csp-redesign.csp-redesign #cspWorkspace #panes #elevPalette{
+    width:100%;min-width:0;min-height:44px;border:0;border-radius:0;background-color:transparent;box-shadow:none;color:var(--ui-text-muted);font-size:15px;text-align:right;
+  }
+  .csp-glass body.csp-redesign.csp-redesign #cspWorkspace #elevColorDisclosure #elevPaletteBox{order:5}
+  .csp-glass body.csp-redesign.csp-redesign #cspWorkspace #panes #elevPaletteBox .ev-color-row{justify-content:space-between;align-items:center;flex-wrap:wrap}
+  .csp-glass body.csp-redesign.csp-redesign #cspWorkspace #panes #elevPaletteReverse{
+    display:flex;align-items:center;gap:4px;width:auto;min-height:44px;padding:4px;border:0;background:transparent;color:var(--ui-accent);font-size:12px;
+  }
+  .csp-glass body.csp-redesign.csp-redesign #cspWorkspace #panes #elevPaletteReverse svg{width:18px;height:18px}
+  .csp-glass body.csp-redesign.csp-redesign #cspWorkspace #elevColorDisclosure .ev-body > .ev-field:has(#elevAlpha){order:6}
+  .csp-glass body.csp-redesign.csp-redesign #cspWorkspace #panes #elevColorDisclosure .ev-status{order:7;margin:0;padding:8px 16px}
+  .csp-glass body.csp-redesign.csp-redesign #cspWorkspace #cspColorRangeHelp{order:8;border-top:.5px solid var(--glass-edge);border-radius:0;background:transparent}
+  .csp-glass body.csp-redesign.csp-redesign #cspWorkspace #cspColorRangeHelp > summary{min-height:44px;padding:8px 16px;font-size:15px;font-weight:500}
+  .csp-glass body.csp-redesign.csp-redesign #cspWorkspace #cspColorRangeHelp > p{margin:0;padding:0 16px 12px;font-size:12px;color:var(--ui-text-muted)}
+  .csp-glass body.csp-redesign.csp-redesign #cspWorkspace #elevColorDisclosure .ev-actions{order:9}
   .csp-glass body.csp-redesign.csp-redesign #cspWorkspace #elevColorDisclosure .ev-actions{flex-direction:column}
   .csp-glass body.csp-redesign.csp-redesign #cspWorkspace #elevColorDisclosure .ev-actions .linkbtn{text-align:left}
   .csp-glass body.csp-redesign.csp-redesign #cspWorkspace #elevColorDisclosure .ev-actions .linkbtn + .linkbtn{border-top:.5px solid var(--glass-edge)}
@@ -4191,7 +4201,7 @@ body.csp-redesign .ls-layer-label .menu-section-title{margin:0}
 @media(max-width:760px) and (orientation:portrait){
   .csp-glass body.csp-redesign.csp-redesign #cspWorkspace .csp-best-recommendation{cursor:default}
   .csp-glass body.csp-redesign.csp-redesign #cspWorkspace .csp-best-show{
-    grid-area:show;justify-self:start;min-height:44px;padding:8px 18px;border:0;border-radius:999px;
+    grid-area:show;justify-self:stretch;min-height:50px;padding:8px 18px;border:0;border-radius:999px;
     background:var(--ui-accent);color:var(--ui-on-accent);font:inherit;font-size:15px;font-weight:600;
   }
   .csp-glass body.csp-redesign.csp-redesign #cspWorkspace .csp-best-shown{
@@ -4199,4 +4209,22 @@ body.csp-redesign .ls-layer-label .menu-section-title{margin:0}
     background:color-mix(in srgb,var(--ui-ok) 22%,transparent);font-size:11px;font-weight:600;
   }
   .csp-glass body.csp-redesign.csp-redesign #cspWorkspace :is(.csp-best-show,.csp-best-shown)[hidden]{display:none}
+}
+
+.csp-glass.csp-reduce-motion body.csp-redesign.csp-redesign #side{transition:none!important}
+@media(max-width:760px) and (orientation:portrait){
+  .csp-glass body.csp-redesign.csp-redesign #cspWorkspace #cspTerrainDownloads .terrain-data-settings .fgrid{
+    grid-template-columns:minmax(0,1fr) minmax(0,60%);
+  }
+  .csp-glass body.csp-redesign.csp-redesign #cspWorkspace #cspTerrainDownloads label[for="terSrc"]{
+    min-width:0;white-space:normal;overflow-wrap:normal;
+  }
+  .csp-glass body.csp-redesign.csp-redesign #cspWorkspace #cspTerrainDownloads #terSrc{width:100%}
+  .csp-glass body.csp-redesign.csp-redesign #cspWorkspace #cspTerrainDownloads .dnr-status-row{padding-inline:16px}
+  .csp-glass body.csp-redesign.csp-redesign #cspWorkspace #panes #cspTerrainDownloads #dnrClear{color:var(--ui-accent)}
+  .csp-glass body.csp-redesign.csp-redesign #cspWorkspace #cspTerrainDownloads :is(.warmmsg,#dnrEngineHint):empty{display:none}
+  .csp-glass body.csp-redesign.csp-redesign #cspWorkspace .ls-phone-group .ls-reset{
+    justify-self:stretch;min-height:44px;margin:0;padding:8px 16px;border-top:.5px solid var(--glass-edge);text-align:left;color:var(--ui-accent);font-size:15px;
+  }
+  .csp-glass body.csp-redesign.csp-redesign #cspWorkspace .ls-phone-group .ls-add{margin:0;padding:0}
 }
