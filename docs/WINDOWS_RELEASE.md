@@ -1,8 +1,9 @@
-Windows 10/11 x64. Download **ClearSkies-Setup-1.0.10-x64.exe** for one-click installation. It permanently installs ClearSkies and its terrain engine into your user profile, creates Desktop and Start shortcuts, and registers an uninstaller in Windows Settings. No Node.js or terminal setup needed.
+Windows 10/11 x64. Download **ClearSkies-Setup-1.0.11-x64.exe** for one-click installation. It permanently installs ClearSkies and its terrain engine into your user profile, creates Desktop and Start shortcuts, and registers an uninstaller in Windows Settings. No Node.js or terminal setup needed.
 
-**ClearSkies-Guided-Setup-1.0.10-x64.exe** provides a branded wizard and location selection. The ZIP is an optional portable alternative; extract the entire folder before launching.
+**ClearSkies-Guided-Setup-1.0.11-x64.exe** provides a branded wizard and location selection. The ZIP is an optional portable alternative; extract the entire folder before launching.
 
-- New in 1.0.10: 3D terrain opens tilted and responds to two-finger tilt again. The 3D view now appears on its first drawn frame, so one slow elevation tile can no longer hold it hidden behind the flat map. The startup splash shows a growing tree until the map is ready. Bundled map build 2026-11-05m.
+- New in 1.0.11: The startup screen stays plain white with the landing maple, which grows and then dissolves into the ready map. A cached map still shows the tree, and a slow connection no longer shows an error while tiles are still arriving. The installed iPhone layout fills the screen, and the phone toolbar stays clear of map info. Bundled map build 2026-11-05r.
+- From 1.0.10: 3D terrain opens tilted and responds to two-finger tilt again. The 3D view now appears on its first drawn frame, so one slow elevation tile can no longer hold it hidden behind the flat map.
 - From 1.0.9: reorganized Satellite imagery and Elevation menus with Planetary Computer results and exact heights; right-click Identify surface geology works again.
 - Optional **Advanced configuration** on the welcome page lets you set terrain tile, WA DNR and memory cache limits, free disk-space reserve, terrain workers, and smoother panning (Off / Auto / On). Skip it to use the default setup. Reopen the welcome with the Start setup shortcut to change these later.
 - Includes the **Missoula** LiDAR preset and the Missoula scablands startup view near Medical Lake, WA.
