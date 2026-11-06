@@ -64,6 +64,9 @@ jobs:
         working-directory: native
     steps:
       - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.13'
       - name: Install the pinned toolchain
         run: rustup show active-toolchain || rustup toolchain install
       - name: Format
@@ -71,7 +74,14 @@ jobs:
       - name: Lint
         run: cargo clippy --locked --all-targets -- -D warnings
       - name: Test
+        env:
+          CSK_TILED_QA_OUTPUT: ${{ runner.temp }}/csk-prepared-qa.tif
         run: cargo test --locked
+      - name: Validate prepared terrain with GDAL
+        run: |
+          python -m venv "$RUNNER_TEMP/csk-tiff-qa"
+          "$RUNNER_TEMP/csk-tiff-qa/bin/pip" install --quiet 'rasterio==1.5.2'
+          "$RUNNER_TEMP/csk-tiff-qa/bin/python" fixtures/tiff/validate-prepared.py "$RUNNER_TEMP/csk-prepared-qa.tif"
       - name: Build the app's engine library for iPhone and the simulator
         run: |
           cargo build --locked --release -p csk-ffi --target aarch64-apple-ios

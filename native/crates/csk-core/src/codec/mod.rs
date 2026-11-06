@@ -7,7 +7,9 @@ pub mod block;
 pub mod lerc;
 pub mod lzw;
 pub mod predictor;
+pub mod rows;
 pub mod tiff;
+pub mod tiled;
 
 pub use block::{DecodeError, decode_block};
 pub use tiff::{Geo, GeoValue, Level, Source, Tiff, TiffError, Windows, parse};

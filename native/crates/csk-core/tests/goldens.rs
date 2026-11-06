@@ -69,6 +69,20 @@ fn tiff_cases_decode_bit_exact() {
                     .unwrap_or_else(|e| panic!("{ctx} block {j}: {e}"));
                 assert_eq!(px.len(), (lv.block_width * lv.block_height) as usize, "{ctx} block {j}");
                 assert_eq!(hex(&f32_bytes(&px)), hash.as_str().unwrap(), "{ctx} block {j} is not bit-exact");
+                // Import streams real rows; a last strip need not contain the
+                // compatibility decoder's zero padding past image height.
+                let rows = if lv.stripped {
+                    lv.block_height.min(lv.height - j as u32 * lv.block_height)
+                } else {
+                    lv.block_height
+                };
+                let mut streamed = Vec::new();
+                codec::rows::decode(&file[o..o + n], lv, tiff.little_endian, rows, |_, row| {
+                    streamed.extend_from_slice(row);
+                    Ok(())
+                })
+                .unwrap_or_else(|e| panic!("{ctx} block {j} row stream: {e}"));
+                assert_eq!(f32_bytes(&streamed), f32_bytes(&px[..streamed.len()]), "{ctx} block {j}: row parity");
                 if j == 0 {
                     let sample: Vec<f32> = f64s(&want["sample"]).iter().map(|&v| v as f32).collect();
                     assert_eq!(&px[..4], sample.as_slice(), "{ctx}");

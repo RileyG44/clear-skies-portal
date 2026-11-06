@@ -119,16 +119,30 @@ pub fn decode_block(raw: &[u8], level: &Level, little_endian: bool) -> Result<Ve
     };
     d.resize(bytes, 0);
 
+    decode_samples(&mut d, level, little_endian, h)
+}
+
+/// Predictors restart at each row, so strip preparation can share the exact
+/// sample conversion with block decoding without retaining the whole strip.
+pub(crate) fn decode_samples(
+    d: &mut [u8],
+    level: &Level,
+    little_endian: bool,
+    rows: usize,
+) -> Result<Vec<f32>, DecodeError> {
+    let bps = usize::from(level.bits_per_sample) / 8;
+    let spp = usize::from(level.samples_per_pixel.max(1));
+    let w = level.block_width as usize;
     match level.predictor {
-        1 => to_little_endian(&mut d, bps, little_endian),
+        1 => to_little_endian(d, bps, little_endian),
         2 => {
-            to_little_endian(&mut d, bps, little_endian);
-            predictor::undo_horizontal(&mut d, w, h, spp, bps);
+            to_little_endian(d, bps, little_endian);
+            predictor::undo_horizontal(d, w, rows, spp, bps);
         }
-        3 => predictor::undo_floating_point(&mut d, w, h, spp, bps),
+        3 => predictor::undo_floating_point(d, w, rows, spp, bps),
         p => return Err(DecodeError::Predictor(p)),
     }
-    convert(&d, bps, level)
+    convert(d, bps, level)
 }
 
 fn to_little_endian(d: &mut [u8], bps: usize, little_endian: bool) {

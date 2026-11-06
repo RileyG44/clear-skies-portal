@@ -142,6 +142,7 @@ dependencies = [
 name = "csk-core"
 version = "0.1.0"
 dependencies = [
+ "flate2",
  "lerc-rs",
  "miniz_oxide 0.8.9",
  "serde_json",

@@ -3,9 +3,9 @@
 //! The portal's download builds a ZIP of whole source files on the fly
 //! (streamed, no byte ranges), so acquisition is staged: download the ZIP to
 //! a file, extract each DTM with its CRC checked, inspect it, and publish it
-//! with one index transaction. DNR's DTMs are already tiled, multi-level
-//! (Big)TIFFs, so they are read in place through the same block cache as
-//! USGS COGs; nothing is re-encoded.
+//! with one index transaction. Tiled (Big)TIFFs are read in place through the
+//! USGS block cache. Strip-layout rasters stream into lossless tiled float32
+//! TIFFs with bounded overviews before publication.
 //!
 //! Vertical units come only from GeoKeys, scoped vertical citations or
 //! documented survey metadata. Unknown units fail closed; terrain comparisons
@@ -695,11 +695,20 @@ impl Engine {
             if !self.work.checkpoint().await {
                 return Err("engine stopped".into());
             }
+            let file = self
+                .dnr_prepare(&file)
+                .await
+                .map_err(|e| format!("DNR dataset {}, {archive_path}: {e}", job.dataset))?;
             let info = self
                 .dnr_inspect(job, &archive_path, &file)
                 .await
                 .map_err(|e| format!("DNR dataset {}, {archive_path}: {e}", job.dataset))?;
             inspected.push((file, info));
+        }
+        let protected: u64 = local.files().iter().filter(|f| intersects(&f.bounds, &job.bbox)).map(|f| f.bytes).sum();
+        let prepared: u64 = inspected.iter().map(|(_, f)| f.bytes).sum();
+        if protected.saturating_add(prepared) > MAX_STORE {
+            return Err("Prepared DNR rasters exceed the local store budget".into());
         }
         // Validate every member before moving any member into the source store.
         let mut added: Vec<LocalFile> = Vec::new();
@@ -720,6 +729,93 @@ impl Engine {
         let pending = state.active.is_some() || !state.queue.is_empty();
         let cpu = state.active.as_ref().map_or(!state.queue.is_empty(), |(_, a)| a.state != "downloading");
         (pending, cpu)
+    }
+
+    /// Convert only strip layouts. Source archive and extracted TIFF stay
+    /// available until every member validates; a partial output is never
+    /// indexed. Existing tiled sources retain their upstream bytes.
+    async fn dnr_prepare(self: &Arc<Self>, file: &Path) -> Result<PathBuf, String> {
+        use csk_core::codec::{rows, tiled};
+        use std::io::{Read, Seek, SeekFrom};
+        let size = std::fs::metadata(file).map_err(|e| e.to_string())?.len();
+        let key = format!("file:{}", file.display());
+        let tiff = self.tiles.usgs.cog.header(&key, size).await.map_err(|e| e.to_string())?;
+        let level = &tiff.levels[0];
+        if !level.stripped {
+            return Ok(file.to_owned());
+        }
+        // LERC strips are self-contained blobs. Keep the bounded existing
+        // decoder for those; large blobs still fail the explicit block gate.
+        if level.compression == 34887 {
+            return Ok(file.to_owned());
+        }
+        if !tiff.complete || level.samples_per_pixel != 1 || level.block_width != level.width {
+            return Err("DNR strip directory is incomplete or not a scalar elevation grid".into());
+        }
+        let decoder_bytes = rows::scratch_bytes(level).map_err(|e| e.to_string())?;
+        let plan = tiled::Plan::new(level.width, level.height, &tiff.geo, MAX_ARCHIVE).map_err(|e| e.to_string())?;
+        let estimate = plan.memory_bytes + decoder_bytes;
+        let memory = self
+            .memory
+            .reserve(estimate)
+            .or_else(|_| {
+                self.tiles.usgs.cog.purge_memory();
+                self.analysis.purge_memory();
+                self.memory.reserve(estimate)
+            })
+            .map_err(|e| e.to_string())?;
+        let disk = self.disk.claim(plan.max_bytes).map_err(|e| e.to_string())?;
+        let output = file.with_extension("prepared.tif");
+        let (input_path, output_path, work) = (file.to_owned(), output.clone(), self.work.clone());
+        tokio::task::spawn_blocking(move || -> Result<(), String> {
+            // Both claims stay with blocking I/O if an async waiter leaves.
+            let _memory = memory;
+            let result = (|| -> std::io::Result<()> {
+                let mut input = std::fs::File::open(&input_path)?;
+                // Overview preparation reads already-written base tiles.
+                let output = std::fs::OpenOptions::new()
+                    .read(true)
+                    .write(true)
+                    .create(true)
+                    .truncate(true)
+                    .open(&output_path)?;
+                let mut writer = tiled::Writer::new(output, plan)?;
+                let level = &tiff.levels[0];
+                let count = level.height.div_ceil(level.block_height);
+                if level.offsets.len() != count as usize || level.counts.len() != count as usize {
+                    return Err(std::io::Error::other("DNR strip table length is invalid"));
+                }
+                for i in 0..count as usize {
+                    let (offset, length) = (level.offsets[i], level.counts[i]);
+                    if offset.checked_add(length).is_none_or(|end| end > size) || length == 0 {
+                        return Err(std::io::Error::other("DNR strip range is outside the file"));
+                    }
+                    input.seek(SeekFrom::Start(offset))?;
+                    let reader = work.reader((&mut input).take(length));
+                    let actual_rows = level.block_height.min(level.height - i as u32 * level.block_height);
+                    rows::decode(reader, level, tiff.little_endian, actual_rows, |_, row| {
+                        if !work.checkpoint_blocking() {
+                            return Err(std::io::Error::other("engine stopped"));
+                        }
+                        writer.row(row)
+                    })?;
+                }
+                let output = writer.finish(|| {
+                    if work.checkpoint_blocking() { Ok(()) } else { Err(std::io::Error::other("engine stopped")) }
+                })?;
+                output.sync_all()?;
+                Ok(())
+            })();
+            if let Err(e) = result {
+                let _ = std::fs::remove_file(&output_path);
+                return Err(e.to_string());
+            }
+            disk.materialized().map_err(|e| e.to_string())?;
+            Ok(())
+        })
+        .await
+        .map_err(|_| "DNR strip preparation stopped".to_owned())??;
+        Ok(output)
     }
 
     async fn dnr_inspect(self: &Arc<Self>, job: &Job, archive_path: &str, file: &Path) -> Result<LocalFile, String> {
@@ -778,7 +874,7 @@ impl Engine {
             origin,
             resolution: [sx, -sy],
             pixel_is_area,
-            nodata: g.nodata,
+            nodata: g.nodata.filter(|v| v.is_finite()),
             vertical_meters: 1.0,
             vertical_basis: String::new(),
             native_meters: sx * proj.unit,
@@ -871,14 +967,18 @@ impl Engine {
             // The coarsest level still no coarser than the output.
             let mut level = 0;
             for i in 0..tiff.levels.len() {
-                if f64::from(f.width) / f64::from(tiff.levels[i].width) * f.native_meters <= spec.ground_res {
+                let factor = (f64::from(f.width) / f64::from(tiff.levels[i].width))
+                    .max(f64::from(f.height) / f64::from(tiff.levels[i].height));
+                if factor * f.native_meters <= spec.ground_res {
                     level = i;
                 } else {
                     break;
                 }
             }
             let lv = &tiff.levels[level];
-            let factor = f64::from(f.width) / f64::from(lv.width);
+            let factor_x = f64::from(f.width) / f64::from(lv.width);
+            let factor_y = f64::from(f.height) / f64::from(lv.height);
+            let factor = factor_x.max(factor_y);
             let proj = f.proj.projection();
             // Project a coarse lattice and interpolate, as the USGS reader does.
             let k = 8usize;
@@ -893,7 +993,8 @@ impl Engine {
                     nodes.push(proj.forward(lon, lat));
                 }
             }
-            let shift = if f.pixel_is_area { 0.5 } else { 0.5 - 0.5 / factor };
+            let shift_x = if f.pixel_is_area { 0.5 } else { 0.5 - 0.5 / factor_x };
+            let shift_y = if f.pixel_is_area { 0.5 } else { 0.5 - 0.5 / factor_y };
             let (mut px, mut py) = (vec![0f64; size * size], vec![0f64; size * size]);
             let (mut minx, mut miny, mut maxx, mut maxy) =
                 (f64::INFINITY, f64::INFINITY, f64::NEG_INFINITY, f64::NEG_INFINITY);
@@ -911,8 +1012,8 @@ impl Engine {
                         a.0 * (1.0 - dx) * (1.0 - dy) + bb.0 * dx * (1.0 - dy) + c.0 * (1.0 - dx) * dy + d.0 * dx * dy;
                     let sy =
                         a.1 * (1.0 - dx) * (1.0 - dy) + bb.1 * dx * (1.0 - dy) + c.1 * (1.0 - dx) * dy + d.1 * dx * dy;
-                    let xx = (sx - f.origin[0]) / (f.resolution[0] * factor) - shift;
-                    let yy = (sy - f.origin[1]) / (f.resolution[1] * factor) - shift;
+                    let xx = (sx - f.origin[0]) / (f.resolution[0] * factor_x) - shift_x;
+                    let yy = (sy - f.origin[1]) / (f.resolution[1] * factor_y) - shift_y;
                     px[j * size + i] = xx;
                     py[j * size + i] = yy;
                     minx = minx.min(xx);
@@ -1254,6 +1355,131 @@ mod tests {
                 }))
             })
         }
+    }
+
+    /// A single raw strip bigger than the old whole-block decode ceiling.
+    /// Construct it on disk so the test itself never holds a giant raster.
+    fn giant_strip(path: &Path) {
+        use std::io::Write;
+        let (w, h) = (4097u32, 2049u32);
+        let keys: [u16; 24] =
+            [1, 1, 0, 5, 1024, 0, 1, 1, 1025, 0, 1, 1, 3072, 0, 1, 26910, 3076, 0, 1, 9001, 4099, 0, 1, 9003];
+        let mut tags: Vec<(u16, u16, u32, Vec<u8>)> = Vec::new();
+        for (id, value) in [(256, w), (257, h), (273, 0), (278, h), (279, w * h * 4)] {
+            tags.push((id, 4, 1, value.to_le_bytes().to_vec()));
+        }
+        for (id, value) in [(258, 32u16), (259, 1), (262, 1), (277, 1), (339, 3)] {
+            tags.push((id, 3, 1, value.to_le_bytes().to_vec()));
+        }
+        tags.push((33550, 12, 3, [0.5f64, 0.5, 0.0].iter().flat_map(|v| v.to_le_bytes()).collect()));
+        tags.push((
+            33922,
+            12,
+            6,
+            [0.0f64, 0.0, 0.0, 500000.0, 5300000.0, 0.0].iter().flat_map(|v| v.to_le_bytes()).collect(),
+        ));
+        tags.push((34735, 3, keys.len() as u32, keys.iter().flat_map(|v| v.to_le_bytes()).collect()));
+        tags.sort_by_key(|t| t.0);
+        let mut bytes = vec![0; 8 + 2 + tags.len() * 12 + 4];
+        bytes[..8].copy_from_slice(&[b'I', b'I', 42, 0, 8, 0, 0, 0]);
+        bytes[8..10].copy_from_slice(&(tags.len() as u16).to_le_bytes());
+        let mut strip_entry = 0;
+        for (i, (id, kind, count, data)) in tags.iter().enumerate() {
+            let at = 10 + i * 12;
+            bytes[at..at + 2].copy_from_slice(&id.to_le_bytes());
+            bytes[at + 2..at + 4].copy_from_slice(&kind.to_le_bytes());
+            bytes[at + 4..at + 8].copy_from_slice(&count.to_le_bytes());
+            if *id == 273 {
+                strip_entry = at + 8;
+            }
+            if data.len() <= 4 {
+                bytes[at + 8..at + 8 + data.len()].copy_from_slice(data);
+            } else {
+                let offset = bytes.len() as u32;
+                bytes[at + 8..at + 12].copy_from_slice(&offset.to_le_bytes());
+                bytes.extend_from_slice(data);
+            }
+        }
+        let offset = bytes.len() as u32;
+        bytes[strip_entry..strip_entry + 4].copy_from_slice(&offset.to_le_bytes());
+        let mut file = std::fs::File::create(path).unwrap();
+        file.write_all(&bytes).unwrap();
+        for y in 0..h {
+            let row: Vec<u8> = (0..w).flat_map(|x| (1000.0f32 + ((x + y) % 32) as f32 / 4.0).to_le_bytes()).collect();
+            file.write_all(&row).unwrap();
+        }
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn giant_strips_prepare_with_admission_pause_and_numeric_routes() {
+        let dir = tempfile::tempdir().unwrap();
+        let source = dir.path().join("source.tif");
+        giant_strip(&source);
+        let engine = Engine::for_test(
+            crate::Config {
+                cache_dir: dir.path().join("cache"),
+                data_dir: None,
+                cache_budget: 1 << 20,
+                usgs_scope: Some(vec![]),
+            },
+            Arc::new(Portal(Vec::new())),
+        )
+        .unwrap();
+        let job = Job {
+            id: "strip".into(),
+            bbox: [-124.0, 46.0, -121.0, 49.0],
+            dataset: 0,
+            project: "Strip fixture".into(),
+            year: 2021,
+            touched: Instant::now(),
+        };
+        assert!(engine.dnr_inspect(&job, "strip.tif", &source).await.unwrap_err().contains("32 MiB"));
+        engine.memory.set_limit(1024);
+        assert!(engine.dnr_prepare(&source).await.is_err());
+        assert!(!source.with_extension("prepared.tif").exists());
+        engine.memory.set_limit(256 << 20);
+        engine.work.set_allowed(false);
+        let worker = engine.clone();
+        let input = source.clone();
+        let mut task = tokio::spawn(async move { worker.dnr_prepare(&input).await });
+        assert!(tokio::time::timeout(Duration::from_millis(30), &mut task).await.is_err());
+        assert!(engine.memory.stats().used > 0, "parked preparation retains its memory charge");
+        engine.work.set_allowed(true);
+        let prepared = task.await.unwrap().unwrap();
+        let mut info = engine.dnr_inspect(&job, "strip.tif", &prepared).await.unwrap();
+        assert_eq!((info.width, info.height), (4097, 2049));
+        assert_eq!(info.vertical_meters, US_FOOT);
+        let bytes = std::fs::read(&prepared).unwrap();
+        let tiff = csk_core::codec::parse(&bytes).unwrap();
+        assert!(tiff.levels.len() > 1);
+        assert!(tiff.levels.iter().all(|l| !l.stripped && l.block_width * l.block_height * 4 <= 256 * 256 * 4));
+        for (x, y) in [(0, 0), (4096, 2048), (256, 257), (1234, 1000)] {
+            let level = &tiff.levels[0];
+            let index = (y / level.block_height * level.blocks_across() + x / level.block_width) as usize;
+            let offset = level.offsets[index] as usize;
+            let count = level.counts[index] as usize;
+            let tile = csk_core::codec::decode_block(&bytes[offset..offset + count], level, true).unwrap();
+            assert_eq!(
+                tile[((y % level.block_height) * level.block_width + x % level.block_width) as usize],
+                1000.0 + ((x + y) % 32) as f32 / 4.0
+            );
+        }
+        std::fs::rename(&prepared, engine.dnr_local.path_of(&info)).unwrap();
+        info.added = now_ms();
+        *engine.dnr_local.files.lock().unwrap() = vec![info.clone()];
+        let (lon, lat) = ((info.bounds[0] + info.bounds[2]) / 2.0, (info.bounds[1] + info.bounds[3]) / 2.0);
+        let n = 2f64.powi(16);
+        let x = ((lon + 180.0) / 360.0 * n) as u32;
+        let y = ((1.0 - lat.to_radians().tan().asinh() / std::f64::consts::PI) / 2.0 * n) as u32;
+        let response = engine
+            .handle(crate::Request::new("GET", &format!("/api/elev32/wadnr/16/{x}/{y}?acquire=0"), vec![]).unwrap())
+            .await;
+        assert_eq!(response.status, 200);
+        assert_eq!(response.get("X-Elevation-Source"), Some("wadnr-dtm"));
+        let values: Vec<f32> =
+            csk_core::elev32::decode(&response.body).unwrap().samples().filter(|v| v.is_finite()).collect();
+        assert!(values.len() > 32000);
+        assert!(values.iter().all(|v| *v > 304.0 && *v < 308.0), "source feet convert to metres exactly once");
     }
 
     #[tokio::test(flavor = "multi_thread")]
