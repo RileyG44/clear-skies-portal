@@ -273,7 +273,7 @@ pub fn status(state: &AppState, fitted: &Fitted, lon: f64, lat: f64, zoom: f64, 
 }
 
 pub fn counts(state: &AppState) -> Value {
-    let overlays = state.overlays.values().filter(|o| o.on).count();
+    let overlays = crate::overlays::OVERLAYS.iter().filter(|o| o.raster.is_some() && state.overlay(o.id).on).count();
     let layers = 1 + overlays + usize::from(state.terrain.style != "off");
     json!({"layers": layers.to_string(), "terrain": "1"})
 }
@@ -598,8 +598,9 @@ const ADD_LAYERS: [(&str, &str); 8] = [
 pub fn layer_title(state: &AppState, id: &str) -> Option<(String, String)> {
     match id {
         id if id.starts_with("overlay:") => {
-            let info = crate::overlays::info(&id["overlay:".len()..])?;
-            Some((info.name.into(), format!("Labels & reference · {}", info.via)))
+            let info = crate::overlays::find(&id["overlay:".len()..])?;
+            info.raster?;
+            Some((info.name.into(), format!("{} · {}", info.group.name(), info.via)))
         }
         "terrain" => {
             let t = &state.terrain;
@@ -652,33 +653,51 @@ fn layers_page(state: &AppState) -> Value {
     json!({"route": "layers", "title": title, "description": description, "items": items})
 }
 
-/// Labels & reference: the reference overlays, each with its opacity once
-/// on, and where they come from.
-fn labels_page(state: &AppState) -> Value {
-    use crate::overlays::OVERLAYS;
+/// A reference-layer page (Labels & reference, Geology & hazards, Live
+/// conditions, Past landscapes): each overlay's switch and, once on, its
+/// opacity; overlays with no native layer yet as disabled rows; and where
+/// the layers come from.
+fn overlay_page(route: &str, group: crate::overlays::Group, state: &AppState) -> Value {
+    use crate::overlays::{Group, in_group};
     let mut rows = Vec::new();
-    for o in &OVERLAYS {
+    match group {
+        Group::Conditions => rows.push(hint("Live weather, earthquake and volcano alerts aren't in this build yet.")),
+        Group::Past => rows.push(hint("Ice-age reconstructions aren't in this build yet.")),
+        _ => {}
+    }
+    for o in in_group(group) {
+        let r = format!("#ov_{}", o.id);
+        if o.raster.is_none() {
+            rows.push(json!({"kind": "toggle", "ref": r, "title": o.name, "color": o.color, "value": false,
+                "disabled": true, "detail": "Not in this build yet"}));
+            continue;
+        }
         let overlay = state.overlay(o.id);
-        rows.push(json!({"kind": "toggle", "ref": format!("#ov_{}", o.id), "title": o.name, "color": o.color,
-            "value": overlay.on}));
+        rows.push(json!({"kind": "toggle", "ref": r, "title": o.name, "color": o.color, "value": overlay.on}));
         if overlay.on {
             let value = overlay.opacity.round();
             rows.push(json!({"kind": "slider", "ref": format!("#ovOpacity_{}", o.id), "title": "Opacity",
                 "disabled": false, "value": value, "min": 0, "max": 100, "step": 1, "display": format!("{value}%")}));
         }
     }
-    let on = OVERLAYS.iter().filter(|o| state.overlay(o.id).on).count();
-    let sources: Vec<Value> =
-        OVERLAYS.iter().map(|o| json!({"kind": "text", "style": "row", "title": o.name, "detail": o.via})).collect();
+    let on = in_group(group).filter(|o| o.raster.is_some() && state.overlay(o.id).on).count();
+    // Each source, and what its publisher says it is and is not.
+    let sources: Vec<Value> = in_group(group)
+        .flat_map(|o| {
+            let row = json!({"kind": "text", "style": "row", "title": o.name, "detail": o.via});
+            std::iter::once(row).chain(o.note.map(hint))
+        })
+        .collect();
     let items = vec![
-        json!({"kind": "group", "ref": "labels:layers", "pane": true, "title": "Reference layers",
+        json!({"kind": "group", "ref": format!("{route}:layers"), "pane": true, "title": group.pane(),
             "detail": if on == 0 { "None on".to_string() } else { format!("{on} on") }, "open": true, "items": rows}),
-        json!({"kind": "group", "ref": "labels:sources", "title": "About these layers", "items": [
-            {"kind": "disclosure", "ref": "labels:provenance", "title": "Sources & scale", "items": sources},
+        json!({"kind": "group", "ref": format!("{route}:sources"), "title": "About these layers", "items": [
+            {"kind": "disclosure", "ref": format!("{route}:provenance"), "title": "Sources & scale",
+                "items": sources},
         ]}),
     ];
-    let (title, description) = route_info("labels").unwrap_or_default();
-    json!({"route": "labels", "title": title, "description": description, "items": items})
+    let (title, description) = route_info(route).unwrap_or_default();
+    json!({"route": route, "title": title, "description": description, "items": items})
 }
 
 /// A page for `route`, from native state.
@@ -687,7 +706,10 @@ pub fn page(route: &str, state: &AppState, fitted: &Fitted) -> Option<Value> {
     Some(match route {
         "terrain" => terrain_page(state, fitted),
         "layers" => layers_page(state),
-        "labels" => labels_page(state),
+        "labels" | "geology" | "conditions" | "past" => {
+            let group = crate::overlays::Group::for_route(route)?;
+            overlay_page(route, group, state)
+        }
         _ => json!({"route": route, "title": title, "description": description, "items": []}),
     })
 }
@@ -695,4 +717,33 @@ pub fn page(route: &str, state: &AppState, fitted: &Fitted) -> Option<Value> {
 /// Hex colour helper for palettes in pages.
 pub fn colour_hex(value: &str) -> Option<String> {
     parse_hex(value).map(hex)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn overlay_pages_keep_sources_defaults_and_unavailable_rows_honest() {
+        let mut state = AppState::default();
+        state.set_overlay("wafaults", true);
+        let geology = page("geology", &state, &Fitted::default()).unwrap();
+        let rows = geology["items"][0]["items"].as_array().unwrap();
+        assert!(rows.iter().any(|r| r["ref"] == "#ov_wafaults" && r["value"] == true));
+        assert!(rows.iter().any(|r| r["ref"] == "#ovOpacity_wafaults" && r["value"] == 86.0));
+        assert_eq!(layer_title(&state, "overlay:wafaults").unwrap().1, "Geology & hazards · WGS · DDS-1");
+        assert!(geology["items"][1].to_string().contains("site-specific setback"));
+        for group in crate::overlays::Group::ALL {
+            let p = page(group.route(), &state, &Fitted::default()).unwrap();
+            let rows = p["items"][0]["items"].as_array().unwrap();
+            for o in crate::overlays::in_group(group).filter(|o| o.raster.is_none()) {
+                let row = rows.iter().find(|r| r["ref"] == format!("#ov_{}", o.id)).unwrap();
+                assert_eq!(row["disabled"], true);
+                assert_eq!(row["detail"], "Not in this build yet");
+                assert!(layer_title(&state, &format!("overlay:{}", o.id)).is_none());
+            }
+        }
+        assert_eq!(state.overlay("water").opacity, 5.0);
+        assert_eq!(state.overlay("snowdepth").opacity, 70.0);
+    }
 }

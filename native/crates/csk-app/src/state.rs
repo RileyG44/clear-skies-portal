@@ -65,7 +65,16 @@ pub struct Overlay {
 impl AppState {
     /// An overlay's state: off at the default opacity until set.
     pub fn overlay(&self, id: &str) -> Overlay {
-        self.overlays.get(id).copied().unwrap_or(Overlay { on: false, opacity: crate::overlays::DEFAULT_OPACITY })
+        self.overlays.get(id).copied().unwrap_or(Overlay { on: false, opacity: Self::default_opacity(id) })
+    }
+
+    /// An overlay's opacity on a fresh launch: the catalogue's, except Rivers
+    /// & lakes, which the launch view shows faintly.
+    pub fn default_opacity(id: &str) -> f64 {
+        if id == "water" {
+            return LAUNCH_WATER_OPACITY;
+        }
+        crate::overlays::find(id).map_or(crate::overlays::DEFAULT_OPACITY, |o| o.default_opacity)
     }
 
     /// Turns an overlay on or off; one turned on joins the top of the order.

@@ -82,8 +82,10 @@ fn sources(preference: &str) -> Vec<TerrainSource> {
 /// map theme, then the person's order (kept top first).
 fn draws(state: &AppState) -> Vec<Draw> {
     let dark = state.theme == "dark";
-    let base = if dark { RasterLayer::DarkBase } else { RasterLayer::LightBase };
-    let mut out = vec![Draw::Raster(base, RasterStyle { opacity: 1.0, muted: false })];
+    let mut out = Vec::new();
+    if let Some(base) = RasterLayer::by_id(if dark { "dark" } else { "light" }) {
+        out.push(Draw::Raster(base, RasterStyle { opacity: 1.0, muted: false }));
+    }
     for id in state.layer_order.iter().rev() {
         match id.as_str() {
             "terrain" => out.push(Draw::Terrain),
@@ -98,7 +100,7 @@ fn draws(state: &AppState) -> Vec<Draw> {
         }
     }
     if !out.contains(&Draw::Terrain) {
-        out.insert(1, Draw::Terrain);
+        out.insert(out.len().min(1), Draw::Terrain);
     }
     out
 }
@@ -352,7 +354,8 @@ impl App {
                 }
                 if let Some(id) = r.strip_prefix("layer:").and_then(|r| r.strip_suffix(":edit")) {
                     drop(inner);
-                    self.navigate(if id == "terrain" { "terrain" } else { "labels" });
+                    let group = id.strip_prefix("overlay:").and_then(crate::overlays::find).map(|o| o.group);
+                    self.navigate(group.map_or("terrain", |g| g.route()));
                     return;
                 }
                 if !self.act(&mut inner, r, op, &args["value"]) {
@@ -680,9 +683,10 @@ impl App {
         if let Some(rest) = r.strip_prefix("layer:") {
             return act_layer(&mut inner.state, rest, value);
         }
-        // Labels & reference: an overlay's switch and, once on, its opacity.
+        // An overlay's switch and, once on, its opacity. Overlays with no
+        // native layer cannot be turned on.
         if let Some(id) = r.strip_prefix("#ov_") {
-            if crate::overlays::info(id).is_none() {
+            if crate::overlays::find(id).is_none_or(|o| o.raster.is_none()) {
                 return false;
             }
             let on = value.as_bool().unwrap_or(!inner.state.overlay(id).on);
@@ -690,7 +694,10 @@ impl App {
             return true;
         }
         if let Some(id) = r.strip_prefix("#ovOpacity_") {
-            let (Some(_), Some(v)) = (crate::overlays::info(id), v) else { return false };
+            let Some(v) = v else { return false };
+            if crate::overlays::find(id).is_none_or(|o| o.raster.is_none()) {
+                return false;
+            }
             let mut overlay = inner.state.overlay(id);
             overlay.opacity = v.clamp(0.0, 100.0);
             inner.state.overlays.insert(id.to_owned(), overlay);
@@ -991,6 +998,11 @@ fn act_layer(state: &mut AppState, rest: &str, value: &Value) -> bool {
     if !state.layer_order.iter().any(|l| l == id) {
         return false;
     }
+    if let Some(o) = id.strip_prefix("overlay:")
+        && crate::overlays::find(o).is_none_or(|o| o.raster.is_none())
+    {
+        return false;
+    }
     let v = number(value);
     match (id, what) {
         (overlay, "toggle") if overlay.starts_with("overlay:") => {
@@ -1006,9 +1018,8 @@ fn act_layer(state: &mut AppState, rest: &str, value: &Value) -> bool {
         }
         (overlay, "reset") if overlay.starts_with("overlay:") => {
             let o = &overlay["overlay:".len()..];
-            let fresh = AppState::default().overlays.get(o).copied();
             let mut s = state.overlay(o);
-            s.opacity = fresh.map_or(crate::overlays::DEFAULT_OPACITY, |f| f.opacity);
+            s.opacity = AppState::default_opacity(o);
             state.overlays.insert(o.to_owned(), s);
         }
         ("terrain", "toggle") => {
