@@ -1,7 +1,8 @@
 /* Clear Skies native host. The iPhone app injects this before any page script.
    It exists only inside the app: the hosted web client and the Mac app never
    see it, and the page falls back to its ordinary web path when it is absent.
-   The app replaces __CSP_NATIVE_CONFIG__ with {engineBase, appVersion}. */
+   The app replaces __CSP_NATIVE_CONFIG__ with {engineBase, builtInEngine,
+   appVersion, resume, sessionStart}. */
 (() => {
   "use strict";
   const handler = window.webkit?.messageHandlers?.cspNative;
@@ -108,6 +109,9 @@
          launch); false after iOS ended the page's process and it reloads. */
       sessionStart: config.sessionStart === true,
       appVersion: String(config.appVersion || ""),
+      /* True once the app answers /api itself when no engine address is
+         set. The page then probes and uses it like any other engine. */
+      builtInEngine: config.builtInEngine === true,
       startupFailed: message => post("startup.failed", { message: String(message || "") }).catch(() => {}),
       startupSettled: () => post("startup.settled", {}).catch(() => {}),
       /* The engine address belongs to the app. The page keeps its requests

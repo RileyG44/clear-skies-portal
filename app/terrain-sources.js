@@ -285,6 +285,16 @@ const SHARED_SERVER=takeSharedServerBase();
    and the engine needs no change. Anywhere else CSPNativeHost does not exist
    and none of this behaves differently. */
 const NATIVE_HOST=window.CSPNativeHost||null;
+/* The app says whether it serves /api itself. Until it does, the app has no
+   engine of its own and only an entered address is worth asking. */
+const BUILT_IN_ENGINE=NATIVE_HOST?.builtInEngine===true;
+/* Whether any engine could answer. GitHub Pages is static, so asking it for
+   /api/health only makes a misleading 404; the app without a built-in engine
+   is the same case. An explicit address is always asked, and locally served
+   pages keep auto-detecting the engine beside them. */
+function engineExpected(base){
+  return !!base||BUILT_IN_ENGINE||!(NATIVE_HOST||/\.github\.io$/i.test(location.hostname));
+}
 let nativeEngineSync=Promise.resolve();
 let API = normaliseBase(NATIVE_HOST ? NATIVE_HOST.engineBase() : (SHARED_SERVER || localStorage.getItem("cspServer") || ""));
 const api = p => (NATIVE_HOST ? "" : API) + p;
