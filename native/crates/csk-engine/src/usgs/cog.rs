@@ -59,6 +59,11 @@ pub struct CogReader {
 }
 
 impl CogReader {
+    /// Existing callers retain their Arc; disposable cache ownership drops now.
+    pub fn purge_memory(&self) {
+        self.blocks.lock().unwrap_or_else(|e| e.into_inner()).clear();
+        self.headers.lock().unwrap_or_else(|e| e.into_inner()).clear();
+    }
     /// `base_url` is the bucket origin, e.g. `https://prd-tnm.s3.amazonaws.com`.
     pub fn new(store: Arc<Store>, upstream: Arc<Upstream>, base_url: impl Into<String>) -> Arc<Self> {
         Arc::new(Self {

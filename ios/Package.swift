@@ -8,7 +8,7 @@ let package = Package(
     targets: [
         .target(name: "EngineSupport", path: "Sources/Engine",
                 exclude: ["LocalEngine.swift", "NetworkTransport.swift", "EngineRuntime.swift",
-                          "EngineAppDelegate.swift", "BackgroundDownloads.swift"],
+                          "EngineAppDelegate.swift", "BackgroundDownloads.swift", "EngineBackground.swift"],
                 sources: ["TransferJournal.swift"]),
         .testTarget(name: "EngineSupportTests", dependencies: ["EngineSupport"], path: "Tests")
     ]

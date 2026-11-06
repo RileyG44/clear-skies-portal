@@ -165,6 +165,7 @@ nonisolated final class BackgroundDownloads: NSObject, URLSessionDownloadDelegat
             do {
                 try journal.finish(key, temporary: location, status: response.statusCode, headers: headers)
                 startOrDeliver(key)
+                Task { @MainActor in EngineBackground.shared.archiveReady() }
             } catch {
                 finish(key, failure: error as? TransferJournal.Failure == .tooLarge ? .tooLarge : .network(error.localizedDescription))
                 journal.remove(key)

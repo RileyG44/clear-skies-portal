@@ -213,7 +213,11 @@ unsafe fn str_arg<'a>(p: *const c_char) -> Option<&'a str> {
 /// Creates the engine. `config_json` is csk_engine::Config as JSON. Returns
 /// NULL (and releases the transport) if the configuration or store is invalid.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn csk_engine_new(config_json: *const c_char, transport: CskTransport) -> *mut CskEngine {
+pub unsafe extern "C" fn csk_engine_new(
+    config_json: *const c_char,
+    transport: CskTransport,
+    work_allowed: bool,
+) -> *mut CskEngine {
     let platform = Arc::new(Platform { t: transport, next: AtomicU64::new(1) });
     // SAFETY: per the contract above.
     let Some(text) = (unsafe { str_arg(config_json) }) else { return std::ptr::null_mut() };
@@ -233,6 +237,7 @@ pub unsafe extern "C" fn csk_engine_new(config_json: *const c_char, transport: C
         let _enter = runtime.enter();
         match Engine::new(config, Arc::new(Bridge(platform))) {
             Ok(e) => {
+                e.work.set_allowed(work_allowed);
                 e.warm();
                 e
             }
@@ -246,6 +251,49 @@ fn serde_json_config(text: &str) -> Result<Config, ()> {
     csk_engine::config_from_json(text).map_err(|_| ())
 }
 
+/// Durable-job progress; reading this never starts work or accesses the network.
+#[repr(C)]
+#[derive(Default)]
+pub struct CskWorkStatus {
+    pub pending: bool,
+    pub cpu_pending: bool,
+    pub failed: bool,
+    pub total: u64,
+    pub completed: u64,
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn csk_engine_work_status(engine: *mut CskEngine) -> CskWorkStatus {
+    let Some(e) = (unsafe { engine.as_ref() }) else { return CskWorkStatus::default() };
+    let usgs = e.engine.downloads.status();
+    let dnr = e.engine.dnr_warm.status();
+    let (acquisition, cpu) = e.engine.dnr_work_status();
+    CskWorkStatus {
+        pending: usgs.running || dnr.running || acquisition,
+        cpu_pending: usgs.running || cpu || (dnr.running && !acquisition),
+        failed: !usgs.error.is_empty() || dnr.error.is_some(),
+        total: usgs.total + dnr.total + u64::from(acquisition && !dnr.running),
+        completed: usgs.done + dnr.done,
+    }
+}
+
+/// Background grants and the foreground allow durable jobs to advance.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn csk_engine_set_work_allowed(engine: *mut CskEngine, allowed: bool) {
+    if let Some(e) = unsafe { engine.as_ref() } {
+        e.engine.work.set_allowed(allowed);
+    }
+}
+
+/// Drop disposable decoded blocks and headers under platform memory pressure.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn csk_engine_purge_memory(engine: *mut CskEngine) {
+    if let Some(e) = unsafe { engine.as_ref() } {
+        e.engine.tiles.usgs.cog.purge_memory();
+        e.engine.analysis.purge_memory();
+    }
+}
+
 /// Stops the engine: in-flight requests are cancelled (each `respond` gets NULL).
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn csk_engine_free(engine: *mut CskEngine) {
@@ -254,6 +302,7 @@ pub unsafe extern "C" fn csk_engine_free(engine: *mut CskEngine) {
     }
     // SAFETY: created by csk_engine_new and not used after this call.
     let e = unsafe { Box::from_raw(engine) };
+    e.engine.work.shutdown();
     for (_, h) in e.requests.lock().unwrap_or_else(|p| p.into_inner()).drain() {
         h.abort();
     }
@@ -462,7 +511,7 @@ mod tests {
         let t = CskTransport { context: std::ptr::null_mut(), fetch, cancel, release, download_consumed: None };
         // SAFETY: exercising the ABI as the platform does.
         unsafe {
-            let e = csk_engine_new(cfg.as_ptr(), t);
+            let e = csk_engine_new(cfg.as_ptr(), t, true);
             assert!(!e.is_null());
             let ask = |path: &CStr| {
                 let (tx, rx) = mpsc::channel::<Option<(u16, String)>>();

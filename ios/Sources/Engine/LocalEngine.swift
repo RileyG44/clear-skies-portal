@@ -44,9 +44,13 @@ final class LocalEngine {
         csk_engine_cancel(handle, pending.id)
     }
 
-    fileprivate func finished(_ pending: EngineRequest) {
+    fileprivate func finished(_ pending: EngineRequest, status: Int? = nil) {
         if running[ObjectIdentifier(pending.task)] === pending {
             running.removeValue(forKey: ObjectIdentifier(pending.task))
+        }
+        if status == 200, pending.task.request.httpMethod == "POST",
+           ["/api/usgs/warm", "/api/wadnr/warm"].contains(pending.url.path) {
+            EngineBackground.shared.userStartedJob()
         }
     }
 }
@@ -67,7 +71,7 @@ final class EngineRequest {
     }
 
     func deliver(status: Int, headers: String, body: Data) {
-        owner?.finished(self)
+        owner?.finished(self, status: status)
         guard !stopped else { return }
         var fields: [String: String] = [:]
         for line in headers.split(separator: "\n") {

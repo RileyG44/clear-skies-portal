@@ -36,6 +36,12 @@ impl Default for Analysis {
 }
 
 impl Analysis {
+    pub fn purge_memory(&self) {
+        let mut cache = self.cache.lock().unwrap_or_else(|e| e.into_inner());
+        cache.0.clear();
+        cache.1 = 0;
+    }
+
     fn get(&self, key: &str) -> Option<Arc<Vec<u8>>> {
         self.cache.lock().unwrap_or_else(|e| e.into_inner()).0.get(key).cloned()
     }
