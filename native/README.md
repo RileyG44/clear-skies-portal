@@ -23,4 +23,7 @@ first use.
   input float32 grids and complete CSPA reference frames together; native tests
   compare every raster bit and metadata field. Regenerate only for a deliberate
   scientific-contract change.
+- `fixtures/tiff/validate-prepared.py` — independent GDAL validation (through
+  Rasterio) of emitted local TIFFs. CI checks their base samples, no-data,
+  georeferencing and exact-extent overview lattice.
 - `inventory/routes.js` — writes `docs/native/ROUTES.md`.
