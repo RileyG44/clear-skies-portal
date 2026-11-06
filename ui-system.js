@@ -1534,7 +1534,19 @@ const setSheetStyle=(element,name,value)=>{
   if(element.style.getPropertyValue(name)!==value) element.style.setProperty(name,value);
 };
 let sheetLimits=null;
+const syncPhoneLabels=()=>{
+  const write=(selector,phone,desktop)=>{
+    const node=document.querySelector(selector)?.firstChild;
+    if(!node||node.nodeType!==Node.TEXT_NODE) return;
+    const next=sheetMode()?phone:desktop;
+    if(node.nodeValue!==next) node.nodeValue=next;
+  };
+  // Edit the text node only. Replacing the heading would drop its status span.
+  write("#terLidarHeading","Map display ","Terrain mode & data ");
+  write("#terAppearance .menu-section-title","Color & contrast ","Appearance ");
+};
 const placeSheetTools=()=>{
+  syncPhoneLabels();
   if(!sheetTools) return;
   if(!sheetMode()){
     document.body.style.removeProperty("--sheet-medium");
@@ -1593,7 +1605,7 @@ const trackSheetHeight=height=>{
 // The narrow and compact tiles are measured once per open, with the height
 // cap lifted. Later frames only compare the narrow tile with the gap above
 // the unreserved sheet, then give the compact tile the gap the reserve leaves.
-let fittingInfo=false,narrowInfo=0,compactInfo=0;
+let fittingInfo=false,narrowInfo=0,compactInfo=0,infoOrigin=null;
 const setSheetLarge=px=>{
   const rounded=Math.round(px);
   if(!sheetLimits||Math.round(sheetLimits.large)===rounded) return;
@@ -1621,7 +1633,7 @@ const fitMapInfo=height=>{
     const deciding=isCollapsed()?0:(document.body.dataset.cspDetent==="large"||height>medium+80)?fullLarge:height;
     const decisionRoom=isCollapsed()?420:Math.max(44,appHeight-4-deciding-top-8);
     if(!expanded){
-      narrowInfo=0;compactInfo=0;
+      narrowInfo=0;compactInfo=0;infoOrigin=null;
       readout.classList.remove("sheet-compact");
       setSheetLarge(fullLarge);
       setSheetStyle(readout,"--map-info-space",`${Math.round(decisionRoom)}px`);
@@ -1634,7 +1646,7 @@ const fitMapInfo=height=>{
     }
     const compact=narrowInfo>decisionRoom+1;
     if(!compact){
-      compactInfo=0;
+      compactInfo=0;infoOrigin=null;
       readout.classList.remove("sheet-compact");
       setSheetLarge(fullLarge);
       setSheetStyle(readout,"--map-info-space",`${Math.round(decisionRoom)}px`);
@@ -1644,11 +1656,15 @@ const fitMapInfo=height=>{
       readout.classList.add("sheet-compact");
       setSheetStyle(readout,"--map-info-space","480px");
       compactInfo=readoutHeight();
+      // The tile is pinned to the map. One origin sample lasts for this open;
+      // later spring frames must not force layout under the blurring sheet.
+      infoOrigin=Math.max(0,readout.getBoundingClientRect().top-safeTop);
     }else readout.classList.add("sheet-compact");
     // Reserve in the same space as the sheet: portal height, not the viewport.
     // origin.y is the tile's top below the status bar, so the safe area is
     // not counted twice.
-    const originY=Math.max(0,readout.getBoundingClientRect().top-safeTop);
+    const originY=infoOrigin==null?Math.max(0,readout.getBoundingClientRect().top-safeTop):infoOrigin;
+    if(infoOrigin==null) infoOrigin=originY;
     const reserve=originY+compactInfo+8;
     const large=Math.max(base*.84,Math.min(fullLarge,base-4-reserve));
     setSheetLarge(large);
@@ -1662,20 +1678,21 @@ new ResizeObserver(entries=>trackSheetHeight(entries[0].borderBoxSize?.[0]?.bloc
 // readout.js dispatches this after the expanded class and content visibility
 // change, and before it samples the animation's target box.
 readout?.addEventListener("csp:map-info-fit",()=>fitMapInfo(side.offsetHeight));
+const sheetTextField=element=>!!element?.matches?.("textarea,input:not([type=button],[type=checkbox],[type=radio],[type=range],[type=color],[type=file],[type=submit],[type=reset],[type=image],[type=hidden])");
 const closeMenu=event=>{
   event?.stopPropagation();
   const input=document.activeElement;
-  if(event?.currentTarget?.id==="cspSearchClose"&&event.currentTarget.dataset.keyboard==="true"){
-    $("#q").blur();delete event.currentTarget.dataset.keyboard;return;
+  if(event?.currentTarget?.dataset.keyboard==="true"){
+    document.activeElement?.blur();delete event.currentTarget.dataset.keyboard;return;
   }
-  if(input?.matches("#q,#cspSatQuery")){input.blur();return}
+  if(sheetTextField(input)){input.blur();return}
   goToDetent("peek");
 };
 for(const [id,parent] of [["cspSearchClose",$(".search-row",nav)],["cspPageClose",$("#cspWorkspaceHeader")]]){
   const button=document.createElement("button");button.type="button";button.id=id;button.className="csp-close-menu";
   button.setAttribute("aria-label","Close menu");button.title="Close menu";
   button.innerHTML='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>';
-  button.addEventListener("pointerdown",()=>{button.dataset.keyboard=String(!!document.activeElement?.matches("#q,#cspSatQuery"))});
+  button.addEventListener("pointerdown",()=>{button.dataset.keyboard=String(sheetTextField(document.activeElement))});
   button.addEventListener("click",closeMenu);parent.append(button);
 }
 // A leading-edge swipe pops the current page without closing the menu.
@@ -1797,7 +1814,7 @@ if(sheetMode()&&!isCollapsed()){
     }
     return null;
   };
-  let gesture=null,suppressClick=false,suppressTimer=0;
+  let gesture=null,suppressClick=false,suppressTimer=0,keyboardAtPointer=false;
   /* A touch tap is followed by a compatibility click. On Chrome that click can
      arrive after a 0ms timer, and it would step the detent straight back.
      Hold the swallow long enough for the late click, and release it once the
@@ -1810,8 +1827,9 @@ if(sheetMode()&&!isCollapsed()){
   const begin=(x,y,target,source)=>{
     gesture={x,y,startH:side.getBoundingClientRect().height,from:currentDetent(),target,source,
              header:!!target.closest(".csp-wordmark,.searchbox,#cspWorkspaceHeader"),
-             keyboard:!!document.activeElement?.matches("#q,#cspSatQuery"),
+             keyboard:keyboardAtPointer||sheetTextField(document.activeElement),
              onGrabber:target===grabber,scroller:scrollerFor(target),mode:null,samples:[{y,t:performance.now()}]};
+    keyboardAtPointer=false;
   };
   // Returns true while the sheet owns the gesture, so the caller can stop the
   // browser scrolling underneath it.
@@ -1971,11 +1989,9 @@ if(sheetMode()&&!isCollapsed()){
     requestAnimationFrame(pin);
     requestAnimationFrame(syncKeyboardInset);
   };
-  const sheetTextField=element=>!!element?.matches?.("textarea,input:not([type=button],[type=checkbox],[type=radio],[type=range],[type=color],[type=file],[type=submit],[type=reset],[type=image],[type=hidden])");
   side.addEventListener("focusin",event=>{
     if(!sheetMode()||!sheetTextField(event.target)) return;
-    if(event.target.closest("#q,#cspSatQuery")) focusSearch(event.target);
-    else if(currentDetent()!=="large") openSheet("large");
+    focusSearch(event.target);
   });
   const syncKeyboardInset=()=>{
     const vv=window.visualViewport;
@@ -1988,16 +2004,22 @@ if(sheetMode()&&!isCollapsed()){
   window.visualViewport?.addEventListener("resize",syncKeyboardInset);
   window.visualViewport?.addEventListener("scroll",()=>{
     syncKeyboardInset();
-    if(sheetMode()&&document.activeElement?.matches("#q,#cspSatQuery")&&window.scrollY) window.scrollTo(0,0);
+    if(sheetMode()&&sheetTextField(document.activeElement)&&window.scrollY) window.scrollTo(0,0);
   });
   document.addEventListener("focusout",()=>requestAnimationFrame(syncKeyboardInset));
-  /* With the keyboard up, a tap anywhere outside the search row dismisses it.
+  /* With the keyboard up, a tap outside the focused field dismisses it.
      The sheet stays where it is; the close control and a header drag are what
-     lower it. */
+     lower it. Sample the field before blurring so the gesture still sees it. */
   document.addEventListener("pointerdown",event=>{
-    if(!sheetMode()||!document.activeElement?.matches("#q,#cspSatQuery")) return;
-    if(event.target.closest(".search-row,#ac,.csp-sat-field")) return;
-    document.activeElement.blur();
+    if(!sheetMode()) return;
+    const field=document.activeElement;
+    keyboardAtPointer=sheetTextField(field);
+    if(!keyboardAtPointer) return;
+    if(event.target===field||field.contains?.(event.target)) return;
+    if(event.target.closest(".search-row,#ac,.csp-sat-field,.ls-save-row,.ls-field")) return;
+    const id=field.id&&globalThis.CSS?.escape?CSS.escape(field.id):field.id;
+    if(id&&event.target.closest(`label[for="${id}"]`)) return;
+    field.blur();
   },true);
 }
 

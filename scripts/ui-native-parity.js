@@ -49,6 +49,37 @@ const base=process.argv[2]||'http://127.0.0.1:8765/';
    assert.equal(studio.border,'none','portrait presets sit on the sheet glass');
    assert.equal(studio.save,'none','portrait presets hide the studio save control');
    assert.equal(studio.arrows,'none','portrait presets hide the carousel arrows');
+   if(studio.border==='none'){
+    const portrait=await page.evaluate(()=>{
+     const chosen=document.querySelector('.ls-look[aria-checked="true"]')||document.querySelector('.ls-look');
+     if(chosen&&chosen.getAttribute('aria-checked')!=='true'){
+      document.querySelectorAll('.ls-look').forEach(el=>el.setAttribute('aria-checked','false'));
+      chosen.setAttribute('aria-checked','true');
+     }
+     const selected=document.querySelector('.ls-look[aria-checked="true"] .ls-look-name');
+     const thumb=document.querySelector('.ls-look:not([aria-checked="true"]) .ls-look-preview')||document.querySelector('.ls-look-preview');
+     const status=document.querySelector('.ls-preset-status');
+     const probe=document.createElement('i');probe.style.color='var(--ui-accent)';document.body.append(probe);
+     const accent=getComputedStyle(probe).color;probe.remove();
+     return {
+      title:document.querySelector('.ls-preset-card .menu-section-title')?.textContent||'',
+      customize:document.querySelector('.ls-customize > summary')?.innerText||'',
+      heading:document.getElementById('terLidarHeading')?.firstChild?.nodeValue||'',
+      appearance:document.querySelector('#terAppearance .menu-section-title')?.firstChild?.nodeValue||'',
+      name:selected?getComputedStyle(selected).color:'',
+      accent,
+      shadow:thumb?getComputedStyle(thumb).boxShadow:'',
+      status:status?getComputedStyle(status).display:''
+     };
+    });
+    assert.equal(portrait.title,'Quick presets','portrait presets use the native section name');
+    assert.match(portrait.customize,/Customize terrain/,'portrait customize disclosure uses the native name');
+    assert.match(portrait.heading,/^Map display /,'portrait map display uses the native section name');
+    assert.match(portrait.appearance,/^Color & contrast /,'portrait appearance uses the native section name');
+    assert.equal(portrait.name,portrait.accent,'a selected preset caption uses the tint');
+    assert.match(portrait.shadow,/0\.5px/,'an unselected preset thumb uses the hairline stroke');
+    assert.equal(portrait.status,'none','portrait customize hides the studio status');
+   }
    await page.screenshot({path:path.join(output,`terrain-${dark?'dark':'light'}.png`)});
    // Capture real touch events for interactive edge-pop when the browser supports CDP.
    if((process.env.CSP_UI_BROWSER||'chrome')!=='webkit'){
@@ -63,6 +94,7 @@ const base=process.argv[2]||'http://127.0.0.1:8765/';
    assert(await page.locator('body').evaluate(el=>el.classList.contains('collapsed')),'home close returns to the search capsule');
    await page.locator('#q').click();await page.waitForTimeout(400);
    await page.locator('[data-route="elevation"]').click();await page.waitForTimeout(400);
+   assert.equal(await page.locator('.ev-toggle-text strong').first().evaluate(el=>getComputedStyle(el).fontSize),'15px','portrait elevation rows use the home title size');
    await page.locator('#cspPageClose').click();await page.waitForTimeout(400);
    assert(await page.locator('body').evaluate(el=>el.classList.contains('collapsed')),'page close returns to capsule');
    await page.locator('#q').click();await page.waitForTimeout(400);

@@ -90,8 +90,15 @@
     container.innerHTML="";
     const el=(tag,cls,html)=>{const n=document.createElement(tag);if(cls) n.className=cls;if(html!==undefined) n.innerHTML=html;return n};
 
+    /* Portrait labels match nativeTerrainItems. A later render restores the
+       desktop studio strings when the phone sheet is gone. */
+    const phoneMenu=()=>!!globalThis.matchMedia?.("(max-width:760px) and (orientation:portrait)").matches&&document.documentElement.classList.contains("csp-glass");
+    let phoneLabels=phoneMenu();
+    const phoneWatch=globalThis.matchMedia?.("(max-width:760px) and (orientation:portrait)");
+    const onPhoneLabels=()=>{const next=phoneMenu();if(next===phoneLabels||destroyed)return;phoneLabels=next;render()};
+    phoneWatch?.addEventListener?.("change",onPhoneLabels);
     function render(){
-      const s=style(),scroll=container.closest(".pane-b")?.scrollTop;
+      const s=style(),scroll=container.closest(".pane-b")?.scrollTop,phone=phoneMenu();
       presetScroll=container.querySelector(".ls-looks")?.scrollLeft??presetScroll;
       state.look=s?R.matchLook(state,s):null;
       if(state.look) presetOrigin=state.look;
@@ -101,8 +108,14 @@
         container.append(el("p","control-hint ls-note","Presets and color layers need GPU rendering, which this browser doesn’t provide. Choose a terrain mode below instead."));
         return;
       }
-      const settings=disclosure("customize","Customize preset","ls-customize ls-section");
-      settings.querySelector("summary").append(el("span","ls-preset-status"));
+      const settings=disclosure("customize",phone?"Customize terrain":"Customize preset","ls-customize ls-section");
+      const summary=settings.querySelector("summary");
+      if(phone){
+        summary.textContent="";
+        summary.append(el("span","ls-disclosure-title","Customize terrain"));
+        summary.append(el("span","ls-disclosure-detail","Mix layers, edit palettes and apply terrain effects"));
+      }
+      summary.append(el("span","ls-preset-status"));
       const body=el("div","ls-customize-body");
       body.append(renderLayers(s),renderEffects(s));settings.append(body);
       const presets=renderPresets();
@@ -118,7 +131,7 @@
     function allLooks(){ return R.LOOKS.map(l=>Object.assign({user:false},l)).concat(state.userLooks.map(l=>Object.assign({user:true,blurb:"Your saved preset."},l))) }
     function renderPresets(){
       const wrap=el("section","ls-section ls-preset-card");wrap.setAttribute("aria-label","Presets");
-      const head=el("div","ls-head",'<h3 class="menu-section-title">Presets</h3>');
+      const head=el("div","ls-head",`<h3 class="menu-section-title">${phoneMenu()?"Quick presets":"Presets"}</h3>`);
       const saveButton=el("button","linkbtn ls-save-look","Save current");saveButton.type="button";
       saveButton.disabled=!style();saveButton.title=style()?"Save these layers and settings as a preset":"Choose a preset or layer first";
       head.append(saveButton);wrap.append(head);
@@ -349,7 +362,7 @@
     }
     function renderLayers(s){
       const wrap=el("div","ls-section");
-      const head=el("div","ls-head ls-layers-head",`<div class="ls-layer-label"><h3 class="menu-section-title">Layers</h3><span class="pane-n">${layerKeys().length} of ${R.MAX_LAYERS}</span></div>`);
+      const head=el("div","ls-head ls-layers-head",`<div class="ls-layer-label"><h3 class="menu-section-title">${phoneMenu()?"Layers & colors":"Layers"}</h3><span class="pane-n">${layerKeys().length} of ${R.MAX_LAYERS}</span></div>`);
       wrap.append(head);
       wrap.append(el("p","control-hint","Open a layer to edit colors, opacity and blending. Layers at the top draw over those below."));
       if(!s)wrap.append(el("p","control-hint","Choose a preset above, or add your first layer."));
@@ -716,7 +729,9 @@
 
     /* ----------------------------------------------------------- effects */
     function renderEffects(s){
-      const wrap=disclosure("effects","Terrain effects","ls-section");
+      /* On the phone sheet the effects sit inside Customize terrain. Desktop
+         keeps them behind their own disclosure. */
+      const wrap=phoneMenu()?el("div","ls-section ls-effects"):disclosure("effects","Terrain effects","ls-section");
       if(!s){wrap.append(el("p","control-hint","Effects apply once a layer is on."));return wrap}
       const e=state.effects,grid=el("div","ls-sliders");
       const setEffect=patch=>{state.effects=R.normalizeEffects(Object.assign({},state.effects,patch));commit()};
@@ -894,7 +909,7 @@
         remFloor=snapshot.remFloor??null;remLandFloor=snapshot.remLandFloor??null;expanded=null;render();host.onChange&&host.onChange();
       },
       applyLook,
-      destroy(){destroyed=true;clearTimeout(saveTimer);previewWatch?.disconnect();container.innerHTML=""}
+      destroy(){destroyed=true;clearTimeout(saveTimer);previewWatch?.disconnect();phoneWatch?.removeEventListener?.("change",onPhoneLabels);container.innerHTML=""}
     };
   }
 

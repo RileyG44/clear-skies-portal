@@ -3797,13 +3797,86 @@ body.csp-redesign .ls-layer-label .menu-section-title{margin:0}
   .csp-glass body.csp-redesign.csp-redesign #cspWorkspace #panes :is(.ls-preset-card,.terrain-card){
     border:0;box-shadow:none;background:transparent;
   }
-  .csp-glass body.csp-redesign.csp-redesign #cspWorkspace :is(.ls-save-look,.ls-preset-navigation){display:none}
-  .csp-glass body.csp-redesign.csp-redesign #cspWorkspace .ls-customize{border-top:0}
+  .csp-glass body.csp-redesign.csp-redesign #cspWorkspace :is(.ls-save-look,.ls-preset-navigation,.ls-preset-status,.ls-look-blurb,#terLidarState,#terLookStyle){display:none}
+  .csp-glass body.csp-redesign.csp-redesign #cspWorkspace .ls-customize{border-top:0;padding:0}
+  .csp-glass body.csp-redesign.csp-redesign #cspWorkspace .ls-customize-body > .ls-section > .control-hint{display:none}
+  .csp-glass body.csp-redesign.csp-redesign #cspWorkspace .ls-customize > summary{
+    display:grid;grid-template-columns:auto minmax(0,1fr);align-items:center;column-gap:8px;row-gap:1px;
+    min-height:44px;margin:0;padding:8px 16px;border-radius:12px;background:var(--sheet-card);
+    font-size:15px;font-weight:500;
+  }
+  .csp-glass body.csp-redesign.csp-redesign #cspWorkspace .ls-customize > summary::before{grid-row:1 / span 2;font-size:18px}
+  .csp-glass body.csp-redesign.csp-redesign #cspWorkspace .ls-disclosure-title{font-size:15px;font-weight:500;color:var(--ui-text)}
+  .csp-glass body.csp-redesign.csp-redesign #cspWorkspace .ls-disclosure-detail{grid-column:2;font-size:12px;font-weight:400;line-height:1.35;color:var(--ui-text-muted)}
+  .csp-glass body.csp-redesign.csp-redesign #cspWorkspace .ls-look:hover .ls-look-preview{transform:none}
+  .csp-glass body.csp-redesign.csp-redesign #cspWorkspace .ls-look-preview{
+    box-shadow:inset 0 0 0 .5px color-mix(in srgb,var(--ui-text) 8%,transparent);
+  }
   .csp-glass body.csp-redesign.csp-redesign #cspWorkspace .ls-look[aria-checked="true"] .ls-look-preview{
     box-shadow:inset 0 0 0 2px var(--ui-accent);
   }
-  .csp-glass body.csp-redesign.csp-redesign #cspWorkspace .ls-look[aria-checked="true"] .ls-look-name{color:var(--ui-text);font-weight:600}
+  .csp-glass body.csp-redesign.csp-redesign #cspWorkspace .ls-look[aria-checked="true"] .ls-look-name{color:var(--ui-accent);font-weight:600}
+  .csp-glass body.csp-redesign.csp-redesign #cspWorkspace .ls-palettes{
+    display:flex;grid-template-columns:none;gap:8px;overflow-x:auto;padding:4px 0;scrollbar-width:none;
+  }
+  .csp-glass body.csp-redesign.csp-redesign #cspWorkspace .ls-palettes::-webkit-scrollbar{display:none}
+  .csp-glass body.csp-redesign.csp-redesign #cspWorkspace .ls-palette{
+    flex:0 0 76px;width:76px;min-height:0;gap:4px;padding:0;background:transparent;box-shadow:none;font-size:11px;
+  }
+  .csp-glass body.csp-redesign.csp-redesign #cspWorkspace .ls-palette-bar{
+    width:76px;height:16px;border-radius:999px;box-shadow:inset 0 0 0 .5px color-mix(in srgb,var(--ui-text) 12%,transparent);
+  }
+  .csp-glass body.csp-redesign.csp-redesign #cspWorkspace .ls-palette[aria-checked="true"]{background:transparent;box-shadow:none}
+  .csp-glass body.csp-redesign.csp-redesign #cspWorkspace .ls-palette[aria-checked="true"] .ls-palette-bar{box-shadow:inset 0 0 0 2px var(--ui-accent)}
+  .csp-glass body.csp-redesign.csp-redesign #cspWorkspace .ls-palette[aria-checked="true"] .ls-palette-name{color:var(--ui-accent);font-weight:600}
+  .csp-glass body.csp-redesign.csp-redesign #cspWorkspace .ls-layers{
+    gap:0;overflow:hidden;border-radius:12px;background:var(--sheet-card);
+  }
+  .csp-glass body.csp-redesign.csp-redesign #cspWorkspace .ls-layer,
+  .csp-glass body.csp-redesign.csp-redesign #cspWorkspace .ls-layer.is-open{background:transparent;border-radius:0}
+  .csp-glass body.csp-redesign.csp-redesign #cspWorkspace .ls-layer + .ls-layer{border-top:.5px solid var(--glass-edge)}
+  .csp-glass body.csp-redesign.csp-redesign #cspWorkspace .ls-layer-name{font-size:15px;font-weight:500}
+  .csp-glass body.csp-redesign.csp-redesign #cspWorkspace .ls-layer-meta{font-size:12px}
   .csp-glass body.csp-redesign.csp-redesign #cspWorkspace :is(.ls-layer,.ls-add-button,button.ls-menu-item){min-height:44px}
+  .csp-glass body.csp-redesign.csp-redesign #cspWorkspace .ls-customize .ls-layers-head{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center}
+  .csp-glass body.csp-redesign.csp-redesign #cspWorkspace .ls-customize .ls-add{grid-column:1 / -1;margin:8px 0 0}
+  .csp-glass body.csp-redesign.csp-redesign #cspWorkspace .ls-add-button{
+    width:100%;justify-content:flex-start;gap:8px;padding:0 16px;border:0;border-radius:12px;
+    background:var(--sheet-card);color:var(--ui-text);font-size:15px;font-weight:500;
+  }
+  .csp-glass body.csp-redesign.csp-redesign #cspWorkspace #panes :is(.menu-section-title,.elev-section-title){
+    margin:12px 0 6px;font-size:13px;font-weight:600;letter-spacing:0;color:var(--ui-text-muted);
+  }
+  .csp-glass body.csp-redesign.csp-redesign #cspWorkspace #panes .ls-layers-head .menu-section-title,
+  .csp-glass body.csp-redesign.csp-redesign #cspWorkspace #panes :is(#terAppearance,#terLighting) .menu-section-title{
+    margin:8px 0 2px;font-size:15px;font-weight:500;color:var(--ui-text);
+  }
+  .csp-glass body.csp-redesign.csp-redesign #cspWorkspace #panes #terLidarHeading{
+    margin:20px 0 6px;font-size:13px;font-weight:600;color:var(--ui-text-muted);
+  }
+  .csp-glass body.csp-redesign.csp-redesign #cspWorkspace #panes #terLidar > .terrain-fields{
+    margin:0 0 12px;padding:4px 16px 8px;border-radius:12px;background:var(--sheet-card);
+  }
+  .csp-glass body.csp-redesign.csp-redesign #cspWorkspace #panes #terLidar .terrain-fields > label{font-size:15px;font-weight:500}
+  .csp-glass body.csp-redesign.csp-redesign #cspWorkspace #panes #terLidar select{min-height:44px}
+  .csp-glass body.csp-redesign.csp-redesign #cspWorkspace #panes .terrain-appearance > summary{min-height:44px;font-size:15px;font-weight:500}
+  .csp-glass body.csp-redesign.csp-redesign #cspWorkspace #panes .terrain-disclosure-description{font-size:12px;line-height:1.35}
+  .csp-glass body.csp-redesign.csp-redesign #cspWorkspace :is(.csp-setting-text strong,.csp-available-row strong,.csp-layer-name){font-size:15px;font-weight:500}
+  .csp-glass body.csp-redesign.csp-redesign #cspWorkspace :is(.csp-setting-text span,.csp-available-row span,.csp-layer-meta){font-size:12px}
+  .csp-glass body.csp-redesign.csp-redesign #cspWorkspace .csp-field-row,
+  .csp-glass body.csp-redesign.csp-redesign #cspWorkspace label.csp-switch-row{min-height:44px;font-size:15px}
+  .csp-glass body.csp-redesign.csp-redesign #cspWorkspace .csp-field-row > label{font-size:15px}
+  .csp-glass body.csp-redesign.csp-redesign #cspWorkspace .csp-section-label,
+  .csp-glass body.csp-redesign.csp-grouped-menus #cspWorkspace .csp-menu-section > .csp-section-label{
+    font-size:13px;font-weight:600;letter-spacing:0;color:var(--ui-text-muted);
+  }
+  .csp-glass body.csp-redesign.csp-grouped-menus #cspWorkspace #panes .ev-toggle-text strong{font-size:15px;font-weight:500}
+  .csp-glass body.csp-redesign.csp-grouped-menus #cspWorkspace #panes .ev-band-name{font-size:15px;font-weight:500}
+  .csp-glass body.csp-redesign.csp-redesign #cspWorkspace .csp-sat-filterbox > summary{min-height:44px;font-size:15px;font-weight:500}
+  .csp-glass body.csp-redesign.csp-redesign #cspWorkspace .csp-sat-filter-sum{font-size:12px}
+  .csp-glass body.csp-redesign.csp-redesign #cspWorkspace #panes :is(.menu-card,#surfaceResearchBox,.csp-menu-card,.csp-settings-card){
+    border:0;box-shadow:none;background:var(--sheet-card);border-radius:12px;
+  }
   .csp-glass body.csp-redesign.csp-redesign.csp-edge-pop[data-csp-view="detail"] #cspNav{
     display:flex;position:absolute;inset:0;z-index:1;
   }
