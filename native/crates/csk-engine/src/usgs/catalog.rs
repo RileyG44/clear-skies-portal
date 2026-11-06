@@ -45,7 +45,16 @@ pub struct Meta {
     /// False while some scope prefix could not even be enumerated.
     pub enumerated: bool,
     pub projects: usize,
+    /// Loaded from the snapshot bundled with the app, not listed here yet:
+    /// it serves coverage at once but cannot prove "no coverage", since a
+    /// project may have been published since the snapshot.
+    #[serde(default)]
+    pub seeded: bool,
 }
+
+/// The catalogue snapshot shipped in the app (`csk-cli EXPORT-CATALOG`):
+/// zstd-compressed TSV, a `#scope\tbuilt` header, then one row per file.
+const SNAPSHOT: &[u8] = include_bytes!("../../data/usgs-catalog.tsv.zst");
 
 /// One file covering a cell, as listed.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -184,14 +193,111 @@ impl Catalog {
             .flatten()
             .and_then(|(v, _)| serde_json::from_str::<Meta>(&v).ok())
             .filter(|m| m.version == VERSION);
-        Arc::new(Self {
+        let me = Arc::new(Self {
             store,
             upstream,
             scope,
             meta: Mutex::new(meta),
             building: Flights::default(),
             last_repair: Mutex::new(None),
-        })
+        });
+        if me.meta().is_none() {
+            let _ = me.seed(SNAPSHOT);
+        }
+        me
+    }
+
+    /// Loads a snapshot whose scope covers ours. Returns whether it did.
+    pub fn seed(&self, snapshot: &[u8]) -> Result<bool, CatalogError> {
+        let Ok(text) = zstd::decode_all(snapshot) else { return Ok(false) };
+        let Ok(text) = String::from_utf8(text) else { return Ok(false) };
+        let mut lines = text.lines();
+        let Some((scope, built)) = lines.next().and_then(|h| h.strip_prefix('#')).and_then(|h| h.split_once('\t'))
+        else {
+            return Ok(false);
+        };
+        let probe = Meta {
+            version: VERSION,
+            built: built.parse().unwrap_or(0),
+            scope: scope.to_owned(),
+            failed: Vec::new(),
+            enumerated: true,
+            projects: 0,
+            seeded: true,
+        };
+        if !self.covers_scope(&probe) {
+            return Ok(false);
+        }
+        let rows: Vec<(String, i64, i64, i64, String, i64)> = lines
+            .filter_map(|l| {
+                let f: Vec<&str> = l.split('\t').collect();
+                (f.len() == 6).then(|| {
+                    Some((
+                        f[0].to_owned(),
+                        f[1].parse().ok()?,
+                        f[2].parse().ok()?,
+                        f[3].parse().ok()?,
+                        f[4].to_owned(),
+                        f[5].parse().ok()?,
+                    ))
+                })?
+            })
+            .collect();
+        let wanted: Vec<String> = self.scope.iter().filter(|s| !s.eq_ignore_ascii_case("ALL")).cloned().collect();
+        let keep = |p: &str| wanted.is_empty() || wanted.iter().any(|w| p.starts_with(w.as_str()));
+        self.store
+            .write(|c| {
+                let tx = c.transaction()?;
+                {
+                    let mut ins = tx.prepare(
+                        "INSERT OR REPLACE INTO usgs_cells (project, zone, cx, cy, file, size) VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+                    )?;
+                    for (p, z, cx, cy, f, size) in rows.iter().filter(|r| keep(&r.0)) {
+                        ins.execute(params![p, z, cx, cy, f, size])?;
+                    }
+                }
+                tx.commit()
+            })
+            .map_err(|e| CatalogError::Store(e.to_string()))?;
+        let projects = self
+            .store
+            .read(|c| c.query_row("SELECT COUNT(DISTINCT project) FROM usgs_cells", [], |r| r.get::<_, i64>(0)))
+            .map_err(|e| CatalogError::Store(e.to_string()))? as usize;
+        let meta = Meta { scope: self.scope_name(), projects, ..probe };
+        self.store
+            .kv_put(META_KEY, &serde_json::to_string(&meta).expect("meta serialises"))
+            .map_err(|e| CatalogError::Store(e.to_string()))?;
+        *self.meta.lock().unwrap_or_else(|e| e.into_inner()) = Some(meta);
+        Ok(true)
+    }
+
+    /// The catalogue as a snapshot for bundling.
+    pub fn snapshot(&self) -> Result<Vec<u8>, CatalogError> {
+        let meta = self.meta().ok_or_else(|| CatalogError::Listing("no catalogue".into()))?;
+        let mut text = format!("#{}\t{}\n", meta.scope, meta.built);
+        let rows: Vec<String> = self
+            .store
+            .read(|c| {
+                c.prepare("SELECT project, zone, cx, cy, file, size FROM usgs_cells ORDER BY project, zone, cx, cy")?
+                    .query_map([], |r| {
+                        Ok(format!(
+                            "{}\t{}\t{}\t{}\t{}\t{}",
+                            r.get::<_, String>(0)?,
+                            r.get::<_, i64>(1)?,
+                            r.get::<_, i64>(2)?,
+                            r.get::<_, i64>(3)?,
+                            r.get::<_, String>(4)?,
+                            r.get::<_, i64>(5)?
+                        ))
+                    })?
+                    .collect()
+            })
+            .map_err(|e| CatalogError::Store(e.to_string()))?;
+        for r in rows {
+            text.push_str(&r);
+            text.push('\n');
+        }
+        zstd::encode_all(text.as_bytes(), 19).map_err(|e| CatalogError::Store(e.to_string()))
     }
 
     pub fn scope_name(&self) -> String {
@@ -214,7 +320,7 @@ impl Catalog {
 
     /// Whether a "no 1 m coverage" answer is final.
     pub fn complete(&self) -> bool {
-        self.meta().is_some_and(|m| m.failed.is_empty() && m.enumerated && self.covers_scope(&m))
+        self.meta().is_some_and(|m| !m.seeded && m.failed.is_empty() && m.enumerated && self.covers_scope(&m))
     }
 
     /// A usable catalogue: the stored one (repairing it in the background if
@@ -222,7 +328,8 @@ impl Catalog {
     pub async fn ensure(self: &Arc<Self>) -> Result<Meta, CatalogError> {
         if let Some(m) = self.meta() {
             let age = now_ms() - m.built;
-            if age > TTL.as_millis() as i64 {
+            if m.seeded || age > TTL.as_millis() as i64 {
+                // Serve what we have; list the archive in the background.
                 let me = self.clone();
                 tokio::spawn(async move { me.build().await });
             } else if !(m.failed.is_empty() && m.enumerated && self.covers_scope(&m)) {
@@ -351,6 +458,7 @@ impl Catalog {
             failed,
             enumerated: if full { enumerated } else { previous.as_ref().is_none_or(|m| m.enumerated) },
             projects,
+            seeded: !full && previous.as_ref().is_some_and(|m| m.seeded),
         };
         let text = serde_json::to_string(&meta).expect("meta serialises");
         self.store.kv_put(META_KEY, &text).map_err(|e| CatalogError::Store(e.to_string()))?;

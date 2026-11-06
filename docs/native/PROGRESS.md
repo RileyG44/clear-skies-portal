@@ -54,7 +54,7 @@ Plan: [ARCHITECTURE.md](ARCHITECTURE.md). Phases have exit gates, not dates.
 | Catalogue, coverage, status | **Done.** `/api/wadnr/coverage` from the portal's project and hillshade-layer lists (7-day cache, stale on failure, 30 s retry); `/api/wadnr/status` truthfully reports no local rasters. |
 | Hillshade export and file query | **Done.** `/api/wadnr/export` (dpi kept at the tile-cache scale, 256 px fallback offline, failures retryable) and `POST /api/wadnr/query`. The transport now carries POST bodies and headers. |
 | Acquisition and ingest (§4.4) | Not started: ZIP64 central directory, zran/staging, strip decoder, DNR projections, tiled TIFF writer, elevation tiles, `/api/wadnr/elev`, `/api/wadnr/warm`. |
-| Bundled catalogue | Not started. First launch lists S3 (about 13 s cold in the simulator for the default scope); a catalogue snapshot shipped in the app removes that wait. |
+| Bundled catalogue | **Done.** A 71 KB zstd snapshot of the default scope (69 projects; `csk-cli EXPORT-CATALOG`) seeds the catalogue on first launch: 1 m tiles come at once (first tile 1.6 s cold, was 13 s+) while the archive is listed again in the background. A seeded catalogue serves coverage but never a final "no coverage", since a project may have been published since the snapshot. |
 
 ## Findings while porting
 

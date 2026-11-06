@@ -140,6 +140,7 @@ dependencies = [
  "thiserror",
  "tokio",
  "url",
+ "zstd",
 ]
 
 [[package]]
