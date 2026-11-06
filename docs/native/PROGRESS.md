@@ -49,6 +49,12 @@ Plan: [ARCHITECTURE.md](ARCHITECTURE.md). Phases have exit gates, not dates.
 | Float32 elevation to the page (R8) | **Done.** With an engine offering `elev32`, `app/elevation.js` fetches `/api/elev32/…` for 1 m, national and best-ground tiles and reads the samples as a zero-copy `Float32Array`: no PNG decode, no canvas readback, no worker hop. Decoding follows the response's Content-Type, so a PNG fallback still works; the overview keeps its PNG route and AWS fallback. |
 | Page announcement | **Done.** `LocalEngine.announced = true`. In the simulator the page reports the engine as "built into this app" and loads its elevation through it with no desktop. Capabilities not yet native (WA DNR elevation, Oregon) are absent from health `features`, so the page never asks for them. |
 
+## Phase 3 — Remaining sources and exports
+
+| Item | State |
+|---|---|
+| Oregon numeric elevation | **Implemented.** Native `/api/oregon/elev` and `/api/elev32/oregon` routes select only primary DOGAMI rasters at ≤1.001 m native spacing, matched uniquely to completed survey name/year metadata declaring Feet and 3 FOOT. Locked-raster F32 LERC exports preserve validity masks and convert feet to metres once. Actual valid-pixel coverage and source/metadata IDs are returned separately; overviews never enter the path. Shared z12 catalogue queries and tile flights preserve other consumers on cancellation; failed catalogue/export/decode or memory admission remains retryable. Focused route tests, the existing JS source contract and clippy pass. Live Mount Hood fixture returned Wasco 2015 at 0.9144 m with 0.308 valid coverage (783 ms first tile, 33 ms cached PNG in this desktop CLI run; not a phone benchmark). |
+
 ## Phase 4 — Direct WA DNR
 
 | Item | State |

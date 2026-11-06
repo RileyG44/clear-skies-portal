@@ -13,6 +13,7 @@ pub mod dnr_routes;
 pub mod flight;
 pub mod markup;
 pub mod national;
+pub mod oregon;
 pub mod proxies;
 pub mod router;
 pub mod tiles;
@@ -83,6 +84,7 @@ pub struct Engine {
     pub dnr: dnr::Dnr,
     pub dnr_local: dnr_local::DnrLocal,
     pub dnr_warm: dnr_routes::Warm,
+    pub oregon: oregon::Oregon,
     /// Proxy fetches shared while in flight.
     proxy_flights: flight::Flights<String, Option<(Vec<u8>, String, bool)>>,
     started: Instant,
@@ -90,8 +92,16 @@ pub struct Engine {
 
 /// Features the web client may use (`/api/health` → `features`). Only what
 /// this engine really answers is listed.
-pub const FEATURES: &[&str] =
-    &["overview-elevation", "elev32", "built-in", "markup", "wadnr-dpi", "wadnr-elevation", "wadnr-job-cancel"];
+pub const FEATURES: &[&str] = &[
+    "overview-elevation",
+    "elev32",
+    "built-in",
+    "markup",
+    "wadnr-dpi",
+    "wadnr-elevation",
+    "wadnr-job-cancel",
+    "oregon-elevation",
+];
 
 impl Engine {
     pub fn new(config: Config, transport: Arc<dyn Transport>) -> Result<Arc<Self>, EngineError> {
@@ -132,6 +142,7 @@ impl Engine {
             dnr: dnr::Dnr::default(),
             dnr_local,
             dnr_warm: dnr_routes::Warm::default(),
+            oregon: oregon::Oregon::default(),
             proxy_flights: flight::Flights::default(),
             started: Instant::now(),
         }))
