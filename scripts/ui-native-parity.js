@@ -61,24 +61,67 @@ const base=process.argv[2]||'http://127.0.0.1:8765/';
      const status=document.querySelector('.ls-preset-status');
      const probe=document.createElement('i');probe.style.color='var(--ui-accent)';document.body.append(probe);
      const accent=getComputedStyle(probe).color;probe.remove();
+     const top=node=>node?node.getBoundingClientRect().top:0;
+     const value=document.getElementById('terStyle')?.value;
+     const chip=document.querySelector(`.csp-style-chip[data-value="${value}"]`);
+     const chipBox=chip?.getBoundingClientRect();
+     const layers=document.querySelector('.ls-layers-disclosure');
+     const probeLayer=document.createElement('li');
+     probeLayer.className='ls-layer';
+     probeLayer.innerHTML='<div class="ls-layer-main"><span class="ls-swatch"></span></div>';
+     document.getElementById('cspWorkspace').append(probeLayer);
+     const swatch=probeLayer.querySelector('.ls-swatch')?.getBoundingClientRect();
+     probeLayer.remove();
      return {
       title:document.querySelector('.ls-preset-card .menu-section-title')?.textContent||'',
-      customize:document.querySelector('.ls-customize > summary')?.innerText||'',
+      kicker:document.querySelector('.ls-phone-kicker')?.textContent||'',
+      layers:layers?.querySelector('summary')?.innerText||'',
+      layersOpen:!!layers?.open,
+      count:document.querySelector('.ls-layers-head .pane-n')?.textContent||'',
+      effects:!!document.querySelector('.ls-layers-disclosure .ls-effects'),
+      customize:!!document.querySelector('.ls-customize'),
       heading:document.getElementById('terLidarHeading')?.firstChild?.nodeValue||'',
-      appearance:document.querySelector('#terAppearance .menu-section-title')?.firstChild?.nodeValue||'',
+      appearance:document.querySelector('.terrain-phone-appearance .ls-disclosure-title')?.textContent||'',
+      lighting:document.querySelector('.terrain-phone-lighting .ls-disclosure-title')?.textContent||'',
+      appearanceOpen:!!document.querySelector('.terrain-phone-appearance')?.open,
+      lightingOpen:!!document.querySelector('.terrain-phone-lighting')?.open,
       name:selected?getComputedStyle(selected).color:'',
       accent,
       shadow:thumb?getComputedStyle(thumb).boxShadow:'',
-      status:status?getComputedStyle(status).display:''
+      status:status?getComputedStyle(status).display:'',
+      chip:chipBox?{w:Math.round(chipBox.width),h:Math.round(chipBox.height),on:chip.getAttribute('aria-checked')}:null,
+      swatch:swatch?{w:Math.round(swatch.width),h:Math.round(swatch.height)}:null,
+      order:[
+        top(document.querySelector('.ls-preset-card')),
+        top(document.getElementById('terLidarHeading')),
+        top(document.getElementById('cspStyleChips')),
+        top(document.querySelector('.terrain-data-settings')),
+        top(document.querySelector('.ls-phone-kicker')),
+        top(layers),
+        top(document.querySelector('.terrain-phone-appearance')),
+        top(document.querySelector('.terrain-phone-lighting'))
+      ]
      };
     });
     assert.equal(portrait.title,'Quick presets','portrait presets use the native section name');
-    assert.match(portrait.customize,/Customize terrain/,'portrait customize disclosure uses the native name');
+    assert.equal(portrait.kicker,'Customize terrain','customize terrain is a section label');
+    assert.match(portrait.layers,/Layers & colors/,'layers disclosure uses the native name');
+    assert.match(portrait.layers,/Mix layers, edit palettes and apply terrain effects/,'the mix sentence sits on layers');
+    assert.equal(portrait.layersOpen,false,'layers starts collapsed');
+    assert.equal(portrait.count,'','the phone layer card drops the studio count');
+    assert.equal(portrait.effects,true,'effects stay inside the layers disclosure');
+    assert.equal(portrait.customize,false,'the phone sheet does not keep the desktop customize disclosure');
     assert.match(portrait.heading,/^Map display /,'portrait map display uses the native section name');
-    assert.match(portrait.appearance,/^Color & contrast /,'portrait appearance uses the native section name');
+    assert.equal(portrait.appearance,'Color & contrast','color and contrast is its own disclosure');
+    assert.equal(portrait.lighting,'Lighting & 3D relief','lighting is its own disclosure');
+    assert.equal(portrait.appearanceOpen,false,'color and contrast starts collapsed');
+    assert.equal(portrait.lightingOpen,false,'lighting starts collapsed');
+    assert.deepEqual(portrait.order,portrait.order.slice().sort((a,b)=>a-b),'presets, map display, then customize disclosures');
+    assert.deepEqual(portrait.chip,{w:70,h:62,on:'true'},'map display is a 70 by 62 chip row');
+    assert.deepEqual(portrait.swatch,{w:30,h:12},'a closed layer swatch is the native capsule');
     assert.equal(portrait.name,portrait.accent,'a selected preset caption uses the tint');
     assert.match(portrait.shadow,/0\.5px/,'an unselected preset thumb uses the hairline stroke');
-    assert.equal(portrait.status,'none','portrait customize hides the studio status');
+    assert.equal(portrait.status,'','the phone sheet does not render the studio status');
    }
    await page.screenshot({path:path.join(output,`terrain-${dark?'dark':'light'}.png`)});
    // Capture real touch events for interactive edge-pop when the browser supports CDP.
@@ -95,6 +138,25 @@ const base=process.argv[2]||'http://127.0.0.1:8765/';
    await page.locator('#q').click();await page.waitForTimeout(400);
    await page.locator('[data-route="elevation"]').click();await page.waitForTimeout(400);
    assert.equal(await page.locator('.ev-toggle-text strong').first().evaluate(el=>getComputedStyle(el).fontSize),'15px','portrait elevation rows use the home title size');
+   const elevation=await page.evaluate(()=>({
+     units:document.querySelector('#elevUnitsDisclosure > summary')?.innerText||'',
+     unitsOpen:!!document.getElementById('elevUnitsDisclosure')?.open,
+     bands:document.querySelector('#elevBandsDisclosure > summary')?.innerText||'',
+     bandsOpen:!!document.getElementById('elevBandsDisclosure')?.open,
+     intro:getComputedStyle(document.querySelector('.ev-intro')).display
+   }));
+   assert.match(elevation.units,/Units/,'elevation units are their own disclosure');
+   assert.equal(elevation.unitsOpen,false,'units starts collapsed');
+   assert.match(elevation.bands,/Highlight elevations/,'highlight elevations folds to a summary');
+   assert.equal(elevation.bandsOpen,false,'highlight elevations starts collapsed');
+   assert.equal(elevation.intro,'none','the phone highlight card drops the studio intro');
+   await page.evaluate(()=>{document.getElementById('elevSpectrumMore').open=true});
+   await page.locator('#elevVal').click();
+   await page.waitForTimeout(250);
+   assert.equal(await page.locator('#cspPageClose').getAttribute('aria-label'),'Dismiss keyboard','page close points at the focused field');
+   await page.locator('#cspPageClose').click();await page.waitForTimeout(200);
+   assert(!await page.locator('body').evaluate(el=>el.classList.contains('collapsed')),'page close dismisses the keyboard and leaves the sheet up');
+   assert.notEqual(await page.evaluate(()=>document.activeElement?.id),'elevVal');
    await page.locator('#cspPageClose').click();await page.waitForTimeout(400);
    assert(await page.locator('body').evaluate(el=>el.classList.contains('collapsed')),'page close returns to capsule');
    await page.locator('#q').click();await page.waitForTimeout(400);

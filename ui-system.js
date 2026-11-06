@@ -818,7 +818,7 @@ function renderSatelliteView(){
   }
   satelliteSearch?.dispatchEvent(new Event("csp:search-sync"));
   $("#cspSatBest").hidden=!$("#summary")?.children.length;
-  syncSatelliteFilterSummary();syncSatelliteCurrent();
+  syncSatelliteFilterSummary();syncSatelliteCurrent();syncPhoneSatellite();
 }
 
 function renderExportView(){
@@ -1545,8 +1545,236 @@ const syncPhoneLabels=()=>{
   write("#terLidarHeading","Map display ","Terrain mode & data ");
   write("#terAppearance .menu-section-title","Color & contrast ","Appearance ");
 };
+/* Phone-only presentation of the terrain page. The static source order stays
+   presets, then terrain mode, so desktop and the source-order check are
+   unchanged. display:contents plus these wraps put Map display between the
+   presets and Customize terrain while the sheet is up. */
+function paintStyleChips(){
+  const select=$("#terStyle"),row=$("#cspStyleChips");if(!select||!row) return;
+  for(const button of row.children){
+    const on=button.dataset.value===select.value;
+    button.setAttribute("aria-checked",on?"true":"false");
+    button.tabIndex=on?0:-1;
+  }
+}
+function syncStyleChips(){
+  const select=$("#terStyle");if(!select) return;
+  const label=document.querySelector('label[for="terStyle"]');
+  let row=$("#cspStyleChips");
+  if(!sheetMode()){
+    row?.remove();
+    if(select.dataset.phoneChip==="1"){
+      delete select.dataset.phoneChip;
+      select.removeAttribute("aria-hidden");
+      select.tabIndex=0;
+    }
+    label?.removeAttribute("aria-hidden");
+    return;
+  }
+  select.dataset.phoneChip="1";
+  select.setAttribute("aria-hidden","true");
+  select.tabIndex=-1;
+  label?.setAttribute("aria-hidden","true");
+  if(!row){
+    row=document.createElement("div");
+    row.id="cspStyleChips";
+    row.className="csp-style-chips";
+    row.setAttribute("role","radiogroup");
+    row.setAttribute("aria-label","Map display");
+    const labels={off:"Off",hs:"Hillshade",hsmulti:"Multi\nhillshade",tint:"Elevation",rem:"Relative",slope:"Slope",aspect:"Aspect",northness:"Exposure",c2:"Contours\n2 ft",c5:"Contours\n5 ft",c10:"Contours\n10 ft",c25:"Contours\n25 ft"};
+    for(const option of select.options){
+      const button=document.createElement("button");
+      button.type="button";button.className="csp-style-chip";button.dataset.value=option.value;
+      button.setAttribute("role","radio");
+      button.textContent=labels[option.value]||option.label;
+      button.addEventListener("click",()=>{
+        if(select.value!==button.dataset.value){
+          select.value=button.dataset.value;
+          select.dispatchEvent(new Event("change",{bubbles:true}));
+        }
+      });
+      row.append(button);
+    }
+    select.addEventListener("change",paintStyleChips);
+    ($("#terLidarHeading")||select).after(row);
+  }
+  paintStyleChips();
+}
+function wrapPhoneSection(section,title,detail,kind){
+  if(!section) return;
+  const parent=section.parentElement;
+  if(!sheetMode()){
+    if(parent?.classList.contains("terrain-phone-disclosure")) parent.replaceWith(section);
+    return;
+  }
+  if(parent?.classList.contains("terrain-phone-disclosure")){
+    const titleNode=parent.querySelector(".ls-disclosure-title"),detailNode=parent.querySelector(".ls-disclosure-detail");
+    if(titleNode) titleNode.textContent=title;
+    if(detailNode) detailNode.textContent=detail;
+    return;
+  }
+  const box=document.createElement("details");
+  box.className=`terrain-phone-disclosure terrain-phone-${kind} ls-disclosure ls-phone-disclosure`;
+  box.open=false;
+  box.innerHTML='<summary><span class="ls-disclosure-title"></span><span class="ls-disclosure-detail"></span></summary>';
+  box.querySelector(".ls-disclosure-title").textContent=title;
+  box.querySelector(".ls-disclosure-detail").textContent=detail;
+  section.before(box);box.append(section);
+}
+/* display:contents on the terrain <details> does not make its children flex
+   items, so the phone sheet moves the real nodes around the studio instead.
+   render() puts them back before it wipes #terStudio. */
+function restorePhoneTerrain(){
+  const body=$("#terLayerSettings > .terrain-settings-body");
+  const data=$(".terrain-data-settings");
+  const appearance=$(".terrain-phone-appearance");
+  const lighting=$(".terrain-phone-lighting");
+  if(body){
+    if(data&&data.parentElement!==body) body.insertBefore(data,body.firstChild);
+    if(lighting&&lighting.parentElement!==body) body.append(lighting);
+    if(appearance&&appearance.parentElement!==body) body.insertBefore(appearance,lighting&&lighting.parentElement===body?lighting:null);
+  }
+  const lidar=$("#terLidar");
+  const fields=lidar?.querySelector(":scope > .terrain-fields");
+  const settings=$("#terLayerSettings");
+  const heading=$("#terLidarHeading");
+  const legend=$("#terLegend");
+  const chips=$("#cspStyleChips");
+  if(lidar&&heading&&heading.parentElement!==lidar) lidar.insertBefore(heading,fields||lidar.firstChild);
+  if(heading&&chips&&chips.parentElement!==lidar) heading.after(chips);
+  if(lidar&&legend&&legend.parentElement!==lidar) lidar.insertBefore(legend,settings);
+  lidar?.removeAttribute("data-phone-split");
+}
+function placePhoneTerrain(){
+  const studio=$("#terStudio");
+  const kicker=$(".ls-phone-kicker",studio);
+  const layers=$(".ls-layers-disclosure",studio);
+  if(!studio||!kicker) return;
+  let marker=kicker;
+  for(const node of [$(".terrain-data-settings"),$("#terLegend"),$("#cspStyleChips"),$("#terLidarHeading")]){
+    if(!node) continue;
+    marker.before(node);
+    marker=node;
+  }
+  let after=layers||kicker;
+  for(const node of [$(".terrain-phone-appearance"),$(".terrain-phone-lighting")]){
+    if(!node) continue;
+    after.after(node);
+    after=node;
+  }
+  $("#terLidar")?.setAttribute("data-phone-split","1");
+}
+function syncPhoneTerrain(){
+  if(!sheetMode()){
+    restorePhoneTerrain();
+    wrapPhoneSection($("#terAppearance"),"Color & contrast","Brightness, contrast and saturation","appearance");
+    wrapPhoneSection($("#terLighting"),"Lighting & 3D relief","Sun direction, ambient light and vertical exaggeration","lighting");
+    syncStyleChips();
+    return;
+  }
+  wrapPhoneSection($("#terAppearance"),"Color & contrast","Brightness, contrast and saturation","appearance");
+  wrapPhoneSection($("#terLighting"),"Lighting & 3D relief","Sun direction, ambient light and vertical exaggeration","lighting");
+  syncStyleChips();
+  placePhoneTerrain();
+}
+globalThis.CSPPhoneTerrain={restore:restorePhoneTerrain,sync:syncPhoneTerrain};
+function phoneBandDetail(){
+  const detail=$("#elevBandsDisclosure .ls-disclosure-detail");if(!detail) return;
+  const unit=document.querySelector("#elevBandsBox [data-elev-unit]")?.textContent||"";
+  const parts=[];
+  if($("#elevBelowOn")?.checked) parts.push(`Below ${$("#elevBelowVal")?.value||""} ${unit}`.trim());
+  if($("#elevAboveOn")?.checked) parts.push(`Above ${$("#elevAboveVal")?.value||""} ${unit}`.trim());
+  detail.textContent=parts.join(" · ")||"Off";
+}
+function syncPhoneElevation(){
+  const head=$("#elevSpectrumSection .ev-section-head"),unit=$(".ev-unit-wrap");
+  if(head&&unit){
+    let units=$("#elevUnitsDisclosure");
+    if(!sheetMode()){
+      if(units){head.append(unit);units.remove()}
+    }else{
+      if(!units){
+        units=document.createElement("details");
+        units.id="elevUnitsDisclosure";
+        units.className="ev-units-disclosure ls-disclosure ls-phone-disclosure";
+        units.open=false;
+        units.innerHTML='<summary><span class="ls-disclosure-title">Units</span><span class="ls-disclosure-detail"></span></summary>';
+        document.querySelector('.pane[data-pane="elevation"] > .pane-b')?.append(units);
+        const select=$("#elevUnit");
+        if(select&&!select.dataset.unitWatch){
+          select.dataset.unitWatch="1";
+          select.addEventListener("change",()=>{
+            const next=$("#elevUnitsDisclosure .ls-disclosure-detail");
+            if(next) next.textContent=select.selectedOptions?.[0]?.textContent||"";
+          });
+        }
+      }
+      if(unit.parentElement!==units) units.append(unit);
+      const next=units.querySelector(".ls-disclosure-detail"),select=$("#elevUnit");
+      if(next&&select) next.textContent=select.selectedOptions?.[0]?.textContent||"";
+    }
+  }
+  const section=$("#elevBandsSection"),box=$("#elevBandsBox");
+  if(!section||!box) return;
+  let bands=$("#elevBandsDisclosure");
+  if(!sheetMode()){
+    if(bands){section.querySelector(".csp-section-label")?.after(box);bands.remove()}
+    return;
+  }
+  if(!bands){
+    bands=document.createElement("details");
+    bands.id="elevBandsDisclosure";
+    bands.className="ev-phone-disclosure ls-disclosure ls-phone-disclosure";
+    bands.open=false;
+    bands.innerHTML='<summary><span class="ls-disclosure-title">Highlight elevations</span><span class="ls-disclosure-detail"></span></summary>';
+    section.querySelector(".csp-section-label")?.after(bands);
+    if(!section.dataset.bandWatch){
+      section.dataset.bandWatch="1";
+      section.addEventListener("change",phoneBandDetail);
+      section.addEventListener("input",phoneBandDetail);
+    }
+  }
+  if(box.parentElement!==bands) bands.append(box);
+  phoneBandDetail();
+}
+function syncPhoneSatellite(){
+  const bar=$("#cspSatResultsBar");if(!bar) return;
+  let box=$("#cspSatResultOptions");
+  if(!sheetMode()){
+    if(box){
+      [...box.children].forEach(node=>{if(node.tagName!=="SUMMARY") bar.append(node)});
+      box.remove();
+    }
+    return;
+  }
+  if(!box){
+    box=document.createElement("details");
+    box.id="cspSatResultOptions";
+    box.className="csp-sat-result-options";
+    box.open=false;
+    const summary=document.createElement("summary");
+    summary.innerHTML='<span>Result options</span><span class="csp-sat-filter-sum" id="cspSatResultSum"></span>';
+    box.append(summary);
+    bar.prepend(box);
+    if(!bar.dataset.resultWatch){
+      bar.dataset.resultWatch="1";
+      bar.addEventListener("change",syncPhoneSatellite);
+    }
+  }
+  [...bar.children].forEach(node=>{if(node!==box) box.append(node)});
+  const summaryText=[
+    $("#sort")?.selectedOptions?.[0]?.textContent?.trim(),
+    $("#viewable")?.checked&&"Drawable only",
+    $("#groupSrc")?.checked&&"By source"
+  ].filter(Boolean).join(" · ");
+  const out=$("#cspSatResultSum");
+  if(out&&out.textContent!==summaryText) out.textContent=summaryText;
+}
 const placeSheetTools=()=>{
   syncPhoneLabels();
+  syncPhoneTerrain();
+  syncPhoneElevation();
+  syncPhoneSatellite();
   if(!sheetTools) return;
   if(!sheetMode()){
     document.body.style.removeProperty("--sheet-medium");
@@ -1743,11 +1971,17 @@ workspace.addEventListener("touchend",event=>{
 });
 workspace.addEventListener("touchcancel",()=>{if(!edgePan)return;edgePan=null;releaseEdge(false)});
 const syncSearchClose=()=>{
-  const keyboard=document.activeElement===$("#q"),button=$("#cspSearchClose");
-  button.setAttribute("aria-label",keyboard?"Dismiss keyboard":"Close menu");button.title=keyboard?"Dismiss keyboard":"Close menu";
-  button.querySelector("path").setAttribute("d",keyboard?"M4 3h16v10H4z M7 6h1m3 0h1m3 0h1M7 10h10m-9 7 4 4 4-4":"m6 9 6 6 6-6");
+  const keyboard=sheetTextField(document.activeElement);
+  const label=keyboard?"Dismiss keyboard":"Close menu";
+  const path=keyboard?"M4 3h16v10H4z M7 6h1m3 0h1m3 0h1M7 10h10m-9 7 4 4 4-4":"m6 9 6 6 6-6";
+  for(const id of ["cspSearchClose","cspPageClose"]){
+    const button=$("#"+id);if(!button) continue;
+    button.setAttribute("aria-label",label);button.title=label;
+    button.querySelector("path")?.setAttribute("d",path);
+  }
 };
-$("#q").addEventListener("focus",syncSearchClose);$("#q").addEventListener("blur",syncSearchClose);
+document.addEventListener("focusin",syncSearchClose);
+document.addEventListener("focusout",()=>requestAnimationFrame(syncSearchClose));
 const syncGrabber=()=>{
   grabber.setAttribute("aria-label",peeking()?"Show panel":"Resize panel");
   grabber.setAttribute("aria-expanded",String(currentDetent()==="large"));
@@ -2016,7 +2250,7 @@ if(sheetMode()&&!isCollapsed()){
     keyboardAtPointer=sheetTextField(field);
     if(!keyboardAtPointer) return;
     if(event.target===field||field.contains?.(event.target)) return;
-    if(event.target.closest(".search-row,#ac,.csp-sat-field,.ls-save-row,.ls-field")) return;
+    if(event.target.closest(".csp-close-menu,.search-row,#ac,.csp-sat-field,.ls-save-row,.ls-field")) return;
     const id=field.id&&globalThis.CSS?.escape?CSS.escape(field.id):field.id;
     if(id&&event.target.closest(`label[for="${id}"]`)) return;
     field.blur();
