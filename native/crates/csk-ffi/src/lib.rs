@@ -88,6 +88,7 @@ pub type CskRespond = extern "C" fn(context: *mut c_void, response: *const CskRe
 pub struct CskBody {
     _headers: CString,
     _body: Vec<u8>,
+    _reservation: Option<csk_engine::MemoryReservation>,
 }
 
 /// A pending fetch, consumed by `csk_fetch_complete` or `csk_fetch_fail`.
@@ -294,6 +295,15 @@ pub unsafe extern "C" fn csk_engine_purge_memory(engine: *mut CskEngine) {
     }
 }
 
+/// Admission ceiling adapts to available platform memory. Existing readers
+/// retain their allocations, while new work waits through retryable errors.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn csk_engine_set_memory_limit(engine: *mut CskEngine, bytes: usize) {
+    if let Some(e) = unsafe { engine.as_ref() } {
+        e.engine.memory.set_limit(bytes.min(256 << 20));
+    }
+}
+
 /// Stops the engine: in-flight requests are cancelled (each `respond` gets NULL).
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn csk_engine_free(engine: *mut CskEngine) {
@@ -326,8 +336,11 @@ impl Responder {
             .filter(|(k, v)| !k.contains(['\n', ':']) && !v.contains('\n'))
             .map(|(k, v)| format!("{k}: {v}\n"))
             .collect();
-        let body =
-            Box::new(CskBody { _headers: CString::new(headers.replace('\0', "")).expect("no NUL"), _body: r.body });
+        let body = Box::new(CskBody {
+            _headers: CString::new(headers.replace('\0', "")).expect("no NUL"),
+            _body: r.body,
+            _reservation: r.reservation,
+        });
         let c = CskResponse {
             status: r.status,
             headers: body._headers.as_ptr(),
@@ -369,6 +382,17 @@ pub unsafe extern "C" fn csk_engine_request(
     };
     // SAFETY: per the contract above.
     let (m, u, hdrs) = unsafe { (str_arg(method).unwrap_or("GET"), str_arg(url), str_arg(headers).unwrap_or("")) };
+    if body_len > 32 << 20 {
+        responder.send(Response::text(413, "request body exceeds 32 MiB"));
+        return 0;
+    }
+    let request_reservation = match e.engine.memory.reserve(body_len) {
+        Ok(r) => r,
+        Err(_) => {
+            responder.send(Response::text(503, "request is waiting for memory").header("Retry-After", "2"));
+            return 0;
+        }
+    };
     let payload = if body.is_null() || body_len == 0 {
         Vec::new()
     } else {
@@ -385,6 +409,7 @@ pub unsafe extern "C" fn csk_engine_request(
     let mut table = e.requests.lock().unwrap_or_else(|p| p.into_inner());
     let task = e.runtime.spawn(async move {
         let res = engine.handle(req).await;
+        drop(request_reservation);
         requests.lock().unwrap_or_else(|p| p.into_inner()).remove(&id);
         responder.send(res);
     });

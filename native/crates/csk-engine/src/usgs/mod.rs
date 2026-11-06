@@ -511,7 +511,7 @@ impl Usgs {
                     }
                 }
             }
-            let blocks: std::collections::HashMap<(u32, u32), Arc<[f32]>> =
+            let blocks: std::collections::HashMap<(u32, u32), Arc<csk_core::resource::Samples>> =
                 join_all(wanted.iter().map(|&(tx, ty)| async move {
                     ((tx, ty), self.cog.block(&o.key, &o.tiff, o.level, tx, ty).await)
                 }))

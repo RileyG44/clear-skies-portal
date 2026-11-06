@@ -64,16 +64,18 @@ impl Request {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug)]
 pub struct Response {
     pub status: u16,
     pub headers: Vec<(String, String)>,
     pub body: Vec<u8>,
+    /// Follows response bytes through the platform's zero-copy buffer owner.
+    pub reservation: Option<csk_core::resource::Reservation>,
 }
 
 impl Response {
     pub fn new(status: u16, media: &str, body: Vec<u8>) -> Self {
-        Self { status, headers: vec![("Content-Type".into(), media.into())], body }
+        Self { status, headers: vec![("Content-Type".into(), media.into())], body, reservation: None }
     }
 
     pub fn json(status: u16, value: &serde_json::Value) -> Self {

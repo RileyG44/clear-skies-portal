@@ -151,6 +151,12 @@ void csk_engine_set_work_allowed(struct CskEngine *engine, bool allowed);
 void csk_engine_purge_memory(struct CskEngine *engine);
 
 /**
+ * Admission ceiling adapts to available platform memory. Existing readers
+ * retain their allocations, while new work waits through retryable errors.
+ */
+void csk_engine_set_memory_limit(struct CskEngine *engine, size_t bytes);
+
+/**
  * Stops the engine: in-flight requests are cancelled (each `respond` gets NULL).
  */
 void csk_engine_free(struct CskEngine *engine);
