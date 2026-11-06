@@ -3905,34 +3905,56 @@ body.csp-redesign .ls-layer-label .menu-section-title{margin:0}
   .csp-glass body.csp-redesign.csp-redesign #cspWorkspace .ls-phone-group :is(.ls-layers,.ls-add-button){border-radius:0;background:transparent}
   .csp-glass body.csp-redesign.csp-redesign #cspWorkspace .ls-phone-group .ls-layers-disclosure .ls-add-button,
   .csp-glass body.csp-redesign.csp-redesign #cspWorkspace .ls-phone-group .ls-layers-disclosure .ls-layers:empty + .ls-add .ls-add-button{border-radius:0}
-  .csp-glass body.csp-redesign.csp-redesign #cspWorkspace .csp-phone-section{margin:18px 0 6px}
+  .csp-glass body.csp-redesign.csp-redesign #cspWorkspace #panes .csp-phone-section.menu-section-title{margin:20px 0 6px}
+  .csp-glass body.csp-redesign.csp-redesign #cspWorkspace #cspMapDisplay .csp-style-chips{padding:8px calc(50% - 35px)}
+  .csp-glass body.csp-redesign.csp-redesign #cspWorkspace #cspMapDisplay #terLegend:not(:empty){
+    margin:0;padding:8px 16px;border-top:.5px solid var(--glass-edge);
+  }
   .csp-glass body.csp-redesign.csp-redesign #cspWorkspace #cspTerrainDownloads .terrain-data-settings{
-    margin:0;padding:0 16px 8px;border-radius:0;background:transparent;
+    margin:0;padding:0;border-radius:0;background:transparent;
   }
   .csp-glass body.csp-redesign.csp-redesign #cspWorkspace .terrain-opacity-control{
-    display:grid;grid-template-columns:auto minmax(0,1fr) auto;align-items:center;gap:10px;
-    min-height:44px;margin:0;padding:4px 16px;border-radius:12px;background:var(--sheet-card);
+    display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:4px 8px;
+    margin:0;padding:8px 16px 4px;border-radius:0;background:transparent;border-top:.5px solid var(--glass-edge);
   }
   .csp-glass body.csp-redesign.csp-redesign #cspWorkspace .terrain-opacity-control .elev-label-row{display:contents}
   .csp-glass body.csp-redesign.csp-redesign #cspWorkspace .terrain-opacity-control label{
     grid-column:1;grid-row:1;font-size:15px;font-weight:500;color:var(--ui-text);
   }
-  .csp-glass body.csp-redesign.csp-redesign #cspWorkspace .terrain-opacity-control input[type=range]{grid-column:2;grid-row:1;width:100%;min-height:32px;margin:0}
-  .csp-glass body.csp-redesign.csp-redesign #cspWorkspace .terrain-opacity-control output{
-    grid-column:3;grid-row:1;font-size:15px;font-weight:400;color:var(--ui-text-muted);font-variant-numeric:tabular-nums;
+  .csp-glass body.csp-redesign.csp-redesign #cspWorkspace .terrain-opacity-control input[type=range]{
+    grid-column:1 / -1;grid-row:2;width:100%;min-height:44px;margin:0;
   }
-  .csp-glass body.csp-redesign.csp-redesign #cspWorkspace :is(.terrain-look-grid,.terrain-lighting .terrain-look-grid,.ls-slider){
-    grid-template-columns:minmax(88px,auto) minmax(0,1fr) auto;align-items:center;gap:8px 10px;padding:2px 16px;
+  .csp-glass body.csp-redesign.csp-redesign #cspWorkspace .terrain-opacity-control output{
+    grid-column:2;grid-row:1;font-size:15px;font-weight:400;color:var(--ui-text-muted);font-variant-numeric:tabular-nums;
+  }
+  .csp-glass body.csp-redesign.csp-redesign #cspWorkspace :is(.terrain-look-grid,.terrain-lighting .terrain-look-grid){
+    grid-template-columns:minmax(0,1fr) auto;align-items:center;column-gap:10px;row-gap:0;padding:4px 16px 8px;
+  }
+  .csp-glass body.csp-redesign.csp-redesign #cspWorkspace .ls-slider{
+    grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:4px 8px;padding:8px 16px 4px;border-top:.5px solid var(--glass-edge);
   }
   .csp-glass body.csp-redesign.csp-redesign #cspWorkspace .ls-slider .elev-label-row{display:contents}
   .csp-glass body.csp-redesign.csp-redesign #cspWorkspace :is(.terrain-look-grid,.ls-slider) label{
     grid-column:1;font-size:15px;font-weight:500;color:var(--ui-text);
   }
-  .csp-glass body.csp-redesign.csp-redesign #cspWorkspace :is(.terrain-look-grid,.ls-slider) input[type=range]{grid-column:2;min-height:32px}
-  .csp-glass body.csp-redesign.csp-redesign #cspWorkspace :is(.terrain-look-grid,.ls-slider) output{
-    grid-column:3;font-size:15px;font-weight:400;color:var(--ui-text-muted);font-variant-numeric:tabular-nums;
+  .csp-glass body.csp-redesign.csp-redesign #cspWorkspace .ls-slider label{grid-row:1}
+  .csp-glass body.csp-redesign.csp-redesign #cspWorkspace :is(.terrain-look-grid,.ls-slider) input[type=range]{
+    grid-column:1 / -1;width:100%;min-height:44px;margin:0;
   }
-  .csp-glass body.csp-redesign.csp-redesign #cspWorkspace .ls-slider .control-hint{grid-column:1 / -1;grid-row:2;margin:0}
+  .csp-glass body.csp-redesign.csp-redesign #cspWorkspace .ls-slider input[type=range]{grid-row:2}
+  .csp-glass body.csp-redesign.csp-redesign #cspWorkspace :is(.terrain-look-grid,.ls-slider) output{
+    grid-column:2;font-size:15px;font-weight:400;color:var(--ui-text-muted);font-variant-numeric:tabular-nums;
+  }
+  .csp-glass body.csp-redesign.csp-redesign #cspWorkspace .ls-slider output{grid-row:1}
+  .csp-glass body.csp-redesign.csp-redesign #cspWorkspace .ls-slider .control-hint{grid-column:1 / -1;grid-row:3;margin:0}
+  .csp-glass body.csp-redesign.csp-redesign #cspWorkspace .terrain-look-grid > :is(:nth-child(1),:nth-child(3)){grid-row:1}
+  .csp-glass body.csp-redesign.csp-redesign #cspWorkspace .terrain-look-grid > :nth-child(2){grid-row:2}
+  .csp-glass body.csp-redesign.csp-redesign #cspWorkspace .terrain-look-grid > :is(:nth-child(4),:nth-child(6)){grid-row:3}
+  .csp-glass body.csp-redesign.csp-redesign #cspWorkspace .terrain-look-grid > :nth-child(5){grid-row:4}
+  .csp-glass body.csp-redesign.csp-redesign #cspWorkspace .terrain-look-grid > :is(:nth-child(7),:nth-child(9)){grid-row:5}
+  .csp-glass body.csp-redesign.csp-redesign #cspWorkspace .terrain-look-grid > :nth-child(8){grid-row:6}
+  .csp-glass body.csp-redesign.csp-redesign #cspWorkspace .terrain-look-grid > :is(:nth-child(10),:nth-child(12)){grid-row:7}
+  .csp-glass body.csp-redesign.csp-redesign #cspWorkspace .terrain-look-grid > :nth-child(11){grid-row:8}
   .csp-glass body.csp-redesign.csp-redesign #cspWorkspace #terLidar[data-phone-split] .terrain-card-footer{margin:0;padding:0;border:0}
   .csp-glass body.csp-redesign.csp-redesign #cspWorkspace #terLidar[data-phone-split] #terReset{
     width:100%;min-height:44px;margin:0!important;padding:8px 16px;border:0;border-radius:12px;
@@ -4028,6 +4050,90 @@ body.csp-redesign .ls-layer-label .menu-section-title{margin:0}
   }
   .csp-glass body.csp-redesign.csp-redesign:not(.collapsed) #loc svg{display:none}
   .csp-glass body.csp-redesign.csp-redesign:not(.collapsed) #loc::before{content:"";width:17px;height:17px;background:currentColor;-webkit-mask:url("vendor/icons/navigation.svg") center/contain no-repeat;mask:url("vendor/icons/navigation.svg") center/contain no-repeat}
+  .csp-glass body.csp-redesign.csp-redesign #cspWorkspace :is(#cspTerrainDownloads,#cspTerrainAbout) :is(.terrain-settings-section,.terrain-settings-body,.terrain-subsection,.dnr-module){
+    margin:0;padding:0;border:0;background:transparent;gap:0;
+  }
+  .csp-glass body.csp-redesign.csp-redesign #cspWorkspace :is(#cspTerrainDownloads,#cspTerrainAbout,.ls-phone-group,.csp-fold) :is(h4,.menu-section-title){display:none}
+  .csp-glass body.csp-redesign.csp-redesign #cspWorkspace #cspTerrainDownloads .terrain-data-settings .fgrid{
+    display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:0 8px;min-height:44px;padding:4px 16px 0;
+  }
+  .csp-glass body.csp-redesign.csp-redesign #cspWorkspace #cspTerrainDownloads label[for="terSrc"]{
+    grid-column:1;grid-row:1;margin:0;font-size:15px;font-weight:500;color:var(--ui-text);
+  }
+  .csp-glass body.csp-redesign.csp-redesign #cspWorkspace #cspTerrainDownloads #terSrc{grid-column:2;grid-row:1;width:auto;max-width:46%;min-height:44px}
+  .csp-glass body.csp-redesign.csp-redesign #cspWorkspace #cspTerrainDownloads #terSrcHint{
+    display:block;grid-column:1 / -1;grid-row:2;margin:0;padding:0 0 8px;font-size:12px;line-height:1.35;color:var(--ui-text-muted);
+  }
+  .csp-glass body.csp-redesign.csp-redesign #cspWorkspace #cspTerrainDownloads .elev-field{
+    display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:8px;min-height:44px;margin:0;padding:0 16px;border-top:.5px solid var(--glass-edge);
+  }
+  .csp-glass body.csp-redesign.csp-redesign #cspWorkspace #cspTerrainDownloads .elev-field > label{font-size:15px;font-weight:500;color:var(--ui-text)}
+  .csp-glass body.csp-redesign.csp-redesign #cspWorkspace :is(#cspTerrainDownloads,#cspTerrainAbout) .control-hint{
+    margin:0;padding:0 16px 8px;font-size:12px;line-height:1.35;color:var(--ui-text-muted);
+  }
+  .csp-glass body.csp-redesign.csp-redesign #cspWorkspace #panes :is(#cspTerrainDownloads,#cspTerrainAbout) :is(#terWarm,#dnrSelect,#dnrViewport,#dnrClear,#terrainInspectSource){
+    display:flex;align-items:center;width:100%;min-height:44px;margin:0;padding:8px 16px;border:0;border-top:.5px solid var(--glass-edge);border-radius:0;
+    background:transparent;box-shadow:none;color:var(--ui-text);font-size:15px;font-weight:500;text-align:left;
+  }
+  .csp-glass body.csp-redesign.csp-redesign #cspWorkspace #cspTerrainAbout :is(#terrainSourceSummary,#terrainSurveyInfo,#terInfo){
+    margin:0;padding:8px 16px;font-size:15px;line-height:1.35;
+  }
+  .csp-glass body.csp-redesign.csp-redesign #cspWorkspace .ls-phone-group .ls-effects{margin:0;border-top:.5px solid var(--glass-edge)}
+  .csp-glass body.csp-redesign.csp-redesign #cspWorkspace .ls-phone-group .ls-sliders{display:block}
+  .csp-glass body.csp-redesign.csp-redesign #cspWorkspace .ls-phone-group .ls-editor{
+    display:grid;gap:0;padding:0;border-top:.5px solid var(--glass-edge);
+  }
+  .csp-glass body.csp-redesign.csp-redesign #cspWorkspace .ls-phone-group .ls-field{
+    display:grid;grid-template-columns:minmax(0,1fr) minmax(0,46%);align-items:center;gap:8px;min-height:44px;margin:0;padding:0 16px;border-top:.5px solid var(--glass-edge);
+  }
+  .csp-glass body.csp-redesign.csp-redesign #cspWorkspace .ls-phone-group .ls-field-label{font-size:15px;font-weight:500;color:var(--ui-text)}
+  .csp-glass body.csp-redesign.csp-redesign #cspWorkspace .ls-phone-group .ls-editor :is(.ls-hint,.control-hint){margin:0;padding:0 16px 8px;font-size:12px}
+  .csp-glass body.csp-redesign.csp-redesign #cspWorkspace .ls-phone-group .ls-editor .ls-disclosure{border-top:.5px solid var(--glass-edge);background:transparent}
+  .csp-glass body.csp-redesign.csp-redesign #cspWorkspace .ls-phone-group .ls-editor .ls-disclosure > summary{min-height:44px;padding:8px 16px;font-size:15px;font-weight:500}
+  .csp-glass body.csp-redesign.csp-redesign #cspWorkspace #panes .terrain-phone-disclosure .terrain-look-reset{
+    width:100%;min-height:44px;margin:0;padding:8px 16px;border:0;border-top:.5px solid var(--glass-edge);border-radius:0;
+    background:transparent;box-shadow:none;color:var(--ui-text);font-size:15px;font-weight:500;text-align:left;
+  }
+  .csp-glass body.csp-redesign.csp-redesign #cspWorkspace #elevColorDisclosure .ev-body{
+    display:flex;flex-direction:column;gap:0;padding:0;border-top:.5px solid var(--glass-edge);
+  }
+  .csp-glass body.csp-redesign.csp-redesign #cspWorkspace #elevColorDisclosure .ev-field:not(.ev-colors){
+    display:grid;grid-template-columns:minmax(0,1fr) auto;gap:4px 8px;margin:0;padding:8px 16px 4px;border:0;border-top:.5px solid var(--glass-edge);background:transparent;
+  }
+  .csp-glass body.csp-redesign.csp-redesign #cspWorkspace #elevColorDisclosure .elev-label-row{display:contents}
+  .csp-glass body.csp-redesign.csp-redesign #cspWorkspace #elevColorDisclosure .elev-label{
+    grid-column:1;grid-row:1;font-size:15px;font-weight:500;color:var(--ui-text);
+  }
+  .csp-glass body.csp-redesign.csp-redesign #cspWorkspace #elevColorDisclosure :is(.unit-field,.elev-value){grid-column:2;grid-row:1}
+  .csp-glass body.csp-redesign.csp-redesign #cspWorkspace #elevColorDisclosure .ev-field input[type=range]{
+    grid-column:1 / -1;grid-row:2;width:100%;min-height:44px;margin:0;
+  }
+  .csp-glass body.csp-redesign.csp-redesign #cspWorkspace #elevColorDisclosure .ev-field .control-hint{grid-column:1 / -1;grid-row:3;margin:0;font-size:12px}
+  .csp-glass body.csp-redesign.csp-redesign #cspWorkspace #elevColorDisclosure .ev-colors{
+    margin:0;padding:8px 16px;border-top:.5px solid var(--glass-edge);background:transparent;
+  }
+  .csp-glass body.csp-redesign.csp-redesign #cspWorkspace #elevColorDisclosure .elev-spectrum-scale{margin:0;padding:8px 16px 0}
+  .csp-glass body.csp-redesign.csp-redesign #cspWorkspace #elevColorDisclosure .ev-actions{
+    display:flex;min-height:44px;border-top:.5px solid var(--glass-edge);
+  }
+  .csp-glass body.csp-redesign.csp-redesign #cspWorkspace #elevColorDisclosure .ev-actions .linkbtn{min-height:44px;padding:8px 16px;font-size:15px}
+  .csp-glass body.csp-redesign.csp-redesign #cspWorkspace #elevBandsDisclosure #elevBandsBox{
+    margin:0;padding:0;border:0;border-radius:0;background:transparent;box-shadow:none;
+  }
+  .csp-glass body.csp-redesign.csp-redesign #cspWorkspace #elevBandsDisclosure .ev-band-row{
+    display:flex;align-items:center;gap:8px;min-height:44px;margin:0;padding:6px 16px;border:0;border-top:.5px solid var(--glass-edge);border-radius:0;background:transparent;
+  }
+  .csp-glass body.csp-redesign.csp-redesign #cspWorkspace #elevBandsDisclosure .ev-band-name{font-size:15px;font-weight:500;color:var(--ui-text)}
+  .csp-glass body.csp-redesign.csp-redesign #cspWorkspace #elevBandsDisclosure .ev-more{
+    margin:0;border:0;border-top:.5px solid var(--glass-edge);border-radius:0;background:transparent;
+  }
+  .csp-glass body.csp-redesign.csp-redesign #cspWorkspace #elevBandsDisclosure .ev-more > summary{min-height:44px;padding:8px 16px;font-size:15px;font-weight:500}
+  .csp-glass body.csp-redesign.csp-redesign #cspWorkspace .csp-sat-result-options > summary{
+    display:grid;grid-template-columns:minmax(0,1fr) auto;grid-template-areas:"title chevron" "caption chevron";align-items:center;
+  }
+  .csp-glass body.csp-redesign.csp-redesign #cspWorkspace .csp-sat-result-options > summary > span:first-child{grid-area:title}
+  .csp-glass body.csp-redesign.csp-redesign #cspWorkspace .csp-sat-result-options > summary .csp-sat-filter-sum{grid-area:caption;white-space:normal}
+  .csp-glass body.csp-redesign.csp-redesign #cspWorkspace .csp-sat-result-options > summary::after{grid-area:chevron}
 }
 @media(prefers-reduced-motion:reduce){
   .csp-glass body.csp-redesign.csp-redesign #side,

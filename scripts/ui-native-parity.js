@@ -102,6 +102,13 @@ const base=process.argv[2]||'http://127.0.0.1:8765/';
       dataKicker:document.getElementById('cspDataKicker')?.textContent||'',
       resetKicker:document.getElementById('cspResetKicker')?.textContent||'',
       opacityLabel:document.querySelector('label[for="terOp"]')?.textContent||'',
+      mapCard:document.getElementById('cspStyleChips')?.parentElement?.id||'',
+      opacityCard:document.querySelector('.terrain-opacity-control')?.parentElement?.id||'',
+      legendCard:document.getElementById('terLegend')?.parentElement?.id||'',
+      mapRadius:document.getElementById('cspMapDisplay')?getComputedStyle(document.getElementById('cspMapDisplay')).borderRadius:'',
+      opacityRadius:document.querySelector('.terrain-opacity-control')?getComputedStyle(document.querySelector('.terrain-opacity-control')).borderRadius:'',
+      trackRow:document.getElementById('terOp')?getComputedStyle(document.getElementById('terOp')).gridRowStart:'',
+      kickerMargin:document.getElementById('cspDataKicker')?getComputedStyle(document.getElementById('cspDataKicker')).marginTop:'',
       sourceTop:top(document.getElementById('cspTerrainDownloads')),
       lightingTop:top(document.querySelector('.terrain-phone-lighting')),
       order:[
@@ -140,6 +147,13 @@ const base=process.argv[2]||'http://127.0.0.1:8765/';
     assert.equal(portrait.aboutKicker,'About this terrain','about this terrain is its own section');
     assert.equal(portrait.resetKicker,'Reset','reset is its own section');
     assert.equal(portrait.opacityLabel,'Terrain opacity','map display keeps the opacity row');
+    assert.equal(portrait.mapCard,'cspMapDisplay','chips sit in the map display card');
+    assert.equal(portrait.opacityCard,'cspMapDisplay','opacity sits in the map display card');
+    assert.equal(portrait.legendCard,'cspMapDisplay','the legend sits in the map display card');
+    assert.equal(portrait.mapRadius,'12px','map display has one corner radius');
+    assert.equal(portrait.opacityRadius,'0px','the opacity row is not its own card');
+    assert.equal(portrait.trackRow,'2','the opacity track sits under its title');
+    assert.equal(portrait.kickerMargin,'20px','phone sections use the native section spacing');
     assert(portrait.sourceTop>portrait.lightingTop,'the source card follows customize');
     assert.deepEqual(portrait.chip,{w:70,h:62,on:'true'},'map display is a 70 by 62 chip row');
     assert.deepEqual(portrait.swatch,{w:30,h:12},'a closed layer swatch is the native capsule');
@@ -155,7 +169,7 @@ const base=process.argv[2]||'http://127.0.0.1:8765/';
      if(!row||!chip) return false;
      const mid=(chip.getBoundingClientRect().left+chip.getBoundingClientRect().right)/2;
      const center=(row.getBoundingClientRect().left+row.getBoundingClientRect().right)/2;
-     return Math.abs(mid-center)<40;
+     return Math.abs(mid-center)<8;
    });
    const chips=await page.evaluate(()=>{
      const row=document.getElementById('cspStyleChips');
@@ -163,11 +177,35 @@ const base=process.argv[2]||'http://127.0.0.1:8765/';
      const mid=(chip.getBoundingClientRect().left+chip.getBoundingClientRect().right)/2;
      const center=(row.getBoundingClientRect().left+row.getBoundingClientRect().right)/2;
      row.dispatchEvent(new KeyboardEvent('keydown',{key:'ArrowLeft',bubbles:true,cancelable:true}));
-     return {centered:Math.abs(mid-center)<40,value:document.getElementById('terStyle').value};
+     return {centered:Math.abs(mid-center)<8,value:document.getElementById('terStyle').value};
    });
    assert.equal(chips.centered,true,'the selected map display chip scrolls to the center');
    assert.equal(chips.value,'c10','arrow keys move the map display choice');
    await page.locator('.csp-style-chip[data-value="off"]').click();
+   await page.evaluate(()=>{
+     document.getElementById('cspTerrainDownloads').open=true;
+     document.getElementById('cspTerrainAbout').open=true;
+   });
+   const opened=await page.evaluate(()=>{
+     const hint=document.getElementById('terSrcHint');
+     const heading=document.querySelector('#cspTerrainDownloads h4');
+     const about=document.querySelector('#cspTerrainAbout h4');
+     const label=document.querySelector('#cspTerrainDownloads label[for="terSrc"]');
+     return {
+       hint:hint?getComputedStyle(hint).display:'',
+       heading:heading?getComputedStyle(heading).display:'',
+       about:about?getComputedStyle(about).display:'',
+       label:label?getComputedStyle(label).fontSize:''
+     };
+   });
+   assert.equal(opened.hint,'block','the source hint shows inside terrain downloads');
+   assert.equal(opened.heading,'none','terrain downloads hides the desktop heading');
+   assert.equal(opened.about,'none','sources and scale hides the desktop heading');
+   assert.equal(opened.label,'15px','the source row uses the list title size');
+   await page.evaluate(()=>{
+     document.getElementById('cspTerrainDownloads').open=false;
+     document.getElementById('cspTerrainAbout').open=false;
+   });
    // Capture real touch events for interactive edge-pop when the browser supports CDP.
    if((process.env.CSP_UI_BROWSER||'chrome')!=='webkit'){
     const cdp=await context.newCDPSession(page),side=await page.locator('#side').boundingBox();
@@ -199,6 +237,14 @@ const base=process.argv[2]||'http://127.0.0.1:8765/';
    assert.match(elevation.color,/Off/,'color by elevation reads off until the switch is on');
    assert.equal(elevation.colorOpen,false,'color by elevation starts collapsed');
    assert.equal(elevation.intro,'none','the phone highlight card drops the studio intro');
+   await page.locator('#lb_elevSh').click();
+   const flipped=await page.evaluate(()=>({
+     on:document.getElementById('elevSh').checked,
+     open:document.getElementById('elevColorDisclosure').open
+   }));
+   assert.equal(flipped.on,true,'the color switch turns on without opening the fold');
+   assert.equal(flipped.open,false,'the color fold stays closed when the switch turns on');
+   await page.locator('#lb_elevSh').click();
    await page.evaluate(()=>{document.getElementById('elevColorDisclosure').open=true});
    await page.locator('#elevVal').click();
    await page.waitForTimeout(250);

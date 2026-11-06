@@ -1549,6 +1549,7 @@ const syncPhoneLabels=()=>{
    presets, then terrain mode, so desktop and the source-order check are
    unchanged. display:contents plus these wraps put Map display between the
    presets and Customize terrain while the sheet is up. */
+let chipWatch=null;
 function paintStyleChips(){
   const select=$("#terStyle"),row=$("#cspStyleChips");if(!select||!row) return;
   let checked=null;
@@ -1562,14 +1563,27 @@ function paintStyleChips(){
   if(!checked) return;
   const reduced=matchMedia("(prefers-reduced-motion: reduce)").matches||document.documentElement.classList.contains("csp-reduce-motion");
   const rowBox=row.getBoundingClientRect(),box=checked.getBoundingClientRect();
+  // A hidden terrain pane reports zeros. Center once it is actually on screen.
+  if(rowBox.width<1||box.width<1){watchChipRow(row);return}
   const delta=(box.left+box.width/2)-(rowBox.left+rowBox.width/2);
   if(Math.abs(delta)>1) row.scrollBy({left:delta,behavior:reduced?"instant":"smooth"});
+}
+function watchChipRow(row){
+  if(chipWatch) return;
+  chipWatch=new ResizeObserver(()=>{
+    if(row.getBoundingClientRect().width<1) return;
+    chipWatch.disconnect();
+    chipWatch=null;
+    paintStyleChips();
+  });
+  chipWatch.observe(row);
 }
 function syncStyleChips(){
   const select=$("#terStyle");if(!select) return;
   const label=document.querySelector('label[for="terStyle"]');
   let row=$("#cspStyleChips");
   if(!sheetMode()){
+    chipWatch?.disconnect();chipWatch=null;
     row?.remove();
     if(select.dataset.phoneChip==="1"){
       delete select.dataset.phoneChip;
@@ -1611,7 +1625,7 @@ function syncStyleChips(){
       if(!next) return;
       event.preventDefault();
       next.click();
-      next.focus();
+      next.focus({preventScroll:true});
     });
     select.addEventListener("change",paintStyleChips);
     ($("#terLidarHeading")||select).after(row);
@@ -1701,21 +1715,36 @@ function restorePhoneTerrain(){
   if(lidar&&heading&&heading.parentElement!==lidar) lidar.insertBefore(heading,fields||lidar.firstChild);
   if(heading&&chips&&chips.parentElement!==lidar) heading.after(chips);
   if(lidar&&legend&&legend.parentElement!==lidar) lidar.insertBefore(legend,settings);
+  const mapCard=$("#cspMapDisplay");
+  if(mapCard&&!mapCard.childElementCount) mapCard.remove();
   lidar?.removeAttribute("data-phone-split");
   phoneLabel('label[for="terOp"]',"Terrain opacity");
   phoneLabel('label[for="terSrc"]',"Preferred terrain source");
+}
+function appendTail(parent,nodes){
+  const want=nodes.filter(Boolean);
+  if(!parent||!want.length) return;
+  const kids=[...parent.children];
+  const start=kids.length-want.length;
+  if(start>=0&&want.every((node,index)=>kids[start+index]===node)) return;
+  parent.append(...want);
 }
 function placePhoneTerrain(){
   const studio=$("#terStudio");
   const kicker=$(".ls-phone-kicker",studio);
   const layers=$(".ls-layers-disclosure",studio);
   if(!studio||!kicker) return;
-  let marker=kicker;
-  for(const node of [$(".terrain-opacity-control"),$("#terLegend"),$("#cspStyleChips"),$("#terLidarHeading")]){
-    if(!node) continue;
-    marker.before(node);
-    marker=node;
+  const heading=$("#terLidarHeading");
+  if(heading&&heading.parentElement!==kicker.parentElement) kicker.before(heading);
+  let card=$("#cspMapDisplay");
+  if(!card){
+    card=document.createElement("div");
+    card.id="cspMapDisplay";
+    card.className="ls-phone-group";
   }
+  if(heading?.parentElement&&heading.nextElementSibling!==card) heading.after(card);
+  else if(!heading&&card.parentElement!==studio) kicker.before(card);
+  appendTail(card,[$("#cspStyleChips"),$("#terLegend"),$(".terrain-opacity-control")]);
   let group=$("#cspCustomizeGroup");
   if(!group){
     group=document.createElement("div");
@@ -1729,21 +1758,18 @@ function placePhoneTerrain(){
   const lidar=$("#terLidar");
   if(!lidar) return;
   const downloads=phoneDisclosure("cspTerrainDownloads","Terrain downloads","Source preference, offline areas and Washington LiDAR");
-  for(const node of [$(".terrain-data-settings"),$("#terrainDownloadBox"),$(".terrain-download-settings")]){
-    if(node) downloads.append(node);
-  }
+  appendTail(downloads,[$(".terrain-data-settings"),$("#terrainDownloadBox"),$(".terrain-download-settings")]);
   const about=phoneDisclosure("cspTerrainAbout","Sources & scale","Rendered data, survey details and resolution");
   const sources=$("#terrainSourceDetails");
-  if(sources) about.append(sources);
-  const footer=$(".terrain-card-footer");
-  lidar.append(
+  if(sources&&sources.parentElement!==about) about.append(sources);
+  appendTail(lidar,[
     phoneSectionTitle("cspDataKicker","Data & downloads"),
     downloads,
     phoneSectionTitle("cspAboutKicker","About this terrain"),
     about,
-    phoneSectionTitle("cspResetKicker","Reset")
-  );
-  if(footer) lidar.append(footer);
+    phoneSectionTitle("cspResetKicker","Reset"),
+    $(".terrain-card-footer")
+  ]);
   lidar.setAttribute("data-phone-split","1");
   phoneLabel('label[for="terOp"]',"Terrain opacity");
   phoneLabel('label[for="terSrc"]',"Preferred terrain source");
@@ -1857,17 +1883,20 @@ function syncColorFold(){
   }
   if(!toggle.dataset.foldStop){
     toggle.dataset.foldStop="1";
-    const stop=event=>event.stopPropagation();
-    toggle.addEventListener("click",stop);
-    toggle.addEventListener("pointerdown",stop);
+    // A label inside summary still toggles the disclosure. Cancel that click,
+    // then flip the switch. The fold stays where the person left it.
+    toggle.addEventListener("click",event=>{
+      event.preventDefault();
+      event.stopPropagation();
+      const box=$("#elevSh");
+      if(!box) return;
+      box.checked=!box.checked;
+      box.dispatchEvent(new Event("change",{bubbles:true}));
+    });
   }
   if($("#elevSh")&&!$("#elevSh").dataset.foldWatch){
     $("#elevSh").dataset.foldWatch="1";
-    $("#elevSh").addEventListener("change",()=>{
-      const next=$("#elevColorDisclosure");
-      if(next) next.open=!!$("#elevSh").checked;
-      colorFoldDetail();
-    });
+    $("#elevSh").addEventListener("change",colorFoldDetail);
   }
   if(!section.dataset.colorWatch){
     section.dataset.colorWatch="1";
