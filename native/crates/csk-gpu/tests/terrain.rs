@@ -287,3 +287,61 @@ fn vector_layers_draw_in_place_at_screen_widths() {
     assert_eq!(at(128 + 84, 128 + 5), vec![0, 0, 0, 0], "a 6 px line ends 3 px out");
     assert_eq!(at(128 - 60, 128), vec![128, 128, 0, 128], "point fill");
 }
+
+/// Detailed linework at a coarse zoom (path points far closer than the line
+/// is wide, turning sharply) draws no spike: every lit pixel lies within
+/// the miter limit of the path.
+#[test]
+fn vector_lines_keep_within_their_miter_limit() {
+    use csk_gpu::{Geometry, Layer, Shape, Shapes, Style, Vector, vector::tessellate};
+    let Some(gpu) = renderer() else { return };
+    let mut terrain = Terrain::new(&gpu, 8).unwrap();
+    let centre = [0.25, 0.4];
+    let view = View { center: centre, zoom: 4.0, bearing: 0.0, css: [256.0, 256.0], dpr: 1.0 };
+    let world = 256.0 * 16.0;
+    // A deterministic random walk of sub-pixel steps around the centre.
+    let mut seed = 0x2545_f491_4f6c_dd1du64;
+    let mut next = || {
+        seed ^= seed << 13;
+        seed ^= seed >> 7;
+        seed ^= seed << 17;
+        (seed >> 11) as f64 / (1u64 << 53) as f64 - 0.5
+    };
+    let mut at = [0.0f64, 0.0];
+    let mut path = Vec::new();
+    for _ in 0..4000 {
+        at = [(at[0] + next() * 0.8).clamp(-60.0, 60.0), (at[1] + next() * 0.8).clamp(-60.0, 60.0)];
+        path.push(at);
+    }
+    let line = Style { fill: [0.0; 4], line: [1.0; 4], width: 4.0, dash: [0.0; 2] };
+    let shapes = Shapes {
+        styles: vec![line],
+        shapes: vec![Shape {
+            geometry: Geometry::Line(
+                path.iter().map(|p| [centre[0] + p[0] / world, centre[1] + p[1] / world]).collect(),
+            ),
+            style: 0,
+            feature: 0,
+        }],
+        points: vec![],
+    };
+    let vector = Vector::new(&gpu, &tessellate(&shapes)).unwrap();
+    let (frame, _) =
+        terrain.render_offscreen_layers(&gpu, &view, &Uniforms::default(), &mut [Layer::Vector(&vector, 1.0)]).unwrap();
+    let pixels = gpu.readback(&frame).unwrap();
+    // The miter limit is 4 half widths of the drawn extent (2 px + 1 px).
+    let reach = 4.0 * 3.0 + 1.0;
+    let mut lit = 0;
+    for y in 0..256 {
+        for x in 0..256 {
+            if pixels[(y * 256 + x) * 4 + 3] == 0 {
+                continue;
+            }
+            lit += 1;
+            let (px, py) = (x as f64 + 0.5 - 128.0, y as f64 + 0.5 - 128.0);
+            let near = path.iter().any(|p| (p[0] - px).hypot(p[1] - py) <= reach);
+            assert!(near, "spike at {x},{y}");
+        }
+    }
+    assert!(lit > 100, "the line draws");
+}

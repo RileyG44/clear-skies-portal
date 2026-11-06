@@ -54,6 +54,9 @@ struct Varying {
     @location(3) @interpolate(flat) kind: u32,
 }
 
+// Longest line extrusion, in half widths (SVG's default stroke-miterlimit).
+const MITER_LIMIT: f32 = 4.0;
+
 // Half the drawn width: at least one CSS px wide, thinner lines fade instead.
 fn half_width(s: Style) -> f32 {
     return max(s.width, 1.0) * 0.5;
@@ -69,7 +72,15 @@ fn vertex(@builtin(vertex_index) index: u32) -> Varying {
     var screen = vec2<f32>(p.x * c - p.y * n, p.x * n + p.y * c);
     if v.kind == 1u {
         let extent = half_width(s) + 1.0;
-        screen += vec2<f32>(v.normal.x * c - v.normal.y * n, v.normal.x * n + v.normal.y * c) * extent;
+        // A miter limit: at a sharp turn between path points closer than the
+        // line is wide (any coarse zoom), the inner join's extrusion grows
+        // without bound. Capping it keeps the corner a corner, not a spike.
+        var normal = v.normal;
+        let length = length(normal);
+        if length > MITER_LIMIT {
+            normal *= MITER_LIMIT / length;
+        }
+        screen += vec2<f32>(normal.x * c - normal.y * n, normal.x * n + normal.y * c) * extent;
     }
     screen += frame.css * 0.5;
     var out: Varying;

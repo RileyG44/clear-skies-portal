@@ -267,6 +267,18 @@ impl App {
             let lighting = inner.state.terrain.lighting;
             drop(inner);
             *lock(&self.map) = Some(map.clone());
+            // Vector shapes built before this map, for layers still on. A
+            // build finishing later finds this map itself: it keeps its
+            // shapes before it looks for the map.
+            let inner = lock(&self.inner);
+            for (id, slot) in lock(&self.vectors).iter() {
+                if inner.state.overlay(id).on
+                    && let Some(shapes) = &slot.shapes
+                {
+                    map.set_vector(id, Some(shapes.clone()));
+                }
+            }
+            drop(inner);
             *lock(&self.previews) = None;
             self.refresh_previews(lighting);
             map.set_listener(Some(Arc::new(MapEvents(Arc::downgrade(self)))));
@@ -478,16 +490,20 @@ impl App {
                 continue;
             }
             slot.drawn = Some(key.clone());
-            let (id, alerts, me, map) = (spec.id, state.alerts.clone(), self.me.clone(), map.clone());
+            let (id, alerts, me) = (spec.id, state.alerts.clone(), self.me.clone());
             runtime.spawn_blocking(move || {
                 let shapes = Arc::new(crate::vectors::shapes(id, &features, &alerts, width, slice));
                 let Some(app) = me.upgrade() else { return };
-                let mut vectors = lock(&app.vectors);
-                let Some(slot) = vectors.get_mut(id).filter(|s| s.drawn.as_deref() == Some(key.as_str())) else {
-                    return;
-                };
-                slot.shapes = Some(shapes.clone());
-                if let Some(map) = &map {
+                {
+                    let mut vectors = lock(&app.vectors);
+                    let Some(slot) = vectors.get_mut(id).filter(|s| s.drawn.as_deref() == Some(key.as_str())) else {
+                        return;
+                    };
+                    slot.shapes = Some(shapes.clone());
+                }
+                // The map attached now, which may be one attached since this
+                // began (`set_map` hands over shapes already built).
+                if let Some(map) = lock(&app.map).clone() {
                     map.set_vector(id, Some(shapes));
                 }
             });
@@ -781,6 +797,14 @@ impl App {
             "clear" => {
                 drop(inner);
                 self.select(None);
+                return;
+            }
+            "goTo" => {
+                // A camera move by coordinates (a debug launch, a link).
+                let (Some(lat), Some(lng)) = (args["lat"].as_f64(), args["lng"].as_f64()) else { return };
+                drop(inner);
+                let zoom = args["zoom"].as_f64().map(|z| z.clamp(1.0, 20.0));
+                self.go_to(lat.clamp(-85.0, 85.0), lng, zoom, 0.0);
                 return;
             }
             "centerSelected" => {

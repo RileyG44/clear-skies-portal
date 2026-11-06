@@ -43,6 +43,7 @@ struct Varying {
     uint style;
     uint kind;
 };
+constant float MITER_LIMIT = 4.0;
 
 float half_width(
     Style s
@@ -67,6 +68,7 @@ vertex vertex_Output vertex_(
 , constant _mslBufferSizes& _buffer_sizes [[buffer(30)]]
 ) {
     metal::float2 screen = {};
+    metal::float2 normal = {};
     Varying out = {};
     Vertex v = vertices[index];
     Style s_1 = styles[v.style];
@@ -80,24 +82,35 @@ vertex vertex_Output vertex_(
     if (v.kind == 1u) {
         float _e44 = half_width(s_1);
         float extent = _e44 + 1.0;
-        metal::float2 _e47 = screen;
-        screen = _e47 + (metal::float2((v.normal.x * c) - (v.normal.y * n), (v.normal.x * n) + (v.normal.y * c)) * extent);
+        normal = v.normal;
+        metal::float2 _e49 = normal;
+        float length = metal::length(_e49);
+        if (length > MITER_LIMIT) {
+            metal::float2 _e53 = normal;
+            normal = _e53 * (MITER_LIMIT / length);
+        }
+        metal::float2 _e57 = screen;
+        float _e59 = normal.x;
+        float _e62 = normal.y;
+        float _e66 = normal.x;
+        float _e69 = normal.y;
+        screen = _e57 + (metal::float2((_e59 * c) - (_e62 * n), (_e66 * n) + (_e69 * c)) * extent);
     }
-    metal::float2 _e65 = screen;
-    metal::float2 _e68 = frame.css;
-    screen = _e65 + (_e68 * 0.5);
-    float _e75 = screen.x;
-    float _e79 = frame.css.x;
-    float _e86 = screen.y;
-    float _e90 = frame.css.y;
-    out.position = metal::float4(((_e75 / _e79) * 2.0) - 1.0, 1.0 - ((_e86 / _e90) * 2.0), 0.0, 1.0);
-    float _e103 = frame.scale;
-    out.along = v.advance * _e103;
+    metal::float2 _e75 = screen;
+    metal::float2 _e78 = frame.css;
+    screen = _e75 + (_e78 * 0.5);
+    float _e85 = screen.x;
+    float _e89 = frame.css.x;
+    float _e96 = screen.y;
+    float _e100 = frame.css.y;
+    out.position = metal::float4(((_e85 / _e89) * 2.0) - 1.0, 1.0 - ((_e96 / _e100) * 2.0), 0.0, 1.0);
+    float _e113 = frame.scale;
+    out.along = v.advance * _e113;
     out.across = v.across;
     out.style = v.style;
     out.kind = v.kind;
-    Varying _e111 = out;
-    const auto _tmp = _e111;
+    Varying _e121 = out;
+    const auto _tmp = _e121;
     return vertex_Output { _tmp.position, _tmp.along, _tmp.across, _tmp.style, _tmp.kind };
 }
 

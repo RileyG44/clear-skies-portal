@@ -2,6 +2,7 @@
 //! `CAMetalLayer` on iOS). The surface is sized from the view each frame, so
 //! the camera is the single source of truth for drawable size.
 
+use std::future::Future;
 use std::sync::Arc;
 
 use csk_core::resource::Reservation;
@@ -84,7 +85,10 @@ impl Presenter {
         self.format
     }
 
-    fn configure(&mut self, gpu: &Renderer, (width, height): (u32, u32)) -> Result<(), Error> {
+    /// Configures the drawables. Ok(false) when the device refused this
+    /// time (it could not go idle in time, as under first-launch load):
+    /// the size stays unset, so the next frame tries again.
+    fn configure(&mut self, gpu: &Renderer, (width, height): (u32, u32)) -> Result<bool, Error> {
         if width > gpu.max_dimension() || height > gpu.max_dimension() {
             return Err(Error::Input("viewport exceeds device limits"));
         }
@@ -94,6 +98,7 @@ impl Presenter {
         }
         let bytes = texture_bytes(width, height, 4) * (FRAME_LATENCY as usize + 1);
         self.charge = Some(Arc::new(gpu.budget.reserve(bytes)?));
+        let scope = gpu.device.push_error_scope(wgpu::ErrorFilter::Validation);
         self.surface.configure(
             &gpu.device,
             &wgpu::SurfaceConfiguration {
@@ -108,8 +113,18 @@ impl Presenter {
                 color_space: wgpu::SurfaceColorSpace::Srgb,
             },
         );
+        // Native backends report a scope's errors at once, so one poll reads
+        // them without an executor.
+        let mut pop = std::pin::pin!(scope.pop());
+        let refused = matches!(
+            pop.as_mut().poll(&mut std::task::Context::from_waker(std::task::Waker::noop())),
+            std::task::Poll::Ready(Some(_))
+        );
+        if refused {
+            return Ok(false);
+        }
         self.size = Some((width, height));
-        Ok(())
+        Ok(true)
     }
 
     /// Draws the view and presents it at the next vsync.
@@ -125,8 +140,8 @@ impl Presenter {
             return Err(Error::Input("presenter belongs to another GPU device"));
         }
         let size = view.device_size();
-        if self.size != Some(size) {
-            self.configure(gpu, size)?;
+        if self.size != Some(size) && !self.configure(gpu, size)? {
+            return Ok(Presented::Skipped);
         }
         let (texture, suboptimal) = match self.surface.get_current_texture() {
             wgpu::CurrentSurfaceTexture::Success(t) => (t, false),
