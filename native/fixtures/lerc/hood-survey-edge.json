@@ -1,0 +1,8 @@
+{
+  "source": "test-fixtures/oregon/hood-survey-edge.lerc",
+  "reference": "bundled Esri LERC WASM decoder",
+  "width": 256,
+  "height": 256,
+  "valid": 20178,
+  "canonicalFloat32Sha256": "b4507eaafa965cb3ce83ba73061a179f73f7c2e9ec68e7eb45e23989d275e916"
+}
