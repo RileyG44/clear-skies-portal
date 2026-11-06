@@ -1,6 +1,6 @@
 /* Maple leaves for the maple page, drawn once into a small texture atlas that the leaf
-   layer in sketch.js stamps across the canopy. The page draws vine maple leaves
-   (vineOutline); the bigleaf blade it began with is kept (leafOutline).
+   layer in sketch.js stamps across the canopy: bigleaf blades (leafOutline) or vine
+   maple blades (vineOutline), for whichever tree the page is drawing.
 
    A vine maple (Acer circinatum) blade is nearly round, a hand's breadth or less across:
    seven to nine short, pointed lobes fan right round from the stalk, cut perhaps a third
@@ -129,13 +129,13 @@ const lerp = (a, b, t) => a + (b - a) * t;
 const smoothstep = (a, b, x) => { const t = Math.max(0, Math.min(1, (x - a) / (b - a))); return t * t * (3 - 2 * t); };
 
 /* the atlas, as RGBA bytes (rows from the top), LEAF_GRID x LEAF_GRID cells */
-export function leafAtlas(seed = 20261105) {
+export function leafAtlas(seed = 20261105, outline = leafOutline) {
   const S = LEAF_CELL, W = S * LEAF_GRID;
   const mk = () => { const c = typeof document === "undefined" ? new OffscreenCanvas(W, W) : document.createElement("canvas"); c.width = c.height = W; const g = c.getContext("2d"); g.fillStyle = "#000"; g.fillRect(0, 0, W, W); return [c, g]; };
   const [cR, gR] = mk(), [cG, gG] = mk(), [cB, gB] = mk(), [cA, gA] = mk();
   for (let v = 0; v < LEAF_GRID * LEAF_GRID; v++) {
     const ox = (v % LEAF_GRID) * S, oy = Math.floor(v / LEAF_GRID) * S;
-    const { pts, lobes } = vineOutline(seed + v * 977);
+    const { pts, lobes } = outline(seed + v * 977);
     const P = ([x, y]) => [ox + S * (0.5 + x * LEAF_R0), oy + S * (LEAF_JY - y * LEAF_R0)];
     const path = g => { g.beginPath(); pts.forEach((p, i) => { const [x, y] = P(p); i ? g.lineTo(x, y) : g.moveTo(x, y); }); g.closePath(); };
     const jx = ox + S * 0.5, jy = oy + S * LEAF_JY;

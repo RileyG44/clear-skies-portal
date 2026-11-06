@@ -17,7 +17,7 @@
     "public-terrain-worker.js", "startup-tree.js", "startup-tree-worker.js", "site.json"
   ],
   "tree": [
-    "sketch.js", "sketch-kit.js", "maple.js", "maple-growth.js", "maple-tree.js", "maple-leaves.js", "phenology.js", "section-maple-valley.js"
+    "sketch.js", "sketch-kit.js", "maple.js", "maple-species.js", "maple-growth.js", "maple-tree-vine.js", "maple-leaves.js", "phenology.js", "section-maple-valley.js"
   ],
   "app": [
     "app/config.js", "app/map.js", "app/search.js", "app/results.js", "app/snapshot.js",
@@ -66,7 +66,9 @@
     "icon.png",
     "maple-growth.js",
     "maple-leaves.js",
+    "maple-species.js",
     "maple-tree.js",
+    "maple-tree-vine.js",
     "maple.js",
     "media/app-desktop.webp",
     "media/app-phone.webp",

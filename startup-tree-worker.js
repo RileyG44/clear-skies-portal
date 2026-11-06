@@ -1,10 +1,13 @@
 /* No DOM, renderer, or map state: return the same seasonal drawing and atlas
    as the landing page, transferring the buffers instead of copying them. */
 import { buildMaple } from "./maple.js";
+import { SPECIES } from "./maple-species.js";
+// the start-up screen keeps the vine maple; the landing page picks either tree per visit
+import { BAKED } from "./maple-tree-vine.js";
 
 self.onmessage = event => {
   try {
-    const T = buildMaple(new Date(event.data), undefined, { treeOnly: true });
+    const T = buildMaple(new Date(event.data), SPECIES.vine, { treeOnly: true, baked: BAKED });
     const tree = {};
     for (const key of ["count", "nb", "labels", "anchors", "seg", "bon", "sty", "col", "leafCount", "leafData", "bones", "view", "leafPen", "loadFlex"]) tree[key] = T[key];
     const atlas = T.leafCount ? T.leafAtlas() : null;

@@ -1045,6 +1045,7 @@ export function createSketch(canvas, layer, opts = {}) {
       for (const material of materials) material.dispose();
       tex.dispose(); leafU?.uAtlas0.value.dispose();
       renderer.dispose(); renderer.forceContextLoss();
+      for (const el of els) el.remove();
     },
     params: P, angles: ang, poseOf: b => [TX[b], TY[b], A[b]], strokes: T.count, bones: n, anchors, pageY, relayout: () => layout(),
     // a point of the drawing in viewport pixels, and the pixels in one drawing unit

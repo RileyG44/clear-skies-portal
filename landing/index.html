@@ -180,7 +180,7 @@ a{color:inherit}
       <a class="btn btn-ghost inked" href="map.html" target="_blank" rel="noopener">Open in your browser</a>
     </div>
   </section>
-  <figure class="fig" id="fig" aria-label="Pen and watercolour sketch of a vine maple, drawn as it looks near Maple Valley, Washington today, above a soil section of forest duff and gravelly loam, Vashon glacial till, outwash gravel and coal-bearing sandstone. Brush it with your cursor and the branches move.">
+  <figure class="fig" id="fig" aria-label="Pen and watercolour sketch of a maple, drawn as it looks near Maple Valley, Washington today, above a soil section of forest duff and gravelly loam, Vashon glacial till, outwash gravel and coal-bearing sandstone. Brush it with your cursor and the branches move.">
     <canvas id="tree"></canvas>
     <div class="labels" id="labels" aria-hidden="true"></div>
   </figure>
@@ -189,6 +189,7 @@ a{color:inherit}
 <script type="module">
 import { createSketch } from "./sketch.js";
 import { buildMaple, VIEW } from "./maple.js";
+import { pickSpecies } from "./maple-species.js";
 import { pageDate } from "./phenology.js";
 import { startCrow } from "./crow.js";
 import { WIN, MAC, FILES, RELEASES_PAGE, refresh } from "./releases.js";
@@ -218,23 +219,58 @@ function align(pageY, a) {
   copy.style.setProperty("--head-top", Math.max(16, py(an.tip) - top - glyphTop()) + "px");
   copy.style.setProperty("--foot", Math.max(16, top + copy.offsetHeight - py(an.rock)) + "px");
 }
-/* today's tree; its canopy colour becomes the page accent */
-const T = buildMaple(pageDate());
-{
-  // a colour e-ink panel shows colour muted, towards its grey
-  const g = (T.accent[0] + T.accent[1] + T.accent[2]) / 3, muted = T.accent.map(v => v + (g - v) * 0.35);
-  const c = muted.map(v => Math.round(Math.min(1, v) * 255));
-  const deep = muted.map(v => Math.round(Math.min(1, v) * 255 * 0.6));
-  document.documentElement.style.setProperty("--accent", `rgb(${c.join(" ")})`);
-  document.documentElement.style.setProperty("--accent-deep", `rgb(${deep.join(" ")})`);
+/* today's tree: a bigleaf or a vine maple, picked afresh on every load (?tree=bigleaf or
+   ?tree=vine to choose). Only the picked tree's baked skeleton is downloaded. Its canopy
+   colour becomes the page accent. */
+const fig = document.getElementById("fig"), fonts = Promise.all([document.fonts.load("400 60px Pacifico"), document.fonts.load("600 60px Caveat")]);
+let scene = null;   // what is running: { sketch, crow }
+async function boot() {
+  const sp = pickSpecies();
+  const { BAKED } = await sp.bake().catch(() => ({ BAKED: null }));   // (without the bake, the tree is grown here)
+  const T = buildMaple(pageDate(), sp, { baked: BAKED });
+  {
+    // a colour e-ink panel shows colour muted, towards its grey
+    const g = (T.accent[0] + T.accent[1] + T.accent[2]) / 3, muted = T.accent.map(v => v + (g - v) * 0.35);
+    const c = muted.map(v => Math.round(Math.min(1, v) * 255));
+    const deep = muted.map(v => Math.round(Math.min(1, v) * 255 * 0.6));
+    document.documentElement.style.setProperty("--accent", `rgb(${c.join(" ")})`);
+    document.documentElement.style.setProperty("--accent-deep", `rgb(${deep.join(" ")})`);
+  }
+  fig.setAttribute("aria-label", fig.getAttribute("aria-label").replace(/sketch of an? [a-z ]*?maple,/, `sketch of a ${sp.alt},`));
+  fig.dataset.tree = sp.id;
+  window.__tree = T;
+  const sketch = createSketch(document.getElementById("tree"), document.getElementById("labels"), {
+    build: () => T, view: VIEW,
+    onNoWebGL() { fig.classList.add("nogl"); },
+    onLayout: align
+  });
+  const me = scene = { sketch, crow: null };
+  window.__sketch = sketch;
+  await fonts;
+  if (scene !== me) return;   // shut down before the fonts came
+  align();
+  me.crow = window.__crow = startCrow(title, { sketch, ground: T.ground, occluders: T.occluders });
 }
-window.__tree = T;
-window.__sketch = createSketch(document.getElementById("tree"), document.getElementById("labels"), {
-  build: () => T, view: VIEW,
-  onNoWebGL() { document.getElementById("fig").classList.add("nogl"); },
-  onLayout: align
+/* when the page is left, the scene shuts down: the render loop, the GPU's buffers and
+   textures, the WebGL context, the crow and every listener they hold. If the browser
+   keeps the page and brings it back (back/forward), a fresh tree is picked and drawn on
+   a fresh canvas. */
+function shutdown() {
+  if (!scene) return;
+  const { sketch, crow } = scene; scene = null;
+  if (crow) crow.stop();
+  if (sketch) sketch.dispose();
+  window.__sketch = window.__crow = window.__tree = null;
+}
+addEventListener("pagehide", shutdown);
+addEventListener("pageshow", e => {
+  if (!e.persisted || scene) return;
+  const old = document.getElementById("tree"), cv = document.createElement("canvas");
+  cv.id = "tree"; old.replaceWith(cv); fig.classList.remove("nogl");
+  boot();
 });
-Promise.all([document.fonts.load("400 60px Pacifico"), document.fonts.load("600 60px Caveat")]).then(() => { align(); window.__crow = startCrow(title, { sketch: window.__sketch, ground: T.ground, occluders: T.occluders }); });
+window.__shutdown = shutdown;
+boot();
 wide.addEventListener("change", () => align());
 </script>
 
