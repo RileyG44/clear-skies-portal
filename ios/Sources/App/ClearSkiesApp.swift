@@ -29,6 +29,11 @@ struct ClearSkiesApp: App {
             .onChange(of: phase, initial: true) { _, next in
                 if next == .active && portal == nil { portal = PortalModel(native: NativeMapPreference.enabled) }
             }
+            .onOpenURL { url in
+                guard url.isFileURL, url.pathExtension.lowercased() == "clearskies" else { return }
+                if portal == nil { portal = PortalModel(native: NativeMapPreference.enabled) }
+                portal?.native?.open(document: url)
+            }
         }
     }
 }

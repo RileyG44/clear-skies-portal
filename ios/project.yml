@@ -47,6 +47,20 @@ targets:
           - $(PRODUCT_BUNDLE_IDENTIFIER).terrain-continued.*
         UIBackgroundModes:
           - processing
+        # Shared views: a .clearskies document opens straight into the app.
+        UTExportedTypeDeclarations:
+          - UTTypeIdentifier: dev.riley.clearskies.view
+            UTTypeDescription: Clear Skies map view
+            UTTypeConformsTo: [public.json, public.data, public.content]
+            UTTypeTagSpecification:
+              public.filename-extension: [clearskies]
+              public.mime-type: [application/vnd.clearskies.view+json]
+        CFBundleDocumentTypes:
+          - CFBundleTypeName: Clear Skies map view
+            CFBundleTypeRole: Viewer
+            LSHandlerRank: Owner
+            LSItemContentTypes: [dev.riley.clearskies.view]
+        LSSupportsOpeningDocumentsInPlace: false
         NSPhotoLibraryAddUsageDescription: ClearSkies saves exported map images to Photos only when you choose Save Image.
         NSLocationWhenInUseUsageDescription: ClearSkies moves the map to where you are when you tap Locate.
         NSLocalNetworkUsageDescription: ClearSkies connects to the terrain engine you set up on your own network.

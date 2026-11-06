@@ -282,9 +282,36 @@ pub fn appearance() -> Value {
         "textSize": 1, "preset": "meadow"})
 }
 
-pub fn search() -> Value {
-    json!({"version": 0, "label": "", "query": "", "canCopy": false, "coordinates": "", "mapsURL": "", "earthURL": "",
-        "canClear": false})
+/// The selected place: where search or a map tap put it.
+#[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
+pub struct Location {
+    pub lat: f64,
+    pub lng: f64,
+    pub label: String,
+}
+
+/// The search field and the selected place's actions.
+pub fn search(location: Option<&Location>, version: u64) -> Value {
+    let Some(l) = location else {
+        return json!({"version": version, "label": "", "query": "", "canCopy": false, "coordinates": "", "mapsURL": "",
+            "earthURL": "", "canClear": false});
+    };
+    let compact = format!("{:.6},{:.6}", l.lat, l.lng);
+    json!({"version": version, "label": l.label, "lat": l.lat, "lng": l.lng, "query": l.label, "canCopy": true,
+        "coordinates": format!("{:.6}, {:.6}", l.lat, l.lng),
+        "mapsURL": format!("https://www.google.com/maps/search/?api=1&query={}", compact.replace(',', "%2C")),
+        "earthURL": format!("https://earth.google.com/web/search/{compact}/"),
+        "canClear": true})
+}
+
+/// A place's label once picked: its name and the first two parts of its
+/// context.
+pub fn place_label(primary: &str, secondary: &str) -> String {
+    if secondary.is_empty() {
+        return primary.to_owned();
+    }
+    let context: Vec<&str> = secondary.split(',').map(str::trim).take(2).collect();
+    format!("{primary}, {}", context.join(", "))
 }
 
 /// Relief depth's slider position for an exaggeration: log2 steps.

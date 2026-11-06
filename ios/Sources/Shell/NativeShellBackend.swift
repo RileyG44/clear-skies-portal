@@ -12,11 +12,13 @@ final class NativeShellBackend: ShellBackend {
     var debugSheetVisible = false
     /// The map view, once it exists: its window and canvas.
     weak var mapView: NativeMapView?
+    private weak var shell: ShellModel?
     private let location = LocationService()
     private static let log = Logger(subsystem: Bundle.main.bundleIdentifier ?? "ClearSkies", category: "shell")
 
     init?(shell: ShellModel) {
         guard let engine = EngineRuntime.shared?.handle else { return nil }
+        self.shell = shell
         let sink = NativeShellSink()
         sink.shell = shell
         let context = Unmanaged.passRetained(sink).toOpaque()
@@ -43,6 +45,8 @@ final class NativeShellBackend: ShellBackend {
         switch command {
         case "locate":
             locate()
+        case "copyCoordinates":
+            if let text = shell?.search.coordinates, !text.isEmpty { UIPasteboard.general.string = text }
         default:
             csk_app_send(handle, command, Self.json(arguments))
         }
@@ -60,6 +64,17 @@ final class NativeShellBackend: ShellBackend {
             throw NSError(domain: "ClearSkiesSearch", code: 1, userInfo: [NSLocalizedDescriptionKey: message])
         }
         return answer
+    }
+
+    /// Opens a shared `.clearskies` view (AirDrop, Messages, Mail, Files).
+    func open(document url: URL) {
+        let scoped = url.startAccessingSecurityScopedResource()
+        defer { if scoped { url.stopAccessingSecurityScopedResource() } }
+        guard let data = try? Data(contentsOf: url), let text = String(data: data, encoding: .utf8) else {
+            Self.log.error("shared view could not be read")
+            return
+        }
+        csk_app_send(handle, "openDocument", Self.json(["text": text]))
     }
 
     func useMapCanvas(_ theme: String?) {
