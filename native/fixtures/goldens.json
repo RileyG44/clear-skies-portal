@@ -1,0 +1,946 @@
+{
+ "about": "Frozen L1 TIFF goldens. Decoded samples are float32 little-endian, row-major, one block at a time, padded as TIFF pads.",
+ "cases": [
+  {
+   "name": "usgs-tiled-lzw-fp",
+   "note": "USGS 1 m COG shape: LE, tiled, LZW, predictor 3, float32, overviews, GeoKeys, GDAL_NODATA",
+   "file": "tiff/usgs-tiled-lzw-fp.tif",
+   "bytes": 13130,
+   "sha256": "d0cbe36e87f2d0eb91b47517de1c0c155d9db6cd97482ddb7c3cd4519c252133",
+   "le": true,
+   "big": false,
+   "ifd0": 8,
+   "geo": {
+    "scale": [
+     1,
+     1,
+     0
+    ],
+    "tie": [
+     0,
+     0,
+     0,
+     594000,
+     5190000,
+     0
+    ],
+    "epsg": 26910,
+    "desc": "NAD83 / UTM zone 10N|",
+    "nodata": -9999
+   },
+   "levels": [
+    {
+     "w": 64,
+     "h": 48,
+     "tw": 16,
+     "th": 16,
+     "stripped": false,
+     "comp": 5,
+     "pred": 3,
+     "bps": 32,
+     "spp": 1,
+     "sf": 3,
+     "offsets": [
+      830,
+      1615,
+      2392,
+      3159,
+      3940,
+      4717,
+      5487,
+      6261,
+      7038,
+      7815,
+      8586,
+      9357
+     ],
+     "counts": [
+      785,
+      777,
+      767,
+      781,
+      777,
+      770,
+      774,
+      777,
+      777,
+      771,
+      771,
+      774
+     ],
+     "blocks": [
+      "6e1d93f75091490b2128df26506251a1ab742232c5dff70c5f27cd4a0bffec83",
+      "8df0088b14028b25bccea9ac7a7835dbf3924f6cc431041aa04ea60ee252ddea",
+      "ee67eebe485131f5c218b0b305d475f8744719dfe1aef228774055aed86fa674",
+      "ffac795075064fede91ea6265f7ff61af6b5793284cf6d8e7a0d65a8e4f578ba",
+      "27d7655aaa3dfc2d0cc17b921acbb9fa7841522a5de9cbadf0ce9d4388f37a63",
+      "51dbde7a504d1d557cfef1aec392391ea14a79599a5e3efd6be6c4a6d794d834",
+      "95828305faa13c7abdd3e9bcd673be9ccb736e6fa5ffc090fa583a484de97604",
+      "94fcab93b28a7cc73826ab9fdc45624e6b6ec2178da2e6ac4d5618264c241aec",
+      "cf3bf67bc255b57d117e85ab00b65a182d542c4b9a4db26082b55cd0d558e32a",
+      "000d52b7f343ba702292d0cb61fbb164d122e127b7d3d631a73a2aaddea64857",
+      "8e099633b7fa23ee238882055f6b4aa072bc4de9e93d342ffbb34dd9c5cf8327",
+      "af36f1913ccb5a5ed0a28a8c951b23afa0bb564299a9883ea2d0dc55d0533866"
+     ],
+     "sample": [
+      1030.1839599609375,
+      1037.244873046875,
+      1044.1846923828125,
+      1050.8504638671875
+     ]
+    },
+    {
+     "w": 32,
+     "h": 24,
+     "tw": 16,
+     "th": 16,
+     "stripped": false,
+     "comp": 5,
+     "pred": 3,
+     "bps": 32,
+     "spp": 1,
+     "sf": 3,
+     "offsets": [
+      10131,
+      10910,
+      11689,
+      12113
+     ],
+     "counts": [
+      779,
+      779,
+      424,
+      416
+     ],
+     "blocks": [
+      "e9c074a0663205513c0ee0459931304a2e200d169a2e0c5602c06d60454f7d1f",
+      "00c6353e0b822dd97801ee00eb87186ce89175babff2c4c084c4c268829d7b2c",
+      "d45c10e2aaecc0785fd4550a4413192d753a65f09ea227ac7c94c12ec40b2987",
+      "2021453835c37cc4b53dab23291ed263387b86d44ba370a5c238e741c4f15148"
+     ],
+     "sample": [
+      1030.1590576171875,
+      1037.1396484375,
+      1044.281494140625,
+      1050.8046875
+     ]
+    },
+    {
+     "w": 16,
+     "h": 12,
+     "tw": 16,
+     "th": 16,
+     "stripped": false,
+     "comp": 5,
+     "pred": 3,
+     "bps": 32,
+     "spp": 1,
+     "sf": 3,
+     "offsets": [
+      12529
+     ],
+     "counts": [
+      601
+     ],
+     "blocks": [
+      "e396b77eda5db62c98e6c7a3914068c303cd708ef1b5fbc3fd62b142ce3d24d1"
+     ],
+     "sample": [
+      1030.134033203125,
+      1037.2845458984375,
+      1044.12841796875,
+      1051.0089111328125
+     ]
+    }
+   ],
+   "jsParity": true
+  },
+  {
+   "name": "stripped-deflate-fp",
+   "note": "stripped 1 m product (WA_ColumbiaValley shape), short last strip",
+   "file": "tiff/stripped-deflate-fp.tif",
+   "bytes": 3558,
+   "sha256": "70fb62d2bf2fc8f317f689b93dad823e287718bc16234a2ff01e581173d73bdf",
+   "le": true,
+   "big": false,
+   "ifd0": 8,
+   "geo": {
+    "scale": [
+     1,
+     1,
+     0
+    ],
+    "tie": [
+     0,
+     0,
+     0,
+     594000,
+     5190000,
+     0
+    ],
+    "epsg": 26910,
+    "desc": "NAD83 / UTM zone 10N|",
+    "nodata": -9999
+   },
+   "levels": [
+    {
+     "w": 40,
+     "h": 30,
+     "tw": 40,
+     "th": 7,
+     "stripped": true,
+     "comp": 8,
+     "pred": 3,
+     "bps": 32,
+     "spp": 1,
+     "sf": 3,
+     "offsets": [
+      382,
+      1113,
+      1861,
+      2600,
+      3333
+     ],
+     "counts": [
+      731,
+      748,
+      739,
+      733,
+      225
+     ],
+     "blocks": [
+      "dc6b0646b51894dd0d1adb89c9f72f064bd7b1356b866cde7bfa95884dd5e28e",
+      "849169121322a392a3ea7c8714b211a1d5d162d4b766bf653cc17a72cf9f0a00",
+      "93b2749b5c164941675c736182649e74e43c95f5c5001fd0e51edfc46123f830",
+      "cd7101431badb2c3fdb6dd8c4e0b7b0a273b07aa51a62e164203a6d4f5ab8dad",
+      "6da8535869bd4dd89f42d05a1ed578a91b2df97a7f7962a5b285128cf25271a8"
+     ],
+     "sample": [
+      1030.1839599609375,
+      1037.244873046875,
+      1044.1846923828125,
+      1050.8504638671875
+     ]
+    }
+   ],
+   "jsParity": true
+  },
+  {
+   "name": "bigtiff-adobe-deflate-fp",
+   "note": "BigTIFF, Adobe deflate (32946), LONG8 offsets",
+   "file": "tiff/bigtiff-adobe-deflate-fp.tif",
+   "bytes": 7761,
+   "sha256": "fb8482acaaad48b19f830542b988322eead238f2f6e43530ed5ea204b31f70e6",
+   "le": true,
+   "big": true,
+   "ifd0": 16,
+   "geo": {
+    "scale": [
+     1,
+     1,
+     0
+    ],
+    "tie": [
+     0,
+     0,
+     0,
+     594000,
+     5190000,
+     0
+    ],
+    "epsg": 26910,
+    "desc": "NAD83 / UTM zone 10N|",
+    "nodata": -9999
+   },
+   "levels": [
+    {
+     "w": 48,
+     "h": 40,
+     "tw": 16,
+     "th": 16,
+     "stripped": false,
+     "comp": 32946,
+     "pred": 3,
+     "bps": 32,
+     "spp": 1,
+     "sf": 3,
+     "offsets": [
+      1014,
+      1713,
+      2387,
+      3069,
+      3769,
+      4456,
+      5139,
+      5499,
+      5864
+     ],
+     "counts": [
+      699,
+      674,
+      682,
+      700,
+      687,
+      683,
+      360,
+      365,
+      368
+     ],
+     "blocks": [
+      "69170060e0b11fa47e5660e0d0decaefde732e57dcbda5a1e61d8ed5f8698a36",
+      "e4d8a4346f65ad49c7cc9c19dac2a2538724de64e07b75c2c3194485045cb440",
+      "04dfef8b7b884ff958226cb2d5728f07023d068de5c00ce092514b28ed0ae50e",
+      "cccd13aa47b5ac09b0511522310bc8d30c90fe55dd0787fe2d208ac968791272",
+      "31148a9b3857276ee982b7874291f3380ebeb9b5fc56c4e9cbadb9d631c2b212",
+      "4ed704bfd547f45ac330be5b71d9e9bf8e879eff23140890b7fbd14294abc32e",
+      "40cfd61c578be9eb704571dd76252437281fcfe7f1c97a86249d09d32e37641f",
+      "acc599e3d41a57e3784ac9af63237a7b0e7568d64115d5e9a156f06bbbb9d3db",
+      "eb1be62210293e28faa42e9d6167bbb21d526a1ca38adccdd71ecb0530601f7d"
+     ],
+     "sample": [
+      1030.1839599609375,
+      1037.244873046875,
+      1044.1846923828125,
+      1050.8504638671875
+     ]
+    },
+    {
+     "w": 24,
+     "h": 20,
+     "tw": 16,
+     "th": 16,
+     "stripped": false,
+     "comp": 32946,
+     "pred": 3,
+     "bps": 32,
+     "spp": 1,
+     "sf": 3,
+     "offsets": [
+      6232,
+      6939,
+      7422,
+      7618
+     ],
+     "counts": [
+      707,
+      483,
+      196,
+      143
+     ],
+     "blocks": [
+      "c69132547fc719da31df6ee1b0254e3991d11907c253b1532312a4c8309fd276",
+      "62c14ce5b96567ecb5a8f31862cca30f475d6143098f7ca77e2665325af8e75b",
+      "202af53338d693b7f425b80c182f5ca1e4ff7a5972134f4e828b935701356642",
+      "f396d98b8bb04f45bfd934b39a3c11d249abf41dcfbd3afc4928c063232b98be"
+     ],
+     "sample": [
+      1030.1590576171875,
+      1037.1396484375,
+      1044.281494140625,
+      1050.8046875
+     ]
+    }
+   ],
+   "jsParity": true
+  },
+  {
+   "name": "late-ifd-lzw",
+   "note": "directory after the pixel data (ordinary TIFF), no predictor",
+   "file": "tiff/late-ifd-lzw.tif",
+   "bytes": 7126,
+   "sha256": "c5d81d54a8cb84d9f8115d4589a71da40f084a492bb467ca758a7d795c5a5524",
+   "le": true,
+   "big": false,
+   "ifd0": 6696,
+   "geo": {
+    "scale": [
+     1,
+     1,
+     0
+    ],
+    "tie": [
+     0,
+     0,
+     0,
+     594000,
+     5190000,
+     0
+    ],
+    "epsg": 26910,
+    "desc": "NAD83 / UTM zone 10N|",
+    "nodata": -9999
+   },
+   "levels": [
+    {
+     "w": 50,
+     "h": 34,
+     "tw": 16,
+     "th": 16,
+     "stripped": false,
+     "comp": 5,
+     "pred": 1,
+     "bps": 32,
+     "spp": 1,
+     "sf": 3,
+     "offsets": [
+      8,
+      953,
+      1916,
+      2882,
+      3062,
+      4004,
+      4968,
+      5931,
+      6113,
+      6278,
+      6452,
+      6626
+     ],
+     "counts": [
+      945,
+      963,
+      966,
+      180,
+      942,
+      964,
+      963,
+      182,
+      165,
+      174,
+      174,
+      70
+     ],
+     "blocks": [
+      "3d632dc50d37d95f37cf534b13867f33b9cd593b46b6b883d4a7dbfc9b17cad5",
+      "fe632c40e7baa0266a6b3ba82756310d5afb17bed15d9b902edf3905c832b776",
+      "cf2df78044caf34c0d63ba1e0f171eb74ce5c0b78f0ccb0857ed8f1b44beafbe",
+      "1f732d5a333a741831d420f42aea964a7e093a99ff8add84078d51f87294f1e9",
+      "5e7b94fd980e7704bd807ff796fad37186b0599a671608cde27b1312aea66e1b",
+      "526f4d6f04d85c052e677b445e1ae42dd29e6c9b14edbdcfba721dfc15b7c9f2",
+      "e7859300e2df225c6822372726535d93b8500a383190009d048bd4966e00ad14",
+      "22fee334933ca61276450bac95ef398a0ea93ba5464975237342b6c7ae59dd75",
+      "5bde9f5afa6b3b5f7d5a42f485e369d0c25db1f860957dabb713dbf4acb18d92",
+      "a229d8325832228e62ef0638cc243cca70dfb39c1a9f075419306d66543af162",
+      "1d26359d3b331846666bf66117e271e49b8e0ef715060aee2615bed5482ad13c",
+      "4cede1c529555b47b0e790d9bcb538ff3394810ab62c9c23a075d058cfead065"
+     ],
+     "sample": [
+      1030.1839599609375,
+      1037.244873046875,
+      1044.1846923828125,
+      1050.8504638671875
+     ]
+    }
+   ],
+   "jsParity": true
+  },
+  {
+   "name": "be-tiled-lzw-fp",
+   "note": "big-endian file, predictor 3 (planes are byte-order independent)",
+   "file": "tiff/be-tiled-lzw-fp.tif",
+   "bytes": 3481,
+   "sha256": "8fac0d8b08316188ed172e3758e910140ed5435a3adcac1fc07b1b075f175c6c",
+   "le": false,
+   "big": false,
+   "ifd0": 8,
+   "geo": {
+    "scale": [
+     1,
+     1,
+     0
+    ],
+    "tie": [
+     0,
+     0,
+     0,
+     594000,
+     5190000,
+     0
+    ],
+    "epsg": 26910,
+    "desc": "NAD83 / UTM zone 10N|",
+    "nodata": -9999
+   },
+   "levels": [
+    {
+     "w": 32,
+     "h": 32,
+     "tw": 16,
+     "th": 16,
+     "stripped": false,
+     "comp": 5,
+     "pred": 3,
+     "bps": 32,
+     "spp": 1,
+     "sf": 3,
+     "offsets": [
+      386,
+      1162,
+      1938,
+      2710
+     ],
+     "counts": [
+      776,
+      776,
+      772,
+      771
+     ],
+     "blocks": [
+      "1069544517bca4395043f2fca3b175a2764276d3ce9b09005ca5c7fa24433de9",
+      "ebbcf9cb0efda01dd6c485dd5357852beef268eb9ff80f352b2751c83a8ec25f",
+      "4044945fe01e42a2c6a83cce6339bbac7e2068d351ef1360daf07f25cb825902",
+      "19b8c65708d312c74ada3d7fb04f6c0f322771c24f97bddfd8f328dbb1e7c9b0"
+     ],
+     "sample": [
+      1030.1839599609375,
+      1037.244873046875,
+      1044.1846923828125,
+      1050.8504638671875
+     ]
+    }
+   ],
+   "jsParity": true
+  },
+  {
+   "name": "be-stripped-raw",
+   "note": "big-endian file, uncompressed float32: samples are big-endian",
+   "file": "tiff/be-stripped-raw.tif",
+   "bytes": 1314,
+   "sha256": "d04b7a51de213be439837c4f8d22341bfa62b637eb9a27051182b321a8b969d0",
+   "le": false,
+   "big": false,
+   "ifd0": 8,
+   "geo": {
+    "scale": [
+     1,
+     1,
+     0
+    ],
+    "tie": [
+     0,
+     0,
+     0,
+     594000,
+     5190000,
+     0
+    ],
+    "epsg": 26910,
+    "desc": "NAD83 / UTM zone 10N|",
+    "nodata": -9999
+   },
+   "levels": [
+    {
+     "w": 24,
+     "h": 10,
+     "tw": 24,
+     "th": 4,
+     "stripped": true,
+     "comp": 1,
+     "pred": 1,
+     "bps": 32,
+     "spp": 1,
+     "sf": 3,
+     "offsets": [
+      354,
+      738,
+      1122
+     ],
+     "counts": [
+      384,
+      384,
+      192
+     ],
+     "blocks": [
+      "b958e87f492f0e309312ae698c43a5a3198729dcca357130098524b63d35bee4",
+      "15908864f86832f49fab875ecb63f6c05eac7df86f2798c58775693a26527e04",
+      "11a21d454a6be5ea7f06bdc4c71a44deabc159ee42c4a28b10b04439ca762952"
+     ],
+     "sample": [
+      1030.1839599609375,
+      1037.244873046875,
+      1044.1846923828125,
+      1050.8504638671875
+     ]
+    }
+   ],
+   "jsParity": false
+  },
+  {
+   "name": "int16-pred2-deflate",
+   "note": "signed 16-bit DEM with horizontal differencing on sample values",
+   "file": "tiff/int16-pred2-deflate.tif",
+   "bytes": 767,
+   "sha256": "9f6b25ad3bfd00a6b86f4b55eb151ad1647c030ceaa728d9e940705eee813ae7",
+   "le": true,
+   "big": false,
+   "ifd0": 8,
+   "geo": {
+    "scale": [
+     1,
+     1,
+     0
+    ],
+    "tie": [
+     0,
+     0,
+     0,
+     594000,
+     5190000,
+     0
+    ],
+    "epsg": 26910,
+    "desc": "NAD83 / UTM zone 10N|",
+    "nodata": -9999
+   },
+   "levels": [
+    {
+     "w": 32,
+     "h": 20,
+     "tw": 16,
+     "th": 16,
+     "stripped": false,
+     "comp": 8,
+     "pred": 2,
+     "bps": 16,
+     "spp": 1,
+     "sf": 2,
+     "offsets": [
+      386,
+      529,
+      659,
+      712
+     ],
+     "counts": [
+      143,
+      130,
+      53,
+      55
+     ],
+     "blocks": [
+      "db489f82e37d7277114445999449e1b75512aa410cc91aabeb4a67d10395d5c3",
+      "ecdee7d29efe7293aa492a22975882aa9731113a46d7c9cbed3057bd347e5bff",
+      "a0dd8084d81f08c4c01de2d782aad3fa75bf1ae0a803520afd862d7fadbff4d0",
+      "b759d4424b20e2aaffba4e1abb203697aa25041bf7a3d530080bfc23ac3825e9"
+     ],
+     "sample": [
+      -70,
+      -63,
+      -56,
+      -49
+     ]
+    }
+   ],
+   "jsParity": false
+  },
+  {
+   "name": "uint16-raw",
+   "note": "unsigned 16-bit, uncompressed",
+   "file": "tiff/uint16-raw.tif",
+   "bytes": 2238,
+   "sha256": "a3a46bb8962c3b78470cc80aeba6369857616ad37b3a2a6578c1b15c2c73610b",
+   "le": true,
+   "big": false,
+   "ifd0": 8,
+   "geo": null,
+   "levels": [
+    {
+     "w": 20,
+     "h": 18,
+     "tw": 16,
+     "th": 16,
+     "stripped": false,
+     "comp": 1,
+     "pred": 1,
+     "bps": 16,
+     "spp": 1,
+     "sf": 1,
+     "offsets": [
+      190,
+      702,
+      1214,
+      1726
+     ],
+     "counts": [
+      512,
+      512,
+      512,
+      512
+     ],
+     "blocks": [
+      "2a2685594c1cf8ae957c1c4d0eb7938cb70e108e7b736e14f2459a25a65aea96",
+      "536af72cebd27bd7360e195462deef4eb50f50f87e5c2717fa53f327bfb590c8",
+      "2e60daf222943397689d71935c7b3cd25267fcc36584c272d56dbd06048b5ecb",
+      "7188ced40c890db263ffd5e88791f7421a5be72346c737fa29a3b9500011796f"
+     ],
+     "sample": [
+      10302,
+      10372,
+      10442,
+      10509
+     ]
+    }
+   ],
+   "jsParity": true
+  },
+  {
+   "name": "uint8-pred2-lzw",
+   "note": "8-bit with byte differencing",
+   "file": "tiff/uint8-pred2-lzw.tif",
+   "bytes": 390,
+   "sha256": "64a62ea350841709e9bf58c101673bff2dc710ab101154da2005bdad1be57fe0",
+   "le": true,
+   "big": false,
+   "ifd0": 8,
+   "geo": null,
+   "levels": [
+    {
+     "w": 20,
+     "h": 12,
+     "tw": 16,
+     "th": 16,
+     "stripped": false,
+     "comp": 5,
+     "pred": 2,
+     "bps": 8,
+     "spp": 1,
+     "sf": 1,
+     "offsets": [
+      186,
+      309
+     ],
+     "counts": [
+      123,
+      81
+     ],
+     "blocks": [
+      "669054345994b608338e571fe065aad759d16af113648a81c12335b001579161",
+      "f6f11b9d5c03b4f1059f02bf963cb7220633683a72b84042384843c8d3780c91"
+     ],
+     "sample": [
+      6,
+      13,
+      20,
+      27
+     ]
+    }
+   ],
+   "jsParity": false
+  }
+ ],
+ "utm": [
+  {
+   "lon": -121.7603,
+   "lat": 46.8523,
+   "zone": 10,
+   "e": 594507.852669037,
+   "n": 5189496.969483755,
+   "backLon": -121.76029999994964,
+   "backLat": 46.852300001744055
+  },
+  {
+   "lon": -122.3321,
+   "lat": 47.6062,
+   "zone": 10,
+   "e": 550200.21335878,
+   "n": 5272748.591921584,
+   "backLon": -122.33209999997526,
+   "backLat": 47.60620000193364
+  },
+  {
+   "lon": -117.426,
+   "lat": 47.6588,
+   "zone": 11,
+   "e": 468013.3737395477,
+   "n": 5278466.288387305,
+   "backLon": -117.42600000001586,
+   "backLat": 47.65880000194719
+  },
+  {
+   "lon": -120.0001,
+   "lat": 46,
+   "zone": 10,
+   "e": 732285.6156380253,
+   "n": 5098423.7880311385,
+   "backLon": -120.00009999514576,
+   "backLat": 46.000000001416375
+  },
+  {
+   "lon": -119.9999,
+   "lat": 49,
+   "zone": 11,
+   "e": 280593.6115012837,
+   "n": 5431792.575681568,
+   "backLon": -119.9999000052489,
+   "backLat": 49.00000000217351
+  },
+  {
+   "lon": -123.9,
+   "lat": 45.5,
+   "zone": 10,
+   "e": 429685.9254399092,
+   "n": 5038890.41016557,
+   "backLon": -123.9000000000238,
+   "backLat": 45.50000000142503
+  },
+  {
+   "lon": -80,
+   "lat": 25,
+   "zone": 17,
+   "e": 600913.0266955434,
+   "n": 2765319.9440450124,
+   "backLon": -80.00000000000271,
+   "backLat": 24.99999999954352
+  },
+  {
+   "lon": -3.7,
+   "lat": 40.4,
+   "zone": 30,
+   "e": 440598.0788517881,
+   "n": 4472390.0312767085,
+   "backLon": -3.7000000000049487,
+   "backLat": 40.400000000460864
+  },
+  {
+   "lon": 151.2,
+   "lat": -33.9,
+   "zone": 56,
+   "e": 333568.9410100587,
+   "n": -3752526.663212177,
+   "backLon": 151.19999999991043,
+   "backLat": -33.89999999977369
+  },
+  {
+   "lon": -121.5,
+   "lat": 0.001,
+   "zone": 10,
+   "e": 666931.6429628775,
+   "n": 110.56819046570156,
+   "backLon": -121.50000000000361,
+   "backLat": 0.0009999999999782305
+  }
+ ],
+ "merc": [
+  {
+   "lon": -121.7603,
+   "lat": 46.8523,
+   "x": -13554294.594836228,
+   "y": 5917998.907946289,
+   "backLon": -121.7603,
+   "backLat": 46.8523
+  },
+  {
+   "lon": -122.3321,
+   "lat": 47.6062,
+   "x": -13617947.079671822,
+   "y": 6041588.817409255,
+   "backLon": -122.33210000000001,
+   "backLat": 47.6062
+  },
+  {
+   "lon": -117.426,
+   "lat": 47.6588,
+   "x": -13071802.525890943,
+   "y": 6050277.866411235,
+   "backLon": -117.426,
+   "backLat": 47.6588
+  },
+  {
+   "lon": -120.0001,
+   "lat": 46,
+   "x": -13358350.027141908,
+   "y": 5780349.220256351,
+   "backLon": -120.0001,
+   "backLat": 45.999999999999986
+  },
+  {
+   "lon": -119.9999,
+   "lat": 49,
+   "x": -13358327.76324375,
+   "y": 6274861.394006576,
+   "backLon": -119.9999,
+   "backLat": 49.00000000000001
+  },
+  {
+   "lon": -123.9,
+   "lat": 45.5,
+   "x": -13792484.909286596,
+   "y": 5700582.732404122,
+   "backLon": -123.9,
+   "backLat": 45.49999999999999
+  },
+  {
+   "lon": -80,
+   "lat": 25,
+   "x": -8905559.263461886,
+   "y": 2875744.6243522414,
+   "backLon": -80,
+   "backLat": 24.999999999999996
+  },
+  {
+   "lon": -3.7,
+   "lat": 40.4,
+   "x": -411882.11593511223,
+   "y": 4924240.587205196,
+   "backLon": -3.7000000000000006,
+   "backLat": 40.400000000000006
+  },
+  {
+   "lon": 151.2,
+   "lat": -33.9,
+   "x": 16831507.007942963,
+   "y": -4015382.3600731594,
+   "backLon": 151.20000000000002,
+   "backLat": -33.89999999999999
+  },
+  {
+   "lon": -121.5,
+   "lat": 0.001,
+   "x": -13525318.13138274,
+   "y": 111.31949079802544,
+   "backLon": -121.5,
+   "backLat": 0.0009999999999973934
+  }
+ ],
+ "tiles": [
+  {
+   "z": 0,
+   "x": 0,
+   "y": 0,
+   "minx": -20037508.342789244,
+   "maxx": 20037508.342789244,
+   "maxy": 20037508.342789244,
+   "miny": -20037508.342789244,
+   "span": 40075016.68557849
+  },
+  {
+   "z": 13,
+   "x": 1326,
+   "y": 2909,
+   "minx": -13550756.374396047,
+   "maxx": -13545864.404585795,
+   "maxy": 5806768.164768269,
+   "miny": 5801876.194958018,
+   "span": 4891.96981025128
+  },
+  {
+   "z": 18,
+   "x": 42446,
+   "y": 93106,
+   "minx": -13548616.137604062,
+   "maxx": -13548463.263547491,
+   "maxy": 5804016.431750003,
+   "miny": 5803863.557693433,
+   "span": 152.8740565703525
+  },
+  {
+   "z": 20,
+   "x": 167000,
+   "y": 365000,
+   "minx": -13655016.480977027,
+   "maxx": -13654978.262462884,
+   "maxy": 6087750.680744577,
+   "miny": 6087712.462230435,
+   "span": 38.21851414258813
+  }
+ ]
+}

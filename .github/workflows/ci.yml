@@ -53,6 +53,28 @@ jobs:
           zsh -n ios/scripts/run-on-iphone.sh
           python3 -m unittest discover -s ios/scripts -p 'test_*.py' -v
 
+  # The native core (docs/native): format, lint, the frozen goldens, and the
+  # iPhone builds. rust-toolchain.toml pins the compiler and targets.
+  rust:
+    runs-on: macos-latest
+    defaults:
+      run:
+        working-directory: native
+    steps:
+      - uses: actions/checkout@v7
+      - name: Install the pinned toolchain
+        run: rustup show active-toolchain || rustup toolchain install
+      - name: Format
+        run: cargo fmt --check
+      - name: Lint
+        run: cargo clippy --locked --all-targets -- -D warnings
+      - name: Test
+        run: cargo test --locked
+      - name: Build for iPhone and the simulator
+        run: |
+          cargo build --locked --release --target aarch64-apple-ios
+          cargo build --locked --target aarch64-apple-ios-sim
+
   # The engine often runs on a Windows desktop, not the Mac: run the whole
   # suite there too, including the real server, worker pool and disk cache.
   windows:
