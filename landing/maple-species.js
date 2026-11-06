@@ -13,6 +13,7 @@ export const SPECIES = {
      crown, blades up to a foot across, gold and tan in the fall. */
   bigleaf: {
     id: "bigleaf", growth: MAPLE, seed: 20261104,
+    frameLeft: -0.59,                                        // the page frame's left edge, just outside the crown (see viewFor)
     bakeFile: "maple-tree.js", bake: () => import("./maple-tree.js"),
     outline: leafOutline,
     leafSize: [0.0072, 0.0115],                              // a blade up to a foot across
@@ -29,6 +30,7 @@ export const SPECIES = {
      Washington was first called Vine Maple Valley. */
   vine: {
     id: "vine", growth: VINE, seed: 20451160,
+    frameLeft: -0.53,                                        // a narrower crown, so a closer frame
     bakeFile: "maple-tree-vine.js", bake: () => import("./maple-tree-vine.js"),
     outline: vineOutline,
     leafSize: [0.0068, 0.0105],                              // a hand's breadth across, on a small tree

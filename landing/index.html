@@ -70,10 +70,18 @@ a{color:inherit}
 .nav a::after{content:"";position:absolute;left:0;right:0;bottom:1px;height:2px;border-radius:2px;background:currentColor;transform:scaleX(0);transform-origin:left;transition:transform .35s ease}
 .nav a:hover::after{transform:scaleX(1)}
 
-.sk{display:grid;grid-template-columns:minmax(0,44fr) minmax(0,56fr);min-height:100svh}
+/* the letterhead and the drawing are one scene. The copy column is as wide as its text,
+   the figure as wide as the tree's frame at the page's height (--fig-ratio, from maple.js
+   viewFor), with one fixed gap between them, and the pair is centred inside an even inset,
+   so a wider screen widens the margins around the scene, never the space inside it. The
+   right inset is 28px less than the left: the drawing's notes stop about that far inside
+   the figure, so the ink sits centred */
+.sk{--fig-h:max(100svh,600px);--fig-ratio:.8562;--gap:clamp(16px,2.5vw,40px);--inset:max(24px,min(7.5vw,130px));
+  display:grid;grid-template-columns:auto minmax(0,calc(var(--fig-h) * var(--fig-ratio)));column-gap:var(--gap);
+  justify-content:center;padding:0 calc(var(--inset) - 28px) 0 var(--inset);min-height:100svh}
 /* letterhead: the title's top sits level with the tree's tip and the buttons' bottom with the
    foot of the andesite; the script below sets --head-top and --foot from the drawing */
-.copy{--title-drop:0px;--title-fs:clamp(52px,5.98vw,100px);display:flex;flex-direction:column;align-items:flex-start;padding:var(--head-top,96px) clamp(16px,2vw,32px) var(--foot,72px) max(24px,min(7.5vw,130px));max-width:640px}
+.copy{--title-drop:0px;--title-fs:clamp(52px,5.98vw,100px);display:flex;flex-direction:column;align-items:flex-start;padding:var(--head-top,96px) clamp(16px,2vw,32px) var(--foot,72px) 0;max-width:640px}
 .title{display:inline-block;white-space:nowrap;font-family:var(--brand);font-weight:450;font-variation-settings:"opsz" 72;color:var(--ink);margin:var(--title-drop,0px) 0 .12em -.05em;
   padding:0 .08em .06em .02em;font-size:calc(.98 * var(--title-fs));line-height:calc(1.15 * var(--title-fs));letter-spacing:-.012em}
 /* downloads: notebook entries in the space between the letterhead and the buttons */
@@ -127,13 +135,13 @@ a{color:inherit}
 
 @media (max-width:860px){
   .nav{position:static;justify-content:flex-start;padding:18px 20px 0 max(20px,env(safe-area-inset-left,0px));font-size:18px}
-  .sk{grid-template-columns:1fr;min-height:0}
+  .sk{grid-template-columns:1fr;min-height:0;padding:0}
   .copy{padding:28px 20px 8px;max-width:none}
   .copy{--title-fs:clamp(44px,12vw,55px)}.title{padding-right:.08em;--title-drop:0px}
   .dl{margin:4px 0 28px}
   .dl-row{padding:12px 0}
   .actions{margin-top:0}
-  .fig{height:auto;min-height:0;aspect-ratio:1.32/1.46;overflow:clip}
+  .fig{height:auto;min-height:0;aspect-ratio:var(--fig-ratio);overflow:clip}
 }
 @media (max-width:380px){.btn{padding:14px 20px 12px}.btn-ghost{padding:12px 18px 10px}}
 </style>
@@ -193,7 +201,7 @@ a{color:inherit}
 
 <script type="module">
 import { createSketch } from "./sketch.js";
-import { buildMaple, VIEW } from "./maple.js";
+import { buildMaple, viewFor } from "./maple.js";
 import { pickSpecies } from "./maple-species.js";
 import { pageDate } from "./phenology.js";
 import { startCrow } from "./crow.js";
@@ -227,12 +235,13 @@ function align(pageY, a) {
 /* today's tree: a bigleaf or a vine maple, picked afresh on every load (?tree=bigleaf or
    ?tree=vine to choose). Only the picked tree's baked skeleton is downloaded. Its canopy
    colour becomes the page accent. */
-const fig = document.getElementById("fig"), fonts = Promise.all([document.fonts.load("450 60px Fraunces"), document.fonts.load("600 60px Caveat")]);
+const fig = document.getElementById("fig"), sk = document.querySelector(".sk"), fonts = Promise.all([document.fonts.load("450 60px Fraunces"), document.fonts.load("600 60px Caveat")]);
 let scene = null;   // what is running: { sketch, crow }
 async function boot() {
   const sp = pickSpecies();
   const { BAKED } = await sp.bake().catch(() => ({ BAKED: null }));   // (without the bake, the tree is grown here)
-  const T = buildMaple(pageDate(), sp, BAKED);
+  const T = buildMaple(pageDate(), sp, BAKED), view = viewFor(sp);
+  sk.style.setProperty("--fig-ratio", (view.w / view.h).toFixed(4));   // the figure takes the tree's frame
   {
     // a colour e-ink panel shows colour muted, towards its grey
     const g = (T.accent[0] + T.accent[1] + T.accent[2]) / 3, muted = T.accent.map(v => v + (g - v) * 0.35);
@@ -245,7 +254,7 @@ async function boot() {
   fig.dataset.tree = sp.id;
   window.__tree = T;
   const sketch = createSketch(document.getElementById("tree"), document.getElementById("labels"), {
-    build: () => T, view: VIEW,
+    build: () => T, view,
     onNoWebGL() { fig.classList.add("nogl"); },
     onLayout: align
   });

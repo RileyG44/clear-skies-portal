@@ -17,7 +17,16 @@ import { growMaple, unpackMaple } from "./maple-growth.js";
 import { leafAtlas } from "./maple-leaves.js";
 import { SPECIES } from "./maple-species.js";
 
-export const VIEW = { cx: 0.0, cy: 0.425, w: 1.32, h: 1.46 };
+/* the page's frame for a tree, in tree units. Its left edge (sp.frameLeft) sits just
+   outside that tree's crown and margin notes, so the drawing keeps no empty margin facing
+   the text; the right edge keeps the height note. index.html sizes the figure to its
+   aspect. VIEW is the bigleaf's, the default tree's. */
+const FRAME_RIGHT = 0.66, FRAME_Y = 0.425, FRAME_H = 1.46;
+export function viewFor(sp = SPECIES.bigleaf) {
+  const left = sp.frameLeft ?? -0.66;
+  return { cx: (left + FRAME_RIGHT) / 2, cy: FRAME_Y, w: FRAME_RIGHT - left, h: FRAME_H };
+}
+export const VIEW = viewFor();
 
 const PEN = [0.15, 0.155, 0.165];        // a cool near-black, like the e-ink text
 const TWIG_INK = [0.3, 0.29, 0.28];      // fine wood: pen thinned with the bark colour
