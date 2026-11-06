@@ -27,20 +27,28 @@ struct ClearSkiesApp: App {
                 else { Color.white.ignoresSafeArea() }
             }
             .onChange(of: phase, initial: true) { _, next in
-                if next == .active && portal == nil { portal = PortalModel(native: NativeMapPreference.enabled) }
+                if next == .active && portal == nil { portal = PortalModel.launch() }
             }
             .onOpenURL { url in
                 guard url.isFileURL, url.pathExtension.lowercased() == "clearskies" else { return }
-                if portal == nil { portal = PortalModel(native: NativeMapPreference.enabled) }
+                if portal == nil { portal = PortalModel.launch() }
                 portal?.native?.open(document: url)
             }
         }
     }
 }
 
-/// App-wide state the native layer needs from the page.
+/// App-wide state: the map backend, its start-up, and the shell it feeds.
 @MainActor @Observable
 final class PortalModel {
+    static func launch() -> PortalModel {
+        #if NATIVE_ONLY
+        PortalModel()
+        #else
+        PortalModel(native: NativeMapPreference.enabled)
+        #endif
+    }
+
     var ready = false
     /// The page's start-up screen is up: the native cover gives way to it.
     var splashUp = false
@@ -48,15 +56,34 @@ final class PortalModel {
     /// True while the page reloads after iOS ended its process.
     var restoring = false
 
-    /// The web canvas and its page, until the native app state replaces it.
+    #if !NATIVE_ONLY
+    /// The web canvas and its page, in builds that still carry it.
     @ObservationIgnored let host: WebHost?
-    /// The native map and app state (`cspNativeMap`).
-    @ObservationIgnored let native: NativeShellBackend?
+    #endif
+    /// The native map and app state.
+    @ObservationIgnored private(set) var native: NativeShellBackend?
     @ObservationIgnored let shell: ShellModel
 
     /// Space under the home indicator, from the map's window.
     var homeInset: CGFloat { shell.backend?.window?.safeAreaInsets.bottom ?? 0 }
 
+    #if NATIVE_ONLY
+    init() {
+        shell = ShellModel()
+        startNative()
+    }
+
+    func retry() { startNative() }
+
+    private func startNative() {
+        guard let backend = NativeShellBackend(shell: shell) else {
+            startupFailure = "The map couldn\u{2019}t start on this iPhone."
+            return
+        }
+        startupFailure = nil
+        use(backend)
+    }
+    #else
     func retry() { host?.retryStartup() }
 
     init(native useNative: Bool) {
@@ -64,28 +91,9 @@ final class PortalModel {
         self.shell = shell
         if useNative, let backend = NativeShellBackend(shell: shell) {
             host = nil
-            native = backend
-            shell.backend = backend
-            ready = true
-            backend.start()
-            #if DEBUG
-            // `-cspDebugAct look:missoula` runs one shell action at launch,
-            // for checking a state on a simulator that takes no touches.
-            if let ref = UserDefaults.standard.string(forKey: "cspDebugAct") {
-                backend.send("act", ["ref": ref, "op": "click"])
-            }
-            // `-cspDebugSearch "Mount Rainier"` submits a search, as typed.
-            if let text = UserDefaults.standard.string(forKey: "cspDebugSearch") {
-                Task { @MainActor in
-                    try? await Task.sleep(for: .seconds(3))
-                    shell.query = text
-                    shell.submit()
-                }
-            }
-            #endif
+            use(backend)
             return
         }
-        native = nil
         let host = WebHost(engine: EngineSettings())
         self.host = host
         shell.backend = host
@@ -119,6 +127,30 @@ final class PortalModel {
             shell.reset()
         }
         host.load()
+    }
+    #endif
+
+    private func use(_ backend: NativeShellBackend) {
+        native = backend
+        shell.backend = backend
+        ready = true
+        backend.start()
+        #if DEBUG
+        // `-cspDebugAct look:missoula` runs one shell action at launch,
+        // for checking a state on a simulator that takes no touches.
+        if let ref = UserDefaults.standard.string(forKey: "cspDebugAct") {
+            backend.send("act", ["ref": ref, "op": "click"])
+        }
+        // `-cspDebugSearch "Mount Rainier"` submits a search, as typed.
+        if let text = UserDefaults.standard.string(forKey: "cspDebugSearch") {
+            let shell = shell
+            Task { @MainActor in
+                try? await Task.sleep(for: .seconds(3))
+                shell.query = text
+                shell.submit()
+            }
+        }
+        #endif
     }
 }
 

@@ -226,6 +226,8 @@ dependencies = [
  "csk-engine",
  "csk-gpu",
  "csk-map",
+ "png",
+ "pollster",
  "serde",
  "serde_json",
  "tokio",

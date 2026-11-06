@@ -1,6 +1,5 @@
 import SwiftUI
 import UIKit
-import WebKit
 
 /// The map canvas. A saved theme wins over the system appearance, using the
 /// same colours as `#map` (`#dbe6eb` / `#111416`). With nothing saved, the
@@ -45,10 +44,13 @@ struct RootView: View {
     var body: some View {
         GeometryReader { geometry in
             ZStack(alignment: .bottom) {
+                #if !NATIVE_ONLY
                 if let host = portal.host {
                     PortalWebView(webView: host.webView)
                         .ignoresSafeArea()
-                } else if let native = portal.native {
+                }
+                #endif
+                if let native = portal.native {
                     NativeMapRepresentable(backend: native)
                         .ignoresSafeArea()
                 }
@@ -403,10 +405,4 @@ private struct HeaderPanSurface: UIViewRepresentable {
                           sender.velocity(in: window).y, keyboardAtStart)
         }
     }
-}
-
-struct PortalWebView: UIViewRepresentable {
-    let webView: WKWebView
-    func makeUIView(context: Context) -> WKWebView { webView }
-    func updateUIView(_ webView: WKWebView, context: Context) {}
 }

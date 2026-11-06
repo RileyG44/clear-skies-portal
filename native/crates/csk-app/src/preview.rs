@@ -100,9 +100,11 @@ fn floor(grid: &[f64], w: usize, h: usize, radius: f64) -> Vec<f64> {
     filter(&filter(grid, w, h, radius, true), w, h, radius, false)
 }
 
-/// The preview landscape and its derived fields, computed once.
+/// A landscape to draw looks on, and its derived fields, computed once.
 pub struct Landscape {
     grid: Vec<f64>,
+    width: u32,
+    height: u32,
     res: f64,
     floors: BTreeMap<u64, Vec<f64>>,
     blurs: BTreeMap<u64, Vec<f64>>,
@@ -111,24 +113,30 @@ pub struct Landscape {
 impl Default for Landscape {
     fn default() -> Self {
         let (grid, res) = terrain(WIDTH, HEIGHT);
-        Self { grid, res, floors: BTreeMap::new(), blurs: BTreeMap::new() }
+        Self::new(grid, WIDTH, HEIGHT, res)
     }
 }
 
 impl Landscape {
+    /// Heights in rows, `res` metres a pixel.
+    pub fn new(grid: Vec<f64>, width: u32, height: u32, res: f64) -> Self {
+        assert_eq!(grid.len(), (width * height) as usize);
+        Self { grid, width, height, res, floors: BTreeMap::new(), blurs: BTreeMap::new() }
+    }
+
     fn floor(&mut self, radius: f64) -> &[f64] {
-        let (w, h) = (WIDTH as usize, HEIGHT as usize);
+        let (w, h) = (self.width as usize, self.height as usize);
         let grid = &self.grid;
         self.floors.entry(radius.to_bits()).or_insert_with(|| floor(grid, w, h, radius))
     }
 
     fn blur(&mut self, radius: f64) -> &[f64] {
-        let (w, h) = (WIDTH as usize, HEIGHT as usize);
+        let (w, h) = (self.width as usize, self.height as usize);
         let grid = &self.grid;
         self.blurs.entry(radius.to_bits()).or_insert_with(|| filter(grid, w, h, radius, false))
     }
 
-    /// A look drawn with `lighting`: premultiplied RGBA, `WIDTH x HEIGHT`.
+    /// A look drawn with `lighting`: premultiplied RGBA, the landscape's size.
     pub fn render(&mut self, gpu: &Renderer, look: &Look, lighting: Lighting) -> Result<Vec<u8>, csk_gpu::Error> {
         let mut studio = Studio::default();
         let style = studio.apply_scene(&look.scene, Some(&look.id));
@@ -167,14 +175,15 @@ impl Landscape {
         appearance.apply(&mut uniforms)?;
         // A camera whose pixel is `res` metres at the equator.
         let zoom = (csk_gpu::WORLD_METRES / (256.0 * self.res)).log2();
-        uniforms.set("u_cssSize", &[WIDTH as f32, HEIGHT as f32])?;
+        let (width, height) = (self.width, self.height);
+        uniforms.set("u_cssSize", &[width as f32, height as f32])?;
         uniforms.set("u_dpr", &[1.0])?;
         uniforms.set("u_zoom", &[zoom as f32])?;
         uniforms.set("u_centerMerc", &[0.5, 0.5])?;
         uniforms.set("u_bearingRad", &[0.0])?;
         let field = |values: &[f64]| {
             let values: Vec<f32> = values.iter().map(|v| *v as f32).collect();
-            gpu.field(WIDTH, HEIGHT, &values)
+            gpu.field(width, height, &values)
         };
         let heights = field(&grid)?;
         let detail = stack.as_ref().filter(|s| s.detail != 0.0 && s.detail_radius / self.res >= 1.0);

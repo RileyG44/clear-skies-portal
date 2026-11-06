@@ -47,20 +47,6 @@ targets:
           - $(PRODUCT_BUNDLE_IDENTIFIER).terrain-continued.*
         UIBackgroundModes:
           - processing
-        # Shared views: a .clearskies document opens straight into the app.
-        UTExportedTypeDeclarations:
-          - UTTypeIdentifier: dev.riley.clearskies.view
-            UTTypeDescription: Clear Skies map view
-            UTTypeConformsTo: [public.json, public.data, public.content]
-            UTTypeTagSpecification:
-              public.filename-extension: [clearskies]
-              public.mime-type: [application/vnd.clearskies.view+json]
-        CFBundleDocumentTypes:
-          - CFBundleTypeName: Clear Skies map view
-            CFBundleTypeRole: Viewer
-            LSHandlerRank: Owner
-            LSItemContentTypes: [dev.riley.clearskies.view]
-        LSSupportsOpeningDocumentsInPlace: false
         NSPhotoLibraryAddUsageDescription: ClearSkies saves exported map images to Photos only when you choose Save Image.
         NSLocationWhenInUseUsageDescription: ClearSkies moves the map to where you are when you tap Locate.
         NSLocalNetworkUsageDescription: ClearSkies connects to the terrain engine you set up on your own network.
@@ -96,11 +82,97 @@ targets:
         script: |
           "${SRCROOT}/scripts/bundle_site.sh" "${SRCROOT}/.." "${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/site" "${CONFIGURATION}"
         basedOnDependencyAnalysis: false
+  # Drumlin: the fully native app (docs/native/ARCHITECTURE.md), its own
+  # App Store Connect record and TestFlight builds beside ClearSkies. The
+  # same Swift shell with no web page, WebKit or bundled web client.
+  Drumlin:
+    type: application
+    platform: iOS
+    sources:
+      - path: Sources
+        excludes:
+          - Web/**
+      - path: Resources
+        buildPhase: resources
+        excludes:
+          - "*.js"
+      - path: Drumlin
+        buildPhase: resources
+    info:
+      path: Config/Drumlin-Info.plist
+      properties:
+        CFBundleDisplayName: Drumlin
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        LSApplicationCategoryType: public.app-category.navigation
+        ITSAppUsesNonExemptEncryption: false
+        UIAppFonts:
+          - Inter.ttf
+          - Pacifico.ttf
+        UILaunchScreen:
+          UIColorName: LaunchBackground
+        UIApplicationSceneManifest:
+          UIApplicationSupportsMultipleScenes: false
+        UISupportedInterfaceOrientations:
+          - UIInterfaceOrientationPortrait
+          - UIInterfaceOrientationLandscapeLeft
+          - UIInterfaceOrientationLandscapeRight
+        CADisableMinimumFrameDurationOnPhone: true
+        BGTaskSchedulerPermittedIdentifiers:
+          - $(PRODUCT_BUNDLE_IDENTIFIER).terrain-processing
+          - $(PRODUCT_BUNDLE_IDENTIFIER).terrain-continued.*
+        UIBackgroundModes:
+          - processing
+        # Shared views: a .clearskies document opens straight into the app.
+        UTExportedTypeDeclarations:
+          - UTTypeIdentifier: dev.riley.clearskies.view
+            UTTypeDescription: Map view
+            UTTypeConformsTo: [public.json, public.data, public.content]
+            UTTypeTagSpecification:
+              public.filename-extension: [clearskies]
+              public.mime-type: [application/vnd.clearskies.view+json]
+        CFBundleDocumentTypes:
+          - CFBundleTypeName: Map view
+            CFBundleTypeRole: Viewer
+            LSHandlerRank: Owner
+            LSItemContentTypes: [dev.riley.clearskies.view]
+        LSSupportsOpeningDocumentsInPlace: false
+        NSLocationWhenInUseUsageDescription: Drumlin moves the map to where you are when you tap Locate.
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: $(DRUMLIN_BUNDLE_ID)
+        PRODUCT_NAME: Drumlin
+        MARKETING_VERSION: $(DRUMLIN_MARKETING_VERSION)
+        SWIFT_ACTIVE_COMPILATION_CONDITIONS: $(inherited) NATIVE_ONLY
+        TARGETED_DEVICE_FAMILY: "1"
+        SWIFT_VERSION: "6.0"
+        SWIFT_DEFAULT_ACTOR_ISOLATION: MainActor
+        SWIFT_APPROACHABLE_CONCURRENCY: YES
+        GENERATE_INFOPLIST_FILE: NO
+        CODE_SIGN_STYLE: Automatic
+        ASSETCATALOG_COMPILER_APPICON_NAME: DrumlinIcon
+        ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
+        ENABLE_USER_SCRIPT_SANDBOXING: NO
+        SWIFT_INCLUDE_PATHS: $(SRCROOT)/../native/crates/csk-ffi/include
+        LIBRARY_SEARCH_PATHS: $(BUILT_PRODUCTS_DIR)/csk
+    preBuildScripts:
+      - name: Build the native engine
+        script: |
+          "${SRCROOT}/scripts/build_native.sh" "${SRCROOT}/.." "${BUILT_PRODUCTS_DIR}/csk"
+        basedOnDependencyAnalysis: false
 schemes:
   ClearSkies:
     build:
       targets:
         ClearSkies: all
+    run:
+      config: Debug
+    archive:
+      config: Release
+  Drumlin:
+    build:
+      targets:
+        Drumlin: all
     run:
       config: Debug
     archive:
