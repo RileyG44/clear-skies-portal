@@ -1,0 +1,426 @@
+//! The engine's C ABI (docs/native/ARCHITECTURE.md §4.1).
+//!
+//! The platform layer creates one engine with a transport (URLSession on
+//! iOS), sends it the web client's requests, and gets each answer through a
+//! callback with a body it owns until it frees it. Bodies are handed over
+//! without copying.
+//!
+//! Contracts:
+//! - `respond` is called exactly once per request, on an engine thread,
+//!   with `response == NULL` if the request was cancelled.
+//! - Each `fetch` hands the platform a `CskFetch` token, which it must
+//!   consume exactly once with `csk_fetch_complete` or `csk_fetch_fail`,
+//!   from any thread. `cancel` is advisory: the token must still be
+//!   consumed.
+
+#![allow(clippy::missing_safety_doc)]
+
+use std::collections::HashMap;
+use std::ffi::{CStr, CString, c_char, c_void};
+use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::{Arc, Mutex};
+use std::time::Duration;
+
+use csk_engine::transport::{FetchError, FetchFuture, FetchRequest, FetchResponse, Transport};
+use csk_engine::{Config, Engine, Request, Response};
+use tokio::sync::oneshot;
+
+/// A request the platform should make.
+#[repr(C)]
+pub struct CskFetchRequest {
+    /// "GET" or "HEAD".
+    pub method: *const c_char,
+    pub url: *const c_char,
+    /// Inclusive byte range, or -1 for none.
+    pub range_first: i64,
+    pub range_last: i64,
+    pub timeout_ms: u32,
+    /// Fail with `CSK_FETCH_TOO_LARGE` beyond this many body bytes.
+    pub max_body: u64,
+}
+
+/// The platform's network.
+#[repr(C)]
+pub struct CskTransport {
+    pub context: *mut c_void,
+    /// Start `request`; consume `token` when it finishes. `id` names it for `cancel`.
+    pub fetch: extern "C" fn(context: *mut c_void, token: *mut CskFetch, id: u64, request: *const CskFetchRequest),
+    /// The engine no longer needs fetch `id`.
+    pub cancel: extern "C" fn(context: *mut c_void, id: u64),
+    /// The engine is gone; release `context`.
+    pub release: extern "C" fn(context: *mut c_void),
+}
+
+/// Failure codes for `csk_fetch_fail`.
+pub const CSK_FETCH_NETWORK: i32 = 0;
+pub const CSK_FETCH_TIMEOUT: i32 = 1;
+pub const CSK_FETCH_CANCELLED: i32 = 2;
+pub const CSK_FETCH_TOO_LARGE: i32 = 3;
+pub const CSK_FETCH_OFFLINE: i32 = 4;
+
+/// An answer. `headers` is `Name: value` lines separated by `\n`.
+#[repr(C)]
+pub struct CskResponse {
+    pub status: u16,
+    pub headers: *const c_char,
+    pub body: *const u8,
+    pub body_len: usize,
+}
+
+pub type CskRespond = extern "C" fn(context: *mut c_void, response: *const CskResponse, owner: *mut CskBody);
+
+/// Owns a response's headers and body until `csk_body_free`.
+pub struct CskBody {
+    _headers: CString,
+    _body: Vec<u8>,
+}
+
+/// A pending fetch, consumed by `csk_fetch_complete` or `csk_fetch_fail`.
+pub struct CskFetch {
+    tx: oneshot::Sender<Result<FetchResponse, FetchError>>,
+}
+
+pub struct CskEngine {
+    runtime: tokio::runtime::Runtime,
+    engine: Arc<Engine>,
+    next: AtomicU64,
+    requests: Arc<Mutex<HashMap<u64, tokio::task::AbortHandle>>>,
+}
+
+struct Platform {
+    t: CskTransport,
+    next: AtomicU64,
+}
+
+// The platform promises its callbacks are thread-safe (see the module docs).
+unsafe impl Send for Platform {}
+unsafe impl Sync for Platform {}
+
+impl Drop for Platform {
+    fn drop(&mut self) {
+        (self.t.release)(self.t.context);
+    }
+}
+
+/// Cancels the platform's fetch if the engine stops waiting for it.
+struct CancelOnDrop {
+    platform: Arc<Platform>,
+    id: u64,
+    armed: bool,
+}
+
+impl Drop for CancelOnDrop {
+    fn drop(&mut self) {
+        if self.armed {
+            (self.platform.t.cancel)(self.platform.t.context, self.id);
+        }
+    }
+}
+
+struct Bridge(Arc<Platform>);
+
+impl Transport for Bridge {
+    fn fetch(&self, req: FetchRequest) -> FetchFuture {
+        let platform = self.0.clone();
+        Box::pin(async move {
+            let (tx, rx) = oneshot::channel();
+            let id = platform.next.fetch_add(1, Ordering::Relaxed);
+            {
+                // Raw pointers live only for the call, never across an await.
+                let method = CString::new(req.method.as_str()).expect("no NUL");
+                let url = CString::new(req.url.as_str()).map_err(|_| FetchError::Network("URL contains NUL".into()))?;
+                let (first, last) = req.range.map_or((-1, -1), |(a, b)| (a as i64, b as i64));
+                let c = CskFetchRequest {
+                    method: method.as_ptr(),
+                    url: url.as_ptr(),
+                    range_first: first,
+                    range_last: last,
+                    timeout_ms: req.timeout.as_millis().min(u128::from(u32::MAX)) as u32,
+                    max_body: req.max_body as u64,
+                };
+                let token = Box::into_raw(Box::new(CskFetch { tx }));
+                (platform.t.fetch)(platform.t.context, token, id, &c);
+            }
+            let mut guard = CancelOnDrop { platform: platform.clone(), id, armed: true };
+            let out = rx.await.unwrap_or(Err(FetchError::Cancelled));
+            guard.armed = false;
+            out
+        })
+    }
+}
+
+unsafe fn str_arg<'a>(p: *const c_char) -> Option<&'a str> {
+    if p.is_null() {
+        return None;
+    }
+    // SAFETY: the caller passes a NUL-terminated string valid for this call.
+    unsafe { CStr::from_ptr(p) }.to_str().ok()
+}
+
+/// Creates the engine. `config_json` is csk_engine::Config as JSON. Returns
+/// NULL (and releases the transport) if the configuration or store is invalid.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn csk_engine_new(config_json: *const c_char, transport: CskTransport) -> *mut CskEngine {
+    let platform = Arc::new(Platform { t: transport, next: AtomicU64::new(1) });
+    // SAFETY: per the contract above.
+    let Some(text) = (unsafe { str_arg(config_json) }) else { return std::ptr::null_mut() };
+    let Ok(config) = serde_json_config(text) else { return std::ptr::null_mut() };
+    let threads = std::thread::available_parallelism().map_or(4, |n| n.get()).clamp(2, 6);
+    let Ok(runtime) = tokio::runtime::Builder::new_multi_thread()
+        .worker_threads(threads)
+        .max_blocking_threads(threads * 2)
+        .thread_name("csk-engine")
+        .thread_keep_alive(Duration::from_secs(30))
+        .enable_time()
+        .build()
+    else {
+        return std::ptr::null_mut();
+    };
+    let engine = {
+        let _enter = runtime.enter();
+        match Engine::new(config, Arc::new(Bridge(platform))) {
+            Ok(e) => {
+                e.warm();
+                e
+            }
+            Err(_) => return std::ptr::null_mut(),
+        }
+    };
+    Box::into_raw(Box::new(CskEngine { runtime, engine, next: AtomicU64::new(1), requests: Arc::default() }))
+}
+
+fn serde_json_config(text: &str) -> Result<Config, ()> {
+    csk_engine::config_from_json(text).map_err(|_| ())
+}
+
+/// Stops the engine: in-flight requests are cancelled (each `respond` gets NULL).
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn csk_engine_free(engine: *mut CskEngine) {
+    if engine.is_null() {
+        return;
+    }
+    // SAFETY: created by csk_engine_new and not used after this call.
+    let e = unsafe { Box::from_raw(engine) };
+    for (_, h) in e.requests.lock().unwrap_or_else(|p| p.into_inner()).drain() {
+        h.abort();
+    }
+    e.runtime.shutdown_timeout(Duration::from_secs(2));
+}
+
+struct Responder {
+    respond: CskRespond,
+    context: *mut c_void,
+    done: bool,
+}
+
+// The platform's respond callback is thread-safe by contract.
+unsafe impl Send for Responder {}
+
+impl Responder {
+    fn send(mut self, r: Response) {
+        let headers: String = r
+            .headers
+            .iter()
+            .filter(|(k, v)| !k.contains(['\n', ':']) && !v.contains('\n'))
+            .map(|(k, v)| format!("{k}: {v}\n"))
+            .collect();
+        let body =
+            Box::new(CskBody { _headers: CString::new(headers.replace('\0', "")).expect("no NUL"), _body: r.body });
+        let c = CskResponse {
+            status: r.status,
+            headers: body._headers.as_ptr(),
+            body: body._body.as_ptr(),
+            body_len: body._body.len(),
+        };
+        self.done = true;
+        (self.respond)(self.context, &c, Box::into_raw(body));
+    }
+}
+
+impl Drop for Responder {
+    fn drop(&mut self) {
+        if !self.done {
+            (self.respond)(self.context, std::ptr::null(), std::ptr::null_mut());
+        }
+    }
+}
+
+/// Answers one request (`url` may be absolute or a path with query).
+/// Returns its id for `csk_engine_cancel`.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn csk_engine_request(
+    engine: *const CskEngine,
+    method: *const c_char,
+    url: *const c_char,
+    body: *const u8,
+    body_len: usize,
+    context: *mut c_void,
+    respond: CskRespond,
+) -> u64 {
+    let responder = Responder { respond, context, done: false };
+    // SAFETY: a live engine from csk_engine_new.
+    let Some(e) = (unsafe { engine.as_ref() }) else {
+        responder.send(Response::text(503, "engine not running"));
+        return 0;
+    };
+    // SAFETY: per the contract above.
+    let (m, u) = unsafe { (str_arg(method).unwrap_or("GET"), str_arg(url)) };
+    let payload = if body.is_null() || body_len == 0 {
+        Vec::new()
+    } else {
+        // SAFETY: body points at body_len readable bytes for this call.
+        unsafe { std::slice::from_raw_parts(body, body_len) }.to_vec()
+    };
+    let Some(req) = u.and_then(|u| Request::new(m, u, payload)) else {
+        responder.send(Response::text(400, "invalid URL encoding"));
+        return 0;
+    };
+    let id = e.next.fetch_add(1, Ordering::Relaxed);
+    let engine = e.engine.clone();
+    let requests = e.requests.clone();
+    let mut table = e.requests.lock().unwrap_or_else(|p| p.into_inner());
+    let task = e.runtime.spawn(async move {
+        let res = engine.handle(req).await;
+        requests.lock().unwrap_or_else(|p| p.into_inner()).remove(&id);
+        responder.send(res);
+    });
+    table.insert(id, task.abort_handle());
+    id
+}
+
+/// The platform no longer wants request `id`; its `respond` gets NULL.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn csk_engine_cancel(engine: *const CskEngine, id: u64) {
+    // SAFETY: a live engine from csk_engine_new.
+    if let Some(e) = unsafe { engine.as_ref() }
+        && let Some(h) = e.requests.lock().unwrap_or_else(|p| p.into_inner()).remove(&id)
+    {
+        h.abort();
+    }
+}
+
+/// Frees a response body handed to `respond`.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn csk_body_free(owner: *mut CskBody) {
+    if !owner.is_null() {
+        // SAFETY: an owner from respond, freed once.
+        drop(unsafe { Box::from_raw(owner) });
+    }
+}
+
+/// Completes a fetch. `headers` is `Name: value` lines; `body` may be NULL
+/// when `body_len` is 0.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn csk_fetch_complete(
+    token: *mut CskFetch,
+    status: u16,
+    headers: *const c_char,
+    body: *const u8,
+    body_len: usize,
+) {
+    if token.is_null() {
+        return;
+    }
+    // SAFETY: a token from fetch, consumed once.
+    let t = unsafe { Box::from_raw(token) };
+    // SAFETY: per the contract above.
+    let headers = unsafe { str_arg(headers) }
+        .unwrap_or("")
+        .lines()
+        .filter_map(|l| l.split_once(':'))
+        .map(|(k, v)| (k.trim().to_ascii_lowercase(), v.trim().to_owned()))
+        .collect();
+    let body = if body.is_null() || body_len == 0 {
+        Vec::new()
+    } else {
+        // SAFETY: body points at body_len readable bytes for this call.
+        unsafe { std::slice::from_raw_parts(body, body_len) }.to_vec()
+    };
+    let _ = t.tx.send(Ok(FetchResponse { status, headers, body }));
+}
+
+/// Fails a fetch with a `CSK_FETCH_*` code.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn csk_fetch_fail(token: *mut CskFetch, code: i32, message: *const c_char) {
+    if token.is_null() {
+        return;
+    }
+    // SAFETY: a token from fetch, consumed once.
+    let t = unsafe { Box::from_raw(token) };
+    // SAFETY: per the contract above.
+    let msg = unsafe { str_arg(message) }.unwrap_or("").to_owned();
+    let e = match code {
+        CSK_FETCH_TIMEOUT => FetchError::Timeout,
+        CSK_FETCH_CANCELLED => FetchError::Cancelled,
+        CSK_FETCH_TOO_LARGE => FetchError::TooLarge,
+        CSK_FETCH_OFFLINE => FetchError::Offline,
+        _ => FetchError::Network(msg),
+    };
+    let _ = t.tx.send(Err(e));
+}
+
+/// The engine version, static.
+#[unsafe(no_mangle)]
+pub extern "C" fn csk_version() -> *const c_char {
+    static V: &CStr = match CStr::from_bytes_with_nul(concat!(env!("CARGO_PKG_VERSION"), "\0").as_bytes()) {
+        Ok(v) => v,
+        Err(_) => panic!("version"),
+    };
+    V.as_ptr()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::sync::mpsc;
+
+    extern "C" fn fetch(_: *mut c_void, token: *mut CskFetch, _: u64, req: *const CskFetchRequest) {
+        // SAFETY: test transport; the request is valid during this call.
+        let url = unsafe { CStr::from_ptr((*req).url) }.to_str().unwrap().to_owned();
+        struct Token(*mut CskFetch);
+        unsafe impl Send for Token {}
+        let token = Token(token);
+        std::thread::spawn(move || {
+            let token = token;
+            let body = if url.contains("terrarium") { b"not a png".to_vec() } else { Vec::new() };
+            // SAFETY: consuming the token once.
+            unsafe { csk_fetch_complete(token.0, 200, c"content-type: x\n".as_ptr(), body.as_ptr(), body.len()) };
+        });
+    }
+    extern "C" fn cancel(_: *mut c_void, _: u64) {}
+    extern "C" fn release(_: *mut c_void) {}
+
+    extern "C" fn respond(ctx: *mut c_void, r: *const CskResponse, owner: *mut CskBody) {
+        // SAFETY: ctx is the test's channel; r is valid until owner is freed.
+        let tx = unsafe { Box::from_raw(ctx.cast::<mpsc::Sender<Option<(u16, String)>>>()) };
+        let got = unsafe { r.as_ref() }
+            .map(|r| (r.status, unsafe { CStr::from_ptr(r.headers) }.to_str().unwrap().to_owned()));
+        unsafe { csk_body_free(owner) };
+        tx.send(got).unwrap();
+    }
+
+    #[test]
+    fn requests_round_trip_through_the_abi() {
+        let dir = std::env::temp_dir().join(format!("csk-ffi-{}", std::process::id()));
+        let cfg = CString::new(format!("{{\"cacheDir\":{:?}}}", dir.to_str().unwrap())).unwrap();
+        let t = CskTransport { context: std::ptr::null_mut(), fetch, cancel, release };
+        // SAFETY: exercising the ABI as the platform does.
+        unsafe {
+            let e = csk_engine_new(cfg.as_ptr(), t);
+            assert!(!e.is_null());
+            let ask = |path: &CStr| {
+                let (tx, rx) = mpsc::channel::<Option<(u16, String)>>();
+                let ctx = Box::into_raw(Box::new(tx)).cast();
+                csk_engine_request(e, c"GET".as_ptr(), path.as_ptr(), std::ptr::null(), 0, ctx, respond);
+                rx.recv_timeout(Duration::from_secs(10)).unwrap()
+            };
+            let (status, headers) = ask(c"/api/health").unwrap();
+            assert_eq!(status, 200);
+            assert!(headers.contains("Content-Type: application/json"));
+            // An upstream answering garbage is a 502, not a crash.
+            assert_eq!(ask(c"/api/elev/overview/1/0/0.png").unwrap().0, 502);
+            csk_engine_free(e);
+        }
+        let _ = std::fs::remove_dir_all(dir);
+    }
+}

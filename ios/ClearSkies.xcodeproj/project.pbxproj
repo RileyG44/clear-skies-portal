@@ -26,14 +26,16 @@
 		9330CEE6CCF0379D547739A3 /* EngineSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7A5C3C577CD7C64B9D567D34 /* EngineSettings.swift */; };
 		ABE48556CBB654BFC921C7F0 /* Inter-LICENSE.txt in Resources */ = {isa = PBXBuildFile; fileRef = 57FA85E29ADDE2D56E589C31 /* Inter-LICENSE.txt */; };
 		C356FA2FFFE4A00326F814C4 /* ItemCards.swift in Sources */ = {isa = PBXBuildFile; fileRef = 41FA309B2DF96C4DA8E97CDA /* ItemCards.swift */; };
+		C4231FD3663CE6F23CD3E9CA /* NetworkTransport.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6F0E2D26A12EDBED7F97D2FC /* NetworkTransport.swift */; };
 		C5A8DD5A2BBBBF9EA6C339CE /* ItemList.swift in Sources */ = {isa = PBXBuildFile; fileRef = CBB682433A2F721E2FE18263 /* ItemList.swift */; };
 		C76D19F4032E83E937B308A0 /* WebHost.swift in Sources */ = {isa = PBXBuildFile; fileRef = CB9A8F34DAE20150043E9DC9 /* WebHost.swift */; };
+		CAF08CB27D6EC66EAD78B5FA /* LocalEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = 82F37E26101933DE0ABE065D /* LocalEngine.swift */; };
 		DC5497B0B19D031E97179977 /* ToolbarPanelContent.swift in Sources */ = {isa = PBXBuildFile; fileRef = D40250219A657D0A53237861 /* ToolbarPanelContent.swift */; };
-		A1C0FFEE5EED000000000002 /* MarkupPanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1C0FFEE5EED000000000001 /* MarkupPanel.swift */; };
 		F56403A0C4B86316717B12FA /* Pacifico.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 97F225C066396F78511098F8 /* Pacifico.ttf */; };
 		F619D6162621933589AD9F56 /* ShellTypes.swift in Sources */ = {isa = PBXBuildFile; fileRef = 50DEB7F130FA28E41EBC643E /* ShellTypes.swift */; };
 		FDB30D23ECE4D164644D5CAD /* EngineProxy.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6413F062BCDC8F91FC0CBC3D /* EngineProxy.swift */; };
 		FDFBD1B44164D4C45186E6C2 /* SiteSchemeHandler.swift in Sources */ = {isa = PBXBuildFile; fileRef = B18712F44EDED02F546FBB86 /* SiteSchemeHandler.swift */; };
+		FF3A75180645132EB27FB72E /* MarkupPanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = E844CFD67EFBF05405A8B472 /* MarkupPanel.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -51,7 +53,9 @@
 		6413F062BCDC8F91FC0CBC3D /* EngineProxy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EngineProxy.swift; sourceTree = "<group>"; };
 		656CE6D448A7190204A7F13B /* native-shell.js */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.javascript; path = "native-shell.js"; sourceTree = "<group>"; };
 		6ED1B58D57DFE1A43CECB322 /* Symbols.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Symbols.swift; sourceTree = "<group>"; };
+		6F0E2D26A12EDBED7F97D2FC /* NetworkTransport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NetworkTransport.swift; sourceTree = "<group>"; };
 		7A5C3C577CD7C64B9D567D34 /* EngineSettings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EngineSettings.swift; sourceTree = "<group>"; };
+		82F37E26101933DE0ABE065D /* LocalEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocalEngine.swift; sourceTree = "<group>"; };
 		9358789AB8DD0FAAA8287FBE /* ItemRows.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ItemRows.swift; sourceTree = "<group>"; };
 		97ADA2236FDB543CB76BA8FD /* Base.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Base.xcconfig; sourceTree = "<group>"; };
 		97F225C066396F78511098F8 /* Pacifico.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = Pacifico.ttf; sourceTree = "<group>"; };
@@ -64,8 +68,8 @@
 		CBB682433A2F721E2FE18263 /* ItemList.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ItemList.swift; sourceTree = "<group>"; };
 		CC6A76E18A5F8DC3652CC437 /* NativeBridge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NativeBridge.swift; sourceTree = "<group>"; };
 		D40250219A657D0A53237861 /* ToolbarPanelContent.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ToolbarPanelContent.swift; sourceTree = "<group>"; };
-		A1C0FFEE5EED000000000001 /* MarkupPanel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MarkupPanel.swift; sourceTree = "<group>"; };
 		E233CBDAC389F8BDE93C75D6 /* ClearSkies.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = ClearSkies.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		E844CFD67EFBF05405A8B472 /* MarkupPanel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MarkupPanel.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXGroup section */
@@ -103,7 +107,7 @@
 		5D5796D15FEF2C9A8254EB93 /* Sheet */ = {
 			isa = PBXGroup;
 			children = (
-				A1C0FFEE5EED000000000001 /* MarkupPanel.swift */,
+				E844CFD67EFBF05405A8B472 /* MarkupPanel.swift */,
 				D40250219A657D0A53237861 /* ToolbarPanelContent.swift */,
 				36E8E55CF384FCC1082F9BFC /* ToolsSheet.swift */,
 			);
@@ -122,6 +126,15 @@
 				6ED1B58D57DFE1A43CECB322 /* Symbols.swift */,
 			);
 			path = Shell;
+			sourceTree = "<group>";
+		};
+		74F4BB143886C97D186EB37B /* Engine */ = {
+			isa = PBXGroup;
+			children = (
+				82F37E26101933DE0ABE065D /* LocalEngine.swift */,
+				6F0E2D26A12EDBED7F97D2FC /* NetworkTransport.swift */,
+			);
+			path = Engine;
 			sourceTree = "<group>";
 		};
 		7AEE22D1FD56A5E3D3412701 /* Resources */ = {
@@ -185,6 +198,7 @@
 			isa = PBXGroup;
 			children = (
 				C06D42A24A3BF4C10B68F3A4 /* App */,
+				74F4BB143886C97D186EB37B /* Engine */,
 				4C0EE7D74EF308B7D92FF557 /* Platform */,
 				6D66DE1EFC5A3069BA18FC08 /* Shell */,
 				E606D6F59977C205D0B8F22A /* Web */,
@@ -207,6 +221,7 @@
 			isa = PBXNativeTarget;
 			buildConfigurationList = 505A612BD0F5803F9B1467E3 /* Build configuration list for PBXNativeTarget "ClearSkies" */;
 			buildPhases = (
+				8F4BA9232E82A4AF6514D000 /* Build the native engine */,
 				4482074C24A80BF45B490002 /* Sources */,
 				9A3DE4DE25BE21810DEC331E /* Bundle the web client */,
 				07EBBAA1179DBB874CF32608 /* Resources */,
@@ -273,6 +288,25 @@
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXShellScriptBuildPhase section */
+		8F4BA9232E82A4AF6514D000 /* Build the native engine */ = {
+			isa = PBXShellScriptBuildPhase;
+			alwaysOutOfDate = 1;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+			);
+			name = "Build the native engine";
+			outputFileListPaths = (
+			);
+			outputPaths = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "\"${SRCROOT}/scripts/build_native.sh\" \"${SRCROOT}/..\" \"${BUILT_PRODUCTS_DIR}/csk\"\n";
+		};
 		9A3DE4DE25BE21810DEC331E /* Bundle the web client */ = {
 			isa = PBXShellScriptBuildPhase;
 			alwaysOutOfDate = 1;
@@ -306,16 +340,18 @@
 				C5A8DD5A2BBBBF9EA6C339CE /* ItemList.swift in Sources */,
 				7D975955FCB40C65FE63D13E /* ItemRows.swift in Sources */,
 				5D04D08A745F73F15EB7C49C /* LidarViews.swift in Sources */,
+				CAF08CB27D6EC66EAD78B5FA /* LocalEngine.swift in Sources */,
 				7D50214CB292E03CCFE41EE4 /* LocationService.swift in Sources */,
 				0AD40A5672A49C1545F87D1F /* MapChrome.swift in Sources */,
+				FF3A75180645132EB27FB72E /* MarkupPanel.swift in Sources */,
 				6C14F7E3B1E463ECCFC912B4 /* NativeAppearance.swift in Sources */,
 				7FF872851A4919B0C25A7A39 /* NativeBridge.swift in Sources */,
+				C4231FD3663CE6F23CD3E9CA /* NetworkTransport.swift in Sources */,
 				688D7112D165DC54281C3B01 /* RootView.swift in Sources */,
 				6D752DC0C27F7694BEF11237 /* ShellModel.swift in Sources */,
 				F619D6162621933589AD9F56 /* ShellTypes.swift in Sources */,
 				FDFBD1B44164D4C45186E6C2 /* SiteSchemeHandler.swift in Sources */,
 				91D609663C61C38F235BFFA4 /* Symbols.swift in Sources */,
-				A1C0FFEE5EED000000000002 /* MarkupPanel.swift in Sources */,
 				DC5497B0B19D031E97179977 /* ToolbarPanelContent.swift in Sources */,
 				2154D725841995B822656419 /* ToolsSheet.swift in Sources */,
 				C76D19F4032E83E937B308A0 /* WebHost.swift in Sources */,
@@ -339,11 +375,13 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
+				LIBRARY_SEARCH_PATHS = "$(BUILT_PRODUCTS_DIR)/csk";
 				PRODUCT_BUNDLE_IDENTIFIER = "$(CSP_BUNDLE_ID)";
 				PRODUCT_NAME = ClearSkies;
 				SDKROOT = iphoneos;
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
 				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
+				SWIFT_INCLUDE_PATHS = "$(SRCROOT)/../native/crates/csk-ffi/include";
 				SWIFT_VERSION = 6.0;
 				TARGETED_DEVICE_FAMILY = 1;
 			};
@@ -363,11 +401,13 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
+				LIBRARY_SEARCH_PATHS = "$(BUILT_PRODUCTS_DIR)/csk";
 				PRODUCT_BUNDLE_IDENTIFIER = "$(CSP_BUNDLE_ID)";
 				PRODUCT_NAME = ClearSkies;
 				SDKROOT = iphoneos;
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
 				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
+				SWIFT_INCLUDE_PATHS = "$(SRCROOT)/../native/crates/csk-ffi/include";
 				SWIFT_VERSION = 6.0;
 				TARGETED_DEVICE_FAMILY = 1;
 			};

@@ -1,0 +1,16 @@
+[package]
+name = "csk-cli"
+version = "0.1.0"
+description = "Developer tool: run the engine on a desktop against the real network"
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+publish = false
+
+[dependencies]
+csk-engine = { path = "../csk-engine" }
+tokio = { version = "1", features = ["rt-multi-thread", "macros"] }
+ureq = "3"
+
+[lints]
+workspace = true

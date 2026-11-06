@@ -6,7 +6,7 @@
 //! |---|---|
 //! | 0–3 | ASCII `CSE2` |
 //! | 4 | u8 version = 1 |
-//! | 5 | u8 flags (bit 0 = zstd payload; disk only, never on the wire) |
+//! | 5 | u8 flags (bit 0 = zstd payload, bit 1 = byte-shuffled planes; disk only, never on the wire) |
 //! | 6–7 | u16 LE header bytes = 16 |
 //! | 8–9 | u16 LE width |
 //! | 10–11 | u16 LE height |
@@ -19,6 +19,8 @@ pub const MAGIC: [u8; 4] = *b"CSE2";
 pub const VERSION: u8 = 1;
 pub const HEADER_BYTES: usize = 16;
 pub const FLAG_ZSTD: u8 = 1;
+/// Samples stored as four byte planes (see csk-store's packed tiles).
+pub const FLAG_SHUFFLE: u8 = 2;
 pub const MEDIA_TYPE: &str = "application/vnd.clearskies.elev32";
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -103,7 +105,7 @@ pub fn decode(bytes: &[u8]) -> Result<View<'_>, Elev32Error> {
         return Err(Elev32Error::Version(bytes[4]));
     }
     let flags = bytes[5];
-    if flags & FLAG_ZSTD != 0 {
+    if flags & (FLAG_ZSTD | FLAG_SHUFFLE) != 0 {
         return Err(Elev32Error::Compressed);
     }
     if flags != 0 {

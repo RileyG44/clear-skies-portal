@@ -7,3 +7,4 @@
 pub mod codec;
 pub mod elev32;
 pub mod geo;
+pub mod raster;

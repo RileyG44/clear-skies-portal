@@ -1,0 +1,25 @@
+[package]
+name = "csk-ffi"
+version = "0.1.0"
+description = "C ABI for the platform layer: the engine, its requests, and the platform transport"
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+publish = false
+
+[lib]
+crate-type = ["staticlib", "rlib"]
+
+[dependencies]
+csk-engine = { path = "../csk-engine" }
+tokio = { version = "1", features = ["rt-multi-thread", "sync"] }
+
+[build-dependencies]
+cbindgen = { version = "0.29", default-features = false }
+
+# The FFI boundary is the one place unsafe code is allowed.
+[lints.rust]
+unsafe_op_in_unsafe_fn = "deny"
+
+[lints.clippy]
+all = { level = "warn", priority = -1 }

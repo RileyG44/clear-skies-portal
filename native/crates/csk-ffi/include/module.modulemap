@@ -1,0 +1,5 @@
+module CSKEngine {
+    header "csk.h"
+    link "csk_ffi"
+    export *
+}
