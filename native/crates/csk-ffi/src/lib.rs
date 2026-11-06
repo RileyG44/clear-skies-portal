@@ -15,7 +15,9 @@
 
 #![allow(clippy::missing_safety_doc)]
 
+mod app;
 mod map;
+pub use app::*;
 pub use map::*;
 
 use std::collections::HashMap;

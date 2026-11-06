@@ -14,10 +14,19 @@ use std::sync::{Arc, Mutex, MutexGuard};
 
 use csk_engine::Engine;
 use csk_engine::elevation::TerrainSource;
-use csk_gpu::{Presented, Presenter, Renderer, TILE, Terrain, Uniforms, View};
+use csk_gpu::{Presented, Presenter, Renderer, TILE, Terrain, Uniforms, View, ViewSample};
 
 pub use camera::{Camera, Pose};
 pub use loader::Wake;
+
+/// What the map tells the app state, always outside the map's locks so the
+/// app may change the map in reply.
+pub trait Listener: Send + Sync {
+    /// The camera moved (a gesture, momentum or an animation).
+    fn moved(&self, _pose: Pose) {}
+    /// Heights of a settled, presented view: what auto layers fit to.
+    fn sampled(&self, _sample: ViewSample) {}
+}
 
 /// Bounds the tile pool: enough for the largest rotated view at any
 /// fractional zoom, with every slot drawing from two sources.
@@ -48,12 +57,18 @@ struct Scene {
     /// The last presented view; `None` forces the next frame.
     shown: Option<View>,
     coverage: f64,
+    /// The view last sampled, and whether terrain arrived since.
+    sampled: Option<View>,
+    fresh: bool,
 }
 
 pub struct Map {
     camera: Mutex<Camera>,
     scene: Mutex<Scene>,
     wake: Wake,
+    listener: Mutex<Option<Arc<dyn Listener>>>,
+    /// The pose last reported to the listener.
+    reported: Mutex<Option<Pose>>,
 }
 
 /// Store slots of the largest view the camera can show at this size: a 45°
@@ -86,9 +101,34 @@ impl Map {
         let mut terrain = Terrain::new(&gpu, pool)?;
         let mut loader = loader::Loader::new(runtime, engine, wake.clone());
         loader.set_sources(&mut terrain, &TerrainSource::ALL);
-        let scene =
-            Scene { gpu, presenter, terrain, loader, uniforms: Uniforms::default(), shown: None, coverage: 0.0 };
-        Ok(Self { camera: Mutex::new(camera), scene: Mutex::new(scene), wake })
+        let scene = Scene {
+            gpu,
+            presenter,
+            terrain,
+            loader,
+            uniforms: Uniforms::default(),
+            shown: None,
+            coverage: 0.0,
+            sampled: None,
+            fresh: false,
+        };
+        Ok(Self {
+            camera: Mutex::new(camera),
+            scene: Mutex::new(scene),
+            wake,
+            listener: Mutex::new(None),
+            reported: Mutex::new(None),
+        })
+    }
+
+    /// Who hears about camera moves and view samples.
+    pub fn set_listener(&self, listener: Option<Arc<dyn Listener>>) {
+        *lock(&self.listener) = listener;
+        *lock(&self.reported) = None;
+        let mut scene = lock(&self.scene);
+        scene.sampled = None;
+        drop(scene);
+        (self.wake)();
     }
 
     /// Changes the camera under its lock and wakes the frame loop.
@@ -125,14 +165,31 @@ impl Map {
     /// One display-link tick. `now` is the frame's target presentation time
     /// in seconds on the platform's media clock.
     pub fn frame(&self, now: f64) -> Result<FrameResult, csk_gpu::Error> {
-        let (view, animating) = {
+        let (view, pose, animating) = {
             let mut camera = lock(&self.camera);
             let animating = camera.advance(now);
-            (camera.view(), animating)
+            (camera.view(), camera.pose(), animating)
         };
+        let (result, sample) = self.draw(view, animating)?;
+        let listener = lock(&self.listener).clone();
+        if let Some(listener) = listener {
+            let moved = lock(&self.reported).replace(pose) != Some(pose);
+            if moved {
+                listener.moved(pose);
+            }
+            if let Some(sample) = sample {
+                listener.sampled(sample);
+            }
+        }
+        Ok(result)
+    }
+
+    fn draw(&self, view: View, animating: bool) -> Result<(FrameResult, Option<ViewSample>), csk_gpu::Error> {
         let mut scene = lock(&self.scene);
-        let Scene { gpu, presenter, terrain, loader, uniforms, shown, coverage } = &mut *scene;
+        let Scene { gpu, presenter, terrain, loader, uniforms, shown, coverage, sampled, fresh } = &mut *scene;
         let changed = loader.update(gpu, terrain, &view);
+        *fresh |= changed;
+        let sample = terrain.take_sample(gpu);
         let mut result = FrameResult {
             presented: false,
             again: animating,
@@ -140,8 +197,14 @@ impl Map {
             resident: terrain.resident_tiles(),
             in_flight: loader.in_flight(),
         };
-        if !changed && *shown == Some(view) {
-            return Ok(result);
+        // A settled view is sampled once, and again as terrain arrives.
+        let settle = !animating && !terrain.sampling() && (*sampled != Some(view) || *fresh);
+        if !changed && *shown == Some(view) && !settle {
+            result.again |= terrain.sampling();
+            return Ok((result, sample));
+        }
+        if settle {
+            terrain.request_sample();
         }
         match presenter.present(gpu, terrain, &view, uniforms)? {
             Presented::Shown(stats) => {
@@ -149,12 +212,17 @@ impl Map {
                 *coverage = stats.coverage;
                 result.presented = true;
                 result.coverage = stats.coverage;
+                if settle {
+                    *sampled = Some(view);
+                    *fresh = false;
+                }
             }
             Presented::Skipped => {
                 *shown = None;
                 result.again = true;
             }
         }
-        Ok(result)
+        result.again |= terrain.sampling();
+        Ok((result, sample))
     }
 }

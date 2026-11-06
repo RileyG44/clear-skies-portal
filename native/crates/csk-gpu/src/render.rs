@@ -31,6 +31,7 @@ pub struct Renderer {
     shade_fragment: wgpu::ShaderModule,
     pub(crate) composite: (wgpu::ComputePipeline, wgpu::BindGroupLayout),
     pub(crate) resample: (wgpu::ComputePipeline, wgpu::BindGroupLayout),
+    pub(crate) sample: (wgpu::ComputePipeline, wgpu::BindGroupLayout),
     /// Absent derived fields bind a 1x1 invalid texture with scale zero.
     empty_aux: wgpu::TextureView,
     water: Mutex<wgpu::TextureView>,
@@ -179,6 +180,16 @@ impl Renderer {
                 entry(2, c, storage(wgpu::TextureFormat::R32Float)),
             ],
         );
+        let sample = compute(
+            &device,
+            "sample",
+            include_str!("wgsl/sample.wgsl"),
+            &[
+                entry(0, c, buffer(wgpu::BufferBindingType::Uniform)),
+                entry(1, c, sampled(wgpu::TextureViewDimension::D2, FLOAT)),
+                entry(2, c, buffer(wgpu::BufferBindingType::Storage { read_only: false })),
+            ],
+        );
         let tiny = |format, bytes: &[u8]| {
             device
                 .create_texture_with_data(
@@ -215,6 +226,7 @@ impl Renderer {
             shade_fragment,
             composite,
             resample,
+            sample,
             empty_aux,
             water,
             _resident: resident,

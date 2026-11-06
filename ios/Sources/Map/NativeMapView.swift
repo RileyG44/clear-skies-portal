@@ -17,16 +17,9 @@ enum NativeMapPreference {
     static var enabled: Bool { UserDefaults.standard.bool(forKey: key) }
 }
 
-struct NativeMapScreen: View {
-    var body: some View {
-        NativeMapRepresentable()
-            .ignoresSafeArea()
-            .background(MapCanvasColor.color().ignoresSafeArea())
-    }
-}
-
-private struct NativeMapRepresentable: UIViewRepresentable {
-    func makeUIView(context: Context) -> NativeMapView { NativeMapView() }
+struct NativeMapRepresentable: UIViewRepresentable {
+    let backend: NativeShellBackend
+    func makeUIView(context: Context) -> NativeMapView { NativeMapView(backend: backend) }
     func updateUIView(_ view: NativeMapView, context: Context) {}
 }
 
@@ -135,6 +128,7 @@ final class NativeMapView: UIView, UIGestureRecognizerDelegate {
     private static let logger = Logger(subsystem: Bundle.main.bundleIdentifier ?? "ClearSkies", category: "map")
     private let renderer = MapRenderer()
     private var map: OpaquePointer?
+    private let backend: NativeShellBackend
     private var pinchScale: CGFloat = 1
     private var pinchCentroid: CGPoint = .zero
     private var rotation: CGFloat = 0
@@ -142,8 +136,10 @@ final class NativeMapView: UIView, UIGestureRecognizerDelegate {
     /// The web map's start-up view (app/map.js CSP_STARTUP_VIEW).
     private static let startup = CskCamera(lon: -117.699455, lat: 47.559373, zoom: 10.04, bearing: 0)
 
-    init() {
+    init(backend: NativeShellBackend) {
+        self.backend = backend
         super.init(frame: .zero)
+        backend.mapView = self
         metalLayer.isOpaque = false
         metalLayer.framebufferOnly = true
         isMultipleTouchEnabled = true
@@ -163,7 +159,9 @@ final class NativeMapView: UIView, UIGestureRecognizerDelegate {
 
     required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
 
-    deinit {
+    isolated deinit {
+        // The app state lets go of the map before the render thread frees it.
+        csk_app_set_map(backend.handle, nil)
         renderer.shutdown()
     }
 
@@ -199,10 +197,20 @@ final class NativeMapView: UIView, UIGestureRecognizerDelegate {
         }
         Self.logger.notice("native map started at \(self.bounds.width)x\(self.bounds.height) pt, scale \(self.contentScaleFactor)")
         map = made
+        csk_app_set_map(backend.handle, made)
+        backend.useMapCanvas(MapCanvasColor.theme())
         renderer.attach(made)
     }
 
     private var now: CFTimeInterval { CACurrentMediaTime() }
+
+    /// Eases the camera to a place, keeping the bearing.
+    func ease(lon: Double, lat: Double, zoom: Double) {
+        guard let map else { return }
+        var target = csk_map_camera(map)
+        (target.lon, target.lat, target.zoom) = (lon, lat, zoom)
+        csk_map_ease_to(map, now, target, 0.6)
+    }
 
     // MARK: Gestures
 

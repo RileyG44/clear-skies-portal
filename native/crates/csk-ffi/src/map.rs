@@ -19,7 +19,7 @@ use csk_map::{Camera, Map, Pose};
 use crate::CskEngine;
 
 pub struct CskMap {
-    map: Map,
+    pub(crate) map: Arc<Map>,
 }
 
 /// The platform's frame loop.
@@ -111,7 +111,7 @@ pub unsafe extern "C" fn csk_map_new(
         .ok_or_else(|| "no engine".to_string())
         .and_then(|e| unsafe { create(e, metal_layer, camera, [css_width, css_height], dpr, wake) });
     match made {
-        Ok(map) => Box::into_raw(Box::new(CskMap { map })),
+        Ok(map) => Box::into_raw(Box::new(CskMap { map: Arc::new(map) })),
         Err(message) => {
             if !error.is_null() && error_len > 0 {
                 let bytes = &message.as_bytes()[..message.len().min(error_len - 1)];

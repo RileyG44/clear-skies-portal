@@ -219,6 +219,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "csk-app"
+version = "0.1.0"
+dependencies = [
+ "csk-engine",
+ "csk-gpu",
+ "csk-map",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "csk-cli"
 version = "0.1.0"
 dependencies = [
@@ -267,10 +278,12 @@ name = "csk-ffi"
 version = "0.1.0"
 dependencies = [
  "cbindgen",
+ "csk-app",
  "csk-engine",
  "csk-gpu",
  "csk-map",
  "csk-store",
+ "serde_json",
  "tokio",
 ]
 

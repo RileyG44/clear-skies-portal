@@ -11,10 +11,12 @@ publish = false
 crate-type = ["staticlib", "rlib"]
 
 [dependencies]
+csk-app = { path = "../csk-app" }
 csk-engine = { path = "../csk-engine" }
 csk-gpu = { path = "../csk-gpu" }
 csk-map = { path = "../csk-map" }
 csk-store = { path = "../csk-store" }
+serde_json = "1"
 tokio = { version = "1", features = ["rt-multi-thread", "sync"] }
 
 [build-dependencies]

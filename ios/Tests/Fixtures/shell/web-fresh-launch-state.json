@@ -1,0 +1,910 @@
+{
+ "groups": [
+  {
+   "label": "Explore the map",
+   "routes": [
+    {
+     "key": "layers",
+     "title": "Map layers",
+     "description": "Manage visibility, order and opacity",
+     "icon": "layers"
+    },
+    {
+     "key": "satellite",
+     "title": "Satellite imagery",
+     "description": "Find and compare dated images",
+     "icon": "satellite"
+    },
+    {
+     "key": "terrain",
+     "title": "Terrain & LiDAR",
+     "description": "Style terrain, adjust lighting and download data",
+     "icon": "radar"
+    },
+    {
+     "key": "elevation",
+     "title": "Elevation colors",
+     "description": "Color heights and highlight elevation ranges",
+     "icon": "mountain-snow"
+    }
+   ]
+  },
+  {
+   "label": "Study & share",
+   "routes": [
+    {
+     "key": "analyze",
+     "title": "Terrain analysis",
+     "description": "Measure and reveal landform patterns",
+     "icon": "scan-search"
+    },
+    {
+     "key": "markup",
+     "title": "Draw & annotate",
+     "description": "Add drawings, labels and notes",
+     "icon": "pen-line"
+    },
+    {
+     "key": "export",
+     "title": "Export image",
+     "description": "Save the map view or a selected area",
+     "icon": "download"
+    }
+   ]
+  },
+  {
+   "label": "Reference layers",
+   "routes": [
+    {
+     "key": "conditions",
+     "title": "Live conditions",
+     "description": "Weather, fire, snow and recent events",
+     "icon": "cloud-sun"
+    },
+    {
+     "key": "geology",
+     "title": "Geology & hazards",
+     "description": "Explore geology, faults and landslides",
+     "icon": "triangle-alert"
+    },
+    {
+     "key": "past",
+     "title": "Past landscapes",
+     "description": "Explore ice-age and historical landscapes",
+     "icon": "history"
+    },
+    {
+     "key": "labels",
+     "title": "Labels & reference",
+     "description": "Add roads, places and boundaries",
+     "icon": "tags"
+    }
+   ]
+  },
+  {
+   "label": "App",
+   "routes": [
+    {
+     "key": "appearance",
+     "title": "App appearance",
+     "description": "Choose the app theme, text and colors",
+     "icon": "sliders-horizontal"
+    },
+    {
+     "key": "settings",
+     "title": "App settings",
+     "description": "Connection, accessibility and device preferences",
+     "icon": "settings"
+    }
+   ]
+  }
+ ],
+ "ready": true,
+ "route": "layers",
+ "counts": {
+  "layers": "3",
+  "terrain": "1",
+  "elevation": "1",
+  "labels": "1"
+ },
+ "search": {
+  "version": 0,
+  "label": "",
+  "query": "",
+  "canCopy": false,
+  "coordinates": "",
+  "mapsURL": "",
+  "earthURL": "",
+  "canClear": false
+ },
+ "map": {
+  "mode": "2d",
+  "theme": "",
+  "pointCloud": false,
+  "terrain3d": false,
+  "selecting": false,
+  "drawing": false,
+  "bearing": 0
+ },
+ "appearance": {
+  "toggle": null,
+  "track": null,
+  "button": null,
+  "font": "system",
+  "fontColor": null,
+  "locationDot": null,
+  "textSize": 1,
+  "preset": "meadow"
+ },
+ "session": {
+  "center": [
+   47.5593647078516,
+   -117.69940491479726
+  ],
+  "zoom": 10.073166863935198,
+  "bearing": 0,
+  "pitch": 0,
+  "mode": "2d",
+  "location": null
+ },
+ "dock": [
+  {
+   "ref": "#mapModeToggle",
+   "id": "mapModeToggle",
+   "tool": "mapMode",
+   "title": "Map view: 2D map"
+  },
+  {
+   "ref": "#quickDraw",
+   "id": "quickDraw",
+   "tool": "draw",
+   "title": "Draw on the map"
+  },
+  {
+   "ref": "#mapInfoToggle",
+   "id": "mapInfoToggle",
+   "tool": "scene",
+   "title": "Show displayed imagery controls",
+   "hidden": true
+  },
+  {
+   "ref": "#terrainSourceToggle",
+   "id": "terrainSourceToggle",
+   "tool": "terrain-source",
+   "title": "Show layers"
+  },
+  {
+   "ref": "#snapshot",
+   "id": "snapshot",
+   "tool": "snapshot",
+   "title": "Save current map viewport as an image"
+  },
+  {
+   "ref": "#mapTheme",
+   "id": "mapTheme",
+   "tool": "theme",
+   "title": "Switch to dark map"
+  },
+  {
+   "ref": "#bearingReset",
+   "id": "bearingReset",
+   "tool": "bearing",
+   "title": "Reset map to north",
+   "hidden": true
+  },
+  {
+   "ref": "#serverToggle",
+   "id": "serverToggle",
+   "tool": "server",
+   "title": "Terrain engine: built into this app",
+   "dot": "on"
+  }
+ ],
+ "status": {
+  "mapInfo": {
+   "basis": "Map center",
+   "coordinates": "47.55936\u00b0 N \u00b7 117.69940\u00b0 W",
+   "elevation": "Elevation \u2248 2,426 ft",
+   "source": "National elevation",
+   "analysis": "",
+   "terrain": {
+    "state": "loading",
+    "text": "Preparing the terrain picture \u00b7 visible picture still settling \u00b7 Waiting for elevation"
+   },
+   "distance": {
+    "label": "10 mi",
+    "width": 164.1,
+    "amount": 10,
+    "unit": "mi"
+   },
+   "keys": [
+    {
+     "name": "Relative elevation \u00b7 Ember + Hillshade",
+     "stops": [
+      {
+       "color": "#fbf2ea",
+       "opacity": 1,
+       "at": 0
+      },
+      {
+       "color": "#fcecdc",
+       "opacity": 1,
+       "at": 0.0078000000000000005
+      },
+      {
+       "color": "#fce8d4",
+       "opacity": 1,
+       "at": 0.015600000000000001
+      },
+      {
+       "color": "#fde4cd",
+       "opacity": 1,
+       "at": 0.023399999999999997
+      },
+      {
+       "color": "#fde1c6",
+       "opacity": 1,
+       "at": 0.0313
+      },
+      {
+       "color": "#fddec0",
+       "opacity": 1,
+       "at": 0.0391
+      },
+      {
+       "color": "#fedbba",
+       "opacity": 1,
+       "at": 0.046900000000000004
+      },
+      {
+       "color": "#fed9b5",
+       "opacity": 1,
+       "at": 0.0547
+      },
+      {
+       "color": "#fed6af",
+       "opacity": 1,
+       "at": 0.0625
+      },
+      {
+       "color": "#ffd4aa",
+       "opacity": 1,
+       "at": 0.0703
+      },
+      {
+       "color": "#ffd2a5",
+       "opacity": 1,
+       "at": 0.0781
+      },
+      {
+       "color": "#ffce9f",
+       "opacity": 1,
+       "at": 0.0859
+      },
+      {
+       "color": "#ffca99",
+       "opacity": 1,
+       "at": 0.09380000000000001
+      },
+      {
+       "color": "#ffc693",
+       "opacity": 1,
+       "at": 0.1016
+      },
+      {
+       "color": "#ffc38d",
+       "opacity": 1,
+       "at": 0.1094
+      },
+      {
+       "color": "#ffbf87",
+       "opacity": 1,
+       "at": 0.11720000000000001
+      },
+      {
+       "color": "#ffbc81",
+       "opacity": 1,
+       "at": 0.125
+      },
+      {
+       "color": "#ffb87c",
+       "opacity": 1,
+       "at": 0.1328
+      },
+      {
+       "color": "#ffb576",
+       "opacity": 1,
+       "at": 0.1406
+      },
+      {
+       "color": "#ffb271",
+       "opacity": 1,
+       "at": 0.1484
+      },
+      {
+       "color": "#ffae6b",
+       "opacity": 1,
+       "at": 0.1563
+      },
+      {
+       "color": "#ffab66",
+       "opacity": 1,
+       "at": 0.1641
+      },
+      {
+       "color": "#ffa861",
+       "opacity": 1,
+       "at": 0.17190000000000003
+      },
+      {
+       "color": "#ffa55c",
+       "opacity": 1,
+       "at": 0.1797
+      },
+      {
+       "color": "#ffa257",
+       "opacity": 1,
+       "at": 0.1875
+      },
+      {
+       "color": "#ff9f52",
+       "opacity": 1,
+       "at": 0.1953
+      },
+      {
+       "color": "#ff9c4d",
+       "opacity": 1,
+       "at": 0.20309999999999997
+      },
+      {
+       "color": "#ff9949",
+       "opacity": 1,
+       "at": 0.2109
+      },
+      {
+       "color": "#fd9647",
+       "opacity": 1,
+       "at": 0.2188
+      },
+      {
+       "color": "#fc9344",
+       "opacity": 1,
+       "at": 0.2266
+      },
+      {
+       "color": "#fb9142",
+       "opacity": 1,
+       "at": 0.23440000000000003
+      },
+      {
+       "color": "#fa8e40",
+       "opacity": 1,
+       "at": 0.2422
+      },
+      {
+       "color": "#f98b3d",
+       "opacity": 1,
+       "at": 0.25
+      },
+      {
+       "color": "#f8893b",
+       "opacity": 1,
+       "at": 0.25780000000000003
+      },
+      {
+       "color": "#f68639",
+       "opacity": 1,
+       "at": 0.2656
+      },
+      {
+       "color": "#f58337",
+       "opacity": 1,
+       "at": 0.2734
+      },
+      {
+       "color": "#f48134",
+       "opacity": 1,
+       "at": 0.2813
+      },
+      {
+       "color": "#f37e32",
+       "opacity": 1,
+       "at": 0.2891
+      },
+      {
+       "color": "#f27c30",
+       "opacity": 1,
+       "at": 0.2969
+      },
+      {
+       "color": "#f1792e",
+       "opacity": 1,
+       "at": 0.30469999999999997
+      },
+      {
+       "color": "#f0762c",
+       "opacity": 1,
+       "at": 0.3125
+      },
+      {
+       "color": "#ef742a",
+       "opacity": 1,
+       "at": 0.32030000000000003
+      },
+      {
+       "color": "#ee7127",
+       "opacity": 1,
+       "at": 0.3281
+      },
+      {
+       "color": "#ed6f25",
+       "opacity": 1,
+       "at": 0.33590000000000003
+      },
+      {
+       "color": "#ec6d23",
+       "opacity": 1,
+       "at": 0.34380000000000005
+      },
+      {
+       "color": "#eb6a21",
+       "opacity": 1,
+       "at": 0.35159999999999997
+      },
+      {
+       "color": "#ea681f",
+       "opacity": 1,
+       "at": 0.3594
+      },
+      {
+       "color": "#e9651d",
+       "opacity": 1,
+       "at": 0.36719999999999997
+      },
+      {
+       "color": "#e7631c",
+       "opacity": 1,
+       "at": 0.375
+      },
+      {
+       "color": "#e5611c",
+       "opacity": 1,
+       "at": 0.38280000000000003
+      },
+      {
+       "color": "#e35e1c",
+       "opacity": 1,
+       "at": 0.3906
+      },
+      {
+       "color": "#e15c1c",
+       "opacity": 1,
+       "at": 0.39840000000000003
+      },
+      {
+       "color": "#df5a1c",
+       "opacity": 1,
+       "at": 0.40630000000000005
+      },
+      {
+       "color": "#dd581c",
+       "opacity": 1,
+       "at": 0.41409999999999997
+      },
+      {
+       "color": "#db551c",
+       "opacity": 1,
+       "at": 0.4219
+      },
+      {
+       "color": "#d9531c",
+       "opacity": 1,
+       "at": 0.42969999999999997
+      },
+      {
+       "color": "#d7511c",
+       "opacity": 1,
+       "at": 0.4375
+      },
+      {
+       "color": "#d54f1c",
+       "opacity": 1,
+       "at": 0.44530000000000003
+      },
+      {
+       "color": "#d34d1c",
+       "opacity": 1,
+       "at": 0.4531
+      },
+      {
+       "color": "#d14b1c",
+       "opacity": 1,
+       "at": 0.46090000000000003
+      },
+      {
+       "color": "#cf481c",
+       "opacity": 1,
+       "at": 0.46880000000000005
+      },
+      {
+       "color": "#cd461c",
+       "opacity": 1,
+       "at": 0.47659999999999997
+      },
+      {
+       "color": "#cb441c",
+       "opacity": 1,
+       "at": 0.4844
+      },
+      {
+       "color": "#c9421c",
+       "opacity": 1,
+       "at": 0.49219999999999997
+      },
+      {
+       "color": "#c7401c",
+       "opacity": 1,
+       "at": 0.5
+      },
+      {
+       "color": "#c53e1c",
+       "opacity": 1,
+       "at": 0.5078
+      },
+      {
+       "color": "#c33c1c",
+       "opacity": 1,
+       "at": 0.5156000000000001
+      },
+      {
+       "color": "#c13a1c",
+       "opacity": 1,
+       "at": 0.5234000000000001
+      },
+      {
+       "color": "#bf381c",
+       "opacity": 1,
+       "at": 0.5313
+      },
+      {
+       "color": "#bd361c",
+       "opacity": 1,
+       "at": 0.5390999999999999
+      },
+      {
+       "color": "#bb341c",
+       "opacity": 1,
+       "at": 0.5468999999999999
+      },
+      {
+       "color": "#b9311c",
+       "opacity": 1,
+       "at": 0.5547
+      },
+      {
+       "color": "#b7301c",
+       "opacity": 1,
+       "at": 0.5625
+      },
+      {
+       "color": "#b42f1c",
+       "opacity": 1,
+       "at": 0.5703
+      },
+      {
+       "color": "#b22d1c",
+       "opacity": 1,
+       "at": 0.5781000000000001
+      },
+      {
+       "color": "#af2c1d",
+       "opacity": 1,
+       "at": 0.5859000000000001
+      },
+      {
+       "color": "#ac2b1d",
+       "opacity": 1,
+       "at": 0.5938
+      },
+      {
+       "color": "#a92a1d",
+       "opacity": 1,
+       "at": 0.6015999999999999
+      },
+      {
+       "color": "#a6291d",
+       "opacity": 1,
+       "at": 0.6093999999999999
+      },
+      {
+       "color": "#a4281d",
+       "opacity": 1,
+       "at": 0.6172
+      },
+      {
+       "color": "#a1261d",
+       "opacity": 1,
+       "at": 0.625
+      },
+      {
+       "color": "#9e251d",
+       "opacity": 1,
+       "at": 0.6328
+      },
+      {
+       "color": "#9b241e",
+       "opacity": 1,
+       "at": 0.6406000000000001
+      },
+      {
+       "color": "#99231e",
+       "opacity": 1,
+       "at": 0.6484000000000001
+      },
+      {
+       "color": "#96221e",
+       "opacity": 1,
+       "at": 0.6563
+      },
+      {
+       "color": "#93211e",
+       "opacity": 1,
+       "at": 0.6640999999999999
+      },
+      {
+       "color": "#90201e",
+       "opacity": 1,
+       "at": 0.6718999999999999
+      },
+      {
+       "color": "#8e1f1e",
+       "opacity": 1,
+       "at": 0.6797
+      },
+      {
+       "color": "#8b1e1e",
+       "opacity": 1,
+       "at": 0.6875
+      },
+      {
+       "color": "#881c1f",
+       "opacity": 1,
+       "at": 0.6953
+      },
+      {
+       "color": "#861b1f",
+       "opacity": 1,
+       "at": 0.7031000000000001
+      },
+      {
+       "color": "#831a1f",
+       "opacity": 1,
+       "at": 0.7109000000000001
+      },
+      {
+       "color": "#80191f",
+       "opacity": 1,
+       "at": 0.7188
+      },
+      {
+       "color": "#7e181f",
+       "opacity": 1,
+       "at": 0.7265999999999999
+      },
+      {
+       "color": "#7b171f",
+       "opacity": 1,
+       "at": 0.7343999999999999
+      },
+      {
+       "color": "#79161f",
+       "opacity": 1,
+       "at": 0.7422
+      },
+      {
+       "color": "#761520",
+       "opacity": 1,
+       "at": 0.75
+      },
+      {
+       "color": "#731420",
+       "opacity": 1,
+       "at": 0.7578
+      },
+      {
+       "color": "#711320",
+       "opacity": 1,
+       "at": 0.7656000000000001
+      },
+      {
+       "color": "#6e1220",
+       "opacity": 1,
+       "at": 0.7734000000000001
+      },
+      {
+       "color": "#6c121f",
+       "opacity": 1,
+       "at": 0.7813
+      },
+      {
+       "color": "#69111f",
+       "opacity": 1,
+       "at": 0.7890999999999999
+      },
+      {
+       "color": "#67111e",
+       "opacity": 1,
+       "at": 0.7968999999999999
+      },
+      {
+       "color": "#64101e",
+       "opacity": 1,
+       "at": 0.8047
+      },
+      {
+       "color": "#62101d",
+       "opacity": 1,
+       "at": 0.8125
+      },
+      {
+       "color": "#60101c",
+       "opacity": 1,
+       "at": 0.8203
+      },
+      {
+       "color": "#5d0f1c",
+       "opacity": 1,
+       "at": 0.8281000000000001
+      },
+      {
+       "color": "#5b0f1b",
+       "opacity": 1,
+       "at": 0.8359000000000001
+      },
+      {
+       "color": "#580f1b",
+       "opacity": 1,
+       "at": 0.8438
+      },
+      {
+       "color": "#560e1a",
+       "opacity": 1,
+       "at": 0.8515999999999999
+      },
+      {
+       "color": "#540e1a",
+       "opacity": 1,
+       "at": 0.8593999999999999
+      },
+      {
+       "color": "#510e19",
+       "opacity": 1,
+       "at": 0.8672
+      },
+      {
+       "color": "#4f0d19",
+       "opacity": 1,
+       "at": 0.875
+      },
+      {
+       "color": "#4d0d18",
+       "opacity": 1,
+       "at": 0.8828
+      },
+      {
+       "color": "#4a0d17",
+       "opacity": 1,
+       "at": 0.8906000000000001
+      },
+      {
+       "color": "#480c17",
+       "opacity": 1,
+       "at": 0.8984000000000001
+      },
+      {
+       "color": "#460c16",
+       "opacity": 1,
+       "at": 0.9063
+      },
+      {
+       "color": "#430c16",
+       "opacity": 1,
+       "at": 0.9140999999999999
+      },
+      {
+       "color": "#410b15",
+       "opacity": 1,
+       "at": 0.9218999999999999
+      },
+      {
+       "color": "#3f0b15",
+       "opacity": 1,
+       "at": 0.9297
+      },
+      {
+       "color": "#3c0b14",
+       "opacity": 1,
+       "at": 0.9375
+      },
+      {
+       "color": "#3a0a14",
+       "opacity": 1,
+       "at": 0.9453
+      },
+      {
+       "color": "#380a13",
+       "opacity": 1,
+       "at": 0.9531000000000001
+      },
+      {
+       "color": "#350a13",
+       "opacity": 1,
+       "at": 0.9609000000000001
+      },
+      {
+       "color": "#330912",
+       "opacity": 1,
+       "at": 0.9688
+      },
+      {
+       "color": "#310912",
+       "opacity": 1,
+       "at": 0.9765999999999999
+      },
+      {
+       "color": "#2f0911",
+       "opacity": 1,
+       "at": 0.9843999999999999
+      },
+      {
+       "color": "#2c0811",
+       "opacity": 1,
+       "at": 0.9922
+      },
+      {
+       "color": "#2a0810",
+       "opacity": 1,
+       "at": 1
+      }
+     ],
+     "labels": [
+      "0 ft",
+      "128 ft",
+      "256 ft \u00b7 fitted"
+     ],
+     "swatches": []
+    },
+    {
+     "name": "Below 2,320 ft",
+     "stops": [
+      {
+       "color": "#006981",
+       "opacity": 1,
+       "at": 0
+      },
+      {
+       "color": "#006981",
+       "opacity": 1,
+       "at": 1
+      }
+     ],
+     "labels": [],
+     "swatches": []
+    }
+   ]
+  },
+  "terrain": null,
+  "message": {
+   "kind": "idle",
+   "text": "Enter a location, or tap anywhere on the map.",
+   "error": false
+  },
+  "snapshot": null,
+  "engine": {
+   "online": true,
+   "state": "built into this app"
+  }
+ },
+ "panelOpen": null,
+ "imageKeys": []
+}
