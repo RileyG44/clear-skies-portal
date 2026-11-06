@@ -403,3 +403,93 @@ pub fn fit_range(values: &[f64], style: &str, mode: Option<&str>) -> Option<[f64
     };
     Some([(low / unit).floor() * unit, (high / unit).ceil() * unit])
 }
+
+impl Fit {
+    /// The range a legend or a single-range layer shows.
+    pub fn display(&self) -> Option<[f64; 2]> {
+        match self {
+            Fit::Range(r) => Some(*r),
+            Fit::Split { land, water, inland } => land.or(*water).or(*inland),
+        }
+    }
+}
+
+/// Values split by water class (0 land, 1 ocean, 2 inland water) into one
+/// fit per class; None when no class has values.
+fn split(land: &[f64], water: &[f64], inland: &[f64], land_style: &str) -> Option<Fit> {
+    let fit = Fit::Split {
+        land: fit_range(land, land_style, None),
+        water: fit_range(water, "tint", None),
+        inland: if inland.is_empty() { None } else { fit_range(inland, "tint", None) },
+    };
+    fit.display().map(|_| fit)
+}
+
+/// An elevation layer's fit: separate land, ocean and inland-water ranges,
+/// or one continuous range in "full" or "robust" mode.
+pub fn fit_elevation(values: &[f64], water: &[u8], mode: &str) -> Option<Fit> {
+    if mode != "separate" {
+        return fit_range(values, "tint", Some(mode)).map(Fit::Range);
+    }
+    // Classification must align with every height; without it keep one
+    // continuous scale rather than guess water from the height's sign.
+    if water.len() != values.len() {
+        return fit_range(values, "tint", None).map(Fit::Range);
+    }
+    let (mut land, mut depths, mut inland) = (Vec::new(), Vec::new(), Vec::new());
+    for (v, class) in values.iter().zip(water) {
+        if v.is_finite() {
+            match class {
+                0 => land.push(*v),
+                2 => inland.push(*v),
+                _ => depths.push(*v),
+            }
+        }
+    }
+    split(&land, &depths, &inland, "tint")
+}
+
+/// A relative-elevation layer's fit: its near-valley contrast over land
+/// only, with water keyed by absolute elevation.
+pub fn fit_relative(relative: &[f64], heights: &[f64], water: &[u8], mode: &str) -> Option<Fit> {
+    if mode != "separate" || water.len() != heights.len() || relative.len() != heights.len() {
+        return fit_range(relative, "rem", None).map(Fit::Range);
+    }
+    let (mut land, mut depths, mut inland) = (Vec::new(), Vec::new(), Vec::new());
+    for ((r, h), class) in relative.iter().zip(heights).zip(water) {
+        match class {
+            0 if r.is_finite() => land.push(*r),
+            0 => {}
+            2 if h.is_finite() => inland.push(*h),
+            _ if h.is_finite() => depths.push(*h),
+            _ => {}
+        }
+    }
+    split(&land, &depths, &inland, "rem")
+}
+
+/// Ignores small inward endpoint changes while always admitting a newly
+/// sampled extreme, so colours hold steady while panning.
+pub fn stable_fit(next: Fit, previous: Option<&Fit>) -> Fit {
+    let stabilize = |n: Option<[f64; 2]>, p: Option<[f64; 2]>| {
+        let (Some(n), Some(p)) = (n, p) else { return n };
+        let threshold = (n[1] - n[0]).max(1e-6) * 0.04;
+        Some([
+            if n[0] < p[0] || n[0] - p[0] > threshold { n[0] } else { p[0] },
+            if n[1] > p[1] || p[1] - n[1] > threshold { n[1] } else { p[1] },
+        ])
+    };
+    match (next, previous) {
+        (next, None) => next,
+        (Fit::Range(n), Some(Fit::Range(p))) => Fit::Range(stabilize(Some(n), Some(*p)).expect("range")),
+        (Fit::Range(n), Some(_)) => Fit::Range(n),
+        (Fit::Split { land, water, inland }, Some(Fit::Split { land: pl, water: pw, inland: pi })) => Fit::Split {
+            land: stabilize(land, *pl),
+            water: stabilize(water, *pw),
+            inland: inland.and_then(|i| stabilize(Some(i), *pi)),
+        },
+        // A split stabilized against a single range: the web reads the
+        // range's missing class fields, so nothing holds.
+        (split @ Fit::Split { .. }, Some(Fit::Range(_))) => split,
+    }
+}

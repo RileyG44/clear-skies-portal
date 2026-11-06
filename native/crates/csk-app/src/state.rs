@@ -93,4 +93,8 @@ pub struct Fitted {
     pub ranges: BTreeMap<String, Fit>,
     /// Map-centre elevation in metres, from the last view sample.
     pub center: Option<f64>,
+    /// Flat relative-elevation floors (the view's low elevation, and over
+    /// land only), where the derived floor field has no value.
+    pub rem_floor: Option<f64>,
+    pub rem_land_floor: Option<f64>,
 }

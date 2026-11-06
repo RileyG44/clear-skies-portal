@@ -12,7 +12,7 @@ use serde_json::{Map as Object, Value, json};
 use crate::render::{Appearance, Lighting, Look, Spectrum};
 use crate::shell;
 use crate::state::{AppState, Fitted, TerrainState};
-use crate::terrain::{Fit, catalog, fit_range};
+use crate::terrain::{Fit, Stack, catalog, fit_elevation, fit_range, fit_relative, stable_fit};
 
 const STATE_KEY: &str = "app.state.v1";
 
@@ -61,15 +61,17 @@ fn sources(preference: &str) -> Vec<TerrainSource> {
     }
 }
 
-/// Keeps a fitted range unless the view materially changed it, so colours
-/// do not shimmer while panning; a newly sampled extreme always widens it.
-fn stable(next: [f64; 2], previous: Option<[f64; 2]>) -> [f64; 2] {
-    let Some(p) = previous else { return next };
-    let threshold = (next[1] - next[0]).max(1e-6) * 0.04;
-    [
-        if next[0] < p[0] || next[0] - p[0] > threshold { next[0] } else { p[0] },
-        if next[1] > p[1] || p[1] - next[1] > threshold { next[1] } else { p[1] },
-    ]
+/// The derived fields a stack reads: the Detail blur, and the valley floors
+/// of its relative-elevation layers (land-only when separated).
+fn derive(stack: Option<&Stack>) -> csk_gpu::Derive {
+    let Some(stack) = stack else { return csk_gpu::Derive::default() };
+    let rem = |separate: bool| stack.layers.iter().any(|l| l.style == "rem" && l.separate_rem == separate);
+    let floor = |separate: bool| if stack.rem_radius > 0.0 && rem(separate) { stack.rem_radius } else { 0.0 };
+    csk_gpu::Derive {
+        blur: if stack.detail != 0.0 && stack.detail_radius > 0.0 { stack.detail_radius } else { 0.0 },
+        base: floor(false),
+        land_base: floor(true),
+    }
 }
 
 impl App {
@@ -112,7 +114,8 @@ impl App {
         if let Some(map) = &map {
             let inner = lock(&self.inner);
             map.set_sources(&sources(&inner.state.terrain.source));
-            map.set_uniforms(self.uniforms(&inner));
+            let (uniforms, derive) = self.appearance(&inner);
+            map.set_appearance(uniforms, derive);
             drop(inner);
             map.set_listener(Some(Arc::new(MapEvents(Arc::downgrade(self)))));
         }
@@ -148,8 +151,13 @@ impl App {
         }
     }
 
-    fn uniforms(&self, inner: &Inner) -> csk_gpu::Uniforms {
+    /// The map's shading parameters and the derived fields they read.
+    fn appearance(&self, inner: &Inner) -> (csk_gpu::Uniforms, csk_gpu::Derive) {
         let t = &inner.state.terrain;
+        let f = &inner.fitted;
+        let floor = f.rem_floor.unwrap_or(0.0);
+        let stack = t.studio.build_stack(&t.style, &f.ranges, floor, Some(f.rem_land_floor.unwrap_or(floor)));
+        let derive = derive(stack.as_ref());
         let appearance = Appearance {
             style: t.style.clone(),
             opacity: t.opacity / 100.0,
@@ -157,19 +165,20 @@ impl App {
             lighting: t.lighting,
             spectrum: Spectrum::default(),
             spectrum_opacity: 1.0,
-            stack: t.studio.build_stack(&t.style, &inner.fitted.ranges, 0.0, None),
+            stack,
         };
         let mut uniforms = csk_gpu::Uniforms::default();
         // The appearance is built from clamped state; a failure is a layout bug.
         if let Err(error) = appearance.apply(&mut uniforms) {
             debug_assert!(false, "appearance uniforms: {error}");
         }
-        uniforms
+        (uniforms, derive)
     }
 
     fn redraw(&self, inner: &Inner) {
         if let Some(map) = lock(&self.map).as_ref() {
-            map.set_uniforms(self.uniforms(inner));
+            let (uniforms, derive) = self.appearance(inner);
+            map.set_appearance(uniforms, derive);
         }
     }
 
@@ -423,32 +432,84 @@ impl App {
         }
     }
 
+    /// Re-stretches auto layers to the settled view (lidar-studio.js
+    /// fitFromView): elevation ranges hold through small inward changes,
+    /// other ranges refit past 4% of their span.
     fn sampled(&self, sample: ViewSample) {
         let mut inner = lock(&self.inner);
-        let heights: Vec<f64> = sample.heights.iter().map(|h| f64::from(*h)).collect();
-        let centre = heights[(sample.height / 2 * sample.width + sample.width / 2) as usize];
-        inner.fitted.center = centre.is_finite().then_some(centre);
+        let centre = sample.heights[(sample.height / 2 * sample.width + sample.width / 2) as usize];
+        inner.fitted.center = centre.is_finite().then_some(f64::from(centre));
         inner.settled = true;
-        let t = &inner.state.terrain;
-        let mut ranges = inner.fitted.ranges.clone();
-        let mut layers = vec![("base".to_string(), t.studio.base_layer(&t.style))];
-        layers.extend(t.studio.overlays.iter().enumerate().map(|(i, l)| (format!("overlay:{i}"), l.clone())));
-        for (key, layer) in layers {
-            // Relative elevation fits once the valley-floor field exists.
-            if !layer.visible || !layer.auto || layer.style == "rem" {
+        // Drawn samples only, with their floors and water class.
+        let (mut heights, mut relative, mut land_relative, mut water) = (vec![], vec![], vec![], vec![]);
+        for i in 0..sample.heights.len() {
+            let h = f64::from(sample.heights[i]);
+            if !h.is_finite() {
                 continue;
             }
-            let mode = (layer.style == "tint" && layer.range_mode != "separate").then_some(layer.range_mode.as_str());
-            let Some(fit) = fit_range(&heights, &layer.style, mode) else { continue };
-            let previous = match ranges.get(&key) {
-                Some(Fit::Range(r)) => Some(*r),
-                _ => None,
-            };
-            ranges.insert(key, Fit::Range(if layer.style == "tint" { stable(fit, previous) } else { fit }));
+            let above = |floor: f32| if floor.is_finite() { (h - f64::from(floor)).max(0.0) } else { f64::NAN };
+            heights.push(h);
+            relative.push(above(sample.base[i]));
+            land_relative.push(above(sample.land_base[i]));
+            water.push(sample.water[i]);
         }
-        let refitted = ranges != inner.fitted.ranges;
-        inner.fitted.ranges = ranges;
-        if refitted {
+        let floors = (inner.fitted.rem_floor, inner.fitted.rem_land_floor);
+        if let Some([low, _]) = fit_range(&heights, "tint", Some("robust")) {
+            inner.fitted.rem_floor = Some(low);
+        }
+        let land: Vec<f64> = heights.iter().zip(&water).filter(|(_, w)| **w == 0).map(|(h, _)| *h).collect();
+        inner.fitted.rem_land_floor = fit_range(&land, "tint", Some("robust")).map(|[low, _]| low);
+        let t = &inner.state.terrain;
+        let mut layers = vec![("base".to_string(), t.studio.base_layer(&t.style))];
+        layers.extend(t.studio.overlays.iter().enumerate().map(|(i, l)| (format!("overlay:{i}"), l.clone())));
+        layers.retain(|(_, l)| l.visible && l.auto);
+        let mut changed = layers.iter().any(|(_, l)| l.style == "rem")
+            && floors != (inner.fitted.rem_floor, inner.fitted.rem_land_floor);
+        let land_floor = inner.fitted.rem_land_floor;
+        for (key, layer) in layers {
+            let rem = layer.style == "rem";
+            let separate = layer.range_mode == "separate";
+            let source: Vec<f64> = match (rem, separate) {
+                (false, _) => heights.clone(),
+                (true, false) => relative.clone(),
+                (true, true) => land_relative
+                    .iter()
+                    .zip(&heights)
+                    .map(
+                        |(v, h)| {
+                            if v.is_finite() { *v } else { land_floor.map_or(f64::NAN, |floor| (h - floor).max(0.0)) }
+                        },
+                    )
+                    .collect(),
+            };
+            if source.len() < 16 {
+                continue;
+            }
+            let previous = inner.fitted.ranges.get(&key);
+            let elevation = layer.style == "tint" || (rem && separate);
+            let fit = if rem {
+                fit_relative(&source, &heights, &water, &layer.range_mode)
+            } else if layer.style == "tint" {
+                fit_elevation(&source, &water, &layer.range_mode)
+            } else {
+                fit_range(&source, &layer.style, None).map(Fit::Range)
+            };
+            let Some(next) = fit.map(|fit| if elevation { stable_fit(fit, previous) } else { fit }) else { continue };
+            let accept = match (previous, next.display()) {
+                (None, _) => true,
+                (Some(previous), _) if elevation => *previous != next,
+                (Some(previous), Some(range)) => previous.display().is_none_or(|old| {
+                    let span = (range[1] - range[0]).max(1e-6);
+                    (old[0] - range[0]).abs() > span * 0.04 || (old[1] - range[1]).abs() > span * 0.04
+                }),
+                (Some(_), None) => false,
+            };
+            if accept {
+                inner.fitted.ranges.insert(key, next);
+                changed = true;
+            }
+        }
+        if changed {
             self.redraw(&inner);
         }
         let update = self.changed(&inner);

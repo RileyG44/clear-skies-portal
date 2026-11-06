@@ -14,7 +14,7 @@ use std::sync::{Arc, Mutex, MutexGuard};
 
 use csk_engine::Engine;
 use csk_engine::elevation::TerrainSource;
-use csk_gpu::{Presented, Presenter, Renderer, TILE, Terrain, Uniforms, View, ViewSample};
+use csk_gpu::{Derive, Presented, Presenter, Renderer, TILE, Terrain, Uniforms, View, ViewSample};
 
 pub use camera::{Camera, Pose};
 pub use loader::Wake;
@@ -48,6 +48,8 @@ pub struct FrameResult {
     pub in_flight: usize,
 }
 
+type Decoded = Result<Vec<u16>, csk_gpu::Error>;
+
 struct Scene {
     gpu: Renderer,
     presenter: Presenter,
@@ -60,6 +62,9 @@ struct Scene {
     /// The view last sampled, and whether terrain arrived since.
     sampled: Option<View>,
     fresh: bool,
+    /// The water geography, decoded on the runtime, until installed. A
+    /// failure is reported by the next frame; places then draw as land.
+    water: Arc<Mutex<Option<Decoded>>>,
 }
 
 pub struct Map {
@@ -99,6 +104,12 @@ impl Map {
         let view = camera.view();
         let pool = (worst_slots(view.css, view.dpr) * 2).clamp(MIN_POOL, MAX_POOL);
         let mut terrain = Terrain::new(&gpu, pool)?;
+        let water = Arc::new(Mutex::new(None));
+        let (decoded, woken) = (water.clone(), wake.clone());
+        runtime.spawn_blocking(move || {
+            *lock(&decoded) = Some(csk_gpu::water::packed());
+            woken();
+        });
         let mut loader = loader::Loader::new(runtime, engine, wake.clone());
         loader.set_sources(&mut terrain, &TerrainSource::ALL);
         let scene = Scene {
@@ -111,6 +122,7 @@ impl Map {
             coverage: 0.0,
             sampled: None,
             fresh: false,
+            water,
         };
         Ok(Self {
             camera: Mutex::new(camera),
@@ -153,10 +165,12 @@ impl Map {
         (self.wake)();
     }
 
-    /// Replaces the appearance (style and its parameters).
-    pub fn set_uniforms(&self, uniforms: Uniforms) {
+    /// Replaces the appearance: the shading parameters and the derived
+    /// fields they read.
+    pub fn set_appearance(&self, uniforms: Uniforms, derive: Derive) {
         let mut scene = lock(&self.scene);
         scene.uniforms = uniforms;
+        scene.terrain.set_derive(derive);
         scene.shown = None;
         drop(scene);
         (self.wake)();
@@ -186,8 +200,13 @@ impl Map {
 
     fn draw(&self, view: View, animating: bool) -> Result<(FrameResult, Option<ViewSample>), csk_gpu::Error> {
         let mut scene = lock(&self.scene);
-        let Scene { gpu, presenter, terrain, loader, uniforms, shown, coverage, sampled, fresh } = &mut *scene;
-        let changed = loader.update(gpu, terrain, &view);
+        let Scene { gpu, presenter, terrain, loader, uniforms, shown, coverage, sampled, fresh, water } = &mut *scene;
+        let mut changed = loader.update(gpu, terrain, &view);
+        if let Some(mask) = lock(water).take() {
+            gpu.install_water(&mask?)?;
+            terrain.invalidate_derived();
+            changed = true;
+        }
         *fresh |= changed;
         let sample = terrain.take_sample(gpu);
         let mut result = FrameResult {
