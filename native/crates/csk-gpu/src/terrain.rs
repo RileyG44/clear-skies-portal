@@ -88,6 +88,7 @@ pub enum Layer<'a> {
     /// The shaded terrain scene being rendered.
     Terrain,
     Raster(&'a mut crate::raster::Raster, crate::raster::RasterStyle),
+    Markers(&'a [crate::marker::Marker]),
 }
 
 /// The map camera. Bearing is clockwise in degrees; Web Mercator in [0,1].
@@ -861,6 +862,7 @@ impl Terrain {
                 match layer {
                     Layer::Terrain => gpu.shade(&mut pass, &field.view, &uniforms, &aux, format),
                     Layer::Raster(raster, style) => raster.draw(gpu, &mut pass, view, format, *style),
+                    Layer::Markers(markers) => crate::marker::draw(gpu, &mut pass, view, format, markers),
                 }
             }
         }

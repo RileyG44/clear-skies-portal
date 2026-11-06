@@ -30,7 +30,10 @@ pub struct Renderer {
     raster_module: wgpu::ShaderModule,
     raster_layout: wgpu::BindGroupLayout,
     raster_sampler: wgpu::Sampler,
-    raster_pipelines: Mutex<HashMap<wgpu::TextureFormat, wgpu::RenderPipeline>>,
+    marker_module: wgpu::ShaderModule,
+    marker_layout: wgpu::BindGroupLayout,
+    /// Overlay programs (raster, marker) by name and target format.
+    overlay_pipelines: Mutex<HashMap<(&'static str, wgpu::TextureFormat), wgpu::RenderPipeline>>,
     shade_vertex: wgpu::ShaderModule,
     shade_fragment: wgpu::ShaderModule,
     pub(crate) composite: (wgpu::ComputePipeline, wgpu::BindGroupLayout),
@@ -262,6 +265,17 @@ impl Renderer {
             min_filter: wgpu::FilterMode::Linear,
             ..Default::default()
         });
+        let marker_module = device.create_shader_module(wgpu::ShaderModuleDescriptor {
+            label: Some("marker"),
+            source: wgpu::ShaderSource::Wgsl(include_str!("wgsl/marker.wgsl").into()),
+        });
+        let marker_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+            label: Some("marker"),
+            entries: &[
+                entry(0, vf, buffer(wgpu::BufferBindingType::Uniform)),
+                entry(1, vf, buffer(wgpu::BufferBindingType::Storage { read_only: true })),
+            ],
+        });
         let tiny = |format, bytes: &[u8]| {
             device
                 .create_texture_with_data(
@@ -297,7 +311,9 @@ impl Renderer {
             raster_module,
             raster_layout,
             raster_sampler,
-            raster_pipelines: Mutex::new(HashMap::new()),
+            marker_module,
+            marker_layout,
+            overlay_pipelines: Mutex::new(HashMap::new()),
             shade_vertex,
             shade_fragment,
             composite,
@@ -454,20 +470,38 @@ impl Renderer {
         &self,
         format: wgpu::TextureFormat,
     ) -> (wgpu::RenderPipeline, wgpu::BindGroupLayout, wgpu::Sampler) {
-        let mut cache = self.raster_pipelines.lock().unwrap();
-        let pipeline = cache
-            .entry(format)
+        let pipeline = self.overlay_pipeline("raster", &self.raster_module, &self.raster_layout, format);
+        (pipeline, self.raster_layout.clone(), self.raster_sampler.clone())
+    }
+
+    /// The marker program for a target format, and its layout.
+    pub(crate) fn marker_pipeline(&self, format: wgpu::TextureFormat) -> (wgpu::RenderPipeline, wgpu::BindGroupLayout) {
+        (self.overlay_pipeline("marker", &self.marker_module, &self.marker_layout, format), self.marker_layout.clone())
+    }
+
+    /// A full-frame overlay program (`vertex`/`fragment` entry points)
+    /// blending premultiplied "over" into `format`.
+    fn overlay_pipeline(
+        &self,
+        name: &'static str,
+        module: &wgpu::ShaderModule,
+        group: &wgpu::BindGroupLayout,
+        format: wgpu::TextureFormat,
+    ) -> wgpu::RenderPipeline {
+        let mut cache = self.overlay_pipelines.lock().unwrap();
+        cache
+            .entry((name, format))
             .or_insert_with(|| {
                 let layout = self.device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
                     label: None,
-                    bind_group_layouts: &[Some(&self.raster_layout)],
+                    bind_group_layouts: &[Some(group)],
                     immediate_size: 0,
                 });
                 self.device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
-                    label: Some("ClearSkies raster"),
+                    label: Some(name),
                     layout: Some(&layout),
                     vertex: wgpu::VertexState {
-                        module: &self.raster_module,
+                        module,
                         entry_point: Some("vertex"),
                         compilation_options: Default::default(),
                         buffers: &[],
@@ -476,7 +510,7 @@ impl Renderer {
                     depth_stencil: None,
                     multisample: Default::default(),
                     fragment: Some(wgpu::FragmentState {
-                        module: &self.raster_module,
+                        module,
                         entry_point: Some("fragment"),
                         compilation_options: Default::default(),
                         targets: &[Some(wgpu::ColorTargetState {
@@ -489,8 +523,7 @@ impl Renderer {
                     cache: None,
                 })
             })
-            .clone();
-        (pipeline, self.raster_layout.clone(), self.raster_sampler.clone())
+            .clone()
     }
 
     /// Records the shading pass of `field` into `target` (any colour format,

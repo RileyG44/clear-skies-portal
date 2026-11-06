@@ -98,6 +98,24 @@ fn draws(state: &AppState) -> Vec<Draw> {
     out
 }
 
+/// The selected place's dot (search.js setLoc: radius 7, weight 2, the
+/// appearance's location-dot colour, fill at 55%).
+fn markers(location: Option<&shell::Location>) -> Vec<csk_gpu::Marker> {
+    location
+        .map(|l| {
+            let at = Pose::from_lon_lat(l.lng, l.lat, 0.0, 0.0).center;
+            let white = [1.0, 1.0, 1.0];
+            vec![csk_gpu::Marker {
+                at,
+                radius: 7.0,
+                stroke: 2.0,
+                fill: [white[0], white[1], white[2], 0.55],
+                line: [white[0], white[1], white[2], 1.0],
+            }]
+        })
+        .unwrap_or_default()
+}
+
 /// The derived fields a stack reads: the Detail blur, and the valley floors
 /// of its relative-elevation layers (land-only when separated).
 fn derive(stack: Option<&Stack>) -> csk_gpu::Derive {
@@ -162,6 +180,7 @@ impl App {
             let (uniforms, derive) = self.appearance(&inner);
             map.set_appearance(uniforms, derive);
             map.set_layers(draws(&inner.state));
+            map.set_markers(markers(inner.location.as_ref()));
             drop(inner);
             map.set_listener(Some(Arc::new(MapEvents(Arc::downgrade(self)))));
         }
@@ -339,6 +358,17 @@ impl App {
                 }
                 return;
             }
+            "selectPoint" => {
+                // A map tap (CSS px): the place under it, labelled by its
+                // coordinates.
+                let (Some(x), Some(y)) = (args["x"].as_f64(), args["y"].as_f64()) else { return };
+                let Some(map) = lock(&self.map).clone() else { return };
+                drop(inner);
+                let [lng, lat] = map.lon_lat_at([x, y]);
+                let label = format!("{lat:.5}, {lng:.5}");
+                self.select(Some(shell::Location { lat, lng, label }));
+                return;
+            }
             "clear" => {
                 drop(inner);
                 self.select(None);
@@ -412,6 +442,9 @@ impl App {
         let mut inner = lock(&self.inner);
         inner.location = location;
         inner.location_version += 1;
+        if let Some(map) = lock(&self.map).as_ref() {
+            map.set_markers(markers(inner.location.as_ref()));
+        }
         let mut update = Object::new();
         update.insert("search".into(), shell::search(inner.location.as_ref(), inner.location_version));
         drop(inner);
@@ -468,6 +501,7 @@ impl App {
         let camera = &doc["camera"];
         if let Some(map) = lock(&self.map).as_ref() {
             map.set_sources(&sources(&inner.state.terrain.source));
+            map.set_markers(markers(inner.location.as_ref()));
             if let (Some(lon), Some(lat), Some(zoom)) =
                 (camera["lon"].as_f64(), camera["lat"].as_f64(), camera["zoom"].as_f64())
             {
