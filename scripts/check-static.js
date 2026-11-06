@@ -314,11 +314,11 @@ assert(index.includes('id="buildDiag"'),"the geometry readout must be reachable 
          "a resize handle that cannot resize must not stay on screen");
   assert(/@media \(pointer:coarse\)\{[\s\S]{0,240}?\.csp-nav-button\{min-height:44px\}/.test(ui),
          "navigation rows must reach the touch minimum where the input is a thumb");
-  /* Swiping back inside the sheet's detail view used to close the sheet and
-     leave the route where it was, so reopening landed straight back on the
-     screen you had just tried to leave. */
-  assert(/document\.body\.dataset\.cspView==="detail"&&back/.test(index),
-         "the dismiss gesture must go back before it closes, when there is somewhere to go back to");
+  /* A leftward swipe no longer closes the sheet. A pushed page pops from a
+     rightward leading-edge drag, and the home list stays mounted underneath. */
+  const shell=read("ui-system.js");
+  assert(/releaseEdge\(dx>60&&dy<60\)/.test(shell)&&shell.includes("csp-edge-pop"),
+         "a pushed page pops from a rightward leading-edge drag");
 }
 
 /* The sheet's breathing room is stated, not inherited. It used to come from the
@@ -567,14 +567,12 @@ assert(index.indexOf('World_Light_Gray_Base')<index.indexOf('World_Dark_Gray_Bas
   assert(/#pcCanvas\{flex:1 1 auto;min-height:180px/.test(index),
          "the 3D view needs a floor or the controls squeeze it to a strip");
 
-  /* The sidebar is a sheet on a phone and answers the same gestures. The axis
-     is decided once from the first decisive movement, so a diagonal drag
-     cannot flip between scrolling and dismissing halfway through. */
+  /* The phone sheet keeps vertical scrolling. Dismissal is the close control
+     and a downward header drag, not a leftward swipe and not a map tap. */
   assert(index.includes("#side{touch-action:pan-y}"),
-         "the sidebar must keep vertical scrolling and claim only the horizontal axis");
-  assert(/horizontal=Math\.abs\(dx\)>Math\.abs\(dy\)/.test(index),
-         "the dismiss gesture must commit to one axis rather than re-deciding mid-drag");
-  assert(/horizontal&&dx<-56/.test(index),"a swipe back toward the edge must dismiss the sidebar");
+         "the sidebar must keep vertical scrolling");
+  assert(!/horizontal&&dx<-56/.test(index),
+         "a leftward swipe must not dismiss the phone sheet");
   assert(!/getElementById\("map"\)\.addEventListener\("pointerdown"[\s\S]{0,500}setCollapsed\(true\)/.test(index),
          "a map tap must leave the phone sheet up; the close control and a header drag dismiss it");
   /* 44pt is the minimum for a control you aim at, not a floor for every line of

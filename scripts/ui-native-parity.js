@@ -24,6 +24,11 @@ const base=process.argv[2]||'http://127.0.0.1:8765/';
     root.style.setProperty('--safe-top','59px');root.style.setProperty('--safe-bottom','34px');root.style.setProperty('--screen-radius','55px');
    });
    await page.locator('#q').click();await page.waitForTimeout(400);
+   assert.equal(await page.locator('#cspGrabber').getAttribute('aria-hidden'),'true','the grabber is not an accessible control');
+   assert.equal(await page.locator('#cspGrabber').getAttribute('tabindex'),'-1');
+   await page.evaluate(()=>document.getElementById('mapReadout').classList.add('sheet-compact'));
+   assert(Number(await page.locator('#mapDock').evaluate(el=>getComputedStyle(el).opacity))>0.5,'compact map info does not hide the toolbar');
+   await page.evaluate(()=>document.getElementById('mapReadout').classList.remove('sheet-compact'));
    assert.equal(await page.locator('#side').evaluate(el=>getComputedStyle(el).transitionDuration.split(',')[0]),'0.35s','the open-sheet selector honors native timing');
    const corners=await page.locator('#side').evaluate(el=>{const s=getComputedStyle(el);return [s.borderTopLeftRadius,s.borderBottomLeftRadius]});
    assert.deepEqual(corners,['32px','51px'],'fixed top and concentric bottom corners');
@@ -37,6 +42,13 @@ const base=process.argv[2]||'http://127.0.0.1:8765/';
    const header=await page.locator('#cspWorkspaceHeader').evaluate(el=>({height:el.getBoundingClientRect().height,title:getComputedStyle(document.getElementById('cspWorkspaceTitle')).fontSize}));
    assert(header.height<=64&&header.title==='15px','native inline navigation header');
    assert.notEqual(await page.locator('#side').evaluate(el=>getComputedStyle(el).backdropFilter),'none','Terrain retains glass');
+   const studio=await page.evaluate(()=>{
+     const card=document.querySelector('.ls-preset-card'),save=document.querySelector('.ls-save-look'),arrows=document.querySelector('.ls-preset-navigation');
+     return {border:card?getComputedStyle(card).borderTopStyle:null,save:save?getComputedStyle(save).display:null,arrows:arrows?getComputedStyle(arrows).display:null};
+   });
+   assert.equal(studio.border,'none','portrait presets sit on the sheet glass');
+   assert.equal(studio.save,'none','portrait presets hide the studio save control');
+   assert.equal(studio.arrows,'none','portrait presets hide the carousel arrows');
    await page.screenshot({path:path.join(output,`terrain-${dark?'dark':'light'}.png`)});
    // Capture real touch events for interactive edge-pop when the browser supports CDP.
    if((process.env.CSP_UI_BROWSER||'chrome')!=='webkit'){
@@ -57,6 +69,18 @@ const base=process.argv[2]||'http://127.0.0.1:8765/';
    await page.locator('#cspBack').click();await page.waitForTimeout(400);
    await page.locator('#q').click();await page.waitForTimeout(400);
    assert.equal(await page.locator('#cspSearchClose').getAttribute('aria-label'),'Dismiss keyboard');
+   const pinned=await page.evaluate(()=>{
+     const sheet=document.getElementById('side'),previous=sheet.style.transition;
+     sheet.style.transition='none';
+     const before=sheet.getBoundingClientRect();
+     document.body.style.setProperty('--sheet-keyboard','160px');
+     const after=sheet.getBoundingClientRect();
+     document.body.style.removeProperty('--sheet-keyboard');
+     sheet.style.transition=previous;
+     return {before:before.top,top:after.top,bottom:after.bottom,height:after.height,inner:innerHeight};
+   });
+   assert(Math.abs(pinned.top-pinned.before)<1,`keyboard inset keeps the expanded top: ${JSON.stringify(pinned)}`);
+   assert(pinned.inner-pinned.bottom>150,`sheet sits above the keyboard inset: ${JSON.stringify(pinned)}`);
    await page.locator('#cspSearchClose').click();await page.waitForTimeout(150);
    assert(!await page.locator('body').evaluate(el=>el.classList.contains('collapsed')),'keyboard dismiss preserves the menu');
    await page.locator('#cspSearchClose').click();await page.waitForTimeout(400);
@@ -66,7 +90,9 @@ const base=process.argv[2]||'http://127.0.0.1:8765/';
     const observer=typeof PerformanceObserver!=='undefined'&&PerformanceObserver.supportedEntryTypes.includes('longtask')?new PerformanceObserver(list=>longTasks.push(...list.getEntries().map(e=>e.duration))):null;
     observer?.observe({type:'longtask'});
     const measure=()=>new Promise(resolve=>{
-     const begin=performance.now();document.getElementById('cspGrabber').click();
+     const begin=performance.now();
+     const detent=document.body.classList.contains('collapsed')?'peek':document.body.dataset.cspDetent||'medium';
+     [...document.querySelectorAll('.csp-sheet-actions button')].find(button=>button.textContent===(detent==='large'?'Collapse':'Expand')).click();
      const frame=now=>{
       frames.push(now-last);last=now;
       const sheet=document.getElementById('side'),dock=document.getElementById('mapDock');

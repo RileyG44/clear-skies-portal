@@ -33,7 +33,8 @@ const base=process.argv[2]||'http://127.0.0.1:8765/';
         inert:dock.inert,hidden:dock.getAttribute('aria-hidden'),detent:document.body.dataset.cspDetent}));
       const step=()=>page.evaluate(()=>{
         const dock=document.getElementById('mapDock');getComputedStyle(dock).opacity;
-        document.getElementById('cspGrabber').click();
+        const detent=document.body.classList.contains('collapsed')?'peek':document.body.dataset.cspDetent;
+        [...document.querySelectorAll('.csp-sheet-actions button')].find(button=>button.textContent===(detent==='large'?'Collapse':'Expand')).click();
         return getComputedStyle(dock).opacity;
       });
       assert.equal(await page.locator('.csp-wordmark').textContent(),'ClearSkies','native wordmark is present');

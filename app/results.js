@@ -407,44 +407,8 @@ function setCollapsed(on){
   setTimeout(()=>{reflowMap();restoreScenePanelPosition()},380);
 }
 /* The phone sheet dismisses the way the native one does: the close control
-   and a downward header drag. A sideways swipe still pops a pushed page, or
-   dismisses from home. A tap on the map does not close it.
-
-   touch-action:pan-y on #side (see the stylesheet) is what makes this safe -
-   the browser keeps vertical scrolling and only the horizontal axis is ours,
-   which is the same split the point-cloud sheet needed. */
-(function sidebarDismissGestures(){
-  const compact=()=>matchMedia("(max-width:760px)").matches;
-  let startX=0,startY=0,tracking=false,horizontal=null;
-  sideEl.addEventListener("pointerdown",event=>{
-    if(!compact()||event.pointerType==="mouse"||document.body.classList.contains("collapsed")) return;
-    startX=event.clientX;startY=event.clientY;tracking=true;horizontal=null;
-  },{passive:true});
-  sideEl.addEventListener("pointermove",event=>{
-    if(!tracking) return;
-    const dx=event.clientX-startX,dy=event.clientY-startY;
-    /* Decide the axis once, from the first decisive movement, so a diagonal
-       drag does not flip between scrolling and dismissing mid-gesture. */
-    if(horizontal===null){
-      if(Math.abs(dx)<10&&Math.abs(dy)<10) return;
-      horizontal=Math.abs(dx)>Math.abs(dy);
-    }
-    if(horizontal&&dx<-56){
-      tracking=false;
-      /* The redesign puts a detail view inside the sheet. Swiping back from
-         there used to close the whole panel, so you lost the sheet AND stayed
-         stranded on the detail route - reopening dropped you right back where
-         you had just tried to leave. Mirror the back control when there is
-         somewhere to go back to, and only dismiss from the top level. */
-      const back=document.getElementById("cspBack");
-      if(document.body.dataset.cspView==="detail"&&back&&getComputedStyle(back).display!=="none") back.click();
-      else setCollapsed(true);
-    }
-  },{passive:true});
-  const stop=()=>{tracking:false};
-  sideEl.addEventListener("pointerup",stop,{passive:true});
-  sideEl.addEventListener("pointercancel",stop,{passive:true});
-})();
+   and a downward header drag. A leftward swipe does not close it, and a map
+   tap does not either. A pushed page pops from a rightward leading-edge drag. */
 $("#sideToggle").setAttribute("aria-controls","side");
 $("#sideToggle").setAttribute("aria-expanded","true");
 $("#sideToggle").onclick=()=>setCollapsed(!document.body.classList.contains("collapsed"));

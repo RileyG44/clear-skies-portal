@@ -1,7 +1,7 @@
 'use strict';
 /* Interaction test for the phone bottom sheet: the peek, medium and large
-   detents, tap and drag between them, keyboard control of the grabber, the
-   title strip on detail pages, and the landscape card that keeps the old
+   detents, tap and drag between them, the Expand / Collapse / Close actions,
+   the title strip on detail pages, and the landscape card that keeps the old
    hide-and-toggle behaviour. Companion to scripts/ui-stress.js.
 
      node server.js &
@@ -27,7 +27,8 @@ const base = process.argv[2] || 'http://127.0.0.1:8765/';
       toggleShown:getComputedStyle(document.getElementById('sideToggleDock')).display!=='none',
       modeInDock:dock.contains(mb)&&mr.width>0, modeClear:mr.bottom<=r.top-4,
       navHidden:getComputedStyle(document.getElementById('cspNavScroll')).visibility, active:document.activeElement.id,
-      label:document.getElementById('cspGrabber').getAttribute('aria-label') };
+      grabberHidden:document.getElementById('cspGrabber').getAttribute('aria-hidden'),
+      grabberTab:document.getElementById('cspGrabber').tabIndex };
   });
   let s = await st();
   ok('loads at the search capsule', s.collapsed && s.h===52, JSON.stringify(s));
@@ -45,7 +46,7 @@ const base = process.argv[2] || 'http://127.0.0.1:8765/';
   ok('mode menu opens beside the capsule with three modes', menu.open && menu.inside && menu.clearOfDock && menu.items===3 && menu.checked==='2d', JSON.stringify(menu));
   await page.tap('#map', {position:{x:120,y:300}}); await page.waitForTimeout(400);
   ok('tapping the map closes the mode menu', await page.evaluate(()=>document.getElementById('mapModeMenu').hidden));
-  ok('grabber says Show panel in peek', s.label==='Show panel');
+  ok('grabber stays out of the accessibility tree', s.grabberHidden==='true' && s.grabberTab===-1);
 
   await page.evaluate(()=>document.activeElement?.blur());await page.tap('#q'); await page.waitForTimeout(700);
   s=await st();ok('first tap opens medium without raising the keyboard',!s.collapsed&&s.detent==='medium'&&s.active!=='q',JSON.stringify(s));
@@ -78,26 +79,25 @@ const base = process.argv[2] || 'http://127.0.0.1:8765/';
   await page.mouse.move(x,y); await page.mouse.down(); await page.mouse.move(x,y-20,{steps:3}); await page.mouse.up(); await page.waitForTimeout(600);
   s = await st(); ok('a small nudge springs back to peek', s.collapsed && s.h===52, JSON.stringify(s));
 
-  // The collapsed capsule has no grabber. Tap its search field to reopen;
-  // the visible grabber still supports both upper detents.
+  // The clipped grabber is not a control. Expand, Collapse and Close move the sheet.
+  const detentButton=label=>page.evaluate(name=>{
+    [...document.querySelectorAll('.csp-sheet-actions button')].find(button=>button.textContent===name).click();
+  },label);
   await page.evaluate(()=>document.activeElement?.blur());await page.tap('#q'); await page.waitForTimeout(600);
   await page.tap('#q');await page.waitForTimeout(600);
-  await page.focus('#cspGrabber');await page.keyboard.press('ArrowDown'); await page.waitForTimeout(600);
-  s = await st(); ok('search reopens the sheet and grabber ArrowDown reaches medium', !s.collapsed && s.detent==='medium', JSON.stringify(s));
-  await page.evaluate(()=>document.getElementById('cspGrabber').click()); await page.waitForTimeout(600);
-  s = await st(); ok('tap grabber again goes large', !s.collapsed && s.detent==='large', JSON.stringify(s));
-
-  // keyboard
-  await page.focus('#cspGrabber');
-  await page.keyboard.press('ArrowDown'); await page.waitForTimeout(500);
-  s = await st(); ok('ArrowDown large -> medium', s.detent==='medium' && !s.collapsed);
-  await page.keyboard.press('ArrowDown'); await page.waitForTimeout(600);
-  s = await st(); ok('ArrowDown medium -> peek', s.collapsed);
+  await detentButton('Collapse'); await page.waitForTimeout(600);
+  s = await st(); ok('Collapse lowers a search-opened sheet to medium', !s.collapsed && s.detent==='medium', JSON.stringify(s));
+  await detentButton('Expand'); await page.waitForTimeout(600);
+  s = await st(); ok('Expand opens large', !s.collapsed && s.detent==='large', JSON.stringify(s));
+  await detentButton('Collapse'); await page.waitForTimeout(500);
+  s = await st(); ok('Collapse large -> medium', s.detent==='medium' && !s.collapsed);
+  await detentButton('Close'); await page.waitForTimeout(600);
+  s = await st(); ok('Close medium -> peek', s.collapsed);
   await page.evaluate(()=>document.activeElement?.blur());await page.tap('#q');await page.waitForTimeout(600);await page.tap('#q');await page.waitForTimeout(600);
-  await page.focus('#cspGrabber');await page.keyboard.press('ArrowDown');await page.waitForTimeout(600);
-  s = await st();ok('keyboard reopening reaches medium',!s.collapsed&&s.detent==='medium');
-  await page.keyboard.press('ArrowUp');await page.waitForTimeout(600);
-  s=await st();ok('ArrowUp medium -> large',!s.collapsed&&s.detent==='large');
+  await detentButton('Collapse');await page.waitForTimeout(600);
+  s = await st();ok('Collapse after reopening reaches medium',!s.collapsed&&s.detent==='medium');
+  await detentButton('Expand');await page.waitForTimeout(600);
+  s=await st();ok('Expand medium -> large',!s.collapsed&&s.detent==='large');
 
   // detail page peek shows the title
   await page.click('.csp-nav-button[data-route="terrain"]'); await page.waitForTimeout(500);
@@ -139,7 +139,9 @@ const base = process.argv[2] || 'http://127.0.0.1:8765/';
   const st = () => page.evaluate(() => { const side=document.getElementById('side'); const r=side.getBoundingClientRect();
     const sc=document.body.dataset.cspView==='detail'?document.getElementById('cspWorkspaceScroll'):document.getElementById('cspNav');
     return {h:Math.round(r.height), top:Math.round(r.top), detent:document.body.classList.contains('collapsed')?'peek':document.body.dataset.cspDetent, scroll:Math.round(sc.scrollTop)}; });
-  await page.evaluate(()=>document.activeElement?.blur());await page.tap('#q');await page.waitForTimeout(600);await page.tap('#q');await page.waitForTimeout(600);await page.focus('#cspGrabber');await page.keyboard.press('ArrowDown');await page.waitForTimeout(600);
+  await page.evaluate(()=>document.activeElement?.blur());await page.tap('#q');await page.waitForTimeout(600);await page.tap('#q');await page.waitForTimeout(600);
+  await page.evaluate(()=>[...document.querySelectorAll('.csp-sheet-actions button')].find(button=>button.textContent==='Collapse').click());
+  await page.waitForTimeout(600);
   let s=await st(); ok('opened sheet starts medium', s.detent==='medium', JSON.stringify(s));
   // drag on content (a nav row) up -> large
   let row=await (await page.$('.csp-nav-button[data-route="satellite"]')).boundingBox();
@@ -164,7 +166,7 @@ const base = process.argv[2] || 'http://127.0.0.1:8765/';
   s=await st(); ok('slow small nudge stays put', s.detent===beforeNudge && s.detent!=='peek', JSON.stringify(s));
   // go to a long detail page, open large, scroll content
   await page.evaluate(()=>document.querySelector('.csp-nav-button[data-route="conditions"]').click()); await page.waitForTimeout(500);
-  await page.evaluate(()=>{ if(document.body.dataset.cspDetent!=='large') document.getElementById('cspGrabber').click(); }); await page.waitForTimeout(600);
+  await page.evaluate(()=>{ if(document.body.dataset.cspDetent!=='large') [...document.querySelectorAll('.csp-sheet-actions button')].find(button=>button.textContent==='Expand').click(); }); await page.waitForTimeout(600);
   s=await st(); ok('detail at large', s.detent==='large', JSON.stringify(s));
   const mid={x:195,y:500};
   await touch(mid.x,mid.y,0,-250,400);
@@ -195,7 +197,10 @@ const base = process.argv[2] || 'http://127.0.0.1:8765/';
 
   // flicks: a hard flick carries two detents, a slow drag settles where it ends
   const d = () => page.evaluate(()=>document.body.classList.contains('collapsed')?'peek':document.body.dataset.cspDetent);
-  await page.evaluate(()=>{ if(!document.body.classList.contains('collapsed')) document.getElementById('sideToggle').click(); }); await page.waitForTimeout(700);
+  await page.evaluate(()=>{
+    if(document.body.dataset.cspView==='detail') document.getElementById('cspBack').click();
+    if(!document.body.classList.contains('collapsed')) document.getElementById('sideToggle').click();
+  }); await page.waitForTimeout(700);
   let sb2=await (await page.$('#side')).boundingBox();
   await touch(sb2.x+sb2.width/2, sb2.y+40, 0, -260, 0, 3);
   ok('hard flick up from peek -> large', await d()==='large');

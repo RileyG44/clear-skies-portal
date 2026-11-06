@@ -1518,6 +1518,7 @@ const peeking=()=>sheetMode()&&isCollapsed();
 const toggleSheet=()=>$("#sideToggle")?.click();
 const grabber=document.createElement("button");
 grabber.id="cspGrabber";grabber.type="button";
+grabber.tabIndex=-1;grabber.setAttribute("aria-hidden","true");
 side.prepend(grabber);
 const currentDetent=()=>isCollapsed()?"peek":document.body.dataset.cspDetent||"medium";
 const sheetTools=$("#mapDock");
@@ -1569,7 +1570,7 @@ const syncSheetTools=(progress=null)=>{
   if(!sheetTools) return;
   const dragProgress=sheetTools.style.getPropertyValue("--csp-dock-hide");
   if(progress===null&&dragProgress!=="") progress=Number(dragProgress);
-  const hidden=sheetMode()&&(readout?.classList.contains("sheet-compact")||(progress===null?currentDetent()==="large":progress>=.99));
+  const hidden=sheetMode()&&(progress===null?currentDetent()==="large":progress>=.99);
   if(sheetTools.inert!==hidden) sheetTools.inert=hidden;
   sheetTools.style.pointerEvents=hidden?"none":"auto";
   if(hidden) sheetTools.setAttribute("aria-hidden","true");else sheetTools.removeAttribute("aria-hidden");
@@ -1605,16 +1606,20 @@ const readoutHeight=()=>{
 };
 const fitMapInfo=height=>{
   if(fittingInfo||!readout||!sheetMode()||!sheetLimits) return;
+  const expanded=readout.classList.contains("expanded")&&!isCollapsed();
+  // A closed tile must not restyle on every detent frame. The spring writes
+  // sheet height continuously, and one cleanup when the tile closes is enough.
+  if(!expanded&&!narrowInfo&&!compactInfo&&!readout.classList.contains("sheet-compact")) return;
   fittingInfo=true;
   try{
     const {top,appHeight,medium}=sheetLimits;
-    const base=appHeight-sheetPixels("--safe-top");
+    const safeTop=sheetPixels("--safe-top");
+    const base=appHeight-safeTop;
     const fullLarge=base*.9;
     // Decide from the unreserved detent. Applying the reserve must not
     // change the gap used for this choice, or the sheet oscillates.
     const deciding=isCollapsed()?0:(document.body.dataset.cspDetent==="large"||height>medium+80)?fullLarge:height;
     const decisionRoom=isCollapsed()?420:Math.max(44,appHeight-4-deciding-top-8);
-    const expanded=readout.classList.contains("expanded")&&!isCollapsed();
     if(!expanded){
       narrowInfo=0;compactInfo=0;
       readout.classList.remove("sheet-compact");
@@ -1640,8 +1645,12 @@ const fitMapInfo=height=>{
       setSheetStyle(readout,"--map-info-space","480px");
       compactInfo=readoutHeight();
     }else readout.classList.add("sheet-compact");
-    const reserve=readout.getBoundingClientRect().top+compactInfo+8;
-    const large=Math.max(base*.84,Math.min(fullLarge,appHeight-4-reserve));
+    // Reserve in the same space as the sheet: portal height, not the viewport.
+    // origin.y is the tile's top below the status bar, so the safe area is
+    // not counted twice.
+    const originY=Math.max(0,readout.getBoundingClientRect().top-safeTop);
+    const reserve=originY+compactInfo+8;
+    const large=Math.max(base*.84,Math.min(fullLarge,base-4-reserve));
     setSheetLarge(large);
     // The cap is the gap the shortened sheet leaves, not the 90% gap that
     // forced compact mode. Otherwise the tile stays clipped to the button.
@@ -1687,7 +1696,7 @@ const releaseEdge=complete=>{
   };
   const onEnd=event=>{if(event.target===workspace&&event.propertyName==="transform") finish()};
   if(!document.body.classList.contains("csp-edge-pop")){finish();return}
-  workspace.style.transition=reduced?"none":"transform .35s var(--spring)";
+  workspace.style.transition=reduced?"none":"transform .35s cubic-bezier(.28,.9,.32,1.08)";
   workspace.style.transform=complete?"translate3d(100%,0,0)":"translate3d(0,0,0)";
   if(reduced){finish();return}
   workspace.addEventListener("transitionend",onEnd);
@@ -1745,7 +1754,7 @@ sheetActions.className="csp-sheet-actions";
 for(const [label,detent] of [["Expand","large"],["Collapse","medium"],["Close","peek"]]){
   const button=document.createElement("button");
   button.type="button";button.textContent=label;
-  button.addEventListener("click",()=>goToDetent(detent));
+  button.addEventListener("click",event=>{event.stopPropagation();goToDetent(detent)});
   sheetActions.append(button);
 }
 side.append(sheetActions);
@@ -1923,16 +1932,9 @@ if(sheetMode()&&!isCollapsed()){
   side.addEventListener("pointercancel",()=>{if(gesture?.source==="mouse") end()});
   side.addEventListener("click",event=>{
     if(suppressClick){suppressClick=false;clearTimeout(suppressTimer);return}
-    if(event.target===grabber){
-      // keyboard activation, or a tap the gesture code did not see
-      goToDetent(currentDetent()==="peek"?"medium":currentDetent()==="medium"?"large":"medium");
-      return;
-    }
+    if(event.target.closest(".csp-sheet-actions,.csp-close-menu")) return;
     if(!peeking()) return;
     openSheet("medium");
-  });
-  side.addEventListener("focusin",event=>{
-    if(sheetMode()&&event.target.closest("#q,#cspSatQuery")&&currentDetent()!=="large") openSheet("large");
   });
   /* The search capsule takes two taps, as in Maps: the first opens the sheet
      with no keyboard; the next, with the sheet open, focuses the field. A tap
@@ -1955,9 +1957,9 @@ if(sheetMode()&&!isCollapsed()){
   },{passive:false});
   q.addEventListener("mousedown",event=>{if(peeking()) event.preventDefault()});
   /* Focusing with the sheet open: the sheet rises to full height so the
-     suggestions have room, and the keyboard covers the lower part of the
-     sheet rather than shoving the page up. iOS may still pan the document a
-     little while the keyboard animates; undo that while the field has focus. */
+     suggestions have room, and its bottom sits on the keyboard. iOS may still
+     pan the document a little while the keyboard animates; undo that while
+     the field has focus. */
   const focusSearch=input=>{
     if(!sheetMode()) return;
     if(currentDetent()!=="large") openSheet("large");
@@ -1969,11 +1971,15 @@ if(sheetMode()&&!isCollapsed()){
     requestAnimationFrame(pin);
     requestAnimationFrame(syncKeyboardInset);
   };
-  q.addEventListener("focus",()=>focusSearch(q));
-  side.addEventListener("focusin",event=>{if(event.target.id==="cspSatQuery") focusSearch(event.target)});
+  const sheetTextField=element=>!!element?.matches?.("textarea,input:not([type=button],[type=checkbox],[type=radio],[type=range],[type=color],[type=file],[type=submit],[type=reset],[type=image],[type=hidden])");
+  side.addEventListener("focusin",event=>{
+    if(!sheetMode()||!sheetTextField(event.target)) return;
+    if(event.target.closest("#q,#cspSatQuery")) focusSearch(event.target);
+    else if(currentDetent()!=="large") openSheet("large");
+  });
   const syncKeyboardInset=()=>{
     const vv=window.visualViewport;
-    const focused=!!document.activeElement?.matches("#q,#cspSatQuery,input,textarea");
+    const focused=sheetTextField(document.activeElement);
     const covered=vv?Math.max(0,window.innerHeight-vv.height-vv.offsetTop):0;
     const inset=sheetMode()&&focused?Math.max(0,covered-sheetPixels("--safe-bottom")):0;
     if(inset) setSheetStyle(document.body,"--sheet-keyboard",`${Math.round(inset)}px`);
@@ -1993,16 +1999,6 @@ if(sheetMode()&&!isCollapsed()){
     if(event.target.closest(".search-row,#ac,.csp-sat-field")) return;
     document.activeElement.blur();
   },true);
-  grabber.addEventListener("keydown",event=>{
-    const detent=currentDetent();
-    if(event.key==="ArrowUp"){if(detent!=="large") goToDetent(detent==="peek"?"medium":"large")}
-    else if(event.key==="ArrowDown"){
-      if(detent==="large") goToDetent("medium");
-      else if(detent==="medium"&&sheetMode()) goToDetent("peek");
-    }
-    else return;
-    event.preventDefault();
-  });
 }
 
 /* A preview engine (scripts/preview.sh) labels itself, so a preview tab can
