@@ -27,6 +27,7 @@ const RANGE_TTL: Duration = Duration::from_secs(365 * 24 * 3600);
 const HEADERS: usize = 512;
 /// Decoded 256² float blocks: 256 KiB each.
 const BLOCKS: usize = 192;
+const BLOCK_BYTES: usize = 48 << 20;
 
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 pub enum ReadError {
@@ -75,8 +76,31 @@ impl CogReader {
         format!("{}/{}", self.base_url, key)
     }
 
-    /// Bytes `first..=last` of an object, from the store or the network.
+    /// Bytes `first..=last` of an object: a local file for `file:` keys
+    /// (prepared DNR rasters), else from the store or the network.
     pub async fn range(&self, key: &str, first: u64, last: u64) -> Result<Arc<[u8]>, ReadError> {
+        if let Some(path) = key.strip_prefix("file:") {
+            let path = std::path::PathBuf::from(path);
+            return tokio::task::spawn_blocking(move || {
+                use std::io::{Read, Seek, SeekFrom};
+                let mut f =
+                    std::fs::File::open(&path).map_err(|e| ReadError::Tiff(format!("{}: {e}", path.display())))?;
+                let size = f.metadata().map_err(|e| ReadError::Tiff(e.to_string()))?.len();
+                if first >= size || last < first {
+                    return Ok(Arc::from([]));
+                }
+                let last = last.min(size.saturating_sub(1));
+                if last - first + 1 > 64 << 20 {
+                    return Err(ReadError::Tiff("local read exceeds the 64 MiB budget".into()));
+                }
+                let mut buf = vec![0u8; (last + 1).saturating_sub(first) as usize];
+                f.seek(SeekFrom::Start(first)).map_err(|e| ReadError::Tiff(e.to_string()))?;
+                f.read_exact(&mut buf).map_err(|e| ReadError::Tiff(e.to_string()))?;
+                Ok(Arc::from(buf))
+            })
+            .await
+            .map_err(|_| ReadError::Stopped)?;
+        }
         let ck = format!("range:{key}:{first}-{last}");
         let want = (last - first + 1) as usize;
         if let Ok(Some(hit)) = self.store.get(&ck, RANGE_TTL)
@@ -144,7 +168,7 @@ impl CogReader {
         if ifd < head.len() as u64 {
             return Err(ReadError::Tiff("no readable IFD found".into()));
         }
-        let last = if size > ifd { size - 1 } else { ifd + TAIL - 1 };
+        let last = if size > ifd { (size - 1).min(ifd + TAIL - 1) } else { ifd + TAIL - 1 };
         let tail = self.range(key, ifd, last).await?;
         let windows = Windows::new().with(0, &head[..]).with(ifd, &tail[..]);
         match codec::parse(&windows) {
@@ -189,7 +213,15 @@ impl CogReader {
                 .await
                 .map_err(|_| ReadError::Stopped)??;
                 let px: Arc<[f32]> = px.into();
-                me.blocks.lock().unwrap_or_else(|e| e.into_inner()).put(k, px.clone());
+                let mut cache = me.blocks.lock().unwrap_or_else(|e| e.into_inner());
+                cache.put(k, px.clone());
+                // DNR blocks may be much larger than USGS's 256² blocks.
+                // A count limit alone is not a memory budget.
+                let mut bytes: usize = cache.iter().map(|(_, b)| std::mem::size_of_val(b.as_ref())).sum();
+                while bytes > BLOCK_BYTES {
+                    let Some((_, b)) = cache.pop_lru() else { break };
+                    bytes -= std::mem::size_of_val(b.as_ref());
+                }
                 Ok(Some(px))
             })
             .await

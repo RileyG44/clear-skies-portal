@@ -42,6 +42,9 @@ pub struct CskFetchRequest {
     /// Request body, or NULL.
     pub body: *const u8,
     pub body_len: usize,
+    /// Write the response body to this file path instead of returning it
+    /// (complete with an empty body), or NULL.
+    pub dest_path: *const c_char,
 }
 
 /// The platform's network.
@@ -142,6 +145,7 @@ impl Transport for Bridge {
                     .map(|(k, v)| format!("{k}: {v}\n"))
                     .collect();
                 let headers = CString::new(headers).expect("filtered");
+                let dest = req.dest.as_ref().and_then(|p| CString::new(p.to_string_lossy().into_owned()).ok());
                 let c = CskFetchRequest {
                     method: method.as_ptr(),
                     url: url.as_ptr(),
@@ -152,6 +156,7 @@ impl Transport for Bridge {
                     headers: headers.as_ptr(),
                     body: if req.body.is_empty() { std::ptr::null() } else { req.body.as_ptr() },
                     body_len: req.body.len(),
+                    dest_path: dest.as_ref().map_or(std::ptr::null(), |d| d.as_ptr()),
                 };
                 let token = Box::into_raw(Box::new(CskFetch { tx }));
                 (platform.t.fetch)(platform.t.context, token, id, &c);

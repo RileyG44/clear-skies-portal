@@ -14,7 +14,7 @@ final class LocalEngine {
 
     /// Whether the page is told this engine is built in. It answers every
     /// route the page uses once an engine is connected; capabilities it does
-    /// not have yet (WA DNR elevation, Oregon) are left out of its health
+    /// not have yet (such as Oregon) are left out of its health
     /// `features`, so the page never asks for them.
     static let announced = true
 

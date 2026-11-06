@@ -35,6 +35,9 @@ pub struct FetchRequest {
     pub headers: Vec<(String, String)>,
     /// Request body (POST).
     pub body: Vec<u8>,
+    /// Write the body to this file instead of memory (large downloads); the
+    /// response's `body` is then empty. `max_body` still applies.
+    pub dest: Option<std::path::PathBuf>,
 }
 
 impl FetchRequest {
@@ -47,7 +50,16 @@ impl FetchRequest {
             max_body: 32 << 20,
             headers: Vec::new(),
             body: Vec::new(),
+            dest: None,
         }
+    }
+    pub fn to_file(mut self, path: impl Into<std::path::PathBuf>) -> Self {
+        self.dest = Some(path.into());
+        self
+    }
+    pub fn header(mut self, name: &str, value: impl Into<String>) -> Self {
+        self.headers.push((name.into(), value.into()));
+        self
     }
     /// A form POST (`application/x-www-form-urlencoded`).
     pub fn post_form(url: impl Into<String>, form: String) -> Self {
@@ -87,6 +99,26 @@ impl FetchResponse {
     pub fn header(&self, name: &str) -> Option<&str> {
         self.headers.iter().find(|(k, _)| k.eq_ignore_ascii_case(name)).map(|(_, v)| v.as_str())
     }
+
+    /// `name=value` of every cookie set, from any number of `Set-Cookie`
+    /// headers, including platforms that join them with commas.
+    pub fn cookies(&self) -> Vec<String> {
+        let mut out = Vec::new();
+        for (_, v) in self.headers.iter().filter(|(k, _)| k.eq_ignore_ascii_case("set-cookie")) {
+            for part in v.split(',') {
+                let pair = part.split(';').next().unwrap_or("").trim();
+                // An Expires date's comma leaves a fragment with no '=' before ';'.
+                if let Some((name, _)) = pair.split_once('=')
+                    && !name.is_empty()
+                    && !name.contains(' ')
+                    && !["expires", "max-age", "path", "domain"].contains(&name.to_ascii_lowercase().as_str())
+                {
+                    out.push(pair.to_owned());
+                }
+            }
+        }
+        out
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
@@ -110,4 +142,26 @@ pub type FetchFuture = Pin<Box<dyn Future<Output = Result<FetchResponse, FetchEr
 /// every hop against its allowlist).
 pub trait Transport: Send + Sync + 'static {
     fn fetch(&self, req: FetchRequest) -> FetchFuture;
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn cookies_from_separate_or_joined_headers() {
+        let joined = super::FetchResponse {
+            status: 200,
+            headers: vec![(
+                "Set-Cookie".into(),
+                "JSESSIONID=84BB; Path=/; HttpOnly, dlgate=ok; Path=/; Max-Age=7200; Expires=Wed, 21 Oct 2026 07:28:00 GMT; Secure".into(),
+            )],
+            body: vec![],
+        };
+        assert_eq!(joined.cookies(), vec!["JSESSIONID=84BB", "dlgate=ok"]);
+        let separate = super::FetchResponse {
+            status: 200,
+            headers: vec![("set-cookie".into(), "a=1; Path=/".into()), ("set-cookie".into(), "b=2".into())],
+            body: vec![],
+        };
+        assert_eq!(separate.cookies(), vec!["a=1", "b=2"]);
+    }
 }

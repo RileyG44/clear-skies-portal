@@ -5,13 +5,16 @@ import Foundation
 /// HTTP/3, proxy settings, Low Data Mode and cellular policy. The engine
 /// keeps its own cache, so URLSession's is off. Body size is enforced while
 /// bytes arrive, not after.
-nonisolated final class NetworkTransport: NSObject, URLSessionDataDelegate, @unchecked Sendable {
+nonisolated final class NetworkTransport: NSObject, URLSessionDataDelegate, URLSessionDownloadDelegate, @unchecked Sendable {
     private struct Fetch {
         let token: OpaquePointer
         let maxBody: UInt64
+        /// Large downloads go straight to this file.
+        let dest: URL?
         var status = 0
         var headers = ""
         var body = Data()
+        var fileError: String?
     }
 
     private let lock = NSLock()
@@ -73,9 +76,16 @@ nonisolated final class NetworkTransport: NSObject, URLSessionDataDelegate, @unc
         if let body = request.body, request.body_len > 0 {
             r.httpBody = Data(bytes: body, count: request.body_len)
         }
-        let task = session.dataTask(with: r)
+        let dest = request.dest_path.map { URL(filePath: String(cString: $0)) }
+        if dest != nil {
+            // DNR archives can be large: bulk transfers use unmetered Wi-Fi.
+            r.allowsCellularAccess = false
+            r.allowsExpensiveNetworkAccess = false
+            r.allowsConstrainedNetworkAccess = false
+        }
+        let task: URLSessionTask = dest == nil ? session.dataTask(with: r) : session.downloadTask(with: r)
         lock.withLock {
-            fetches[task.taskIdentifier] = Fetch(token: token, maxBody: request.max_body)
+            fetches[task.taskIdentifier] = Fetch(token: token, maxBody: request.max_body, dest: dest)
             tasks[id] = task
             ids[task.taskIdentifier] = id
         }
@@ -130,6 +140,47 @@ nonisolated final class NetworkTransport: NSObject, URLSessionDataDelegate, @unc
         }
     }
 
+    private static func headerLines(_ response: URLResponse?) -> (Int, String) {
+        let http = response as? HTTPURLResponse
+        let lines = (http?.allHeaderFields ?? [:]).compactMap { key, value -> String? in
+            guard let name = key as? String else { return nil }
+            return "\(name): \(value)"
+        }.joined(separator: "\n")
+        return (http?.statusCode ?? 0, lines)
+    }
+
+    func urlSession(_ session: URLSession, downloadTask: URLSessionDownloadTask, didWriteData bytesWritten: Int64,
+                    totalBytesWritten: Int64, totalBytesExpectedToWrite: Int64) {
+        let limit = lock.withLock { fetches[downloadTask.taskIdentifier]?.maxBody } ?? .max
+        if UInt64(max(0, max(totalBytesWritten, totalBytesExpectedToWrite))) > limit, let f = take(downloadTask) {
+            csk_fetch_fail(f.token, CSK_FETCH_TOO_LARGE, "download too large")
+            downloadTask.cancel()
+        }
+    }
+
+    /// The file URLSession wrote is removed when this returns: move it now.
+    func urlSession(_ session: URLSession, downloadTask: URLSessionDownloadTask, didFinishDownloadingTo location: URL) {
+        let (status, headers) = Self.headerLines(downloadTask.response)
+        lock.withLock {
+            guard var f = fetches[downloadTask.taskIdentifier], let dest = f.dest else { return }
+            f.status = status
+            f.headers = headers
+            do {
+                let size = try location.resourceValues(forKeys: [.fileSizeKey]).fileSize ?? 0
+                guard UInt64(size) <= f.maxBody else {
+                    f.fileError = "download too large"
+                    fetches[downloadTask.taskIdentifier] = f
+                    return
+                }
+                try? FileManager.default.removeItem(at: dest)
+                try FileManager.default.moveItem(at: location, to: dest)
+            } catch {
+                f.fileError = error.localizedDescription
+            }
+            fetches[downloadTask.taskIdentifier] = f
+        }
+    }
+
     /// Redirects come back to the engine, which decides whether to follow
     /// (a snapshot image re-validates every hop against its allowlist).
     func urlSession(_ session: URLSession, task: URLSessionTask, willPerformHTTPRedirection response: HTTPURLResponse,
@@ -152,6 +203,10 @@ nonisolated final class NetworkTransport: NSObject, URLSessionDataDelegate, @unc
         }
         if let error {
             csk_fetch_fail(f.token, CSK_FETCH_NETWORK, String(describing: error))
+            return
+        }
+        if let fileError = f.fileError {
+            csk_fetch_fail(f.token, CSK_FETCH_NETWORK, fileError)
             return
         }
         f.headers.withCString { headers in

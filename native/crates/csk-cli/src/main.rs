@@ -59,12 +59,20 @@ impl Transport for Ureq {
                     .iter()
                     .map(|(k, v)| (k.as_str().to_ascii_lowercase(), v.to_str().unwrap_or("").to_owned()))
                     .collect();
-                let body = r
-                    .body_mut()
-                    .with_config()
-                    .limit(req.max_body as u64)
-                    .read_to_vec()
-                    .map_err(|_| FetchError::TooLarge)?;
+                let body = match &req.dest {
+                    Some(path) => {
+                        let mut reader = r.body_mut().with_config().limit(req.max_body as u64).reader();
+                        let mut file = std::fs::File::create(path).map_err(|e| FetchError::Network(e.to_string()))?;
+                        std::io::copy(&mut reader, &mut file).map_err(|_| FetchError::TooLarge)?;
+                        Vec::new()
+                    }
+                    None => r
+                        .body_mut()
+                        .with_config()
+                        .limit(req.max_body as u64)
+                        .read_to_vec()
+                        .map_err(|_| FetchError::TooLarge)?,
+                };
                 Ok(FetchResponse { status, headers, body })
             })
             .await
@@ -86,6 +94,25 @@ async fn main() {
     let out = std::path::Path::new(&dir).join("out");
     std::fs::create_dir_all(&out).expect("out dir");
     for route in args {
+        // "UNTIL <route>": repeat a GET until it is no longer 202 Accepted (max 10 min).
+        if let Some(path) = route.strip_prefix("UNTIL ") {
+            let t = Instant::now();
+            loop {
+                let r = engine.handle(Request::new("GET", path, Vec::new()).expect("route")).await;
+                if r.status != 202 || t.elapsed().as_secs() > 600 {
+                    println!("{path} -> {} after {:.0} s", r.status, t.elapsed().as_secs_f64());
+                    for (k, v) in &r.headers {
+                        println!("  {k}: {}", &v[..v.len().min(300)]);
+                    }
+                    let name: String =
+                        path.chars().map(|c| if c.is_ascii_alphanumeric() || c == '.' { c } else { '_' }).collect();
+                    std::fs::write(out.join(name), &r.body).expect("write body");
+                    break;
+                }
+                tokio::time::sleep(std::time::Duration::from_secs(3)).await;
+            }
+            continue;
+        }
         // "EXPORT-CATALOG <file>" lists the archive and writes the bundled snapshot.
         if let Some(file) = route.strip_prefix("EXPORT-CATALOG ") {
             let catalog = &engine.tiles.usgs.catalog;

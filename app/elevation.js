@@ -542,10 +542,10 @@ async function fetchElevation(url,signal){
    then skips the PNG decode and canvas readback entirely. The overview keeps
    its PNG route, which falls back to AWS directly. */
 const ELEV32_MEDIA="application/vnd.clearskies.elev32";
-const ELEV32_ROUTES={"usgs/elev":"usgs/","elev/national":"national/","elev":""};
+const ELEV32_ROUTES={"usgs/elev":"usgs/","wadnr/elev":"wadnr/","elev/national":"national/","elev":""};
 function elev32Url(url){
   if(typeof serverHealth==="undefined"||!serverHealth?.features?.includes("elev32"))return null;
-  const m=url.match(/\/api\/(usgs\/elev|elev\/national|elev)\/(\d+\/\d+\/\d+)\.png(\?.*)?$/);
+  const m=url.match(/\/api\/(usgs\/elev|wadnr\/elev|elev\/national|elev)\/(\d+\/\d+\/\d+)\.png(\?.*)?$/);
   return m?url.slice(0,m.index)+"/api/elev32/"+ELEV32_ROUTES[m[1]]+m[2]+(m[3]||""):null;
 }
 /* Checks the header and length as the engine's contract asks; the engine

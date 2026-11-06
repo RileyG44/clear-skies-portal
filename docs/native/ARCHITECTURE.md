@@ -182,6 +182,14 @@ Each has a replacement: a bounded native executor, resumable jobs, adjustable al
 
 Adopted from `deepseek/08` §2.4.3 with the R6/R7 rulings.
 
+**Observed 2026-11-06:** the direct DNR portal streams a generated ZIP and ignores
+byte ranges. The initial direct path therefore downloads to a bounded staging file
+before reading its central directory. King County East 2021 already contains tiled,
+multi-level BigTIFFs: read those in place, preserving their original samples, rather
+than transcoding them. Range-based access below applies only to an upstream that
+actually supports it. Unsupported projection/units and oversized strip blocks fail
+closed until their codec path is implemented.
+
 1. **Central directory.** Read the ZIP end-of-central-directory record and Zip64 locator with two range reads.
    - Reject encrypted members, unknown compression methods, and paths that escape the staging folder ("zip-slip").
    - Enforce limits on compressed size, uncompressed size and member count.
