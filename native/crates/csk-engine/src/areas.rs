@@ -154,7 +154,9 @@ pub fn start(engine: &Arc<Engine>, req: &Request) -> Response {
         Ok(j) => j,
         Err(e) => return err(500, &format!("could not record the download: {e}")),
     };
-    run(engine, job, spec);
+    if let Err(e) = run(engine, job, spec) {
+        return err(507, &e);
+    }
     Response::json(200, &serde_json::to_value(d.status()).unwrap_or_default())
 }
 
@@ -175,7 +177,7 @@ pub fn resume(engine: &Arc<Engine>) {
     if let Some((job, spec)) = row
         && let Ok(spec) = serde_json::from_str::<Spec>(&spec)
     {
-        run(engine, job, spec);
+        let _ = run(engine, job, spec);
     }
 }
 
@@ -228,7 +230,7 @@ struct JobState {
     sources: BTreeSet<String>,
 }
 
-fn run(engine: &Arc<Engine>, job: String, spec: Spec) {
+fn run(engine: &Arc<Engine>, job: String, spec: Spec) -> Result<(), String> {
     let pending: Vec<(u8, u32, u32)> = engine
         .store
         .read(|c| {
@@ -237,6 +239,19 @@ fn run(engine: &Arc<Engine>, job: String, spec: Spec) {
                 .collect()
         })
         .unwrap_or_default();
+    // Two 256² terrain grids plus pinned/WAL/page overhead per pending tile.
+    // Source-cache writes obtain their own bounded transient claims.
+    let growth = match engine.disk.claim((pending.len() as u64).saturating_mul(2 << 20)) {
+        Ok(growth) => growth,
+        Err(e) => {
+            let error = e.to_string();
+            let _ = engine.store.write(|c| {
+                c.execute("UPDATE pinned.jobs SET state='stopped',error=?2 WHERE id=?1", params![job, error])
+            });
+            engine.downloads.progress.lock().unwrap_or_else(|e| e.into_inner()).error = error.clone();
+            return Err(error);
+        }
+    };
     let counts: (u64, u64, u64, u64) = engine
         .store
         .read(|c| {
@@ -268,14 +283,23 @@ fn run(engine: &Arc<Engine>, job: String, spec: Spec) {
     let me = engine.clone();
     let job2 = job.clone();
     let handle = tokio::spawn(async move {
-        let lanes = (0..LANES).map(|_| lane(me.clone(), job2.clone(), area.clone(), spec.raw, state.clone()));
+        let lanes =
+            (0..LANES).map(|_| lane(me.clone(), job2.clone(), area.clone(), spec.raw, state.clone(), growth.clone()));
         futures_util::future::join_all(lanes).await;
         finish(&me, &job2, &area, &spec, &state).await;
     });
     *engine.downloads.task.lock().unwrap_or_else(|e| e.into_inner()) = Some((job, handle.abort_handle()));
+    Ok(())
 }
 
-async fn lane(engine: Arc<Engine>, job: String, area: String, raw: bool, state: Arc<Mutex<JobState>>) {
+async fn lane(
+    engine: Arc<Engine>,
+    job: String,
+    area: String,
+    raw: bool,
+    state: Arc<Mutex<JobState>>,
+    growth: Arc<csk_store::disk::Lease>,
+) {
     loop {
         if !engine.work.checkpoint().await {
             return;
@@ -310,7 +334,8 @@ async fn lane(engine: Arc<Engine>, job: String, area: String, raw: bool, state: 
                     fetched |= !hit;
                     keys.push(tiles::national_key(z, x, y));
                 }
-                Baseline::None => keys.push(tiles::national_key(z, x, y)),
+                Baseline::None if z >= crate::national::MIN_ZOOM => keys.push(tiles::national_key(z, x, y)),
+                Baseline::None => {}
                 Baseline::Failed { .. } if lidar_complete => {}
                 Baseline::Failed { .. } => failure = Some("national 3DEP unavailable; retry later".to_owned()),
             }
@@ -322,9 +347,13 @@ async fn lane(engine: Arc<Engine>, job: String, area: String, raw: bool, state: 
             p.done += 1;
             continue;
         }
-        if let Err(e) = engine.store.pin(&area, &keys) {
+        let pinned = engine.store.pin(&area, &keys);
+        if !matches!(&pinned, Ok(count) if *count==keys.len()) {
             let mut p = engine.downloads.progress.lock().unwrap_or_else(|e| e.into_inner());
-            p.error = format!("could not keep the tile offline: {e}");
+            p.error = match pinned {
+                Err(e) => format!("could not keep the tile offline: {e}"),
+                Ok(_) => "could not keep every required terrain grid offline; retry later".into(),
+            };
             p.done += 1;
             continue;
         }
@@ -341,6 +370,7 @@ async fn lane(engine: Arc<Engine>, job: String, area: String, raw: bool, state: 
             tx.commit()
         });
         let mut p = engine.downloads.progress.lock().unwrap_or_else(|e| e.into_inner());
+        let _ = growth.consume(2 << 20);
         p.done += 1;
         p.ok += ok as u64;
         p.skipped += skipped as u64;
@@ -509,6 +539,96 @@ pub async fn fresh(engine: &Arc<Engine>, req: &Request) -> Response {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[tokio::test]
+    async fn storage_refusal_keeps_tiles_uncommitted_and_retry_finishes_the_same_job() {
+        use crate::transport::{FetchError, FetchFuture, Transport};
+        use std::sync::atomic::{AtomicU64, Ordering};
+        struct Offline;
+        impl Transport for Offline {
+            fn fetch(&self, _: FetchRequest) -> FetchFuture {
+                Box::pin(async { Err(FetchError::Offline) })
+            }
+        }
+        let dir = tempfile::tempdir().unwrap();
+        let floor = (8u64 << 30) + (256 << 20);
+        let free = Arc::new(AtomicU64::new(floor + (3 << 20)));
+        let reading = free.clone();
+        let disk = csk_store::disk::Budget::with_capacity(
+            &dir.path().join("user/offline"),
+            Box::new(move || {
+                Ok(csk_store::disk::Capacity { available: reading.load(Ordering::SeqCst), total: 1 << 40 })
+            }),
+        )
+        .unwrap();
+        let engine = Engine::with_resources(
+            crate::Config {
+                cache_dir: dir.path().into(),
+                data_dir: None,
+                cache_budget: 1 << 20,
+                usgs_scope: Some(vec![]),
+            },
+            Arc::new(Offline),
+            csk_core::resource::Budget::new(64 << 20),
+            disk.clone(),
+        )
+        .unwrap();
+        engine.work.set_allowed(false);
+        let body = br#"{"bbox":[-121.8,46.8,-121.7,46.9],"z0":10,"z1":10,"raw":false}"#.to_vec();
+        let request = || Request::new("POST", "/api/usgs/warm", body.clone()).unwrap();
+        assert_eq!(engine.handle(request()).await.status, 507);
+        assert!(!engine.downloads.status().running);
+        assert_eq!(disk.stats().unwrap().remaining, 0);
+        free.store(64 << 30, Ordering::SeqCst);
+        for y in 360..=361 {
+            engine
+                .store
+                .put(
+                    &tiles::national_key(10, 165, y),
+                    csk_store::Kind::Derived,
+                    204,
+                    "application/vnd.clearskies.elev32",
+                    None,
+                    &[],
+                )
+                .unwrap();
+        }
+        assert_eq!(engine.handle(request()).await.status, 200);
+        assert_eq!(disk.stats().unwrap().remaining, 4 << 20);
+        // The admitted job still has its full future claim. Another app fills
+        // the volume before pinning: no tile may be marked committed offline.
+        free.store(floor + (4 << 20), Ordering::SeqCst);
+        engine.work.set_allowed(true);
+        tokio::time::timeout(std::time::Duration::from_secs(2), async {
+            while engine.downloads.status().running {
+                tokio::task::yield_now().await;
+            }
+        })
+        .await
+        .unwrap();
+        assert!(engine.downloads.status().error.contains("storage"));
+        let undone: i64 = engine
+            .store
+            .read(|c| c.query_row("SELECT COUNT(*) FROM pinned.job_tiles WHERE done=0", [], |r| r.get(0)))
+            .unwrap();
+        assert_eq!(undone, 2);
+        assert_eq!(disk.stats().unwrap().remaining, 0);
+        free.store(64 << 30, Ordering::SeqCst);
+        assert_eq!(engine.handle(request()).await.status, 200);
+        tokio::time::timeout(std::time::Duration::from_secs(2), async {
+            while engine.downloads.status().running {
+                tokio::task::yield_now().await;
+            }
+        })
+        .await
+        .unwrap();
+        assert_eq!(engine.downloads.status().done, 2);
+        assert!(engine.downloads.status().error.is_empty());
+        let jobs: i64 =
+            engine.store.read(|c| c.query_row("SELECT COUNT(*) FROM pinned.jobs", [], |r| r.get(0))).unwrap();
+        assert_eq!(jobs, 1, "retry resumes the durable job");
+        assert_eq!(disk.stats().unwrap().remaining, 0);
+    }
 
     #[test]
     fn validates_like_the_engine() {

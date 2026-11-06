@@ -455,7 +455,7 @@ mod tests {
         }
     }
     fn engine(dir: &std::path::Path, fixture: Arc<Fixture>) -> Arc<Engine> {
-        Engine::new(
+        Engine::for_test(
             Config { cache_dir: dir.into(), data_dir: None, cache_budget: 1 << 20, usgs_scope: Some(vec![]) },
             fixture,
         )

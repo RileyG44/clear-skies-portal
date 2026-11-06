@@ -12,6 +12,7 @@ crate-type = ["staticlib", "rlib"]
 
 [dependencies]
 csk-engine = { path = "../csk-engine" }
+csk-store = { path = "../csk-store" }
 tokio = { version = "1", features = ["rt-multi-thread", "sync"] }
 
 [build-dependencies]

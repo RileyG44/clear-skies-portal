@@ -16,16 +16,26 @@ nonisolated final class TransferJournal {
         var headers: String?
         var bytes: UInt64?
         var completed: Date?
+        var received: UInt64?
     }
 
-    enum Failure: Error, Equatable { case invalidRecord, missingFile, tooLarge }
+    enum Failure: Error, Equatable { case invalidRecord, missingFile, tooLarge, notEnoughStorage }
+
+    struct Storage: Sendable {
+        let reserve: @Sendable (String, UInt64) throws -> Void
+        let release: @Sendable (String) -> Void
+        let reconcile: @Sendable (String, [String]) throws -> Void
+    }
 
     let directory: URL
     private let files = FileManager.default
+    private let storage: Storage?
 
-    init(directory: URL) throws {
+    init(directory: URL, storage: Storage? = nil) throws {
         self.directory = directory
+        self.storage = storage
         try files.createDirectory(at: directory, withIntermediateDirectories: true)
+        try storage?.reconcile("transfer-copy:", [])
         var excluded = directory
         var values = URLResourceValues()
         values.isExcludedFromBackup = true
@@ -52,17 +62,42 @@ nonisolated final class TransferJournal {
     func read(_ key: String) throws -> Record {
         guard Self.validKey(key) else { throw Failure.invalidRecord }
         let record = try JSONDecoder().decode(Record.self, from: Data(contentsOf: manifest(key)))
-        guard let url = URL(string: record.url), Self.key(for: url) == key else { throw Failure.invalidRecord }
+        guard let url = URL(string: record.url), Self.key(for: url) == key,
+              record.maxBytes > 0, record.maxBytes <= 2 << 30,
+              (record.received ?? 0) <= record.maxBytes else { throw Failure.invalidRecord }
         return record
     }
 
     func prepare(url: URL, maxBytes: UInt64) throws -> String {
+        guard maxBytes > 0, maxBytes <= 2 << 30 else { throw Failure.tooLarge }
         let key = Self.key(for: url)
-        if let previous = try? read(key), previous.maxBytes == maxBytes { return key }
+        if let previous = try? read(key), previous.maxBytes == maxBytes {
+            try storage?.reserve("transfer:" + key, previous.state == .ready ? 0 : maxBytes - min(maxBytes, previous.received ?? 0))
+            return key
+        }
         remove(key)
+        try storage?.reserve("transfer:" + key, maxBytes)
         let record = Record(url: url.absoluteString, maxBytes: maxBytes, created: Date(), state: .transferring)
-        try save(record, key: key)
+        do { try save(record, key: key) }
+        catch { storage?.release("transfer:" + key); throw error }
         return key
+    }
+
+    /// Completed bytes already reduce filesystem availability. Checkpointing
+    /// future growth avoids counting them again; an interrupted checkpoint is
+    /// conservative because it leaves a larger outstanding claim.
+    func progress(_ key: String, received: UInt64, force: Bool = false) throws {
+        var record = try read(key)
+        guard record.state == .transferring, received <= record.maxBytes else { return }
+        let previous = record.received ?? 0
+        let restarted = received < previous
+        guard force || restarted || (received >= previous && received - previous >= 16 << 20) else { return }
+        // URLSession can restart a partial transfer. Its discarded bytes no
+        // longer occupy disk, so reclaim future growth before accepting it.
+        if restarted { try storage?.reserve("transfer:" + key, record.maxBytes - received) }
+        record.received = received
+        try save(record, key: key)
+        if !restarted { try storage?.reserve("transfer:" + key, record.maxBytes - received) }
     }
 
     private func save(_ record: Record, key: String) throws {
@@ -87,6 +122,7 @@ nonisolated final class TransferJournal {
         record.bytes = bytes
         record.completed = Date()
         try save(record, key: key)
+        storage?.release("transfer:" + key)
     }
 
     func deliver(_ key: String, to destination: URL, maxBytes: UInt64) throws -> Record {
@@ -101,7 +137,12 @@ nonisolated final class TransferJournal {
         // Same-volume hard links avoid a second archive allocation. The
         // journal's link survives extraction-folder cleanup after a restart.
         do { try files.linkItem(at: payload(key), to: destination) }
-        catch { try files.copyItem(at: payload(key), to: destination) }
+        catch {
+            let copyKey = "transfer-copy:" + key + ":" + Self.key(for: destination)
+            try storage?.reserve(copyKey, bytes)
+            defer { storage?.release(copyKey) }
+            try files.copyItem(at: payload(key), to: destination)
+        }
         return record
     }
 
@@ -109,6 +150,7 @@ nonisolated final class TransferJournal {
         guard Self.validKey(key) else { return }
         try? files.removeItem(at: manifest(key))
         try? files.removeItem(at: payload(key))
+        storage?.release("transfer:" + key)
     }
 
     func keys() -> [String] {
@@ -119,14 +161,21 @@ nonisolated final class TransferJournal {
 
     /// Retain live system tasks and recent completed files. Sweep failed or
     /// abandoned work without touching files outside this journal's namespace.
-    func reconcile(active: Set<String>, now: Date = Date()) {
+    @discardableResult func reconcile(active: Set<String>, now: Date = Date()) -> Set<String> {
+        var refused: Set<String> = []
         for key in keys() {
             guard let record = try? read(key) else { remove(key); continue }
-            if active.contains(key) { continue }
+            if active.contains(key) {
+                do { try storage?.reserve("transfer:" + key, record.state == .ready ? 0 : record.maxBytes - min(record.maxBytes, record.received ?? 0)) }
+                catch { refused.insert(key) }
+                continue
+            }
             if record.state != .ready || now.timeIntervalSince(record.completed ?? record.created) > 24 * 3600 {
                 remove(key)
             } else if (try? size(of: payload(key))) != record.bytes {
                 remove(key)
+            } else {
+                storage?.release("transfer:" + key)
             }
         }
         let known = Set(keys())
@@ -136,6 +185,8 @@ nonisolated final class TransferJournal {
                 try? files.removeItem(at: url)
             }
         }
+        try? storage?.reconcile("transfer:", keys().map { "transfer:" + $0 })
+        return refused
     }
 
     private func size(of url: URL) throws -> UInt64 {

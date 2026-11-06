@@ -1,4 +1,27 @@
 import Foundation
+import CSKEngine
+
+/// Opens the same admission ledger as Rust before the engine is running.
+nonisolated private final class TransferDisk: @unchecked Sendable {
+    let handle: OpaquePointer
+    init(root: URL) throws {
+        guard let handle = root.path(percentEncoded: false).withCString({ csk_disk_open($0) }) else {
+            throw TransferJournal.Failure.notEnoughStorage
+        }
+        self.handle = handle
+    }
+    deinit { csk_disk_free(handle) }
+    var storage: TransferJournal.Storage {
+        .init(reserve: { [self] key, bytes in
+            guard key.withCString({ csk_disk_reserve(handle, $0, bytes) }) else { throw TransferJournal.Failure.notEnoughStorage }
+        }, release: { [self] key in
+            _ = key.withCString { csk_disk_reserve(handle, $0, 0) }
+        }, reconcile: { [self] prefix, live in
+            let ok = prefix.withCString { p in live.joined(separator: "\n").withCString { csk_disk_reconcile(handle, p, $0) } }
+            guard ok else { throw TransferJournal.Failure.notEnoughStorage }
+        })
+    }
+}
 
 /// System-owned public archive transfers. The serial queue owns journal,
 /// tasks and subscribers; no Rust pointer is ever persisted in a task.
@@ -30,8 +53,9 @@ nonisolated final class BackgroundDownloads: NSObject, URLSessionDownloadDelegat
     private override init() {
         super.init()
         do {
-            journal = try TransferJournal(directory: URL.applicationSupportDirectory
-                .appending(path: "engine/offline/transfers", directoryHint: .isDirectory))
+            let root = URL.applicationSupportDirectory.appending(path: "engine/offline", directoryHint: .isDirectory)
+            let disk = try TransferDisk(root: root)
+            journal = try TransferJournal(directory: root.appending(path: "transfers", directoryHint: .isDirectory), storage: disk.storage)
         } catch { journalError = error.localizedDescription }
         let config = URLSessionConfiguration.background(withIdentifier: Self.identifier)
         config.sessionSendsLaunchEvents = true
@@ -53,9 +77,15 @@ nonisolated final class BackgroundDownloads: NSObject, URLSessionDownloadDelegat
                     guard let task = task as? URLSessionDownloadTask, let key = task.taskDescription,
                           TransferJournal.validKey(key), (try? journal?.read(key)) != nil,
                           tasks[key] == nil else { task.taskDescription = nil; task.cancel(); continue }
+                    do { try journal?.progress(key, received: UInt64(max(0, task.countOfBytesReceived)), force: true) }
+                    catch { tasks[key] = task; task.cancel(); continue }
                     tasks[key] = task
                 }
-                journal?.reconcile(active: Set(tasks.keys))
+                for key in journal?.reconcile(active: Set(tasks.keys)) ?? [] {
+                    tasks.removeValue(forKey: key)?.cancel()
+                    finish(key, failure: .network("Not enough device storage to restore this archive"))
+                    journal?.remove(key)
+                }
                 initialized = true
                 for key in Set(subscribers.values.map(\.key)) { startOrDeliver(key) }
             }
@@ -143,7 +173,12 @@ nonisolated final class BackgroundDownloads: NSObject, URLSessionDownloadDelegat
             if UInt64(max(0, max(totalBytesWritten, totalBytesExpectedToWrite))) > record.maxBytes {
                 finish(key, failure: .tooLarge)
                 downloadTask.cancel()
-                journal?.remove(key)
+            } else {
+                do { try journal?.progress(key, received: UInt64(max(0, totalBytesWritten))) }
+                catch {
+                    finish(key, failure: .network("Not enough device storage to restart this archive"))
+                    downloadTask.cancel()
+                }
             }
         }
     }

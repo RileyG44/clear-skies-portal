@@ -187,7 +187,7 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let cfg =
             Config { cache_dir: dir.path().into(), data_dir: None, cache_budget: 1 << 20, usgs_scope: Some(vec![]) };
-        let e = Engine::new(cfg, Arc::new(Offline)).unwrap();
+        let e = Engine::for_test(cfg, Arc::new(Offline)).unwrap();
         let grid: Vec<u8> = (0..20 * 10).flat_map(|i| (100.0f32 + (i % 20) as f32).to_le_bytes()).collect();
         let ask = |product: &str, media: &str| {
             Request::new(

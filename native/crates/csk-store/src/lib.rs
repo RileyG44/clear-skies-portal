@@ -12,12 +12,13 @@
 //! Reads look in the cache, then the pinned tier. Readers use their own
 //! connections, so tile reads never wait on a writer.
 
+pub mod disk;
 mod pack;
 mod user;
 
 use std::path::Path;
-use std::sync::Mutex;
 use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
+use std::sync::{Arc, Mutex};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 pub use pack::{PackError, pack_elevation, unpack_elevation};
@@ -27,6 +28,8 @@ pub use user::UserStore;
 
 #[derive(Debug, thiserror::Error)]
 pub enum StoreError {
+    #[error(transparent)]
+    Disk(#[from] disk::Error),
     #[error("storage: {0}")]
     Sqlite(#[from] rusqlite::Error),
     #[error("storage: {0}")]
@@ -72,6 +75,7 @@ const CACHE_VERSION: i64 = 2;
 const COLUMNS: &str = "key, kind, status, media, meta, body, bytes, created, accessed";
 
 pub struct Store {
+    disk: Mutex<Option<Arc<disk::Session>>>,
     write: Mutex<Connection>,
     readers: Vec<Mutex<Connection>>,
     next: AtomicUsize,
@@ -236,6 +240,7 @@ impl Store {
             readers.push(Mutex::new(r));
         }
         Ok(Self {
+            disk: Mutex::new(None),
             write: Mutex::new(write),
             readers,
             next: AtomicUsize::new(0),
@@ -296,11 +301,27 @@ impl Store {
         Ok(hit)
     }
 
+    pub fn set_disk_session(&self, session: Arc<disk::Session>) {
+        *self.disk.lock().unwrap_or_else(|e| e.into_inner()) = Some(session);
+    }
+
+    fn growth_claim(&self, bytes: u64) -> Result<Option<Arc<disk::Lease>>> {
+        self.disk
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .as_ref()
+            .map(|s| s.claim(bytes))
+            .transpose()
+            .map_err(Into::into)
+    }
+
     /// Stores an entry, replacing any older one. A key some area pins is
     /// refreshed in the pinned tier too, so offline data follows updates.
     pub fn put(&self, key: &str, kind: Kind, status: u16, media: &str, meta: Option<&str>, body: &[u8]) -> Result<()> {
         let now = now_ms();
         let bytes = (body.len() + key.len() + meta.map_or(0, str::len) + 64) as i64;
+        // Cache + refreshed pinned row + both WALs, including page overhead.
+        let _growth = self.growth_claim((bytes as u64).saturating_mul(6).saturating_add(1 << 20))?;
         self.write(|c| {
             let sql =
                 "INSERT OR REPLACE INTO main.cache (key, kind, status, media, meta, body, bytes, created, accessed)
@@ -338,6 +359,7 @@ impl Store {
     /// Pins `keys` for `area`: copies them from the cache into the pinned
     /// tier and records the reference. Returns how many were held to copy.
     pub fn pin(&self, area: &str, keys: &[String]) -> Result<usize> {
+        let _growth = self.growth_claim(self.bytes_of(keys)?.saturating_mul(3).saturating_add(1 << 20))?;
         self.write(|c| {
             let tx = c.transaction()?;
             let mut copied = 0;

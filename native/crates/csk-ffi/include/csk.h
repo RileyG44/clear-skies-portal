@@ -29,6 +29,11 @@
  */
 typedef struct CskBody CskBody;
 
+/**
+ * Independent of the engine runtime: background URLSession may restore first.
+ */
+typedef struct CskDisk CskDisk;
+
 typedef struct CskEngine CskEngine;
 
 /**
@@ -129,6 +134,20 @@ typedef void (*CskRespond)(void *context, const struct CskResponse *response, st
 #ifdef __cplusplus
 extern "C" {
 #endif // __cplusplus
+
+struct CskDisk *csk_disk_open(const char *root);
+
+/**
+ * Atomically replace an identity's remaining growth. Zero releases it.
+ */
+bool csk_disk_reserve(const struct CskDisk *disk, const char *id, uint64_t remaining);
+
+/**
+ * Newline-separated live identities, restricted to the caller's namespace.
+ */
+bool csk_disk_reconcile(const struct CskDisk *disk, const char *prefix, const char *live);
+
+void csk_disk_free(struct CskDisk *disk);
 
 /**
  * Creates the engine. `config_json` is csk_engine::Config as JSON. Returns

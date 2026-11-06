@@ -105,6 +105,59 @@ pub struct CskEngine {
     requests: Arc<Mutex<HashMap<u64, tokio::task::AbortHandle>>>,
 }
 
+/// Independent of the engine runtime: background URLSession may restore first.
+pub struct CskDisk(Arc<csk_store::disk::Budget>);
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn csk_disk_open(root: *const c_char) -> *mut CskDisk {
+    if root.is_null() {
+        return std::ptr::null_mut();
+    }
+    let Ok(root) = unsafe { CStr::from_ptr(root) }.to_str() else {
+        return std::ptr::null_mut();
+    };
+    csk_store::disk::Budget::open(std::path::Path::new(root))
+        .map_or(std::ptr::null_mut(), |budget| Box::into_raw(Box::new(CskDisk(budget))))
+}
+
+/// Atomically replace an identity's remaining growth. Zero releases it.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn csk_disk_reserve(disk: *const CskDisk, id: *const c_char, remaining: u64) -> bool {
+    let Some(disk) = (unsafe { disk.as_ref() }) else {
+        return false;
+    };
+    if id.is_null() {
+        return false;
+    }
+    let Ok(id) = unsafe { CStr::from_ptr(id) }.to_str() else {
+        return false;
+    };
+    disk.0.reserve(id, remaining).is_ok()
+}
+
+/// Newline-separated live identities, restricted to the caller's namespace.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn csk_disk_reconcile(disk: *const CskDisk, prefix: *const c_char, live: *const c_char) -> bool {
+    let Some(disk) = (unsafe { disk.as_ref() }) else {
+        return false;
+    };
+    if prefix.is_null() || live.is_null() {
+        return false;
+    }
+    let (Ok(prefix), Ok(live)) = (unsafe { CStr::from_ptr(prefix) }.to_str(), unsafe { CStr::from_ptr(live) }.to_str())
+    else {
+        return false;
+    };
+    disk.0.reconcile(prefix, &live.lines().map(str::to_owned).collect::<Vec<_>>()).is_ok()
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn csk_disk_free(disk: *mut CskDisk) {
+    if !disk.is_null() {
+        drop(unsafe { Box::from_raw(disk) });
+    }
+}
+
 struct Platform {
     t: CskTransport,
     next: AtomicU64,

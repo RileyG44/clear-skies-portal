@@ -8,8 +8,8 @@ final class EngineAppDelegate: NSObject, UIApplicationDelegate {
 
     func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil) -> Bool {
         EngineBackground.shared.register()
-        _ = BackgroundDownloads.shared
         _ = EngineRuntime.shared
+        _ = BackgroundDownloads.shared
         if application.applicationState == .background { EngineBackground.shared.enteredBackground() }
         return true
     }
@@ -20,8 +20,8 @@ final class EngineAppDelegate: NSObject, UIApplicationDelegate {
     func application(_ application: UIApplication, handleEventsForBackgroundURLSession identifier: String,
                      completionHandler: @escaping () -> Void) {
         guard identifier == BackgroundDownloads.identifier else { completionHandler(); return }
-        _ = BackgroundDownloads.shared
         _ = EngineRuntime.shared
+        _ = BackgroundDownloads.shared
         if Self.finished.remove(identifier) != nil { completionHandler() }
         else { Self.handlers[identifier] = completionHandler }
     }

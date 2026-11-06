@@ -73,6 +73,7 @@ pub enum EngineError {
 }
 
 pub struct Engine {
+    pub disk: Arc<csk_store::disk::Session>,
     pub memory: Arc<csk_core::resource::Budget>,
     pub work: Arc<work::Work>,
     pub store: Arc<Store>,
@@ -114,6 +115,18 @@ impl Engine {
         memory: Arc<MemoryBudget>,
     ) -> Result<Arc<Self>, EngineError> {
         let data_dir = config.data_dir.clone().unwrap_or_else(|| config.cache_dir.join("user"));
+        let budget = csk_store::disk::Budget::open(&data_dir.join("offline")).map_err(csk_store::StoreError::from)?;
+        Self::with_resources(config, transport, memory, budget)
+    }
+
+    pub fn with_resources(
+        config: Config,
+        transport: Arc<dyn Transport>,
+        memory: Arc<MemoryBudget>,
+        budget: Arc<csk_store::disk::Budget>,
+    ) -> Result<Arc<Self>, EngineError> {
+        let data_dir = config.data_dir.clone().unwrap_or_else(|| config.cache_dir.join("user"));
+        let disk = budget.engine_session().map_err(csk_store::StoreError::from)?;
         // Offline areas: in data_dir (not purgeable), under offline/ (the
         // platform excludes it from backup: it can be downloaded again).
         let store = Arc::new(Store::open(
@@ -122,6 +135,7 @@ impl Engine {
             config.cache_budget,
         )?);
         let user = Arc::new(UserStore::open(&data_dir.join("user.sqlite"))?);
+        store.set_disk_session(disk.clone());
         let upstream = Arc::new(Upstream::new(transport));
         let scope =
             config.usgs_scope.unwrap_or_else(|| usgs::catalog::DEFAULT_SCOPE.iter().map(|s| (*s).to_owned()).collect());
@@ -131,6 +145,7 @@ impl Engine {
         let tiles = Tiles::new(store.clone(), upstream.clone(), usgs);
         let dnr_local = dnr_local::DnrLocal::open(data_dir.join("offline").join("dnr"), &store);
         Ok(Arc::new(Self {
+            disk,
             memory,
             work: Arc::default(),
             store,
@@ -146,6 +161,17 @@ impl Engine {
             proxy_flights: flight::Flights::default(),
             started: Instant::now(),
         }))
+    }
+
+    #[cfg(test)]
+    pub(crate) fn for_test(config: Config, transport: Arc<dyn Transport>) -> Result<Arc<Self>, EngineError> {
+        let root = config.data_dir.clone().unwrap_or_else(|| config.cache_dir.join("user")).join("offline");
+        let budget = csk_store::disk::Budget::with_capacity(
+            &root,
+            Box::new(|| Ok(csk_store::disk::Capacity { available: 1 << 40, total: 2 << 40 })),
+        )
+        .map_err(csk_store::StoreError::from)?;
+        Self::with_resources(config, transport, csk_core::resource::Budget::new(256 << 20), budget)
     }
 
     /// Starts background work that should not wait for the first request.
@@ -169,6 +195,7 @@ impl Engine {
         let catalog = &self.tiles.usgs.catalog;
         let meta = catalog.meta();
         let memory = self.memory.stats();
+        let disk = self.disk.budget.stats().ok();
         Response::json(
             200,
             &json!({
@@ -181,6 +208,7 @@ impl Engine {
                 "nationalCircuit": self.upstream.circuit_state(DEP_HOST),
                 "uptimeSec": self.started.elapsed().as_secs(),
                 "memoryBudget": {"limit": memory.limit, "used": memory.used, "peak": memory.peak},
+                "storageAdmission": disk.map(|d|json!({"remaining":d.remaining,"available":d.available,"reserve":d.reserve,"cacheFloor":d.cache_floor})),
                 "features": FEATURES,
                 "usgsCatalog": {
                     "complete": catalog.complete(),
