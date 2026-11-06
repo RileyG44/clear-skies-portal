@@ -104,6 +104,17 @@ typedef struct CskTransport {
 } CskTransport;
 
 /**
+ * Durable-job progress; reading this never starts work or accesses the network.
+ */
+typedef struct CskWorkStatus {
+  bool pending;
+  bool cpu_pending;
+  bool failed;
+  uint64_t total;
+  uint64_t completed;
+} CskWorkStatus;
+
+/**
  * An answer. `headers` is `Name: value` lines separated by `\n`.
  */
 typedef struct CskResponse {
@@ -123,7 +134,21 @@ extern "C" {
  * Creates the engine. `config_json` is csk_engine::Config as JSON. Returns
  * NULL (and releases the transport) if the configuration or store is invalid.
  */
-struct CskEngine *csk_engine_new(const char *config_json, struct CskTransport transport);
+struct CskEngine *csk_engine_new(const char *config_json,
+                                 struct CskTransport transport,
+                                 bool work_allowed);
+
+struct CskWorkStatus csk_engine_work_status(struct CskEngine *engine);
+
+/**
+ * Background grants and the foreground allow durable jobs to advance.
+ */
+void csk_engine_set_work_allowed(struct CskEngine *engine, bool allowed);
+
+/**
+ * Drop disposable decoded blocks and headers under platform memory pressure.
+ */
+void csk_engine_purge_memory(struct CskEngine *engine);
 
 /**
  * Stops the engine: in-flight requests are cancelled (each `respond` gets NULL).

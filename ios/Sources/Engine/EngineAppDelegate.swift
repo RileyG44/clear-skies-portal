@@ -7,10 +7,15 @@ final class EngineAppDelegate: NSObject, UIApplicationDelegate {
     private static var finished: Set<String> = []
 
     func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil) -> Bool {
+        EngineBackground.shared.register()
         _ = BackgroundDownloads.shared
         _ = EngineRuntime.shared
+        if application.applicationState == .background { EngineBackground.shared.enteredBackground() }
         return true
     }
+
+    func applicationDidBecomeActive(_ application: UIApplication) { EngineBackground.shared.becameActive() }
+    func applicationDidEnterBackground(_ application: UIApplication) { EngineBackground.shared.enteredBackground() }
 
     func application(_ application: UIApplication, handleEventsForBackgroundURLSession identifier: String,
                      completionHandler: @escaping () -> Void) {

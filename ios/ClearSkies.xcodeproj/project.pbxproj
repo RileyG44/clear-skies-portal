@@ -40,6 +40,7 @@
 		B3D25E73D7271C727058CB0C /* TransferJournal.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8A21C29706005824AEA99786 /* TransferJournal.swift */; };
 		7B1983BBBE1F5039D958EB65 /* EngineRuntime.swift in Sources */ = {isa = PBXBuildFile; fileRef = 575E87697E619264A5CD3E1F /* EngineRuntime.swift */; };
 		E8CA5D9DA654BEF81917FB17 /* EngineAppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 33F8664E80C97FBDF889F354 /* EngineAppDelegate.swift */; };
+		0BC0E2707E066390A836BBF6 /* EngineBackground.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3873111623B16D82674A4228 /* EngineBackground.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -78,6 +79,7 @@
 		8A21C29706005824AEA99786 /* TransferJournal.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TransferJournal.swift; sourceTree = "<group>"; };
 		575E87697E619264A5CD3E1F /* EngineRuntime.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EngineRuntime.swift; sourceTree = "<group>"; };
 		33F8664E80C97FBDF889F354 /* EngineAppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EngineAppDelegate.swift; sourceTree = "<group>"; };
+		3873111623B16D82674A4228 /* EngineBackground.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EngineBackground.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXGroup section */
@@ -143,6 +145,7 @@
 				8A21C29706005824AEA99786 /* TransferJournal.swift */,
 				575E87697E619264A5CD3E1F /* EngineRuntime.swift */,
 				33F8664E80C97FBDF889F354 /* EngineAppDelegate.swift */,
+				3873111623B16D82674A4228 /* EngineBackground.swift */,
 				82F37E26101933DE0ABE065D /* LocalEngine.swift */,
 				6F0E2D26A12EDBED7F97D2FC /* NetworkTransport.swift */,
 			);
@@ -356,6 +359,7 @@
 				B3D25E73D7271C727058CB0C /* TransferJournal.swift in Sources */,
 				7B1983BBBE1F5039D958EB65 /* EngineRuntime.swift in Sources */,
 				E8CA5D9DA654BEF81917FB17 /* EngineAppDelegate.swift in Sources */,
+				0BC0E2707E066390A836BBF6 /* EngineBackground.swift in Sources */,
 				CAF08CB27D6EC66EAD78B5FA /* LocalEngine.swift in Sources */,
 				7D50214CB292E03CCFE41EE4 /* LocationService.swift in Sources */,
 				0AD40A5672A49C1545F87D1F /* MapChrome.swift in Sources */,

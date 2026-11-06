@@ -449,9 +449,13 @@ impl Engine {
                 )
             });
             let result = match recorded {
-                Ok(_) => me.dnr_acquire(&job).await,
+                Ok(_) if me.work.checkpoint().await => me.dnr_acquire(&job).await,
+                Ok(_) => return,
                 Err(e) => Err(e.to_string()),
             };
+            if me.work.is_stopped() {
+                return;
+            }
             let _ = me.store.write(|c| c.execute("DELETE FROM pinned.dnr_acquisition WHERE id = 1", []));
             {
                 let mut s = me.dnr_local.state.lock().unwrap_or_else(|e| e.into_inner());
@@ -482,6 +486,7 @@ impl Engine {
         std::fs::create_dir_all(&staging).map_err(|e| e.to_string())?;
         let _staging_owner = Staging(staging.clone());
         let download_url = download_url(job.dataset, &shape);
+        local.set_active("downloading", 0, 0.0);
         let restored = self
             .upstream
             .restore_download(
@@ -490,10 +495,18 @@ impl Engine {
             .await
             .map_err(|e| e.to_string())?;
         let output_bytes = if restored.is_some() {
+            local.set_active("preparing", 0, 0.0);
+            if !self.work.checkpoint().await {
+                return Err("engine stopped".into());
+            }
             // The archived query was admitted before the system task began.
             // Bound extraction independently of its compressed size.
             archive_output_size(&staging.join("download.zip"))?
         } else {
+            local.set_active("checking", 0, 0.0);
+            if !self.work.checkpoint().await {
+                return Err("engine stopped".into());
+            }
             match self.dnr_download_plan(job, &shape).await? {
                 Some(bytes) => bytes.saturating_mul(2),
                 None => {
@@ -518,7 +531,9 @@ impl Engine {
         let added = match outcome {
             Ok(files) => files,
             Err(e) => {
-                self.upstream.download_consumed(&download_url);
+                if !self.work.is_stopped() {
+                    self.upstream.download_consumed(&download_url);
+                }
                 return Err(e);
             }
         };
@@ -643,10 +658,14 @@ impl Engine {
         if r.status != 200 || !(media.contains("zip") || media.contains("octet-stream")) {
             return Err(format!("DNR elevation download HTTP {}", r.status));
         }
+        if !self.work.checkpoint().await {
+            return Err("engine stopped".into());
+        }
         local.set_active("preparing", std::fs::metadata(&zip_path).map_or(0, |m| m.len()), 0.0);
         let known_paths: Vec<String> = known.iter().map(|f| f.archive_path.clone()).collect();
         let dir = staging.to_path_buf();
-        let extracted = tokio::task::spawn_blocking(move || extract(&zip_path, &dir, &known_paths))
+        let work = self.work.clone();
+        let extracted = tokio::task::spawn_blocking(move || extract_controlled(&zip_path, &dir, &known_paths, &work))
             .await
             .map_err(|_| "DNR extraction stopped".to_owned())??;
         if extracted.is_empty() && known.is_empty() {
@@ -654,6 +673,9 @@ impl Engine {
         }
         let mut inspected = Vec::new();
         for (archive_path, file) in extracted {
+            if !self.work.checkpoint().await {
+                return Err("engine stopped".into());
+            }
             let info = self
                 .dnr_inspect(job, &archive_path, &file)
                 .await
@@ -672,6 +694,13 @@ impl Engine {
             added.push(info);
         }
         Ok(added)
+    }
+
+    pub fn dnr_work_status(&self) -> (bool, bool) {
+        let state = self.dnr_local.state.lock().unwrap_or_else(|e| e.into_inner());
+        let pending = state.active.is_some() || !state.queue.is_empty();
+        let cpu = state.active.as_ref().map_or(!state.queue.is_empty(), |(_, a)| a.state != "downloading");
+        (pending, cpu)
     }
 
     async fn dnr_inspect(self: &Arc<Self>, job: &Job, archive_path: &str, file: &Path) -> Result<LocalFile, String> {
@@ -1053,7 +1082,17 @@ fn archive_output_size(path: &Path) -> Result<u64, String> {
 }
 
 /// Extracts every TIFF in the archive not already held, with CRCs checked.
+#[cfg(test)]
 fn extract(zip_path: &Path, dir: &Path, known: &[String]) -> Result<Vec<(String, PathBuf)>, String> {
+    extract_controlled(zip_path, dir, known, &crate::work::Work::default())
+}
+
+fn extract_controlled(
+    zip_path: &Path,
+    dir: &Path,
+    known: &[String],
+    work: &crate::work::Work,
+) -> Result<Vec<(String, PathBuf)>, String> {
     let file = std::fs::File::open(zip_path).map_err(|e| e.to_string())?;
     let mut archive = zip::ZipArchive::new(file).map_err(|e| format!("DNR archive: {e}"))?;
     let mut out = Vec::new();
@@ -1085,8 +1124,9 @@ fn extract(zip_path: &Path, dir: &Path, known: &[String]) -> Result<Vec<(String,
         let dest = dir.join(format!("entry-{i}.tif"));
         let mut f = std::fs::File::create(&dest).map_err(|e| e.to_string())?;
         // Reading to the end verifies the member's CRC-32.
-        let copied = std::io::copy(&mut std::io::Read::take(&mut entry, MAX_ARCHIVE - written + 1), &mut f)
-            .map_err(|e| format!("DNR elevation archive: {e}"))?;
+        let copied =
+            std::io::copy(&mut work.reader(std::io::Read::take(&mut entry, MAX_ARCHIVE - written + 1)), &mut f)
+                .map_err(|e| format!("DNR elevation archive: {e}"))?;
         if copied != expected || copied > MAX_ARCHIVE - written {
             return Err("DNR archive member has an invalid size".into());
         }

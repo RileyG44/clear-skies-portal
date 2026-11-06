@@ -1,6 +1,7 @@
 import CSKEngine
 import Foundation
 import os
+import UIKit
 
 /// One process-wide engine, including background launches with no map view.
 /// Its persistent job journals resume once when the runtime is created.
@@ -28,7 +29,8 @@ final class EngineRuntime {
         let transport = NetworkTransport()
         let context = Unmanaged.passRetained(transport).toOpaque()
         let csk = CskTransport(context: context, fetch: transportFetch, cancel: transportCancel, release: transportRelease, download_consumed: transportDownloadConsumed)
-        guard let engine = json.withCString({ csk_engine_new($0, csk) }) else {
+        let workAllowed = UIApplication.shared.applicationState != .background
+        guard let engine = json.withCString({ csk_engine_new($0, csk, workAllowed) }) else {
             Self.log.error("the built-in engine did not start")
             return nil
         }

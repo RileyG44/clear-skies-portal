@@ -33,6 +33,12 @@ pub struct WarmState {
 #[derive(Default)]
 pub struct Warm(Mutex<WarmState>);
 
+impl Warm {
+    pub fn status(&self) -> WarmState {
+        self.0.lock().unwrap_or_else(|e| e.into_inner()).clone()
+    }
+}
+
 fn save(engine: &Engine, state: &WarmState) -> Result<(), String> {
     let text = serde_json::to_string(state).map_err(|e| e.to_string())?;
     engine
@@ -72,6 +78,9 @@ fn run(engine: &Arc<Engine>) {
                     continue;
                 }
                 loop {
+                    if !me.work.checkpoint().await {
+                        return;
+                    }
                     if me.dnr_warm.0.lock().unwrap_or_else(|e| e.into_inner()).stop {
                         break 'cells;
                     }
