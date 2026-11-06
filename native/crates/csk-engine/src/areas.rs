@@ -277,6 +277,9 @@ fn run(engine: &Arc<Engine>, job: String, spec: Spec) {
 
 async fn lane(engine: Arc<Engine>, job: String, area: String, raw: bool, state: Arc<Mutex<JobState>>) {
     loop {
+        if !engine.work.checkpoint().await {
+            return;
+        }
         let Some((z, x, y)) = state.lock().unwrap_or_else(|e| e.into_inner()).queue.pop_front() else { return };
         let mut keys = Vec::new();
         let mut fetched = false;
@@ -359,6 +362,9 @@ async fn finish(engine: &Arc<Engine>, job: &str, area: &str, spec: &Spec, state:
         // Record each source COG's ETag: that is what makes staleness a HEAD away.
         let mut manifest_sources = Vec::new();
         for key in &sources {
+            if !engine.work.checkpoint().await {
+                return;
+            }
             manifest_sources.push(head(engine, key).await);
         }
         let manifest = json!({

@@ -19,6 +19,7 @@ pub mod tiles;
 pub mod transport;
 pub mod upstream;
 pub mod usgs;
+pub mod work;
 
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -70,6 +71,7 @@ pub enum EngineError {
 }
 
 pub struct Engine {
+    pub work: Arc<work::Work>,
     pub store: Arc<Store>,
     pub upstream: Arc<Upstream>,
     pub tiles: Arc<Tiles>,
@@ -109,6 +111,7 @@ impl Engine {
         let tiles = Tiles::new(store.clone(), upstream.clone(), usgs);
         let dnr_local = dnr_local::DnrLocal::open(data_dir.join("offline").join("dnr"), &store);
         Ok(Arc::new(Self {
+            work: Arc::default(),
             store,
             upstream,
             tiles,
