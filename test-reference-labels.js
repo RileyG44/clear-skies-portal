@@ -4,7 +4,7 @@ const source=require("./test-fixtures/page-source.js");
 function extend(props){function Layer(url,options){this.options=options;this._map={};this.events={};this.initialize?.(url,options)}Layer.prototype=Object.assign(Object.create(this.prototype||{}),props);Layer.extend=extend;return Layer}
 const requests=[],timers=new Map();let timerID=0;
 const Base=extend.call(function(){},{initialize(url,options){this.options=options},on(name,fn){this.events[name]=fn},fire(){},createTile(c,done){const image={url:this.getTileUrl(c)};requests.push({image,done});return image}});
-const context={ResilientTileLayer:Base,L:{Util:{template:(url,c)=>url.replace(/\{([xyz])\}/g,(_,k)=>c[k])}},window:{devicePixelRatio:3},tileMerc:()=>[1,2,3,4],EMPTY_TILE:'empty',setTimeout:fn=>{timers.set(++timerID,fn);return timerID},clearTimeout:id=>timers.delete(id),document:{createElement:()=>({getContext:()=>({clearRect(){},drawImage(image){context.painted=image.url}})})}};
+const context={ResilientTileLayer:Base,L:{Util:{template:(url,c)=>url.replace(/\{([xyz])\}/g,(_,k)=>c[k])}},window:{devicePixelRatio:3},tileMerc:()=>[1,2,3,4],EMPTY_TILE:'empty',setTimeout:fn=>{timers.set(++timerID,fn);return timerID},clearTimeout:id=>timers.delete(id),addEventListener:(name,fn)=>context.onWindow.push([name,fn]),onWindow:[],document:{readyState:'complete',createElement:()=>({getContext:()=>({clearRect(){},drawImage(image){context.painted=image.url}})})}};
 vm.runInNewContext(source.slice(source.indexOf('const ExportLayer ='),source.indexOf('const OV_KEY=')).replace('const ReferenceLabelLayer=','globalThis.ReferenceLabelLayer='),context);
 const layer=new context.ReferenceLabelLayer('',{endpoint:'https://hydro.nationalmap.gov/export',layers:'4,6',cachedUrl:'cache/{z}/{x}/{y}',minDetailScale:577790.554289});
 const c={x:1,y:2,z:12};let complete=0;
@@ -21,6 +21,90 @@ context.window.devicePixelRatio=1;const url=new URL(layer.getTileUrl(c));assert.
 const fn=source.slice(source.indexOf('function snapshotLayerTileUrl('),source.indexOf('async function snapshotPool('));vm.runInNewContext(fn,context);context.snapshotWrappedX=(x,z)=>((x%2**z)+2**z)%2**z;
 assert.match(context.snapshotLayerTileUrl({_url:'',getTileUrl:()=> 'dynamic-export'},c),/dynamic-export/,'dynamic capture layers have an empty template URL');
 console.log('Reference label staging, fallback, scale, cancellation and capture URL checks passed');
+
+/* hydro.nationalmap.gov answers overload with gateway error pages that lack CORS
+   headers. Detail is metered so a burst of tiles cannot provoke them: a cap on
+   requests in flight, a deadline ahead of the gateway, and backoff after failures. */
+{
+let clock=1e6;context.Date={now:()=>clock};requests.length=0;timers.clear();
+const meter=new context.ReferenceLabelLayer("",{endpoint:"https://hydro.nationalmap.gov/export",layers:"4,6",cachedUrl:"cache/{z}/{x}/{y}",minDetailScale:577790.554289});
+const tiles=[],outcomes=[];
+for(let i=0;i<4;i++){const n=outcomes.length;outcomes.push([]);tiles.push(meter.createTile({x:i,y:2,z:12},error=>outcomes[n].push(error)))}
+const detailRequests=()=>requests.filter(r=>/hydro/.test(r.image.url));
+assert.equal(detailRequests().length,2,"at most two detail exports in flight");
+assert.equal(requests.length,6,"every cached tile still requests at once");
+const [first,second]=detailRequests();
+first.done(null,first.image);
+assert.equal(detailRequests().length,3,"a finished export frees its slot for the queue");
+/* Deadline: a stalled export is cancelled silently (never left to become a
+   gateway error page) and retried once from the back of the queue. */
+const cached1=requests.find(r=>r.image.url==="cache/12/1/2");cached1.done(null,cached1.image);
+const expire=tile=>{const id=tile._cspReferenceTimer,fn=timers.get(id);assert(fn,"deadline armed");timers.delete(id);fn()};
+expire(tiles[1]);
+assert.equal(second.image._cspCancelled,true,"timed-out export is cancelled");
+assert.equal(meter._cspDetailFailures,0,"a first timeout is retried, not yet a failure");
+assert.equal(meter._cspDetailQueue.at(-1),tiles[1]._cspReferenceJob,"the retry waits behind tiles not yet tried");
+assert.equal(tiles[1]._cspReferenceQuality,"cached","timeout keeps cached coverage");
+assert.deepEqual(outcomes[1],[null]);
+expire(tiles[2]);expire(tiles[3]);
+assert.equal(meter._cspDetailActive,2,"retries reuse the freed slots");
+/* A second timeout is final for that tile; consecutive failures pause new exports. */
+expire(tiles[1]);assert.equal(meter._cspDetailFailures,1);assert.equal(meter.detailPaused(),false,"one failure does not pause");
+assert.equal(tiles[1]._cspReferenceQuality,"cached");assert.equal(meter._cspDetailQueue.includes(tiles[1]._cspReferenceJob),false);
+expire(tiles[2]);
+assert(meter.detailPaused(),"two consecutive failures pause detail");
+const before=detailRequests().length;
+tiles.push(meter.createTile({x:9,y:2,z:12},()=>{}));
+assert.equal(detailRequests().length,before,"no new export starts while paused");
+const wake=[...timers.values()].pop();clock+=60*1000;wake();
+assert.equal(detailRequests().length,before+1,"queued detail resumes after the pause");
+/* Success resets backoff; detail is never replaced by a late cached tile. */
+const last=detailRequests().pop();last.done(null,last.image);
+assert.equal(meter._cspDetailFailures,0);
+const lateCached=requests.find(r=>r.image.url==="cache/12/9/2");lateCached.done(null,lateCached.image);
+assert.equal(tiles[4]._cspReferenceQuality,"detail","late cached pixels cannot undo detail");
+/* Cached failure while paused settles the tile instead of waiting out the pause. */
+meter._cspDetailPausedUntil=clock+30000;requests.length=0;const errs=[];
+const stuck=meter.createTile({x:20,y:2,z:12},error=>errs.push(error));
+assert.equal(requests.length,1,"paused: only the cached request starts");
+requests[0].done(Error("cached down"),requests[0].image);
+assert.equal(errs.length,1);assert(errs[0]);assert.equal(meter._cspDetailQueue.includes(stuck._cspReferenceJob),false);
+/* Detail waits for the window load event so slow exports cannot hold it. */
+meter._cspDetailPausedUntil=0;meter._cspDetailFailures=0;meter._cspDetailQueue.length=0;meter._cspDetailActive=0;requests.length=0;
+context.document.readyState="interactive";
+const early=meter.createTile({x:40,y:2,z:12},()=>{});meter.createTile({x:41,y:2,z:12},()=>{});
+assert.equal(requests.length,2,"only cached tiles load before the window load event");
+assert.equal(context.onWindow.filter(([name])=>name==="load").length,1,"one load listener per layer");
+context.document.readyState="complete";context.onWindow.pop()[1]();
+assert.equal(detailRequests().length,2,"detail starts once the page has loaded");
+meter.events.tileunload({tile:early});
+/* A 1 px answer is the quiet failure the service worker and the engine use
+   instead of a CORS-less gateway page. It must not paint over cached water,
+   and it is retried once. */
+meter._cspDetailPausedUntil=0;meter._cspDetailFailures=0;meter._cspDetailQueue.length=0;meter._cspDetailActive=0;
+meter._cspDetailTransportSettled=true;requests.length=0;timers.clear();
+const sentinelTile=meter.createTile({x:50,y:2,z:12},()=>{});
+const sentinelCached=requests.find(r=>r.image.url==="cache/12/50/2");
+sentinelCached.done(null,sentinelCached.image);
+assert.equal(sentinelTile._cspReferenceQuality,"cached");
+const sentinelDetail=requests.find(r=>/hydro/.test(r.image.url));
+sentinelDetail.image.naturalWidth=1;
+sentinelDetail.done(null,sentinelDetail.image);
+assert.equal(sentinelTile._cspReferenceQuality,"cached","a sentinel does not replace cached hydrography");
+assert.equal(meter._cspDetailFailures,0,"the first sentinel is retried");
+const sentinelRetry=requests.filter(r=>/hydro/.test(r.image.url)).pop();
+assert.notEqual(sentinelRetry,sentinelDetail);
+sentinelRetry.image.naturalWidth=1;
+sentinelRetry.done(null,sentinelRetry.image);
+assert.equal(meter._cspDetailFailures,1,"a second sentinel is a real miss");
+assert.equal(sentinelTile._cspReferenceQuality,"cached");
+/* Unloading an active tile frees its slot without counting as a failure. */
+meter._cspDetailPausedUntil=0;meter._cspDetailFailures=0;meter._cspDetailQueue.length=0;meter._cspDetailActive=0;requests.length=0;
+const a=meter.createTile({x:30,y:2,z:12},()=>{});
+assert.equal(meter._cspDetailActive,1);meter.events.tileunload({tile:a});
+assert.equal(meter._cspDetailActive,0);assert.equal(meter._cspDetailFailures,0);
+console.log("Reference detail concurrency, deadline, backoff and late-response checks passed");
+}
 
 /* Failed detail must capture cached pixels with the same grey and alpha on WebKit. */
 {

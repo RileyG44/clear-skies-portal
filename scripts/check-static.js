@@ -827,6 +827,8 @@ for(const host of ["World_Imagery","tiles.maps.eox.at"])
          `display-only imagery (${host}) must never enter the service worker precache`);
 assert(read("sw.js").includes("url.origin !== self.location.origin) return"),
        "the service worker must leave cross-origin imagery to the network");
+assert(read("sw.js").includes('hostname==="hydro.nationalmap.gov"')&&read("sw.js").includes("hydroQuietResponse"),
+       "NHD gateway errors omit CORS, so the service worker answers those exports itself");
 /* Maxar Open Data is CC-BY-NC-4.0. The non-commercial term has to reach the
    screen, not just the source registry. */
 assert(index.includes('id:"maxarvhr"')&&index.includes('popupKind:"maxar"'),

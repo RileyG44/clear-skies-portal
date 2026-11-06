@@ -384,6 +384,19 @@ async function main(){
     assert.equal(postSnapshot.status,405);
     assert.equal(postSnapshot.headers.allow,"GET");
 
+    const missingReference=await request(port,"/api/reference/nhd");
+    assert.equal(missingReference.status,400);
+    assert.match(JSON.parse(missingReference.body).error,/bad reference export/);
+    const foreignReference=await request(port,"/api/reference/nhd?url="+
+      encodeURIComponent("https://evil.example/arcgis/rest/services/nhd/MapServer/export?bbox=1,2,3,4"));
+    assert.equal(foreignReference.status,400);
+    const hydroQuery="https://hydro.nationalmap.gov/arcgis/rest/services/nhd/MapServer/export?bbox=1,2,3,4&bboxSR=3857&imageSR=3857&size=512,512&format=png32&transparent=true&dpi=192&f=image&layers=show:2,4";
+    const openReference=await request(port,"/api/reference/nhd?url="+
+      encodeURIComponent(hydroQuery.replace("/nhd/MapServer/export","/other/MapServer/export")));
+    assert.equal(openReference.status,400,"the reference route must not proxy an arbitrary hydro path");
+    const postReference=await request(port,"/api/reference/nhd",{method:"POST"});
+    assert.equal(postReference.status,405);
+
     const invalidJson=await request(port,"/api/warm",{method:"POST",body:"{"});
     assert.equal(invalidJson.status,400);
     const hugePlan=await request(port,"/api/warm",{

@@ -238,61 +238,182 @@ const ExportLayer = ResilientTileLayer.extend({
   }
 });
 
+/* hydro.nationalmap.gov renders each NHD export on demand and is erratic under
+   load. Measured 2026-11-05: parallel exports drew 504 Gateway Time-out at
+   ~10.2 s and 502 sooner, or stalled past 90 s. Those gateway pages carry no
+   Access-Control-Allow-Origin, so a cross-origin image logs a CORS error plus
+   net::ERR_FAILED. Successful responses do send CORS, and a cold render often
+   lands at 9.0-9.4 s. Detail stays metered. On the public site the service
+   worker (and, when the local engine is connected, /api/reference/nhd) turns a
+   failed or timed-out render into a 1 px PNG so the console stays quiet; the
+   layer treats that sentinel as "no detail" and keeps the cached hydrography.
+   A direct request, used only when neither quiet path is up, is cancelled
+   before the gateway page can arrive. One miss is retried; repeated misses
+   pause new detail with backoff. */
+const REFERENCE_DETAIL_ACTIVE=2;
+const REFERENCE_DETAIL_PAUSE_MS=15000,REFERENCE_DETAIL_PAUSE_MAX_MS=5*60*1000;
+function referenceDetailQuiet(){
+  try{
+    if(typeof PROXY!=="undefined"&&PROXY) return true;
+    if(typeof navigator!=="undefined"&&navigator.serviceWorker&&navigator.serviceWorker.controller) return true;
+  }catch(e){}
+  return false;
+}
+/* Quiet paths answer by ~10 s with a real image or the sentinel. A direct
+   image has to be gone before CloudFront's ~10.2 s CORS-less error page. */
+function referenceDetailDeadline(){ return referenceDetailQuiet()?20000:9000 }
+function referenceDetailSentinel(url,width){
+  return width>0&&width<16&&(/hydro\.nationalmap\.gov/i.test(url)||/\/api\/reference\/nhd\?/.test(url));
+}
+
 /* Keep the cached map useful while a genuine high-density NHD feature render
    stages. Each tile upgrades independently; late cached pixels cannot undo it.
    Child image requests use the existing retry/cancellation implementation. */
 const ReferenceLabelLayer=ExportLayer.extend({
   initialize(url,options){
     ResilientTileLayer.prototype.initialize.call(this,url,options);
+    this._cspDetailQueue=[];this._cspDetailActive=0;this._cspDetailFailures=0;this._cspDetailPausedUntil=0;
     this.on("tileunload",event=>{
-      for(const request of event.tile?._cspReferenceRequests||[]){
+      const tile=event.tile;
+      for(const request of tile?._cspReferenceRequests||[]){
         request._cspCancelled=true;clearTimeout(request._cspRetry);
         request.onload=null;request.onerror=null;request.src=EMPTY_TILE;
       }
-      clearTimeout(event.tile?._cspReferenceTimer);
+      clearTimeout(tile?._cspReferenceTimer);
+      if(tile?._cspReferenceJob)this.detailRelease(tile._cspReferenceJob,null);
     });
   },
   wantsDetail(c){return 591657527.591555/2**c.z<=this.options.minDetailScale},
   getFallbackTileUrl(c){return L.Util.template(this.options.cachedUrl,c)},
-  getTileUrl(c){return this.wantsDetail(c)?ExportLayer.prototype.getTileUrl.call(this,c):this.getFallbackTileUrl(c)},
+  detailExportUrl(c){
+    const direct=ExportLayer.prototype.getTileUrl.call(this,c);
+    if(typeof PROXY!=="undefined"&&PROXY) return api("/api/reference/nhd?url="+encodeURIComponent(direct));
+    return direct;
+  },
+  getTileUrl(c){return this.wantsDetail(c)?this.detailExportUrl(c):this.getFallbackTileUrl(c)},
   getSnapshotTileUrl(c){return this._cspReferenceDetailAvailable?this.getTileUrl(c):this.getFallbackTileUrl(c)},
+  /* Pages installs the worker on load, and the local engine's health probe is
+     still in flight then. Detail waits for whichever quiet path will exist,
+     so the first exports are not a burst of direct calls that can CORS-fail. */
+  awaitQuietTransport(){
+    if(referenceDetailQuiet()||this._cspDetailTransportSettled) return false;
+    const host=typeof location!=="undefined"?location.hostname:"";
+    const local=host==="localhost"||host==="127.0.0.1";
+    const secure=typeof location!=="undefined"&&(location.protocol==="https:"||host==="localhost");
+    const worker=typeof navigator!=="undefined"&&navigator.serviceWorker;
+    const waitForWorker=!!(secure&&worker);
+    const waitForEngine=local&&typeof PROXY!=="undefined"&&!PROXY;
+    if(!waitForWorker&&!waitForEngine){ this._cspDetailTransportSettled=true; return false }
+    if(this._cspDetailTransportWait) return true;
+    this._cspDetailTransportWait=true;
+    const settle=()=>{
+      if(!this._cspDetailTransportWait) return;
+      this._cspDetailTransportWait=false;this._cspDetailTransportSettled=true;this.detailPump();
+    };
+    const timer=setTimeout(settle,4000);
+    if(waitForWorker){
+      const ready=worker.ready;
+      if(ready&&typeof ready.then==="function") ready.then(()=>{ clearTimeout(timer); settle() },()=>{ clearTimeout(timer); settle() });
+    }
+    if(waitForEngine) addEventListener("csp:server",()=>{ clearTimeout(timer); settle() },{once:true});
+    return true;
+  },
+  detailPaused(){return this._cspDetailPausedUntil>Date.now()},
+  detailPump(){
+    clearTimeout(this._cspDetailWake);this._cspDetailWake=null;
+    if(this._cspRemoved)return;
+    /* An image request holds the window load event even off-DOM, and the
+       service worker and 3D preload wait on that event. Detail can follow it. */
+    if(document.readyState!=="complete"){
+      if(!this._cspDetailAwaitingLoad){
+        this._cspDetailAwaitingLoad=true;
+        addEventListener("load",()=>{this._cspDetailAwaitingLoad=false;this.detailPump()},{once:true});
+      }
+      return;
+    }
+    if(this.awaitQuietTransport()) return;
+    if(this.detailPaused()){
+      if(this._cspDetailQueue.length)
+        this._cspDetailWake=setTimeout(()=>this.detailPump(),this._cspDetailPausedUntil-Date.now());
+      return;
+    }
+    while(this._cspDetailActive<REFERENCE_DETAIL_ACTIVE&&this._cspDetailQueue.length){
+      const job=this._cspDetailQueue.shift();job.active=true;this._cspDetailActive++;job.start();
+    }
+  },
+  /* A timed-out render usually finishes upstream anyway, so the repeat is cheap. */
+  detailRequeue(job){
+    if(job.released)return;
+    if(job.active){job.active=false;this._cspDetailActive--}
+    this._cspDetailQueue.push(job);this.detailPump();
+  },
+  /* ok: true succeeded, false failed or timed out, null cancelled (no verdict). */
+  detailRelease(job,ok){
+    if(job.released)return;job.released=true;
+    const queued=this._cspDetailQueue.indexOf(job);if(queued>=0)this._cspDetailQueue.splice(queued,1);
+    if(job.active){job.active=false;this._cspDetailActive--}
+    if(ok===true)this._cspDetailFailures=0;
+    else if(ok===false&&++this._cspDetailFailures>1)
+      this._cspDetailPausedUntil=Date.now()+Math.min(REFERENCE_DETAIL_PAUSE_MAX_MS,REFERENCE_DETAIL_PAUSE_MS*2**(this._cspDetailFailures-2));
+    this.detailPump();
+  },
   createTile(c,done){
     if(!this.wantsDetail(c))return ResilientTileLayer.prototype.createTile.call(this,c,done);
     const canvas=document.createElement("canvas"),context=canvas.getContext("2d");
     const density=Math.max(2,Math.min(3,Math.ceil(Number(window.devicePixelRatio)||1)));
     canvas.width=canvas.height=256*density;canvas._cspReferenceRequests=[];
     canvas._cspReferenceQuality="loading";
-    let remaining=2,reported=false,detailReady=false;
-    const publish=(error,image,detail)=>{
-      if(canvas._cspCancelled||this._cspRemoved||!this._map)return;
-      if(detail)clearTimeout(canvas._cspReferenceTimer);
-      remaining--;
-      if(!error&&(!detailReady||detail)){
-        context.clearRect(0,0,canvas.width,canvas.height);context.drawImage(image,0,0,canvas.width,canvas.height);
-        detailReady=detail;canvas._cspReferenceQuality=detail?"detail":"cached";canvas._cspHasContent=true;
-        if(detail){this._cspReferenceDetailAvailable=true;clearTimeout(canvas._cspReferenceTimer)}
-        if(!reported){reported=true;done(null,canvas)}
-        this.fire("tilerefine",{tile:canvas,coords:c});
-      }
-      if(!remaining&&!reported){reported=true;done(error||new Error("Reference labels unavailable"),canvas)}
-      if(!remaining)this.fire("tilerefine",{tile:canvas,coords:c});
-    };
-    for(const detail of [false,true]){
+    const state={cached:"loading",detail:"loading"};let reported=false;
+    const request=detail=>{
       const consumer=Object.create(this);
       consumer.options={...this.options,tileRetries:detail?0:1};
-      consumer.getTileUrl=()=>detail?ExportLayer.prototype.getTileUrl.call(this,c):this.getFallbackTileUrl(c);
+      consumer.getTileUrl=()=>detail?this.detailExportUrl(c):this.getFallbackTileUrl(c);
       consumer.getFallbackTileUrl=()=>null;
       const image=ResilientTileLayer.prototype.createTile.call(consumer,c,(error,tile)=>publish(error,tile,detail));
       canvas._cspReferenceRequests.push(image);
-      if(detail){
-        // The cached tile remains useful if the dynamic provider stalls.
-        canvas._cspReferenceTimer=setTimeout(()=>{
-          if(detailReady||canvas._cspCancelled)return;
-          image._cspCancelled=true;image.onload=null;image.onerror=null;image.src=EMPTY_TILE;
-          publish(new Error("High-density reference render timed out"),image,true);
-        },15000);
+      return image;
+    };
+    const job={start:()=>{
+      const image=request(true);
+      // The cached tile remains useful if the dynamic provider stalls.
+      canvas._cspReferenceTimer=setTimeout(()=>{
+        if(state.detail!=="loading"||canvas._cspCancelled)return;
+        image._cspCancelled=true;image.onload=null;image.onerror=null;image.src=EMPTY_TILE;
+        if(!job.retried){job.retried=true;this.detailRequeue(job);return}
+        publish(new Error("High-density reference render timed out"),image,true);
+      },referenceDetailDeadline());
+    }};
+    const publish=(error,image,detail)=>{
+      if(canvas._cspCancelled||this._cspRemoved||!this._map)return;
+      const source=detail?"detail":"cached";
+      if(state[source]!=="loading")return;
+      if(detail&&!error&&referenceDetailSentinel(image&&(image.url||image.src),image&&image.naturalWidth))
+        error=new Error("High-density reference render unavailable");
+      /* The first miss is a retry: the render often finishes upstream and the
+         repeat is then cheap. A second miss is final for this tile. */
+      if(detail&&error&&!job.retried){
+        job.retried=true;clearTimeout(canvas._cspReferenceTimer);this.detailRequeue(job);return;
       }
-    }
+      state[source]=error?"failed":"ready";
+      if(detail){clearTimeout(canvas._cspReferenceTimer);this.detailRelease(job,!error)}
+      if(!error&&(detail||state.detail!=="ready")){
+        context.clearRect(0,0,canvas.width,canvas.height);context.drawImage(image,0,0,canvas.width,canvas.height);
+        canvas._cspReferenceQuality=source;canvas._cspHasContent=true;
+        if(detail)this._cspReferenceDetailAvailable=true;
+        if(!reported){reported=true;done(null,canvas)}
+        this.fire("tilerefine",{tile:canvas,coords:c});
+      }else if(error&&!detail&&!job.active&&this.detailPaused()){
+        // Nothing to show and detail is waiting out a provider pause: settle now.
+        state.detail="failed";this.detailRelease(job,null);
+      }
+      if(state.cached!=="loading"&&state.detail!=="loading"){
+        if(!reported){reported=true;done(error||new Error("Reference labels unavailable"),canvas)}
+        this.fire("tilerefine",{tile:canvas,coords:c});
+      }
+    };
+    canvas._cspReferenceJob=job;
+    request(false);
+    this._cspDetailQueue.push(job);this.detailPump();
     return canvas;
   }
 });
