@@ -131,7 +131,7 @@ const smoothstep = (a, b, x) => { const t = Math.max(0, Math.min(1, (x - a) / (b
 /* the atlas, as RGBA bytes (rows from the top), LEAF_GRID x LEAF_GRID cells */
 export function leafAtlas(seed = 20261105) {
   const S = LEAF_CELL, W = S * LEAF_GRID;
-  const mk = () => { const c = document.createElement("canvas"); c.width = c.height = W; const g = c.getContext("2d"); g.fillStyle = "#000"; g.fillRect(0, 0, W, W); return [c, g]; };
+  const mk = () => { const c = typeof document === "undefined" ? new OffscreenCanvas(W, W) : document.createElement("canvas"); c.width = c.height = W; const g = c.getContext("2d"); g.fillStyle = "#000"; g.fillRect(0, 0, W, W); return [c, g]; };
   const [cR, gR] = mk(), [cG, gG] = mk(), [cB, gB] = mk(), [cA, gA] = mk();
   for (let v = 0; v < LEAF_GRID * LEAF_GRID; v++) {
     const ox = (v % LEAF_GRID) * S, oy = Math.floor(v / LEAF_GRID) * S;

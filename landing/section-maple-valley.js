@@ -13,7 +13,7 @@
    The frame, ground line and return values match drawSection in sketch.js, so the rest
    of the drawing does not need to know which section it stands on. */
 
-import { lerp, DEG } from "./sketch.js";
+import { lerp, DEG } from "./sketch-kit.js";
 
 export function drawSectionMV(K, ink) {
   const { rnd, R, line, poly, ROOT, label } = K;

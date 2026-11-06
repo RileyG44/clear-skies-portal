@@ -59,11 +59,10 @@ html.csp-reduce-motion #map>.leaflet-map-pane{transition:none}
    (startup-tree.js, drawn once it can be), over everything until the first map
    picture is whole. It then fades once to the map and its controls. */
 #cspSplash{display:none}
-html.csp-splash #cspSplash{position:fixed;inset:0;z-index:9999;display:grid;place-items:center;background:#fff;transition:opacity .65s cubic-bezier(.22,.61,.36,1)}
-html.csp-splash-out #cspSplash{opacity:0;pointer-events:none}
-#cspSplashTree{display:block;width:min(56vw,44vh,360px);aspect-ratio:1;max-height:52vh;opacity:0;transition:opacity .4s ease-out,transform .65s cubic-bezier(.22,.61,.36,1)}
+html.csp-splash #cspSplash{position:fixed;inset:0;z-index:9999;display:grid;place-items:center;background:#fff;transition:opacity .72s cubic-bezier(.45,0,.55,1)}
+html.csp-splash-out #cspSplash{opacity:0}
+#cspSplashTree{display:block;width:min(56vw,44vh,360px);aspect-ratio:1;max-height:52vh;opacity:0;transition:opacity .2s ease-out}
 #cspSplashTree.on{opacity:1}
-html.csp-splash-out #cspSplashTree{opacity:0;transform:translateY(-3px) scale(.99);transition-duration:.25s,.65s}
 /* (over the boot colours, and the theme the worker writes into them) */
 html.csp-splash:not(.csp-splash-out),html.csp-splash:not(.csp-splash-out) body{background:#fff!important}
 html.csp-reduce-motion :is(#cspSplash,#cspSplashTree){transition:none}
@@ -171,7 +170,7 @@ html[data-ui-theme="dark"] #cspStartup{background:#111416;color:#ebebeb}
     if(revealed)return;revealed=true;
     /* Leave csp-map-staging to the picture coordinator. Dropping it here
        shows whatever imagery tiles have arrived and lets the rest pop in. */
-    root.classList.add("csp-reveal");root.classList.remove("csp-boot");var shell=document.getElementById("app");if(shell)shell.removeAttribute("inert");
+    root.classList.add("csp-reveal");root.classList.remove("csp-boot");var shell=document.getElementById("app");if(shell&&!root.classList.contains("csp-splash"))shell.removeAttribute("inert");
     root.dispatchEvent(new Event("csp:reveal"));   // the iOS cover lifts with it
     var still=root.classList.contains("csp-reduce-motion")||!!(window.matchMedia&&matchMedia("(prefers-reduced-motion: reduce)").matches);
     /* In the iOS app the native launch cover performs the fade (.35 s in
@@ -181,37 +180,48 @@ html[data-ui-theme="dark"] #cspStartup{background:#111416;color:#ebebeb}
   };
   /* The start-up screen lifts once the shell is up and the first map picture
      is whole: the pane has left csp-map-staging and no terrain is held back.
-     A failure lifts it at once, so its message and Reload show, and nothing
-     holds it past 8 s; the picture watch above still covers a slow map. A tree
+     A failure lifts it, so its message and Reload show. A slow picture stays
+     covered until it settles or recovery is offered; never reveal an empty
+     map just because a timer expired. A tree
      that has only just come up has time to draw before the transition.
      splash.lifted settles as the fade begins; the iOS shell shows its native
      controls with it (native-shell.js). */
-  var splash=boot.splash={done:false,dispose:null,treeAt:0,treeHold:0};
+  var splash=boot.splash={done:false,dispose:null,freeze:null,treeAt:0,treeHold:0,treePending:true,treeDeadline:Date.now()+1500};
   splash.lifted=new Promise(function(resolve){splash.lift=resolve});
   var shellUp=false,splashWait=0,splashCap=0;
-  splash.tree=function(hold){if(!splash.done){splash.treeAt=Date.now();splash.treeHold=hold||500}};
+  splash.tree=function(hold){if(!splash.done){splash.treePending=false;splash.treeAt=Date.now();splash.treeHold=hold||500;splash.check()}};
+  splash.skipTree=function(){splash.treePending=false;splash.check()};
   splash.finish=function(){
     if(splash.done)return;splash.done=true;clearTimeout(splashWait);clearTimeout(splashCap);
     var theme=(root.dataset||{}).uiTheme,color=theme==="dark"?"#111416":"#dbe6eb";
     if(document.querySelectorAll){var metas=document.querySelectorAll('meta[name="theme-color"]');for(var mi=0;mi<metas.length;mi++)metas[mi].setAttribute("content",color)}
     var still=root.classList.contains("csp-reduce-motion")||!!(window.matchMedia&&matchMedia("(prefers-reduced-motion: reduce)").matches);
     var el=document.getElementById("cspSplash"),fade;
+    try{if(splash.freeze)splash.freeze()}catch(e){}
     /* Wait for the compositor's fade, not a wall-clock timer that may fire
        before a busy first map frame has actually painted the transition. */
-    if(!still&&el&&el.animate)fade=el.animate([{opacity:1},{opacity:0}],{duration:650,easing:"cubic-bezier(.22,.61,.36,1)"});
+    if(!still&&el&&el.animate)fade=el.animate([{opacity:1},{opacity:0}],{duration:720,easing:"cubic-bezier(.45,0,.55,1)"});
     root.classList.add("csp-splash-out");splash.lift();root.dispatchEvent(new Event("csp:splash"));
     var remove=function(){
       root.classList.remove("csp-splash");root.classList.remove("csp-splash-out");
       if(el&&el.parentNode)el.parentNode.removeChild(el);
+      var shell=document.getElementById("app");if(shell&&!root.classList.contains("csp-boot"))shell.removeAttribute("inert");
       try{if(splash.dispose)splash.dispose()}catch(e){}
+      splash.dispose=null;splash.freeze=null;splash.prepared=null;
     };
-    if(fade)fade.finished.then(remove,remove);else setTimeout(remove,still?0:680);
+    if(fade)fade.finished.then(remove,remove);else setTimeout(remove,still?0:750);
   };
   /* Checked when the shell reveals and when the picture settles (below). */
   var splashCheck=function(){
     if(splash.done)return;
     if(boot.failed){splash.finish();return}
     if(!shellUp||root.classList.contains("csp-map-staging")||root.classList.contains("csp-terrain-pending"))return;
+    /* A cached map can beat the optional drawing. Give it a short, bounded
+       chance to paint, so a fast launch still carries the maple. Failures
+       skip this immediately; a missing script cannot hold a ready map. */
+    if(!splash.treeAt&&splash.treePending&&Date.now()<splash.treeDeadline){
+      clearTimeout(splashWait);splashWait=setTimeout(splashCheck,splash.treeDeadline-Date.now());return;
+    }
     var still=root.classList.contains("csp-reduce-motion")||!!(window.matchMedia&&matchMedia("(prefers-reduced-motion: reduce)").matches);
     var wait=splash.treeAt?(still?500:splash.treeHold)-(Date.now()-splash.treeAt):0;
     if(wait>0){clearTimeout(splashWait);splashWait=setTimeout(splashCheck,wait);return}
@@ -219,7 +229,17 @@ html[data-ui-theme="dark"] #cspStartup{background:#111416;color:#ebebeb}
   };
   splash.check=splashCheck;
   root.addEventListener("csp:reveal",function(){shellUp=true;splashCheck()},{once:true});
-  splashCap=setTimeout(splash.finish,8000);
+  /* The inactivity watch offers recovery after 12 s. At 15 s, give a map
+     still fetching one bounded extension: a slow connection may yet finish.
+     Even a never-settling request offers recovery by 30 s. */
+  var expireSplash=function(){
+    if(boot.done)boot.failPicture("The map is taking longer to start. Check your connection, then reload.");
+    else boot.fail("The portal is taking longer to start. Check your connection, then reload.");
+  };
+  splashCap=setTimeout(function(){
+    if(boot.done&&boot.pictureStillMoving()){splashCap=setTimeout(expireSplash,15000);return}
+    expireSplash();
+  },15000);
   /* The shell and the map arrive together. boot.holds are promises the app
      registers before csp:ready (the first map picture; a shared link's view,
      also boot.hold); the fade-in waits for all of them, never more than 1.6 s. */
@@ -236,28 +256,32 @@ html[data-ui-theme="dark"] #cspStartup{background:#111416;color:#ebebeb}
   },true);
 })();
 </script>
-<script type="importmap">{"imports":{"three":"./vendor/three.module.min.js?build=2026-11-05q"}}</script>
+<script type="importmap">{"imports":{"three":"./vendor/three.module.min.js?build=2026-11-05r"}}</script>
+<link rel="modulepreload" href="startup-tree.js?build=2026-11-05r">
+<link rel="modulepreload" href="sketch.js">
+<!-- Prepare the optional drawing during parse; only create its GL context
+     once the map has requested its first tiles. Nothing here holds the map. -->
+<script type="module" async>
+var unavailable=function(error){window.CSPBoot.splash.skipTree();console.warn("Start-up tree unavailable",error);return null};
+var drawing=import("./startup-tree.js?build=2026-11-05r").then(function(m){m.prepareStartupTree(window.CSPBoot.splash);return m}).catch(unavailable);
+var start=function(){drawing.then(function(m){if(m)return m.drawStartupTree(window.CSPBoot.splash)}).catch(unavailable)};
+if(window.CSPBoot.done)setTimeout(start,0);else document.documentElement.addEventListener("csp:ready",function(){setTimeout(start,0)},{once:true});
+</script>
 
 </head>
 <body>
 <!-- The modern shell is the only interface, at every viewport size. -->
 <script>document.body.classList.add("csp-redesign");document.documentElement.classList.toggle("csp-glass",true);</script>
 <div id="cspSplash" aria-hidden="true"><canvas id="cspSplashTree"></canvas></div>
-<!-- The tree is optional: a module that cannot load leaves the screen plain white. -->
-<script type="module">
-var start=function(){import("./startup-tree.js?build=2026-11-05q").then(function(m){m.drawStartupTree(window.CSPBoot.splash)}).catch(function(error){console.warn("Start-up tree unavailable",error)})};
-/* Drawn once the map has asked for its first tiles, while they are on their way. */
-if(window.CSPBoot.done)setTimeout(start,0);else document.documentElement.addEventListener("csp:ready",function(){setTimeout(start,0)},{once:true});
-</script>
 <section id="cspStartup" role="status" aria-live="polite">
   <p id="cspStartupMessage">Loading your map and tools…</p>
   <a id="cspStartupRetry" href="?reload=2026-10-24n">Reload portal</a>
 </section>
-<link rel="stylesheet" href="vendor/leaflet.css?build=2026-11-05q">
-<link rel="stylesheet" href="ui-base.css?build=2026-11-05q">
-<link rel="stylesheet" href="ui-theme.css?build=2026-11-05q">
-<link rel="stylesheet" href="ui-system.css?build=2026-11-05q">
-<!-- inert until csp:ready: the transparent shell must not take focus or input. -->
+<link rel="stylesheet" href="vendor/leaflet.css?build=2026-11-05r">
+<link rel="stylesheet" href="ui-base.css?build=2026-11-05r">
+<link rel="stylesheet" href="ui-theme.css?build=2026-11-05r">
+<link rel="stylesheet" href="ui-system.css?build=2026-11-05r">
+<!-- inert until the loading cover is gone: hidden controls must not take focus. -->
 <div id="app" inert>
   <div id="side">
     <nav id="cspNav" aria-label="ClearSkies workspace">
@@ -1056,8 +1080,8 @@ if(window.CSPBoot.done)setTimeout(start,0);else document.documentElement.addEven
 </div>
 <div id="paneLive" role="status" aria-live="polite"></div>
 
-<script src="vendor/leaflet.js?build=2026-11-05q"></script>
-<script src="vendor/leaflet-rotate.umd.min.js?build=2026-11-05q"></script>
+<script src="vendor/leaflet.js?build=2026-11-05r"></script>
+<script src="vendor/leaflet-rotate.umd.min.js?build=2026-11-05r"></script>
 <script>
 /* leaflet-rotate wraps Renderer.onAdd(map) and reads map._rotate, but Leaflet's
    Canvas and SVG renderers call Renderer.prototype.onAdd.call(this) with no
@@ -1069,40 +1093,40 @@ if(window.CSPBoot.done)setTimeout(start,0);else document.documentElement.addEven
   L.Renderer.prototype.onAdd=function(map){return onAdd.call(this,map||this._map)};
 })();
 </script>
-<script src="ui-icons.js?build=2026-11-05q"></script>
-<script src="version.js?build=2026-11-05q"></script>
-<script src="mosaic-core.js?build=2026-11-05q"></script>
-<script src="png-stream.js?build=2026-11-05q"></script>
-<script src="terrain-core.js?build=2026-11-05q"></script>
-<script src="terrain-raster.js?build=2026-11-05q"></script>
-<script src="elevation-bands.js?build=2026-11-05q"></script>
-<script src="elevation-tile-core.js?build=2026-11-05q"></script>
-<script src="terrain-drape-core.js?build=2026-11-05q"></script>
-<script src="terrain-drape-pool.js?build=2026-11-05q"></script>
-<script src="public-terrain.js?build=2026-11-05q"></script>
-<script src="tile-pipeline.js?build=2026-11-05q"></script>
-<script src="water-geography-data.js?build=2026-11-05q"></script>
-<script src="water-geography.js?build=2026-11-05q"></script>
-<script src="gpu-terrain-shaders.js?build=2026-11-05q"></script>
-<script src="lidar-render.js?build=2026-11-05q"></script>
-<script src="lidar-studio.js?build=2026-11-05q"></script>
-<script src="analysis-layers.js?build=2026-11-05q"></script>
-<script src="share-state.js?build=2026-11-05q"></script>
-<script src="coordinates.js?build=2026-11-05q"></script>
-<script src="location-search.js?build=2026-11-05q"></script>
-<script src="gpu-terrain-store.js?build=2026-11-05q"></script>
-<script src="gpu-terrain-engine.js?build=2026-11-05q"></script>
-<script src="gpu-terrain-layer.js?build=2026-11-05q"></script>
-<script src="gpu-terrain-3d-cache.js?build=2026-11-05q"></script>
-<script src="gpu-terrain-3d-renderer.js?build=2026-11-05q"></script>
-<script src="gpu-terrain-3d-layer.js?build=2026-11-05q"></script>
-<script src="wa-archaeology.js?build=2026-11-05q"></script>
-<script src="research-contract.js?build=2026-11-05q"></script>
-<script src="point-cloud-core.js?build=2026-11-05q"></script>
-<script src="point-cloud-viewer.js?build=2026-11-05q"></script>
-<script src="app.js?build=2026-11-05q"></script>
-<script src="markup-3d.js?build=2026-11-05q"></script>
-<script src="markup.js?build=2026-11-05q"></script>
-<script src="ui-system.js?build=2026-11-05q"></script>
+<script src="ui-icons.js?build=2026-11-05r"></script>
+<script src="version.js?build=2026-11-05r"></script>
+<script src="mosaic-core.js?build=2026-11-05r"></script>
+<script src="png-stream.js?build=2026-11-05r"></script>
+<script src="terrain-core.js?build=2026-11-05r"></script>
+<script src="terrain-raster.js?build=2026-11-05r"></script>
+<script src="elevation-bands.js?build=2026-11-05r"></script>
+<script src="elevation-tile-core.js?build=2026-11-05r"></script>
+<script src="terrain-drape-core.js?build=2026-11-05r"></script>
+<script src="terrain-drape-pool.js?build=2026-11-05r"></script>
+<script src="public-terrain.js?build=2026-11-05r"></script>
+<script src="tile-pipeline.js?build=2026-11-05r"></script>
+<script src="water-geography-data.js?build=2026-11-05r"></script>
+<script src="water-geography.js?build=2026-11-05r"></script>
+<script src="gpu-terrain-shaders.js?build=2026-11-05r"></script>
+<script src="lidar-render.js?build=2026-11-05r"></script>
+<script src="lidar-studio.js?build=2026-11-05r"></script>
+<script src="analysis-layers.js?build=2026-11-05r"></script>
+<script src="share-state.js?build=2026-11-05r"></script>
+<script src="coordinates.js?build=2026-11-05r"></script>
+<script src="location-search.js?build=2026-11-05r"></script>
+<script src="gpu-terrain-store.js?build=2026-11-05r"></script>
+<script src="gpu-terrain-engine.js?build=2026-11-05r"></script>
+<script src="gpu-terrain-layer.js?build=2026-11-05r"></script>
+<script src="gpu-terrain-3d-cache.js?build=2026-11-05r"></script>
+<script src="gpu-terrain-3d-renderer.js?build=2026-11-05r"></script>
+<script src="gpu-terrain-3d-layer.js?build=2026-11-05r"></script>
+<script src="wa-archaeology.js?build=2026-11-05r"></script>
+<script src="research-contract.js?build=2026-11-05r"></script>
+<script src="point-cloud-core.js?build=2026-11-05r"></script>
+<script src="point-cloud-viewer.js?build=2026-11-05r"></script>
+<script src="app.js?build=2026-11-05r"></script>
+<script src="markup-3d.js?build=2026-11-05r"></script>
+<script src="markup.js?build=2026-11-05r"></script>
+<script src="ui-system.js?build=2026-11-05r"></script>
 </body>
 </html>
