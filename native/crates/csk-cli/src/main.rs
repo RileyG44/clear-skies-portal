@@ -23,6 +23,7 @@ impl Transport for Ureq {
                 .config()
                 .timeout_global(Some(req.timeout))
                 .http_status_as_error(false)
+                .max_redirects(0)
                 .build();
                 b = b.header("User-Agent", "ClearSkies/native-dev");
                 if let Some((a, z)) = req.range {

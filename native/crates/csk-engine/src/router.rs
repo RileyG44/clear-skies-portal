@@ -145,7 +145,7 @@ fn sources_list(meta: &Meta) -> String {
 }
 
 /// `/<prefix>/<z>/<x>/<y><suffix>` with valid coordinates.
-fn tile_coords(path: &str, prefix: &str, suffix: &str, max_z: u8) -> Option<(u8, u32, u32)> {
+pub(crate) fn tile_coords(path: &str, prefix: &str, suffix: &str, max_z: u8) -> Option<(u8, u32, u32)> {
     let rest = path.strip_prefix(prefix)?.strip_suffix(suffix)?;
     let mut it = rest.split('/');
     let (z, x, y) = (it.next()?, it.next()?, it.next()?);
@@ -192,7 +192,18 @@ async fn route(engine: &Arc<Engine>, req: &Request) -> Response {
         "/api/health" => return engine.health().header("Cache-Control", NO_STORE),
         "/api/usgs/cover" => return cover(engine, req).await,
         "/api/usgs/index" => return index(engine, req).await,
+        "/api/3dep" => return crate::proxies::dep(engine, req).await,
+        "/api/snow" => return crate::proxies::snow(engine, req).await,
+        "/api/firms" => return crate::proxies::firms(engine, req).await,
+        "/api/reference/nhd" => return crate::proxies::hydro(engine, req).await,
+        "/api/snapshot/image" => return crate::proxies::snapshot(engine, req).await,
         _ => {}
+    }
+    if let Some(rest) = p.strip_prefix("/api/usgs/tile/") {
+        return styled(engine, rest).await;
+    }
+    if p.starts_with("/api/geo/") {
+        return crate::proxies::geology(engine, req).await;
     }
     // Longest prefixes first, as server.js orders them.
     if p.starts_with("/api/elev32/") {
@@ -238,6 +249,43 @@ async fn serve(engine: &Arc<Engine>, which: Which, wire: Wire, z: u8, x: u32, y:
         Which::National => national(engine, wire, z, x, y).await,
         Which::Overview => overview(engine, wire, z, x, y).await,
         Which::Best => best(engine, wire, z, x, y).await,
+    }
+}
+
+/// Terrain drawn from 1 m lidar: `/api/usgs/tile/<style>/<z>/<x>/<y>.png`.
+/// The elevation grid is what is cached; drawing it takes a few ms.
+async fn styled(engine: &Arc<Engine>, rest: &str) -> Response {
+    const TILE_STYLES: &[&str] = &["hs", "hsmulti", "tint", "slope", "aspect", "c2", "c5", "c10", "c25"];
+    let Some((style, coords)) = rest.split_once('/') else { return Response::text(400, "bad tile path") };
+    let Some((z, x, y)) = tile_coords(&format!("/{coords}"), "/", ".png", 22) else {
+        return Response::text(400, "bad tile coordinates or style");
+    };
+    if !TILE_STYLES.contains(&style) {
+        return Response::text(400, "bad tile coordinates or style");
+    }
+    let draw = |grid: &Grid, meta: &Meta| {
+        let surface = csk_core::raster::style::Surface {
+            grid: &grid.values,
+            side: usize::from(grid.side),
+            skirt: grid.skirt,
+            ground_res: meta.ground_res.unwrap_or(1.0),
+        };
+        let rgba = csk_core::raster::style::render(style, &surface, Default::default());
+        let s = u32::from(grid.size());
+        Response::new(200, "image/png", png::encode_rgba(&rgba, s, s)).headers(federal_headers(meta))
+    };
+    match engine.tiles.lidar(z, x, y).await {
+        Lidar::Tile { grid, meta, hit } => draw(&grid, &meta)
+            .header("X-Sources", sources_list(&meta))
+            .header("X-Cache", if hit { "hit" } else { "miss" })
+            .header("Cache-Control", IMMUTABLE),
+        Lidar::None => empty(Wire::Png, false).header("X-Coverage", "none").header("Cache-Control", IMMUTABLE),
+        Lidar::Provisional => busy(Wire::Png, 10).header("X-Coverage", "unknown"),
+        Lidar::Failed { stale: Some((grid, meta)) } => draw(&grid, &meta)
+            .header("X-Cache", "saved-fallback")
+            .header("X-CSP-Provisional", "1")
+            .header("Cache-Control", NO_STORE),
+        Lidar::Failed { stale: None } => busy(Wire::Png, 2).header("X-Cache", "BUSY"),
     }
 }
 

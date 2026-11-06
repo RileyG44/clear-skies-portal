@@ -7,6 +7,7 @@
 
 pub mod flight;
 pub mod national;
+pub mod proxies;
 pub mod router;
 pub mod tiles;
 pub mod transport;
@@ -62,6 +63,8 @@ pub struct Engine {
     pub store: Arc<Store>,
     pub upstream: Arc<Upstream>,
     pub tiles: Arc<Tiles>,
+    /// Proxy fetches shared while in flight.
+    proxy_flights: flight::Flights<String, Option<(Vec<u8>, String, bool)>>,
     started: Instant,
 }
 
@@ -79,7 +82,13 @@ impl Engine {
         let cog = CogReader::new(store.clone(), upstream.clone(), Usgs::s3_origin());
         let usgs = Arc::new(Usgs::new(catalog, cog));
         let tiles = Tiles::new(store.clone(), upstream.clone(), usgs);
-        Ok(Arc::new(Self { store, upstream, tiles, started: Instant::now() }))
+        Ok(Arc::new(Self {
+            store,
+            upstream,
+            tiles,
+            proxy_flights: flight::Flights::default(),
+            started: Instant::now(),
+        }))
     }
 
     /// Starts background work that should not wait for the first request.

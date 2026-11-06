@@ -3,6 +3,7 @@
 
 pub mod png;
 pub mod sample;
+pub mod style;
 pub mod terrarium;
 
 use std::sync::OnceLock;
