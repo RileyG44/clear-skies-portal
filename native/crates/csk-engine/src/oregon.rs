@@ -334,6 +334,16 @@ fn empty(float32: bool) -> Response {
     }
 }
 
+/// The tile's metres (NaN where invalid), or None where no qualifying
+/// DOGAMI survey answers. Errors are retryable.
+pub(crate) async fn grid(engine: &Arc<Engine>, z: u8, x: u32, y: u32) -> Result<Option<Vec<f32>>, String> {
+    if !allowed(z, x, y) {
+        return Ok(None);
+    }
+    let tile = load(engine, z, x, y).await?;
+    Ok((!tile.sources.is_empty()).then(|| tile.values.clone()))
+}
+
 pub async fn elevation(engine: &Arc<Engine>, z: u8, x: u32, y: u32, float32: bool) -> Response {
     if !allowed(z, x, y) {
         return empty(float32)

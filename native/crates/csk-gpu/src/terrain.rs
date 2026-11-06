@@ -108,7 +108,10 @@ impl View {
     /// Display-level tile bounds of the rotated viewport, `shift` world
     /// widths east (keeps an anchored store's numbering across ±180°).
     fn bounds(&self, margin: i64, shift: i64) -> Bounds {
-        let z = self.level();
+        self.bounds_at(self.level(), margin, shift)
+    }
+
+    fn bounds_at(&self, z: u8, margin: i64, shift: i64) -> Bounds {
         let n = 1i64 << z;
         let scale = n as f64 / (256.0 * self.zoom.exp2());
         let a = self.bearing.to_radians();
@@ -126,19 +129,39 @@ impl View {
         }
     }
 
-    /// Tiles to request: one canonical id per world tile, one-tile margin.
+    /// Display tiles to request: one canonical id per world tile, one-tile
+    /// margin.
     pub fn wanted(&self) -> Vec<TileId> {
-        let b = self.bounds(1, 0);
+        self.tiles_at(self.level(), 1)
+    }
+
+    /// Level-`z` tiles over the rotated view with `margin` tiles around it,
+    /// one canonical id per world tile, nearest the view centre first.
+    pub fn tiles_at(&self, z: u8, margin: i64) -> Vec<TileId> {
+        let b = self.bounds_at(z, margin, 0);
         let n = 1i64 << b.z;
         let end = b.x1.min(b.x0 + n - 1);
+        let (cx, cy) = (self.center[0] * n as f64, self.center[1] * n as f64);
         let mut out = Vec::new();
         for y in b.y0..=b.y1 {
             for x in b.x0..=end {
-                out.push(TileId { z: b.z, x: x.rem_euclid(n) as u32, y: y as u32 });
+                let d = (x as f64 + 0.5 - cx).hypot(y as f64 + 0.5 - cy);
+                out.push((d, TileId { z: b.z, x: x.rem_euclid(n) as u32, y: y as u32 }));
             }
         }
-        out
+        out.sort_by(|a, b| a.0.total_cmp(&b.0));
+        out.into_iter().map(|(_, t)| t).collect()
     }
+}
+
+/// A held answer's kind.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Answer {
+    Empty,
+    /// Some samples are no data.
+    Partial,
+    /// Every sample is valid.
+    Complete,
 }
 
 struct Entry {
@@ -154,7 +177,6 @@ struct Entry {
 struct Draw {
     origin: [f32; 2],
     scale: f32,
-    rank: f32,
     rect: [u32; 4],
     layer: u32,
 }
@@ -165,6 +187,8 @@ struct Store {
     view: wgpu::TextureView,
     dirty: Vec<bool>,
     covered: Vec<bool>,
+    /// Records each slot drew from at its last composite.
+    drawn: Vec<Vec<TileKey>>,
     charge: Arc<Reservation>,
 }
 
@@ -292,9 +316,7 @@ impl Terrain {
         if heights.len() != (TILE * TILE) as usize {
             return Err(Error::Input("source tile must be 256x256"));
         }
-        if key.tile.z > 24 || key.tile.x >= 1 << key.tile.z || key.tile.y >= 1 << key.tile.z {
-            return Err(Error::Input("tile outside the world"));
-        }
+        Self::check_key(key)?;
         let valid = |v: &f32| v.is_finite() && *v > -1e20;
         let count = heights.iter().filter(|v| valid(v)).count();
         let previous = self.records.remove(&key).and_then(|e| e.layer);
@@ -322,14 +344,48 @@ impl Terrain {
             );
             Some(layer)
         };
+        self.record(key, rank, layer, count == heights.len());
+        Ok(())
+    }
+
+    /// Stores a source's answer of no data for a tile (coverage only).
+    pub fn insert_empty(&mut self, key: TileKey, rank: u8) -> Result<(), Error> {
+        Self::check_key(key)?;
+        if let Some(layer) = self.records.remove(&key).and_then(|e| e.layer) {
+            self.free.push(layer);
+        }
+        self.record(key, rank, None, false);
+        Ok(())
+    }
+
+    fn check_key(key: TileKey) -> Result<(), Error> {
+        if key.tile.z > 24 || key.tile.x >= 1 << key.tile.z || key.tile.y >= 1 << key.tile.z {
+            return Err(Error::Input("tile outside the world"));
+        }
+        Ok(())
+    }
+
+    fn record(&mut self, key: TileKey, rank: u8, layer: Option<u32>, all_valid: bool) {
         self.stamp += 1;
-        self.records
-            .insert(key, Entry { rank, layer, all_valid: count == heights.len(), used: self.frame, stamp: self.stamp });
+        self.records.insert(key, Entry { rank, layer, all_valid, used: self.frame, stamp: self.stamp });
         if layer.is_none() && self.records.len() > MAX_EMPTY {
             self.trim_empty();
         }
         self.touch(key.tile);
-        Ok(())
+    }
+
+    /// The held answer for a key, if any.
+    pub fn answer(&self, key: TileKey) -> Option<Answer> {
+        self.records.get(&key).map(|e| match e.layer {
+            None => Answer::Empty,
+            Some(_) if e.all_valid => Answer::Complete,
+            Some(_) => Answer::Partial,
+        })
+    }
+
+    /// Keys of every held answer from `source`.
+    pub fn keys_of(&self, source: u16) -> Vec<TileKey> {
+        self.records.keys().filter(|k| k.source == source).copied().collect()
     }
 
     pub fn remove(&mut self, key: TileKey) {
@@ -341,19 +397,39 @@ impl Terrain {
         }
     }
 
-    /// Frees the least recently drawn resident tile. The record goes
+    /// Frees a resident tile: first one no store slot draws from, then one
+    /// outside the store, then the least recently drawn. The record goes
     /// entirely: keeping it as metadata would claim an empty answer.
     fn evict(&mut self) -> Result<u32, Error> {
+        let drawn: std::collections::HashSet<TileKey> =
+            self.store.iter().flat_map(|s| s.drawn.iter().flatten().copied()).collect();
         let victim = self
             .records
             .iter()
             .filter(|(_, e)| e.layer.is_some())
-            .min_by_key(|(_, e)| (e.used, e.stamp))
+            .min_by_key(|(k, e)| (drawn.contains(k), self.in_store(k.tile), e.used, e.stamp))
             .map(|(k, _)| *k)
             .ok_or(Error::Input("tile pool is empty"))?;
         let entry = self.records.remove(&victim).expect("victim");
         self.touch(victim.tile);
         Ok(entry.layer.expect("resident victim"))
+    }
+
+    /// Whether a record's footprint meets the anchored store.
+    fn in_store(&self, tile: TileId) -> bool {
+        let Some(store) = &self.store else { return false };
+        let b = store.bounds;
+        let (x0, x1, y0, y1) = if tile.z <= b.z {
+            let d = b.z - tile.z;
+            let (x, y) = (i64::from(tile.x) << d, i64::from(tile.y) << d);
+            (x, x + (1 << d) - 1, y, y + (1 << d) - 1)
+        } else {
+            let d = tile.z - b.z;
+            let (x, y) = (i64::from(tile.x >> d), i64::from(tile.y >> d));
+            (x, x, y, y)
+        };
+        let n = 1i64 << b.z;
+        y0 <= b.y1 && y1 >= b.y0 && [-n, 0, n].iter().any(|k| x0 + k <= b.x1 && x1 + k >= b.x0)
     }
 
     fn trim_empty(&mut self) {
@@ -420,16 +496,7 @@ impl Terrain {
             let origin = |slot: u32, record: u32| {
                 ((f64::from(slot) * scale - f64::from(record)) * f64::from(TILE) + 0.5 * scale - 0.5) as f32
             };
-            out.push((
-                *key,
-                Draw {
-                    origin: [origin(x, r.x), origin(y, r.y)],
-                    scale: scale as f32,
-                    rank: f32::from(entry.rank),
-                    rect,
-                    layer,
-                },
-            ));
+            out.push((*key, Draw { origin: [origin(x, r.x), origin(y, r.y)], scale: scale as f32, rect, layer }));
         }
         out
     }
@@ -457,12 +524,12 @@ impl Terrain {
         if w > gpu.max_dimension() || h > gpu.max_dimension() {
             return Err(Error::Input("view exceeds the terrain store limits"));
         }
-        let charge = Arc::new(gpu.budget.reserve(texture_bytes(w, h, 8))?);
+        let charge = Arc::new(gpu.budget.reserve(texture_bytes(w, h, 4))?);
         let texture = gpu.texture(
             w,
             h,
             1,
-            wgpu::TextureFormat::Rg32Float,
+            wgpu::TextureFormat::R32Float,
             wgpu::TextureUsages::STORAGE_BINDING
                 | wgpu::TextureUsages::TEXTURE_BINDING
                 | wgpu::TextureUsages::COPY_SRC
@@ -475,9 +542,10 @@ impl Terrain {
             texture,
             dirty: vec![true; slots],
             covered: vec![false; slots],
+            drawn: vec![Vec::new(); slots],
             charge,
         };
-        if let Some(old) = self.store.take() {
+        if let Some(mut old) = self.store.take() {
             if old.bounds.z == z {
                 let (x0, x1) = (bounds.x0.max(old.bounds.x0), bounds.x1.min(old.bounds.x1));
                 let (y0, y1) = (bounds.y0.max(old.bounds.y0), bounds.y1.min(old.bounds.y1));
@@ -514,6 +582,7 @@ impl Terrain {
                             let (i, j) = (store.slot(wx, wy), old.slot(wx, wy));
                             store.dirty[i] = old.dirty[j];
                             store.covered[i] = old.covered[j];
+                            store.drawn[i] = std::mem::take(&mut old.drawn[j]);
                         }
                     }
                 }
@@ -527,6 +596,9 @@ impl Terrain {
     /// Composites every dirty slot. Returns the number composited.
     fn composite(&mut self, gpu: &Renderer, encoder: &mut wgpu::CommandEncoder) -> usize {
         let Some(store) = &self.store else { return 0 };
+        if !store.dirty.contains(&true) {
+            return 0;
+        }
         let b = store.bounds;
         let n = 1i64 << b.z;
         let mut order: Vec<(TileKey, &Entry)> =
@@ -547,7 +619,7 @@ impl Terrain {
                 let first = count;
                 for (key, d) in &plan {
                     used.push(*key);
-                    for v in [d.origin[0], d.origin[1], d.scale, d.rank] {
+                    for v in [d.origin[0], d.origin[1], d.scale, 0.0] {
                         draws.extend_from_slice(&v.to_le_bytes());
                     }
                     for v in d.rect.into_iter().chain([d.layer, 0, 0, 0]) {
@@ -559,7 +631,7 @@ impl Terrain {
                 for v in [origin[0], origin[1], first, plan.len() as u32] {
                     jobs.extend_from_slice(&v.to_le_bytes());
                 }
-                done.push((i, !plan.is_empty()));
+                done.push((i, plan.iter().map(|(key, _)| *key).collect::<Vec<_>>()));
             }
         }
         if done.is_empty() {
@@ -599,11 +671,13 @@ impl Terrain {
             }
         }
         let store = self.store.as_mut().expect("store");
-        for (i, covered) in &done {
-            store.dirty[*i] = false;
-            store.covered[*i] = *covered;
+        let count = done.len();
+        for (i, drawn) in done {
+            store.dirty[i] = false;
+            store.covered[i] = !drawn.is_empty();
+            store.drawn[i] = drawn;
         }
-        done.len()
+        count
     }
 
     /// Renders the view into `target` (e.g. a presentation surface texture of

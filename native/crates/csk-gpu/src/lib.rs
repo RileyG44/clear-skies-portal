@@ -4,11 +4,15 @@
 
 mod layout;
 mod render;
+mod surface;
 mod terrain;
 
 pub use layout::Uniforms;
 pub use render::{FRAME_FORMAT, Field, Frame, Pixels, Renderer};
-pub use terrain::{FrameStats, SourceSpec, TILE, Terrain, TileId, TileKey, View};
+pub use surface::{Presented, Presenter, instance};
+pub use terrain::{Answer, FrameStats, SourceSpec, TILE, Terrain, TileId, TileKey, View};
+/// The pinned wgpu, for surfaces made at the platform boundary.
+pub use wgpu;
 
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
@@ -18,6 +22,8 @@ pub enum Error {
     Device(String),
     #[error("invalid terrain frame: {0}")]
     Input(&'static str),
+    #[error("presentation failed: {0}")]
+    Surface(&'static str),
     #[error(transparent)]
     Memory(#[from] csk_core::resource::Unavailable),
 }

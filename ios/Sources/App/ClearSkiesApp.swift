@@ -23,11 +23,12 @@ struct ClearSkiesApp: App {
     var body: some Scene {
         WindowGroup {
             Group {
-                if let portal { RootView(portal: portal) }
+                if NativeMapPreference.enabled { NativeMapScreen() }
+                else if let portal { RootView(portal: portal) }
                 else { Color.white.ignoresSafeArea() }
             }
             .onChange(of: phase, initial: true) { _, next in
-                if next == .active && portal == nil { portal = PortalModel() }
+                if next == .active && portal == nil && !NativeMapPreference.enabled { portal = PortalModel() }
             }
         }
     }

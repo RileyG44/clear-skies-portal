@@ -3,7 +3,7 @@
 
 fn main() {
     let dir = std::env::var("CARGO_MANIFEST_DIR").expect("manifest dir");
-    println!("cargo:rerun-if-changed=src/lib.rs");
+    println!("cargo:rerun-if-changed=src");
     let config = cbindgen::Config {
         language: cbindgen::Language::C,
         include_guard: Some("CSK_H".into()),

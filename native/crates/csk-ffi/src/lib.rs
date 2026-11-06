@@ -15,6 +15,9 @@
 
 #![allow(clippy::missing_safety_doc)]
 
+mod map;
+pub use map::*;
+
 use std::collections::HashMap;
 use std::ffi::{CStr, CString, c_char, c_void};
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -97,6 +100,11 @@ pub struct CskFetch {
     reservation: Mutex<csk_engine::MemoryReservation>,
     max_body: usize,
 }
+
+/// The process's admitted engine memory: request and raster work plus the
+/// native map's GPU resources (tile pool, store, screen field, drawables),
+/// which share one budget.
+const MEMORY_CAP: usize = 512 << 20;
 
 pub struct CskEngine {
     runtime: tokio::runtime::Runtime,
@@ -279,7 +287,7 @@ pub unsafe extern "C" fn csk_engine_new(
     transport: CskTransport,
     work_allowed: bool,
 ) -> *mut CskEngine {
-    let memory = csk_engine::MemoryBudget::new(256 << 20);
+    let memory = csk_engine::MemoryBudget::new(MEMORY_CAP);
     let platform = Arc::new(Platform { t: transport, next: AtomicU64::new(1), memory: memory.clone() });
     // SAFETY: per the contract above.
     let Some(text) = (unsafe { str_arg(config_json) }) else { return std::ptr::null_mut() };
@@ -361,7 +369,7 @@ pub unsafe extern "C" fn csk_engine_purge_memory(engine: *mut CskEngine) {
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn csk_engine_set_memory_limit(engine: *mut CskEngine, bytes: usize) {
     if let Some(e) = unsafe { engine.as_ref() } {
-        e.engine.memory.set_limit(bytes.min(256 << 20));
+        e.engine.memory.set_limit(bytes.min(MEMORY_CAP));
     }
 }
 

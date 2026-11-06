@@ -10,6 +10,7 @@ pub mod areas;
 pub mod dnr;
 pub mod dnr_local;
 pub mod dnr_routes;
+pub mod elevation;
 pub mod flight;
 pub mod markup;
 pub mod national;

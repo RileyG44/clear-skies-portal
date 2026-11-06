@@ -164,7 +164,7 @@ impl Renderer {
             include_str!("wgsl/composite.wgsl"),
             &[
                 entry(0, c, sampled(wgpu::TextureViewDimension::D2Array, FLOAT)),
-                entry(1, c, storage(wgpu::TextureFormat::Rg32Float)),
+                entry(1, c, storage(wgpu::TextureFormat::R32Float)),
                 entry(2, c, buffer(wgpu::BufferBindingType::Storage { read_only: true })),
                 entry(3, c, buffer(wgpu::BufferBindingType::Storage { read_only: true })),
             ],
