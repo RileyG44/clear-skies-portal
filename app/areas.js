@@ -33,7 +33,8 @@ function warmPlan(){
   /* Zoom is fractional now, but everything downstream of here builds whole tile
      coordinates for the pre-cache, so round at the boundary. */
   const zNow=Math.round(map.getZoom()), mode=$("#terDepth").value,style=$("#terStyle").value;
-  const nativeCeiling=chooseTerrain(style).src==="3dep"?17:18;
+  const src=chooseTerrain(style).src;
+  const nativeCeiling=src==="3dep"?17:18;
   const requestedZ1=Math.min(nativeCeiling,mode==="screen"?zNow+2:nativeCeiling);
   let range=warmLevelRange(b,zNow,requestedZ1);
   /* Only the finest few levels are worth downloading: they are where the
@@ -47,14 +48,31 @@ function warmPlan(){
   }
   const lat=map.getCenter().lat;
   return {b, ...range, zNow, requestedZ1, limited:range.z1<requestedZ1,
-          mpp:MPP(range.z1,lat)};
+          mpp:MPP(range.z1,lat), bytes:warmBytes(b,range.z0,range.z1,src)};
 }
-const TILE_BYTES = 18000;               // measured average across z13-z19
+/* What one tile of a download adds on disk, measured from a desktop engine
+   cache on 2026-11-05 (23,000 tiles): a 256 px elevation PNG averages about
+   80 KB, from the national 3DEP mosaic or from raw 1 m lidar alike; a
+   rendered WA DNR or 3DEP image is about 50 KB. Raw downloads keep both
+   elevation tiles from z13, and WA DNR keeps both rendered images. The old
+   flat 18 KB dated from baked hillshade tiles and understated downloads
+   four- to ninefold. Outside 1 m coverage the raw tile is empty, so the
+   figure is an upper bound there.                                        */
+const ELEVATION_TILE_BYTES=80000, RENDERED_TILE_BYTES=50000, RAW_FROM_Z=13;
+function warmTileBytes(src,z){
+  if(src==="wadnr") return 2*RENDERED_TILE_BYTES;
+  return ELEVATION_TILE_BYTES+(src==="usgs1m"&&z>=RAW_FROM_Z?ELEVATION_TILE_BYTES:0);
+}
+function warmBytes(b,z0,z1,src){
+  let bytes=0;
+  for(let z=z0;z<=z1;z++) bytes+=warmTileEstimate(b,z,z)*warmTileBytes(src,z);
+  return bytes;
+}
 function warmPreview(){
   const el=$("#terWarmMsg"); if(!el || warmPoll) return;
   if(!PROXY || $("#terStyle").value==="off") return;
   const p=warmPlan();
-  const size=fmtMB(p.tiles*TILE_BYTES);
+  const size=fmtMB(p.bytes);
   $("#terWarm").textContent=p.limited?"Download broad-area pass":"Download this view";
   el.innerHTML=(p.limited?`Broad-area pass \u00b7 `:"")
     + `z${p.z0}\u2013${p.z1} \u00b7 ${(p.mpp*3.28084).toFixed(2)} ft/px \u00b7 `
@@ -445,7 +463,7 @@ $("#terWarm").onclick=async ()=>{
       + `Zoom in, shrink the margin, or drop to Screen +2.`; return }
   if(est>WARM_WARN && !confirm(
       `${est.toLocaleString()} tiles at ${(plan.mpp*3.28084).toFixed(2)} ft/px, roughly `
-      + `${fmtMB(est*TILE_BYTES)} on disk.\n\nA cold terrain download may take a while. Continue?`))
+      + `${fmtMB(plan.bytes)} on disk.\n\nA cold terrain download may take a while. Continue?`))
     return;
   const pick=chooseTerrain(style);
   const bbox=[b.getWest(),b.getSouth(),b.getEast(),b.getNorth()];

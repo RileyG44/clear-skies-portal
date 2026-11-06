@@ -309,11 +309,17 @@ final class WebHost: NSObject {
 
     private static func bootstrapSource(engineBase: String, session: [String: Any]?, sessionStart: Bool) -> String {
         let template = resource("native-host")
-        let config: [String: Any] = ["engineBase": engineBase, "appVersion": appVersion, "resume": session ?? NSNull(),
+        let config: [String: Any] = ["engineBase": engineBase, "builtInEngine": builtInEngine,
+                                     "appVersion": appVersion, "resume": session ?? NSNull(),
                                      "sessionStart": sessionStart]
         let json = (try? JSONSerialization.data(withJSONObject: config)).flatMap { String(data: $0, encoding: .utf8) } ?? "{}"
         return template.replacingOccurrences(of: "__CSP_NATIVE_CONFIG__", with: json)
     }
+
+    /// Whether this build answers /api itself when no engine address is set.
+    /// False until the in-app engine serves requests; the page then stops
+    /// treating the app as engine-less.
+    static let builtInEngine = false
 
     static var appVersion: String {
         let info = Bundle.main.infoDictionary

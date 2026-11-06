@@ -1,16 +1,12 @@
 function scheduleServerProbe(delay){
   clearTimeout(serverProbeTimer);
-  if(API) serverProbeTimer=setTimeout(()=>probeServer(),delay);
+  if(API||BUILT_IN_ENGINE) serverProbeTimer=setTimeout(()=>probeServer(),delay);
 }
 function probeServer(){
   const token=++probeToken, base=API, controller=new AbortController(), wasOnline=PROXY;
   let becameAvailable=false;
-  /* GitHub Pages is intentionally static. With no configured engine URL there
-     is nothing to probe, and asking github.io for /api/health only creates a
-     misleading 404 in an otherwise healthy production session. A Tailscale or
-     other explicit URL is still probed; locally served pages keep auto-detect.
-     The iPhone app never serves the engine itself, so it is the same case. */
-  if(!base&&(NATIVE_HOST||/\.github\.io$/i.test(location.hostname))){
+  /* Nothing to probe: see engineExpected. */
+  if(!engineExpected(base)){
     PROXY=false; serverHealth=null; paintServerBox(); paintTerrainInfo(); return Promise.resolve(false);
   }
   // Raw lidar rendering can legitimately occupy the engine for several
