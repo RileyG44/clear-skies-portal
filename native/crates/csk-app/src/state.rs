@@ -55,6 +55,67 @@ impl TerrainState {
     }
 }
 
+/// The live-alert filters (app/overlays.js `alertPrefs`). Which feeds are
+/// on is the overlays' own state.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct Alerts {
+    /// Ask NWS for the view only, and count what is in view.
+    pub viewport: bool,
+    /// "all", "watch" or "warning".
+    pub nws_severity: String,
+    /// "hour", "day", "week" or "month".
+    pub quake_age: String,
+    /// -1 for every detected event.
+    pub quake_mag: f64,
+    /// NWS alert types by category (vectors.rs `nws_category`).
+    pub types: BTreeMap<String, bool>,
+}
+
+/// The NWS alert type switches, in the web's order.
+pub const ALERT_TYPES: [(&str, &str); 6] = [
+    ("storm", "Storm & flood"),
+    ("winter", "Winter & avalanche"),
+    ("fire", "Fire & smoke"),
+    ("coast", "Coast & marine"),
+    ("temperature", "Heat, cold & air"),
+    ("other", "Other public alerts"),
+];
+
+impl Default for Alerts {
+    fn default() -> Self {
+        Self {
+            viewport: true,
+            nws_severity: "all".into(),
+            quake_age: "week".into(),
+            quake_mag: -1.0,
+            types: ALERT_TYPES.iter().map(|(k, _)| ((*k).to_owned(), true)).collect(),
+        }
+    }
+}
+
+impl Alerts {
+    pub fn quake_age(&self) -> &str {
+        match self.quake_age.as_str() {
+            age @ ("hour" | "day" | "week" | "month") => age,
+            _ => "week",
+        }
+    }
+
+    fn normalize(&mut self) {
+        if !["all", "watch", "warning"].contains(&self.nws_severity.as_str()) {
+            self.nws_severity = "all".into();
+        }
+        self.quake_age = self.quake_age().to_owned();
+        if ![-1.0, 1.0, 2.5, 4.0, 5.5].contains(&self.quake_mag) {
+            self.quake_mag = -1.0;
+        }
+        for (k, _) in ALERT_TYPES {
+            self.types.entry(k.into()).or_insert(true);
+        }
+    }
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
 pub struct Overlay {
     pub on: bool,
@@ -70,13 +131,16 @@ impl AppState {
         self.layer_order =
             vec!["overlay:water".into(), "elevation-bands".into(), "elevation-spectrum".into(), "terrain".into()];
         for o in crate::overlays::OVERLAYS {
-            if o.raster.is_some() && o.id != "water" && self.overlay(o.id).on {
+            if o.drawn() && o.id != "water" && self.overlay(o.id).on {
                 self.layer_order.insert(0, format!("overlay:{}", o.id));
             }
         }
     }
 
     pub fn normalize(&mut self) {
+        self.alerts.normalize();
+        self.line_widths.retain(|id, _| crate::vectors::spec(id).is_some_and(|s| s.line_width.is_some()));
+        self.slices.retain(|id, _| crate::vectors::spec(id).is_some_and(|s| s.slice.is_some()));
         self.elevation.normalize();
         self.appearance.normalize();
         for (id, on) in [("elevation-spectrum", self.elevation.on), ("elevation-bands", self.elevation.bands_on())] {
@@ -98,6 +162,18 @@ impl AppState {
             return LAUNCH_WATER_OPACITY;
         }
         crate::overlays::find(id).map_or(crate::overlays::DEFAULT_OPACITY, |o| o.default_opacity)
+    }
+
+    /// A vector overlay's line width (CSS px), if it offers one.
+    pub fn line_width(&self, id: &str) -> Option<f64> {
+        let spec = crate::vectors::spec(id)?.line_width?;
+        Some(self.line_widths.get(id).copied().unwrap_or(spec.default).clamp(spec.min, spec.max))
+    }
+
+    /// A time-sliced overlay's slice, if it has one.
+    pub fn slice(&self, id: &str) -> Option<f64> {
+        let spec = crate::vectors::spec(id)?.slice?;
+        Some(spec.snap(self.slices.get(id).copied().unwrap_or(spec.default)))
     }
 
     /// Turns an overlay on or off; one turned on joins the top of the order.
@@ -126,6 +202,11 @@ pub struct AppState {
     pub layer_order: Vec<String>,
     /// Dock tool ids, in the person's order.
     pub dock_order: Vec<String>,
+    pub alerts: Alerts,
+    /// Vector overlays' line widths (CSS px), once set.
+    pub line_widths: BTreeMap<String, f64>,
+    /// Time-sliced overlays' slices, once set.
+    pub slices: BTreeMap<String, f64>,
 }
 
 impl Default for AppState {
@@ -138,6 +219,9 @@ impl Default for AppState {
             overlays: BTreeMap::from([("water".into(), Overlay { on: true, opacity: LAUNCH_WATER_OPACITY })]),
             layer_order: vec!["overlay:water".into(), "terrain".into()],
             dock_order: Vec::new(),
+            alerts: Alerts::default(),
+            line_widths: BTreeMap::new(),
+            slices: BTreeMap::new(),
         }
     }
 }
@@ -154,6 +238,8 @@ pub struct Fitted {
     /// land only), where the derived floor field has no value.
     pub rem_floor: Option<f64>,
     pub rem_land_floor: Option<f64>,
+    /// Vector overlays' loading state, by id ("Loading", "12 in view").
+    pub vector_status: BTreeMap<String, String>,
 }
 
 #[cfg(test)]

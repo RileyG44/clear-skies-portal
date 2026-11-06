@@ -1,6 +1,5 @@
 //! The reference overlays (app/overlays.js), in the web's page order, and the
-//! raster layers that draw them. Vector overlays (GeoJSON features, live
-//! feeds) have no native layer yet; their pages show them disabled.
+//! raster or vector layers (vectors.rs) that draw them.
 
 use csk_engine::layers::RasterLayer;
 
@@ -74,8 +73,13 @@ pub struct Info {
     pub note: Option<&'static str>,
     /// Percent, until the person sets one.
     pub default_opacity: f64,
-    /// None for vector overlays, which are not in this build yet.
+    /// The raster layer drawing it; None for vector overlays.
     pub raster: Option<Raster>,
+    /// Drawn from features (vectors.rs).
+    pub vector: bool,
+    /// Listed on its group's page. Active fires are switched from the
+    /// live-alert controls, as on the web.
+    pub listed: bool,
     /// Drawn greyscale and brightened on the dark map, as the web reads
     /// hydrography on a dark basemap.
     pub muted_dark: bool,
@@ -94,7 +98,16 @@ const fn info(id: &'static str, name: &'static str, via: &'static str, color: &'
         note: None,
         default_opacity: DEFAULT_OPACITY,
         raster: Some(Raster::One(id)),
+        vector: false,
+        listed: true,
         muted_dark: false,
+    }
+}
+
+impl Info {
+    /// Whether the app draws it.
+    pub fn drawn(&self) -> bool {
+        self.raster.is_some() || self.vector
     }
 }
 
@@ -103,7 +116,7 @@ const fn layer(base: Info, opacity: f64, note: &'static str) -> Info {
 }
 
 const fn vector(base: Info, opacity: f64, note: &'static str) -> Info {
-    Info { raster: None, default_opacity: opacity, note: Some(note), ..base }
+    Info { raster: None, vector: true, default_opacity: opacity, note: Some(note), ..base }
 }
 
 use Group::{Conditions, Geology, Labels, Past};
@@ -218,6 +231,16 @@ pub static OVERLAYS: &[Info] = &[
         "A public-safe research index, not Washington's protected inventory. Every marker states its precision, \
          uncertainty, access limits, and source.",
     ),
+    // Conditions: active fires (app/map-menu.js), from the live-alert controls.
+    Info {
+        listed: false,
+        ..vector(
+            info("fires", "Active fires", "NIFC live perimeter feed", "#f85149", Conditions),
+            100.0,
+            "Current interagency fire perimeters and incident locations; perimeters lag the fire line and can be \
+             revised.",
+        )
+    },
     // Conditions: snow.
     layer(
         info("snowdepth", "Snow depth", "NOHRSC", "#7fc4ff", Conditions),
@@ -272,6 +295,8 @@ mod tests {
         for o in OVERLAYS {
             for dark in [false, true] {
                 assert_eq!(raster(o.id, dark).is_some(), o.raster.is_some(), "{}", o.id);
+                assert!(o.drawn(), "{}", o.id);
+                assert_eq!(o.vector, crate::vectors::spec(o.id).is_some(), "{}", o.id);
             }
         }
         assert_eq!(raster("labels", true).unwrap().0.id(), "labels-dark");

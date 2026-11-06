@@ -13,5 +13,6 @@ pub mod render;
 pub mod shell;
 pub mod state;
 pub mod terrain;
+pub mod vectors;
 
 pub use app::{App, Publish};

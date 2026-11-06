@@ -20,4 +20,4 @@ for source in crates/csk-gpu/src/wgsl/*.wgsl; do
   $tool "$source" "shaders/generated/$(basename "$source" .wgsl)"
 done
 cp "$scratch/layouts.json" "$scratch/defaults.bin" "$scratch/terrain.json" "$scratch/terrain-cases.json" \
-  "$scratch/water-mask.rle" shaders/generated/
+  "$scratch/water-mask.rle" "$scratch/wa-archaeology.json" shaders/generated/

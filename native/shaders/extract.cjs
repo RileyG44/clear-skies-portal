@@ -181,3 +181,8 @@ fs.writeFileSync(path.join(output, "terrain-cases.json"), JSON.stringify(cases) 
 // packing, decoded natively into the same RGBA16UI mask the shader reads.
 fs.writeFileSync(path.join(output, "water-mask.rle"), Buffer.from(require("../../water-geography-data.js"), "base64"));
 
+
+// The public-safe Washington archaeology index (wa-archaeology.js), as the
+// GeoJSON the web layer draws, so the native layer shows the same entries.
+const archaeology = require("../../wa-archaeology.js");
+fs.writeFileSync(path.join(output, "wa-archaeology.json"), JSON.stringify(archaeology.featureCollection()) + "\n");

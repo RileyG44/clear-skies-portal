@@ -89,7 +89,9 @@ pub unsafe extern "C" fn csk_app_new(engine: *const CskEngine, sink: CskShellSin
     // SAFETY: the caller passes a live engine or NULL.
     let Some(e) = (unsafe { engine.as_ref() }) else { return std::ptr::null_mut() };
     let publish: csk_app::Publish = Arc::new(move |json: String| sink.update(json));
-    Box::into_raw(Box::new(CskApp { app: App::new(e.engine.clone(), publish), runtime: e.runtime.handle().clone() }))
+    let app = App::new(e.engine.clone(), publish);
+    app.set_runtime(e.runtime.handle().clone());
+    Box::into_raw(Box::new(CskApp { app, runtime: e.runtime.handle().clone() }))
 }
 
 /// Publishes everything the shell shows, marked ready.

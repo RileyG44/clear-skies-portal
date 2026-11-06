@@ -43,7 +43,12 @@ struct Inner {
     /// The selected place, and how many times it has changed.
     location: Option<shell::Location>,
     location_version: u64,
+    /// The tapped vector feature's details, while its panel is open.
+    feature: Option<(String, Vec<Value>)>,
 }
+
+/// The panel showing a tapped vector feature.
+const FEATURE_PANEL: &str = "featurePanel";
 
 /// The last place suggestions, numbered so a pick names the list it saw.
 #[derive(Default)]
@@ -52,8 +57,35 @@ struct Suggestions {
     places: Vec<csk_engine::places::Place>,
 }
 
+/// A vector overlay's features and what the map draws of them.
+#[derive(Default)]
+struct VectorSlot {
+    features: Option<Arc<Vec<crate::vectors::Feature>>>,
+    /// Unix ms of the oldest answer drawn, and whether a refresh failed.
+    fetched: i64,
+    stale: bool,
+    error: bool,
+    /// A fetch is running; `generation` names the newest one.
+    loading: bool,
+    generation: u64,
+    /// What the features were fetched for: a source parameter (the
+    /// earthquake age) and the bounds a view query covers.
+    param: String,
+    bounds: Option<[f64; 4]>,
+    /// The features' revision, and the shapes drawn for it and the filters.
+    revision: u64,
+    drawn: Option<String>,
+    shapes: Option<Arc<csk_gpu::Shapes>>,
+}
+
 pub struct App {
     engine: Arc<Engine>,
+    /// Itself, for work it starts on the runtime.
+    me: std::sync::Weak<App>,
+    /// Where background loading runs, once attached (`set_runtime`).
+    runtime: Mutex<Option<tokio::runtime::Handle>>,
+    /// Vector overlays by id. Locked after `inner` when both are held.
+    vectors: Mutex<std::collections::HashMap<&'static str, VectorSlot>>,
     inner: Mutex<Inner>,
     suggestions: Mutex<Suggestions>,
     /// The lighting the published look previews were drawn with.
@@ -103,10 +135,15 @@ fn draws(state: &AppState) -> Vec<Draw> {
             "terrain" | "elevation-spectrum" | "elevation-bands" => {}
             overlay => {
                 let Some(o) = overlay.strip_prefix("overlay:") else { continue };
-                let state = state.overlay(o);
-                if let (true, Some((layer, muted))) = (state.on, crate::overlays::raster(o, dark)) {
-                    let opacity = (state.opacity / 100.0).clamp(0.0, 1.0) as f32;
+                let overlay = state.overlay(o);
+                let opacity = (overlay.opacity / 100.0).clamp(0.0, 1.0) as f32;
+                if !overlay.on {
+                    continue;
+                }
+                if let Some((layer, muted)) = crate::overlays::raster(o, dark) {
                     out.push(Draw::Raster(layer, RasterStyle { opacity, muted }));
+                } else if let Some(spec) = crate::vectors::spec(o) {
+                    out.push(Draw::Vector(spec.id, opacity));
                 }
             }
         }
@@ -172,15 +209,37 @@ impl App {
             settled: false,
             location: None,
             location_version: 0,
+            feature: None,
         };
-        Arc::new(Self {
+        Arc::new_cyclic(|me| Self {
             engine,
+            me: me.clone(),
+            runtime: Mutex::new(None),
+            vectors: Mutex::default(),
             inner: Mutex::new(inner),
             suggestions: Mutex::default(),
             previews: Mutex::new(None),
             map: Mutex::new(None),
             publish,
         })
+    }
+
+    /// Runs background work (vector overlays' features, live refreshes) on
+    /// `runtime`, from now on.
+    pub fn set_runtime(&self, runtime: tokio::runtime::Handle) {
+        *lock(&self.runtime) = Some(runtime.clone());
+        // Live feeds refresh on their age limits while they are on.
+        let me = self.me.clone();
+        runtime.spawn(async move {
+            loop {
+                tokio::time::sleep(std::time::Duration::from_secs(30)).await;
+                let Some(app) = me.upgrade() else { return };
+                let inner = lock(&app.inner);
+                app.sync_vectors(&inner.state);
+            }
+        });
+        let inner = lock(&self.inner);
+        self.sync_vectors(&inner.state);
     }
 
     /// Starts the shell: everything it shows, marked ready.
@@ -231,11 +290,13 @@ impl App {
     }
 
     fn panel_update(&self, inner: &Inner, update: &mut Object<String, Value>) {
-        let panel = inner
-            .view
-            .panel
-            .as_deref()
-            .and_then(|id| shell::panel(id, &inner.state, self.engine.store.stats().map_or(0, |s| s.bytes)));
+        let panel = inner.view.panel.as_deref().and_then(|id| {
+            if id == FEATURE_PANEL {
+                let (title, items) = inner.feature.clone()?;
+                return Some(json!({"id": FEATURE_PANEL, "title": title, "items": items}));
+            }
+            shell::panel(id, &inner.state, self.engine.store.stats().map_or(0, |s| s.bytes))
+        });
         update.insert("panelOpen".into(), json!(inner.view.panel));
         update.insert("panel".into(), panel.unwrap_or(Value::Null));
     }
@@ -318,6 +379,236 @@ impl App {
             map.set_layers(draws(&inner.state));
             map.set_markers(markers(inner.location.as_ref(), &inner.state.appearance));
         }
+        self.sync_vectors(&inner.state);
+    }
+
+    /// Brings vector overlays in line with the state: fetches what is due
+    /// (missing, older than its age limit, asked for other parameters, or a
+    /// view query the view has left), and redraws shapes whose features or
+    /// filters changed. Layers turned off leave the map.
+    fn sync_vectors(&self, state: &AppState) {
+        let runtime = lock(&self.runtime).clone();
+        let map = lock(&self.map).clone();
+        let view = map.as_ref().map(|m| m.view());
+        let now =
+            std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |d| d.as_millis() as i64);
+        let mut vectors = lock(&self.vectors);
+        for spec in crate::vectors::SPECS {
+            let slot = vectors.entry(spec.id).or_default();
+            if !state.overlay(spec.id).on {
+                if slot.drawn.take().is_some()
+                    && let Some(map) = &map
+                {
+                    map.set_vector(spec.id, None);
+                }
+                slot.shapes = None;
+                continue;
+            }
+            let Some(runtime) = &runtime else { continue };
+            let (urls, bounds) = crate::vectors::request(spec, &state.alerts, view.as_ref());
+            let param = match spec.source {
+                crate::vectors::Source::Quakes => state.alerts.quake_age().to_owned(),
+                crate::vectors::Source::Nws => state.alerts.viewport.to_string(),
+                _ => String::new(),
+            };
+            let left = match (slot.bounds, view.as_ref()) {
+                (Some(held), Some(v)) if bounds.is_some() => {
+                    !crate::vectors::inside(crate::vectors::view_bounds(v, 0.0), held)
+                }
+                _ => false,
+            };
+            let old = now - slot.fetched >= spec.ttl.as_millis() as i64;
+            let bundled = matches!(spec.source, crate::vectors::Source::Bundled(_));
+            let due = slot.features.is_none() || slot.param != param || left || (old && !bundled);
+            if due && !slot.loading && !(slot.error && slot.features.is_none() && !old && slot.param == param && !left)
+            {
+                slot.loading = true;
+                slot.generation += 1;
+                let (id, generation, ttl, engine, me) =
+                    (spec.id, slot.generation, spec.ttl, self.engine.clone(), self.me.clone());
+                let (param_now, source) = (param.clone(), spec.source);
+                runtime.spawn(async move {
+                    // Fetch every part, then parse off the async workers: a
+                    // month of earthquakes is large.
+                    let (mut bodies, mut fetched, mut stale, mut failed) = (Vec::new(), now, false, false);
+                    for (part, url) in urls.iter().enumerate() {
+                        match engine.features(url, ttl).await {
+                            Ok(answer) => {
+                                fetched = fetched.min(answer.fetched);
+                                stale |= answer.stale;
+                                bodies.push((part as u8, answer.body));
+                            }
+                            Err(_) => failed = true,
+                        }
+                    }
+                    let parsed = tokio::task::spawn_blocking(move || {
+                        let mut features = Vec::new();
+                        let mut any = false;
+                        if let crate::vectors::Source::Bundled(bytes) = source
+                            && let Some(parsed) = crate::vectors::parse(bytes, 0)
+                        {
+                            features = parsed;
+                            any = true;
+                        }
+                        for (part, body) in &bodies {
+                            match crate::vectors::parse(body, *part) {
+                                Some(parsed) => {
+                                    features.extend(parsed);
+                                    any = true;
+                                }
+                                None => failed = true,
+                            }
+                        }
+                        any.then_some((features, fetched, stale || failed))
+                    })
+                    .await
+                    .ok()
+                    .flatten();
+                    if let Some(app) = me.upgrade() {
+                        app.vector_loaded(id, generation, param_now, bounds, parsed);
+                    }
+                });
+            }
+            // Redraw shapes for new features or filters.
+            let Some(features) = slot.features.clone() else { continue };
+            let width = state.line_width(spec.id);
+            let slice = state.slice(spec.id);
+            let key = format!("{}|{:?}|{width:?}|{slice:?}", slot.revision, state.alerts);
+            if slot.drawn.as_deref() == Some(key.as_str()) {
+                continue;
+            }
+            slot.drawn = Some(key.clone());
+            let (id, alerts, me, map) = (spec.id, state.alerts.clone(), self.me.clone(), map.clone());
+            runtime.spawn_blocking(move || {
+                let shapes = Arc::new(crate::vectors::shapes(id, &features, &alerts, width, slice));
+                let Some(app) = me.upgrade() else { return };
+                let mut vectors = lock(&app.vectors);
+                let Some(slot) = vectors.get_mut(id).filter(|s| s.drawn.as_deref() == Some(key.as_str())) else {
+                    return;
+                };
+                slot.shapes = Some(shapes.clone());
+                if let Some(map) = &map {
+                    map.set_vector(id, Some(shapes));
+                }
+            });
+        }
+    }
+
+    /// A vector overlay's fetch finished: keeps its features (or marks the
+    /// failure, keeping what was drawn), then redraws and republishes.
+    fn vector_loaded(
+        &self,
+        id: &'static str,
+        generation: u64,
+        param: String,
+        bounds: Option<[f64; 4]>,
+        loaded: Option<(Vec<crate::vectors::Feature>, i64, bool)>,
+    ) {
+        {
+            let mut vectors = lock(&self.vectors);
+            let Some(slot) = vectors.get_mut(id).filter(|s| s.generation == generation) else { return };
+            slot.loading = false;
+            match loaded {
+                Some((features, fetched, stale)) => {
+                    slot.features = Some(Arc::new(features));
+                    slot.fetched = fetched;
+                    slot.stale = stale;
+                    slot.error = false;
+                    slot.revision += 1;
+                    slot.param = param;
+                    slot.bounds = bounds;
+                }
+                None => {
+                    slot.error = true;
+                    // Ask again after the retry interval, not every sync.
+                    slot.fetched = std::time::SystemTime::now()
+                        .duration_since(std::time::UNIX_EPOCH)
+                        .map_or(0, |d| d.as_millis() as i64);
+                    if slot.features.is_none() {
+                        slot.param = param;
+                        slot.bounds = bounds;
+                    }
+                }
+            }
+        }
+        let mut inner = lock(&self.inner);
+        self.sync_vectors(&inner.state);
+        self.republish_vector_status(&mut inner);
+    }
+
+    /// Refreshes each vector overlay's loading state, and the open page if
+    /// that changed it.
+    fn republish_vector_status(&self, inner: &mut MutexGuard<'_, Inner>) {
+        let status = self.vector_status(&inner.state);
+        if status == inner.fitted.vector_status {
+            return;
+        }
+        inner.fitted.vector_status = status;
+        let page = inner.view.page.as_deref().and_then(|p| shell::page(p, &inner.state, &inner.fitted));
+        let Some(page) = page else { return };
+        let mut update = Object::new();
+        update.insert("page".into(), page);
+        self.send_update(update);
+    }
+
+    /// What each vector overlay that is on shows: loading, unavailable, or
+    /// for live feeds how many features are in view (or in all).
+    fn vector_status(&self, state: &AppState) -> std::collections::BTreeMap<String, String> {
+        let view = lock(&self.map).as_ref().map(|m| m.view());
+        let bounds = view.as_ref().map(|v| crate::vectors::view_bounds(v, 0.15));
+        let vectors = lock(&self.vectors);
+        let mut out = std::collections::BTreeMap::new();
+        for spec in crate::vectors::SPECS {
+            if !state.overlay(spec.id).on {
+                continue;
+            }
+            let Some(slot) = vectors.get(spec.id) else { continue };
+            let status = match (&slot.features, slot.loading, slot.error) {
+                (None, true, _) => "Loading".to_string(),
+                (None, _, true) => "Unavailable".to_string(),
+                (None, _, _) => continue,
+                (Some(features), _, _) => {
+                    let live =
+                        !matches!(spec.source, crate::vectors::Source::Url(_) | crate::vectors::Source::Bundled(_));
+                    if !live {
+                        if slot.stale { "Showing the last copy kept".to_string() } else { continue }
+                    } else {
+                        let slice = state.slice(spec.id);
+                        let shown = features
+                            .iter()
+                            .filter(|f| crate::vectors::shown(spec.id, f, &state.alerts, slice))
+                            .filter(|f| !state.alerts.viewport || bounds.is_none_or(|b| crate::vectors::in_view(f, b)))
+                            .count();
+                        let scope = if state.alerts.viewport { "in view" } else { "shown" };
+                        let count = format!("{} {scope}", shown);
+                        if slot.stale { format!("{count} · refresh failed, last update kept") } else { count }
+                    }
+                }
+            };
+            out.insert(spec.id.to_owned(), status);
+        }
+        out
+    }
+
+    /// The topmost interactive vector feature under a screen point, with
+    /// its layer.
+    fn feature_at(&self, state: &AppState, at: [f64; 2]) -> Option<(String, Vec<Value>)> {
+        let view = lock(&self.map).as_ref()?.view();
+        let vectors = lock(&self.vectors);
+        for draw in draws(state).iter().rev() {
+            let Draw::Vector(id, _) = draw else { continue };
+            if !crate::vectors::spec(id).is_some_and(|s| s.interactive) {
+                continue;
+            }
+            let Some(slot) = vectors.get(id) else { continue };
+            let (Some(shapes), Some(features)) = (&slot.shapes, &slot.features) else { continue };
+            if let Some(index) = shapes.hit(&view, at, 6.0)
+                && let Some(feature) = features.get(index as usize)
+            {
+                return Some(crate::vectors::details(id, feature));
+            }
+        }
+        None
     }
 
     fn save(&self, inner: &Inner) {
@@ -413,6 +704,7 @@ impl App {
             "closePanel" => {
                 if args["id"].as_str() == inner.view.panel.as_deref() {
                     inner.view.panel = None;
+                    inner.feature = None;
                 }
                 self.changed(&inner)
             }
@@ -469,6 +761,17 @@ impl App {
                 // coordinates.
                 let (Some(x), Some(y)) = (args["x"].as_f64(), args["y"].as_f64()) else { return };
                 let Some(map) = lock(&self.map).clone() else { return };
+                // A live alert, fire or archaeology marker shows what it is,
+                // as the web's pop-ups do, instead of selecting a place.
+                if let Some(details) = self.feature_at(&inner.state, [x, y]) {
+                    inner.feature = Some(details);
+                    inner.view.panel = Some(FEATURE_PANEL.into());
+                    let mut update = Object::new();
+                    self.panel_update(&inner, &mut update);
+                    drop(inner);
+                    self.send_update(update);
+                    return;
+                }
                 drop(inner);
                 let [lng, lat] = map.lon_lat_at([x, y]);
                 let label = format!("{lat:.5}, {lng:.5}");
@@ -772,16 +1075,76 @@ impl App {
         // An overlay's switch and, once on, its opacity. Overlays with no
         // native layer cannot be turned on.
         if let Some(id) = r.strip_prefix("#ov_") {
-            if crate::overlays::find(id).is_none_or(|o| o.raster.is_none()) {
+            if crate::overlays::find(id).is_none_or(|o| !o.drawn()) {
                 return false;
             }
             let on = value.as_bool().unwrap_or(!inner.state.overlay(id).on);
             inner.state.set_overlay(id, on);
             return true;
         }
+        // The live-alert controls: feed switches are their overlays' own.
+        let feed = match r {
+            "#alertNws" => Some("weatheralerts"),
+            "#alertQuakes" => Some("earthquakes"),
+            "#alertVolcanoes" => Some("volcanostatus"),
+            "#alertFires" => Some("fires"),
+            _ => None,
+        };
+        if let Some(id) = feed {
+            let on = value.as_bool().unwrap_or(!inner.state.overlay(id).on);
+            inner.state.set_overlay(id, on);
+            return true;
+        }
+        let alerts = &mut inner.state.alerts;
+        match r {
+            "#alertViewport" => {
+                alerts.viewport = value.as_bool().unwrap_or(!alerts.viewport);
+                return true;
+            }
+            "#alertNwsSeverity" | "#alertQuakeAge" => {
+                let Some(choice) = value.as_str() else { return false };
+                let (field, allowed): (&mut String, &[&str]) = if r == "#alertNwsSeverity" {
+                    (&mut alerts.nws_severity, &["all", "watch", "warning"])
+                } else {
+                    (&mut alerts.quake_age, &["hour", "day", "week", "month"])
+                };
+                if !allowed.contains(&choice) {
+                    return false;
+                }
+                *field = choice.to_owned();
+                return true;
+            }
+            "#alertQuakeMag" => {
+                let Some(m) = v.filter(|m| [-1.0, 1.0, 2.5, 4.0, 5.5].contains(m)) else { return false };
+                alerts.quake_mag = m;
+                return true;
+            }
+            _ => {}
+        }
+        if let Some(kind) = r.strip_prefix("#alertType_") {
+            if !crate::state::ALERT_TYPES.iter().any(|(k, _)| *k == kind) {
+                return false;
+            }
+            let on = value.as_bool().unwrap_or(!alerts.types.get(kind).copied().unwrap_or(true));
+            alerts.types.insert(kind.to_owned(), on);
+            return true;
+        }
+        if let Some(id) = r.strip_prefix("#ovLine_") {
+            let (Some(width), Some(v)) = (crate::vectors::spec(id).and_then(|s| s.line_width), v) else { return false };
+            let snapped = ((v.clamp(width.min, width.max) - width.min) / width.step).round() * width.step + width.min;
+            inner.state.line_widths.insert(id.to_owned(), snapped);
+            return true;
+        }
+        if let Some(id) = r.strip_prefix("#ovTime_") {
+            let (Some(slice), Some(v)) = (crate::vectors::spec(id).and_then(|s| s.slice), v) else { return false };
+            let values = slice.values();
+            let index = (v.round().max(0.0) as usize).min(values.len() - 1);
+            inner.state.slices.insert(id.to_owned(), values[index]);
+            return true;
+        }
         if let Some(id) = r.strip_prefix("#ovOpacity_") {
             let Some(v) = v else { return false };
-            if crate::overlays::find(id).is_none_or(|o| o.raster.is_none()) {
+            if crate::overlays::find(id).is_none_or(|o| !o.drawn()) {
                 return false;
             }
             let mut overlay = inner.state.overlay(id);
@@ -985,6 +1348,10 @@ impl App {
         if changed {
             self.redraw(&inner);
         }
+        // A settled view: view queries it has left ask again, and live
+        // counts follow what is in view.
+        self.sync_vectors(&inner.state);
+        inner.fitted.vector_status = self.vector_status(&inner.state);
         let update = self.changed(&inner);
         drop(inner);
         self.send_update(update);
@@ -1085,7 +1452,7 @@ fn act_layer(state: &mut AppState, rest: &str, value: &Value) -> bool {
         return false;
     }
     if let Some(o) = id.strip_prefix("overlay:")
-        && crate::overlays::find(o).is_none_or(|o| o.raster.is_none())
+        && crate::overlays::find(o).is_none_or(|o| !o.drawn())
     {
         return false;
     }
