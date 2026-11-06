@@ -336,7 +336,7 @@ function paintServerBox(){
   if(forget) forget.disabled=!API;
   if(meta){ meta.className=""; meta.textContent="" }
   if(PROXY){
-    st.textContent = API ? "connected" : "connected (this page)";
+    st.textContent = API ? "connected" : BUILT_IN_ENGINE ? "built into this app" : "connected (this page)";
     if(tool){ tool.title="Terrain engine: "+st.textContent; tool.setAttribute("aria-label",tool.title) }
     if(meta){
       const bits=[];
@@ -353,6 +353,12 @@ function paintServerBox(){
       if(serverHealth?.nationalCircuit?.coolingDown) bits.push(`browser fallback ${serverHealth.nationalCircuit.retryInSec}s`);
       meta.className="ok"; meta.textContent=bits.join(" · ")||"Health check passed.";
     }
+    return;
+  }
+  if(!API&&BUILT_IN_ENGINE){
+    st.textContent = "starting";
+    if(tool){ tool.title="Terrain engine: starting"; tool.setAttribute("aria-label",tool.title) }
+    if(meta) meta.textContent="The engine built into this app has not answered yet. It retries on its own.";
     return;
   }
   if(!API){
@@ -391,7 +397,7 @@ function setServerBase(value){
 async function connectServer(){
   const field=$("#srvUrl"), button=$("#srvConnect");
   const base=setServerBase(field&&field.value);
-  if(!base&&(NATIVE_HOST||/\.github\.io$/i.test(location.hostname))){ paintServerBox(); return false }
+  if(!engineExpected(base)){ paintServerBox(); return false }
   if(button){ button.disabled=true; button.textContent="Checking\u2026"; }
   const ok=await probeServer();
   if(button) button.disabled=false;

@@ -486,7 +486,14 @@ async function syncAll(){
     for(const info of remote.values()){
       const local=layers.get(info.id);
       if(local?.shared)continue;
-      if(local&&local.doc.markup.updated>=info.updated){ if(local.doc.markup.updated===info.updated) local.syncedAt=info.updated;continue }
+      if(local){
+        if(local.doc.markup.updated===info.updated){ local.syncedAt=info.updated;continue }
+        /* Changed here and on another device since the last save: pull the
+           other copy; adopt() keeps this device's edits as a separate layer.
+           A newer timestamp here must not overwrite the other device's work. */
+        const both=unsavedHere(local)&&remoteMoved(local,info);
+        if(!both&&local.doc.markup.updated>info.updated) continue;
+      }
       const r=await fetch(B.api(`/api/markup/${info.id}`),{cache:"no-store"});
       if(r.ok) adopt(await r.json());
     }
@@ -497,6 +504,9 @@ async function syncAll(){
          and not saved yet; one that came from an engine and is gone from this
          one belongs to another engine (or was deleted), so it is let go. */
       if(!info&&layer.syncedAt!==null){ removeLocal(layer.doc.markup.id);continue }
+      /* A conflict that could not be settled yet (a mark was mid-drag) waits
+         for the next sync rather than overwriting the other device's copy. */
+      if(info&&remoteMoved(layer,info)) continue;
       if(!info||layer.doc.markup.updated>info.updated) await push(layer);
     }
     status("synced");
@@ -514,12 +524,37 @@ async function push(layer){
   else if(r.status===410) removeLocal(doc.markup.id);
   else throw new Error(`markup save HTTP ${r.status}`);
 }
+/* Edits made here that the engine has not confirmed. */
+const unsavedHere=layer=>layer.syncedAt!==layer.doc.markup.updated;
+/* The engine's copy changed since this device last saved or loaded it. */
+const remoteMoved=(layer,info)=>layer.syncedAt!==null&&layer.syncedAt!==info.updated;
+const sameContent=(a,b)=>a.markup.name===b.markup.name&&a.markup.description===b.markup.description&&
+  a.markup.color===b.markup.color&&JSON.stringify(a.features)===JSON.stringify(b.features);
 function adopt(doc){
   if(!doc?.markup?.id) return;
   const local=layers.get(doc.markup.id);
   if(local&&editing===local&&gesture) return;      // never pull a mark out from under the pointer
-  if(local){ local.doc=doc;local.syncedAt=doc.markup.updated;if(selected?.layer===local) deselect();renderLayer(local) }
+  if(local){
+    if(unsavedHere(local)&&local.doc.markup.updated!==doc.markup.updated&&!sameContent(local.doc,doc)) keepConflictCopy(local);
+    local.doc=doc;local.syncedAt=doc.markup.updated;if(selected?.layer===local) deselect();renderLayer(local);
+  }
   else{ const view=readView()[doc.markup.id]||{};const layer=makeLayer(doc,view);layer.syncedAt=doc.markup.updated;layer.rank=nextRank();applyOrder() }
+}
+/* Another device saved this layer while it had edits here that the engine
+   never received. The engine's copy keeps the layer; this device's version
+   becomes a new layer beside it, saved on the next sync, so no one's marks
+   are lost and nothing is merged silently. */
+const CONFLICT_SUFFIX=" (conflict copy)";
+function keepConflictCopy(local){
+  const now=Date.now(),from=local.doc.markup,oldId=from.id;
+  const doc={...JSON.parse(JSON.stringify(local.doc)),
+    markup:{...from,id:slug(from.name),name:from.name.slice(0,120-CONFLICT_SUFFIX.length)+CONFLICT_SUFFIX,created:now,updated:now}};
+  const copy=makeLayer(doc,{on:local.visible,op:local.opacity});
+  copy.rank=nextRank();applyOrder();
+  for(const stacks of [undoStacks,redoStacks]) if(stacks.has(oldId)){ stacks.set(doc.markup.id,stacks.get(oldId));stacks.delete(oldId) }
+  if(editing===local) startEditing(copy);
+  copy.conflictCopy=true;writeView();touch(copy);
+  return copy;
 }
 function removeLocal(id){
   const layer=layers.get(id);if(!layer) return;
@@ -1770,6 +1805,10 @@ function changed(){
   },60);
 }
 function statusText(layer){
+  const text=saveText(layer);
+  return layer.conflictCopy?`${text} · your edits, kept from a sync conflict`:text;
+}
+function saveText(layer){
   const server=serverState();
   if(!server.online) return "Not saved · terrain engine not connected";
   if(lastStatus==="unsupported") return "Not saved · engine needs an update to keep markup";
