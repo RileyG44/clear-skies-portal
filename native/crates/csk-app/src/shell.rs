@@ -737,11 +737,17 @@ pub fn map_sources(state: &AppState) -> Value {
     json!({"kind":"disclosure","ref":"settings:sources","title":"Map sources","items":items})
 }
 
-fn settings_page(state: &AppState) -> Value {
+fn settings_page(state: &AppState, fitted: &Fitted) -> Value {
     let (title, description) = route_info("settings").unwrap_or_default();
     json!({"route":"settings","title":title,"description":description,"items":[
         {"kind":"group","ref":"settings:engine","title":"Terrain engine","items":[
             {"kind":"text","style":"row","title":"Secure terrain engine · built into this app"}
+        ]},
+        {"kind":"group","ref":"settings:device","title":"This device","items":[
+            {"kind":"text","style":"row","title":"Build details","detail":fitted.build.as_deref().unwrap_or("App version unavailable")},
+            {"kind":"text","style":"row","title":"Terrain engine version","detail":csk_engine::VERSION},
+            {"kind":"button","ref":"settings:resetPreferences","title":"Reset app preferences","role":"link","hint":"Resets appearance, dock order, layer order and pane states. Map content stays."},
+            {"kind":"button","ref":"settings:resetMenuLayout","title":"Reset menu layout","role":"link"}
         ]},
         {"kind":"group","ref":"settings:sources:group","title":"About the map","items":[map_sources(state)]}
     ]})
@@ -795,7 +801,7 @@ pub fn page(route: &str, state: &AppState, fitted: &Fitted) -> Option<Value> {
         "layers" => layers_page(state),
         "elevation" => crate::elevation::page(&state.elevation),
         "appearance" => crate::appearance::page(&state.appearance),
-        "settings" => settings_page(state),
+        "settings" => settings_page(state, fitted),
         "labels" | "geology" | "conditions" | "past" => {
             let group = crate::overlays::Group::for_route(route)?;
             overlay_page(route, group, state)

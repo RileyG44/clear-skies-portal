@@ -353,6 +353,7 @@ nonisolated struct NativeAppearance: Decodable, Hashable, Sendable {
 }
 
 struct ShellUpdate: Decodable {
+    var resetMenuLayout: Bool?
     var appearance: NativeAppearance?
     var images: [String: String]?
     var imageKeys: [String]?
@@ -370,13 +371,14 @@ struct ShellUpdate: Decodable {
     var openRoute: String?
 
     enum Key: String, CodingKey {
-        case groups, ready, route, counts, search, map, dock, status, panelOpen, page, panel, openRoute, images, imageKeys, appearance
+        case groups, ready, route, counts, search, map, dock, status, panelOpen, page, panel, openRoute, images, imageKeys, appearance, resetMenuLayout
     }
 
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: Key.self)
         images = try container.decodeIfPresent([String: String].self, forKey: .images)
         imageKeys = try container.decodeIfPresent([String].self, forKey: .imageKeys)
+        resetMenuLayout = try container.decodeIfPresent(Bool.self, forKey: .resetMenuLayout)
         appearance = try container.decodeIfPresent(NativeAppearance.self, forKey: .appearance)
         groups = try container.decodeIfPresent([RouteGroup].self, forKey: .groups)
         ready = try container.decodeIfPresent(Bool.self, forKey: .ready)

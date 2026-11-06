@@ -63,6 +63,19 @@ pub struct Overlay {
 }
 
 impl AppState {
+    /// Preferences only: terrain, coloring, active layers and camera content stay.
+    pub fn reset_preferences(&mut self) {
+        self.appearance = crate::appearance::Appearance::default();
+        self.dock_order.clear();
+        self.layer_order =
+            vec!["overlay:water".into(), "elevation-bands".into(), "elevation-spectrum".into(), "terrain".into()];
+        for o in crate::overlays::OVERLAYS {
+            if o.raster.is_some() && o.id != "water" && self.overlay(o.id).on {
+                self.layer_order.insert(0, format!("overlay:{}", o.id));
+            }
+        }
+    }
+
     pub fn normalize(&mut self) {
         self.elevation.normalize();
         self.appearance.normalize();
@@ -135,8 +148,38 @@ pub struct Fitted {
     pub ranges: BTreeMap<String, Fit>,
     /// Map-centre elevation in metres, from the last view sample.
     pub center: Option<f64>,
+    /// Platform version/build, supplied at startup; never persisted in a view document.
+    pub build: Option<String>,
     /// Flat relative-elevation floors (the view's low elevation, and over
     /// land only), where the derived floor field has no value.
     pub rem_floor: Option<f64>,
     pub rem_land_floor: Option<f64>,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn resetting_preferences_preserves_map_content_and_keeps_all_active_layers() {
+        let mut s = AppState { theme: "dark".into(), ..AppState::default() };
+        s.terrain.apply_look("missoula");
+        s.set_overlay("snowdepth", true);
+        s.elevation.below.on = true;
+        s.normalize();
+        let terrain = s.terrain.clone();
+        let elevation = s.elevation.clone();
+        let overlays = s.overlays.clone();
+        s.appearance.act("appearance:preset:ocean", &serde_json::Value::Null);
+        s.dock_order = vec!["snapshot".into()];
+        s.layer_order.reverse();
+        s.reset_preferences();
+        assert_eq!(s.terrain, terrain);
+        assert_eq!(s.elevation, elevation);
+        assert_eq!(s.overlays, overlays);
+        assert_eq!(s.theme, "dark");
+        assert_eq!(s.appearance, crate::appearance::Appearance::default());
+        assert!(s.dock_order.is_empty());
+        assert!(s.layer_order.contains(&"overlay:snowdepth".into()));
+        assert!(s.layer_order.contains(&"elevation-bands".into()));
+    }
 }

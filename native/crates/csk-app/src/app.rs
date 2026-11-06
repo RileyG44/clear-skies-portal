@@ -345,6 +345,11 @@ impl App {
     pub fn send(self: &Arc<Self>, command: &str, args: &Value) {
         let mut inner = lock(&self.inner);
         let update = match command {
+            "build" => {
+                let text = |key: &str| args[key].as_str().unwrap_or("?").chars().take(60).collect::<String>();
+                inner.fitted.build = Some(format!("{} {} ({})", text("name"), text("version"), text("build")));
+                self.changed(&inner)
+            }
             "setView" => {
                 let page = args["page"].as_str().map(str::to_owned);
                 inner.view.sheet = args["sheet"].as_str().unwrap_or("closed").to_owned();
@@ -398,7 +403,11 @@ impl App {
                     self.save(&inner);
                     self.refresh_previews(inner.state.terrain.lighting);
                 }
-                self.changed(&inner)
+                let mut update = self.changed(&inner);
+                if ["settings:resetPreferences", "settings:resetMenuLayout"].contains(&r) {
+                    update.insert("resetMenuLayout".into(), json!(true));
+                }
+                update
             }
             "closePanel" => {
                 if args["id"].as_str() == inner.view.panel.as_deref() {
@@ -591,7 +600,7 @@ impl App {
         let mut inner = lock(&self.inner);
         inner.state = state;
         inner.state.normalize();
-        inner.fitted = Fitted::default();
+        inner.fitted = Fitted { build: inner.fitted.build.clone(), ..Fitted::default() };
         inner.location = location;
         inner.location_version += 1;
         self.save(&inner);
@@ -713,6 +722,14 @@ impl App {
 
     /// Applies an action on a control. Returns whether anything changed.
     fn act(&self, inner: &mut Inner, r: &str, op: &str, value: &Value) -> bool {
+        if r == "settings:resetPreferences" {
+            inner.state.reset_preferences();
+            return true;
+        }
+        if r == "settings:resetMenuLayout" {
+            inner.state.dock_order.clear();
+            return true;
+        }
         if let Some(id) = r.strip_prefix('#').and_then(shell::panel_for_tool) {
             inner.view.panel = Some(id.into());
             return true;
@@ -1176,6 +1193,50 @@ impl Listener for MapEvents {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn shell_commands_publish_build_panel_edits_and_preference_resets() {
+        struct Offline;
+        impl csk_engine::transport::Transport for Offline {
+            fn fetch(&self, _: csk_engine::transport::FetchRequest) -> csk_engine::transport::FetchFuture {
+                Box::pin(async { panic!("No network needed for shell actions") })
+            }
+        }
+        let dir = std::env::temp_dir().join(format!("drumlin-shell-test-{}", std::process::id()));
+        let engine = Engine::new(
+            csk_engine::Config { cache_dir: dir.clone(), data_dir: None, cache_budget: 1 << 20, usgs_scope: None },
+            Arc::new(Offline),
+        )
+        .unwrap();
+        let output = Arc::new(Mutex::new(Vec::<Value>::new()));
+        let sink = output.clone();
+        let app = App::new(engine.clone(), Arc::new(move |s| lock(&sink).push(serde_json::from_str(&s).unwrap())));
+        app.send("build", &json!({"name":"Drumlin","version":"1.2","build":"17"}));
+        app.send("open", &json!({"route":"settings"}));
+        assert!(lock(&output).last().unwrap()["page"].to_string().contains("Drumlin 1.2 (17)"));
+        app.send("tool", &json!({"id":"terrainSourceToggle"}));
+        assert_eq!(lock(&output).last().unwrap()["panelOpen"], "terrainSourcePanel");
+        app.send("act", &json!({"ref":"layer:overlay:water:opacity","value":32}));
+        let last = lock(&output).last().unwrap().clone();
+        assert!(
+            last["panel"]["items"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .any(|r| r["id"] == "overlay:water" && r["opacity"]["value"] == 32.0)
+        );
+        app.send("closePanel", &json!({"id":"terrainSourcePanel"}));
+        assert!(lock(&output).last().unwrap()["panel"].is_null());
+        app.send("act", &json!({"ref":"appearance:preset:ocean"}));
+        assert_eq!(lock(&output).last().unwrap()["appearance"]["preset"], "ocean");
+        app.send("act", &json!({"ref":"settings:resetPreferences"}));
+        let last = lock(&output).last().unwrap().clone();
+        assert_eq!(last["resetMenuLayout"], true);
+        assert_eq!(last["appearance"]["preset"], "meadow");
+        assert_eq!(lock(&app.inner).state.overlay("water").opacity, 32.0);
+        drop(app);
+        drop(engine);
+        std::fs::remove_dir_all(dir).unwrap();
+    }
     #[test]
     fn marker_uses_the_appearance_color_at_the_web_opacity() {
         let mut a = crate::appearance::Appearance::default();

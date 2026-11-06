@@ -10,6 +10,7 @@ struct ItemList: View {
     var description: String?
     var route: String?
 
+    @Environment(ShellModel.self) private var shell
     @State private var folded = SectionFolds()
 
     var body: some View {
@@ -59,6 +60,8 @@ struct ItemList: View {
         .scrollContentBackground(.hidden)
         .onSheetGlass()
         .modifier(SheetScrollTracking())
+        .id(shell.menuLayoutRevision)
+        .onChange(of: shell.menuLayoutRevision) { folded.reset() }
         // Keep the soft frost used under the title. The hard edge promotes
         // the rows to a darker, more opaque fill as they move.
         .scrollEdgeEffectStyle(.soft, for: .top)
@@ -101,6 +104,17 @@ struct PageSection: Identifiable {
         let defaults = UserDefaults.standard
         folded = Set(defaults.stringArray(forKey: Self.storageKey) ?? [])
         opened = Set(defaults.stringArray(forKey: Self.storageKey + ".opened") ?? [])
+    }
+
+    static func resetSaved() {
+        UserDefaults.standard.removeObject(forKey: storageKey)
+        UserDefaults.standard.removeObject(forKey: storageKey + ".opened")
+    }
+
+    func reset() {
+        folded.removeAll()
+        opened.removeAll()
+        Self.resetSaved()
     }
 
     func key(route: String?, title: String) -> String { "\(route ?? ""):\(title)" }

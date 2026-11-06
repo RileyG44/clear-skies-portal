@@ -33,6 +33,9 @@ final class NativeShellBackend: ShellBackend {
 
     func start() {
         csk_app_start(handle)
+        send("build", ["name": Bundle.main.object(forInfoDictionaryKey: "CFBundleDisplayName") as? String ?? "ClearSkies",
+                       "version": Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "?",
+                       "build": Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "?"])
     }
 
     private static func json(_ arguments: [String: Any]) -> String {

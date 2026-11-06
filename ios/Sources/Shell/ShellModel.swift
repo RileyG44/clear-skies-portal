@@ -32,6 +32,7 @@ final class ShellModel {
     var connected = false
     var images: [String: String] = [:]
     var appearance = NativeAppearance()
+    var menuLayoutRevision = 0
     /// A dock action that would end a hidden freeform draft waits for an
     /// explicit discard, just like changing tools inside the markup pane.
     struct MarkupExit: Identifiable {
@@ -139,7 +140,7 @@ final class ShellModel {
         if let panelOpen = update.panelOpen {
             self.panelOpen = panelOpen
             // Draw from a layer page and the dock share the same native pane.
-            if (panelOpen == "mkBar" || backend is NativeShellBackend), presentedPanel != panelOpen {
+            if let panelOpen, (panelOpen == "mkBar" || backend is NativeShellBackend), presentedPanel != panelOpen {
                 detent = .medium
                 #if DEBUG
                 // `-cspDebugDetent large` also applies to a scripted Draw.
@@ -147,6 +148,10 @@ final class ShellModel {
                 #endif
                 activeSheet = .panel(panelOpen)
             }
+        }
+        if update.resetMenuLayout == true {
+            SectionFolds.resetSaved()
+            menuLayoutRevision += 1
         }
         if let page = update.page { self.page = page }
         if let panel = update.panel {
