@@ -33,30 +33,26 @@ const base=process.argv[2]||'http://127.0.0.1:8765/';
         inert:dock.inert,hidden:dock.getAttribute('aria-hidden'),detent:document.body.dataset.cspDetent}));
       const step=()=>page.evaluate(()=>{
         const dock=document.getElementById('mapDock');getComputedStyle(dock).opacity;
-        document.getElementById('cspGrabber').click();
+        const detent=document.body.classList.contains('collapsed')?'peek':document.body.dataset.cspDetent;
+        [...document.querySelectorAll('.csp-sheet-actions button')].find(button=>button.textContent===(detent==='large'?'Collapse':'Expand')).click();
         return getComputedStyle(dock).opacity;
       });
-      const footer=await page.locator('#cspNav').evaluate(nav=>{
-        const settings=document.getElementById('cspSettingsNav'),foot=nav.querySelector('.foot');
-        return {gap:nav.getBoundingClientRect().bottom-settings.getBoundingClientRect().bottom,
-          sheetGap:document.getElementById('side').getBoundingClientRect().bottom-settings.getBoundingClientRect().bottom,
-          meta:foot.querySelector('.foot-meta')?getComputedStyle(foot.querySelector('.foot-meta')).display:'absent',height:foot.getBoundingClientRect().height};
-      });
-      assert(footer.gap<=10&&['none','absent'].includes(footer.meta)&&footer.height<130,'Settings sits at the bottom without a metadata shelf');
-      assert(footer.sheetGap<45,'the home-indicator inset is reserved once');
+      assert.equal(await page.locator('.csp-wordmark').textContent(),'ClearSkies','native wordmark is present');
+      assert.equal(await page.locator('#cspNavScroll .csp-home-group').count(),4,'native task grouping');
+      assert(await page.locator('#cspSettingsNav').evaluate(el=>el.parentElement.hidden),'utilities move into the native scrolling App group');
       await step();await page.waitForTimeout(90);let mid=await state();
       if(reduced) assert.equal(mid.opacity,0,'Reduce Motion hides without a spatial transition');
-      else assert(mid.opacity>0&&mid.opacity<1,`toolbar fades out rather than snapping: ${JSON.stringify(mid)}`);
-      await page.waitForTimeout(350);let settled=await state();
+      else assert(mid.opacity<1,`toolbar follows the rising sheet: ${JSON.stringify(mid)}`);
+      await page.waitForTimeout(500);let settled=await state();
       assert.equal(settled.opacity,0);assert(settled.inert&&settled.hidden==='true','hidden tools leave keyboard and accessibility navigation');
       await step();await page.waitForTimeout(90);mid=await state();
       if(reduced){assert.equal(mid.opacity,1);assert(['none','matrix(1, 0, 0, 1, 0, 0)'].includes(mid.transform))}
-      else assert(mid.opacity>0&&mid.opacity<1,`toolbar eases back in: ${JSON.stringify(mid)}`);
-      await page.waitForTimeout(350);settled=await state();
+      else assert(mid.opacity>=0&&mid.opacity<1,`toolbar follows the lowering sheet: ${JSON.stringify(mid)}`);
+      await page.waitForTimeout(500);settled=await state();
       assert.equal(settled.opacity,1);assert(!settled.inert&&settled.hidden===null);
       if(!reduced){
-        const session=await context.newCDPSession(page),grab=await page.locator('#cspGrabber').boundingBox();
-        const x=grab.x+grab.width/2,y=grab.y+10;
+        const session=await context.newCDPSession(page),grab=await page.locator('.csp-wordmark').boundingBox();
+        const x=grab.x+grab.width/2,y=grab.y+grab.height/2;
         await session.send('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:[{x,y,id:1}]});
         await page.waitForTimeout(30);
         await session.send('Input.dispatchTouchEvent',{type:'touchMove',touchPoints:[{x,y:y-60,id:1}]});
@@ -67,7 +63,7 @@ const base=process.argv[2]||'http://127.0.0.1:8765/';
         await session.send('Input.dispatchTouchEvent',{type:'touchEnd',touchPoints:[]});
         await page.waitForFunction(()=>document.body.dataset.cspDetent==='large');
         await page.waitForTimeout(450);assert.equal((await state()).opacity,0);
-        await step();await page.waitForTimeout(450);assert.equal((await state()).opacity,1);
+        await step();await page.waitForTimeout(700);assert.equal((await state()).opacity,1);
         await session.detach();
       }
       await page.evaluate(()=>document.querySelector('.csp-nav-button[data-route="settings"]').click());
@@ -86,7 +82,7 @@ const base=process.argv[2]||'http://127.0.0.1:8765/';
       assert(await page.locator('[data-reset-layout]').isVisible(),'desktop retains layout reset in Settings');
       assert(!(await state()).inert,'leaving the phone layout restores tool accessibility');
       assert.deepEqual(errors,[],`${label} has no page errors`);
-      console.log(`PASS ${label}: compact footer, hide/reveal motion, drag tracking, accessibility and Settings utilities`);
+      console.log(`PASS ${label}: native home groups, hide/reveal motion, drag tracking, accessibility and Settings utilities`);
       await context.close();
     }
   }finally{await browser.close()}

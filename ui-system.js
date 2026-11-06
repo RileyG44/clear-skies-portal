@@ -86,6 +86,54 @@ settingsNav.innerHTML=`<button class="csp-nav-button" type="button" data-route="
 settingsNav.querySelector("button").addEventListener("click",()=>activateRoute("settings"));
 foot.prepend(appearanceNav,settingsNav);
 
+// The phone home uses the native app's sections and two-line task names.
+const PHONE_ROUTES={
+  layers:["Map layers","Manage visibility, order and opacity"],
+  satellite:["Satellite imagery","Find and compare dated images"],
+  terrain:["Terrain & LiDAR","Style terrain, adjust lighting and download data"],
+  elevation:["Elevation colors","Color heights and highlight elevation ranges"],
+  analyze:["Terrain analysis","Measure and reveal landform patterns"],
+  markup:["Draw & annotate","Add drawings, labels and notes"],
+  export:["Export image","Save the map view or a selected area"],
+  conditions:["Live conditions","Weather, fire, snow and recent events"],
+  geology:["Geology & hazards","Explore geology, faults and landslides"],
+  past:["Past landscapes","Explore ice-age and historical landscapes"],
+  labels:["Labels & reference","Add roads, places and boundaries"],
+  appearance:["App appearance","Choose the app theme, text and colors"],
+  settings:["App settings","Connection, accessibility and device preferences"]
+};
+const PHONE_GROUPS=[["Explore the map",["layers","satellite","terrain","elevation"]],
+  ["Study & share",["analyze","markup","export"]],
+  ["Reference layers",["conditions","geology","past","labels"]],
+  ["App",["appearance","settings"]]];
+const wordmark=document.createElement("h1");wordmark.className="csp-wordmark";wordmark.textContent="ClearSkies";nav.prepend(wordmark);
+const phoneHome=matchMedia("(max-width:760px) and (orientation:portrait)");
+let phoneHomeActive=null;
+const syncPhoneHome=()=>{
+  if(phoneHomeActive===phoneHome.matches) return;
+  phoneHomeActive=phoneHome.matches;
+  const buttons=new Map($$(".csp-nav-button[data-route]").map(button=>[button.dataset.route,button]));
+  navScroll.replaceChildren();
+  for(const [label,keys] of phoneHomeActive?PHONE_GROUPS:NAV_GROUPS){
+    const group=document.createElement("section"),heading=document.createElement("div"),rows=document.createElement("div");
+    group.className="csp-home-group";heading.className="csp-nav-label";heading.textContent=label;
+    rows.className="csp-home-rows";group.append(heading,rows);
+    for(const key of keys){
+      const button=buttons.get(key);if(!button) continue;
+      const title=button.querySelector("span:not(.csp-nav-count)");
+      title.replaceChildren();
+      const name=document.createElement("span");name.textContent=phoneHomeActive?PHONE_ROUTES[key][0]:ROUTES[key].title;title.append(name);
+      if(phoneHomeActive){const detail=document.createElement("small");detail.textContent=PHONE_ROUTES[key][1];title.append(detail)}
+      rows.append(button);
+    }
+    navScroll.append(group);
+  }
+  if(!phoneHomeActive){appearanceNav.append(buttons.get("appearance"));settingsNav.append(buttons.get("settings"))}
+  foot.hidden=phoneHomeActive;
+};
+phoneHome.addEventListener("change",syncPhoneHome);syncPhoneHome();
+
+
 /* Source references are the last group on the Settings page; the toolbar's
    Layers popover carries the same credits. The card is built once and kept, so
    the attribution observer below can update it while it is detached. */
@@ -770,7 +818,7 @@ function renderSatelliteView(){
   }
   satelliteSearch?.dispatchEvent(new Event("csp:search-sync"));
   $("#cspSatBest").hidden=!$("#summary")?.children.length;
-  syncSatelliteFilterSummary();syncSatelliteCurrent();
+  syncSatelliteFilterSummary();syncSatelliteCurrent();syncPhoneSatellite();
 }
 
 function renderExportView(){
@@ -1175,7 +1223,7 @@ let routesShown=0;
 workspace.addEventListener("animationend",event=>{if(event.target===workspaceScroll) workspace.classList.remove("csp-route-enter")});
 function activateRoute(key,options={}){
   const route=ROUTES[key];if(!route) return;
-  if(routesShown++&&key!==currentRoute){
+  if(routesShown++&&(key!==currentRoute||(compactShell.matches&&document.body.dataset.cspView==="nav"&&!options.stayOnNav))){
     workspace.classList.remove("csp-route-enter");void workspace.offsetWidth;workspace.classList.add("csp-route-enter");
   }
   currentRoute=key;overlayGroup=route.overlayGroup||null;
@@ -1184,7 +1232,7 @@ function activateRoute(key,options={}){
   document.body.classList.toggle("csp-grouped-menus",key!=="terrain");
   if(compactShell.matches&&!options.stayOnNav) document.body.dataset.cspView="detail";
   $$(".csp-nav-button[data-route]").forEach(button=>button.setAttribute("aria-current",button.dataset.route===key?"page":"false"));
-  $("#cspWorkspaceTitle").textContent=route.title;const descriptionEl=$("#cspWorkspaceDescription");descriptionEl.textContent=route.description;descriptionEl.hidden=!route.description;
+  $("#cspWorkspaceTitle").textContent=phoneHome.matches?PHONE_ROUTES[key][0]:route.title;const descriptionEl=$("#cspWorkspaceDescription");descriptionEl.textContent=phoneHome.matches?PHONE_ROUTES[key][1]:route.description;descriptionEl.hidden=!route.description;
   $$(".pane",panes).forEach(pane=>pane.classList.toggle("csp-route-hidden",!route.panes.includes(pane.dataset.pane)));
   filterResearch(route.researchMode);
   annotateOverlayGroups();
@@ -1197,7 +1245,7 @@ function activateRoute(key,options={}){
   updateCounts();
 }
 
-navScroll.addEventListener("click",event=>{const route=event.target.closest("[data-route]")?.dataset.route;if(route) activateRoute(route)});
+navScroll.addEventListener("click",event=>{const route=event.target.closest("[data-route]")?.dataset.route;if(route&&!["appearance","settings"].includes(route)) activateRoute(route)});
 
 /* The navigation pane's light. A soft disc trails the pointer on a slightly
    underdamped spring - it lags, overshoots a touch, and stretches along its
@@ -1458,8 +1506,8 @@ syncAllRangeFills();
    on and a slow drag lands where it is let go. Past the ends it rubber-bands.
 
    Closing and opening still go through the existing toggle, so every other
-   close path (tapping the map, the back swipe, the point-cloud viewer) lands
-   on peek. A phone on its side uses the leading-edge card instead and keeps
+   close path (the close control, the header drag, the point-cloud viewer)
+   lands on peek. A phone on its side uses the leading-edge card instead and keeps
    hide-and-toggle, because a peek strip would cover most of its height. */
 const phoneSheet=matchMedia("(max-width:760px)");
 const peekLayout=matchMedia("(max-width:760px) and (orientation:portrait)");
@@ -1470,31 +1518,666 @@ const peeking=()=>sheetMode()&&isCollapsed();
 const toggleSheet=()=>$("#sideToggle")?.click();
 const grabber=document.createElement("button");
 grabber.id="cspGrabber";grabber.type="button";
+grabber.tabIndex=-1;grabber.setAttribute("aria-hidden","true");
 side.prepend(grabber);
 const currentDetent=()=>isCollapsed()?"peek":document.body.dataset.cspDetent||"medium";
 const sheetTools=$("#mapDock");
-// Leaflet disables native touch panning on #map. Keep the scrollable toolbar
-// in the app overlay so that restriction does not swallow its swipe gestures.
-if(sheetTools) $("#app").append(sheetTools);
-// Observe the actual sheet edge so safe areas, detents and interactive resizing
-// all reserve the same 12px gap below the tools.
-const placeSheetTools=()=>{
-  if(!sheetTools) return;
-  if(sheetMode()) sheetTools.style.setProperty("--csp-sheet-top",`${side.offsetTop}px`);
-  else sheetTools.style.removeProperty("--csp-sheet-top");
+// Reserve space by lowering the medium sheet, never by clipping the dock.
+// Native MapTools uses balanced columns only when the viewport itself is short.
+const sheetMetric=document.createElement("div");
+sheetMetric.style.cssText="position:fixed;visibility:hidden;pointer-events:none;width:0;contain:strict";
+document.body.append(sheetMetric);
+const sheetPixels=variable=>{
+  sheetMetric.style.height=`var(${variable})`;
+  return sheetMetric.offsetHeight;
 };
+const setSheetStyle=(element,name,value)=>{
+  if(element.style.getPropertyValue(name)!==value) element.style.setProperty(name,value);
+};
+let sheetLimits=null;
+const syncPhoneLabels=()=>{
+  const write=(selector,phone,desktop)=>{
+    const node=document.querySelector(selector)?.firstChild;
+    if(!node||node.nodeType!==Node.TEXT_NODE) return;
+    const next=sheetMode()?phone:desktop;
+    if(node.nodeValue!==next) node.nodeValue=next;
+  };
+  // Edit the text node only. Replacing the heading would drop its status span.
+  write("#terLidarHeading","Map display ","Terrain mode & data ");
+  write("#terAppearance .menu-section-title","Color & contrast ","Appearance ");
+};
+/* Phone-only presentation of the terrain page. The static source order stays
+   presets, then terrain mode, so desktop and the source-order check are
+   unchanged. display:contents plus these wraps put Map display between the
+   presets and Customize terrain while the sheet is up. */
+let chipWatch=null;
+function paintStyleChips(){
+  const select=$("#terStyle"),row=$("#cspStyleChips");if(!select||!row) return;
+  let checked=null;
+  for(const button of row.children){
+    const on=button.dataset.value===select.value;
+    button.setAttribute("aria-checked",on?"true":"false");
+    button.tabIndex=on?0:-1;
+    if(on) checked=button;
+  }
+  // ChoicesRow centers the selected style. Scroll the row only, so the sheet does not jump.
+  if(!checked) return;
+  const reduced=matchMedia("(prefers-reduced-motion: reduce)").matches||document.documentElement.classList.contains("csp-reduce-motion");
+  const rowBox=row.getBoundingClientRect(),box=checked.getBoundingClientRect();
+  // A hidden terrain pane reports zeros. Center once it is actually on screen.
+  if(rowBox.width<1||box.width<1){watchChipRow(row);return}
+  const delta=(box.left+box.width/2)-(rowBox.left+rowBox.width/2);
+  if(Math.abs(delta)>1) row.scrollBy({left:delta,behavior:reduced?"instant":"smooth"});
+}
+function watchChipRow(row){
+  if(chipWatch) return;
+  chipWatch=new ResizeObserver(()=>{
+    if(row.getBoundingClientRect().width<1) return;
+    chipWatch.disconnect();
+    chipWatch=null;
+    paintStyleChips();
+  });
+  chipWatch.observe(row);
+}
+function syncStyleChips(){
+  const select=$("#terStyle");if(!select) return;
+  const label=document.querySelector('label[for="terStyle"]');
+  let row=$("#cspStyleChips");
+  if(!sheetMode()){
+    chipWatch?.disconnect();chipWatch=null;
+    row?.remove();
+    if(select.dataset.phoneChip==="1"){
+      delete select.dataset.phoneChip;
+      select.removeAttribute("aria-hidden");
+      select.tabIndex=0;
+    }
+    label?.removeAttribute("aria-hidden");
+    return;
+  }
+  select.dataset.phoneChip="1";
+  select.setAttribute("aria-hidden","true");
+  select.tabIndex=-1;
+  label?.setAttribute("aria-hidden","true");
+  if(!row){
+    row=document.createElement("div");
+    row.id="cspStyleChips";
+    row.className="csp-style-chips";
+    row.setAttribute("role","radiogroup");
+    row.setAttribute("aria-label","Map display");
+    const labels={off:"Off",hs:"Hillshade",hsmulti:"Multi\nhillshade",tint:"Elevation",rem:"Relative",slope:"Slope",aspect:"Aspect",northness:"Exposure",c2:"Contours\n2 ft",c5:"Contours\n5 ft",c10:"Contours\n10 ft",c25:"Contours\n25 ft"};
+    for(const option of select.options){
+      const button=document.createElement("button");
+      button.type="button";button.className="csp-style-chip";button.dataset.value=option.value;
+      button.setAttribute("role","radio");
+      button.textContent=labels[option.value]||option.label;
+      button.addEventListener("click",()=>{
+        if(select.value!==button.dataset.value){
+          select.value=button.dataset.value;
+          select.dispatchEvent(new Event("change",{bubbles:true}));
+        }
+      });
+      row.append(button);
+    }
+    row.addEventListener("keydown",event=>{
+      if(event.key!=="ArrowRight"&&event.key!=="ArrowLeft") return;
+      const buttons=[...row.children];
+      const index=buttons.findIndex(button=>button.getAttribute("aria-checked")==="true");
+      const next=buttons[index+(event.key==="ArrowRight"?1:-1)];
+      if(!next) return;
+      event.preventDefault();
+      next.click();
+      next.focus({preventScroll:true});
+    });
+    select.addEventListener("change",paintStyleChips);
+    ($("#terLidarHeading")||select).after(row);
+  }
+  paintStyleChips();
+}
+function wrapPhoneSection(section,title,detail,kind){
+  if(!section) return;
+  const parent=section.parentElement;
+  if(!sheetMode()){
+    if(parent?.classList.contains("terrain-phone-disclosure")) parent.replaceWith(section);
+    return;
+  }
+  if(parent?.classList.contains("terrain-phone-disclosure")){
+    const titleNode=parent.querySelector(".ls-disclosure-title"),detailNode=parent.querySelector(".ls-disclosure-detail");
+    if(titleNode) titleNode.textContent=title;
+    if(detailNode) detailNode.textContent=detail;
+    return;
+  }
+  const box=document.createElement("details");
+  box.className=`terrain-phone-disclosure terrain-phone-${kind} ls-disclosure ls-phone-disclosure`;
+  box.open=false;
+  box.innerHTML='<summary><span class="ls-disclosure-title"></span><span class="ls-disclosure-detail"></span></summary>';
+  box.querySelector(".ls-disclosure-title").textContent=title;
+  box.querySelector(".ls-disclosure-detail").textContent=detail;
+  section.before(box);box.append(section);
+}
+/* The phone sheet moves real nodes. render() puts them back before it wipes
+   #terStudio. Anything left inside the studio is destroyed with that wipe. */
+function phoneLabel(selector,phoneText){
+  const node=document.querySelector(selector);if(!node) return;
+  if(!node.dataset.desktopLabel) node.dataset.desktopLabel=node.textContent;
+  node.textContent=sheetMode()?phoneText:node.dataset.desktopLabel;
+  if(!sheetMode()) delete node.dataset.desktopLabel;
+}
+function phoneDisclosure(id,title,detail){
+  let box=document.getElementById(id);
+  if(!box){
+    box=document.createElement("details");
+    box.id=id;
+    box.className="ls-disclosure ls-phone-disclosure csp-phone-disclosure";
+    box.open=false;
+    box.innerHTML='<summary><span class="ls-disclosure-title"></span><span class="ls-disclosure-detail"></span></summary>';
+  }
+  const titleNode=box.querySelector(".ls-disclosure-title"),detailNode=box.querySelector(".ls-disclosure-detail");
+  if(titleNode) titleNode.textContent=title;
+  if(detailNode) detailNode.textContent=detail;
+  return box;
+}
+function phoneSectionTitle(id,text){
+  let node=document.getElementById(id);
+  if(!node){
+    node=document.createElement("h3");
+    node.id=id;
+    node.className="menu-section-title csp-phone-section";
+  }
+  node.textContent=text;
+  return node;
+}
+function restorePhoneTerrain(){
+  const data=$(".terrain-data-settings");
+  const grid=data?.querySelector(":scope > .fgrid")||data;
+  const opacity=$(".terrain-opacity-control");
+  if(opacity&&grid&&opacity.parentElement!==grid) grid.append(opacity);
+  const offlineBody=$("#terDataOffline .terrain-settings-body");
+  if(offlineBody){
+    for(const node of [$("#terrainDownloadBox"),$(".terrain-download-settings"),$("#terrainSourceDetails")]){
+      if(node) offlineBody.append(node);
+    }
+  }
+  const body=$("#terLayerSettings > .terrain-settings-body");
+  const appearance=$(".terrain-phone-appearance");
+  const lighting=$(".terrain-phone-lighting");
+  if(body){
+    if(data&&data.parentElement!==body) body.insertBefore(data,body.firstChild);
+    if(lighting&&lighting.parentElement!==body) body.append(lighting);
+    if(appearance&&appearance.parentElement!==body) body.insertBefore(appearance,lighting&&lighting.parentElement===body?lighting:null);
+  }
+  $("#cspCustomizeGroup")?.remove();
+  for(const id of ["cspTerrainDownloads","cspTerrainAbout","cspDataKicker","cspAboutKicker","cspResetKicker"]) document.getElementById(id)?.remove();
+  const lidar=$("#terLidar");
+  const fields=lidar?.querySelector(":scope > .terrain-fields");
+  const settings=$("#terLayerSettings");
+  const heading=$("#terLidarHeading");
+  const legend=$("#terLegend");
+  const chips=$("#cspStyleChips");
+  if(lidar&&heading&&heading.parentElement!==lidar) lidar.insertBefore(heading,fields||lidar.firstChild);
+  if(heading&&chips&&chips.parentElement!==lidar) heading.after(chips);
+  if(lidar&&legend&&legend.parentElement!==lidar) lidar.insertBefore(legend,settings);
+  const mapCard=$("#cspMapDisplay");
+  if(mapCard&&!mapCard.childElementCount) mapCard.remove();
+  lidar?.removeAttribute("data-phone-split");
+  phoneLabel('label[for="terOp"]',"Terrain opacity");
+  phoneLabel('label[for="terSrc"]',"Preferred terrain source");
+}
+function appendTail(parent,nodes){
+  const want=nodes.filter(Boolean);
+  if(!parent||!want.length) return;
+  const kids=[...parent.children];
+  const start=kids.length-want.length;
+  if(start>=0&&want.every((node,index)=>kids[start+index]===node)) return;
+  parent.append(...want);
+}
+function placePhoneTerrain(){
+  const studio=$("#terStudio");
+  const kicker=$(".ls-phone-kicker",studio);
+  const layers=$(".ls-layers-disclosure",studio);
+  if(!studio||!kicker) return;
+  const heading=$("#terLidarHeading");
+  if(heading&&heading.parentElement!==kicker.parentElement) kicker.before(heading);
+  let card=$("#cspMapDisplay");
+  if(!card){
+    card=document.createElement("div");
+    card.id="cspMapDisplay";
+    card.className="ls-phone-group";
+  }
+  if(heading?.parentElement&&heading.nextElementSibling!==card) heading.after(card);
+  else if(!heading&&card.parentElement!==studio) kicker.before(card);
+  appendTail(card,[$("#cspStyleChips"),$("#terLegend"),$(".terrain-opacity-control")]);
+  let group=$("#cspCustomizeGroup");
+  if(!group){
+    group=document.createElement("div");
+    group.id="cspCustomizeGroup";
+    group.className="ls-phone-group";
+  }
+  kicker.after(group);
+  for(const node of [layers,$(".terrain-phone-appearance"),$(".terrain-phone-lighting")]){
+    if(node) group.append(node);
+  }
+  const lidar=$("#terLidar");
+  if(!lidar) return;
+  const downloads=phoneDisclosure("cspTerrainDownloads","Terrain downloads","Source preference, offline areas and Washington LiDAR");
+  appendTail(downloads,[$(".terrain-data-settings"),$("#terrainDownloadBox"),$(".terrain-download-settings")]);
+  const about=phoneDisclosure("cspTerrainAbout","Sources & scale","Rendered data, survey details and resolution");
+  const sources=$("#terrainSourceDetails");
+  if(sources&&sources.parentElement!==about) about.append(sources);
+  appendTail(lidar,[
+    phoneSectionTitle("cspDataKicker","Data & downloads"),
+    downloads,
+    phoneSectionTitle("cspAboutKicker","About this terrain"),
+    about,
+    phoneSectionTitle("cspResetKicker","Reset"),
+    $(".terrain-card-footer")
+  ]);
+  lidar.setAttribute("data-phone-split","1");
+  phoneLabel('label[for="terOp"]',"Terrain opacity");
+  phoneLabel('label[for="terSrc"]',"Preferred terrain source");
+}
+function syncPhoneTerrain(){
+  if(!sheetMode()){
+    restorePhoneTerrain();
+    wrapPhoneSection($("#terAppearance"),"Color & contrast","Brightness, contrast and saturation","appearance");
+    wrapPhoneSection($("#terLighting"),"Lighting & 3D relief","Sun direction, ambient light and vertical exaggeration","lighting");
+    syncStyleChips();
+    return;
+  }
+  wrapPhoneSection($("#terAppearance"),"Color & contrast","Brightness, contrast and saturation","appearance");
+  wrapPhoneSection($("#terLighting"),"Lighting & 3D relief","Sun direction, ambient light and vertical exaggeration","lighting");
+  syncStyleChips();
+  placePhoneTerrain();
+}
+globalThis.CSPPhoneTerrain={restore:restorePhoneTerrain,sync:syncPhoneTerrain};
+function phoneBandDetail(){
+  const detail=$("#elevBandsDisclosure .ls-disclosure-detail");if(!detail) return;
+  const unit=document.querySelector("#elevBandsBox [data-elev-unit]")?.textContent||"";
+  const parts=[];
+  if($("#elevBelowOn")?.checked) parts.push(`Below ${$("#elevBelowVal")?.value||""} ${unit}`.trim());
+  if($("#elevAboveOn")?.checked) parts.push(`Above ${$("#elevAboveVal")?.value||""} ${unit}`.trim());
+  detail.textContent=parts.join(" · ")||"Off";
+}
+function syncPhoneElevation(){
+  const head=$("#elevSpectrumSection .ev-section-head"),unit=$(".ev-unit-wrap");
+  if(head&&unit){
+    let units=$("#elevUnitsDisclosure");
+    if(!sheetMode()){
+      if(units){head.append(unit);units.remove()}
+    }else{
+      if(!units){
+        units=document.createElement("details");
+        units.id="elevUnitsDisclosure";
+        units.className="ev-units-disclosure ls-disclosure ls-phone-disclosure csp-fold";
+        units.open=false;
+        units.innerHTML='<summary><span class="ls-disclosure-title">Units</span><span class="ls-disclosure-detail"></span></summary>';
+        document.querySelector('.pane[data-pane="elevation"] > .pane-b')?.append(units);
+        const select=$("#elevUnit");
+        if(select&&!select.dataset.unitWatch){
+          select.dataset.unitWatch="1";
+          select.addEventListener("change",()=>{
+            const next=$("#elevUnitsDisclosure .ls-disclosure-detail");
+            if(next) next.textContent=select.selectedOptions?.[0]?.textContent||"";
+          });
+        }
+      }
+      units.classList.add("csp-fold");
+      if(unit.parentElement!==units) units.append(unit);
+      const next=units.querySelector(".ls-disclosure-detail"),select=$("#elevUnit");
+      if(next&&select) next.textContent=select.selectedOptions?.[0]?.textContent||"";
+    }
+  }
+  const section=$("#elevBandsSection"),box=$("#elevBandsBox");
+  if(!section||!box){syncColorFold();return}
+  let bands=$("#elevBandsDisclosure");
+  if(!sheetMode()){
+    if(bands){section.querySelector(".csp-section-label")?.after(box);bands.remove()}
+    syncColorFold();
+    return;
+  }
+  if(!bands){
+    bands=document.createElement("details");
+    bands.id="elevBandsDisclosure";
+    bands.className="ev-phone-disclosure ls-disclosure ls-phone-disclosure csp-fold";
+    bands.open=false;
+    bands.innerHTML='<summary><span class="ls-disclosure-title">Highlight elevations</span><span class="ls-disclosure-detail"></span></summary>';
+    section.querySelector(".csp-section-label")?.after(bands);
+    if(!section.dataset.bandWatch){
+      section.dataset.bandWatch="1";
+      section.addEventListener("change",phoneBandDetail);
+      section.addEventListener("input",phoneBandDetail);
+    }
+  }
+  bands.classList.add("csp-fold");
+  if(box.parentElement!==bands) bands.append(box);
+  phoneBandDetail();
+  syncColorFold();
+}
+function colorFoldDetail(){
+  const detail=$("#elevColorDisclosure .ls-disclosure-detail");if(!detail) return;
+  const on=!!$("#elevSh")?.checked;
+  detail.textContent=on?($("#elevSpectrumMoreValue")?.textContent||"On"):"Off";
+}
+// Move the live controls, preserving their handlers and desktop homes.
+let phoneColorHomes=null;
+function syncPhoneColorControls(body,phone){
+  if(!phone){
+    if(!phoneColorHomes) return;
+    for(const [node,anchor] of phoneColorHomes){anchor.replaceWith(node)}
+    phoneColorHomes=null;
+    $("#cspColorPresetRow")?.remove();
+    $("#cspColorRangeHelp")?.remove();
+    $(".csp-color-reverse-text")?.remove();
+    $("#elevPaletteBox .elev-label")?.setAttribute("for","elevPalette");
+    const mid=$("#elevMidColor")?.nextElementSibling;if(mid) mid.textContent="Ref";
+    return;
+  }
+  if(!body||phoneColorHomes) return;
+  const select=$("#elevPalette"),hint=$("#elevSpanHint");
+  if(!select||!hint) return;
+  phoneColorHomes=[select,hint].map(node=>{
+    const anchor=document.createComment("desktop elevation control");node.before(anchor);return [node,anchor];
+  });
+  const picker=document.createElement("div");
+  picker.id="cspColorPresetRow";
+  picker.innerHTML='<label for="elevPalette">Color preset</label>';
+  picker.append(select);body.append(picker);
+  const help=document.createElement("details");
+  help.id="cspColorRangeHelp";help.className="csp-fold";
+  help.innerHTML='<summary>How the color range works</summary>';
+  help.append(hint);body.append(help);
+  $("#elevPaletteBox .elev-label")?.removeAttribute("for");
+  const mid=$("#elevMidColor")?.nextElementSibling;if(mid) mid.textContent="Reference";
+  const reverse=document.createElement("span");reverse.className="csp-color-reverse-text";reverse.textContent="Reverse colors";
+  $("#elevPaletteReverse")?.append(reverse);
+}
+let colorFoldWasOpen=null;
+function syncColorFold(){
+  const section=$("#elevSpectrumSection"),box=$("#elevSpectrumBox"),toggle=$("#lb_elevSh");
+  const body=$("#elevSpectrumMore .ev-body")||$("#elevColorDisclosure .ev-body");
+  const more=$("#elevSpectrumMore");
+  if(!section||!box||!toggle) return;
+  syncPhoneColorControls(body,sheetMode());
+  let fold=$("#elevColorDisclosure");
+  const input=$("#elevSh");
+  if(!sheetMode()){
+    input?.removeAttribute("aria-label");
+    if(fold){
+      if(body&&more&&body.parentElement!==more) more.append(body);
+      if(toggle.parentElement!==box) box.insertBefore(toggle,more||null);
+      colorFoldWasOpen=fold.open;
+      fold.remove();
+    }
+    return;
+  }
+  input?.setAttribute("aria-label","Color by elevation on map");
+  if(!fold){
+    fold=document.createElement("details");
+    fold.id="elevColorDisclosure";
+    fold.className="csp-fold ev-color-disclosure ls-disclosure";
+    // A rotation rebuilds the fold; keep it as the person left it.
+    fold.open=colorFoldWasOpen??!!$("#elevSh")?.checked;
+    fold.innerHTML='<summary><span class="ls-disclosure-title">Color by elevation</span><span class="ls-disclosure-detail"></span></summary>';
+    section.querySelector(".ev-section-head")?.after(fold);
+  }
+  if(!toggle.dataset.foldStop){
+    toggle.dataset.foldStop="1";
+    // A label inside summary still toggles the disclosure. Cancel that click,
+    // then flip the switch. The fold stays where the person left it.
+    toggle.addEventListener("click",event=>{
+      event.preventDefault();
+      event.stopPropagation();
+      const box=$("#elevSh");
+      if(!box) return;
+      box.checked=!box.checked;
+      box.dispatchEvent(new Event("change",{bubbles:true}));
+    });
+  }
+  if($("#elevSh")&&!$("#elevSh").dataset.foldWatch){
+    $("#elevSh").dataset.foldWatch="1";
+    $("#elevSh").addEventListener("change",colorFoldDetail);
+  }
+  if(!section.dataset.colorWatch){
+    section.dataset.colorWatch="1";
+    section.addEventListener("input",colorFoldDetail);
+    section.addEventListener("change",colorFoldDetail);
+  }
+  const summary=fold.querySelector("summary");
+  if(summary&&toggle.parentElement!==summary) summary.append(toggle);
+  if(body&&body.parentElement!==fold) fold.append(body);
+  colorFoldDetail();
+}
+function syncPhoneSatellite(){
+  const bar=$("#cspSatResultsBar");if(!bar) return;
+  let box=$("#cspSatResultOptions");
+  if(!sheetMode()){
+    if(box){
+      [...box.children].forEach(node=>{if(node.tagName!=="SUMMARY") bar.append(node)});
+      box.remove();
+    }
+    return;
+  }
+  if(!box){
+    box=document.createElement("details");
+    box.id="cspSatResultOptions";
+    box.className="csp-sat-result-options";
+    box.open=false;
+    const summary=document.createElement("summary");
+    summary.innerHTML='<span>Result options</span><span class="csp-sat-filter-sum" id="cspSatResultSum"></span>';
+    box.append(summary);
+    bar.prepend(box);
+    if(!bar.dataset.resultWatch){
+      bar.dataset.resultWatch="1";
+      bar.addEventListener("change",syncPhoneSatellite);
+    }
+  }
+  [...bar.children].forEach(node=>{if(node!==box) box.append(node)});
+  const summaryText=[
+    $("#sort")?.selectedOptions?.[0]?.textContent?.trim(),
+    $("#viewable")?.checked&&"Drawable only",
+    $("#groupSrc")?.checked&&"By source"
+  ].filter(Boolean).join(" · ");
+  const out=$("#cspSatResultSum");
+  if(out&&out.textContent!==summaryText) out.textContent=summaryText;
+}
+const placeSheetTools=()=>{
+  syncPhoneLabels();
+  syncPhoneTerrain();
+  syncPhoneElevation();
+  syncPhoneSatellite();
+  if(!sheetTools) return;
+  if(!sheetMode()){
+    document.body.style.removeProperty("--sheet-medium");
+    document.body.style.removeProperty("--sheet-large");
+    delete sheetTools.dataset.columns;sheetTools.style.removeProperty("--csp-dock-rows");return;
+  }
+  const appHeight=$("#app").clientHeight,top=sheetTools.offsetTop;
+  const count=$$(".map-tool",sheetTools).filter(button=>!button.hidden).length;
+  const ideal=Math.min(appHeight*.5+sheetPixels("--safe-bottom"),sheetPixels("--sheet-large"));
+  const singleHeight=count*48+Math.max(0,count-1);
+  const columns=appHeight-4-top-singleHeight-12<200?2:1;
+  const rows=Math.ceil(count/columns),dockHeight=rows*48+Math.max(0,rows-1);
+  $$(".map-tool",sheetTools).filter(button=>!button.hidden).forEach((button,index)=>{
+    button.dataset.divider=String(index%rows!==rows-1&&index!==count-1);
+  });
+  const medium=Math.round(Math.max(160,Math.min(ideal,appHeight-4-top-dockHeight-12)));
+  sheetTools.dataset.columns=String(columns);
+  setSheetStyle(sheetTools,"--csp-dock-rows",String(rows));
+  setSheetStyle(document.body,"--sheet-medium",`${medium}px`);
+  // Keep the limit that the fade compares against equal to the CSS pixel
+  // height. A fractional limit leaves the dock a hair scaled down at rest.
+  sheetLimits={medium,large:sheetPixels("--sheet-large"),top,appHeight,safeTop:sheetPixels("--safe-top"),safeBottom:sheetPixels("--safe-bottom"),peek:52};
+};
+// Recompute detent limits only when the viewport or tools change.
 const sheetToolsObserver=new ResizeObserver(placeSheetTools);
-sheetToolsObserver.observe(side);
 sheetToolsObserver.observe($("#app"));
+new MutationObserver(placeSheetTools).observe(sheetTools,{attributes:true,subtree:true,attributeFilter:["hidden"],childList:true});
+new MutationObserver(placeSheetTools).observe(document.documentElement,{attributes:true,attributeFilter:["class","style"]});
 peekLayout.addEventListener("change",placeSheetTools);
+placeSheetTools();
 const syncSheetTools=(progress=null)=>{
   if(!sheetTools) return;
   const dragProgress=sheetTools.style.getPropertyValue("--csp-dock-hide");
   if(progress===null&&dragProgress!=="") progress=Number(dragProgress);
   const hidden=sheetMode()&&(progress===null?currentDetent()==="large":progress>=.99);
   if(sheetTools.inert!==hidden) sheetTools.inert=hidden;
-  if(hidden) sheetTools.setAttribute("aria-hidden","true");else sheetTools.removeAttribute("aria-hidden");
+  const pointer=hidden?"none":"auto";
+  if(sheetTools.style.pointerEvents!==pointer) sheetTools.style.pointerEvents=pointer;
+  if(hidden){if(!sheetTools.hasAttribute("aria-hidden"))sheetTools.setAttribute("aria-hidden","true")}else if(sheetTools.hasAttribute("aria-hidden"))sheetTools.removeAttribute("aria-hidden");
 };
+// Detent changes use the dock's own 0.24s native fade. Only a finger drag
+// writes intermediate visibility; observing every spring frame restyled all
+// six tools for no visual benefit. Map-info fitting runs on state changes.
+const readout=$("#mapReadout");
+// The narrow and compact tiles are measured once per open, with the height
+// cap lifted. Later frames only compare the narrow tile with the gap above
+// the unreserved sheet, then give the compact tile the gap the reserve leaves.
+let fittingInfo=false,narrowInfo=0,compactInfo=0,infoOrigin=null;
+const setSheetLarge=px=>{
+  const rounded=Math.round(px);
+  if(!sheetLimits||Math.round(sheetLimits.large)===rounded) return;
+  setSheetStyle(document.body,"--sheet-large",`${rounded}px`);
+  sheetLimits.large=px;
+};
+const readoutHeight=()=>{
+  const content=$("#mapInfoContent");
+  return content?content.scrollHeight+readout.offsetHeight-content.offsetHeight:readout.offsetHeight;
+};
+const fitMapInfo=height=>{
+  if(fittingInfo||!readout||!sheetMode()||!sheetLimits) return;
+  const expanded=readout.classList.contains("expanded")&&!isCollapsed();
+  // A closed tile needs no work on a detent change; clean up once on close.
+  if(!expanded&&!narrowInfo&&!compactInfo&&!readout.classList.contains("sheet-compact")) return;
+  fittingInfo=true;
+  try{
+    const {top,appHeight,medium}=sheetLimits;
+    const safeTop=sheetLimits.safeTop;
+    const base=appHeight-safeTop;
+    const fullLarge=base*.9;
+    // Decide from the unreserved detent. Applying the reserve must not
+    // change the gap used for this choice, or the sheet oscillates.
+    const deciding=isCollapsed()?0:(document.body.dataset.cspDetent==="large"||height>medium+80)?fullLarge:height;
+    const decisionRoom=isCollapsed()?420:Math.max(44,appHeight-4-deciding-top-8);
+    if(!expanded){
+      narrowInfo=0;compactInfo=0;infoOrigin=null;
+      readout.classList.remove("sheet-compact");
+      setSheetLarge(fullLarge);
+      setSheetStyle(readout,"--map-info-space",`${Math.round(decisionRoom)}px`);
+      return;
+    }
+    if(!narrowInfo){
+      readout.classList.remove("sheet-compact");
+      setSheetStyle(readout,"--map-info-space","480px");
+      narrowInfo=readoutHeight();
+    }
+    const compact=narrowInfo>decisionRoom+1;
+    if(!compact){
+      compactInfo=0;infoOrigin=null;
+      readout.classList.remove("sheet-compact");
+      setSheetLarge(fullLarge);
+      setSheetStyle(readout,"--map-info-space",`${Math.round(decisionRoom)}px`);
+      return;
+    }
+    if(!compactInfo){
+      readout.classList.add("sheet-compact");
+      setSheetStyle(readout,"--map-info-space","480px");
+      compactInfo=readoutHeight();
+      // The tile is pinned to the map. One origin sample lasts for this open;
+      // later spring frames must not force layout under the blurring sheet.
+      infoOrigin=Math.max(0,readout.getBoundingClientRect().top-safeTop);
+    }else readout.classList.add("sheet-compact");
+    // Reserve in the same space as the sheet: portal height, not the viewport.
+    // origin.y is the tile's top below the status bar, so the safe area is
+    // not counted twice.
+    const originY=infoOrigin==null?Math.max(0,readout.getBoundingClientRect().top-safeTop):infoOrigin;
+    if(infoOrigin==null) infoOrigin=originY;
+    const reserve=originY+compactInfo+8;
+    const large=Math.max(base*.84,Math.min(fullLarge,base-4-reserve));
+    setSheetLarge(large);
+    // The cap is the gap the shortened sheet leaves, not the 90% gap that
+    // forced compact mode. Otherwise the tile stays clipped to the button.
+    const space=Math.max(44,appHeight-4-large-top-8);
+    setSheetStyle(readout,"--map-info-space",`${Math.round(space)}px`);
+  }finally{fittingInfo=false}
+};
+// readout.js dispatches this after the expanded class and content visibility
+// change, and before it samples the animation's target box.
+readout?.addEventListener("csp:map-info-fit",()=>fitMapInfo(side.offsetHeight));
+const sheetTextField=element=>!!element?.matches?.("textarea,input:not([type=button],[type=checkbox],[type=radio],[type=range],[type=color],[type=file],[type=submit],[type=reset],[type=image],[type=hidden])");
+const closeMenu=event=>{
+  event?.stopPropagation();
+  const input=document.activeElement;
+  if(event?.currentTarget?.dataset.keyboard==="true"){
+    document.activeElement?.blur();delete event.currentTarget.dataset.keyboard;return;
+  }
+  if(sheetTextField(input)){input.blur();return}
+  goToDetent("peek");
+};
+for(const [id,parent] of [["cspSearchClose",$(".search-row",nav)],["cspPageClose",$("#cspWorkspaceHeader")]]){
+  const button=document.createElement("button");button.type="button";button.id=id;button.className="csp-close-menu";
+  button.setAttribute("aria-label","Close menu");button.title="Close menu";
+  button.innerHTML='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>';
+  button.addEventListener("pointerdown",()=>{button.dataset.keyboard=String(sheetTextField(document.activeElement))});
+  button.addEventListener("click",closeMenu);parent.append(button);
+}
+// A leading-edge swipe pops the current page without closing the menu.
+// The home list stays mounted underneath, and the page follows the finger
+// until release completes or cancels on the same 0.35s curve.
+let edgePan=null;
+const releaseEdge=complete=>{
+  const reduced=matchMedia("(prefers-reduced-motion:reduce)").matches||document.documentElement.classList.contains("csp-reduce-motion");
+  let settled=false;
+  const finish=()=>{
+    if(settled) return;
+    settled=true;
+    workspace.removeEventListener("transitionend",onEnd);
+    workspace.style.transition="";
+    workspace.style.transform="";
+    document.body.classList.remove("csp-edge-pop");
+    if(complete) document.body.dataset.cspView="nav";
+  };
+  const onEnd=event=>{if(event.target===workspace&&event.propertyName==="transform") finish()};
+  if(!document.body.classList.contains("csp-edge-pop")){finish();return}
+  workspace.style.transition=reduced?"none":"transform .35s cubic-bezier(.28,.9,.32,1.08)";
+  workspace.style.transform=complete?"translate3d(100%,0,0)":"translate3d(0,0,0)";
+  if(reduced){finish();return}
+  workspace.addEventListener("transitionend",onEnd);
+  setTimeout(finish,450);
+};
+workspace.addEventListener("touchstart",event=>{
+  if(!sheetMode()||isCollapsed()||document.body.dataset.cspView!=="detail"||event.touches.length!==1)return;
+  const t=event.touches[0],left=side.getBoundingClientRect().left;
+  if(t.clientX-left<=24)edgePan={x:t.clientX,y:t.clientY};
+},{passive:true});
+workspace.addEventListener("touchmove",event=>{
+  if(!edgePan||event.touches.length!==1)return;
+  const t=event.touches[0],dx=t.clientX-edgePan.x,dy=t.clientY-edgePan.y;
+  if(Math.abs(dy)>Math.max(12,Math.abs(dx))){edgePan=null;releaseEdge(false);return}
+  if(dx>8){
+    event.preventDefault();
+    document.body.classList.add("csp-edge-pop");
+    workspace.style.transition="none";
+    workspace.style.transform=`translate3d(${Math.max(0,dx)}px,0,0)`;
+  }
+},{passive:false});
+workspace.addEventListener("touchend",event=>{
+  const pan=edgePan;edgePan=null;if(!pan)return;
+  const t=event.changedTouches[0];
+  const dx=t?t.clientX-pan.x:0,dy=t?Math.abs(t.clientY-pan.y):99;
+  releaseEdge(dx>60&&dy<60);
+});
+workspace.addEventListener("touchcancel",()=>{if(!edgePan)return;edgePan=null;releaseEdge(false)});
+const syncSearchClose=()=>{
+  const keyboard=sheetTextField(document.activeElement);
+  const label=keyboard?"Dismiss keyboard":"Close menu";
+  const path=keyboard?"M4 3h16v10H4z M7 6h1m3 0h1m3 0h1M7 10h10m-9 7 4 4 4-4":"m6 9 6 6 6-6";
+  for(const id of ["cspSearchClose","cspPageClose"]){
+    const button=$("#"+id);if(!button) continue;
+    button.setAttribute("aria-label",label);button.title=label;
+    button.querySelector("path")?.setAttribute("d",path);
+  }
+};
+document.addEventListener("focusin",syncSearchClose);
+document.addEventListener("focusout",()=>requestAnimationFrame(syncSearchClose));
 const syncGrabber=()=>{
   grabber.setAttribute("aria-label",peeking()?"Show panel":"Resize panel");
   grabber.setAttribute("aria-expanded",String(currentDetent()==="large"));
@@ -1504,6 +2187,7 @@ const setDetent=detent=>{
   side.style.height="";
   syncGrabber();
   syncSheetTools();
+  if(sheetMode()&&readout?.classList.contains("expanded"))fitMapInfo(detent==="large"?sheetLimits.large:sheetLimits.medium);
 };
 const openSheet=(detent="medium")=>{setDetent(detent);if(isCollapsed()) toggleSheet()};
 const goToDetent=detent=>{
@@ -1513,6 +2197,15 @@ const goToDetent=detent=>{
   if(!isCollapsed()) toggleSheet();
 };
 setDetent("medium");
+const sheetActions=document.createElement("div");
+sheetActions.className="csp-sheet-actions";
+for(const [label,detent] of [["Expand","large"],["Collapse","medium"],["Close","peek"]]){
+  const button=document.createElement("button");
+  button.type="button";button.textContent=label;
+  button.addEventListener("click",event=>{event.stopPropagation();goToDetent(detent)});
+  sheetActions.append(button);
+}
+side.append(sheetActions);
 document.addEventListener("csp:dnr-select",()=>{if(phoneSheet.matches) goToDetent("peek")});
 document.addEventListener("csp:dnr-download",()=>{if(phoneSheet.matches) goToDetent("peek")});
 /* setCollapsed() makes the whole panel inert, which is right when it is hidden
@@ -1524,6 +2217,7 @@ const syncPeek=()=>{
   else side.inert=isCollapsed();
   syncGrabber();
   syncSheetTools();
+  if(isCollapsed()&&narrowInfo)fitMapInfo(52);
 };
 new MutationObserver(syncPeek).observe(document.body,{attributes:true,attributeFilter:["class"]});
 peekLayout.addEventListener("change",()=>{sheetTools?.style.removeProperty("--csp-dock-hide");syncPeek()});
@@ -1537,11 +2231,8 @@ if(sheetMode()&&!isCollapsed()){
   requestAnimationFrame(()=>requestAnimationFrame(()=>document.body.classList.remove("csp-sheet-dragging")));
 }
 {
-  const probeHeight=variable=>{
-    const probe=document.createElement("div");probe.style.cssText=`position:absolute;visibility:hidden;height:var(${variable})`;
-    document.body.append(probe);const height=probe.getBoundingClientRect().height;probe.remove();return height;
-  };
-  const detentHeights=()=>({peek:probeHeight("--sheet-peek"),medium:probeHeight("--sheet-medium"),large:probeHeight("--sheet-large")});
+  const probeHeight=sheetPixels;
+  const detentHeights=()=>sheetMode()&&sheetLimits?{peek:52,medium:sheetLimits.medium,large:sheetLimits.large}:{peek:probeHeight("--sheet-peek"),medium:probeHeight("--sheet-medium"),large:probeHeight("--sheet-large")};
   /* Controls that own their own drags. A slider, a picker, the layer reorder
      handle and the suggestion list keep the gesture. */
   const OWN_GESTURE='input[type="range"],select,textarea,[contenteditable="true"],.csp-layer-handle,#ac,.csp-sat-suggest,.ls-looks,.ls-menu';
@@ -1552,7 +2243,15 @@ if(sheetMode()&&!isCollapsed()){
     }
     return null;
   };
-  let gesture=null,suppressClick=false,suppressTimer=0;
+  let gesture=null,suppressClick=false,suppressTimer=0,keyboardAtPointer=false;
+  peekLayout.addEventListener("change",()=>{
+    if(!gesture) return;
+    gesture=null;
+    side.style.height="";
+    document.body.classList.remove("csp-sheet-dragging");
+    sheetTools?.style.removeProperty("--csp-dock-hide");
+    syncSheetTools();
+  });
   /* A touch tap is followed by a compatibility click. On Chrome that click can
      arrive after a 0ms timer, and it would step the detent straight back.
      Hold the swallow long enough for the late click, and release it once the
@@ -1564,7 +2263,10 @@ if(sheetMode()&&!isCollapsed()){
   };
   const begin=(x,y,target,source)=>{
     gesture={x,y,startH:side.getBoundingClientRect().height,from:currentDetent(),target,source,
+             header:!!target.closest(".csp-wordmark,.searchbox,#cspWorkspaceHeader"),
+             keyboard:keyboardAtPointer||sheetTextField(document.activeElement),
              onGrabber:target===grabber,scroller:scrollerFor(target),mode:null,samples:[{y,t:performance.now()}]};
+    keyboardAtPointer=false;
   };
   // Returns true while the sheet owns the gesture, so the caller can stop the
   // browser scrolling underneath it.
@@ -1574,8 +2276,9 @@ if(sheetMode()&&!isCollapsed()){
     if(g.mode===null){
       if(Math.abs(dx)<8&&Math.abs(dy)<8) return false;
       if(Math.abs(dx)>Math.abs(dy)||(!g.onGrabber&&g.target.closest(OWN_GESTURE))){g.mode="none";return false}
-      if(g.onGrabber||g.from!=="large") g.mode="sheet";
-      // at large, the content scrolls until it is at its top and pulled down
+      if(g.onGrabber||g.header||g.from!=="large") g.mode="sheet";
+      // at large, the content scrolls until it is at its top and pulled down.
+      // The header always moves the sheet, including the rubber-band above large.
       else g.mode=dy>0&&(!g.scroller||g.scroller.scrollTop<=0)?"sheet":"none";
       if(g.mode==="sheet"){
         g.limits=detentHeights();
@@ -1583,6 +2286,7 @@ if(sheetMode()&&!isCollapsed()){
       }
     }
     if(g.mode!=="sheet") return false;
+    if(g.header&&g.keyboard){document.activeElement?.blur();return true}
     const {peek,large}=g.limits;
     let height=g.startH-dy;
     // rubber-band past either end instead of stopping dead
@@ -1620,6 +2324,21 @@ if(sheetMode()&&!isCollapsed()){
     suppressNextClick();
     const first=g.samples[0],last=g.samples[g.samples.length-1];
     const velocity=last.t>first.t?(last.y-first.y)/(last.t-first.t):0; // px per ms, positive = down
+    if(g.header&&g.keyboard){side.style.height="";settleTools();return}
+    const lastMove=g.samples[g.samples.length-1];
+    // The native search capsule needs at least 24 points of upward travel;
+    // velocity alone must not turn a tiny nudge into an open.
+    if(g.from==="peek"&&g.y-lastMove.y<=24){goToDetent("peek");settleTools();return}
+    const down=lastMove.y-g.y;
+    // Home dismisses past 80px, or on a short flick faster than 300px/s.
+    // A pushed page steps one detent: large to medium, then medium to close.
+    if(g.header&&(down>80||(down>24&&velocity>0.3))){
+      const page=!!g.target.closest("#cspWorkspaceHeader");
+      const home=!page&&document.body.dataset.cspView!=="detail"&&!!g.target.closest(".csp-wordmark,.searchbox");
+      if(page) goToDetent(g.from==="large"?"medium":"peek");
+      else if(home) goToDetent("peek");
+      if(page||home){settleTools();return}
+    }
     const height=side.getBoundingClientRect().height;
     // Project the release speed forward, as UIKit does for sheets: a moderate
     // flick carries one detent, a hard one carries two, a slow drag stays
@@ -1651,11 +2370,14 @@ if(sheetMode()&&!isCollapsed()){
   },{passive:false});
   side.addEventListener("touchend",()=>{if(gesture?.source==="touch") end()});
   side.addEventListener("touchcancel",()=>{if(gesture?.source==="touch") end()});
-  /* Mouse (a narrow desktop window, or testing): the grabber and the peek
-     strip drag; content does not, because a mouse has a wheel for it. */
+  /* Mouse (a narrow desktop window, or testing): the grabber, the peek
+     strip and the sheet header drag. Content does not, because a mouse
+     has a wheel for it. The header is included because the grabber is not
+     a hit target; a downward header drag is the mouse dismiss. */
   side.addEventListener("pointerdown",event=>{
     if(event.pointerType!=="mouse"||!active()) return;
-    if(event.target!==grabber&&!peeking()) return;
+    const header=!!event.target.closest(".csp-wordmark,.searchbox,#cspWorkspaceHeader");
+    if(event.target!==grabber&&!peeking()&&!header) return;
     begin(event.clientX,event.clientY,event.target,"mouse");
   });
   side.addEventListener("pointermove",event=>{
@@ -1668,16 +2390,9 @@ if(sheetMode()&&!isCollapsed()){
   side.addEventListener("pointercancel",()=>{if(gesture?.source==="mouse") end()});
   side.addEventListener("click",event=>{
     if(suppressClick){suppressClick=false;clearTimeout(suppressTimer);return}
-    if(event.target===grabber){
-      // keyboard activation, or a tap the gesture code did not see
-      goToDetent(currentDetent()==="peek"?"medium":currentDetent()==="medium"?"large":"medium");
-      return;
-    }
+    if(event.target.closest(".csp-sheet-actions,.csp-close-menu")) return;
     if(!peeking()) return;
     openSheet("medium");
-  });
-  side.addEventListener("focusin",event=>{
-    if(peeking()&&event.target.closest("#q")) openSheet("large");
   });
   /* The search capsule takes two taps, as in Maps: the first opens the sheet
      with no keyboard; the next, with the sheet open, focuses the field. A tap
@@ -1700,9 +2415,9 @@ if(sheetMode()&&!isCollapsed()){
   },{passive:false});
   q.addEventListener("mousedown",event=>{if(peeking()) event.preventDefault()});
   /* Focusing with the sheet open: the sheet rises to full height so the
-     suggestions have room, and the keyboard covers the lower part of the
-     sheet rather than shoving the page up. iOS may still pan the document a
-     little while the keyboard animates; undo that while the field has focus. */
+     suggestions have room, and its bottom sits on the keyboard. iOS may still
+     pan the document a little while the keyboard animates; undo that while
+     the field has focus. */
   const focusSearch=input=>{
     if(!sheetMode()) return;
     if(currentDetent()!=="large") openSheet("large");
@@ -1712,30 +2427,42 @@ if(sheetMode()&&!isCollapsed()){
       if(performance.now()<until&&document.activeElement===input) requestAnimationFrame(pin);
     };
     requestAnimationFrame(pin);
+    requestAnimationFrame(syncKeyboardInset);
   };
-  q.addEventListener("focus",()=>focusSearch(q));
-  side.addEventListener("focusin",event=>{if(event.target.id==="cspSatQuery") focusSearch(event.target)});
+  side.addEventListener("focusin",event=>{
+    if(!sheetMode()||!sheetTextField(event.target)) return;
+    focusSearch(event.target);
+  });
+  const syncKeyboardInset=()=>{
+    const vv=window.visualViewport;
+    const focused=sheetTextField(document.activeElement);
+    const covered=vv?Math.max(0,window.innerHeight-vv.height-vv.offsetTop):0;
+    const inset=sheetMode()&&focused?Math.max(0,covered-sheetPixels("--safe-bottom")):0;
+    const next=inset?`${Math.round(inset)}px`:"";
+    if(document.body.style.getPropertyValue("--sheet-keyboard")===next) return;
+    if(inset) setSheetStyle(document.body,"--sheet-keyboard",`${Math.round(inset)}px`);
+    else document.body.style.removeProperty("--sheet-keyboard");
+  };
+  window.visualViewport?.addEventListener("resize",syncKeyboardInset);
   window.visualViewport?.addEventListener("scroll",()=>{
-    if(sheetMode()&&document.activeElement?.matches("#q,#cspSatQuery")&&window.scrollY) window.scrollTo(0,0);
+    syncKeyboardInset();
+    if(sheetMode()&&sheetTextField(document.activeElement)&&window.scrollY) window.scrollTo(0,0);
   });
-  /* With the keyboard up, a tap anywhere outside the search row dismisses it.
-     A tap on the map also lowers the sheet back to the capsule (the existing
-     map handler does that). */
+  document.addEventListener("focusout",()=>requestAnimationFrame(syncKeyboardInset));
+  /* With the keyboard up, a tap outside the focused field dismisses it.
+     The sheet stays where it is; the close control and a header drag are what
+     lower it. Sample the field before blurring so the gesture still sees it. */
   document.addEventListener("pointerdown",event=>{
-    if(!sheetMode()||!document.activeElement?.matches("#q,#cspSatQuery")) return;
-    if(event.target.closest(".search-row,#ac,.csp-sat-field")) return;
-    document.activeElement.blur();
+    if(!sheetMode()) return;
+    const field=document.activeElement;
+    keyboardAtPointer=sheetTextField(field);
+    if(!keyboardAtPointer) return;
+    if(event.target===field||field.contains?.(event.target)) return;
+    if(event.target.closest(".csp-close-menu,.search-row,#ac,.csp-sat-field,.ls-save-row,.ls-field")) return;
+    const id=field.id&&globalThis.CSS?.escape?CSS.escape(field.id):field.id;
+    if(id&&event.target.closest(`label[for="${id}"]`)) return;
+    field.blur();
   },true);
-  grabber.addEventListener("keydown",event=>{
-    const detent=currentDetent();
-    if(event.key==="ArrowUp"){if(detent!=="large") goToDetent(detent==="peek"?"medium":"large")}
-    else if(event.key==="ArrowDown"){
-      if(detent==="large") goToDetent("medium");
-      else if(detent==="medium"&&sheetMode()) goToDetent("peek");
-    }
-    else return;
-    event.preventDefault();
-  });
 }
 
 /* A preview engine (scripts/preview.sh) labels itself, so a preview tab can

@@ -27,40 +27,37 @@ const base=process.argv[2]||'http://127.0.0.1:8765/';
       const geometry=()=>page.evaluate(()=>{
         const dock=document.getElementById('mapDock'),info=document.getElementById('mapReadout'),sheet=document.getElementById('side');
         const d=dock.getBoundingClientRect(),i=info.getBoundingClientRect(),s=sheet.getBoundingClientRect();
-        return {dockTop:d.top,infoTop:i.top,gap:s.top-d.bottom,scrolls:dock.scrollHeight>dock.clientHeight+1};
+        return {dockTop:d.top,infoTop:i.top,gap:s.top-d.bottom,scrolls:dock.scrollHeight>dock.clientHeight+1,dockHeight:d.height,sheetHeight:s.height,buttons:[...dock.querySelectorAll('button:not([hidden])')].map(button=>{const r=button.getBoundingClientRect();return {id:button.id,height:r.height,inside:r.top>=d.top&&r.bottom<=d.bottom+1}})};
       });
       let g=await geometry();
       assert(Math.abs(g.dockTop-g.infoTop)<1,`info aligns with toolbar at ${width}x${height}, installed=${installed}: ${JSON.stringify(g)}`);
       await page.locator('#mapReadout .map-info-toggle').click();await page.waitForTimeout(400);
       assert(Math.abs((await geometry()).infoTop-g.dockTop)<1,'expanded info keeps the shared top edge');
+      await page.locator('#mapReadout .map-info-toggle').click();await page.waitForTimeout(300);
       await page.locator('#q').click();await page.waitForTimeout(550);
       g=await geometry();assert(g.gap>=11,`medium sheet clears the entire dock: ${JSON.stringify(g)}`);
       // Extra live controls (e.g. a rotated map's compass) must fit as well.
-      await page.evaluate(()=>{document.getElementById('bearingReset').hidden=false});
+      await page.evaluate(()=>{document.getElementById('bearingReset').hidden=false});await page.waitForTimeout(700);
       g=await geometry();assert(g.gap>=11,'additional tools keep the sheet gap');
-      if(g.scrolls){
-        const dock=page.locator('#mapDock'),box=await dock.boundingBox(),session=await context.newCDPSession(page);
-        await dock.evaluate(el=>{el.scrollTop=0});
-        const order=await dock.locator('button').evaluateAll(buttons=>buttons.map(button=>button.id));
-        const x=box.x+box.width/2,y=box.y+box.height-25;
-        await session.send('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:[{x,y,id:1}]});
-        for(let step=1;step<=5;step++){
-          await session.send('Input.dispatchTouchEvent',{type:'touchMove',touchPoints:[{x,y:y-step*12,id:1}]});
-          await page.waitForTimeout(30);
-        }
-        await session.send('Input.dispatchTouchEvent',{type:'touchEnd',touchPoints:[]});
-        await page.waitForTimeout(150);
-        assert(await dock.evaluate(el=>el.scrollTop>0),'touch scrolls the constrained dock');
-        assert.deepEqual(await dock.locator('button').evaluateAll(buttons=>buttons.map(button=>button.id)),order,'scrolling does not reorder tools');
-        await page.locator('#serverToggle').scrollIntoViewIfNeeded();
-        const button=await page.locator('#serverToggle').boundingBox(),current=await dock.boundingBox();
-        assert(button.y>=current.y&&button.y+button.height<=current.y+current.height+1,'last tool is fully reachable');
-        await page.locator('#serverToggle').click();
-        assert(await page.locator('#serverPanel').isVisible(),'last tool still opens its panel');
-        await session.detach();
-      }
+      assert(!g.scrolls,'toolbar never scrolls or clips');
+      assert(g.buttons.every(button=>button.height===48&&button.inside),`every tool keeps its full 48px target: ${JSON.stringify(g)}`);
+      const fs=require('node:fs'),path=require('node:path');
+      const output=process.env.CSP_UI_OUTPUT||'.codex-audits/native-parity';fs.mkdirSync(output,{recursive:true});
+      if(width===430&&installed)await page.screenshot({path:path.join(output,'phone-medium.png')});
+      const mediumDockHeight=g.dockHeight;
+      await page.evaluate(()=>[...document.querySelectorAll('.csp-sheet-actions button')].find(button=>button.textContent==='Expand').click());await page.waitForTimeout(400);
+      assert.equal(await page.locator('#mapDock').evaluate(el=>getComputedStyle(el).opacity),'0','expanded menu hides the toolbar');
+      assert(await page.locator('#mapDock').evaluate(el=>el.inert&&el.getAttribute('aria-hidden')==='true'),'hidden tools leave touch, keyboard and accessibility navigation');
+      if(width===430&&installed)await page.screenshot({path:path.join(output,'phone-large.png')});
+      await page.evaluate(()=>[...document.querySelectorAll('.csp-sheet-actions button')].find(button=>button.textContent==='Collapse').click());await page.waitForTimeout(700);
+      g=await geometry();assert.equal(g.dockHeight,mediumDockHeight,'menu changes never reduce toolbar height');
+      assert.equal(await page.locator('#mapDock').evaluate(el=>getComputedStyle(el).opacity),'1','medium menu restores the entire toolbar');
+      const button=await page.locator('#serverToggle').boundingBox();
+      assert(button.y+button.height<height-g.sheetHeight-4,'last toolbar button remains above the menu');
+      await page.locator('#serverToggle').click();
+      assert(await page.locator('#serverPanel').isVisible(),'last tool remains usable without scrolling');
       assert.deepEqual(errors,[],'no browser errors');
-      console.log(`PASS ${width}x${height}, installed=${installed}: alignment, info expansion, sheet clearance and tool access`);
+      console.log(`PASS ${width}x${height}, installed=${installed}: alignment, info expansion, sheet clearance and full toolbar access`);
       await context.close();
     }
   }finally{await browser.close()}

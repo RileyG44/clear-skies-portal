@@ -63,6 +63,7 @@ function renderPasses(){
    of the catalog behind them. Real buttons, so keyboards reach them too. */
 function summarise(pool){
   const el=$("#summary");
+  el.cspRecommendationPool=pool;
   showPane("summary", pool.length>0);
   if(!pool.length){ el.innerHTML=""; setCount("summary",""); return }
   const byDate=pool.slice().sort((a,b)=>new Date(b.date)-new Date(a.date));
@@ -78,7 +79,15 @@ function summarise(pool){
   const isCurrent=it=>same(it,shownItem),stateOf=it=>isCurrent(it)?"showing":same(it,loadingItem)?"loading":"";
   const provider=it=>esc(it.src.split(" ")[0]);
   const meta=it=>[ago(it.date),res(it.gsd),it.cloud!=null?it.cloud.toFixed(0)+"% cloud":"",provider(it)].filter(Boolean).join(" &middot; ");
+  const phoneRecommendation=matchMedia("(max-width:760px) and (orientation:portrait)").matches;
   const main=photo
+    &&phoneRecommendation?`<div class="csp-best-main csp-best-recommendation" tabindex="-1" data-state="${stateOf(photo)}">
+        <strong>${esc(photo.label)} &middot; ${esc(photo.date.slice(0,10))}</strong>
+        <span class="csp-best-meta">${meta(photo)}</span>
+        <span class="csp-best-shown" ${isCurrent(photo)?"":"hidden"}>Shown</span>
+        <button type="button" class="csp-best-show" data-id="${esc(photo.id)}" data-src="${esc(photo.src)}" ${isCurrent(photo)?"hidden":""} ${stateOf(photo)==="loading"?'disabled aria-busy="true"':""}>${stateOf(photo)==="loading"?"Loading…":"Show"}</button>
+      </div>`
+    :photo
     ? `<button type="button" class="csp-best-main" data-id="${esc(photo.id)}" data-src="${esc(photo.src)}" aria-pressed="${isCurrent(photo)}" data-state="${stateOf(photo)}">
         <span class="csp-best-k">${{showing:"Showing best clear image",loading:"Loading best clear image…"}[stateOf(photo)]||"Show best clear image"}</span>
         <strong>${esc(photo.label)} &middot; ${esc(photo.date.slice(0,10))}</strong>
@@ -90,7 +99,7 @@ function summarise(pool){
     : "";
   const chips=chip("Newest",newest,`${ago(newest.date)} &middot; ${provider(newest)}`)+chip("Sharpest",sharp,`${res(sharp.gsd)} &middot; ${ago(sharp.date)}`);
   const focused=document.activeElement?.closest?.("#summary button[data-id]");
-  const focusKey=focused?(focused.classList.contains("csp-best-main")?"main":focused.querySelector("span")?.textContent.split(" ")[0]):"";
+  const focusKey=focused?(focused.matches(".csp-best-main,.csp-best-show")?"main":focused.querySelector("span")?.textContent.split(" ")[0]):"";
   el.innerHTML=main+(chips?`<div class="csp-best-alt">${chips}</div>`:"")+
     `<div class="csp-best-cover">${pool.length.toLocaleString()} matching scenes from ${srcs} ${srcs===1?"source":"sources"}, listed below</div>`;
   el.querySelectorAll("button[data-id]").forEach(button=>button.onclick=()=>{
@@ -98,11 +107,15 @@ function summarise(pool){
   });
   // Keep keyboard focus on the same choice when the card is rebuilt.
   if(focusKey){
-    const next=focusKey==="main"?el.querySelector(".csp-best-main"):[...el.querySelectorAll(".csp-best-chip")].find(b=>b.querySelector("span")?.textContent.startsWith(focusKey));
+    const next=focusKey==="main"?(el.querySelector(".csp-best-show:not([hidden])")||el.querySelector(".csp-best-main")):[...el.querySelectorAll(".csp-best-chip")].find(b=>b.querySelector("span")?.textContent.startsWith(focusKey));
     (next||el.querySelector("button[data-id]"))?.focus({preventScroll:true});
   }
   setCount("summary", pool.length+" scenes");
 }
+matchMedia("(max-width:760px) and (orientation:portrait)").addEventListener("change",()=>{
+  const pool=$("#summary")?.cspRecommendationPool;
+  if(pool) summarise(pool);
+});
 
 /* A "photo" here means a daylight true-color scene - the ordinary satellite
    view you get on a maps app. Explicitly not radar, not night lights, not
@@ -406,50 +419,9 @@ function setCollapsed(on){
   restoreScenePanelPosition();
   setTimeout(()=>{reflowMap();restoreScenePanelPosition()},380);
 }
-/* The sidebar is a sheet on a phone, so it answers the gestures a sheet
-   answers: swipe it back toward its own edge to dismiss, or tap the map beside
-   it. Without these the only way out was a 44px button in the far corner.
-
-   touch-action:pan-y on #side (see the stylesheet) is what makes this safe -
-   the browser keeps vertical scrolling and only the horizontal axis is ours,
-   which is the same split the point-cloud sheet needed. */
-(function sidebarDismissGestures(){
-  const compact=()=>matchMedia("(max-width:760px)").matches;
-  let startX=0,startY=0,tracking=false,horizontal=null;
-  sideEl.addEventListener("pointerdown",event=>{
-    if(!compact()||event.pointerType==="mouse"||document.body.classList.contains("collapsed")) return;
-    startX=event.clientX;startY=event.clientY;tracking=true;horizontal=null;
-  },{passive:true});
-  sideEl.addEventListener("pointermove",event=>{
-    if(!tracking) return;
-    const dx=event.clientX-startX,dy=event.clientY-startY;
-    /* Decide the axis once, from the first decisive movement, so a diagonal
-       drag does not flip between scrolling and dismissing mid-gesture. */
-    if(horizontal===null){
-      if(Math.abs(dx)<10&&Math.abs(dy)<10) return;
-      horizontal=Math.abs(dx)>Math.abs(dy);
-    }
-    if(horizontal&&dx<-56){
-      tracking=false;
-      /* The redesign puts a detail view inside the sheet. Swiping back from
-         there used to close the whole panel, so you lost the sheet AND stayed
-         stranded on the detail route - reopening dropped you right back where
-         you had just tried to leave. Mirror the back control when there is
-         somewhere to go back to, and only dismiss from the top level. */
-      const back=document.getElementById("cspBack");
-      if(document.body.dataset.cspView==="detail"&&back&&getComputedStyle(back).display!=="none") back.click();
-      else setCollapsed(true);
-    }
-  },{passive:true});
-  const stop=()=>{tracking=false};
-  sideEl.addEventListener("pointerup",stop,{passive:true});
-  sideEl.addEventListener("pointercancel",stop,{passive:true});
-  /* Tap the map beside the sheet. Pointerdown on the map, not a document
-     click, so it cannot be swallowed by Leaflet's own handlers. */
-  document.getElementById("map").addEventListener("pointerdown",()=>{
-    if(compact()&&!document.body.classList.contains("collapsed")) setCollapsed(true);
-  },{capture:true,passive:true});
-})();
+/* The phone sheet dismisses the way the native one does: the close control
+   and a downward header drag. A leftward swipe does not close it, and a map
+   tap does not either. A pushed page pops from a rightward leading-edge drag. */
 $("#sideToggle").setAttribute("aria-controls","side");
 $("#sideToggle").setAttribute("aria-expanded","true");
 $("#sideToggle").onclick=()=>setCollapsed(!document.body.classList.contains("collapsed"));
@@ -570,8 +542,6 @@ allDockButtons().forEach(el=>{
   });
   el.addEventListener("pointerdown",e=>{
     if(e.button!==0) return;
-    // A constrained phone dock scrolls by touch; dragging must not reorder it.
-    if(e.pointerType==="touch"&&dockEl.scrollHeight>dockEl.clientHeight+1) return;
     const r=el.getBoundingClientRect();
     dockDrag={el,pointerId:e.pointerId,x0:e.clientX,y0:e.clientY,grabY:e.clientY-r.top,moved:false};
     try{ el.setPointerCapture(e.pointerId) }catch(err){}

@@ -12,6 +12,7 @@ fs.mkdirSync(vendor,{recursive:true});
    Icons are copied one by one from Lucide, so the shell ships only the
    symbols it uses rather than the library's all-icons runtime. */
 const SOURCES=[
+  ["vendor/fonts/pacifico-regular.ttf","ios/Resources/Fonts/Pacifico.ttf"],
   ["vendor/maplibre-gl","node_modules/maplibre-gl/dist/maplibre-gl"],
   ["vendor/leaflet-rotate","node_modules/@tomickigrzegorz/leaflet-rotate/dist/leaflet-rotate"],
   ["vendor/lerc/","node_modules/lerc/"],
@@ -33,6 +34,7 @@ for(const target of [...synced,"vendor/lerc/README.md"]){
    resolve -apple-system first and never download this file. One variable
    Latin face covers every weight the interface uses. */
 const fontDir=path.join(vendor,"fonts");
+fs.copyFileSync(path.join(root,"ios/Resources/Fonts/Pacifico-LICENSE.txt"),path.join(fontDir,"Pacifico-LICENSE.txt"));
 fs.copyFileSync(path.join(root,"node_modules/@fontsource-variable/inter/LICENSE"),path.join(fontDir,"Inter-LICENSE.txt"));
 
 const potreeRequired=["build/potree/potree.js","build/potree/potree.css","build/potree/workers/EptLaszipDecoderWorker.js","build/potree/workers/laz-perf.wasm","libs/copc/index.js","SOURCE.json"];
