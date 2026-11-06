@@ -1525,10 +1525,11 @@ const sheetTools=$("#mapDock");
 // Reserve space by lowering the medium sheet, never by clipping the dock.
 // Native MapTools uses balanced columns only when the viewport itself is short.
 const sheetMetric=document.createElement("div");
-sheetMetric.style.cssText="position:absolute;visibility:hidden;pointer-events:none";
+sheetMetric.style.cssText="position:fixed;visibility:hidden;pointer-events:none;width:0;contain:strict";
+document.body.append(sheetMetric);
 const sheetPixels=variable=>{
-  sheetMetric.style.height=`var(${variable})`;document.body.append(sheetMetric);
-  const value=sheetMetric.offsetHeight;sheetMetric.remove();return value;
+  sheetMetric.style.height=`var(${variable})`;
+  return sheetMetric.offsetHeight;
 };
 const setSheetStyle=(element,name,value)=>{
   if(element.style.getPropertyValue(name)!==value) element.style.setProperty(name,value);
@@ -1986,10 +1987,12 @@ const syncSheetTools=(progress=null)=>{
   sheetTools.style.pointerEvents=hidden?"none":"auto";
   if(hidden) sheetTools.setAttribute("aria-hidden","true");else sheetTools.removeAttribute("aria-hidden");
 };
-// ResizeObserver supplies the already computed height. Both finger movement
-// and a detent spring use that same progress; there is no second fade clock.
+// ResizeObserver supplies the resting border box. A detent spring and a finger
+// hold that box still and move a clip, so this must not restyle on those frames.
 const readout=$("#mapReadout");
+let sheetSpring=false;
 const trackSheetHeight=height=>{
+  if(sheetSpring||document.body.classList.contains("csp-sheet-dragging")) return;
   if(!sheetMode()||!sheetLimits) return;
   const {medium,large}=sheetLimits;
   const span=Math.max(1,Math.min(120,(large-medium)*.5));
@@ -2018,8 +2021,8 @@ const readoutHeight=()=>{
 const fitMapInfo=height=>{
   if(fittingInfo||!readout||!sheetMode()||!sheetLimits) return;
   const expanded=readout.classList.contains("expanded")&&!isCollapsed();
-  // A closed tile must not restyle on every detent frame. The spring writes
-  // sheet height continuously, and one cleanup when the tile closes is enough.
+  // A closed tile must not restyle on a detent change. The clip spring keeps
+  // the sheet's border box still, and one cleanup when the tile closes is enough.
   if(!expanded&&!narrowInfo&&!compactInfo&&!readout.classList.contains("sheet-compact")) return;
   fittingInfo=true;
   try{
@@ -2076,7 +2079,7 @@ const fitMapInfo=height=>{
 new ResizeObserver(entries=>trackSheetHeight(entries[0].borderBoxSize?.[0]?.blockSize??entries[0].contentRect.height)).observe(side);
 // readout.js dispatches this after the expanded class and content visibility
 // change, and before it samples the animation's target box.
-readout?.addEventListener("csp:map-info-fit",()=>fitMapInfo(side.offsetHeight));
+readout?.addEventListener("csp:map-info-fit",()=>fitMapInfo(visibleSheetHeight()));
 const sheetTextField=element=>!!element?.matches?.("textarea,input:not([type=button],[type=checkbox],[type=radio],[type=range],[type=color],[type=file],[type=submit],[type=reset],[type=image],[type=hidden])");
 const closeMenu=event=>{
   event?.stopPropagation();
@@ -2157,18 +2160,146 @@ const syncGrabber=()=>{
   grabber.setAttribute("aria-label",peeking()?"Show panel":"Resize panel");
   grabber.setAttribute("aria-expanded",String(currentDetent()==="large"));
 };
+let sheetMotionGen=0,sheetMotionFrame=0;
+const sheetMotionReduced=()=>matchMedia("(prefers-reduced-motion: reduce)").matches||document.documentElement.classList.contains("csp-reduce-motion");
+const sheetClipPx=()=>{
+  const clip=getComputedStyle(side).clipPath;
+  return clip.startsWith("inset(")?parseFloat(clip.slice(6))||0:0;
+};
+const visibleSheetHeight=()=>side.getBoundingClientRect().height-sheetClipPx();
+const sheetContents=[nav,workspace];
+let sheetClipRadii="";
+const clipAt=px=>`inset(${Math.max(0,px)}px 0px 0px 0px round ${sheetClipRadii})`;
+const prepareSheetClip=()=>{
+  const style=getComputedStyle(side);
+  sheetClipRadii=[style.borderTopLeftRadius,style.borderTopRightRadius,style.borderBottomRightRadius,style.borderBottomLeftRadius].join(" ");
+  side.classList.add("csp-sheet-clip");
+};
+const paintSheetClip=px=>{
+  side.style.clipPath=clipAt(px);
+  for(const content of sheetContents) content.style.transform=`translate3d(0,${px}px,0)`;
+};
+const cancelSheetAnimations=()=>{
+  cancelAnimationFrame(sheetMotionFrame);sheetMotionFrame=0;
+};
+// The same easing as the native-style CSS spring. Solve the monotonic x curve
+// once per frame; no geometry or computed-style reads are needed while moving.
+const sheetEase=progress=>{
+  const curve=(t,a,b)=>3*(1-t)*(1-t)*t*a+3*(1-t)*t*t*b+t*t*t;
+  let low=0,high=1;
+  for(let i=0;i<12;i++){
+    const mid=(low+high)/2;
+    if(curve(mid,.28,.32)<progress) low=mid;else high=mid;
+  }
+  return curve((low+high)/2,.9,1.08);
+};
+// The blurred border box stays fixed throughout a spring/drag. Only a rounded
+// top clip and the content translations move. Animate those compositor
+// properties directly: an inherited animated custom property would restyle
+// the entire control tree every frame, even with a fixed border box. One frame
+// callback writes the clip and translation together: WebKit otherwise samples
+// a compositor transform a frame ahead of its rounded clip animation.
+const dropSheetHold=()=>{
+  cancelSheetAnimations();
+  sheetSpring=false;
+  side.style.transition="none";
+  side.classList.remove("csp-sheet-clip");
+  side.style.removeProperty("clip-path");
+  side.style.removeProperty("height");
+  for(const content of sheetContents) content.style.removeProperty("transform");
+  void side.offsetHeight;
+  side.style.transition="";
+  trackSheetHeight(side.offsetHeight);
+};
+const finishSheetSpring=generation=>{
+  if(generation!==sheetMotionGen||document.body.classList.contains("csp-sheet-dragging")) return;
+  sheetMotionGen++;
+  dropSheetHold();
+};
+const stopSheetSpring=()=>{
+  const clip=sheetClipPx();
+  sheetMotionGen++;
+  cancelSheetAnimations();
+  if(side.classList.contains("csp-sheet-clip")) paintSheetClip(clip);
+  side.style.transition="none";
+};
+const targetSheetHeight=()=>{
+  if(isCollapsed()) return sheetPixels("--capsule-h")||52;
+  if(document.body.dataset.cspDetent==="large") return Math.max(160,sheetPixels("--sheet-large")-sheetPixels("--sheet-keyboard"));
+  return sheetPixels("--sheet-medium");
+};
+const parkDock=()=>{
+  if(!sheetTools||!sheetMode()) return;
+  const hide=!isCollapsed()&&document.body.dataset.cspDetent==="large"?1:0;
+  setSheetStyle(sheetTools,"--csp-dock-hide",hide.toFixed(3));
+  syncSheetTools(hide);
+};
+const settleSheetMotion=fromVisible=>{
+  if(!sheetMode()){
+    if(side.classList.contains("csp-sheet-clip")) dropSheetHold();
+    return;
+  }
+  stopSheetSpring();
+  const generation=++sheetMotionGen;
+  sheetSpring=true;
+  const to=targetSheetHeight();
+  if(sheetMotionReduced()||Math.abs(to-fromVisible)<1){finishSheetSpring(generation);return}
+  const frozen=Math.max(side.getBoundingClientRect().height,fromVisible,to)+Math.min(24,Math.abs(to-fromVisible)*.08);
+  const start=Math.max(0,frozen-fromVisible),end=Math.max(0,frozen-to);
+  prepareSheetClip();
+  side.style.height=`${frozen}px`;
+  parkDock();
+  paintSheetClip(start);
+  side.style.transition="";
+  const started=performance.now();
+  const frame=now=>{
+    if(generation!==sheetMotionGen) return;
+    const progress=Math.min(1,(now-started)/350);
+    paintSheetClip(start+(end-start)*sheetEase(progress));
+    if(progress<1) sheetMotionFrame=requestAnimationFrame(frame);
+    else finishSheetSpring(generation);
+  };
+  sheetMotionFrame=requestAnimationFrame(frame);
+};
+const clearInterruptedSheet=()=>{
+  if(!side.classList.contains("csp-sheet-clip")) return;
+  sheetMotionGen++;
+  document.body.classList.remove("csp-sheet-dragging");
+  dropSheetHold();
+};
+peekLayout.addEventListener("change",clearInterruptedSheet);
+window.addEventListener("resize",clearInterruptedSheet);
+matchMedia("(prefers-reduced-motion: reduce)").addEventListener("change",()=>{if(sheetMotionReduced())clearInterruptedSheet()});
+new MutationObserver(()=>{if(sheetMotionReduced())clearInterruptedSheet()}).observe(document.documentElement,{attributes:true,attributeFilter:["class"]});
 const setDetent=detent=>{
   document.body.dataset.cspDetent=detent;
-  side.style.height="";
+  if(!sheetMode()) side.style.height="";
   syncGrabber();
   syncSheetTools();
 };
-const openSheet=(detent="medium")=>{setDetent(detent);if(isCollapsed()) toggleSheet()};
+const holdSheetBox=()=>{
+  if(!sheetMode()||side.style.height) return;
+  side.style.height=`${side.getBoundingClientRect().height}px`;
+};
+const openSheet=(detent="medium")=>{
+  const from=sheetMode()?visibleSheetHeight():0;
+  holdSheetBox();
+  setDetent(detent);
+  if(isCollapsed()) toggleSheet();
+  settleSheetMotion(from);
+};
 const goToDetent=detent=>{
-  if(detent!=="peek"){openSheet(detent);return}
-  // the next open starts at medium, as it does in Maps
-  setDetent("medium");
-  if(!isCollapsed()) toggleSheet();
+  const from=sheetMode()?visibleSheetHeight():0;
+  holdSheetBox();
+  if(detent!=="peek"){
+    setDetent(detent);
+    if(isCollapsed()) toggleSheet();
+  }else{
+    // the next open starts at medium, as it does in Maps
+    setDetent("medium");
+    if(!isCollapsed()) toggleSheet();
+  }
+  settleSheetMotion(from);
 };
 setDetent("medium");
 const sheetActions=document.createElement("div");
@@ -2204,10 +2335,7 @@ if(sheetMode()&&!isCollapsed()){
   requestAnimationFrame(()=>requestAnimationFrame(()=>document.body.classList.remove("csp-sheet-dragging")));
 }
 {
-  const probeHeight=variable=>{
-    const probe=document.createElement("div");probe.style.cssText=`position:absolute;visibility:hidden;height:var(${variable})`;
-    document.body.append(probe);const height=probe.getBoundingClientRect().height;probe.remove();return height;
-  };
+  const probeHeight=sheetPixels;
   const detentHeights=()=>({peek:probeHeight("--sheet-peek"),medium:probeHeight("--sheet-medium"),large:probeHeight("--sheet-large")});
   /* Controls that own their own drags. A slider, a picker, the layer reorder
      handle and the suggestion list keep the gesture. */
@@ -2230,7 +2358,7 @@ if(sheetMode()&&!isCollapsed()){
     suppressTimer=setTimeout(()=>{suppressClick=false},400);
   };
   const begin=(x,y,target,source)=>{
-    gesture={x,y,startH:side.getBoundingClientRect().height,from:currentDetent(),target,source,
+    gesture={x,y,startH:visibleSheetHeight(),from:currentDetent(),target,source,
              header:!!target.closest(".csp-wordmark,.searchbox,#cspWorkspaceHeader"),
              keyboard:keyboardAtPointer||sheetTextField(document.activeElement),
              onGrabber:target===grabber,scroller:scrollerFor(target),mode:null,samples:[{y,t:performance.now()}]};
@@ -2249,8 +2377,15 @@ if(sheetMode()&&!isCollapsed()){
       // The header always moves the sheet, including the rubber-band above large.
       else g.mode=dy>0&&(!g.scroller||g.scroller.scrollTop<=0)?"sheet":"none";
       if(g.mode==="sheet"){
+        stopSheetSpring();
         g.limits=detentHeights();
         document.body.classList.add("csp-sheet-dragging");
+        g.frozen=Math.max(g.limits.large+96,g.startH);
+        if(sheetMode()){
+          sheetSpring=true;
+          prepareSheetClip();
+          side.style.height=`${g.frozen}px`;
+        }
       }
     }
     if(g.mode!=="sheet") return false;
@@ -2260,7 +2395,10 @@ if(sheetMode()&&!isCollapsed()){
     // rubber-band past either end instead of stopping dead
     if(height>large) height=large+(height-large)*.22;
     if(height<peek) height=Math.max(peek*.6,peek-(peek-height)*.22);
-    side.style.height=`${height}px`;
+    if(sheetMode()){
+      if(height>g.frozen-0.5){g.frozen=height+120;side.style.height=`${g.frozen}px`}
+      paintSheetClip(Math.max(0,g.frozen-height));
+    }else side.style.height=`${height}px`;
     if(sheetMode()&&sheetTools){
       /* Clear the tools before the rising sheet reaches them. While a finger
          owns the sheet, opacity and position follow its height directly. */
@@ -2292,8 +2430,11 @@ if(sheetMode()&&!isCollapsed()){
     suppressNextClick();
     const first=g.samples[0],last=g.samples[g.samples.length-1];
     const velocity=last.t>first.t?(last.y-first.y)/(last.t-first.t):0; // px per ms, positive = down
-    if(g.header&&g.keyboard){side.style.height="";settleTools();return}
+    if(g.header&&g.keyboard){sheetMotionGen++;dropSheetHold();settleTools();return}
     const lastMove=g.samples[g.samples.length-1];
+    // The native search capsule needs at least 24 points of upward travel;
+    // velocity alone must not turn a tiny nudge into an open.
+    if(g.from==="peek"&&g.y-lastMove.y<=24){goToDetent("peek");settleTools();return}
     const down=lastMove.y-g.y;
     // Home dismisses past 80px, or on a short flick faster than 300px/s.
     // A pushed page steps one detent: large to medium, then medium to close.
@@ -2304,7 +2445,7 @@ if(sheetMode()&&!isCollapsed()){
       else if(home) goToDetent("peek");
       if(page||home){settleTools();return}
     }
-    const height=side.getBoundingClientRect().height;
+    const height=visibleSheetHeight();
     // Project the release speed forward, as UIKit does for sheets: a moderate
     // flick carries one detent, a hard one carries two, a slow drag stays
     // where it is let go. (300ms is gentler than scroll views' ~500ms.)
@@ -2315,7 +2456,7 @@ if(sheetMode()&&!isCollapsed()){
       const distance=Math.abs(heights[detent]-projected);
       if(distance<best){best=distance;target=detent}
     }
-    if(target===g.from) side.style.height="";
+    if(target===g.from) settleSheetMotion(height);
     else goToDetent(target);
     settleTools();
   };

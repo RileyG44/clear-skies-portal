@@ -78,7 +78,15 @@ function summarise(pool){
   const isCurrent=it=>same(it,shownItem),stateOf=it=>isCurrent(it)?"showing":same(it,loadingItem)?"loading":"";
   const provider=it=>esc(it.src.split(" ")[0]);
   const meta=it=>[ago(it.date),res(it.gsd),it.cloud!=null?it.cloud.toFixed(0)+"% cloud":"",provider(it)].filter(Boolean).join(" &middot; ");
+  const phoneRecommendation=matchMedia("(max-width:760px) and (orientation:portrait)").matches;
   const main=photo
+    &&phoneRecommendation?`<div class="csp-best-main csp-best-recommendation" tabindex="-1" data-state="${stateOf(photo)}">
+        <strong>${esc(photo.label)} &middot; ${esc(photo.date.slice(0,10))}</strong>
+        <span class="csp-best-meta">${meta(photo)}</span>
+        <span class="csp-best-shown" ${isCurrent(photo)?"":"hidden"}>Shown</span>
+        <button type="button" class="csp-best-show" data-id="${esc(photo.id)}" data-src="${esc(photo.src)}" ${isCurrent(photo)?"hidden":""} ${stateOf(photo)==="loading"?'disabled aria-busy="true"':""}>${stateOf(photo)==="loading"?"Loading…":"Show"}</button>
+      </div>`
+    :photo
     ? `<button type="button" class="csp-best-main" data-id="${esc(photo.id)}" data-src="${esc(photo.src)}" aria-pressed="${isCurrent(photo)}" data-state="${stateOf(photo)}">
         <span class="csp-best-k">${{showing:"Showing best clear image",loading:"Loading best clear image…"}[stateOf(photo)]||"Show best clear image"}</span>
         <strong>${esc(photo.label)} &middot; ${esc(photo.date.slice(0,10))}</strong>
@@ -90,7 +98,7 @@ function summarise(pool){
     : "";
   const chips=chip("Newest",newest,`${ago(newest.date)} &middot; ${provider(newest)}`)+chip("Sharpest",sharp,`${res(sharp.gsd)} &middot; ${ago(sharp.date)}`);
   const focused=document.activeElement?.closest?.("#summary button[data-id]");
-  const focusKey=focused?(focused.classList.contains("csp-best-main")?"main":focused.querySelector("span")?.textContent.split(" ")[0]):"";
+  const focusKey=focused?(focused.matches(".csp-best-main,.csp-best-show")?"main":focused.querySelector("span")?.textContent.split(" ")[0]):"";
   el.innerHTML=main+(chips?`<div class="csp-best-alt">${chips}</div>`:"")+
     `<div class="csp-best-cover">${pool.length.toLocaleString()} matching scenes from ${srcs} ${srcs===1?"source":"sources"}, listed below</div>`;
   el.querySelectorAll("button[data-id]").forEach(button=>button.onclick=()=>{
@@ -98,7 +106,7 @@ function summarise(pool){
   });
   // Keep keyboard focus on the same choice when the card is rebuilt.
   if(focusKey){
-    const next=focusKey==="main"?el.querySelector(".csp-best-main"):[...el.querySelectorAll(".csp-best-chip")].find(b=>b.querySelector("span")?.textContent.startsWith(focusKey));
+    const next=focusKey==="main"?(el.querySelector(".csp-best-show:not([hidden])")||el.querySelector(".csp-best-main")):[...el.querySelectorAll(".csp-best-chip")].find(b=>b.querySelector("span")?.textContent.startsWith(focusKey));
     (next||el.querySelector("button[data-id]"))?.focus({preventScroll:true});
   }
   setCount("summary", pool.length+" scenes");
