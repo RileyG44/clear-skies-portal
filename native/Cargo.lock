@@ -222,6 +222,7 @@ dependencies = [
 name = "csk-app"
 version = "0.1.0"
 dependencies = [
+ "csk-core",
  "csk-engine",
  "csk-gpu",
  "csk-map",

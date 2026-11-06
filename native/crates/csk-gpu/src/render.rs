@@ -644,6 +644,41 @@ impl Renderer {
         Ok(frame)
     }
 
+    /// Shades an uploaded field with derived fields of its own size (Detail
+    /// blur, REM floors), e.g. a look preview.
+    pub fn render_derived(
+        &self,
+        field: &Field,
+        uniforms: &Uniforms,
+        blur: Option<&Field>,
+        base: Option<&Field>,
+        land_base: Option<&Field>,
+    ) -> Result<Frame, Error> {
+        for f in [Some(field), blur, base, land_base].into_iter().flatten() {
+            if !Arc::ptr_eq(&f.identity, &self.identity) {
+                return Err(Error::Input("field belongs to another GPU device"));
+            }
+            if (f.width, f.height) != (field.width, field.height) {
+                return Err(Error::Input("derived field size"));
+            }
+        }
+        self.poll()?;
+        let frame = self.frame(field.width, field.height, uniforms.bytes().len())?;
+        let mut encoder = self.device.create_command_encoder(&Default::default());
+        let aux = AuxViews {
+            blur: blur.map(|f| (&f.view, 1)),
+            base: base.map(|f| (&f.view, 1)),
+            land_base: land_base.map(|f| (&f.view, 1)),
+            transform: [1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0],
+        };
+        self.encode_shade(&mut encoder, &field.view, uniforms, &aux, &Self::frame_view(&frame), FRAME_FORMAT);
+        self.queue.submit([encoder.finish()]);
+        let charges: Vec<_> =
+            [Some(field), blur, base, land_base].into_iter().flatten().map(|f| f.charge.clone()).collect();
+        self.retain_until_done((charges, frame.charge.clone()));
+        Ok(frame)
+    }
+
     pub fn poll(&self) -> Result<(), Error> {
         self.device.poll(wgpu::PollType::Poll).map_err(|e| Error::Device(e.to_string()))?;
         Ok(())

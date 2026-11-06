@@ -53,7 +53,7 @@ pub struct FrameResult {
 type Decoded = Result<Vec<u16>, csk_gpu::Error>;
 
 struct Scene {
-    gpu: Renderer,
+    gpu: Arc<Renderer>,
     presenter: Presenter,
     terrain: Terrain,
     loader: loader::Loader,
@@ -108,6 +108,7 @@ impl Map {
     ) -> Result<Self, csk_gpu::Error> {
         let view = camera.view();
         let pool = (worst_slots(view.css, view.dpr) * 2).clamp(MIN_POOL, MAX_POOL);
+        let gpu = Arc::new(gpu);
         let mut terrain = Terrain::new(&gpu, pool)?;
         let water = Arc::new(Mutex::new(None));
         let (decoded, woken) = (water.clone(), wake.clone());
@@ -180,6 +181,12 @@ impl Map {
         scene.shown = None;
         drop(scene);
         (self.wake)();
+    }
+
+    /// The map's GPU, for offscreen work (look previews) that must not
+    /// hold the scene.
+    pub fn gpu(&self) -> Arc<Renderer> {
+        lock(&self.scene).gpu.clone()
     }
 
     /// The markers drawn over the map (the selected place).

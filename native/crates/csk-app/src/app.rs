@@ -55,6 +55,8 @@ pub struct App {
     engine: Arc<Engine>,
     inner: Mutex<Inner>,
     suggestions: Mutex<Suggestions>,
+    /// The lighting the published look previews were drawn with.
+    previews: Mutex<Option<crate::render::Lighting>>,
     map: Mutex<Option<Arc<Map>>>,
     publish: Publish,
 }
@@ -154,6 +156,7 @@ impl App {
             engine,
             inner: Mutex::new(inner),
             suggestions: Mutex::default(),
+            previews: Mutex::new(None),
             map: Mutex::new(None),
             publish,
         })
@@ -181,7 +184,11 @@ impl App {
             map.set_appearance(uniforms, derive);
             map.set_layers(draws(&inner.state));
             map.set_markers(markers(inner.location.as_ref()));
+            let lighting = inner.state.terrain.lighting;
             drop(inner);
+            *lock(&self.map) = Some(map.clone());
+            *lock(&self.previews) = None;
+            self.refresh_previews(lighting);
             map.set_listener(Some(Arc::new(MapEvents(Arc::downgrade(self)))));
         }
         *lock(&self.map) = map;
@@ -240,6 +247,40 @@ impl App {
         (uniforms, derive)
     }
 
+    /// Draws the look previews with the person's lighting, off the caller,
+    /// unless they are already drawn with it.
+    fn refresh_previews(self: &Arc<Self>, lighting: crate::render::Lighting) {
+        let Some(map) = lock(&self.map).clone() else { return };
+        {
+            let mut drawn = lock(&self.previews);
+            if *drawn == Some(lighting) {
+                return;
+            }
+            *drawn = Some(lighting);
+        }
+        let app = Arc::downgrade(self);
+        let gpu = map.gpu();
+        std::thread::spawn(move || {
+            let mut landscape = crate::preview::Landscape::default();
+            let mut images = Object::new();
+            for look in &catalog().looks {
+                // A newer lighting supersedes this batch.
+                if app.upgrade().is_none_or(|a| *lock(&a.previews) != Some(lighting)) {
+                    return;
+                }
+                if let Ok(rgba) = landscape.render(&gpu, look, lighting) {
+                    let url = crate::preview::data_url(&rgba, crate::preview::WIDTH, crate::preview::HEIGHT);
+                    images.insert(format!("csp-image:look:{}", look.id), json!(url));
+                }
+            }
+            if let Some(app) = app.upgrade() {
+                let mut update = Object::new();
+                update.insert("images".into(), Value::Object(images));
+                app.send_update(update);
+            }
+        });
+    }
+
     fn redraw(&self, inner: &Inner) {
         if let Some(map) = lock(&self.map).as_ref() {
             let (uniforms, derive) = self.appearance(inner);
@@ -269,7 +310,7 @@ impl App {
     }
 
     /// A shell command (ios/Sources/Shell/ShellBackend.swift).
-    pub fn send(&self, command: &str, args: &Value) {
+    pub fn send(self: &Arc<Self>, command: &str, args: &Value) {
         let mut inner = lock(&self.inner);
         let update = match command {
             "setView" => {
@@ -317,6 +358,7 @@ impl App {
                 self.redraw(&inner);
                 if op != "input" {
                     self.save(&inner);
+                    self.refresh_previews(inner.state.terrain.lighting);
                 }
                 self.changed(&inner)
             }

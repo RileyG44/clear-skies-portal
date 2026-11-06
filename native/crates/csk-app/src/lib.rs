@@ -5,6 +5,7 @@
 
 pub mod app;
 pub mod coords;
+pub mod preview;
 pub mod render;
 pub mod shell;
 pub mod state;
