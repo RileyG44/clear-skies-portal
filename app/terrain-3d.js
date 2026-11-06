@@ -458,6 +458,9 @@ function gpu3dStates(){
     ...(stack||["hs","hsmulti","tint","off"].includes(style)?{lighting:terrainLighting()}:{}),...(stack?{stack}:{})},spectrumOpacity:0},
     elevspec:{terrain:{style:"off"},spectrum:elevationRenderSettings(),spectrumOpacity:1}};
 }
+/* isStyleLoaded() also waits for every source tile. Paint and source changes
+   are legal as soon as the style's layers exist, while elevation streams in. */
+function map3dStyleReady(view=map3d){ return !!view?.getLayer("background") }
 function initGpu3d(module){
   if(!gpu3dPreferred()){document.documentElement.dataset.gpu3d="off";return;}
   gpu3d=CSPGpuTerrain3DLayer.create({map:map3d,version:module.getVersion?.()||module.version,
@@ -466,7 +469,7 @@ function initGpu3d(module){
     onStatus:(enabled)=>{document.documentElement.dataset.gpu3d=enabled?"on":"off";},
     onFallback:reason=>{
       gpu3dFailed=true;console.warn("3D GPU analytical textures: using worker fallback:",reason);
-      setTimeout(()=>{if(!map3d)return;if(map3d.isStyleLoaded())refresh3dStyle();else map3d.once("load",()=>{if(map3d)refresh3dStyle();});},0);
+      setTimeout(()=>{if(!map3d)return;if(map3dStyleReady())refresh3dStyle();else map3d.once("style.load",()=>{if(map3d)refresh3dStyle();});},0);
     }});
 }
 let map3dBuiltKey="",elevSpectrumRevision=0;
@@ -753,6 +756,12 @@ function webgl2Capable(){
 
 const MAP3D_PITCH=58;
 const MAP3D_COMPACT=matchMedia("(pointer: coarse)").matches||/iP(?:hone|ad|od)/.test(navigator.userAgent||"");
+/* MapLibre 6 only discovers its adjacent worker on HTTP(S). The iOS bundle
+   runs at clearskies://app/: without this URL, DEM tiles wait forever on a
+   worker launched with an empty URL, leaving only the flat raster drape. */
+function configureMaplibre(module){
+  module.setWorkerUrl(new URL("./vendor/maplibre-gl-worker.mjs",location.href).href);
+}
 /* The 3D engine is ~260 KB of modules and a worker. Fetch and evaluate it
    while the page is idle after start-up, on devices that can run it, so the
    first switch to 3D does not start with a download. */
@@ -762,7 +771,7 @@ function preloadMaplibre(){
     maplibreModule=import("./vendor/maplibre-gl.mjs").catch(error=>{ maplibreModule=null;throw error });
     /* prewarm() starts MapLibre's tile workers too - each loads its own copy
        of the shared module - so they are parsed and waiting when 3D opens. */
-    maplibreModule.then(module=>{ try{ module.prewarm?.() }catch(error){} },()=>{});loadMaplibreStyles() };
+    maplibreModule.then(module=>{ try{ configureMaplibre(module);module.prewarm?.() }catch(error){} },()=>{});loadMaplibreStyles() };
   ("requestIdleCallback" in window)?requestIdleCallback(go,{timeout:8000}):setTimeout(go,4000);
 }
 addEventListener("load",()=>setTimeout(preloadMaplibre,2500),{once:true});
@@ -784,6 +793,7 @@ async function enterTerrain3d(){
     /* The 3D stylesheet arrives with the 3D module rather than blocking the
        first paint of every visit that never opens 3D. */
     const [module]=await Promise.all([maplibreModule||(maplibreModule=import("./vendor/maplibre-gl.mjs").catch(error=>{ maplibreModule=null;throw error })),loadMaplibreStyles()]);
+    configureMaplibre(module);
     /* MapLibre removed the `supported()` helper in v5; the vendored 6.6.0 does
        not export it, so `module.supported?.()` was always undefined and this
        guard threw on every device — 3D could never start. Probe WebGL2
@@ -834,6 +844,7 @@ async function enterTerrain3d(){
     map3d.on("rotate",syncBearingButton);map3d.on("pitch",syncBearingButton);
     map3d.on("moveend",scheduleTerrainStatus);map3d.on("idle",scheduleTerrainStatus);
     const view=map3d;
+    view.on("style.load",()=>{if(map3d===view&&map3dWanted)schedule3dStyle()});
     let revealTimer=0;
     const reveal=()=>{
       clearTimeout(revealTimer);
@@ -912,7 +923,7 @@ function paint3dHillshade(light,opacity,style){
   map3d.setPaintProperty("terrain-hillshade","hillshade-highlight-color",`rgba(255,247,235,${Math.max(.3,Math.min(1,opacity*1.1)).toFixed(2)})`);
 }
 function apply3dLighting(){
-  if(!map3d||!map3d.isStyleLoaded?.()) return false;
+  if(!map3dStyleReady()) return false;
   if(map3dBuiltKey!==map3dStructureKey()) return false;
   const light=terrainLighting(),opacity=terrainOpacity()/100,style=$("#terStyle").value;
   try{

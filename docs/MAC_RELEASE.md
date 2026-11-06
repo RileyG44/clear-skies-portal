@@ -1,8 +1,9 @@
-Download **ClearSkies-Setup-1.0.11-arm64.dmg** for Apple Silicon (M1 and newer), or **ClearSkies-Setup-1.0.11-x64.dmg** for an Intel Mac.
+Download **ClearSkies-Setup-1.0.12-arm64.dmg** for Apple Silicon (M1 and newer), or **ClearSkies-Setup-1.0.12-x64.dmg** for an Intel Mac.
 
 Open the disk image, drag **ClearSkies** into **Applications**, then open it from Applications. The app and terrain engine are included together; no Node.js or terminal setup is needed. ZIP downloads are also available.
 
-- New in 1.0.11: The startup screen stays plain white with the landing maple, which grows and then dissolves into the ready map. A cached map still shows the tree, and a slow connection no longer shows an error while tiles are still arriving. The installed iPhone layout fills the screen, and the phone toolbar stays clear of map info. Bundled map build 2026-11-05r.
+- New in 1.0.12: 3D terrain on the iPhone builds its height mesh again. The app points MapLibre at the bundled terrain worker, which the clearskies:// bundle could not find on its own, so elevation stayed a flat picture. Bundled map build 2026-11-05s.
+- From 1.0.11: The startup screen stays plain white with the landing maple, which grows and then dissolves into the ready map. A cached map still shows the tree, and a slow connection no longer shows an error while tiles are still arriving. The installed iPhone layout fills the screen, and the phone toolbar stays clear of map info.
 - From 1.0.10: 3D terrain opens tilted and responds to two-finger tilt again. The 3D view now appears on its first drawn frame, so one slow elevation tile can no longer hold it hidden behind the flat map.
 - From 1.0.9: reorganized Satellite imagery and Elevation menus with Planetary Computer results and exact heights; right-click Identify surface geology works again.
 - First launch shows the same terrain welcome page and Pacifico ClearSkies wordmark as Windows. Choose **Open ClearSkies** to start exploring, or **Learn about Tailscale** for the optional remote-access guide.
