@@ -4,7 +4,8 @@
 //! Contracts:
 //! - `update` receives `ShellUpdate` JSON (NUL-terminated, valid for the
 //!   call) from any thread; the platform hops to its UI thread.
-//! - Commands and queries come from the UI thread with JSON arguments.
+//! - Commands and queries come from the UI thread with JSON arguments. A
+//!   query's answer arrives once, from any thread, through its callback.
 //! - Attach a map with `csk_app_set_map` and detach it (NULL) before freeing
 //!   that map. Free the app before its engine.
 
@@ -17,6 +18,22 @@ use crate::{CskEngine, CskMap};
 
 pub struct CskApp {
     app: Arc<App>,
+    runtime: tokio::runtime::Handle,
+}
+
+/// Receives a query's JSON answer (NUL-terminated, valid for the call).
+pub type CskAnswer = extern "C" fn(context: *mut c_void, json: *const c_char);
+
+struct Reply(*mut c_void, CskAnswer);
+
+// The platform's answer callback is thread-safe (see the module docs).
+unsafe impl Send for Reply {}
+
+impl Reply {
+    fn send(self, json: String) {
+        let json = CString::new(json).unwrap_or_default();
+        (self.1)(self.0, json.as_ptr());
+    }
 }
 
 /// Where shell updates go.
@@ -72,7 +89,7 @@ pub unsafe extern "C" fn csk_app_new(engine: *const CskEngine, sink: CskShellSin
     // SAFETY: the caller passes a live engine or NULL.
     let Some(e) = (unsafe { engine.as_ref() }) else { return std::ptr::null_mut() };
     let publish: csk_app::Publish = Arc::new(move |json: String| sink.update(json));
-    Box::into_raw(Box::new(CskApp { app: App::new(e.engine.clone(), publish) }))
+    Box::into_raw(Box::new(CskApp { app: App::new(e.engine.clone(), publish), runtime: e.runtime.handle().clone() }))
 }
 
 /// Publishes everything the shell shows, marked ready.
@@ -90,21 +107,31 @@ pub unsafe extern "C" fn csk_app_send(app: *const CskApp, command: *const c_char
     // SAFETY: the caller passes a live app and strings valid for this call.
     let (Some(a), Some(command)) = (unsafe { app.as_ref() }, unsafe { text(command) }) else { return };
     // SAFETY: as above.
-    a.app.send(command, &unsafe { json_arg(args_json) });
+    let args = unsafe { json_arg(args_json) };
+    if !a.app.send_async(&a.runtime, command, &args) {
+        a.app.send(command, &args);
+    }
 }
 
-/// A shell query. Returns its JSON answer, to free with `csk_string_free`.
+/// A shell query, e.g. `suggest` with `{"text": "Spoka"}`. `answer` is
+/// called exactly once with its JSON (`null` for an unknown query or app).
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn csk_app_ask(
     app: *const CskApp,
     query: *const c_char,
     args_json: *const c_char,
-) -> *mut c_char {
+    context: *mut c_void,
+    answer: CskAnswer,
+) {
+    let reply = Reply(context, answer);
     // SAFETY: the caller passes a live app and strings valid for this call.
-    let (Some(a), Some(query)) = (unsafe { app.as_ref() }, unsafe { text(query) }) else { return std::ptr::null_mut() };
+    let (Some(a), Some(query)) = (unsafe { app.as_ref() }, unsafe { text(query) }) else {
+        return reply.send("null".into());
+    };
     // SAFETY: as above.
-    let answer = a.app.ask(query, &unsafe { json_arg(args_json) });
-    CString::new(answer.to_string()).map_or(std::ptr::null_mut(), CString::into_raw)
+    let args = unsafe { json_arg(args_json) };
+    let (app, query) = (a.app.clone(), query.to_owned());
+    a.runtime.spawn(async move { reply.send(app.ask(query, args).await.to_string()) });
 }
 
 /// Draws the app state into `map`, or detaches with NULL.

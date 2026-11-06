@@ -49,9 +49,17 @@ final class NativeShellBackend: ShellBackend {
     }
 
     func ask(_ query: String, _ arguments: [String: Any]) async throws -> Any? {
-        guard let answer = csk_app_ask(handle, query, Self.json(arguments)) else { return nil }
-        defer { csk_string_free(answer) }
-        return try JSONSerialization.jsonObject(with: Data(String(cString: answer).utf8), options: .fragmentsAllowed)
+        // The engine answers once, from its runtime; network queries
+        // (place suggestions) never block the main thread.
+        let json: String = await withCheckedContinuation { continuation in
+            let box = Unmanaged.passRetained(AnswerBox(continuation)).toOpaque()
+            csk_app_ask(handle, query, Self.json(arguments), box, answerReceived)
+        }
+        let answer = try JSONSerialization.jsonObject(with: Data(json.utf8), options: .fragmentsAllowed)
+        if let failure = answer as? [String: Any], let message = failure["error"] as? String, query == "suggest" {
+            throw NSError(domain: "ClearSkiesSearch", code: 1, userInfo: [NSLocalizedDescriptionKey: message])
+        }
+        return answer
     }
 
     func useMapCanvas(_ theme: String?) {
@@ -108,4 +116,17 @@ nonisolated private func shellUpdate(_ context: UnsafeMutableRawPointer?, _ json
 nonisolated private func shellRelease(_ context: UnsafeMutableRawPointer?) {
     guard let context else { return }
     Unmanaged<NativeShellSink>.fromOpaque(context).release()
+}
+
+/// A query's answer, on an engine thread.
+nonisolated private func answerReceived(_ context: UnsafeMutableRawPointer?, _ json: UnsafePointer<CChar>?) {
+    guard let context else { return }
+    let box = Unmanaged<AnswerBox>.fromOpaque(context).takeRetainedValue()
+    box.continuation.resume(returning: json.map { String(cString: $0) } ?? "null")
+}
+
+/// Carries one query's continuation through the C callback.
+nonisolated private final class AnswerBox: @unchecked Sendable {
+    let continuation: CheckedContinuation<String, Never>
+    init(_ continuation: CheckedContinuation<String, Never>) { self.continuation = continuation }
 }

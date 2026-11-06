@@ -145,6 +145,11 @@ typedef struct CskShellSink {
 } CskShellSink;
 
 /**
+ * Receives a query's JSON answer (NUL-terminated, valid for the call).
+ */
+typedef void (*CskAnswer)(void *context, const char *json);
+
+/**
  * The camera, in degrees.
  */
 typedef struct CskCamera {
@@ -314,9 +319,14 @@ void csk_app_start(const struct CskApp *app);
 void csk_app_send(const struct CskApp *app, const char *command, const char *args_json);
 
 /**
- * A shell query. Returns its JSON answer, to free with `csk_string_free`.
+ * A shell query, e.g. `suggest` with `{"text": "Spoka"}`. `answer` is
+ * called exactly once with its JSON (`null` for an unknown query or app).
  */
-char *csk_app_ask(const struct CskApp *app, const char *query, const char *args_json);
+void csk_app_ask(const struct CskApp *app,
+                 const char *query,
+                 const char *args_json,
+                 void *context,
+                 CskAnswer answer);
 
 /**
  * Draws the app state into `map`, or detaches with NULL.

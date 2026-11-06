@@ -13,6 +13,7 @@ csk-gpu = { path = "../csk-gpu" }
 csk-map = { path = "../csk-map" }
 serde = { version = "1", features = ["derive"] }
 serde_json = { version = "1", features = ["float_roundtrip"] }
+tokio = { version = "1", features = ["rt"] }
 
 [lints]
 workspace = true

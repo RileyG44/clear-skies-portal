@@ -4,6 +4,7 @@
 //! map draws what this state compiles to.
 
 pub mod app;
+pub mod coords;
 pub mod render;
 pub mod shell;
 pub mod state;

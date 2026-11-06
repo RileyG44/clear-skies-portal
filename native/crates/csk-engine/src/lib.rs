@@ -16,6 +16,7 @@ pub mod layers;
 pub mod markup;
 pub mod national;
 pub mod oregon;
+pub mod places;
 pub mod proxies;
 pub mod router;
 pub mod tiles;

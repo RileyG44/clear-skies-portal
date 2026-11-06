@@ -39,9 +39,17 @@ struct Inner {
     settled: bool,
 }
 
+/// The last place suggestions, numbered so a pick names the list it saw.
+#[derive(Default)]
+struct Suggestions {
+    version: u64,
+    places: Vec<csk_engine::places::Place>,
+}
+
 pub struct App {
     engine: Arc<Engine>,
     inner: Mutex<Inner>,
+    suggestions: Mutex<Suggestions>,
     map: Mutex<Option<Arc<Map>>>,
     publish: Publish,
 }
@@ -117,7 +125,13 @@ impl App {
             bearing: 0.0,
             settled: false,
         };
-        Arc::new(Self { engine, inner: Mutex::new(inner), map: Mutex::new(None), publish })
+        Arc::new(Self {
+            engine,
+            inner: Mutex::new(inner),
+            suggestions: Mutex::default(),
+            map: Mutex::new(None),
+            publish,
+        })
     }
 
     /// Starts the shell: everything it shows, marked ready.
@@ -301,6 +315,18 @@ impl App {
                 }
                 self.changed(&inner)
             }
+            "pick" => {
+                let (Some(index), Some(version)) = (args["index"].as_u64(), args["version"].as_u64()) else { return };
+                let place = {
+                    let s = lock(&self.suggestions);
+                    (s.version == version).then(|| s.places.get(index as usize).cloned()).flatten()
+                };
+                drop(inner);
+                if let Some(place) = place {
+                    self.show_place(&place);
+                }
+                return;
+            }
             "moveTool" => {
                 let (Some(id), Some(index)) = (args["id"].as_str(), args["index"].as_u64()) else { return };
                 let mut order: Vec<String> = shell::dock(&inner.state, inner.bearing)
@@ -341,16 +367,106 @@ impl App {
         self.send_update(update);
     }
 
-    /// A shell query; answers JSON in the page's shapes.
-    pub fn ask(&self, query: &str, _args: &Value) -> Value {
-        match query {
-            "routeMatches" | "suggest" => json!([]),
-            "submit" => json!({}),
+    /// Eases the camera to a point, keeping the bearing; `zoom` None keeps
+    /// the zoom (raised to `at_least`).
+    fn go_to(&self, lat: f64, lng: f64, zoom: Option<f64>, at_least: f64) {
+        if let Some(map) = lock(&self.map).as_ref() {
+            map.camera(|c| {
+                let pose = c.pose();
+                let zoom = zoom.unwrap_or(pose.zoom.max(at_least));
+                c.ease_next(Pose::from_lon_lat(lng, lat, zoom, pose.bearing), 0.8);
+            });
+        }
+    }
+
+    /// Fits a place in view (its extent up to z13, else z12), as the web's
+    /// place pick does.
+    fn show_place(&self, place: &csk_engine::places::Place) {
+        let zoom = match (place.extent, lock(&self.map).as_ref()) {
+            (Some([west, north, east, south]), Some(map)) => {
+                let css = map.read_camera(|c| c.view().css);
+                let merc = |lng: f64, lat: f64| Pose::from_lon_lat(lng, lat, 0.0, 0.0).center;
+                let (a, b) = (merc(west, north), merc(east, south));
+                let (dx, dy) = ((b[0] - a[0]).abs().max(1e-12), (b[1] - a[1]).abs().max(1e-12));
+                let fit = (css[0] / (dx * 256.0)).min(css[1] / (dy * 256.0)).log2();
+                fit.min(13.0)
+            }
+            _ => 12.0,
+        };
+        self.go_to(place.lat, place.lng, Some(zoom), 0.0);
+    }
+
+    /// Looks text up: coordinates go straight there (zoom at least 10), a
+    /// place name is geocoded (zoom 11).
+    async fn search_text(self: Arc<Self>, text: String) {
+        match crate::coords::parse(&text) {
+            Ok(Some((lat, lng))) => self.go_to(lat, lng, None, 10.0),
+            Ok(None) => {
+                if let Ok(found) = self.engine.places(&text, 1).await
+                    && let Some(place) = found.first()
+                {
+                    self.go_to(place.lat, place.lng, Some(11.0), 0.0);
+                }
+            }
+            Err(_) => {}
+        }
+    }
+
+    /// A shell query; answers JSON in the page's shapes. Queries that need
+    /// the network (place suggestions) resolve on the engine's runtime.
+    pub async fn ask(self: Arc<Self>, query: String, args: Value) -> Value {
+        let text = args["text"].as_str().unwrap_or_default().trim().to_owned();
+        match query.as_str() {
+            "routeMatches" => route_matches(&text),
+            "suggest" => {
+                if text.chars().count() < 3 || !matches!(crate::coords::parse(&text), Ok(None)) {
+                    return json!([]);
+                }
+                let Ok(places) = self.engine.places(&text, 6).await else {
+                    return json!({"error": "Place search is unavailable."});
+                };
+                let mut s = lock(&self.suggestions);
+                s.version += 1;
+                s.places = places;
+                let version = s.version;
+                Value::Array(
+                    s.places
+                        .iter()
+                        .enumerate()
+                        .map(|(index, p)| {
+                            json!({"index": index, "version": version, "primary": p.primary,
+                                "secondary": p.secondary, "kind": p.kind})
+                        })
+                        .collect(),
+                )
+            }
+            "submit" => {
+                if let Some(route) = route_for_text(&text) {
+                    return json!({"route": route});
+                }
+                let me = self.clone();
+                tokio::spawn(me.search_text(text));
+                json!({})
+            }
             "enterValue" => json!({"accepted": false, "message": "This size is no longer available."}),
             "selectMark" => json!({"selected": false}),
             "shareURL" => json!({"error": "Sharing is not available yet in this build."}),
             "bestImagery" => json!({"message": "", "applied": false}),
             _ => Value::Null,
+        }
+    }
+
+    /// Commands that take time (geocoding) run here, off the caller.
+    pub fn send_async(self: &Arc<Self>, runtime: &tokio::runtime::Handle, command: &str, args: &Value) -> bool {
+        match command {
+            "searchText" => {
+                let text = args["text"].as_str().unwrap_or_default().trim().to_owned();
+                if !text.is_empty() {
+                    runtime.spawn(self.clone().search_text(text));
+                }
+                true
+            }
+            _ => false,
         }
     }
 
@@ -575,6 +691,93 @@ impl App {
         drop(inner);
         self.send_update(update);
     }
+}
+
+/// Words that open a page from the search field (ui-system.js SEARCH_ROUTES).
+const SEARCH_ROUTES: &[(&str, &str)] = &[
+    ("layers", "layers"),
+    ("active layers", "layers"),
+    ("satellite", "satellite"),
+    ("satellite imagery", "satellite"),
+    ("imagery", "satellite"),
+    ("scenes", "satellite"),
+    ("filters", "satellite"),
+    ("terrain", "terrain"),
+    ("lidar", "terrain"),
+    ("terrain lidar", "terrain"),
+    ("hillshade", "terrain"),
+    ("wa dnr", "terrain"),
+    ("dnr", "terrain"),
+    ("point cloud", "terrain"),
+    ("elevation", "elevation"),
+    ("elevation spectrum", "elevation"),
+    ("spectrum", "elevation"),
+    ("elevation highlights", "elevation"),
+    ("elevation bands", "elevation"),
+    ("analyze", "analyze"),
+    ("analysis", "analyze"),
+    ("research", "analyze"),
+    ("export", "export"),
+    ("snapshot", "export"),
+    ("download", "export"),
+    ("conditions", "conditions"),
+    ("weather", "conditions"),
+    ("earthquakes", "conditions"),
+    ("fire", "conditions"),
+    ("snow", "conditions"),
+    ("geology", "geology"),
+    ("hazards", "geology"),
+    ("faults", "geology"),
+    ("landslides", "geology"),
+    ("past landscapes", "past"),
+    ("glaciers", "past"),
+    ("ice age", "past"),
+    ("archaeology", "past"),
+    ("labels", "labels"),
+    ("reference", "labels"),
+    ("roads", "labels"),
+    ("boundaries", "labels"),
+    ("markup", "markup"),
+    ("annotate", "markup"),
+    ("annotations", "markup"),
+    ("draw", "markup"),
+    ("drawing", "markup"),
+    ("notes", "markup"),
+    ("settings", "settings"),
+    ("preferences", "settings"),
+    ("terrain engine", "settings"),
+    ("server", "settings"),
+    ("appearance", "appearance"),
+    ("theme", "appearance"),
+    ("accent", "appearance"),
+    ("accent color", "appearance"),
+    ("color", "appearance"),
+    ("font", "appearance"),
+];
+
+fn normalize(text: &str) -> String {
+    text.trim().to_lowercase().split_whitespace().collect::<Vec<_>>().join(" ")
+}
+
+fn route_for_text(text: &str) -> Option<&'static str> {
+    let query = normalize(text);
+    SEARCH_ROUTES.iter().find(|(k, _)| *k == query).map(|(_, r)| *r)
+}
+
+/// Pages whose keywords start with (or, from three letters, contain) the text.
+fn route_matches(text: &str) -> Value {
+    let query = normalize(text);
+    if query.chars().count() < 2 {
+        return json!([]);
+    }
+    let mut found: Vec<(&str, &str)> = Vec::new();
+    for (keyword, route) in SEARCH_ROUTES {
+        let hit = keyword.starts_with(&query) || (query.chars().count() >= 3 && keyword.contains(&query));
+        if hit && !found.iter().any(|(r, _)| r == route) {
+            found.push((route, keyword));
+        }
+    }
+    Value::Array(found.into_iter().map(|(route, keyword)| json!({"route": route, "keyword": keyword})).collect())
 }
 
 /// A layer list control: `<id>:<toggle|opacity|up|down|reset>`.
