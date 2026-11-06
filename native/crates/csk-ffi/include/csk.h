@@ -39,7 +39,7 @@ typedef struct CskFetch CskFetch;
  */
 typedef struct CskFetchRequest {
   /**
-   * "GET" or "HEAD".
+   * "GET", "HEAD" or "POST".
    */
   const char *method;
   const char *url;
@@ -53,6 +53,15 @@ typedef struct CskFetchRequest {
    * Fail with `CSK_FETCH_TOO_LARGE` beyond this many body bytes.
    */
   uint64_t max_body;
+  /**
+   * Extra headers, `Name: value` lines (may be empty).
+   */
+  const char *headers;
+  /**
+   * Request body, or NULL.
+   */
+  const uint8_t *body;
+  size_t body_len;
 } CskFetchRequest;
 
 /**

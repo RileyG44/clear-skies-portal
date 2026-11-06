@@ -7,6 +7,7 @@
 
 pub mod analysis;
 pub mod areas;
+pub mod dnr;
 pub mod flight;
 pub mod markup;
 pub mod national;
@@ -73,6 +74,7 @@ pub struct Engine {
     pub user: Arc<UserStore>,
     pub downloads: areas::Downloads,
     pub analysis: analysis::Analysis,
+    pub dnr: dnr::Dnr,
     /// Proxy fetches shared while in flight.
     proxy_flights: flight::Flights<String, Option<(Vec<u8>, String, bool)>>,
     started: Instant,
@@ -80,7 +82,7 @@ pub struct Engine {
 
 /// Features the web client may use (`/api/health` → `features`). Only what
 /// this engine really answers is listed.
-pub const FEATURES: &[&str] = &["overview-elevation", "elev32", "built-in", "markup"];
+pub const FEATURES: &[&str] = &["overview-elevation", "elev32", "built-in", "markup", "wadnr-dpi"];
 
 impl Engine {
     pub fn new(config: Config, transport: Arc<dyn Transport>) -> Result<Arc<Self>, EngineError> {
@@ -107,6 +109,7 @@ impl Engine {
             user,
             downloads: areas::Downloads::default(),
             analysis: analysis::Analysis::default(),
+            dnr: dnr::Dnr::default(),
             proxy_flights: flight::Flights::default(),
             started: Instant::now(),
         }))
@@ -148,7 +151,7 @@ impl Engine {
                     "projects": meta.as_ref().map_or(0, |m| m.projects),
                     "failed": meta.as_ref().map_or(0, |m| m.failed.len()),
                 },
-                "dnr": null,
+                "dnr": self.dnr_status(),
             }),
         )
     }

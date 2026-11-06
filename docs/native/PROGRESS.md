@@ -44,7 +44,16 @@ Plan: [ARCHITECTURE.md](ARCHITECTURE.md). Phases have exit gates, not dates.
 | Markup | **Done.** `/api/markup…` with the Node contract (last-edit-wins, 409 with the stored layer, tombstones answer 410, deleted layers kept in a trash table) in a user-state database in Application Support, apart from the cache. |
 | Offline areas (1 m) | **Done.** `/api/usgs/warm{,/status,/stop}`, `/api/usgs/areas{,/check}`, `/api/usgs/plan`, `/api/usgs/check`. A journalled job (every tile written down first, checked off as it lands) resumes after the app is killed; each tile is pinned as it lands into a second SQLite file in Application Support, excluded from backup and never evicted. Where 1 m covers a tile fully, a national 3DEP outage does not fail it. The manifest records each source COG's ETag; the check re-HEADs them. Verified live: 6 tiles fetched, pinned, manifest checked. WA DNR areas (`/api/warm`) come with the DNR source. |
 | Terrain analysis | **Done (19 of 20).** `POST /api/terrain/analyze` computes natively (`csk-science`): sky-view factor, openness, red relief, geomorphons, depressions, drainage, wetness, avalanche slope, solar exposure, wind exposure, local relief, TPI, TRI, multi-scale residual, aspect components, curvature, glacial-margin and flood-channel screens. Every raster is **bit-identical** to `research-analysis.js` on a 320×240 test DEM with no-data, metadata identical, 2–9× faster than V8. Moraine leads (beta) answer 501 until ported; the page computes that one in its worker. Request headers now cross the ABI. |
-| Page announcement | **Held.** `LocalEngine.announced` stays false until the engine answers every route the page uses once an engine is connected (hillshade tiles, analysis, markup, offline areas, snow/NHD/3DEP/snapshot proxies); the page meanwhile keeps its public sources. |
+| Landform fabric | **Done.** `/api/usgs/fabric` (and `/api/wadnr/fabric`, the same surface until DNR rasters are local): UTM sampling in the engine with every block fetched concurrently, statistics in `csk-science::fabric`. Against Node on a live view the measures agree in substance (coverage 0.46 vs 0.45, anisotropy 2.4 vs 2.5%, slope percentiles within 0.6°); the small differences come from overview pixel size (true level widths here, 2^i there). |
+| Page announcement | **Done.** `LocalEngine.announced = true`. In the simulator the page reports the engine as "built into this app" and loads its elevation through it with no desktop. Capabilities not yet native (WA DNR elevation, Oregon) are absent from health `features`, so the page never asks for them. |
+
+## Phase 4 — Direct WA DNR
+
+| Item | State |
+|---|---|
+| Catalogue, coverage, status | **Done.** `/api/wadnr/coverage` from the portal's project and hillshade-layer lists (7-day cache, stale on failure, 30 s retry); `/api/wadnr/status` truthfully reports no local rasters. |
+| Hillshade export and file query | **Done.** `/api/wadnr/export` (dpi kept at the tile-cache scale, 256 px fallback offline, failures retryable) and `POST /api/wadnr/query`. The transport now carries POST bodies and headers. |
+| Acquisition and ingest (§4.4) | Not started: ZIP64 central directory, zran/staging, strip decoder, DNR projections, tiled TIFF writer, elevation tiles, `/api/wadnr/elev`, `/api/wadnr/warm`. |
 | Bundled catalogue | Not started. First launch lists S3 (about 13 s cold in the simulator for the default scope); a catalogue snapshot shipped in the app removes that wait. |
 
 ## Findings while porting

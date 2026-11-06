@@ -63,6 +63,16 @@ nonisolated final class NetworkTransport: NSObject, URLSessionDataDelegate, @unc
         if request.range_first >= 0, request.range_last >= request.range_first {
             r.setValue("bytes=\(request.range_first)-\(request.range_last)", forHTTPHeaderField: "Range")
         }
+        if let lines = request.headers.map({ String(cString: $0) }) {
+            for line in lines.split(separator: "\n") {
+                guard let colon = line.firstIndex(of: ":") else { continue }
+                r.setValue(line[line.index(after: colon)...].trimmingCharacters(in: .whitespaces),
+                           forHTTPHeaderField: line[..<colon].trimmingCharacters(in: .whitespaces))
+            }
+        }
+        if let body = request.body, request.body_len > 0 {
+            r.httpBody = Data(bytes: body, count: request.body_len)
+        }
         let task = session.dataTask(with: r)
         lock.withLock {
             fetches[task.taskIdentifier] = Fetch(token: token, maxBody: request.max_body)

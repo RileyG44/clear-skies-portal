@@ -12,11 +12,11 @@ final class LocalEngine {
     private var running: [ObjectIdentifier: EngineRequest] = [:]
     private static let log = Logger(subsystem: Bundle.main.bundleIdentifier ?? "ClearSkies", category: "engine")
 
-    /// Whether the page is told this engine is built in. It answers USGS
-    /// elevation today; until it answers every route the page uses with an
-    /// engine connected (docs/native/ROUTES.md), the page keeps its public
-    /// sources rather than meeting 501s. Flipped at route parity (phase 6a).
-    static let announced = false
+    /// Whether the page is told this engine is built in. It answers every
+    /// route the page uses once an engine is connected; capabilities it does
+    /// not have yet (WA DNR elevation, Oregon) are left out of its health
+    /// `features`, so the page never asks for them.
+    static let announced = true
 
     /// Disposable engine data lives in Caches, which iOS may clear.
     static var cacheDirectory: URL { URL.cachesDirectory.appending(path: "engine", directoryHint: .isDirectory) }

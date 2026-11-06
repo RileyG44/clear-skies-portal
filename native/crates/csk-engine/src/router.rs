@@ -212,6 +212,19 @@ pub async fn handle(engine: &Arc<Engine>, req: Request) -> Response {
         "/api/usgs/warm" => return post(crate::areas::start(engine, &req)),
         "/api/usgs/warm/stop" => return post(crate::areas::stop(engine)),
         "/api/usgs/check" if req.method == "POST" => return crate::areas::fresh(engine, &req).await,
+        "/api/wadnr/query" => {
+            return if req.method == "POST" {
+                crate::dnr::query(engine, &req).await
+            } else {
+                post(Response::new(405, "text/plain", Vec::new()))
+            };
+        }
+        "/api/wadnr/warm" | "/api/wadnr/warm/stop" if req.method == "POST" => {
+            return Response::json(
+                501,
+                &json!({"error": "WA DNR downloads are not available in the built-in engine yet."}),
+            );
+        }
         "/api/terrain/analyze" => {
             return if req.method == "POST" {
                 crate::analysis::analyze(engine, &req).await
@@ -254,6 +267,16 @@ async fn route(engine: &Arc<Engine>, req: &Request) -> Response {
             return Response::json(200, &serde_json::to_value(crate::areas::Progress::default()).unwrap_or_default());
         }
         "/api/warm/areas" | "/api/warm/check" => return Response::json(200, &json!([])),
+        "/api/usgs/fabric" | "/api/wadnr/fabric" => return fabric(engine, req).await,
+        "/api/wadnr/coverage" => return crate::dnr::coverage(engine, req).await,
+        "/api/wadnr/status" => return crate::dnr::status(engine),
+        "/api/wadnr/export" => return crate::dnr::export(engine, req).await,
+        "/api/wadnr/warm/status" => {
+            return Response::json(
+                200,
+                &json!({"running": false, "total": 0, "done": 0, "bytes": 0, "error": null, "acquisition": engine.dnr_status()}),
+            );
+        }
         "/api/3dep" => return crate::proxies::dep(engine, req).await,
         "/api/snow" => return crate::proxies::snow(engine, req).await,
         "/api/firms" => return crate::proxies::firms(engine, req).await,
@@ -469,6 +492,48 @@ async fn overview(engine: &Arc<Engine>, wire: Wire, z: u8, x: u32, y: u32) -> Re
             }
             None => Response::text(502, "overview elevation unreadable").header("Cache-Control", NO_STORE),
         },
+    }
+}
+
+/// Landform fabric over the view (`/api/usgs/fabric`). Without local DNR
+/// rasters the DNR variant measures the same 1 m surface.
+async fn fabric(engine: &Arc<Engine>, req: &Request) -> Response {
+    let b: Vec<f64> = req.param("bbox").unwrap_or("").split(',').filter_map(|v| v.trim().parse().ok()).collect();
+    let ok = b.len() == 4
+        && b.iter().all(|v| v.is_finite())
+        && b[0] >= -180.0
+        && b[2] <= 180.0
+        && b[1] >= -85.051129
+        && b[3] <= 85.051129
+        && b[0] < b[2]
+        && b[1] < b[3]
+        && b[2] - b[0] <= 5.0
+        && b[3] - b[1] <= 5.0;
+    if !ok {
+        return Response::json(400, &json!({"error": "bbox=w,s,e,n in degrees"}));
+    }
+    let num = |k: &str| req.param(k).and_then(|v| v.parse::<f64>().ok()).filter(|v| v.is_finite()).unwrap_or(0.0);
+    let zone = csk_core::geo::utm_zone((b[0] + b[2]) / 2.0);
+    let corners = [(b[0], b[1]), (b[2], b[1]), (b[0], b[3]), (b[2], b[3])]
+        .map(|(x, y)| csk_core::geo::lon_lat_to_utm(x, y, zone));
+    let (min_e, max_e) = corners.iter().fold((f64::INFINITY, f64::NEG_INFINITY), |(a, z), c| (a.min(c.0), z.max(c.0)));
+    let (min_n, max_n) = corners.iter().fold((f64::INFINITY, f64::NEG_INFINITY), |(a, z), c| (a.min(c.1), z.max(c.1)));
+    let n_req = num("n") as i64;
+    let n = (if n_req == 0 { 192 } else { n_req }).clamp(48, 320) as usize;
+    let res = ((max_e - min_e) / n as f64).max((max_n - min_n) / n as f64).max(1.0);
+    let (lo, hi) = csk_science::fabric::band(res, num("lo"), num("hi"));
+    match engine.tiles.usgs.sample_utm(min_e, min_n, res, n, zone).await {
+        Ok(Some((grid, sources))) => {
+            let v = tokio::task::spawn_blocking(move || {
+                csk_science::fabric::measure(&grid, n, res, lo, hi, zone, &sources)
+            })
+            .await
+            .unwrap_or_else(|_| json!({"ok": false, "reason": "measurement stopped"}));
+            Response::json(200, &v).header("Cache-Control", "no-store")
+        }
+        Ok(None) => Response::json(200, &json!({"ok": false, "reason": "no 1 m coverage in this view", "zone": zone}))
+            .header("Cache-Control", "no-store"),
+        Err(e) => Response::json(503, &json!({"error": e.to_string()})),
     }
 }
 
