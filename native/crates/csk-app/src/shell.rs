@@ -554,11 +554,76 @@ pub fn terrain_page(state: &AppState, fitted: &Fitted) -> Value {
     json!({"route": "terrain", "title": title, "description": description, "items": items})
 }
 
+/// The routes "Add layers" leads to, in the page's order.
+const ADD_LAYERS: [(&str, &str); 8] = [
+    ("satellite", "Dated optical, radar, IR, and global mosaics"),
+    ("terrain", "Style terrain, adjust lighting and download data"),
+    ("elevation", "Color heights and highlight elevation ranges"),
+    ("conditions", "Weather, fire, snow and recent events"),
+    ("geology", "Surface geology, faults, and landslides"),
+    ("past", "Glaciers, ice-age lakes, and archaeology"),
+    ("labels", "Roads, trails, water, places, and boundaries"),
+    ("markup", "Add drawings, labels and notes"),
+];
+
+/// A layer's title and detail in the layer list.
+pub fn layer_title(state: &AppState, id: &str) -> Option<(String, String)> {
+    match id {
+        "overlay:water" => Some(("Rivers & lakes".into(), "Labels & reference · USGS NHD".into())),
+        "terrain" => {
+            let t = &state.terrain;
+            let title = catalog().style(&t.style).map_or("Terrain".to_string(), |s| s.label.clone());
+            let detail = if t.source == "usgs1m" { "USGS 3.3 ft LiDAR" } else { "USGS 3DEP elevation" };
+            Some((title, detail.into()))
+        }
+        _ => None,
+    }
+}
+
+/// The Map layers page: the person's layers top first, the pinned basemap,
+/// and where to add more.
+fn layers_page(state: &AppState) -> Value {
+    let mut items = vec![json!({"kind": "header", "title": "Active layers"})];
+    let order: Vec<&String> = state.layer_order.iter().filter(|id| layer_title(state, id).is_some()).collect();
+    for (index, id) in order.iter().enumerate() {
+        let (title, detail) = layer_title(state, id).expect("listed layer");
+        let (on, opacity) = match id.as_str() {
+            "overlay:water" => (state.water.on, state.water.opacity),
+            _ => (state.terrain.style != "off", state.terrain.opacity),
+        };
+        let r = |what: &str| format!("layer:{id}:{what}");
+        let opacity = opacity.round();
+        items.push(json!({
+            "kind": "layer", "ref": r("card"), "id": id, "title": title, "detail": detail,
+            "edit": {"ref": r("edit")},
+            "toggle": {"ref": r("toggle"), "value": on},
+            "opacity": {"ref": r("opacity"), "value": opacity, "display": format!("{opacity}%")},
+            "actions": [
+                {"ref": r("up"), "action": "up", "title": format!("Move {title} up"), "disabled": index == 0},
+                {"ref": r("down"), "action": "down", "title": format!("Move {title} down"), "disabled": index + 1 == order.len()},
+                {"ref": r("edit"), "action": "edit", "title": format!("Edit {title}")},
+                {"ref": r("reset"), "action": "reset", "title": format!("Reset {title}")},
+            ],
+        }));
+    }
+    items.push(json!({"kind": "layer", "ref": "layer:basemap:card", "id": "basemap", "title": "Reference basemap",
+        "detail": "Pinned below all research layers", "locked": true,
+        "toggle": {"ref": "layer:basemap:toggle", "value": true, "disabled": true}, "actions": []}));
+    items.push(json!({"kind": "header", "title": "Add layers"}));
+    for (route, detail) in ADD_LAYERS {
+        let (title, _) = route_info(route).unwrap_or_default();
+        items.push(json!({"kind": "button", "ref": format!("open:{route}"), "role": "navigate", "title": title, "detail": detail}));
+    }
+    let (title, description) = route_info("layers").unwrap_or_default();
+    json!({"route": "layers", "title": title, "description": description, "items": items})
+}
+
 /// A page for `route`, from native state.
 pub fn page(route: &str, state: &AppState, fitted: &Fitted) -> Option<Value> {
     let (title, description) = route_info(route)?;
     Some(match route {
         "terrain" => terrain_page(state, fitted),
+        "layers" => layers_page(state),
         _ => json!({"route": route, "title": title, "description": description, "items": []}),
     })
 }

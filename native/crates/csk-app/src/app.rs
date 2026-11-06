@@ -261,6 +261,16 @@ impl App {
             "act" => {
                 let r = args["ref"].as_str().unwrap_or_default();
                 let op = args["op"].as_str().unwrap_or("click");
+                if let Some(route) = r.strip_prefix("open:") {
+                    drop(inner);
+                    self.navigate(route);
+                    return;
+                }
+                if r == "layer:terrain:edit" || r == "layer:overlay:water:edit" {
+                    drop(inner);
+                    self.navigate(if r == "layer:terrain:edit" { "terrain" } else { "labels" });
+                    return;
+                }
                 if !self.act(&mut inner, r, op, &args["value"]) {
                     return;
                 }
@@ -312,6 +322,25 @@ impl App {
         self.send_update(update);
     }
 
+    /// Opens a page from inside another (a navigation row, a layer's Edit):
+    /// the shell follows with a way back.
+    fn navigate(&self, route: &str) {
+        let mut inner = lock(&self.inner);
+        if shell::route_info(route).is_none() {
+            return;
+        }
+        inner.route = route.to_owned();
+        inner.view.page = Some(route.to_owned());
+        let mut update = Object::new();
+        update.insert("route".into(), json!(route));
+        update.insert("openRoute".into(), json!(route));
+        if let Some(page) = shell::page(route, &inner.state, &inner.fitted) {
+            update.insert("page".into(), page);
+        }
+        drop(inner);
+        self.send_update(update);
+    }
+
     /// A shell query; answers JSON in the page's shapes.
     pub fn ask(&self, query: &str, _args: &Value) -> Value {
         match query {
@@ -342,6 +371,9 @@ impl App {
         }
         if let Some(rest) = r.strip_prefix("studio:") {
             return self.act_studio(inner, rest, op, value);
+        }
+        if let Some(rest) = r.strip_prefix("layer:") {
+            return act_layer(&mut inner.state, rest, value);
         }
         match (r, v) {
             ("#terStyle", _) => {
@@ -543,6 +575,47 @@ impl App {
         drop(inner);
         self.send_update(update);
     }
+}
+
+/// A layer list control: `<id>:<toggle|opacity|up|down|reset>`.
+fn act_layer(state: &mut AppState, rest: &str, value: &Value) -> bool {
+    let Some((id, what)) = rest.rsplit_once(':') else { return false };
+    if !state.layer_order.iter().any(|l| l == id) {
+        return false;
+    }
+    let v = number(value);
+    match (id, what) {
+        ("overlay:water", "toggle") => state.water.on = value.as_bool().unwrap_or(!state.water.on),
+        ("overlay:water", "opacity") => state.water.opacity = v.unwrap_or(state.water.opacity).clamp(0.0, 100.0),
+        ("overlay:water", "reset") => state.water = AppState::default().water,
+        ("terrain", "toggle") => {
+            let on = value.as_bool().unwrap_or(state.terrain.style == "off");
+            let t = &mut state.terrain;
+            if on && t.style == "off" {
+                // Back to the applied look, or the launch look.
+                let look = t.studio.look.clone().unwrap_or_else(|| crate::state::LAUNCH_LOOK.into());
+                if !t.apply_look(&look) {
+                    t.apply_look(crate::state::LAUNCH_LOOK);
+                }
+            } else if !on {
+                t.style = "off".into();
+            }
+        }
+        ("terrain", "opacity") => state.terrain.opacity = v.unwrap_or(state.terrain.opacity).clamp(0.0, 100.0),
+        ("terrain", "reset") => {
+            let look = state.terrain.studio.look.clone().and_then(|id| catalog().look(&id).cloned());
+            state.terrain.opacity = look.map_or(100.0, |l| l.opacity);
+        }
+        (_, "up" | "down") => {
+            let order = &mut state.layer_order;
+            let i = order.iter().position(|l| l == id).expect("listed");
+            let j = if what == "up" { i.checked_sub(1) } else { Some(i + 1).filter(|j| *j < order.len()) };
+            let Some(j) = j else { return false };
+            order.swap(i, j);
+        }
+        _ => return false,
+    }
+    true
 }
 
 /// The applied look, if the studio still draws exactly that look.
