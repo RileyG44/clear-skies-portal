@@ -80,7 +80,7 @@ pub fn map_state(state: &AppState, bearing: f64) -> Value {
         "drawing": false, "bearing": bearing})
 }
 
-fn group_digits(n: i64) -> String {
+pub(crate) fn group_digits(n: i64) -> String {
     let digits = n.unsigned_abs().to_string();
     let mut out = String::new();
     for (i, c) in digits.chars().enumerate() {
@@ -274,7 +274,11 @@ pub fn status(state: &AppState, fitted: &Fitted, lon: f64, lat: f64, zoom: f64, 
 
 pub fn counts(state: &AppState) -> Value {
     let overlays = crate::overlays::OVERLAYS.iter().filter(|o| o.raster.is_some() && state.overlay(o.id).on).count();
-    let layers = 1 + overlays + usize::from(state.terrain.style != "off");
+    let layers = 1
+        + overlays
+        + usize::from(state.terrain.style != "off")
+        + usize::from(state.elevation.on)
+        + usize::from(state.elevation.bands_on());
     json!({"layers": layers.to_string(), "terrain": "1"})
 }
 
@@ -352,12 +356,12 @@ fn distance_label(metres: f64) -> String {
     }
 }
 
-fn slider(r: &str, title: &str, value: f64, min: f64, max: f64, step: f64, display: String) -> Value {
+pub(crate) fn slider(r: &str, title: &str, value: f64, min: f64, max: f64, step: f64, display: String) -> Value {
     json!({"kind": "slider", "ref": r, "title": title, "disabled": false, "value": value, "min": min, "max": max,
         "step": step, "display": display})
 }
 
-fn hint(text: &str) -> Value {
+pub(crate) fn hint(text: &str) -> Value {
     json!({"kind": "text", "style": "hint", "title": text})
 }
 
@@ -602,6 +606,8 @@ pub fn layer_title(state: &AppState, id: &str) -> Option<(String, String)> {
             info.raster?;
             Some((info.name.into(), format!("{} · {}", info.group.name(), info.via)))
         }
+        "elevation-spectrum" => Some(("Color by elevation".into(), "USGS 3DEP elevation".into())),
+        "elevation-bands" => Some(("Elevation highlights".into(), "USGS 3DEP elevation".into())),
         "terrain" => {
             let t = &state.terrain;
             let title = catalog().style(&t.style).map_or("Terrain".to_string(), |s| s.label.clone());
@@ -617,13 +623,19 @@ pub fn layer_title(state: &AppState, id: &str) -> Option<(String, String)> {
 fn layers_page(state: &AppState) -> Value {
     let mut items = vec![json!({"kind": "header", "title": "Active layers"})];
     // Active layers: the terrain, and the overlays that are on.
-    let active = |id: &str| id.strip_prefix("overlay:").is_none_or(|o| state.overlay(o).on);
+    let active = |id: &str| match id {
+        "elevation-spectrum" => state.elevation.on,
+        "elevation-bands" => state.elevation.bands_on(),
+        _ => id.strip_prefix("overlay:").is_none_or(|o| state.overlay(o).on),
+    };
     let order: Vec<&String> =
         state.layer_order.iter().filter(|id| layer_title(state, id).is_some() && active(id)).collect();
     for (index, id) in order.iter().enumerate() {
         let (title, detail) = layer_title(state, id).expect("listed layer");
         let (on, opacity) = match id.strip_prefix("overlay:") {
             Some(o) => (state.overlay(o).on, state.overlay(o).opacity),
+            None if *id == "elevation-spectrum" => (state.elevation.on, state.elevation.alpha),
+            None if *id == "elevation-bands" => (state.elevation.bands_on(), state.elevation.band_alpha),
             None => (state.terrain.style != "off", state.terrain.opacity),
         };
         let r = |what: &str| format!("layer:{id}:{what}");
@@ -706,6 +718,7 @@ pub fn page(route: &str, state: &AppState, fitted: &Fitted) -> Option<Value> {
     Some(match route {
         "terrain" => terrain_page(state, fitted),
         "layers" => layers_page(state),
+        "elevation" => crate::elevation::page(&state.elevation),
         "labels" | "geology" | "conditions" | "past" => {
             let group = crate::overlays::Group::for_route(route)?;
             overlay_page(route, group, state)

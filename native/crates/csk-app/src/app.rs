@@ -11,7 +11,7 @@ use csk_gpu::ViewSample;
 use csk_map::{Draw, Listener, Map, Pose};
 use serde_json::{Map as Object, Value, json};
 
-use crate::render::{Appearance, Lighting, Look, Spectrum};
+use crate::render::{Appearance, Lighting, Look};
 use crate::shell;
 use crate::state::{AppState, Fitted, TerrainState};
 use crate::terrain::{Fit, Stack, catalog, fit_elevation, fit_range, fit_relative, stable_fit};
@@ -86,9 +86,20 @@ fn draws(state: &AppState) -> Vec<Draw> {
     if let Some(base) = RasterLayer::by_id(if dark { "dark" } else { "light" }) {
         out.push(Draw::Raster(base, RasterStyle { opacity: 1.0, muted: false }));
     }
-    for id in state.layer_order.iter().rev() {
+    // Terrain, spectrum and highlights share one shading surface, at the
+    // uppermost active surface position (the web GPU path uses this too).
+    let surface = state.layer_order.iter().position(|id| match id.as_str() {
+        "terrain" => state.terrain.style != "off",
+        "elevation-spectrum" => state.elevation.on,
+        "elevation-bands" => state.elevation.bands_on(),
+        _ => false,
+    });
+    for (index, id) in state.layer_order.iter().enumerate().rev() {
+        if surface == Some(index) {
+            out.push(Draw::Terrain);
+        }
         match id.as_str() {
-            "terrain" => out.push(Draw::Terrain),
+            "terrain" | "elevation-spectrum" | "elevation-bands" => {}
             overlay => {
                 let Some(o) = overlay.strip_prefix("overlay:") else { continue };
                 let state = state.overlay(o);
@@ -139,13 +150,14 @@ fn derive(stack: Option<&Stack>) -> csk_gpu::Derive {
 impl App {
     /// The app state, restored from the engine's store.
     pub fn new(engine: Arc<Engine>, publish: Publish) -> Arc<Self> {
-        let state = engine
+        let mut state = engine
             .store
             .kv_get(STATE_KEY)
             .ok()
             .flatten()
             .and_then(|(json, _)| serde_json::from_str::<AppState>(&json).ok())
             .unwrap_or_default();
+        state.normalize();
         let inner = Inner {
             state,
             fitted: Fitted::default(),
@@ -240,7 +252,7 @@ impl App {
             opacity: t.opacity / 100.0,
             look: t.look,
             lighting: t.lighting,
-            spectrum: Spectrum::default(),
+            spectrum: inner.state.elevation.spectrum(),
             spectrum_opacity: 1.0,
             stack,
         };
@@ -355,7 +367,11 @@ impl App {
                 if let Some(id) = r.strip_prefix("layer:").and_then(|r| r.strip_suffix(":edit")) {
                     drop(inner);
                     let group = id.strip_prefix("overlay:").and_then(crate::overlays::find).map(|o| o.group);
-                    self.navigate(group.map_or("terrain", |g| g.route()));
+                    self.navigate(if id.starts_with("elevation-") {
+                        "elevation"
+                    } else {
+                        group.map_or("terrain", |g| g.route())
+                    });
                     return;
                 }
                 if !self.act(&mut inner, r, op, &args["value"]) {
@@ -542,6 +558,7 @@ impl App {
         let location = serde_json::from_value::<Option<shell::Location>>(doc["location"].clone()).ok().flatten();
         let mut inner = lock(&self.inner);
         inner.state = state;
+        inner.state.normalize();
         inner.fitted = Fitted::default();
         inner.location = location;
         inner.location_version += 1;
@@ -664,6 +681,18 @@ impl App {
 
     /// Applies an action on a control. Returns whether anything changed.
     fn act(&self, inner: &mut Inner, r: &str, op: &str, value: &Value) -> bool {
+        if r.starts_with("#elev") {
+            let changed = inner.state.elevation.act(r, value);
+            for (id, on) in [
+                ("elevation-spectrum", inner.state.elevation.on),
+                ("elevation-bands", inner.state.elevation.bands_on()),
+            ] {
+                if on && !inner.state.layer_order.iter().any(|l| l == id) {
+                    inner.state.layer_order.insert(0, id.into());
+                }
+            }
+            return changed;
+        }
         let t = &mut inner.state.terrain;
         let v = number(value);
         let refit = |inner: &mut Inner| inner.fitted.ranges.clear();
@@ -1022,6 +1051,27 @@ fn act_layer(state: &mut AppState, rest: &str, value: &Value) -> bool {
             s.opacity = AppState::default_opacity(o);
             state.overlays.insert(o.to_owned(), s);
         }
+        ("elevation-spectrum", "toggle") => state.elevation.on = value.as_bool().unwrap_or(!state.elevation.on),
+        ("elevation-spectrum", "opacity") => {
+            state.elevation.alpha = v.unwrap_or(state.elevation.alpha).clamp(0.0, 100.0)
+        }
+        ("elevation-spectrum", "reset") => {
+            state.elevation.act("#elevSpectrumReset", &Value::Null);
+        }
+        ("elevation-bands", "toggle") => {
+            let on = value.as_bool().unwrap_or(!state.elevation.bands_on());
+            if on && !state.elevation.bands_on() {
+                state.elevation.below.on = true;
+            }
+            if !on {
+                state.elevation.below.on = false;
+                state.elevation.above.on = false;
+            }
+        }
+        ("elevation-bands", "opacity") => {
+            state.elevation.band_alpha = v.unwrap_or(state.elevation.band_alpha).clamp(0.0, 100.0)
+        }
+        ("elevation-bands", "reset") => state.elevation.reset_bands(),
         ("terrain", "toggle") => {
             let on = value.as_bool().unwrap_or(state.terrain.style == "off");
             let t = &mut state.terrain;
@@ -1081,5 +1131,31 @@ impl Listener for MapEvents {
         if let Some(app) = self.0.upgrade() {
             app.sampled(sample);
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn elevation_layers_use_the_uppermost_shared_surface_and_real_opacity() {
+        let mut state = AppState::default();
+        state.elevation.on = true;
+        state.elevation.below.on = true;
+        state.normalize();
+        assert!(act_layer(&mut state, "elevation-bands:opacity", &json!(77)));
+        assert_eq!(state.elevation.band_alpha, 77.0);
+        let layers = draws(&state);
+        assert_eq!(layers.iter().filter(|l| **l == Draw::Terrain).count(), 1);
+        assert_eq!(layers.last(), Some(&Draw::Terrain));
+        let p = shell::page("layers", &state, &Fitted::default()).unwrap();
+        let row = p["items"].as_array().unwrap().iter().find(|r| r["id"] == "elevation-bands").unwrap();
+        assert_eq!(row["title"], "Elevation highlights");
+        assert_eq!(row["opacity"]["value"], 77.0);
+        assert!(act_layer(&mut state, "elevation-bands:toggle", &json!(false)));
+        assert!(!state.elevation.bands_on());
+        assert!(state.elevation.on);
+        assert!(act_layer(&mut state, "elevation-spectrum:reset", &Value::Null));
+        assert!(!state.elevation.on);
     }
 }

@@ -63,6 +63,15 @@ pub struct Overlay {
 }
 
 impl AppState {
+    pub fn normalize(&mut self) {
+        self.elevation.normalize();
+        for (id, on) in [("elevation-spectrum", self.elevation.on), ("elevation-bands", self.elevation.bands_on())] {
+            if on && !self.layer_order.iter().any(|l| l == id) {
+                self.layer_order.insert(0, id.into());
+            }
+        }
+    }
+
     /// An overlay's state: off at the default opacity until set.
     pub fn overlay(&self, id: &str) -> Overlay {
         self.overlays.get(id).copied().unwrap_or(Overlay { on: false, opacity: Self::default_opacity(id) })
@@ -95,6 +104,7 @@ pub struct AppState {
     /// "", "light" or "dark".
     pub theme: String,
     pub terrain: TerrainState,
+    pub elevation: crate::elevation::Elevation,
     /// Reference overlays by id (overlays.rs), once the person has set them.
     pub overlays: BTreeMap<String, Overlay>,
     /// Map layers, top first.
@@ -108,6 +118,7 @@ impl Default for AppState {
         Self {
             theme: String::new(),
             terrain: TerrainState::default(),
+            elevation: crate::elevation::Elevation::default(),
             overlays: BTreeMap::from([("water".into(), Overlay { on: true, opacity: LAUNCH_WATER_OPACITY })]),
             layer_order: vec!["overlay:water".into(), "terrain".into()],
             dock_order: Vec::new(),

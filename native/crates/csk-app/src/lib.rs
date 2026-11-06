@@ -5,6 +5,7 @@
 
 pub mod app;
 pub mod coords;
+pub mod elevation;
 pub mod overlays;
 pub mod preview;
 pub mod render;
