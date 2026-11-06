@@ -43,6 +43,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 naga::AddressSpace::Uniform | naga::AddressSpace::Storage { .. } => {
                     target.buffer = Some(binding.binding as u8)
                 }
+                naga::AddressSpace::Handle if matches!(module.types[var.ty].inner, naga::TypeInner::Sampler { .. }) => {
+                    target.sampler = Some(naga::back::msl::BindSamplerTarget::Resource(binding.binding as u8))
+                }
                 naga::AddressSpace::Handle => target.texture = Some(binding.binding as u8),
                 _ => return Err("unexpected shader resource address space".into()),
             }

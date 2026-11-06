@@ -192,3 +192,35 @@ fn derived_floor_stays_under_terrain_and_samples_classify_water() {
     }
     assert!(sample.water.contains(&2) && sample.water.contains(&0), "shore view has land and inland water");
 }
+
+/// Raster tiles land where the camera puts them, at their opacity, with a
+/// held ancestor standing in for a tile still loading.
+#[test]
+fn raster_layers_draw_in_place_with_stand_ins() {
+    use csk_gpu::{Layer, Raster, RasterStyle};
+    let Some(gpu) = renderer() else { return };
+    let mut terrain = Terrain::new(&gpu, 8).unwrap();
+    let mut raster = Raster::new(&gpu, 8, 16).unwrap();
+    // The view centre sits in the middle of tile (12, 1000, 1500).
+    let view =
+        View { center: [1000.5 / 4096.0, 1500.5 / 4096.0], zoom: 12.0, bearing: 30.0, css: [512.0, 512.0], dpr: 1.0 };
+    let solid = |rgba: [u8; 4]| rgba.repeat((TILE * TILE) as usize);
+    let style = RasterStyle { opacity: 0.5, muted: false };
+    let centre = |terrain: &mut Terrain, raster: &mut Raster| {
+        let (frame, _) = terrain
+            .render_offscreen_layers(&gpu, &view, &Uniforms::default(), &mut [Layer::Raster(raster, style)])
+            .unwrap();
+        let pixels = gpu.readback(&frame).unwrap();
+        let at = |x: usize, y: usize| pixels[(y * 512 + x) * 4..(y * 512 + x) * 4 + 4].to_vec();
+        (at(256, 256), at(456, 256))
+    };
+    raster.insert(&gpu, TileId { z: 11, x: 500, y: 750 }, &solid([0, 0, 255, 255])).unwrap();
+    assert_eq!(centre(&mut terrain, &mut raster).0, vec![0, 0, 128, 128], "ancestor stands in");
+    raster.insert(&gpu, TileId { z: 12, x: 1000, y: 1500 }, &solid([255, 0, 0, 255])).unwrap();
+    let (middle, corner) = centre(&mut terrain, &mut raster);
+    assert_eq!(middle, vec![128, 0, 0, 128], "tile at half opacity");
+    // 200 px east on screen is, turned 30°, a neighbour inside the ancestor.
+    assert_eq!(corner, vec![0, 0, 128, 128]);
+    raster.insert_empty(TileId { z: 12, x: 1000, y: 1500 });
+    assert_eq!(centre(&mut terrain, &mut raster).0, vec![0, 0, 0, 0], "an empty answer hides the stand-in");
+}

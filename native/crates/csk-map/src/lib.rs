@@ -8,6 +8,7 @@
 //! link, which may otherwise pause while nothing changes.
 
 pub mod camera;
+pub mod layers;
 pub mod loader;
 
 use std::sync::{Arc, Mutex, MutexGuard};
@@ -17,6 +18,7 @@ use csk_engine::elevation::TerrainSource;
 use csk_gpu::{Derive, Presented, Presenter, Renderer, TILE, Terrain, Uniforms, View, ViewSample};
 
 pub use camera::{Camera, Pose};
+pub use layers::Draw;
 pub use loader::Wake;
 
 /// What the map tells the app state, always outside the map's locks so the
@@ -55,6 +57,7 @@ struct Scene {
     presenter: Presenter,
     terrain: Terrain,
     loader: loader::Loader,
+    layers: layers::Layers,
     uniforms: Uniforms,
     /// The last presented view; `None` forces the next frame.
     shown: Option<View>,
@@ -110,6 +113,7 @@ impl Map {
             *lock(&decoded) = Some(csk_gpu::water::packed());
             woken();
         });
+        let layers = layers::Layers::new(runtime.clone(), engine.clone(), wake.clone());
         let mut loader = loader::Loader::new(runtime, engine, wake.clone());
         loader.set_sources(&mut terrain, &TerrainSource::ALL);
         let scene = Scene {
@@ -117,6 +121,7 @@ impl Map {
             presenter,
             terrain,
             loader,
+            layers,
             uniforms: Uniforms::default(),
             shown: None,
             coverage: 0.0,
@@ -165,6 +170,15 @@ impl Map {
         (self.wake)();
     }
 
+    /// The map's layers, bottom first (the basemap, the terrain, overlays).
+    pub fn set_layers(&self, order: Vec<Draw>) {
+        let mut scene = lock(&self.scene);
+        scene.layers.set_order(order);
+        scene.shown = None;
+        drop(scene);
+        (self.wake)();
+    }
+
     /// Replaces the appearance: the shading parameters and the derived
     /// fields they read.
     pub fn set_appearance(&self, uniforms: Uniforms, derive: Derive) {
@@ -200,8 +214,10 @@ impl Map {
 
     fn draw(&self, view: View, animating: bool) -> Result<(FrameResult, Option<ViewSample>), csk_gpu::Error> {
         let mut scene = lock(&self.scene);
-        let Scene { gpu, presenter, terrain, loader, uniforms, shown, coverage, sampled, fresh, water } = &mut *scene;
+        let Scene { gpu, presenter, terrain, loader, layers, uniforms, shown, coverage, sampled, fresh, water } =
+            &mut *scene;
         let mut changed = loader.update(gpu, terrain, &view);
+        let drawn = layers.update(gpu, &view)?;
         if let Some(mask) = lock(water).take() {
             gpu.install_water(&mask?)?;
             terrain.invalidate_derived();
@@ -214,18 +230,18 @@ impl Map {
             again: animating,
             coverage: *coverage,
             resident: terrain.resident_tiles(),
-            in_flight: loader.in_flight(),
+            in_flight: loader.in_flight() + layers.in_flight(),
         };
         // A settled view is sampled once, and again as terrain arrives.
         let settle = !animating && !terrain.sampling() && (*sampled != Some(view) || *fresh);
-        if !changed && *shown == Some(view) && !settle {
+        if !changed && !drawn && *shown == Some(view) && !settle {
             result.again |= terrain.sampling();
             return Ok((result, sample));
         }
         if settle {
             terrain.request_sample();
         }
-        match presenter.present(gpu, terrain, &view, uniforms)? {
+        match presenter.present(gpu, terrain, &view, uniforms, &mut layers.frame())? {
             Presented::Shown(stats) => {
                 *shown = Some(view);
                 *coverage = stats.coverage;

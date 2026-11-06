@@ -12,6 +12,7 @@ pub mod dnr_local;
 pub mod dnr_routes;
 pub mod elevation;
 pub mod flight;
+pub mod layers;
 pub mod markup;
 pub mod national;
 pub mod oregon;
@@ -89,6 +90,7 @@ pub struct Engine {
     pub oregon: oregon::Oregon,
     /// Proxy fetches shared while in flight.
     proxy_flights: flight::Flights<String, Option<(Vec<u8>, String, bool)>>,
+    layer_flights: flight::Flights<String, Option<Vec<u8>>>,
     started: Instant,
 }
 
@@ -160,6 +162,7 @@ impl Engine {
             dnr_warm: dnr_routes::Warm::default(),
             oregon: oregon::Oregon::default(),
             proxy_flights: flight::Flights::default(),
+            layer_flights: flight::Flights::default(),
             started: Instant::now(),
         }))
     }

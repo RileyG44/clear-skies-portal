@@ -27,6 +27,10 @@ pub struct Renderer {
     pub(crate) identity: Arc<()>,
     shade_layout: wgpu::BindGroupLayout,
     shade_pipelines: Mutex<HashMap<wgpu::TextureFormat, wgpu::RenderPipeline>>,
+    raster_module: wgpu::ShaderModule,
+    raster_layout: wgpu::BindGroupLayout,
+    raster_sampler: wgpu::Sampler,
+    raster_pipelines: Mutex<HashMap<wgpu::TextureFormat, wgpu::RenderPipeline>>,
     shade_vertex: wgpu::ShaderModule,
     shade_fragment: wgpu::ShaderModule,
     pub(crate) composite: (wgpu::ComputePipeline, wgpu::BindGroupLayout),
@@ -235,6 +239,29 @@ impl Renderer {
             ],
             ["rows", "cols", "erode", "gauss"],
         );
+        let raster_module = device.create_shader_module(wgpu::ShaderModuleDescriptor {
+            label: Some("raster"),
+            source: wgpu::ShaderSource::Wgsl(include_str!("wgsl/raster.wgsl").into()),
+        });
+        let raster_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+            label: Some("raster"),
+            entries: &[
+                entry(0, vf, buffer(wgpu::BufferBindingType::Uniform)),
+                entry(1, wgpu::ShaderStages::VERTEX, buffer(wgpu::BufferBindingType::Storage { read_only: true })),
+                entry(
+                    2,
+                    fragment,
+                    sampled(wgpu::TextureViewDimension::D2Array, wgpu::TextureSampleType::Float { filterable: true }),
+                ),
+                entry(3, fragment, wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering)),
+            ],
+        });
+        let raster_sampler = device.create_sampler(&wgpu::SamplerDescriptor {
+            label: Some("raster"),
+            mag_filter: wgpu::FilterMode::Linear,
+            min_filter: wgpu::FilterMode::Linear,
+            ..Default::default()
+        });
         let tiny = |format, bytes: &[u8]| {
             device
                 .create_texture_with_data(
@@ -267,6 +294,10 @@ impl Renderer {
             identity: Arc::new(()),
             shade_layout,
             shade_pipelines: Mutex::new(HashMap::new()),
+            raster_module,
+            raster_layout,
+            raster_sampler,
+            raster_pipelines: Mutex::new(HashMap::new()),
             shade_vertex,
             shade_fragment,
             composite,
@@ -407,7 +438,7 @@ impl Renderer {
                         compilation_options: Default::default(),
                         targets: &[Some(wgpu::ColorTargetState {
                             format,
-                            blend: None,
+                            blend: Some(wgpu::BlendState::PREMULTIPLIED_ALPHA_BLENDING),
                             write_mask: wgpu::ColorWrites::ALL,
                         })],
                     }),
@@ -416,6 +447,50 @@ impl Renderer {
                 })
             })
             .clone()
+    }
+
+    /// The raster layer program for a target format, its layout and sampler.
+    pub(crate) fn raster_pipeline(
+        &self,
+        format: wgpu::TextureFormat,
+    ) -> (wgpu::RenderPipeline, wgpu::BindGroupLayout, wgpu::Sampler) {
+        let mut cache = self.raster_pipelines.lock().unwrap();
+        let pipeline = cache
+            .entry(format)
+            .or_insert_with(|| {
+                let layout = self.device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+                    label: None,
+                    bind_group_layouts: &[Some(&self.raster_layout)],
+                    immediate_size: 0,
+                });
+                self.device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+                    label: Some("ClearSkies raster"),
+                    layout: Some(&layout),
+                    vertex: wgpu::VertexState {
+                        module: &self.raster_module,
+                        entry_point: Some("vertex"),
+                        compilation_options: Default::default(),
+                        buffers: &[],
+                    },
+                    primitive: Default::default(),
+                    depth_stencil: None,
+                    multisample: Default::default(),
+                    fragment: Some(wgpu::FragmentState {
+                        module: &self.raster_module,
+                        entry_point: Some("fragment"),
+                        compilation_options: Default::default(),
+                        targets: &[Some(wgpu::ColorTargetState {
+                            format,
+                            blend: Some(wgpu::BlendState::PREMULTIPLIED_ALPHA_BLENDING),
+                            write_mask: wgpu::ColorWrites::ALL,
+                        })],
+                    }),
+                    multiview_mask: None,
+                    cache: None,
+                })
+            })
+            .clone();
+        (pipeline, self.raster_layout.clone(), self.raster_sampler.clone())
     }
 
     /// Records the shading pass of `field` into `target` (any colour format,
@@ -427,6 +502,35 @@ impl Renderer {
         uniforms: &Uniforms,
         aux: &AuxViews<'_>,
         target: &wgpu::TextureView,
+        format: wgpu::TextureFormat,
+    ) {
+        let mut pass = Self::begin(encoder, target);
+        self.shade(&mut pass, field, uniforms, aux, format);
+    }
+
+    /// A frame's render pass into `target`, cleared to transparent.
+    pub(crate) fn begin<'e>(encoder: &'e mut wgpu::CommandEncoder, target: &wgpu::TextureView) -> wgpu::RenderPass<'e> {
+        encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+            color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                view: target,
+                depth_slice: None,
+                resolve_target: None,
+                ops: wgpu::Operations {
+                    load: wgpu::LoadOp::Clear(wgpu::Color::TRANSPARENT),
+                    store: wgpu::StoreOp::Store,
+                },
+            })],
+            ..Default::default()
+        })
+    }
+
+    /// Draws the shaded terrain "over" what `pass` holds (premultiplied).
+    pub(crate) fn shade(
+        &self,
+        pass: &mut wgpu::RenderPass<'_>,
+        field: &wgpu::TextureView,
+        uniforms: &Uniforms,
+        aux: &AuxViews<'_>,
         format: wgpu::TextureFormat,
     ) {
         let mut uniforms = uniforms.clone();
@@ -464,18 +568,6 @@ impl Renderer {
             entries: &entries,
         });
         let pipeline = self.shade_pipeline(format);
-        let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-            color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                view: target,
-                depth_slice: None,
-                resolve_target: None,
-                ops: wgpu::Operations {
-                    load: wgpu::LoadOp::Clear(wgpu::Color::TRANSPARENT),
-                    store: wgpu::StoreOp::Store,
-                },
-            })],
-            ..Default::default()
-        });
         pass.set_pipeline(&pipeline);
         pass.set_bind_group(0, &group, &[]);
         pass.draw(0..3, 0..1);
