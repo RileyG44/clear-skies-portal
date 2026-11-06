@@ -74,3 +74,22 @@ async function routeRecovery(){
 }
 (async()=>{await clientRecovery();await routeRecovery();console.log('Elevation recovery: provisional gaps retry while stationary; real nodata stays final');})()
   .catch(error=>{console.error(error);process.exitCode=1;});
+
+/* The built-in engine's float32 tiles: routed by feature, decoded by header. */
+{
+  const helpers=page.slice(page.indexOf('const ELEV32_MEDIA='),page.indexOf('function waitElevationRetry('));
+  const ctx={DataView,Float32Array,Error,serverHealth:{features:["elev32"]}};
+  vm.createContext(ctx);vm.runInContext(helpers+';this.elev32Url=elev32Url;this.decodeElev32=decodeElev32;',ctx);
+  assert.equal(ctx.elev32Url('/api/usgs/elev/14/2/3.png?ix=3'),'/api/elev32/usgs/14/2/3?ix=3');
+  assert.equal(ctx.elev32Url('/api/elev/national/9/1/2.png'),'/api/elev32/national/9/1/2');
+  assert.equal(ctx.elev32Url('/api/elev/14/2/3.png'),'/api/elev32/14/2/3');
+  assert.equal(ctx.elev32Url('/api/elev/overview/9/1/2.png'),null,'the overview keeps its PNG and AWS fallback');
+  const buf=new ArrayBuffer(16+2*1*4),v=new DataView(buf);
+  [0x43,0x53,0x45,0x32,1,0].forEach((b,i)=>v.setUint8(i,b));v.setUint16(6,16,true);v.setUint16(8,2,true);v.setUint16(10,1,true);
+  v.setFloat32(16,1234.5,true);v.setFloat32(20,NaN,true);
+  const tile=ctx.decodeElev32(buf);
+  assert.equal(tile.width,2);assert.equal(tile.grid[0],1234.5);assert.ok(Number.isNaN(tile.grid[1]));
+  assert.throws(()=>ctx.decodeElev32(buf.slice(0,20)));
+  ctx.serverHealth={features:[]};assert.equal(ctx.elev32Url('/api/elev/14/2/3.png'),null,'older engines keep PNG');
+  console.log('elev32 tiles: routed by engine feature, decoded from the header, PNG elsewhere');
+}

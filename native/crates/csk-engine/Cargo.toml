@@ -18,6 +18,7 @@ lru = "0.16"
 percent-encoding = "2"
 url = "2"
 sha2 = "0.10"
+zstd = { version = "0.13", default-features = false }
 futures-util = { version = "0.3", default-features = false, features = ["std"] }
 
 [dev-dependencies]

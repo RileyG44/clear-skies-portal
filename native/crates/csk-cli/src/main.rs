@@ -86,6 +86,16 @@ async fn main() {
     let out = std::path::Path::new(&dir).join("out");
     std::fs::create_dir_all(&out).expect("out dir");
     for route in args {
+        // "EXPORT-CATALOG <file>" lists the archive and writes the bundled snapshot.
+        if let Some(file) = route.strip_prefix("EXPORT-CATALOG ") {
+            let catalog = &engine.tiles.usgs.catalog;
+            let meta = catalog.build().await.expect("catalogue build");
+            assert!(catalog.complete(), "catalogue incomplete: {meta:?}");
+            let bytes = catalog.snapshot().expect("snapshot");
+            std::fs::write(file, &bytes).expect("write snapshot");
+            println!("{} projects, {} bytes -> {file}", meta.projects, bytes.len());
+            continue;
+        }
         // "POST /path {json}" posts; "WAIT /path" polls a status route until it stops running.
         if let Some(path) = route.strip_prefix("WAIT ") {
             loop {
