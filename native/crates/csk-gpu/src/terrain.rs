@@ -83,6 +83,13 @@ pub struct SourceSpec {
     pub allowed: Option<Arc<dyn Fn(TileId) -> bool + Send + Sync>>,
 }
 
+/// One layer of a frame, in drawing order.
+pub enum Layer<'a> {
+    /// The shaded terrain scene being rendered.
+    Terrain,
+    Raster(&'a mut crate::raster::Raster, crate::raster::RasterStyle),
+}
+
 /// The map camera. Bearing is clockwise in degrees; Web Mercator in [0,1].
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct View {
@@ -94,12 +101,12 @@ pub struct View {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-struct Bounds {
-    z: u8,
-    x0: i64,
-    x1: i64,
-    y0: i64,
-    y1: i64,
+pub(crate) struct Bounds {
+    pub z: u8,
+    pub x0: i64,
+    pub x1: i64,
+    pub y0: i64,
+    pub y1: i64,
 }
 
 impl Bounds {
@@ -139,7 +146,7 @@ impl View {
         self.bounds_at(self.level(), margin, shift)
     }
 
-    fn bounds_at(&self, z: u8, margin: i64, shift: i64) -> Bounds {
+    pub(crate) fn bounds_at(&self, z: u8, margin: i64, shift: i64) -> Bounds {
         let n = 1i64 << z;
         let scale = n as f64 / (256.0 * self.zoom.exp2());
         let a = self.bearing.to_radians();
@@ -735,7 +742,8 @@ impl Terrain {
     }
 
     /// Renders the view into `target` (e.g. a presentation surface texture of
-    /// `format`, sized to the view's device pixels).
+    /// `format`, sized to the view's device pixels): `layers` bottom first,
+    /// where [`Layer::Terrain`] is this scene.
     pub fn render(
         &mut self,
         gpu: &Renderer,
@@ -743,6 +751,7 @@ impl Terrain {
         uniforms: &Uniforms,
         target: &wgpu::TextureView,
         format: wgpu::TextureFormat,
+        layers: &mut [Layer<'_>],
     ) -> Result<FrameStats, Error> {
         self.check(gpu)?;
         view.check()?;
@@ -846,7 +855,15 @@ impl Terrain {
         uniforms.set("u_zoom", &[view.zoom as f32])?;
         uniforms.set("u_centerMerc", &[view.center[0] as f32, view.center[1] as f32])?;
         uniforms.set("u_bearingRad", &[view.bearing.to_radians() as f32])?;
-        gpu.encode_shade(&mut encoder, &field.view, &uniforms, &aux, target, format);
+        {
+            let mut pass = Renderer::begin(&mut encoder, target);
+            for layer in layers.iter_mut() {
+                match layer {
+                    Layer::Terrain => gpu.shade(&mut pass, &field.view, &uniforms, &aux, format),
+                    Layer::Raster(raster, style) => raster.draw(gpu, &mut pass, view, format, *style),
+                }
+            }
+        }
         let sampling = if self.sample_next && self.pending.is_none() {
             self.sample_next = false;
             Some(Self::encode_sample(gpu, &mut encoder, &field.view, (w, h), &aux, &place)?)
@@ -881,9 +898,20 @@ impl Terrain {
         view: &View,
         uniforms: &Uniforms,
     ) -> Result<(Frame, FrameStats), Error> {
+        self.render_offscreen_layers(gpu, view, uniforms, &mut [Layer::Terrain])
+    }
+
+    /// Renders `layers` (bottom first) into an offscreen frame.
+    pub fn render_offscreen_layers(
+        &mut self,
+        gpu: &Renderer,
+        view: &View,
+        uniforms: &Uniforms,
+        layers: &mut [Layer<'_>],
+    ) -> Result<(Frame, FrameStats), Error> {
         let (w, h) = view.device_size();
         let frame = gpu.frame(w, h, uniforms.bytes().len())?;
-        let stats = self.render(gpu, view, uniforms, &Renderer::frame_view(&frame), FRAME_FORMAT)?;
+        let stats = self.render(gpu, view, uniforms, &Renderer::frame_view(&frame), FRAME_FORMAT, layers)?;
         gpu.retain_until_done(Renderer::frame_charge(&frame));
         Ok((frame, stats))
     }

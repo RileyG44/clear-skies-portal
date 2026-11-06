@@ -5,8 +5,10 @@ use std::sync::{Arc, Mutex, MutexGuard};
 
 use csk_engine::Engine;
 use csk_engine::elevation::TerrainSource;
+use csk_engine::layers::RasterLayer;
+use csk_gpu::RasterStyle;
 use csk_gpu::ViewSample;
-use csk_map::{Listener, Map, Pose};
+use csk_map::{Draw, Listener, Map, Pose};
 use serde_json::{Map as Object, Value, json};
 
 use crate::render::{Appearance, Lighting, Look, Spectrum};
@@ -59,6 +61,28 @@ fn sources(preference: &str) -> Vec<TerrainSource> {
         "usgs1m" => vec![TerrainSource::Overview, TerrainSource::National, TerrainSource::Lidar],
         _ => TerrainSource::ALL.to_vec(),
     }
+}
+
+/// The map's layers, bottom first: the pinned reference basemap in the
+/// map theme, then the person's order (kept top first).
+fn draws(state: &AppState) -> Vec<Draw> {
+    let dark = state.theme == "dark";
+    let base = if dark { RasterLayer::DarkBase } else { RasterLayer::LightBase };
+    let mut out = vec![Draw::Raster(base, RasterStyle { opacity: 1.0, muted: false })];
+    for id in state.layer_order.iter().rev() {
+        match id.as_str() {
+            "terrain" => out.push(Draw::Terrain),
+            "overlay:water" if state.water.on => out.push(Draw::Raster(
+                RasterLayer::Hydro,
+                RasterStyle { opacity: (state.water.opacity / 100.0).clamp(0.0, 1.0) as f32, muted: dark },
+            )),
+            _ => {}
+        }
+    }
+    if !out.contains(&Draw::Terrain) {
+        out.insert(1, Draw::Terrain);
+    }
+    out
 }
 
 /// The derived fields a stack reads: the Detail blur, and the valley floors
@@ -116,6 +140,7 @@ impl App {
             map.set_sources(&sources(&inner.state.terrain.source));
             let (uniforms, derive) = self.appearance(&inner);
             map.set_appearance(uniforms, derive);
+            map.set_layers(draws(&inner.state));
             drop(inner);
             map.set_listener(Some(Arc::new(MapEvents(Arc::downgrade(self)))));
         }
@@ -179,6 +204,7 @@ impl App {
         if let Some(map) = lock(&self.map).as_ref() {
             let (uniforms, derive) = self.appearance(inner);
             map.set_appearance(uniforms, derive);
+            map.set_layers(draws(&inner.state));
         }
     }
 
@@ -250,6 +276,7 @@ impl App {
                         let dark = inner.state.theme == "dark";
                         inner.state.theme = if dark { "light" } else { "dark" }.into();
                         self.save(&inner);
+                        self.redraw(&inner);
                     }
                     "bearingReset" => {
                         if let Some(map) = lock(&self.map).as_ref() {

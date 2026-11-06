@@ -119,6 +119,7 @@ impl Presenter {
         terrain: &mut Terrain,
         view: &View,
         uniforms: &Uniforms,
+        layers: &mut [crate::terrain::Layer<'_>],
     ) -> Result<Presented, Error> {
         if !Arc::ptr_eq(&self.identity, &gpu.identity) {
             return Err(Error::Input("presenter belongs to another GPU device"));
@@ -141,7 +142,7 @@ impl Presenter {
             wgpu::CurrentSurfaceTexture::Validation => return Err(Error::Surface("surface validation failed")),
         };
         let target = texture.texture.create_view(&Default::default());
-        let stats = terrain.render(gpu, view, uniforms, &target, self.format)?;
+        let stats = terrain.render(gpu, view, uniforms, &target, self.format, layers)?;
         gpu.queue.present(texture);
         if suboptimal {
             self.size = None;
