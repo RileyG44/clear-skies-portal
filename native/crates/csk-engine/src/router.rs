@@ -176,6 +176,35 @@ pub async fn handle(engine: &Arc<Engine>, req: Request) -> Response {
             .header("Access-Control-Allow-Headers", "Content-Type")
             .header("Access-Control-Max-Age", "86400");
     }
+    // Markup is user state with its own methods; everything else reads.
+    if p == "/api/markup" || p.starts_with("/api/markup/") {
+        let user = engine.user.clone();
+        let req = req.clone();
+        return tokio::task::spawn_blocking(move || crate::markup::handle(&user, &req))
+            .await
+            .unwrap_or_else(|_| Response::json(500, &json!({"error": "markup handler stopped"})));
+    }
+    // Routes that change state take POST.
+    let post = |r: Response| {
+        if req.method == "POST" {
+            r
+        } else {
+            Response::json(405, &json!({"error": "method not allowed"})).header("Allow", "POST")
+        }
+    };
+    match p {
+        "/api/usgs/warm" => return post(crate::areas::start(engine, &req)),
+        "/api/usgs/warm/stop" => return post(crate::areas::stop(engine)),
+        "/api/usgs/check" if req.method == "POST" => return crate::areas::fresh(engine, &req).await,
+        // WA DNR areas arrive with the DNR source (phase 4).
+        "/api/warm" | "/api/warm/stop" if req.method == "POST" => {
+            return Response::json(
+                501,
+                &json!({"error": "WA DNR downloads are not available in the built-in engine yet."}),
+            );
+        }
+        _ => {}
+    }
     if req.method != "GET" && req.method != "HEAD" {
         return Response::json(405, &json!({"error": "method not allowed"})).header("Allow", "GET");
     }
@@ -192,6 +221,16 @@ async fn route(engine: &Arc<Engine>, req: &Request) -> Response {
         "/api/health" => return engine.health().header("Cache-Control", NO_STORE),
         "/api/usgs/cover" => return cover(engine, req).await,
         "/api/usgs/index" => return index(engine, req).await,
+        "/api/usgs/warm/status" => {
+            return Response::json(200, &serde_json::to_value(engine.downloads.status()).unwrap_or_default());
+        }
+        "/api/usgs/areas" => return crate::areas::areas(engine),
+        "/api/usgs/areas/check" => return crate::areas::check(engine, req.param("id")).await,
+        "/api/usgs/plan" => return crate::areas::plan(req),
+        "/api/warm/status" => {
+            return Response::json(200, &serde_json::to_value(crate::areas::Progress::default()).unwrap_or_default());
+        }
+        "/api/warm/areas" | "/api/warm/check" => return Response::json(200, &json!([])),
         "/api/3dep" => return crate::proxies::dep(engine, req).await,
         "/api/snow" => return crate::proxies::snow(engine, req).await,
         "/api/firms" => return crate::proxies::firms(engine, req).await,

@@ -20,14 +20,20 @@ final class LocalEngine {
 
     /// Disposable engine data lives in Caches, which iOS may clear.
     static var cacheDirectory: URL { URL.cachesDirectory.appending(path: "engine", directoryHint: .isDirectory) }
+    /// What the person made (markup) lives in Application Support: kept and backed up.
+    static var dataDirectory: URL {
+        URL.applicationSupportDirectory.appending(path: "engine", directoryHint: .isDirectory)
+    }
 
     init?() {
         let config: [String: Any] = [
             "cacheDir": Self.cacheDirectory.path(percentEncoded: false),
+            "dataDir": Self.dataDirectory.path(percentEncoded: false),
             "cacheBudget": 4 << 30,
         ]
         guard let data = try? JSONSerialization.data(withJSONObject: config),
               let json = String(data: data, encoding: .utf8) else { return nil }
+        Self.excludeOfflineFromBackup()
         let transport = NetworkTransport()
         let context = Unmanaged.passRetained(transport).toOpaque()
         let csk = CskTransport(context: context, fetch: transportFetch, cancel: transportCancel, release: transportRelease)
@@ -37,6 +43,17 @@ final class LocalEngine {
         }
         handle = engine
         Self.log.notice("built-in engine \(String(cString: csk_version()), privacy: .public) started")
+    }
+
+    /// Offline areas live under dataDirectory/offline: kept (iOS does not
+    /// purge Application Support) but not backed up, since they can be
+    /// downloaded again.
+    private static func excludeOfflineFromBackup() {
+        var offline = dataDirectory.appending(path: "offline", directoryHint: .isDirectory)
+        try? FileManager.default.createDirectory(at: offline, withIntermediateDirectories: true)
+        var values = URLResourceValues()
+        values.isExcludedFromBackup = true
+        try? offline.setResourceValues(values)
     }
 
     isolated deinit {

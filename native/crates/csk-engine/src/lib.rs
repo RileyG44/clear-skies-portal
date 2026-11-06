@@ -5,7 +5,9 @@
 //! Network access goes through a [`transport::Transport`] the platform
 //! provides (URLSession on iOS).
 
+pub mod areas;
 pub mod flight;
+pub mod markup;
 pub mod national;
 pub mod proxies;
 pub mod router;
@@ -18,7 +20,7 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
-use csk_store::{Kind, Store};
+use csk_store::{Kind, Store, UserStore};
 use serde::Deserialize;
 use serde_json::json;
 
@@ -36,6 +38,10 @@ pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 pub struct Config {
     /// Disposable data (`Library/Caches` on iOS).
     pub cache_dir: PathBuf,
+    /// User state (Application Support on iOS): kept, backed up, never
+    /// evicted. Defaults to `<cache_dir>/user` for desktop tools.
+    #[serde(default)]
+    pub data_dir: Option<PathBuf>,
     /// Cache budget in bytes.
     #[serde(default = "default_budget")]
     pub cache_budget: u64,
@@ -63,6 +69,8 @@ pub struct Engine {
     pub store: Arc<Store>,
     pub upstream: Arc<Upstream>,
     pub tiles: Arc<Tiles>,
+    pub user: Arc<UserStore>,
+    pub downloads: areas::Downloads,
     /// Proxy fetches shared while in flight.
     proxy_flights: flight::Flights<String, Option<(Vec<u8>, String, bool)>>,
     started: Instant,
@@ -70,11 +78,19 @@ pub struct Engine {
 
 /// Features the web client may use (`/api/health` → `features`). Only what
 /// this engine really answers is listed.
-pub const FEATURES: &[&str] = &["overview-elevation", "elev32", "built-in"];
+pub const FEATURES: &[&str] = &["overview-elevation", "elev32", "built-in", "markup"];
 
 impl Engine {
     pub fn new(config: Config, transport: Arc<dyn Transport>) -> Result<Arc<Self>, EngineError> {
-        let store = Arc::new(Store::open(&config.cache_dir.join("engine.sqlite"), config.cache_budget)?);
+        let data_dir = config.data_dir.clone().unwrap_or_else(|| config.cache_dir.join("user"));
+        // Offline areas: in data_dir (not purgeable), under offline/ (the
+        // platform excludes it from backup: it can be downloaded again).
+        let store = Arc::new(Store::open(
+            &config.cache_dir.join("engine.sqlite"),
+            &data_dir.join("offline").join("pinned.sqlite"),
+            config.cache_budget,
+        )?);
+        let user = Arc::new(UserStore::open(&data_dir.join("user.sqlite"))?);
         let upstream = Arc::new(Upstream::new(transport));
         let scope =
             config.usgs_scope.unwrap_or_else(|| usgs::catalog::DEFAULT_SCOPE.iter().map(|s| (*s).to_owned()).collect());
@@ -86,6 +102,8 @@ impl Engine {
             store,
             upstream,
             tiles,
+            user,
+            downloads: areas::Downloads::default(),
             proxy_flights: flight::Flights::default(),
             started: Instant::now(),
         }))
@@ -97,6 +115,8 @@ impl Engine {
         tokio::spawn(async move {
             let _ = catalog.ensure().await;
         });
+        // A download the system stopped (the app was killed) carries on.
+        areas::resume(self);
     }
 
     pub async fn handle(self: &Arc<Self>, req: Request) -> Response {
@@ -114,7 +134,8 @@ impl Engine {
                 "engine": "built-in",
                 "engineVersion": VERSION,
                 "cached": stats.entries,
-                "cacheBudget": {"bytes": stats.bytes, "pinnedBytes": stats.pinned_bytes, "budget": stats.budget},
+                "cacheBudget": {"bytes": stats.bytes, "budget": stats.budget,
+                                "pinnedEntries": stats.pinned_entries, "pinnedBytes": stats.pinned_bytes},
                 "nationalCircuit": self.upstream.circuit_state(DEP_HOST),
                 "uptimeSec": self.started.elapsed().as_secs(),
                 "features": FEATURES,
