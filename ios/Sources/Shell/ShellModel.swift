@@ -139,13 +139,13 @@ final class ShellModel {
         if let panelOpen = update.panelOpen {
             self.panelOpen = panelOpen
             // Draw from a layer page and the dock share the same native pane.
-            if panelOpen == "mkBar", presentedPanel != "mkBar" {
+            if (panelOpen == "mkBar" || backend is NativeShellBackend), presentedPanel != panelOpen {
                 detent = .medium
                 #if DEBUG
                 // `-cspDebugDetent large` also applies to a scripted Draw.
                 if UserDefaults.standard.string(forKey: "cspDebugDetent") == "large" { detent = .expanded }
                 #endif
-                activeSheet = .panel("mkBar")
+                activeSheet = .panel(panelOpen)
             }
         }
         if let page = update.page { self.page = page }

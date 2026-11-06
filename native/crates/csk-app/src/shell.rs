@@ -747,6 +747,46 @@ fn settings_page(state: &AppState) -> Value {
     ]})
 }
 
+/// Dock panels use the same active layer controls as the full page.
+pub fn panel_for_tool(tool: &str) -> Option<&'static str> {
+    match tool {
+        "quickDraw" => Some("mkBar"),
+        "snapshot" => Some("snapshotPanel"),
+        "terrainSourceToggle" => Some("terrainSourcePanel"),
+        "serverToggle" => Some("serverPanel"),
+        "mapModeToggle" => Some("mapModePanel"),
+        _ => None,
+    }
+}
+pub fn panel(id: &str, state: &AppState, cache_bytes: u64) -> Option<Value> {
+    let (title, items) = match id {
+        "terrainSourcePanel" => {
+            let p = layers_page(state);
+            let rows: Vec<Value> =
+                p["items"].as_array()?.iter().take_while(|r| r["title"] != "Add layers").cloned().collect();
+            ("Layers", rows)
+        }
+        "serverPanel" => (
+            "Terrain engine",
+            vec![
+                json!({"kind":"text","style":"row","title":"Terrain engine built into this app"}),
+                json!({"kind":"text","style":"row","title":"Stored map data","detail":format!("{:.1} MiB",cache_bytes as f64 / 1048576.0)}),
+            ],
+        ),
+        "mkBar" | "snapshotPanel" => {
+            let route = if id == "mkBar" { "markup" } else { "export" };
+            let p = unavailable(route)?;
+            (if id == "mkBar" { "Draw & annotate" } else { "Export image" }, p["items"].as_array()?.clone())
+        }
+        "mapModePanel" => (
+            "Map view",
+            vec![hint("3D and point-cloud views aren't in this build yet. The map uses the native 2D terrain view.")],
+        ),
+        _ => return None,
+    };
+    Some(json!({"id":id,"title":title,"items":items}))
+}
+
 /// A page for `route`, from native state.
 pub fn page(route: &str, state: &AppState, fitted: &Fitted) -> Option<Value> {
     route_info(route)?;
@@ -773,6 +813,22 @@ pub fn colour_hex(value: &str) -> Option<String> {
 mod tests {
     use super::*;
 
+    #[test]
+    fn dock_panels_share_live_layer_controls_and_show_hints_for_unfinished_tools() {
+        let mut state = AppState::default();
+        state.set_overlay("snowdepth", true);
+        let p = panel("terrainSourcePanel", &state, 0).unwrap();
+        let expected = layers_page(&state);
+        let rows: Vec<Value> =
+            expected["items"].as_array().unwrap().iter().take_while(|r| r["title"] != "Add layers").cloned().collect();
+        assert_eq!(p["items"], json!(rows));
+        for tool in ["quickDraw", "snapshot", "mapModeToggle"] {
+            let p = panel(panel_for_tool(tool).unwrap(), &state, 0).unwrap();
+            assert_eq!(p["items"][0]["style"], "hint");
+        }
+        let p = panel("serverPanel", &state, 10485760).unwrap();
+        assert_eq!(p["items"][1]["detail"], "10.0 MiB");
+    }
     #[test]
     fn every_route_has_content_and_settings_only_advertises_supported_controls() {
         let mut state = AppState::default();

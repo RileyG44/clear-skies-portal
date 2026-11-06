@@ -27,6 +27,7 @@ pub type Publish = Arc<dyn Fn(String) + Send + Sync>;
 struct View {
     sheet: String,
     page: Option<String>,
+    panel: Option<String>,
 }
 
 struct Inner {
@@ -224,9 +225,18 @@ impl App {
         update.insert("map".into(), shell::map_state(&inner.state, inner.bearing));
         update.insert("dock".into(), shell::dock(&inner.state, inner.bearing));
         update.insert("status".into(), shell::status(&inner.state, &inner.fitted, lon, lat, zoom, inner.settled));
-        update.insert("panelOpen".into(), Value::Null);
-        update.insert("panel".into(), Value::Null);
+        self.panel_update(inner, &mut update);
         update
+    }
+
+    fn panel_update(&self, inner: &Inner, update: &mut Object<String, Value>) {
+        let panel = inner
+            .view
+            .panel
+            .as_deref()
+            .and_then(|id| shell::panel(id, &inner.state, self.engine.store.stats().map_or(0, |s| s.bytes)));
+        update.insert("panelOpen".into(), json!(inner.view.panel));
+        update.insert("panel".into(), panel.unwrap_or(Value::Null));
     }
 
     fn where_(&self, inner: &Inner) -> (f64, f64, f64) {
@@ -320,6 +330,7 @@ impl App {
         let (lon, lat, zoom) = self.where_(inner);
         let mut update = Object::new();
         update.insert("appearance".into(), inner.state.appearance.update());
+        self.panel_update(inner, &mut update);
         update.insert("counts".into(), shell::counts(&inner.state));
         update.insert("map".into(), shell::map_state(&inner.state, inner.bearing));
         update.insert("dock".into(), shell::dock(&inner.state, inner.bearing));
@@ -339,6 +350,7 @@ impl App {
                 inner.view.sheet = args["sheet"].as_str().unwrap_or("closed").to_owned();
                 let opened = page.is_some() && page != inner.view.page;
                 inner.view.page = page;
+                inner.view.panel = args["panel"].as_str().map(str::to_owned);
                 let mut update = Object::new();
                 if opened
                     && let Some(page) =
@@ -388,6 +400,19 @@ impl App {
                 }
                 self.changed(&inner)
             }
+            "closePanel" => {
+                if args["id"].as_str() == inner.view.panel.as_deref() {
+                    inner.view.panel = None;
+                }
+                self.changed(&inner)
+            }
+            "toolForPanel" => {
+                let Some(id) = args["panel"].as_str().filter(|id| shell::panel(id, &inner.state, 0).is_some()) else {
+                    return;
+                };
+                inner.view.panel = Some(id.into());
+                self.changed(&inner)
+            }
             "tool" => {
                 match args["id"].as_str().unwrap_or_default() {
                     "mapTheme" => {
@@ -405,7 +430,10 @@ impl App {
                         }
                         return;
                     }
-                    _ => return,
+                    tool => {
+                        let Some(id) = shell::panel_for_tool(tool) else { return };
+                        inner.view.panel = Some(id.into());
+                    }
                 }
                 self.changed(&inner)
             }
@@ -685,6 +713,10 @@ impl App {
 
     /// Applies an action on a control. Returns whether anything changed.
     fn act(&self, inner: &mut Inner, r: &str, op: &str, value: &Value) -> bool {
+        if let Some(id) = r.strip_prefix('#').and_then(shell::panel_for_tool) {
+            inner.view.panel = Some(id.into());
+            return true;
+        }
         if r.starts_with("appearance:") {
             return inner.state.appearance.act(r, value);
         }

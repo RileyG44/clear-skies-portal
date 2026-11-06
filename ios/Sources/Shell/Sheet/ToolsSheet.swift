@@ -423,9 +423,10 @@ struct PanelSheet: View {
 
     var body: some View {
         let panel = shell.panel?.id == id ? shell.panel : nil
+        let editableMarkup = panel?.items.contains(where: { $0.kind == "markupTools" }) == true
         NavigationStack {
             Group {
-                if let panel, panel.id == "mkBar" {
+                if let panel, panel.id == "mkBar", editableMarkup {
                     MarkupPanelContent(panel: panel)
                 } else if let panel {
                     ToolbarPanelContent(panel: panel)
@@ -459,7 +460,7 @@ struct PanelSheet: View {
                     }
                 }
                 ToolbarItem(placement: .topBarTrailing) {
-                    if id == "mkBar" {
+                    if id == "mkBar", editableMarkup {
                         // Hiding is not stopping: say so on the button itself.
                         Button { shell.activeSheet = nil } label: {
                             HStack(spacing: 4) {
