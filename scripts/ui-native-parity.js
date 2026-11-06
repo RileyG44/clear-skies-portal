@@ -26,6 +26,18 @@ const base=process.argv[2]||'http://127.0.0.1:8765/';
    await page.locator('#q').click();await page.waitForTimeout(400);
    assert.equal(await page.locator('#cspGrabber').getAttribute('aria-hidden'),'true','the grabber is not an accessible control');
    assert.equal(await page.locator('#cspGrabber').getAttribute('tabindex'),'-1');
+   const home=await page.evaluate(()=>{
+    const loc=document.getElementById('loc'),shown=el=>getComputedStyle(el).display!=='none'&&el.getBoundingClientRect().width>0;
+    const glyphs=[...loc.querySelectorAll('svg,img')].filter(shown).length+(getComputedStyle(loc,'::before').content!=='none'?1:0);
+    return {glyphs,dock:Number(getComputedStyle(document.getElementById('mapDock')).zIndex),side:Number(getComputedStyle(document.getElementById('side')).zIndex)};
+   });
+   assert.equal(home.glyphs,1,'the locate button draws one arrow');
+   assert(home.dock<home.side,`the sheet rises over the map tools: ${JSON.stringify(home)}`);
+   for(const width of [375,393,430]){
+    await page.setViewportSize({width,height:932});await page.waitForTimeout(300);
+    const cut=await page.evaluate(()=>[...document.querySelectorAll('#cspNav .csp-nav-button small')].filter(el=>el.offsetParent&&(el.scrollWidth>el.clientWidth+1||el.scrollHeight>el.clientHeight+1)).map(el=>el.textContent));
+    assert.deepEqual(cut,[],`home subtitles wrap instead of clipping at ${width}px`);
+   }
    await page.evaluate(()=>document.getElementById('mapReadout').classList.add('sheet-compact'));
    assert(Number(await page.locator('#mapDock').evaluate(el=>getComputedStyle(el).opacity))>0.5,'compact map info does not hide the toolbar');
    await page.evaluate(()=>document.getElementById('mapReadout').classList.remove('sheet-compact'));

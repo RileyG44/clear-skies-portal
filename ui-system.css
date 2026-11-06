@@ -3701,7 +3701,9 @@ body.csp-redesign .ls-layer-label .menu-section-title{margin:0}
   }
   .csp-glass body.csp-redesign.csp-redesign #cspNav .csp-nav-button + .csp-nav-button{border-top:.5px solid var(--glass-edge)}
   .csp-glass body.csp-redesign.csp-redesign #cspNav .csp-nav-button > span:not(.csp-nav-count){display:grid;gap:4px;text-align:left}
-  .csp-glass body.csp-redesign.csp-redesign #cspNav .csp-nav-button small{font-size:12px;line-height:1.35;font-weight:400;color:var(--ui-text-muted)}
+  .csp-glass body.csp-redesign.csp-redesign #cspNav .csp-nav-button small{font-size:12px;line-height:1.35;font-weight:400;color:var(--ui-text-muted);
+    /* RouteRow lets the description wrap rather than cut a word in half. */
+    display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;overflow:hidden;white-space:normal}
   .csp-glass body.csp-redesign.csp-redesign #cspNav .csp-nav-button .csp-nav-count{padding:0;background:none;font-size:15px;font-weight:400}
   .csp-glass body.csp-redesign.csp-redesign #cspNav .csp-nav-button::after{
     content:"";width:6px;height:6px;border-top:1.5px solid var(--ui-text-muted);border-right:1.5px solid var(--ui-text-muted);transform:rotate(45deg);
@@ -4052,7 +4054,7 @@ body.csp-redesign .ls-layer-label .menu-section-title{margin:0}
   .csp-glass body.csp-redesign.csp-redesign.csp-edge-pop #cspWorkspace{
     position:absolute;inset:0;z-index:2;background:var(--sheet-glass);background-image:var(--lg-sheen-tall);
   }
-  .csp-glass body.csp-redesign.csp-redesign:not(.collapsed) #loc svg{display:none}
+  .csp-glass body.csp-redesign.csp-redesign:not(.collapsed) #loc :is(svg,img){display:none}
   .csp-glass body.csp-redesign.csp-redesign:not(.collapsed) #loc::before{content:"";width:17px;height:17px;background:currentColor;-webkit-mask:url("vendor/icons/navigation.svg") center/contain no-repeat;mask:url("vendor/icons/navigation.svg") center/contain no-repeat}
   .csp-glass body.csp-redesign.csp-redesign #cspWorkspace :is(#cspTerrainDownloads,#cspTerrainAbout) :is(.terrain-settings-section,.terrain-settings-body,.terrain-subsection,.dnr-module){
     margin:0;padding:0;border:0;background:transparent;gap:0;
@@ -4227,4 +4229,10 @@ body.csp-redesign .ls-layer-label .menu-section-title{margin:0}
     justify-self:stretch;min-height:44px;margin:0;padding:8px 16px;border-top:.5px solid var(--glass-edge);text-align:left;color:var(--ui-accent);font-size:15px;
   }
   .csp-glass body.csp-redesign.csp-redesign #cspWorkspace .ls-phone-group .ls-add{margin:0;padding:0}
+}
+
+/* The native sheet rises over the map tools. Their popovers are moved out of
+   #mapDock at runtime, so they keep their own higher layer. */
+@media(max-width:760px) and (orientation:portrait){
+  .csp-glass body.csp-redesign.csp-redesign #mapDock{z-index:1150}
 }
