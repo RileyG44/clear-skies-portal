@@ -69,6 +69,14 @@ final class PortalModel {
             if let ref = UserDefaults.standard.string(forKey: "cspDebugAct") {
                 backend.send("act", ["ref": ref, "op": "click"])
             }
+            // `-cspDebugSearch "Mount Rainier"` submits a search, as typed.
+            if let text = UserDefaults.standard.string(forKey: "cspDebugSearch") {
+                Task { @MainActor in
+                    try? await Task.sleep(for: .seconds(3))
+                    shell.query = text
+                    shell.submit()
+                }
+            }
             #endif
             return
         }
