@@ -23,6 +23,7 @@ impl Transport for Ureq {
                 .config()
                 .timeout_global(Some(req.timeout))
                 .http_status_as_error(false)
+                .max_redirects(0)
                 .build();
                 b = b.header("User-Agent", "ClearSkies/native-dev");
                 if let Some((a, z)) = req.range {
@@ -60,13 +61,33 @@ async fn main() {
         std::process::exit(2);
     };
     let scope = std::env::var("CSK_USGS_SCOPE").ok().map(|s| s.split(',').map(str::to_owned).collect());
-    let config = Config { cache_dir: dir.clone().into(), cache_budget: 4 << 30, usgs_scope: scope };
+    let config = Config { cache_dir: dir.clone().into(), data_dir: None, cache_budget: 4 << 30, usgs_scope: scope };
     let engine = Engine::new(config, Arc::new(Ureq(ureq::Agent::new_with_defaults()))).expect("engine");
     let out = std::path::Path::new(&dir).join("out");
     std::fs::create_dir_all(&out).expect("out dir");
     for route in args {
+        // "POST /path {json}" posts; "WAIT /path" polls a status route until it stops running.
+        if let Some(path) = route.strip_prefix("WAIT ") {
+            loop {
+                let r = engine.handle(Request::new("GET", path, Vec::new()).expect("route")).await;
+                let text = String::from_utf8_lossy(&r.body).into_owned();
+                println!("{path} -> {text}");
+                if !text.contains("\"running\":true") {
+                    break;
+                }
+                tokio::time::sleep(std::time::Duration::from_millis(1500)).await;
+            }
+            continue;
+        }
+        let (method, target, body) = match route.strip_prefix("POST ") {
+            Some(rest) => {
+                let (p, b) = rest.split_once(' ').unwrap_or((rest, ""));
+                ("POST", p.to_owned(), b.as_bytes().to_vec())
+            }
+            None => ("GET", route.clone(), Vec::new()),
+        };
         let t = Instant::now();
-        let res = engine.handle(Request::new("GET", &route, Vec::new()).expect("route")).await;
+        let res = engine.handle(Request::new(method, &target, body).expect("route")).await;
         println!("{route} -> {} in {:.0} ms, {} bytes", res.status, t.elapsed().as_secs_f64() * 1e3, res.body.len());
         for (k, v) in &res.headers {
             let v = if v.len() > 160 { format!("{}…", &v[..160]) } else { v.clone() };

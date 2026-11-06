@@ -120,6 +120,13 @@ nonisolated final class NetworkTransport: NSObject, URLSessionDataDelegate, @unc
         }
     }
 
+    /// Redirects come back to the engine, which decides whether to follow
+    /// (a snapshot image re-validates every hop against its allowlist).
+    func urlSession(_ session: URLSession, task: URLSessionTask, willPerformHTTPRedirection response: HTTPURLResponse,
+                    newRequest request: URLRequest, completionHandler: @escaping @Sendable (URLRequest?) -> Void) {
+        completionHandler(nil)
+    }
+
     func urlSession(_ session: URLSession, task: URLSessionTask, didCompleteWithError error: (any Error)?) {
         guard let f = take(task) else { return }
         if let error = error as? URLError {

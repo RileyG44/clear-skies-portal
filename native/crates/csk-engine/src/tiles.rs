@@ -113,11 +113,11 @@ pub struct Tiles {
     baseline: Flights<Key, Baseline>,
 }
 
-fn lidar_key(z: u8, x: u32, y: u32) -> String {
+pub fn lidar_key(z: u8, x: u32, y: u32) -> String {
     format!("usgs1m:v1:{z}/{x}/{y}")
 }
 
-fn national_key(z: u8, x: u32, y: u32) -> String {
+pub fn national_key(z: u8, x: u32, y: u32) -> String {
     format!("national:v1:{z}/{x}/{y}")
 }
 

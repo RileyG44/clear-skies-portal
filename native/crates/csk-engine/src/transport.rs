@@ -83,7 +83,9 @@ pub enum FetchError {
 
 pub type FetchFuture = Pin<Box<dyn Future<Output = Result<FetchResponse, FetchError>> + Send>>;
 
-/// Dropping the returned future must cancel the request.
+/// Dropping the returned future must cancel the request. Redirects are not
+/// followed: the engine sees the 3xx and decides (a snapshot re-validates
+/// every hop against its allowlist).
 pub trait Transport: Send + Sync + 'static {
     fn fetch(&self, req: FetchRequest) -> FetchFuture;
 }
