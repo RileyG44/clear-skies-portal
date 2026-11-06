@@ -278,6 +278,12 @@ async fn route(engine: &Arc<Engine>, req: &Request) -> Response {
         "/api/snapshot/image" => return crate::proxies::snapshot(engine, req).await,
         _ => {}
     }
+    if p.starts_with("/api/oregon/elev/") || p.starts_with("/api/elev32/oregon/") {
+        let float32 = p.starts_with("/api/elev32/");
+        let (prefix, suffix) = if float32 { ("/api/elev32/oregon/", "") } else { ("/api/oregon/elev/", ".png") };
+        let Some((z, x, y)) = tile_coords(p, prefix, suffix, 18) else { return bad_tile() };
+        return crate::oregon::elevation(engine, z, x, y, float32).await;
+    }
     if p.starts_with("/api/wadnr/elev/") || p.starts_with("/api/elev32/wadnr/") {
         let float32 = p.starts_with("/api/elev32/");
         let (prefix, suffix) = if float32 { ("/api/elev32/wadnr/", "") } else { ("/api/wadnr/elev/", ".png") };
