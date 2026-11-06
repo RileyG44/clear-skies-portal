@@ -70,10 +70,12 @@ jobs:
         run: cargo clippy --locked --all-targets -- -D warnings
       - name: Test
         run: cargo test --locked
-      - name: Build for iPhone and the simulator
+      - name: Build the app's engine library for iPhone and the simulator
         run: |
-          cargo build --locked --release --target aarch64-apple-ios
-          cargo build --locked --target aarch64-apple-ios-sim
+          cargo build --locked --release -p csk-ffi --target aarch64-apple-ios
+          cargo build --locked --profile app-dev -p csk-ffi --target aarch64-apple-ios-sim
+      - name: The checked-in C header matches the ABI
+        run: git diff --exit-code -- crates/csk-ffi/include/csk.h
 
   # The engine often runs on a Windows desktop, not the Mac: run the whole
   # suite there too, including the real server, worker pool and disk cache.

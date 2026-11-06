@@ -21,6 +21,8 @@ final class WebHost: NSObject {
     private let engine: EngineSettings
     private let location = LocationService()
     private let proxy = EngineProxy()
+    /// The engine built into the app; nil only if it failed to start.
+    private let localEngine = LocalEngine()
     private let schemeHandler: SiteSchemeHandler
     private let bridge: NativeBridge
     // One current recovery checkpoint, held only in this app process's memory.
@@ -42,7 +44,7 @@ final class WebHost: NSObject {
     init(engine: EngineSettings) {
         self.engine = engine
         let site = Bundle.main.resourceURL!.appending(path: "site", directoryHint: .isDirectory)
-        schemeHandler = SiteSchemeHandler(root: site, proxy: proxy, engine: engine)
+        schemeHandler = SiteSchemeHandler(root: site, proxy: proxy, engine: engine, local: localEngine)
         bridge = NativeBridge(engine: engine, location: location)
 
         let configuration = WKWebViewConfiguration()
@@ -290,8 +292,9 @@ final class WebHost: NSObject {
     private func installBootstrap() {
         let controller = webView.configuration.userContentController
         controller.removeAllUserScripts()
-        controller.addUserScript(WKUserScript(source: Self.bootstrapSource(engineBase: engine.base, session: session,
-                                                                           sessionStart: sessionStart),
+        controller.addUserScript(WKUserScript(source: Self.bootstrapSource(engineBase: engine.base,
+                                                                           builtInEngine: localEngine != nil && LocalEngine.announced,
+                                                                           session: session, sessionStart: sessionStart),
                                               injectionTime: .atDocumentStart,
                                               forMainFrameOnly: true, in: .page))
         controller.addUserScript(WKUserScript(source: Self.resource("native-shell"),
@@ -307,7 +310,8 @@ final class WebHost: NSObject {
         return source
     }
 
-    private static func bootstrapSource(engineBase: String, session: [String: Any]?, sessionStart: Bool) -> String {
+    private static func bootstrapSource(engineBase: String, builtInEngine: Bool, session: [String: Any]?,
+                                        sessionStart: Bool) -> String {
         let template = resource("native-host")
         let config: [String: Any] = ["engineBase": engineBase, "builtInEngine": builtInEngine,
                                      "appVersion": appVersion, "resume": session ?? NSNull(),
@@ -315,11 +319,6 @@ final class WebHost: NSObject {
         let json = (try? JSONSerialization.data(withJSONObject: config)).flatMap { String(data: $0, encoding: .utf8) } ?? "{}"
         return template.replacingOccurrences(of: "__CSP_NATIVE_CONFIG__", with: json)
     }
-
-    /// Whether this build answers /api itself when no engine address is set.
-    /// False until the in-app engine serves requests; the page then stops
-    /// treating the app as engine-less.
-    static let builtInEngine = false
 
     static var appVersion: String {
         let info = Bundle.main.infoDictionary

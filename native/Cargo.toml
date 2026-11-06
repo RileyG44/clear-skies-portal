@@ -1,6 +1,6 @@
 [workspace]
 resolver = "3"
-members = ["crates/csk-core"]
+members = ["crates/csk-core", "crates/csk-store", "crates/csk-engine", "crates/csk-cli", "crates/csk-ffi"]
 
 [workspace.package]
 edition = "2024"
@@ -17,3 +17,13 @@ all = { level = "warn", priority = -1 }
 lto = "fat"
 codegen-units = 1
 panic = "abort"
+
+# Debug app builds: optimised (raster code is unusable unoptimised) but
+# incremental, so an edit-build-run cycle stays quick.
+[profile.app-dev]
+inherits = "release"
+lto = false
+codegen-units = 16
+incremental = true
+debug = "line-tables-only"
+panic = "unwind"

@@ -1,0 +1,19 @@
+[package]
+name = "csk-store"
+version = "0.1.0"
+description = "ClearSkies native storage: SQLite cache, catalogue tables, packed elevation"
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+csk-core = { path = "../csk-core" }
+rusqlite = { version = "0.37", features = ["bundled"] }
+zstd = { version = "0.13", default-features = false }
+thiserror = "2"
+
+[dev-dependencies]
+tempfile = "3"
+
+[lints]
+workspace = true

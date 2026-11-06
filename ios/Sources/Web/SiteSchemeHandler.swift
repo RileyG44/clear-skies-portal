@@ -2,8 +2,9 @@ import Foundation
 import UniformTypeIdentifiers
 import WebKit
 
-/// Serves the bundled web client at clearskies://app/ and hands /api requests
-/// to the engine proxy.
+/// Serves the bundled web client at clearskies://app/ and answers /api
+/// requests: with the engine at the address the user set, if any, and
+/// otherwise with the engine built into the app.
 ///
 /// WebKit treats a page from a custom scheme as a secure context, so ES
 /// modules, workers, WebAssembly, the clipboard and geolocation behave as they
@@ -17,8 +18,9 @@ final class SiteSchemeHandler: NSObject, WKURLSchemeHandler {
     private let rootPath: String
     private let proxy: EngineProxy
     private let engine: EngineSettings
+    private let local: LocalEngine?
 
-    init(root: URL, proxy: EngineProxy, engine: EngineSettings) {
+    init(root: URL, proxy: EngineProxy, engine: EngineSettings, local: LocalEngine?) {
         self.root = root.standardizedFileURL
         // A directory URL's path ends in "/"; the containment check adds its own.
         var path = self.root.path(percentEncoded: false)
@@ -26,6 +28,7 @@ final class SiteSchemeHandler: NSObject, WKURLSchemeHandler {
         rootPath = path
         self.proxy = proxy
         self.engine = engine
+        self.local = local
     }
 
     func webView(_ webView: WKWebView, start task: any WKURLSchemeTask) {
@@ -35,16 +38,21 @@ final class SiteSchemeHandler: NSObject, WKURLSchemeHandler {
         }
         let path = url.path(percentEncoded: false)
         if path == "/api" || path.hasPrefix("/api/") {
-            proxy.start(task, base: engine.base)
+            if engine.base.isEmpty, let local {
+                local.start(task)
+            } else {
+                proxy.start(task, base: engine.base)
+            }
         } else {
             serveFile(task, url: url, path: path)
         }
     }
 
     func webView(_ webView: WKWebView, stop task: any WKURLSchemeTask) {
-        // Bundled files are answered synchronously in start, so only a
-        // forwarded engine request can still be running.
+        // Bundled files are answered synchronously in start, so only an
+        // engine request can still be running.
         proxy.stop(task)
+        local?.stop(task)
     }
 
     private func serveFile(_ task: any WKURLSchemeTask, url: URL, path: String) {
