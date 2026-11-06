@@ -34,7 +34,7 @@
 <link rel="icon" href="icon.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Caveat:wght@400..700&family=Fraunces:opsz,wght@9..144,100..900&family=Kalam:wght@300;400;700&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Caveat:wght@400..700&family=Newsreader:opsz,wght@72,450&family=Kalam:wght@300;400;700&display=swap">
 <script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js"}}</script>
 <style>
 /* A field-sketchbook page shown on an e-ink screen: a plain white ground and near-black
@@ -52,7 +52,7 @@
   --accent-deep:#4c5638;
   --emerald:var(--accent-deep);
   --sepia:var(--grey);
-  --brand:Fraunces,"Iowan Old Style",Georgia,serif;
+  --brand:Newsreader,"Iowan Old Style",Georgia,serif;
   --hand:Kalam,"Segoe Print","Bradley Hand",cursive;
   --note:Caveat,Kalam,"Segoe Print",cursive;
 }
@@ -249,7 +249,7 @@ function align(pageY, a) {
 /* today's tree: a bigleaf or a vine maple, picked afresh on every load (?tree=bigleaf or
    ?tree=vine to choose). Only the picked tree's baked skeleton is downloaded. Its canopy
    colour becomes the page accent. */
-const fig = document.getElementById("fig"), sk = document.querySelector(".sk"), fonts = Promise.all([document.fonts.load("450 60px Fraunces"), document.fonts.load("600 60px Caveat")]);
+const fig = document.getElementById("fig"), sk = document.querySelector(".sk"), fonts = Promise.all([document.fonts.load("450 60px Newsreader"), document.fonts.load("600 60px Caveat")]);
 let scene = null;   // what is running: { sketch, crow }
 async function boot() {
   const sp = pickSpecies();
