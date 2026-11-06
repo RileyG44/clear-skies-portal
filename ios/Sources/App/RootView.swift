@@ -45,21 +45,26 @@ struct RootView: View {
     var body: some View {
         GeometryReader { geometry in
             ZStack(alignment: .bottom) {
-                PortalWebView(webView: portal.host.webView)
-                    .ignoresSafeArea()
+                if let host = portal.host {
+                    PortalWebView(webView: host.webView)
+                        .ignoresSafeArea()
+                } else if let native = portal.native {
+                    NativeMapRepresentable(backend: native)
+                        .ignoresSafeArea()
+                }
                 MapChrome(toolbarHideProgress: toolbarVisibility.progress)
-                    .padding(.bottom, portal.host.webView.window?.safeAreaInsets.bottom ?? 0)
+                    .padding(.bottom, portal.homeInset)
                     .opacity(portal.ready ? 1 : 0)
                 // White until the page's own white start-up screen has painted
                 // under it; that screen holds the map until it is whole.
                 if (!portal.ready && !portal.splashUp) || portal.startupFailure != nil {
                     LaunchCover(restoring: portal.restoring, failure: portal.startupFailure,
-                                retry: portal.host.retryStartup)
-                        .padding(.bottom, portal.host.webView.window?.safeAreaInsets.bottom ?? 0)
+                                retry: portal.retry)
+                        .padding(.bottom, portal.homeInset)
                 }
                 if let sheet = portal.shell.activeSheet {
                     FloatingToolsSheet(sheet: sheet, geometry: geometry, keyboardHeight: keyboardHeight,
-                                       homeInset: portal.host.webView.window?.safeAreaInsets.bottom ?? 0)
+                                       homeInset: portal.homeInset)
                         .transition(reducedMotion ? .opacity : .move(edge: .bottom).combined(with: .opacity))
                         .zIndex(2)
                 }
@@ -90,7 +95,7 @@ struct RootView: View {
             }
         }
         .onChange(of: portal.shell.activeSheet) {
-            if portal.shell.activeSheet == nil { portal.host.webView.window?.endEditing(true) }
+            if portal.shell.activeSheet == nil { portal.shell.backend?.window?.endEditing(true) }
         }
         .confirmationDialog("Discard the unfinished shape?", isPresented: Binding(
             get: { portal.shell.markupExit != nil },
@@ -103,7 +108,7 @@ struct RootView: View {
         }
         .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillChangeFrameNotification)) { notification in
             guard let frame = notification.userInfo?[UIResponder.keyboardFrameEndUserInfoKey] as? CGRect,
-                  let window = portal.host.webView.window else { return }
+                  let window = portal.shell.backend?.window else { return }
             let height = window.bounds.intersection(window.convert(frame, from: nil)).height
             let duration = notification.userInfo?[UIResponder.keyboardAnimationDurationUserInfoKey] as? Double ?? 0.25
             withAnimation(reducedMotion ? nil : .easeOut(duration: duration)) { keyboardHeight = height }
@@ -219,7 +224,7 @@ private struct FloatingToolsSheet: View {
                              headerHeight: headerHeight, keyboardOpen: keyboardHeight > 0) { phase, translation, velocity, keyboardAtStart in
                 switch phase {
                 case .began:
-                    if keyboardAtStart { shell.host?.webView.window?.endEditing(true) }
+                    if keyboardAtStart { shell.backend?.window?.endEditing(true) }
                 case .changed:
                     if !keyboardAtStart { drag = max(0, translation) }
                 case .ended:
@@ -277,7 +282,7 @@ private struct FloatingToolsSheet: View {
                         // swipe and must not turn it into a sheet dismissal.
                         if header && value.translation.height > 0 {
                             dragAction = .dismissKeyboard
-                            shell.host?.webView.window?.endEditing(true)
+                            shell.backend?.window?.endEditing(true)
                         } else {
                             dragAction = .ignore
                         }
@@ -310,8 +315,8 @@ private struct FloatingToolsSheet: View {
         .accessibilityAction(named: "Close menu") { shell.activeSheet = nil }
         .accessibilityAction(.escape) { shell.activeSheet = nil }
         #if DEBUG
-        .onAppear { shell.host?.debugSheetVisible = true }
-        .onDisappear { shell.host?.debugSheetVisible = false }
+        .onAppear { shell.backend?.debugSheetVisible = true }
+        .onDisappear { shell.backend?.debugSheetVisible = false }
         #endif
         .padding(.horizontal, 4)
         .padding(.bottom, keyboardInset + 4)

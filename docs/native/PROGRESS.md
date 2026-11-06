@@ -2,6 +2,30 @@
 
 Plan: [ARCHITECTURE.md](ARCHITECTURE.md). Phases have exit gates, not dates.
 
+## Next milestone — working prototype
+
+The native iPhone app with no web page behind it (`cspNativeMap`), with the
+existing SwiftUI shell's exact look and flow. Done when, on a phone:
+
+1. The native terrain map draws from the built-in engine with pan, pinch,
+   rotate, momentum and double-tap, and is covered within seconds of launch.
+2. The SwiftUI shell (MapChrome, dock, tool sheet, menu groups, pages) sits on
+   top, fed by a native shell backend that publishes the same `ShellUpdate`
+   content the web does today (reference: `ios/Tests/Fixtures/shell`,
+   captured by `ios/scripts/capture_shell.js`) and handles its actions.
+3. Terrain looks and appearance work natively: the look presets (Swiss Relief
+   as the launch default), style, opacity, sun and lighting, through a native
+   port of the appearance-to-uniforms mapping.
+4. A basemap and Rivers & lakes draw under and over the terrain in the shell's
+   layer order; light and dark themes, north reset and the bearing control
+   work.
+5. Place search and Locate move the native camera.
+6. Sharing works without a server: a `.clearskies` document from the share
+   sheet opens the same view in another copy of the app.
+
+Analysis, markup, imagery scene search, point clouds, 3D and export follow
+the prototype (phases 8–10).
+
 ## Phase 0 — Evidence
 
 | Item | State |
@@ -78,6 +102,7 @@ Plan: [ARCHITECTURE.md](ARCHITECTURE.md). Phases have exit gates, not dates.
 | Shader toolchain (R11) | **Done.** `native/shaders/extract.cjs` takes the shading program from the authoritative `gpu-terrain-shaders.js` factory at build time, on a native field prelude; glslang compiles it to SPIR-V and `csk-shader-tool` (naga) emits WGSL for wgpu and MSL for the raw-Metal comparator. The native WGSL compute programs also get MSL. Outputs are re-validated; the uniform layout is compared between SPIR-V and WGSL (explicit padding, since naga's WGSL writer drops member gaps). `isnan`/`isinf` become IEEE bit tests. Every source rewrite must match or extraction fails; CI regenerates the output and requires no diff. |
 | Terrain scene (`csk-gpu::Terrain`) | **Started.** Native design (ARCHITECTURE §4.2): a budgeted 256×256 `R32Float` tile pool whose eviction prefers records no store slot draws, then records outside the store, then the least recently drawn (evicted records leave entirely, never posing as empty answers); a world-anchored `R32Float` store at the display level, composited by a compute program only when tiles arrive or the store re-anchors, under the loading rules (rank order, no-data reveals lower ranks, a source's complete or authoritative coverage hides its stale records, per-source `allowed` regions); finer records are box-averaged, coarser ancestors magnified Catmull-Rom/bilinear. Per frame: a resample compute pass (f64 camera mapping relative to the store origin) and the generated shading pass into any target format. On Apple M2 a rotated, fractional-zoom view over a survey with a no-data hole matches the analytic tilted plane within 5e-6 m (≈0.0002 texel; gate 0.01 px), the hole shows the lower-ranked source, a 1.5-tile pan recomposites only the 10 exposed slots, and an unchanged view none. All ten styles match frozen `terrain-raster.js` references within 1/255. Next: derived fields in store space and the layer-stack/appearance state. |
 | Native map (`csk-map`, `csk_map_*`, `NativeMapView`) | **Started.** Terrain draws on the iPhone from the built-in engine, behind the `cspNativeMap` default (WebView stays the default). The engine answers typed tiles (`Engine::terrain_tile`) with a coverage snapshot (`terrain_coverage`: DNR from prepared raster bounds, Oregon deferring to it, lidar/national from z13), revisioned so DNR changes re-ask held answers. The loader asks each display tile's sources highest rank first, nearest the centre first, stops below a held complete answer, adds lidar z−2 stand-ins for visible tiles, caps requests per source, cancels what the view leaves, and wakes the paused display link when answers or deferred retries arrive. Camera: anchored pan/pinch/rotate, frame-rate-independent momentum (UIScrollView deceleration), eased and anchored double-tap zoom, antimeridian-safe easing. Presentation: `Bgra8Unorm` CAMetalLayer surface, premultiplied alpha, drawables charged to the shared budget, every `CurrentSurfaceTexture` outcome handled. Swift: a render thread owns the display link and frees the map on it; gestures call the thread-safe ABI from the main thread. The shared engine budget now admits the map's GPU memory (cap 512 MiB, half of available memory on device); the simulator's zero `os_proc_available_memory` no longer zeroes it. Next: appearance and layers, the basemap, chrome. |
+| Native app state and shell backend (`csk-app`, `csk_app_*`, `NativeShellBackend`) | **Started.** The SwiftUI shell sits on a `ShellBackend` boundary (named commands and queries out, `ShellUpdate` JSON in). The web page is one backend until the native one reaches parity; the native app (`cspNativeMap`) runs with no page at all: `csk-app` holds the person's state in the engine's store, publishes the menu groups, dock, map, status (centre coordinates and elevation, legend, scale bar) and pages, and answers actions. The page structure and wording follow `ios/Tests/Fixtures/shell` (captured from the current app by `ios/scripts/capture_shell.js`). Terrain looks: the palette/style/look catalogue is generated from `lidar-render.js` into `native/shaders/generated/terrain.json`; the layer model, stack builder, range fitting and the appearance-to-uniforms mapping are native, and all twelve built-in looks match the web stacks and uniforms exactly (`terrain-cases.json`). Auto ranges fit to an asynchronous GPU sample of the settled view. Launch default: Swiss Relief at 100%, Rivers & lakes on at 5%. Done natively: the Terrain & LiDAR page (presets, styles, opacity, layer visibility, effects, colour, lighting, source preference, resets), theme, reset to north, dock order, Locate. Next: look previews, derived fields (detail, relative elevation), Rivers & lakes and a basemap, the remaining pages, search, native sharing. |
 
 ## Findings while porting
 

@@ -29,6 +29,27 @@ pub const TILE: u32 = 256;
 const MAX_FINER: u8 = 8;
 /// Metadata-only records (answered with no data) kept for coverage.
 const MAX_EMPTY: usize = 16_384;
+/// Samples in a view sample (about 96 x 96, shaped like the screen).
+const SAMPLES: f64 = 9216.0;
+
+/// A grid of the screen field's heights from one presented frame: what auto
+/// layers fit their colour ranges to. NaN where no terrain was drawn.
+#[derive(Clone, Debug, PartialEq)]
+pub struct ViewSample {
+    pub view: View,
+    pub width: u32,
+    pub height: u32,
+    pub heights: Vec<f32>,
+}
+
+/// A view sample on its way back from the GPU.
+struct Pending {
+    view: View,
+    size: (u32, u32),
+    buffer: wgpu::Buffer,
+    ready: Arc<std::sync::atomic::AtomicU8>,
+    _charge: Arc<Reservation>,
+}
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct TileId {
@@ -226,6 +247,9 @@ pub struct Terrain {
     field: Option<ScreenField>,
     frame: u64,
     stamp: u64,
+    /// Sample the next rendered frame.
+    sample_next: bool,
+    pending: Option<Pending>,
 }
 
 /// Whether a record's footprint overlaps display tile (z, x, y).
@@ -271,6 +295,8 @@ impl Terrain {
             field: None,
             frame: 0,
             stamp: 0,
+            sample_next: false,
+            pending: None,
         })
     }
 
@@ -767,7 +793,21 @@ impl Terrain {
         uniforms.set("u_centerMerc", &[view.center[0] as f32, view.center[1] as f32])?;
         uniforms.set("u_bearingRad", &[view.bearing.to_radians() as f32])?;
         gpu.encode_shade(&mut encoder, &field.view, &uniforms, target, format);
+        let sampling = if self.sample_next && self.pending.is_none() {
+            self.sample_next = false;
+            Some(Self::encode_sample(gpu, &mut encoder, &field.view, (w, h))?)
+        } else {
+            None
+        };
         gpu.queue.submit([encoder.finish()]);
+        if let Some((buffer, size, charge)) = sampling {
+            let ready = Arc::new(std::sync::atomic::AtomicU8::new(0));
+            let flag = ready.clone();
+            buffer.slice(..).map_async(wgpu::MapMode::Read, move |result| {
+                flag.store(if result.is_ok() { 1 } else { 2 }, std::sync::atomic::Ordering::Release);
+            });
+            self.pending = Some(Pending { view: *view, size, buffer, ready, _charge: charge });
+        }
         gpu.retain_until_done((store.charge.clone(), field.charge.clone()));
         let visible = view.bounds(0, shift);
         let (mut total, mut covered) = (0usize, 0usize);
@@ -792,6 +832,93 @@ impl Terrain {
         let stats = self.render(gpu, view, uniforms, &Renderer::frame_view(&frame), FRAME_FORMAT)?;
         gpu.retain_until_done(Renderer::frame_charge(&frame));
         Ok((frame, stats))
+    }
+
+    /// Samples the next rendered frame's heights; see `take_sample`.
+    pub fn request_sample(&mut self) {
+        self.sample_next = true;
+    }
+
+    /// Whether a requested sample is still to be drawn or read back.
+    pub fn sampling(&self) -> bool {
+        self.sample_next || self.pending.is_some()
+    }
+
+    /// The requested view sample, once the GPU has delivered it.
+    pub fn take_sample(&mut self, gpu: &Renderer) -> Option<ViewSample> {
+        use std::sync::atomic::Ordering;
+        let pending = self.pending.as_ref()?;
+        gpu.poll().ok()?;
+        match pending.ready.load(Ordering::Acquire) {
+            0 => return None,
+            1 => {}
+            _ => {
+                self.pending = None;
+                return None;
+            }
+        }
+        let pending = self.pending.take()?;
+        let heights = {
+            let Ok(bytes) = pending.buffer.slice(..).get_mapped_range() else { return None };
+            bytes
+                .chunks_exact(4)
+                .map(|b| f32::from_le_bytes(b.try_into().expect("4 bytes")))
+                .map(|v| if v.is_finite() && v > -1e20 { v } else { f32::NAN })
+                .collect()
+        };
+        pending.buffer.unmap();
+        Some(ViewSample { view: pending.view, width: pending.size.0, height: pending.size.1, heights })
+    }
+
+    #[allow(clippy::type_complexity)]
+    fn encode_sample(
+        gpu: &Renderer,
+        encoder: &mut wgpu::CommandEncoder,
+        field: &wgpu::TextureView,
+        (w, h): (u32, u32),
+    ) -> Result<(wgpu::Buffer, (u32, u32), Arc<Reservation>), Error> {
+        let scale = (SAMPLES / (f64::from(w) * f64::from(h))).sqrt().min(1.0);
+        let size = (((f64::from(w) * scale).round() as u32).max(1), ((f64::from(h) * scale).round() as u32).max(1));
+        let bytes = u64::from(size.0) * u64::from(size.1) * 4;
+        let charge = Arc::new(gpu.budget.reserve(2 * bytes as usize + 4096)?);
+        let storage = gpu.device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("view sample"),
+            size: bytes,
+            usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_SRC,
+            mapped_at_creation: false,
+        });
+        let read = gpu.device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("view sample readback"),
+            size: bytes,
+            usage: wgpu::BufferUsages::MAP_READ | wgpu::BufferUsages::COPY_DST,
+            mapped_at_creation: false,
+        });
+        let mut grid = Vec::with_capacity(16);
+        for v in [size.0, size.1, 0, 0] {
+            grid.extend_from_slice(&v.to_le_bytes());
+        }
+        let grid = gpu.device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("view sample grid"),
+            contents: &grid,
+            usage: wgpu::BufferUsages::UNIFORM,
+        });
+        let group = gpu.device.create_bind_group(&wgpu::BindGroupDescriptor {
+            label: None,
+            layout: &gpu.sample.1,
+            entries: &[
+                wgpu::BindGroupEntry { binding: 0, resource: grid.as_entire_binding() },
+                wgpu::BindGroupEntry { binding: 1, resource: wgpu::BindingResource::TextureView(field) },
+                wgpu::BindGroupEntry { binding: 2, resource: storage.as_entire_binding() },
+            ],
+        });
+        {
+            let mut pass = encoder.begin_compute_pass(&Default::default());
+            pass.set_pipeline(&gpu.sample.0);
+            pass.set_bind_group(0, &group, &[]);
+            pass.dispatch_workgroups(size.0.div_ceil(8), size.1.div_ceil(8), 1);
+        }
+        encoder.copy_buffer_to_buffer(&storage, 0, &read, 0, bytes);
+        Ok((read, size, charge))
     }
 
     /// The last frame's screen field (float32 metres, top-down; invalid

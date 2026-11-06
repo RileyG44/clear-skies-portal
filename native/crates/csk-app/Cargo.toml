@@ -1,0 +1,18 @@
+[package]
+name = "csk-app"
+version = "0.1.0"
+description = "The native app state behind the SwiftUI shell: terrain looks, layers, pages and actions"
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+publish = false
+
+[dependencies]
+csk-engine = { path = "../csk-engine" }
+csk-gpu = { path = "../csk-gpu" }
+csk-map = { path = "../csk-map" }
+serde = { version = "1", features = ["derive"] }
+serde_json = { version = "1", features = ["float_roundtrip"] }
+
+[lints]
+workspace = true

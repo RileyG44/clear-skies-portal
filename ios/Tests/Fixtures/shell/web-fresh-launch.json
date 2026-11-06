@@ -1,0 +1,4324 @@
+{
+ "groups": [
+  {
+   "label": "Explore the map",
+   "routes": [
+    {
+     "key": "layers",
+     "title": "Map layers",
+     "description": "Manage visibility, order and opacity",
+     "icon": "layers"
+    },
+    {
+     "key": "satellite",
+     "title": "Satellite imagery",
+     "description": "Find and compare dated images",
+     "icon": "satellite"
+    },
+    {
+     "key": "terrain",
+     "title": "Terrain & LiDAR",
+     "description": "Style terrain, adjust lighting and download data",
+     "icon": "radar"
+    },
+    {
+     "key": "elevation",
+     "title": "Elevation colors",
+     "description": "Color heights and highlight elevation ranges",
+     "icon": "mountain-snow"
+    }
+   ]
+  },
+  {
+   "label": "Study & share",
+   "routes": [
+    {
+     "key": "analyze",
+     "title": "Terrain analysis",
+     "description": "Measure and reveal landform patterns",
+     "icon": "scan-search"
+    },
+    {
+     "key": "markup",
+     "title": "Draw & annotate",
+     "description": "Add drawings, labels and notes",
+     "icon": "pen-line"
+    },
+    {
+     "key": "export",
+     "title": "Export image",
+     "description": "Save the map view or a selected area",
+     "icon": "download"
+    }
+   ]
+  },
+  {
+   "label": "Reference layers",
+   "routes": [
+    {
+     "key": "conditions",
+     "title": "Live conditions",
+     "description": "Weather, fire, snow and recent events",
+     "icon": "cloud-sun"
+    },
+    {
+     "key": "geology",
+     "title": "Geology & hazards",
+     "description": "Explore geology, faults and landslides",
+     "icon": "triangle-alert"
+    },
+    {
+     "key": "past",
+     "title": "Past landscapes",
+     "description": "Explore ice-age and historical landscapes",
+     "icon": "history"
+    },
+    {
+     "key": "labels",
+     "title": "Labels & reference",
+     "description": "Add roads, places and boundaries",
+     "icon": "tags"
+    }
+   ]
+  },
+  {
+   "label": "App",
+   "routes": [
+    {
+     "key": "appearance",
+     "title": "App appearance",
+     "description": "Choose the app theme, text and colors",
+     "icon": "sliders-horizontal"
+    },
+    {
+     "key": "settings",
+     "title": "App settings",
+     "description": "Connection, accessibility and device preferences",
+     "icon": "settings"
+    }
+   ]
+  }
+ ],
+ "dock": [
+  {
+   "id": "mapModeToggle",
+   "title": "Map view: 2D map",
+   "hidden": false
+  },
+  {
+   "id": "quickDraw",
+   "title": "Draw on the map",
+   "hidden": false
+  },
+  {
+   "id": "mapInfoToggle",
+   "title": "Show displayed imagery controls",
+   "hidden": true
+  },
+  {
+   "id": "terrainSourceToggle",
+   "title": "Show layers",
+   "hidden": false
+  },
+  {
+   "id": "snapshot",
+   "title": "Save current map viewport as an image",
+   "hidden": false
+  },
+  {
+   "id": "mapTheme",
+   "title": "Switch to dark map",
+   "hidden": false
+  },
+  {
+   "id": "bearingReset",
+   "title": "Reset map to north",
+   "hidden": true
+  },
+  {
+   "id": "serverToggle",
+   "title": "Terrain engine: built into this app",
+   "hidden": false
+  }
+ ],
+ "pages": {
+  "layers": {
+   "route": "layers",
+   "title": "Map layers",
+   "description": "Manage visibility, order and opacity",
+   "items": [
+    {
+     "kind": "header",
+     "title": "Active layers"
+    },
+    {
+     "kind": "layer",
+     "ref": "@n39",
+     "id": "overlay:water",
+     "title": "Rivers & lakes",
+     "detail": "Labels & reference \u00b7 USGS NHD",
+     "edit": {
+      "ref": "@n40"
+     },
+     "toggle": {
+      "ref": "@n41",
+      "value": true
+     },
+     "opacity": {
+      "ref": "@n42",
+      "value": 10,
+      "display": "10%"
+     },
+     "actions": [
+      {
+       "ref": "@n35",
+       "action": "up",
+       "title": "Move Rivers & lakes up",
+       "disabled": true
+      },
+      {
+       "ref": "@n36",
+       "action": "down",
+       "title": "Move Rivers & lakes down"
+      },
+      {
+       "ref": "@n37",
+       "action": "edit",
+       "title": "Edit Rivers & lakes"
+      },
+      {
+       "ref": "@n38",
+       "action": "reset",
+       "title": "Reset Rivers & lakes"
+      }
+     ]
+    },
+    {
+     "kind": "layer",
+     "ref": "@n47",
+     "id": "elevation-bands",
+     "title": "Elevation highlights",
+     "detail": "Below 2,320 ft",
+     "edit": {
+      "ref": "@n48"
+     },
+     "toggle": {
+      "ref": "@n49",
+      "value": true
+     },
+     "opacity": {
+      "ref": "@n50",
+      "value": 35,
+      "display": "35%"
+     },
+     "actions": [
+      {
+       "ref": "@n43",
+       "action": "up",
+       "title": "Move Elevation highlights up"
+      },
+      {
+       "ref": "@n44",
+       "action": "down",
+       "title": "Move Elevation highlights down"
+      },
+      {
+       "ref": "@n45",
+       "action": "edit",
+       "title": "Edit Elevation highlights"
+      },
+      {
+       "ref": "@n46",
+       "action": "reset",
+       "title": "Reset Elevation highlights"
+      }
+     ]
+    },
+    {
+     "kind": "layer",
+     "ref": "@n55",
+     "id": "terrain",
+     "title": "Relative elevation",
+     "detail": "USGS 3DEP elevation",
+     "edit": {
+      "ref": "@n56"
+     },
+     "toggle": {
+      "ref": "@n57",
+      "value": true
+     },
+     "opacity": {
+      "ref": "@n58",
+      "value": 100,
+      "display": "100%"
+     },
+     "actions": [
+      {
+       "ref": "@n51",
+       "action": "up",
+       "title": "Move Relative elevation up"
+      },
+      {
+       "ref": "@n52",
+       "action": "down",
+       "title": "Move Relative elevation down",
+       "disabled": true
+      },
+      {
+       "ref": "@n53",
+       "action": "edit",
+       "title": "Edit Relative elevation"
+      },
+      {
+       "ref": "@n54",
+       "action": "reset",
+       "title": "Reset Relative elevation"
+      }
+     ]
+    },
+    {
+     "kind": "layer",
+     "ref": "@n59",
+     "id": "basemap",
+     "title": "Reference basemap",
+     "detail": "Pinned below all research layers",
+     "locked": true,
+     "toggle": {
+      "ref": "@n60",
+      "value": true,
+      "disabled": true
+     },
+     "actions": []
+    },
+    {
+     "kind": "header",
+     "title": "Add layers"
+    },
+    {
+     "kind": "button",
+     "ref": "@n61",
+     "role": "navigate",
+     "title": "Satellite imagery",
+     "detail": "Dated optical, radar, IR, and global mosaics"
+    },
+    {
+     "kind": "button",
+     "ref": "@n62",
+     "role": "navigate",
+     "title": "Terrain & LiDAR",
+     "detail": "Style terrain, adjust lighting and download data"
+    },
+    {
+     "kind": "button",
+     "ref": "@n63",
+     "role": "navigate",
+     "title": "Elevation colors",
+     "detail": "Color heights and highlight elevation ranges"
+    },
+    {
+     "kind": "button",
+     "ref": "@n64",
+     "role": "navigate",
+     "title": "Live conditions",
+     "detail": "Weather, fire, snow and recent events"
+    },
+    {
+     "kind": "button",
+     "ref": "@n65",
+     "role": "navigate",
+     "title": "Geology & hazards",
+     "detail": "Surface geology, faults, and landslides"
+    },
+    {
+     "kind": "button",
+     "ref": "@n66",
+     "role": "navigate",
+     "title": "Past landscapes",
+     "detail": "Glaciers, ice-age lakes, and archaeology"
+    },
+    {
+     "kind": "button",
+     "ref": "@n67",
+     "role": "navigate",
+     "title": "Labels & reference",
+     "detail": "Roads, trails, water, places, and boundaries"
+    },
+    {
+     "kind": "button",
+     "ref": "@n68",
+     "role": "navigate",
+     "title": "Draw & annotate",
+     "detail": "Add drawings, labels and notes"
+    }
+   ]
+  },
+  "satellite": {
+   "route": "satellite",
+   "title": "Satellite imagery",
+   "description": "Find and compare dated images",
+   "items": [
+    {
+     "kind": "scenesearch",
+     "ref": "#cspSatQuery",
+     "placeholder": "Place or coordinates"
+    },
+    {
+     "kind": "chips",
+     "ref": "#cspSatFilterBox",
+     "title": "Search filters",
+     "detail": "Last 365 days \u00b7 any cloud \u00b7 all types",
+     "items": [
+      {
+       "kind": "picker",
+       "ref": "#days",
+       "title": "Time window",
+       "disabled": false,
+       "value": "365",
+       "options": [
+        {
+         "value": "14",
+         "title": "Last 14 days"
+        },
+        {
+         "value": "30",
+         "title": "Last 30 days"
+        },
+        {
+         "value": "90",
+         "title": "Last 90 days"
+        },
+        {
+         "value": "365",
+         "title": "Last 365 days"
+        },
+        {
+         "value": "1825",
+         "title": "Last 5 years"
+        },
+        {
+         "value": "0",
+         "title": "All time"
+        },
+        {
+         "value": "custom",
+         "title": "Custom range\u2026"
+        }
+       ]
+      },
+      {
+       "kind": "picker",
+       "ref": "#cloud",
+       "title": "Max cloud",
+       "disabled": false,
+       "value": "101",
+       "options": [
+        {
+         "value": "10",
+         "title": "Under 10%"
+        },
+        {
+         "value": "30",
+         "title": "Under 30%"
+        },
+        {
+         "value": "60",
+         "title": "Under 60%"
+        },
+        {
+         "value": "101",
+         "title": "Any"
+        }
+       ]
+      },
+      {
+       "kind": "picker",
+       "ref": "#vis",
+       "title": "Image type",
+       "disabled": false,
+       "value": "all",
+       "options": [
+        {
+         "value": "all",
+         "title": "All types"
+        },
+        {
+         "value": "rgb",
+         "title": "Natural color (RGB)"
+        },
+        {
+         "value": "sar",
+         "title": "Radar (SAR)"
+        },
+        {
+         "value": "false",
+         "title": "False color / IR"
+        },
+        {
+         "value": "night",
+         "title": "Night lights"
+        },
+        {
+         "value": "terrain",
+         "title": "Terrain"
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "kind": "group",
+     "ref": "@n70",
+     "pane": true,
+     "title": "Satellite scenes",
+     "open": true,
+     "items": [
+      {
+       "kind": "disclosure",
+       "ref": "satellite:list-settings",
+       "title": "Result options",
+       "detail": "",
+       "items": [
+        {
+         "kind": "text",
+         "style": "hint",
+         "title": "Preset windows also list fixed-date composites, such as the 2016 night lights; a custom range includes them only when it covers their date."
+        }
+       ]
+      },
+      {
+       "kind": "group",
+       "ref": "#cspSatResultOptions",
+       "title": "Result options",
+       "detail": "Newest first \u00b7 Drawable only \u00b7 By source",
+       "open": true,
+       "items": [
+        {
+         "kind": "picker",
+         "ref": "#sort",
+         "title": "Sort by",
+         "disabled": false,
+         "value": "date",
+         "options": [
+          {
+           "value": "date",
+           "title": "Newest first"
+          },
+          {
+           "value": "res",
+           "title": "Sharpest first"
+          }
+         ]
+        },
+        {
+         "kind": "toggle",
+         "ref": "#viewable",
+         "title": "Only scenes that draw on the map",
+         "disabled": false,
+         "value": true
+        },
+        {
+         "kind": "toggle",
+         "ref": "#groupSrc",
+         "title": "Group by source",
+         "disabled": false,
+         "value": true
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "kind": "group",
+     "ref": "@n69",
+     "pane": true,
+     "title": "Reference imagery & coverage",
+     "open": false,
+     "items": []
+    }
+   ]
+  },
+  "terrain": {
+   "route": "terrain",
+   "title": "Terrain & LiDAR",
+   "description": "Style terrain, adjust lighting and download data",
+   "items": [
+    {
+     "kind": "group",
+     "ref": "terrain:presets",
+     "title": "Quick presets",
+     "items": [
+      {
+       "kind": "looks",
+       "ref": "@n71",
+       "title": "Terrain presets",
+       "options": [
+        {
+         "ref": "@n72",
+         "title": "Classic",
+         "selected": false,
+         "src": "csp-image:@n73"
+        },
+        {
+         "ref": "@n74",
+         "title": "Lava River",
+         "selected": false,
+         "src": "csp-image:@n75"
+        },
+        {
+         "ref": "@n76",
+         "title": "Ember",
+         "selected": false,
+         "src": "csp-image:@n77"
+        },
+        {
+         "ref": "@n78",
+         "title": "Glacier",
+         "selected": false,
+         "src": "csp-image:@n79"
+        },
+        {
+         "ref": "@n80",
+         "title": "Swiss Relief",
+         "selected": false,
+         "src": "csp-image:@n81"
+        },
+        {
+         "ref": "@n82",
+         "title": "Aurora",
+         "selected": false,
+         "src": "csp-image:@n83"
+        },
+        {
+         "ref": "@n84",
+         "title": "Missoula",
+         "selected": true,
+         "src": "csp-image:@n85"
+        },
+        {
+         "ref": "@n86",
+         "title": "Neon Slope",
+         "selected": false,
+         "src": "csp-image:@n87"
+        },
+        {
+         "ref": "@n88",
+         "title": "Midnight",
+         "selected": false,
+         "src": "csp-image:@n89"
+        },
+        {
+         "ref": "@n90",
+         "title": "Blueprint",
+         "selected": false,
+         "src": "csp-image:@n91"
+        },
+        {
+         "ref": "@n92",
+         "title": "Compass Rose",
+         "selected": false,
+         "src": "csp-image:@n93"
+        },
+        {
+         "ref": "@n94",
+         "title": "Topographic",
+         "selected": false,
+         "src": "csp-image:@n95"
+        }
+       ]
+      },
+      {
+       "kind": "text",
+       "ref": "#ls-preset-hint",
+       "title": "Choosing a preset replaces the current layer mix. Customize its layers and effects below.",
+       "style": "hint"
+      },
+      {
+       "kind": "segmented",
+       "ref": "#cspStyleChips",
+       "title": "Map display",
+       "options": [
+        {
+         "ref": "@n97",
+         "title": "Off",
+         "selected": false
+        },
+        {
+         "ref": "@n98",
+         "title": "Hillshade",
+         "selected": false
+        },
+        {
+         "ref": "@n99",
+         "title": "Multi hillshade",
+         "selected": false
+        },
+        {
+         "ref": "@n100",
+         "title": "Elevation",
+         "selected": false
+        },
+        {
+         "ref": "@n101",
+         "title": "Relative",
+         "selected": true
+        },
+        {
+         "ref": "@n102",
+         "title": "Slope",
+         "selected": false
+        },
+        {
+         "ref": "@n103",
+         "title": "Aspect",
+         "selected": false
+        },
+        {
+         "ref": "@n104",
+         "title": "Exposure",
+         "selected": false
+        },
+        {
+         "ref": "@n105",
+         "title": "Contours 2 ft",
+         "selected": false
+        },
+        {
+         "ref": "@n106",
+         "title": "Contours 5 ft",
+         "selected": false
+        },
+        {
+         "ref": "@n107",
+         "title": "Contours 10 ft",
+         "selected": false
+        },
+        {
+         "ref": "@n108",
+         "title": "Contours 25 ft",
+         "selected": false
+        }
+       ]
+      },
+      {
+       "kind": "text",
+       "title": "Relative elevation \u00b7 Ember + Hillshade",
+       "style": "hint"
+      },
+      {
+       "kind": "gradient",
+       "stops": [
+        {
+         "color": "#fbf2ea",
+         "opacity": 1,
+         "at": 0
+        },
+        {
+         "color": "#fcecdc",
+         "opacity": 1,
+         "at": 0.0078000000000000005
+        },
+        {
+         "color": "#fce8d4",
+         "opacity": 1,
+         "at": 0.015600000000000001
+        },
+        {
+         "color": "#fde4cd",
+         "opacity": 1,
+         "at": 0.023399999999999997
+        },
+        {
+         "color": "#fde1c6",
+         "opacity": 1,
+         "at": 0.0313
+        },
+        {
+         "color": "#fddec0",
+         "opacity": 1,
+         "at": 0.0391
+        },
+        {
+         "color": "#fedbba",
+         "opacity": 1,
+         "at": 0.046900000000000004
+        },
+        {
+         "color": "#fed9b5",
+         "opacity": 1,
+         "at": 0.0547
+        },
+        {
+         "color": "#fed6af",
+         "opacity": 1,
+         "at": 0.0625
+        },
+        {
+         "color": "#ffd4aa",
+         "opacity": 1,
+         "at": 0.0703
+        },
+        {
+         "color": "#ffd2a5",
+         "opacity": 1,
+         "at": 0.0781
+        },
+        {
+         "color": "#ffce9f",
+         "opacity": 1,
+         "at": 0.0859
+        },
+        {
+         "color": "#ffca99",
+         "opacity": 1,
+         "at": 0.09380000000000001
+        },
+        {
+         "color": "#ffc693",
+         "opacity": 1,
+         "at": 0.1016
+        },
+        {
+         "color": "#ffc38d",
+         "opacity": 1,
+         "at": 0.1094
+        },
+        {
+         "color": "#ffbf87",
+         "opacity": 1,
+         "at": 0.11720000000000001
+        },
+        {
+         "color": "#ffbc81",
+         "opacity": 1,
+         "at": 0.125
+        },
+        {
+         "color": "#ffb87c",
+         "opacity": 1,
+         "at": 0.1328
+        },
+        {
+         "color": "#ffb576",
+         "opacity": 1,
+         "at": 0.1406
+        },
+        {
+         "color": "#ffb271",
+         "opacity": 1,
+         "at": 0.1484
+        },
+        {
+         "color": "#ffae6b",
+         "opacity": 1,
+         "at": 0.1563
+        },
+        {
+         "color": "#ffab66",
+         "opacity": 1,
+         "at": 0.1641
+        },
+        {
+         "color": "#ffa861",
+         "opacity": 1,
+         "at": 0.17190000000000003
+        },
+        {
+         "color": "#ffa55c",
+         "opacity": 1,
+         "at": 0.1797
+        },
+        {
+         "color": "#ffa257",
+         "opacity": 1,
+         "at": 0.1875
+        },
+        {
+         "color": "#ff9f52",
+         "opacity": 1,
+         "at": 0.1953
+        },
+        {
+         "color": "#ff9c4d",
+         "opacity": 1,
+         "at": 0.20309999999999997
+        },
+        {
+         "color": "#ff9949",
+         "opacity": 1,
+         "at": 0.2109
+        },
+        {
+         "color": "#fd9647",
+         "opacity": 1,
+         "at": 0.2188
+        },
+        {
+         "color": "#fc9344",
+         "opacity": 1,
+         "at": 0.2266
+        },
+        {
+         "color": "#fb9142",
+         "opacity": 1,
+         "at": 0.23440000000000003
+        },
+        {
+         "color": "#fa8e40",
+         "opacity": 1,
+         "at": 0.2422
+        },
+        {
+         "color": "#f98b3d",
+         "opacity": 1,
+         "at": 0.25
+        },
+        {
+         "color": "#f8893b",
+         "opacity": 1,
+         "at": 0.25780000000000003
+        },
+        {
+         "color": "#f68639",
+         "opacity": 1,
+         "at": 0.2656
+        },
+        {
+         "color": "#f58337",
+         "opacity": 1,
+         "at": 0.2734
+        },
+        {
+         "color": "#f48134",
+         "opacity": 1,
+         "at": 0.2813
+        },
+        {
+         "color": "#f37e32",
+         "opacity": 1,
+         "at": 0.2891
+        },
+        {
+         "color": "#f27c30",
+         "opacity": 1,
+         "at": 0.2969
+        },
+        {
+         "color": "#f1792e",
+         "opacity": 1,
+         "at": 0.30469999999999997
+        },
+        {
+         "color": "#f0762c",
+         "opacity": 1,
+         "at": 0.3125
+        },
+        {
+         "color": "#ef742a",
+         "opacity": 1,
+         "at": 0.32030000000000003
+        },
+        {
+         "color": "#ee7127",
+         "opacity": 1,
+         "at": 0.3281
+        },
+        {
+         "color": "#ed6f25",
+         "opacity": 1,
+         "at": 0.33590000000000003
+        },
+        {
+         "color": "#ec6d23",
+         "opacity": 1,
+         "at": 0.34380000000000005
+        },
+        {
+         "color": "#eb6a21",
+         "opacity": 1,
+         "at": 0.35159999999999997
+        },
+        {
+         "color": "#ea681f",
+         "opacity": 1,
+         "at": 0.3594
+        },
+        {
+         "color": "#e9651d",
+         "opacity": 1,
+         "at": 0.36719999999999997
+        },
+        {
+         "color": "#e7631c",
+         "opacity": 1,
+         "at": 0.375
+        },
+        {
+         "color": "#e5611c",
+         "opacity": 1,
+         "at": 0.38280000000000003
+        },
+        {
+         "color": "#e35e1c",
+         "opacity": 1,
+         "at": 0.3906
+        },
+        {
+         "color": "#e15c1c",
+         "opacity": 1,
+         "at": 0.39840000000000003
+        },
+        {
+         "color": "#df5a1c",
+         "opacity": 1,
+         "at": 0.40630000000000005
+        },
+        {
+         "color": "#dd581c",
+         "opacity": 1,
+         "at": 0.41409999999999997
+        },
+        {
+         "color": "#db551c",
+         "opacity": 1,
+         "at": 0.4219
+        },
+        {
+         "color": "#d9531c",
+         "opacity": 1,
+         "at": 0.42969999999999997
+        },
+        {
+         "color": "#d7511c",
+         "opacity": 1,
+         "at": 0.4375
+        },
+        {
+         "color": "#d54f1c",
+         "opacity": 1,
+         "at": 0.44530000000000003
+        },
+        {
+         "color": "#d34d1c",
+         "opacity": 1,
+         "at": 0.4531
+        },
+        {
+         "color": "#d14b1c",
+         "opacity": 1,
+         "at": 0.46090000000000003
+        },
+        {
+         "color": "#cf481c",
+         "opacity": 1,
+         "at": 0.46880000000000005
+        },
+        {
+         "color": "#cd461c",
+         "opacity": 1,
+         "at": 0.47659999999999997
+        },
+        {
+         "color": "#cb441c",
+         "opacity": 1,
+         "at": 0.4844
+        },
+        {
+         "color": "#c9421c",
+         "opacity": 1,
+         "at": 0.49219999999999997
+        },
+        {
+         "color": "#c7401c",
+         "opacity": 1,
+         "at": 0.5
+        },
+        {
+         "color": "#c53e1c",
+         "opacity": 1,
+         "at": 0.5078
+        },
+        {
+         "color": "#c33c1c",
+         "opacity": 1,
+         "at": 0.5156000000000001
+        },
+        {
+         "color": "#c13a1c",
+         "opacity": 1,
+         "at": 0.5234000000000001
+        },
+        {
+         "color": "#bf381c",
+         "opacity": 1,
+         "at": 0.5313
+        },
+        {
+         "color": "#bd361c",
+         "opacity": 1,
+         "at": 0.5390999999999999
+        },
+        {
+         "color": "#bb341c",
+         "opacity": 1,
+         "at": 0.5468999999999999
+        },
+        {
+         "color": "#b9311c",
+         "opacity": 1,
+         "at": 0.5547
+        },
+        {
+         "color": "#b7301c",
+         "opacity": 1,
+         "at": 0.5625
+        },
+        {
+         "color": "#b42f1c",
+         "opacity": 1,
+         "at": 0.5703
+        },
+        {
+         "color": "#b22d1c",
+         "opacity": 1,
+         "at": 0.5781000000000001
+        },
+        {
+         "color": "#af2c1d",
+         "opacity": 1,
+         "at": 0.5859000000000001
+        },
+        {
+         "color": "#ac2b1d",
+         "opacity": 1,
+         "at": 0.5938
+        },
+        {
+         "color": "#a92a1d",
+         "opacity": 1,
+         "at": 0.6015999999999999
+        },
+        {
+         "color": "#a6291d",
+         "opacity": 1,
+         "at": 0.6093999999999999
+        },
+        {
+         "color": "#a4281d",
+         "opacity": 1,
+         "at": 0.6172
+        },
+        {
+         "color": "#a1261d",
+         "opacity": 1,
+         "at": 0.625
+        },
+        {
+         "color": "#9e251d",
+         "opacity": 1,
+         "at": 0.6328
+        },
+        {
+         "color": "#9b241e",
+         "opacity": 1,
+         "at": 0.6406000000000001
+        },
+        {
+         "color": "#99231e",
+         "opacity": 1,
+         "at": 0.6484000000000001
+        },
+        {
+         "color": "#96221e",
+         "opacity": 1,
+         "at": 0.6563
+        },
+        {
+         "color": "#93211e",
+         "opacity": 1,
+         "at": 0.6640999999999999
+        },
+        {
+         "color": "#90201e",
+         "opacity": 1,
+         "at": 0.6718999999999999
+        },
+        {
+         "color": "#8e1f1e",
+         "opacity": 1,
+         "at": 0.6797
+        },
+        {
+         "color": "#8b1e1e",
+         "opacity": 1,
+         "at": 0.6875
+        },
+        {
+         "color": "#881c1f",
+         "opacity": 1,
+         "at": 0.6953
+        },
+        {
+         "color": "#861b1f",
+         "opacity": 1,
+         "at": 0.7031000000000001
+        },
+        {
+         "color": "#831a1f",
+         "opacity": 1,
+         "at": 0.7109000000000001
+        },
+        {
+         "color": "#80191f",
+         "opacity": 1,
+         "at": 0.7188
+        },
+        {
+         "color": "#7e181f",
+         "opacity": 1,
+         "at": 0.7265999999999999
+        },
+        {
+         "color": "#7b171f",
+         "opacity": 1,
+         "at": 0.7343999999999999
+        },
+        {
+         "color": "#79161f",
+         "opacity": 1,
+         "at": 0.7422
+        },
+        {
+         "color": "#761520",
+         "opacity": 1,
+         "at": 0.75
+        },
+        {
+         "color": "#731420",
+         "opacity": 1,
+         "at": 0.7578
+        },
+        {
+         "color": "#711320",
+         "opacity": 1,
+         "at": 0.7656000000000001
+        },
+        {
+         "color": "#6e1220",
+         "opacity": 1,
+         "at": 0.7734000000000001
+        },
+        {
+         "color": "#6c121f",
+         "opacity": 1,
+         "at": 0.7813
+        },
+        {
+         "color": "#69111f",
+         "opacity": 1,
+         "at": 0.7890999999999999
+        },
+        {
+         "color": "#67111e",
+         "opacity": 1,
+         "at": 0.7968999999999999
+        },
+        {
+         "color": "#64101e",
+         "opacity": 1,
+         "at": 0.8047
+        },
+        {
+         "color": "#62101d",
+         "opacity": 1,
+         "at": 0.8125
+        },
+        {
+         "color": "#60101c",
+         "opacity": 1,
+         "at": 0.8203
+        },
+        {
+         "color": "#5d0f1c",
+         "opacity": 1,
+         "at": 0.8281000000000001
+        },
+        {
+         "color": "#5b0f1b",
+         "opacity": 1,
+         "at": 0.8359000000000001
+        },
+        {
+         "color": "#580f1b",
+         "opacity": 1,
+         "at": 0.8438
+        },
+        {
+         "color": "#560e1a",
+         "opacity": 1,
+         "at": 0.8515999999999999
+        },
+        {
+         "color": "#540e1a",
+         "opacity": 1,
+         "at": 0.8593999999999999
+        },
+        {
+         "color": "#510e19",
+         "opacity": 1,
+         "at": 0.8672
+        },
+        {
+         "color": "#4f0d19",
+         "opacity": 1,
+         "at": 0.875
+        },
+        {
+         "color": "#4d0d18",
+         "opacity": 1,
+         "at": 0.8828
+        },
+        {
+         "color": "#4a0d17",
+         "opacity": 1,
+         "at": 0.8906000000000001
+        },
+        {
+         "color": "#480c17",
+         "opacity": 1,
+         "at": 0.8984000000000001
+        },
+        {
+         "color": "#460c16",
+         "opacity": 1,
+         "at": 0.9063
+        },
+        {
+         "color": "#430c16",
+         "opacity": 1,
+         "at": 0.9140999999999999
+        },
+        {
+         "color": "#410b15",
+         "opacity": 1,
+         "at": 0.9218999999999999
+        },
+        {
+         "color": "#3f0b15",
+         "opacity": 1,
+         "at": 0.9297
+        },
+        {
+         "color": "#3c0b14",
+         "opacity": 1,
+         "at": 0.9375
+        },
+        {
+         "color": "#3a0a14",
+         "opacity": 1,
+         "at": 0.9453
+        },
+        {
+         "color": "#380a13",
+         "opacity": 1,
+         "at": 0.9531000000000001
+        },
+        {
+         "color": "#350a13",
+         "opacity": 1,
+         "at": 0.9609000000000001
+        },
+        {
+         "color": "#330912",
+         "opacity": 1,
+         "at": 0.9688
+        },
+        {
+         "color": "#310912",
+         "opacity": 1,
+         "at": 0.9765999999999999
+        },
+        {
+         "color": "#2f0911",
+         "opacity": 1,
+         "at": 0.9843999999999999
+        },
+        {
+         "color": "#2c0811",
+         "opacity": 1,
+         "at": 0.9922
+        },
+        {
+         "color": "#2a0810",
+         "opacity": 1,
+         "at": 1
+        }
+       ],
+       "labels": [
+        "0 ft",
+        "128 ft",
+        "256 ft \u00b7 fitted"
+       ]
+      },
+      {
+       "kind": "slider",
+       "ref": "#terOp",
+       "title": "Terrain opacity",
+       "disabled": false,
+       "value": 100,
+       "min": 0,
+       "max": 100,
+       "step": 1,
+       "display": "100%"
+      },
+      {
+       "kind": "group",
+       "ref": "@n115",
+       "title": "Layers & colorsMix layers, edit palettes and apply terrain effects",
+       "open": true,
+       "items": [
+        {
+         "kind": "lidarLayer",
+         "ref": "@n109",
+         "title": "Hillshade",
+         "detail": "Soft light \u00b7 90% \u00b7 Moonlight",
+         "stops": [
+          {
+           "color": "#04060c",
+           "opacity": 1,
+           "at": 0
+          },
+          {
+           "color": "#151d31",
+           "opacity": 1,
+           "at": 0.25
+          },
+          {
+           "color": "#3c4c70",
+           "opacity": 1,
+           "at": 0.5
+          },
+          {
+           "color": "#9cadd2",
+           "opacity": 1,
+           "at": 0.75
+          },
+          {
+           "color": "#e9f0ff",
+           "opacity": 1,
+           "at": 1
+          }
+         ],
+         "visible": true,
+         "eye": "@n110",
+         "open": false,
+         "items": []
+        },
+        {
+         "kind": "lidarLayer",
+         "ref": "@n111",
+         "title": "Relative elevation",
+         "detail": "Bottom layer \u00b7 100% \u00b7 Ember",
+         "stops": [
+          {
+           "color": "#fbf2ea",
+           "opacity": 1,
+           "at": 0
+          },
+          {
+           "color": "#ffd2a6",
+           "opacity": 1,
+           "at": 0.16670000000000001
+          },
+          {
+           "color": "#ff9a4a",
+           "opacity": 1,
+           "at": 0.3333
+          },
+          {
+           "color": "#e8641c",
+           "opacity": 1,
+           "at": 0.5
+          },
+          {
+           "color": "#b8301c",
+           "opacity": 1,
+           "at": 0.6667000000000001
+          },
+          {
+           "color": "#6f1220",
+           "opacity": 1,
+           "at": 0.8332999999999999
+          },
+          {
+           "color": "#2a0810",
+           "opacity": 1,
+           "at": 1
+          }
+         ],
+         "visible": true,
+         "eye": "@n112",
+         "open": false,
+         "items": []
+        },
+        {
+         "kind": "button",
+         "ref": "@n113",
+         "title": "Add layer",
+         "disabled": false,
+         "expanded": false
+        },
+        {
+         "kind": "slider",
+         "ref": "#ls-qz4rig",
+         "title": "Relief depth",
+         "disabled": false,
+         "value": 100,
+         "min": -200,
+         "max": 300,
+         "step": 1,
+         "display": "2.00\u00d7"
+        },
+        {
+         "kind": "text",
+         "style": "hint",
+         "title": "Deepen or flatten the shading in every shaded layer."
+        },
+        {
+         "kind": "slider",
+         "ref": "#ls-khn9q6",
+         "title": "Detail",
+         "disabled": false,
+         "value": 30,
+         "min": -100,
+         "max": 300,
+         "step": 1,
+         "display": "Sharpen 30%"
+        },
+        {
+         "kind": "text",
+         "style": "hint",
+         "title": "Smooth away noise, or sharpen tiny features like old roads and channels."
+        },
+        {
+         "kind": "slider",
+         "ref": "#ls-ieaiu2",
+         "title": "Detail size",
+         "disabled": false,
+         "value": 12,
+         "min": 1,
+         "max": 100,
+         "step": 1,
+         "display": "26 ft"
+        },
+        {
+         "kind": "text",
+         "style": "hint",
+         "title": "How large a feature counts as detail."
+        },
+        {
+         "kind": "slider",
+         "ref": "#ls-dutm24",
+         "title": "Valley width",
+         "disabled": false,
+         "value": 38,
+         "min": 0,
+         "max": 100,
+         "step": 1,
+         "display": "1.9 mi"
+        },
+        {
+         "kind": "text",
+         "style": "hint",
+         "title": "How far relative elevation looks for the valley floor. Widen it for big rivers, narrow it for creeks."
+        },
+        {
+         "kind": "button",
+         "ref": "@n114",
+         "title": "Reset colors & layers",
+         "disabled": false,
+         "role": "link"
+        }
+       ]
+      },
+      {
+       "kind": "group",
+       "ref": "@n116",
+       "title": "Color & contrastBrightness, contrast and saturation",
+       "open": true,
+       "items": [
+        {
+         "kind": "slider",
+         "ref": "#terBrightness",
+         "title": "Brightness",
+         "disabled": false,
+         "value": 100,
+         "min": 75,
+         "max": 150,
+         "step": 1,
+         "display": "100%"
+        },
+        {
+         "kind": "slider",
+         "ref": "#terContrast",
+         "title": "Contrast",
+         "disabled": false,
+         "value": 100,
+         "min": 60,
+         "max": 180,
+         "step": 1,
+         "display": "100%"
+        },
+        {
+         "kind": "slider",
+         "ref": "#terSaturation",
+         "title": "Color intensity",
+         "disabled": false,
+         "value": 100,
+         "min": 0,
+         "max": 180,
+         "step": 1,
+         "display": "100%"
+        },
+        {
+         "kind": "button",
+         "ref": "#terLookReset",
+         "title": "Reset appearance",
+         "disabled": false,
+         "role": "action"
+        }
+       ]
+      },
+      {
+       "kind": "group",
+       "ref": "@n117",
+       "title": "Lighting & 3D reliefSun direction, ambient light and vertical exaggeration",
+       "open": true,
+       "items": [
+        {
+         "kind": "sun",
+         "ref": "#terSunAz",
+         "title": "Sun",
+         "azimuth": {
+          "kind": "slider",
+          "ref": "#terSunAz",
+          "title": "Azimuth",
+          "disabled": false,
+          "value": 315,
+          "min": 0,
+          "max": 359,
+          "step": 1,
+          "accessibility": "315 degrees NW",
+          "display": "315\u00b0"
+         },
+         "altitude": {
+          "kind": "slider",
+          "ref": "#terSunAlt",
+          "title": "Altitude",
+          "disabled": false,
+          "value": 45,
+          "min": 5,
+          "max": 90,
+          "step": 1,
+          "accessibility": "45 degrees, mid sun",
+          "display": "45\u00b0"
+         }
+        },
+        {
+         "kind": "slider",
+         "ref": "#terAmbient",
+         "title": "Shadow fill",
+         "disabled": false,
+         "value": 12,
+         "min": 0,
+         "max": 60,
+         "step": 1,
+         "display": "12%"
+        },
+        {
+         "kind": "slider",
+         "ref": "#terExaggeration",
+         "title": "3D relief",
+         "disabled": false,
+         "value": 125,
+         "min": 25,
+         "max": 400,
+         "step": 5,
+         "display": "1.25\u00d7"
+        },
+        {
+         "kind": "button",
+         "ref": "#terLightReset",
+         "title": "Reset lighting",
+         "disabled": false,
+         "role": "action"
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "kind": "group",
+     "ref": "terrain:display",
+     "title": "Map display",
+     "items": [
+      {
+       "kind": "picker",
+       "ref": "#terStyle",
+       "title": "Terrain style",
+       "disabled": false,
+       "value": "rem",
+       "options": [
+        {
+         "value": "off",
+         "title": "Off"
+        },
+        {
+         "value": "hs",
+         "title": "Hillshade"
+        },
+        {
+         "value": "hsmulti",
+         "title": "Hillshade (multi-directional)"
+        },
+        {
+         "value": "tint",
+         "title": "Elevation tinted"
+        },
+        {
+         "value": "rem",
+         "title": "Relative elevation"
+        },
+        {
+         "value": "slope",
+         "title": "Slope"
+        },
+        {
+         "value": "aspect",
+         "title": "Aspect"
+        },
+        {
+         "value": "northness",
+         "title": "North\u2013south exposure"
+        },
+        {
+         "value": "c2",
+         "title": "Contours \u2014 2 ft"
+        },
+        {
+         "value": "c5",
+         "title": "Contours \u2014 5 ft"
+        },
+        {
+         "value": "c10",
+         "title": "Contours \u2014 10 ft"
+        },
+        {
+         "value": "c25",
+         "title": "Contours \u2014 25 ft"
+        }
+       ]
+      },
+      {
+       "kind": "text",
+       "title": "Relative elevation \u00b7 Ember + Hillshade",
+       "style": "hint"
+      },
+      {
+       "kind": "gradient",
+       "stops": [
+        {
+         "color": "#fbf2ea",
+         "opacity": 1,
+         "at": 0
+        },
+        {
+         "color": "#fcecdc",
+         "opacity": 1,
+         "at": 0.0078000000000000005
+        },
+        {
+         "color": "#fce8d4",
+         "opacity": 1,
+         "at": 0.015600000000000001
+        },
+        {
+         "color": "#fde4cd",
+         "opacity": 1,
+         "at": 0.023399999999999997
+        },
+        {
+         "color": "#fde1c6",
+         "opacity": 1,
+         "at": 0.0313
+        },
+        {
+         "color": "#fddec0",
+         "opacity": 1,
+         "at": 0.0391
+        },
+        {
+         "color": "#fedbba",
+         "opacity": 1,
+         "at": 0.046900000000000004
+        },
+        {
+         "color": "#fed9b5",
+         "opacity": 1,
+         "at": 0.0547
+        },
+        {
+         "color": "#fed6af",
+         "opacity": 1,
+         "at": 0.0625
+        },
+        {
+         "color": "#ffd4aa",
+         "opacity": 1,
+         "at": 0.0703
+        },
+        {
+         "color": "#ffd2a5",
+         "opacity": 1,
+         "at": 0.0781
+        },
+        {
+         "color": "#ffce9f",
+         "opacity": 1,
+         "at": 0.0859
+        },
+        {
+         "color": "#ffca99",
+         "opacity": 1,
+         "at": 0.09380000000000001
+        },
+        {
+         "color": "#ffc693",
+         "opacity": 1,
+         "at": 0.1016
+        },
+        {
+         "color": "#ffc38d",
+         "opacity": 1,
+         "at": 0.1094
+        },
+        {
+         "color": "#ffbf87",
+         "opacity": 1,
+         "at": 0.11720000000000001
+        },
+        {
+         "color": "#ffbc81",
+         "opacity": 1,
+         "at": 0.125
+        },
+        {
+         "color": "#ffb87c",
+         "opacity": 1,
+         "at": 0.1328
+        },
+        {
+         "color": "#ffb576",
+         "opacity": 1,
+         "at": 0.1406
+        },
+        {
+         "color": "#ffb271",
+         "opacity": 1,
+         "at": 0.1484
+        },
+        {
+         "color": "#ffae6b",
+         "opacity": 1,
+         "at": 0.1563
+        },
+        {
+         "color": "#ffab66",
+         "opacity": 1,
+         "at": 0.1641
+        },
+        {
+         "color": "#ffa861",
+         "opacity": 1,
+         "at": 0.17190000000000003
+        },
+        {
+         "color": "#ffa55c",
+         "opacity": 1,
+         "at": 0.1797
+        },
+        {
+         "color": "#ffa257",
+         "opacity": 1,
+         "at": 0.1875
+        },
+        {
+         "color": "#ff9f52",
+         "opacity": 1,
+         "at": 0.1953
+        },
+        {
+         "color": "#ff9c4d",
+         "opacity": 1,
+         "at": 0.20309999999999997
+        },
+        {
+         "color": "#ff9949",
+         "opacity": 1,
+         "at": 0.2109
+        },
+        {
+         "color": "#fd9647",
+         "opacity": 1,
+         "at": 0.2188
+        },
+        {
+         "color": "#fc9344",
+         "opacity": 1,
+         "at": 0.2266
+        },
+        {
+         "color": "#fb9142",
+         "opacity": 1,
+         "at": 0.23440000000000003
+        },
+        {
+         "color": "#fa8e40",
+         "opacity": 1,
+         "at": 0.2422
+        },
+        {
+         "color": "#f98b3d",
+         "opacity": 1,
+         "at": 0.25
+        },
+        {
+         "color": "#f8893b",
+         "opacity": 1,
+         "at": 0.25780000000000003
+        },
+        {
+         "color": "#f68639",
+         "opacity": 1,
+         "at": 0.2656
+        },
+        {
+         "color": "#f58337",
+         "opacity": 1,
+         "at": 0.2734
+        },
+        {
+         "color": "#f48134",
+         "opacity": 1,
+         "at": 0.2813
+        },
+        {
+         "color": "#f37e32",
+         "opacity": 1,
+         "at": 0.2891
+        },
+        {
+         "color": "#f27c30",
+         "opacity": 1,
+         "at": 0.2969
+        },
+        {
+         "color": "#f1792e",
+         "opacity": 1,
+         "at": 0.30469999999999997
+        },
+        {
+         "color": "#f0762c",
+         "opacity": 1,
+         "at": 0.3125
+        },
+        {
+         "color": "#ef742a",
+         "opacity": 1,
+         "at": 0.32030000000000003
+        },
+        {
+         "color": "#ee7127",
+         "opacity": 1,
+         "at": 0.3281
+        },
+        {
+         "color": "#ed6f25",
+         "opacity": 1,
+         "at": 0.33590000000000003
+        },
+        {
+         "color": "#ec6d23",
+         "opacity": 1,
+         "at": 0.34380000000000005
+        },
+        {
+         "color": "#eb6a21",
+         "opacity": 1,
+         "at": 0.35159999999999997
+        },
+        {
+         "color": "#ea681f",
+         "opacity": 1,
+         "at": 0.3594
+        },
+        {
+         "color": "#e9651d",
+         "opacity": 1,
+         "at": 0.36719999999999997
+        },
+        {
+         "color": "#e7631c",
+         "opacity": 1,
+         "at": 0.375
+        },
+        {
+         "color": "#e5611c",
+         "opacity": 1,
+         "at": 0.38280000000000003
+        },
+        {
+         "color": "#e35e1c",
+         "opacity": 1,
+         "at": 0.3906
+        },
+        {
+         "color": "#e15c1c",
+         "opacity": 1,
+         "at": 0.39840000000000003
+        },
+        {
+         "color": "#df5a1c",
+         "opacity": 1,
+         "at": 0.40630000000000005
+        },
+        {
+         "color": "#dd581c",
+         "opacity": 1,
+         "at": 0.41409999999999997
+        },
+        {
+         "color": "#db551c",
+         "opacity": 1,
+         "at": 0.4219
+        },
+        {
+         "color": "#d9531c",
+         "opacity": 1,
+         "at": 0.42969999999999997
+        },
+        {
+         "color": "#d7511c",
+         "opacity": 1,
+         "at": 0.4375
+        },
+        {
+         "color": "#d54f1c",
+         "opacity": 1,
+         "at": 0.44530000000000003
+        },
+        {
+         "color": "#d34d1c",
+         "opacity": 1,
+         "at": 0.4531
+        },
+        {
+         "color": "#d14b1c",
+         "opacity": 1,
+         "at": 0.46090000000000003
+        },
+        {
+         "color": "#cf481c",
+         "opacity": 1,
+         "at": 0.46880000000000005
+        },
+        {
+         "color": "#cd461c",
+         "opacity": 1,
+         "at": 0.47659999999999997
+        },
+        {
+         "color": "#cb441c",
+         "opacity": 1,
+         "at": 0.4844
+        },
+        {
+         "color": "#c9421c",
+         "opacity": 1,
+         "at": 0.49219999999999997
+        },
+        {
+         "color": "#c7401c",
+         "opacity": 1,
+         "at": 0.5
+        },
+        {
+         "color": "#c53e1c",
+         "opacity": 1,
+         "at": 0.5078
+        },
+        {
+         "color": "#c33c1c",
+         "opacity": 1,
+         "at": 0.5156000000000001
+        },
+        {
+         "color": "#c13a1c",
+         "opacity": 1,
+         "at": 0.5234000000000001
+        },
+        {
+         "color": "#bf381c",
+         "opacity": 1,
+         "at": 0.5313
+        },
+        {
+         "color": "#bd361c",
+         "opacity": 1,
+         "at": 0.5390999999999999
+        },
+        {
+         "color": "#bb341c",
+         "opacity": 1,
+         "at": 0.5468999999999999
+        },
+        {
+         "color": "#b9311c",
+         "opacity": 1,
+         "at": 0.5547
+        },
+        {
+         "color": "#b7301c",
+         "opacity": 1,
+         "at": 0.5625
+        },
+        {
+         "color": "#b42f1c",
+         "opacity": 1,
+         "at": 0.5703
+        },
+        {
+         "color": "#b22d1c",
+         "opacity": 1,
+         "at": 0.5781000000000001
+        },
+        {
+         "color": "#af2c1d",
+         "opacity": 1,
+         "at": 0.5859000000000001
+        },
+        {
+         "color": "#ac2b1d",
+         "opacity": 1,
+         "at": 0.5938
+        },
+        {
+         "color": "#a92a1d",
+         "opacity": 1,
+         "at": 0.6015999999999999
+        },
+        {
+         "color": "#a6291d",
+         "opacity": 1,
+         "at": 0.6093999999999999
+        },
+        {
+         "color": "#a4281d",
+         "opacity": 1,
+         "at": 0.6172
+        },
+        {
+         "color": "#a1261d",
+         "opacity": 1,
+         "at": 0.625
+        },
+        {
+         "color": "#9e251d",
+         "opacity": 1,
+         "at": 0.6328
+        },
+        {
+         "color": "#9b241e",
+         "opacity": 1,
+         "at": 0.6406000000000001
+        },
+        {
+         "color": "#99231e",
+         "opacity": 1,
+         "at": 0.6484000000000001
+        },
+        {
+         "color": "#96221e",
+         "opacity": 1,
+         "at": 0.6563
+        },
+        {
+         "color": "#93211e",
+         "opacity": 1,
+         "at": 0.6640999999999999
+        },
+        {
+         "color": "#90201e",
+         "opacity": 1,
+         "at": 0.6718999999999999
+        },
+        {
+         "color": "#8e1f1e",
+         "opacity": 1,
+         "at": 0.6797
+        },
+        {
+         "color": "#8b1e1e",
+         "opacity": 1,
+         "at": 0.6875
+        },
+        {
+         "color": "#881c1f",
+         "opacity": 1,
+         "at": 0.6953
+        },
+        {
+         "color": "#861b1f",
+         "opacity": 1,
+         "at": 0.7031000000000001
+        },
+        {
+         "color": "#831a1f",
+         "opacity": 1,
+         "at": 0.7109000000000001
+        },
+        {
+         "color": "#80191f",
+         "opacity": 1,
+         "at": 0.7188
+        },
+        {
+         "color": "#7e181f",
+         "opacity": 1,
+         "at": 0.7265999999999999
+        },
+        {
+         "color": "#7b171f",
+         "opacity": 1,
+         "at": 0.7343999999999999
+        },
+        {
+         "color": "#79161f",
+         "opacity": 1,
+         "at": 0.7422
+        },
+        {
+         "color": "#761520",
+         "opacity": 1,
+         "at": 0.75
+        },
+        {
+         "color": "#731420",
+         "opacity": 1,
+         "at": 0.7578
+        },
+        {
+         "color": "#711320",
+         "opacity": 1,
+         "at": 0.7656000000000001
+        },
+        {
+         "color": "#6e1220",
+         "opacity": 1,
+         "at": 0.7734000000000001
+        },
+        {
+         "color": "#6c121f",
+         "opacity": 1,
+         "at": 0.7813
+        },
+        {
+         "color": "#69111f",
+         "opacity": 1,
+         "at": 0.7890999999999999
+        },
+        {
+         "color": "#67111e",
+         "opacity": 1,
+         "at": 0.7968999999999999
+        },
+        {
+         "color": "#64101e",
+         "opacity": 1,
+         "at": 0.8047
+        },
+        {
+         "color": "#62101d",
+         "opacity": 1,
+         "at": 0.8125
+        },
+        {
+         "color": "#60101c",
+         "opacity": 1,
+         "at": 0.8203
+        },
+        {
+         "color": "#5d0f1c",
+         "opacity": 1,
+         "at": 0.8281000000000001
+        },
+        {
+         "color": "#5b0f1b",
+         "opacity": 1,
+         "at": 0.8359000000000001
+        },
+        {
+         "color": "#580f1b",
+         "opacity": 1,
+         "at": 0.8438
+        },
+        {
+         "color": "#560e1a",
+         "opacity": 1,
+         "at": 0.8515999999999999
+        },
+        {
+         "color": "#540e1a",
+         "opacity": 1,
+         "at": 0.8593999999999999
+        },
+        {
+         "color": "#510e19",
+         "opacity": 1,
+         "at": 0.8672
+        },
+        {
+         "color": "#4f0d19",
+         "opacity": 1,
+         "at": 0.875
+        },
+        {
+         "color": "#4d0d18",
+         "opacity": 1,
+         "at": 0.8828
+        },
+        {
+         "color": "#4a0d17",
+         "opacity": 1,
+         "at": 0.8906000000000001
+        },
+        {
+         "color": "#480c17",
+         "opacity": 1,
+         "at": 0.8984000000000001
+        },
+        {
+         "color": "#460c16",
+         "opacity": 1,
+         "at": 0.9063
+        },
+        {
+         "color": "#430c16",
+         "opacity": 1,
+         "at": 0.9140999999999999
+        },
+        {
+         "color": "#410b15",
+         "opacity": 1,
+         "at": 0.9218999999999999
+        },
+        {
+         "color": "#3f0b15",
+         "opacity": 1,
+         "at": 0.9297
+        },
+        {
+         "color": "#3c0b14",
+         "opacity": 1,
+         "at": 0.9375
+        },
+        {
+         "color": "#3a0a14",
+         "opacity": 1,
+         "at": 0.9453
+        },
+        {
+         "color": "#380a13",
+         "opacity": 1,
+         "at": 0.9531000000000001
+        },
+        {
+         "color": "#350a13",
+         "opacity": 1,
+         "at": 0.9609000000000001
+        },
+        {
+         "color": "#330912",
+         "opacity": 1,
+         "at": 0.9688
+        },
+        {
+         "color": "#310912",
+         "opacity": 1,
+         "at": 0.9765999999999999
+        },
+        {
+         "color": "#2f0911",
+         "opacity": 1,
+         "at": 0.9843999999999999
+        },
+        {
+         "color": "#2c0811",
+         "opacity": 1,
+         "at": 0.9922
+        },
+        {
+         "color": "#2a0810",
+         "opacity": 1,
+         "at": 1
+        }
+       ],
+       "labels": [
+        "0 ft",
+        "128 ft",
+        "256 ft \u00b7 fitted"
+       ]
+      },
+      {
+       "kind": "slider",
+       "ref": "#terOp",
+       "title": "Terrain opacity",
+       "disabled": false,
+       "value": 100,
+       "min": 0,
+       "max": 100,
+       "step": 1,
+       "display": "100%"
+      }
+     ]
+    },
+    {
+     "kind": "group",
+     "ref": "terrain:custom",
+     "title": "Customize terrain",
+     "items": [
+      {
+       "kind": "disclosure",
+       "ref": "terrain:appearance",
+       "title": "Color & contrast",
+       "items": [
+        {
+         "kind": "slider",
+         "ref": "#terBrightness",
+         "title": "Brightness",
+         "disabled": false,
+         "value": 100,
+         "min": 75,
+         "max": 150,
+         "step": 1,
+         "display": "100%"
+        },
+        {
+         "kind": "slider",
+         "ref": "#terContrast",
+         "title": "Contrast",
+         "disabled": false,
+         "value": 100,
+         "min": 60,
+         "max": 180,
+         "step": 1,
+         "display": "100%"
+        },
+        {
+         "kind": "slider",
+         "ref": "#terSaturation",
+         "title": "Color intensity",
+         "disabled": false,
+         "value": 100,
+         "min": 0,
+         "max": 180,
+         "step": 1,
+         "display": "100%"
+        },
+        {
+         "kind": "button",
+         "ref": "#terLookReset",
+         "title": "Reset appearance",
+         "disabled": false,
+         "role": "action"
+        }
+       ]
+      },
+      {
+       "kind": "disclosure",
+       "ref": "terrain:lighting",
+       "title": "Lighting & 3D relief",
+       "items": [
+        {
+         "kind": "sun",
+         "ref": "#terSunAz",
+         "title": "Sun",
+         "azimuth": {
+          "kind": "slider",
+          "ref": "#terSunAz",
+          "title": "Azimuth",
+          "disabled": false,
+          "value": 315,
+          "min": 0,
+          "max": 359,
+          "step": 1,
+          "accessibility": "315 degrees NW",
+          "display": "315\u00b0"
+         },
+         "altitude": {
+          "kind": "slider",
+          "ref": "#terSunAlt",
+          "title": "Altitude",
+          "disabled": false,
+          "value": 45,
+          "min": 5,
+          "max": 90,
+          "step": 1,
+          "accessibility": "45 degrees, mid sun",
+          "display": "45\u00b0"
+         }
+        },
+        {
+         "kind": "slider",
+         "ref": "#terAmbient",
+         "title": "Shadow fill",
+         "disabled": false,
+         "value": 12,
+         "min": 0,
+         "max": 60,
+         "step": 1,
+         "display": "12%"
+        },
+        {
+         "kind": "slider",
+         "ref": "#terExaggeration",
+         "title": "3D relief",
+         "disabled": false,
+         "value": 125,
+         "min": 25,
+         "max": 400,
+         "step": 5,
+         "display": "1.25\u00d7"
+        },
+        {
+         "kind": "button",
+         "ref": "#terLightReset",
+         "title": "Reset lighting",
+         "disabled": false,
+         "role": "action"
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "kind": "group",
+     "ref": "terrain:data",
+     "title": "Data & downloads",
+     "items": [
+      {
+       "kind": "disclosure",
+       "ref": "terrain:downloads",
+       "title": "Terrain downloads",
+       "detail": "Source preference, offline areas and Washington LiDAR",
+       "items": [
+        {
+         "kind": "picker",
+         "ref": "#terSrc",
+         "title": "Preferred terrain source",
+         "disabled": false,
+         "value": "auto",
+         "options": [
+          {
+           "value": "auto",
+           "title": "Best available"
+          },
+          {
+           "value": "3dep",
+           "title": "USGS 3DEP (national)"
+          },
+          {
+           "value": "usgs1m",
+           "title": "USGS 3.3 ft (offline-capable)"
+          }
+         ]
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "kind": "group",
+     "ref": "terrain:sources",
+     "title": "About this terrain",
+     "items": [
+      {
+       "kind": "disclosure",
+       "ref": "terrain:provenance",
+       "title": "Sources & scale",
+       "detail": "Rendered data, survey details and resolution",
+       "items": [
+        {
+         "kind": "text",
+         "ref": "#terrainSourceSummary",
+         "title": "Currently displayed in 2DUSGS 3DEP elevation \u00b7 100% of rendered terrain pixelsNative: Provider mosaic varies; 3.3 ft where available \u00b7 displayed sampling: sampling not reportedPercentages describe the current loaded tile samples, not survey footprint area. USGS 3DEP mixes resolutions; a 3.3 ft service capability does not mean every location has 3.3 ft data. Zooming past a source\u2019s detail does not create new information.",
+         "markdown": "**Currently displayed in 2D**\n\n[USGS 3DEP elevation](https://elevation.nationalmap.gov/arcgis/rest/services/3DEPElevation/ImageServer) \u00b7 100% of rendered terrain pixels\nNative: Provider mosaic varies; 3.3 ft where available \u00b7 displayed sampling: sampling not reported\n\nPercentages describe the current loaded tile samples, not survey footprint area. USGS 3DEP mixes resolutions; a 3.3 ft service capability does not mean every location has 3.3 ft data. Zooming past a source\u2019s detail does not create new information.",
+         "style": "body"
+        },
+        {
+         "kind": "button",
+         "ref": "#terrainInspectSource",
+         "title": "Inspect USGS survey at map center",
+         "disabled": false,
+         "role": "action"
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "kind": "group",
+     "ref": "terrain:reset",
+     "title": "Reset",
+     "items": [
+      {
+       "kind": "button",
+       "ref": "#terReset",
+       "title": "Reset all terrain settings",
+       "disabled": false,
+       "role": "link"
+      }
+     ]
+    }
+   ]
+  },
+  "elevation": {
+   "route": "elevation",
+   "title": "Elevation colors",
+   "description": "Color heights and highlight elevation ranges",
+   "items": [
+    {
+     "kind": "group",
+     "ref": "#elevSpectrumSection",
+     "title": "Color by elevation",
+     "items": []
+    },
+    {
+     "kind": "group",
+     "ref": "#elevBandsSection",
+     "title": "Highlight elevations",
+     "items": []
+    },
+    {
+     "kind": "group",
+     "ref": "#elevUnitsDisclosure",
+     "title": "Unitsfeet",
+     "open": true,
+     "items": [
+      {
+       "kind": "picker",
+       "ref": "#elevUnit",
+       "title": "Units",
+       "disabled": false,
+       "value": "ft",
+       "options": [
+        {
+         "value": "ft",
+         "title": "feet"
+        },
+        {
+         "value": "m",
+         "title": "metres"
+        }
+       ]
+      }
+     ]
+    }
+   ]
+  },
+  "analyze": {
+   "route": "analyze",
+   "title": "Terrain analysis",
+   "description": "Measure and reveal landform patterns",
+   "items": [
+    {
+     "kind": "header",
+     "title": "Landform fabric"
+    },
+    {
+     "kind": "picker",
+     "ref": "#fabBand",
+     "title": "Landform spacing",
+     "hint": "Which wavelength band to isolate. Narrower bands separate fine lineation from ordinary ridge-and-valley grain.",
+     "disabled": false,
+     "value": "50,300",
+     "options": [
+      {
+       "value": "20,120",
+       "title": "65\u2013400 ft"
+      },
+      {
+       "value": "50,300",
+       "title": "165\u20131,000 ft"
+      },
+      {
+       "value": "150,800",
+       "title": "500\u20132,600 ft"
+      }
+     ]
+    },
+    {
+     "kind": "button",
+     "ref": "#fabRun",
+     "title": "Measure landform fabric",
+     "disabled": false,
+     "role": "action"
+    },
+    {
+     "kind": "button",
+     "ref": "@n118",
+     "title": "Choose an analysis",
+     "disabled": false,
+     "expanded": false
+    },
+    {
+     "kind": "toggle",
+     "ref": "#researchLive",
+     "title": "Update as the map moves",
+     "disabled": false,
+     "value": true
+    },
+    {
+     "kind": "button",
+     "ref": "#researchReset",
+     "title": "Reset analysis",
+     "disabled": false,
+     "role": "link"
+    }
+   ]
+  },
+  "markup": {
+   "route": "markup",
+   "title": "Draw & annotate",
+   "description": "Add drawings, labels and notes",
+   "items": [
+    {
+     "kind": "header",
+     "title": "Markup layers"
+    },
+    {
+     "kind": "button",
+     "ref": "@n119",
+     "title": "New markup layer \u00b7 2D & 3D",
+     "disabled": false
+    }
+   ]
+  },
+  "export": {
+   "route": "export",
+   "title": "Export image",
+   "description": "Save the map view or a selected area",
+   "items": [
+    {
+     "kind": "group",
+     "ref": "export:settings",
+     "title": "Image settings",
+     "items": [
+      {
+       "kind": "picker",
+       "ref": "#snapshotScale",
+       "title": "Resolution",
+       "disabled": false,
+       "value": "2",
+       "options": [
+        {
+         "value": "1",
+         "title": "1\u00d7"
+        },
+        {
+         "value": "2",
+         "title": "2\u00d7"
+        },
+        {
+         "value": "4",
+         "title": "4\u00d7"
+        },
+        {
+         "value": "8",
+         "title": "8\u00d7"
+        },
+        {
+         "value": "16",
+         "title": "16\u00d7"
+        },
+        {
+         "value": "32",
+         "title": "32\u00d7"
+        }
+       ]
+      },
+      {
+       "kind": "text",
+       "style": "status",
+       "title": "The whole view at 2\u00d7 is 880 \u00d7 1,912 px (1.7 MP, 161 ft/px)."
+      },
+      {
+       "kind": "toggle",
+       "ref": "#snapshotReadout",
+       "title": "Include map info",
+       "detail": "Coordinates, elevation and color keys",
+       "disabled": false,
+       "value": false
+      }
+     ]
+    },
+    {
+     "kind": "text",
+     "style": "hint",
+     "title": "Higher resolutions request finer source tiles where available. Enlarging a source adds no new detail."
+    },
+    {
+     "kind": "actions",
+     "items": [
+      {
+       "kind": "button",
+       "ref": "#snapshotSelect",
+       "title": "Select area",
+       "detail": "Draw a rectangle on the map to save.",
+       "disabled": false,
+       "icon": "scan",
+       "role": "action"
+      },
+      {
+       "kind": "button",
+       "ref": "#snapshotCapture",
+       "title": "Capture view",
+       "detail": "Save the whole map view.",
+       "disabled": false,
+       "icon": "camera",
+       "role": "primary"
+      }
+     ]
+    }
+   ]
+  },
+  "conditions": {
+   "route": "conditions",
+   "title": "Live conditions",
+   "description": "Weather, fire, snow and recent events",
+   "items": [
+    {
+     "kind": "group",
+     "ref": "@n126",
+     "pane": true,
+     "title": "Live conditions",
+     "open": true,
+     "items": [
+      {
+       "kind": "toggle",
+       "ref": "#alertNws",
+       "title": "NWS weather",
+       "disabled": false,
+       "value": false
+      },
+      {
+       "kind": "toggle",
+       "ref": "#alertQuakes",
+       "title": "USGS earthquakes",
+       "disabled": false,
+       "value": false
+      },
+      {
+       "kind": "toggle",
+       "ref": "#alertVolcanoes",
+       "title": "USGS volcanoes",
+       "disabled": false,
+       "value": false
+      },
+      {
+       "kind": "toggle",
+       "ref": "#alertFires",
+       "title": "Active fires",
+       "disabled": false,
+       "value": false
+      },
+      {
+       "kind": "toggle",
+       "ref": "#alertViewport",
+       "title": "Current view only",
+       "disabled": false,
+       "value": true
+      },
+      {
+       "kind": "picker",
+       "ref": "#alertNwsSeverity",
+       "title": "Weather level",
+       "disabled": false,
+       "value": "all",
+       "options": [
+        {
+         "value": "all",
+         "title": "All advisories"
+        },
+        {
+         "value": "watch",
+         "title": "Watches + warnings"
+        },
+        {
+         "value": "warning",
+         "title": "Warnings only"
+        }
+       ]
+      },
+      {
+       "kind": "toggle",
+       "ref": "@n120",
+       "title": "Storm & flood",
+       "disabled": false,
+       "value": true
+      },
+      {
+       "kind": "toggle",
+       "ref": "@n121",
+       "title": "Winter & avalanche",
+       "disabled": false,
+       "value": true
+      },
+      {
+       "kind": "toggle",
+       "ref": "@n122",
+       "title": "Fire & smoke",
+       "disabled": false,
+       "value": true
+      },
+      {
+       "kind": "toggle",
+       "ref": "@n123",
+       "title": "Coast & marine",
+       "disabled": false,
+       "value": true
+      },
+      {
+       "kind": "toggle",
+       "ref": "@n124",
+       "title": "Heat, cold & air",
+       "disabled": false,
+       "value": true
+      },
+      {
+       "kind": "toggle",
+       "ref": "@n125",
+       "title": "Other public alerts",
+       "disabled": false,
+       "value": true
+      },
+      {
+       "kind": "picker",
+       "ref": "#alertQuakeAge",
+       "title": "Earthquake age",
+       "disabled": false,
+       "value": "week",
+       "options": [
+        {
+         "value": "hour",
+         "title": "Past hour"
+        },
+        {
+         "value": "day",
+         "title": "Past day"
+        },
+        {
+         "value": "week",
+         "title": "Past 7 days"
+        },
+        {
+         "value": "month",
+         "title": "Past 30 days"
+        }
+       ]
+      },
+      {
+       "kind": "picker",
+       "ref": "#alertQuakeMag",
+       "title": "Minimum magnitude",
+       "disabled": false,
+       "value": "-1",
+       "options": [
+        {
+         "value": "-1",
+         "title": "All detected"
+        },
+        {
+         "value": "1",
+         "title": "M1+"
+        },
+        {
+         "value": "2.5",
+         "title": "M2.5+"
+        },
+        {
+         "value": "4",
+         "title": "M4+"
+        },
+        {
+         "value": "5.5",
+         "title": "M5.5+"
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "kind": "group",
+     "ref": "@n69",
+     "pane": true,
+     "title": "Conditions layers",
+     "open": true,
+     "items": [
+      {
+       "kind": "toggle",
+       "ref": "#ov_weatheralerts",
+       "title": "Active weather hazards",
+       "color": "#ff5b68",
+       "value": false
+      },
+      {
+       "kind": "toggle",
+       "ref": "#ov_earthquakes",
+       "title": "Earthquakes",
+       "color": "#ff8d5b",
+       "value": false
+      },
+      {
+       "kind": "toggle",
+       "ref": "#ov_volcanostatus",
+       "title": "Volcano status",
+       "color": "#f26b54",
+       "value": false
+      },
+      {
+       "kind": "toggle",
+       "ref": "#ov_snowdepth",
+       "title": "Snow depth",
+       "color": "#7fc4ff",
+       "value": false
+      },
+      {
+       "kind": "toggle",
+       "ref": "#ov_swe",
+       "title": "Snow water equivalent",
+       "color": "#4f8fd0",
+       "value": false
+      },
+      {
+       "kind": "toggle",
+       "ref": "#ov_snowcover",
+       "title": "Snow cover",
+       "color": "#cfe9ff",
+       "value": false
+      }
+     ]
+    },
+    {
+     "kind": "group",
+     "ref": "conditions:sources",
+     "title": "About these layers",
+     "items": [
+      {
+       "kind": "disclosure",
+       "ref": "conditions:provenance",
+       "title": "Sources & scale",
+       "items": [
+        {
+         "kind": "text",
+         "style": "row",
+         "title": "Active weather hazards",
+         "detail": "NOAA/NWS \u00b7 5 min"
+        },
+        {
+         "kind": "text",
+         "style": "row",
+         "title": "Earthquakes",
+         "detail": "USGS \u00b7 5 min"
+        },
+        {
+         "kind": "text",
+         "style": "row",
+         "title": "Volcano status",
+         "detail": "USGS VSC \u00b7 15 min"
+        },
+        {
+         "kind": "text",
+         "style": "row",
+         "title": "Snow depth",
+         "detail": "NOHRSC \u00b7 M2 cache"
+        },
+        {
+         "kind": "text",
+         "style": "row",
+         "title": "Snow water equivalent",
+         "detail": "NOHRSC \u00b7 M2 cache"
+        },
+        {
+         "kind": "text",
+         "style": "row",
+         "title": "Snow cover",
+         "detail": "NASA GIBS"
+        }
+       ]
+      }
+     ]
+    }
+   ]
+  },
+  "geology": {
+   "route": "geology",
+   "title": "Geology & hazards",
+   "description": "Explore geology, faults and landslides",
+   "items": [
+    {
+     "kind": "group",
+     "ref": "@n127",
+     "pane": true,
+     "title": "Identify geology",
+     "open": true,
+     "items": [
+      {
+       "kind": "button",
+       "ref": "#geologyIdentify",
+       "title": "Identify geology at map centre",
+       "disabled": false,
+       "role": "action"
+      }
+     ]
+    },
+    {
+     "kind": "group",
+     "ref": "@n69",
+     "pane": true,
+     "title": "Geology layers",
+     "open": true,
+     "items": [
+      {
+       "kind": "toggle",
+       "ref": "#ov_geology",
+       "title": "Surface geology",
+       "color": "#c98f6a",
+       "value": false
+      },
+      {
+       "kind": "toggle",
+       "ref": "#ov_sgmc",
+       "title": "State geologic map",
+       "color": "#b06a5a",
+       "value": false
+      },
+      {
+       "kind": "toggle",
+       "ref": "#ov_wageology",
+       "title": "WA surface geology",
+       "color": "#c69b67",
+       "value": false
+      },
+      {
+       "kind": "toggle",
+       "ref": "#ov_wafaults",
+       "title": "WA active faults",
+       "color": "#f05a54",
+       "value": false
+      },
+      {
+       "kind": "toggle",
+       "ref": "#ov_wavents",
+       "title": "WA volcanic vents",
+       "color": "#f28c45",
+       "value": false
+      },
+      {
+       "kind": "toggle",
+       "ref": "#ov_usfaults",
+       "title": "US faults & folds",
+       "color": "#ff5b57",
+       "value": false
+      },
+      {
+       "kind": "toggle",
+       "ref": "#ov_landslide",
+       "title": "Landslide susceptibility",
+       "color": "#b78a55",
+       "value": false
+      },
+      {
+       "kind": "toggle",
+       "ref": "#ov_plateboundaries",
+       "title": "Plate boundaries",
+       "color": "#bb7cff",
+       "value": false
+      },
+      {
+       "kind": "toggle",
+       "ref": "#ov_vs30",
+       "title": "Vs30 site conditions",
+       "color": "#65a8dd",
+       "value": false
+      }
+     ]
+    },
+    {
+     "kind": "group",
+     "ref": "geology:sources",
+     "title": "About these layers",
+     "items": [
+      {
+       "kind": "disclosure",
+       "ref": "geology:provenance",
+       "title": "Sources & scale",
+       "items": [
+        {
+         "kind": "text",
+         "style": "row",
+         "title": "Surface geology",
+         "detail": "Macrostrat"
+        },
+        {
+         "kind": "text",
+         "style": "row",
+         "title": "State geologic map",
+         "detail": "USGS"
+        },
+        {
+         "kind": "text",
+         "style": "row",
+         "title": "WA surface geology",
+         "detail": "WGS \u00b7 DS-18"
+        },
+        {
+         "kind": "text",
+         "style": "row",
+         "title": "WA active faults",
+         "detail": "WGS \u00b7 DDS-1"
+        },
+        {
+         "kind": "text",
+         "style": "row",
+         "title": "WA volcanic vents",
+         "detail": "WGS"
+        },
+        {
+         "kind": "text",
+         "style": "row",
+         "title": "US faults & folds",
+         "detail": "USGS"
+        },
+        {
+         "kind": "text",
+         "style": "row",
+         "title": "Landslide susceptibility",
+         "detail": "USGS"
+        },
+        {
+         "kind": "text",
+         "style": "row",
+         "title": "Plate boundaries",
+         "detail": "USGS"
+        },
+        {
+         "kind": "text",
+         "style": "row",
+         "title": "Vs30 site conditions",
+         "detail": "USGS"
+        }
+       ]
+      }
+     ]
+    }
+   ]
+  },
+  "past": {
+   "route": "past",
+   "title": "Past landscapes",
+   "description": "Explore ice-age and historical landscapes",
+   "items": [
+    {
+     "kind": "group",
+     "ref": "@n69",
+     "pane": true,
+     "title": "Past landscape layers",
+     "open": true,
+     "items": [
+      {
+       "kind": "toggle",
+       "ref": "#ov_waice",
+       "title": "Continental ice limits",
+       "color": "#7ed9ee",
+       "value": false
+      },
+      {
+       "kind": "toggle",
+       "ref": "#ov_waflood",
+       "title": "Ice Age flood extent",
+       "color": "#35bdd5",
+       "value": false
+      },
+      {
+       "kind": "toggle",
+       "ref": "#ov_paleolakes",
+       "title": "Pleistocene lakes",
+       "color": "#6aaeff",
+       "value": false
+      },
+      {
+       "kind": "toggle",
+       "ref": "#ov_nadi1ice",
+       "title": "Cordilleran ice by age",
+       "color": "#cfeefa",
+       "value": false
+      },
+      {
+       "kind": "toggle",
+       "ref": "#ov_waarchaeology",
+       "title": "WA archaeology index",
+       "color": "#d6a6ff",
+       "value": false
+      }
+     ]
+    },
+    {
+     "kind": "group",
+     "ref": "past:sources",
+     "title": "About these layers",
+     "items": [
+      {
+       "kind": "disclosure",
+       "ref": "past:provenance",
+       "title": "Sources & scale",
+       "items": [
+        {
+         "kind": "text",
+         "style": "row",
+         "title": "Continental ice limits",
+         "detail": "WGS \u00b7 1:250k"
+        },
+        {
+         "kind": "text",
+         "style": "row",
+         "title": "Ice Age flood extent",
+         "detail": "WGS"
+        },
+        {
+         "kind": "text",
+         "style": "row",
+         "title": "Pleistocene lakes",
+         "detail": "EWU \u00b7 IAFI"
+        },
+        {
+         "kind": "text",
+         "style": "row",
+         "title": "Cordilleran ice by age",
+         "detail": "NADI-1 \u00b7 25\u201310.5 ka"
+        },
+        {
+         "kind": "text",
+         "style": "row",
+         "title": "WA archaeology index",
+         "detail": "agency + academic"
+        }
+       ]
+      }
+     ]
+    }
+   ]
+  },
+  "labels": {
+   "route": "labels",
+   "title": "Labels & reference",
+   "description": "Add roads, places and boundaries",
+   "items": [
+    {
+     "kind": "group",
+     "ref": "@n69",
+     "pane": true,
+     "title": "Reference layers",
+     "detail": "1 on",
+     "open": true,
+     "items": [
+      {
+       "kind": "toggle",
+       "ref": "#ov_roads",
+       "title": "Roads & streets",
+       "color": "#e0a060",
+       "value": false
+      },
+      {
+       "kind": "toggle",
+       "ref": "#ov_trails",
+       "title": "Trails & paths",
+       "color": "#d2691e",
+       "value": false
+      },
+      {
+       "kind": "toggle",
+       "ref": "#ov_places",
+       "title": "Cities & boundaries",
+       "color": "#9fb4d0",
+       "value": false
+      },
+      {
+       "kind": "toggle",
+       "ref": "#ov_labels",
+       "title": "Place labels",
+       "color": "#d8dee8",
+       "value": false
+      },
+      {
+       "kind": "toggle",
+       "ref": "#ov_water",
+       "title": "Rivers & lakes",
+       "color": "#5aa9e6",
+       "value": true
+      },
+      {
+       "kind": "slider",
+       "ref": "#ovOpacity_water",
+       "title": "Opacity",
+       "disabled": false,
+       "value": 10,
+       "min": 0,
+       "max": 100,
+       "step": 1,
+       "display": "10%"
+      },
+      {
+       "kind": "toggle",
+       "ref": "#ov_peaks",
+       "title": "Peaks & landforms",
+       "color": "#c9a227",
+       "value": false
+      },
+      {
+       "kind": "toggle",
+       "ref": "#ov_gnames",
+       "title": "Named places",
+       "color": "#b0894f",
+       "value": false
+      }
+     ]
+    },
+    {
+     "kind": "group",
+     "ref": "labels:sources",
+     "title": "About these layers",
+     "items": [
+      {
+       "kind": "disclosure",
+       "ref": "labels:provenance",
+       "title": "Sources & scale",
+       "items": [
+        {
+         "kind": "text",
+         "style": "row",
+         "title": "Roads & streets",
+         "detail": "Esri"
+        },
+        {
+         "kind": "text",
+         "style": "row",
+         "title": "Trails & paths",
+         "detail": "USGS"
+        },
+        {
+         "kind": "text",
+         "style": "row",
+         "title": "Cities & boundaries",
+         "detail": "Esri"
+        },
+        {
+         "kind": "text",
+         "style": "row",
+         "title": "Place labels",
+         "detail": "Esri"
+        },
+        {
+         "kind": "text",
+         "style": "row",
+         "title": "Rivers & lakes",
+         "detail": "USGS NHD"
+        },
+        {
+         "kind": "text",
+         "style": "row",
+         "title": "Peaks & landforms",
+         "detail": "USGS GNIS"
+        },
+        {
+         "kind": "text",
+         "style": "row",
+         "title": "Named places",
+         "detail": "USGS GNIS"
+        }
+       ]
+      }
+     ]
+    }
+   ]
+  },
+  "appearance": {
+   "route": "appearance",
+   "title": "App appearance",
+   "description": "Choose the app theme, text and colors",
+   "items": [
+    {
+     "kind": "group",
+     "ref": "@n134",
+     "title": "Theme presets",
+     "items": [
+      {
+       "kind": "segmented",
+       "ref": "@n128",
+       "title": "Theme preset",
+       "options": [
+        {
+         "ref": "@n129",
+         "title": "Meadow",
+         "selected": true
+        },
+        {
+         "ref": "@n130",
+         "title": "Ocean",
+         "selected": false
+        },
+        {
+         "ref": "@n131",
+         "title": "Sunset",
+         "selected": false
+        },
+        {
+         "ref": "@n132",
+         "title": "Berry",
+         "selected": false
+        },
+        {
+         "ref": "@n133",
+         "title": "Graphite",
+         "selected": false
+        }
+       ],
+       "detail": "Sets the colors below together. Change any one and it becomes Custom."
+      }
+     ]
+    },
+    {
+     "kind": "group",
+     "ref": "@n167",
+     "title": "Controls",
+     "items": [
+      {
+       "kind": "swatches",
+       "ref": "@n135",
+       "title": "Toggle & slider color",
+       "options": [
+        {
+         "ref": "@n136",
+         "title": "Green",
+         "color": "#4cd964",
+         "selected": true
+        },
+        {
+         "ref": "@n137",
+         "title": "Mint",
+         "color": "#00c7be",
+         "selected": false
+        },
+        {
+         "ref": "@n138",
+         "title": "Teal",
+         "color": "#30b0c7",
+         "selected": false
+        },
+        {
+         "ref": "@n139",
+         "title": "Blue",
+         "color": "#0a84ff",
+         "selected": false
+        },
+        {
+         "ref": "@n140",
+         "title": "Indigo",
+         "color": "#5e5ce6",
+         "selected": false
+        },
+        {
+         "ref": "@n141",
+         "title": "Purple",
+         "color": "#bf5af2",
+         "selected": false
+        },
+        {
+         "ref": "@n142",
+         "title": "Pink",
+         "color": "#ff375f",
+         "selected": false
+        },
+        {
+         "ref": "@n143",
+         "title": "Red",
+         "color": "#ff453a",
+         "selected": false
+        },
+        {
+         "ref": "@n144",
+         "title": "Orange",
+         "color": "#ff9f0a",
+         "selected": false
+        },
+        {
+         "ref": "@n145",
+         "title": "Yellow",
+         "color": "#ffd60a",
+         "selected": false
+        }
+       ],
+       "custom": {
+        "ref": "@n146",
+        "value": "#4cd964",
+        "title": "Custom Toggle & slider color"
+       },
+       "detail": "Fills every switch knob and the filled part of a slider when it is on."
+      },
+      {
+       "kind": "segmented",
+       "ref": "@n147",
+       "title": "Slider track color",
+       "options": [
+        {
+         "ref": "@n148",
+         "title": "Auto",
+         "selected": true
+        },
+        {
+         "ref": "@n149",
+         "title": "Light grey",
+         "selected": false
+        },
+        {
+         "ref": "@n150",
+         "title": "Grey",
+         "selected": false
+        },
+        {
+         "ref": "@n151",
+         "title": "Charcoal",
+         "selected": false
+        },
+        {
+         "ref": "@n152",
+         "title": "Black",
+         "selected": false
+        },
+        {
+         "ref": "@n153",
+         "title": "White",
+         "selected": false
+        }
+       ],
+       "detail": "The part of the slider bar after the thumb. Auto follows light and dark mode."
+      },
+      {
+       "kind": "color",
+       "ref": "@n154",
+       "title": "Custom Slider track color",
+       "disabled": false,
+       "value": "#000000"
+      },
+      {
+       "kind": "swatches",
+       "ref": "@n155",
+       "title": "Button color",
+       "options": [
+        {
+         "ref": "@n156",
+         "title": "Green",
+         "color": "#4cd964",
+         "selected": false
+        },
+        {
+         "ref": "@n157",
+         "title": "Mint",
+         "color": "#00c7be",
+         "selected": false
+        },
+        {
+         "ref": "@n158",
+         "title": "Teal",
+         "color": "#30b0c7",
+         "selected": false
+        },
+        {
+         "ref": "@n159",
+         "title": "Blue",
+         "color": "#0a84ff",
+         "selected": false
+        },
+        {
+         "ref": "@n160",
+         "title": "Indigo",
+         "color": "#5e5ce6",
+         "selected": false
+        },
+        {
+         "ref": "@n161",
+         "title": "Purple",
+         "color": "#bf5af2",
+         "selected": false
+        },
+        {
+         "ref": "@n162",
+         "title": "Pink",
+         "color": "#ff375f",
+         "selected": false
+        },
+        {
+         "ref": "@n163",
+         "title": "Red",
+         "color": "#ff453a",
+         "selected": false
+        },
+        {
+         "ref": "@n164",
+         "title": "Orange",
+         "color": "#ff9f0a",
+         "selected": false
+        },
+        {
+         "ref": "@n165",
+         "title": "Yellow",
+         "color": "#ffd60a",
+         "selected": false
+        }
+       ],
+       "custom": {
+        "ref": "@n166",
+        "value": "#007aff",
+        "title": "Custom Button color"
+       },
+       "detail": "Coloured buttons, like Capture in the camera pop-up, and links."
+      }
+     ]
+    },
+    {
+     "kind": "group",
+     "ref": "@n175",
+     "title": "Text",
+     "items": [
+      {
+       "kind": "picker",
+       "ref": "@n168",
+       "title": "Font",
+       "detail": "The typeface for menus and panels. Map labels keep their own.",
+       "disabled": false,
+       "value": "system",
+       "options": [
+        {
+         "value": "system",
+         "title": "System"
+        },
+        {
+         "value": "inter",
+         "title": "Inter"
+        },
+        {
+         "value": "serif",
+         "title": "Serif"
+        },
+        {
+         "value": "mono",
+         "title": "Mono"
+        }
+       ]
+      },
+      {
+       "kind": "text",
+       "style": "row",
+       "title": "Text color",
+       "detail": "Overrides the main text color in both light and dark mode."
+      },
+      {
+       "kind": "button",
+       "ref": "@n169",
+       "title": "Auto",
+       "disabled": false,
+       "role": "link"
+      },
+      {
+       "kind": "color",
+       "ref": "@n170",
+       "title": "Text color",
+       "disabled": false,
+       "value": "#000000"
+      },
+      {
+       "kind": "segmented",
+       "ref": "@n171",
+       "title": "Text size",
+       "options": [
+        {
+         "ref": "@n172",
+         "title": "Small",
+         "selected": false
+        },
+        {
+         "ref": "@n173",
+         "title": "Default",
+         "selected": true
+        },
+        {
+         "ref": "@n174",
+         "title": "Large",
+         "selected": false
+        }
+       ],
+       "detail": "Scales the sidebar and pop-up panels."
+      }
+     ]
+    },
+    {
+     "kind": "group",
+     "ref": "@n187",
+     "title": "Selected location",
+     "items": [
+      {
+       "kind": "swatches",
+       "ref": "@n176",
+       "title": "Location dot color",
+       "options": [
+        {
+         "ref": "@n177",
+         "title": "White",
+         "color": "#ffffff",
+         "selected": true
+        },
+        {
+         "ref": "@n178",
+         "title": "Blue",
+         "color": "#4a9eff",
+         "selected": false
+        },
+        {
+         "ref": "@n179",
+         "title": "Red",
+         "color": "#ff453a",
+         "selected": false
+        },
+        {
+         "ref": "@n180",
+         "title": "Orange",
+         "color": "#ff9f0a",
+         "selected": false
+        },
+        {
+         "ref": "@n181",
+         "title": "Yellow",
+         "color": "#ffd60a",
+         "selected": false
+        },
+        {
+         "ref": "@n182",
+         "title": "Green",
+         "color": "#4cd964",
+         "selected": false
+        },
+        {
+         "ref": "@n183",
+         "title": "Pink",
+         "color": "#ff375f",
+         "selected": false
+        },
+        {
+         "ref": "@n184",
+         "title": "Purple",
+         "color": "#bf5af2",
+         "selected": false
+        },
+        {
+         "ref": "@n185",
+         "title": "Black",
+         "color": "#000000",
+         "selected": false
+        }
+       ],
+       "custom": {
+        "ref": "@n186",
+        "value": "#ffffff",
+        "title": "Custom Location dot color"
+       },
+       "detail": "The dot that marks the place you select on the map."
+      }
+     ]
+    },
+    {
+     "kind": "group",
+     "ref": "@n191",
+     "title": "Preview & reset",
+     "items": [
+      {
+       "kind": "toggle",
+       "ref": "@n188",
+       "title": "Preview",
+       "disabled": false,
+       "value": true
+      },
+      {
+       "kind": "slider",
+       "ref": "@n189",
+       "title": "Preview slider",
+       "disabled": false,
+       "value": 62,
+       "min": 0,
+       "max": 100,
+       "step": 1
+      },
+      {
+       "kind": "button",
+       "ref": "@n190",
+       "title": "Capture",
+       "disabled": false,
+       "role": "primary"
+      }
+     ]
+    }
+   ]
+  },
+  "settings": {
+   "route": "settings",
+   "title": "App settings",
+   "description": "Connection, accessibility and device preferences",
+   "items": [
+    {
+     "kind": "header",
+     "title": "Terrain engine"
+    },
+    {
+     "kind": "text",
+     "style": "row",
+     "title": "Secure terrain engine",
+     "detail": "built into this app"
+    },
+    {
+     "kind": "button",
+     "ref": "@n192",
+     "title": "Manage terrain engine",
+     "detail": "Connect to your Mac or manage its saved address",
+     "disabled": false,
+     "role": "navigate"
+    },
+    {
+     "kind": "group",
+     "ref": "settings:export",
+     "title": "Image export",
+     "items": [
+      {
+       "kind": "route",
+       "ref": "route:export",
+       "title": "Export image",
+       "detail": "Resolution, map info and capture area",
+       "id": "export"
+      }
+     ]
+    },
+    {
+     "kind": "header",
+     "title": "Accessibility & data"
+    },
+    {
+     "kind": "picker",
+     "ref": "@n195",
+     "title": "Smoother panning",
+     "detail": "While you drag, terrain is drawn at lower resolution and sharpens when the map stops. Auto does this only when dragging is slow.",
+     "disabled": false,
+     "value": "on",
+     "options": [
+      {
+       "value": "off",
+       "title": "Off"
+      },
+      {
+       "value": "auto",
+       "title": "Auto"
+      },
+      {
+       "value": "on",
+       "title": "On"
+      }
+     ]
+    },
+    {
+     "kind": "toggle",
+     "ref": "@n196",
+     "title": "Reduce motion",
+     "detail": "Calms pop-up and control animations, beyond the system setting.",
+     "disabled": false,
+     "value": false
+    },
+    {
+     "kind": "button",
+     "ref": "@n197",
+     "title": "Reset app preferences",
+     "detail": "Reset appearance, accessibility and saved menu choices",
+     "disabled": false,
+     "role": "link"
+    },
+    {
+     "kind": "header",
+     "title": "This device"
+    },
+    {
+     "kind": "button",
+     "ref": "@n198",
+     "title": "Build details",
+     "detail": "build 2026-11-06b",
+     "disabled": false,
+     "expanded": false,
+     "role": "link"
+    },
+    {
+     "kind": "button",
+     "ref": "@n199",
+     "title": "Reset menu layout",
+     "detail": "Restore the default order, sizes and collapsed panels.",
+     "disabled": false,
+     "role": "link"
+    },
+    {
+     "kind": "group",
+     "ref": "settings:sources",
+     "title": "About the map",
+     "items": [
+      {
+       "kind": "disclosure",
+       "ref": "settings:credits",
+       "title": "Sources & scale",
+       "items": [
+        {
+         "kind": "text",
+         "ref": "#cspMapSources",
+         "title": "Leaflet | Esri, HERE, Garmin, \u00a9 OpenStreetMap contributors, USGS The National Map \u2014 NHD",
+         "markdown": "[Leaflet](https://leafletjs.com/) | Esri, HERE, Garmin, \u00a9 OpenStreetMap contributors, USGS The National Map \u2014 NHD",
+         "style": "body"
+        }
+       ]
+      }
+     ]
+    }
+   ]
+  }
+ },
+ "panels": {
+  "mkBar": null,
+  "snapshotPanel": {
+   "id": "snapshotPanel",
+   "title": "Export image",
+   "state": "PNG",
+   "items": [
+    {
+     "kind": "group",
+     "ref": "export:settings",
+     "title": "Image settings",
+     "items": [
+      {
+       "kind": "picker",
+       "ref": "#snapshotScale",
+       "title": "Resolution",
+       "disabled": false,
+       "value": "2",
+       "options": [
+        {
+         "value": "1",
+         "title": "1\u00d7"
+        },
+        {
+         "value": "2",
+         "title": "2\u00d7"
+        },
+        {
+         "value": "4",
+         "title": "4\u00d7"
+        },
+        {
+         "value": "8",
+         "title": "8\u00d7"
+        },
+        {
+         "value": "16",
+         "title": "16\u00d7"
+        },
+        {
+         "value": "32",
+         "title": "32\u00d7"
+        }
+       ]
+      },
+      {
+       "kind": "text",
+       "style": "status",
+       "title": "The whole view at 2\u00d7 is 880 \u00d7 1,912 px (1.7 MP, 161 ft/px)."
+      },
+      {
+       "kind": "toggle",
+       "ref": "#snapshotReadout",
+       "title": "Include map info",
+       "detail": "Coordinates, elevation and color keys",
+       "disabled": false,
+       "value": false
+      }
+     ]
+    },
+    {
+     "kind": "text",
+     "style": "hint",
+     "title": "Higher resolutions request finer source tiles where available. Enlarging a source adds no new detail."
+    },
+    {
+     "kind": "actions",
+     "items": [
+      {
+       "kind": "button",
+       "ref": "#snapshotSelect",
+       "title": "Select area",
+       "detail": "Draw a rectangle on the map to save.",
+       "disabled": false,
+       "icon": "scan",
+       "role": "action"
+      },
+      {
+       "kind": "button",
+       "ref": "#snapshotCapture",
+       "title": "Capture view",
+       "detail": "Save the whole map view.",
+       "disabled": false,
+       "icon": "camera",
+       "role": "primary"
+      }
+     ]
+    }
+   ]
+  },
+  "terrainSourcePanel": {
+   "id": "terrainSourcePanel",
+   "title": "Layers",
+   "items": [
+    {
+     "kind": "text",
+     "title": "USGS 3DEP elevation \u00b7 100% of tile positions rendered",
+     "style": "status"
+    },
+    {
+     "kind": "source",
+     "ref": "source:terrain",
+     "id": "terrain",
+     "title": "Relative elevation",
+     "detail": "USGS 3DEP elevation (100% \u00b7 Native: Provider mosaic varies; 3.3 ft where available \u00b7 displayed sampling: sampling not reported)",
+     "items": [
+      {
+       "kind": "slider",
+       "ref": "@n201",
+       "title": "Opacity",
+       "disabled": false,
+       "value": 100,
+       "min": 0,
+       "max": 100,
+       "step": 1,
+       "display": "100%"
+      }
+     ],
+     "edit": {
+      "ref": "@n202",
+      "title": "Edit layer"
+     }
+    },
+    {
+     "kind": "source",
+     "ref": "source:elevation-bands",
+     "id": "elevation-bands",
+     "title": "Elevation highlights",
+     "detail": "USGS 3DEP elevation (100% \u00b7 Native: Provider mosaic varies; 3.3 ft where available \u00b7 displayed sampling: sampling not reported)",
+     "items": [
+      {
+       "kind": "slider",
+       "ref": "@n203",
+       "title": "Opacity",
+       "disabled": false,
+       "value": 35,
+       "min": 0,
+       "max": 100,
+       "step": 1,
+       "display": "35%"
+      }
+     ],
+     "edit": {
+      "ref": "@n204",
+      "title": "Edit layer"
+     }
+    },
+    {
+     "kind": "source",
+     "ref": "source:overlay:water",
+     "id": "overlay:water",
+     "title": "Rivers & lakes",
+     "detail": "Labels & reference \u00b7 USGS NHD",
+     "items": [
+      {
+       "kind": "slider",
+       "ref": "@n205",
+       "title": "Opacity",
+       "disabled": false,
+       "value": 10,
+       "min": 0,
+       "max": 100,
+       "step": 1,
+       "display": "10%"
+      }
+     ],
+     "edit": {
+      "ref": "@n206",
+      "title": "Edit layer"
+     }
+    },
+    {
+     "kind": "source",
+     "ref": "source:basemap",
+     "id": "basemap",
+     "title": "Reference basemap",
+     "detail": "Esri / OpenStreetMap reference basemap",
+     "items": []
+    },
+    {
+     "kind": "disclosure",
+     "ref": "sources:references",
+     "title": "Sources & scale",
+     "items": [
+      {
+       "kind": "text",
+       "style": "hint",
+       "title": "Terrain labels reflect loaded tile samples. Other layer rows show the configured provider or feed; they do not imply that every pixel has identical coverage."
+      },
+      {
+       "kind": "text",
+       "title": "Leaflet | Esri, HERE, Garmin, \u00a9 OpenStreetMap contributors, USGS The National Map \u2014 NHD",
+       "markdown": "[Leaflet](https://leafletjs.com/) | Esri, HERE, Garmin, \u00a9 OpenStreetMap contributors, USGS The National Map \u2014 NHD"
+      }
+     ]
+    }
+   ]
+  },
+  "serverPanel": {
+   "id": "serverPanel",
+   "title": "Terrain engine",
+   "state": "built into this app",
+   "items": [
+    {
+     "kind": "text",
+     "style": "hint",
+     "title": "Connect to your Mac for its terrain cache and processing. The engine is optional; public map sources work without it."
+    },
+    {
+     "kind": "group",
+     "ref": "engine:connection",
+     "title": "Connection",
+     "items": [
+      {
+       "kind": "field",
+       "ref": "#srvUrl",
+       "title": "Engine address",
+       "detail": "Use the Tailscale HTTPS address from your Mac.",
+       "disabled": false,
+       "value": "",
+       "placeholder": "https://your-mac.tailnet.ts.net",
+       "input": "url"
+      },
+      {
+       "kind": "text",
+       "style": "status",
+       "title": "online 1m \u00b7 0 cached"
+      }
+     ]
+    },
+    {
+     "kind": "group",
+     "ref": "engine:saved",
+     "title": "Saved address",
+     "items": [
+      {
+       "kind": "button",
+       "ref": "#srvCopyLink",
+       "title": "Copy engine address",
+       "disabled": true,
+       "icon": "copy",
+       "role": "utility"
+      },
+      {
+       "kind": "button",
+       "ref": "#srvForget",
+       "title": "Forget saved address",
+       "detail": "Remove the connection saved on this device.",
+       "disabled": true,
+       "icon": "trash",
+       "role": "destructive",
+       "confirm": "Forget the saved engine address? You can reconnect by entering it again."
+      }
+     ]
+    },
+    {
+     "kind": "actions",
+     "items": [
+      {
+       "kind": "button",
+       "ref": "#srvConnect",
+       "title": "Check again",
+       "disabled": false,
+       "role": "primary"
+      }
+     ]
+    }
+   ]
+  },
+  "ctl": {
+   "id": "ctl",
+   "title": "Displayed on map",
+   "items": [
+    {
+     "kind": "text",
+     "style": "row",
+     "title": "\u2014",
+     "detail": "\u2014"
+    },
+    {
+     "kind": "text",
+     "title": "Opacity",
+     "style": "body"
+    },
+    {
+     "kind": "slider",
+     "ref": "#op",
+     "title": "",
+     "disabled": false,
+     "value": 100,
+     "min": 0,
+     "max": 100,
+     "step": 1
+    },
+    {
+     "kind": "button",
+     "ref": "#ctlReset",
+     "title": "Reset",
+     "disabled": false,
+     "accessibility": "Reset imagery opacity",
+     "role": "link"
+    },
+    {
+     "kind": "text",
+     "title": "Right-click any point for imagery, coordinates, and terrain actions.",
+     "style": "body"
+    }
+   ]
+  }
+ }
+}

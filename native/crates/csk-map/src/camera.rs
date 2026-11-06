@@ -198,7 +198,8 @@ impl Camera {
     /// With `around`, the screen point's world point stays fixed (the
     /// target's centre is then implied by zoom and bearing).
     pub fn ease_to(&mut self, now: f64, to: Pose, duration: f64, around: Option<[f64; 2]>) {
-        let finite = to.center.iter().chain([&to.zoom, &to.bearing, &now, &duration]).all(|v| v.is_finite());
+        let finite = to.center.iter().chain([&to.zoom, &to.bearing, &duration]).all(|v| v.is_finite())
+            && (now.is_finite() || now.is_nan());
         if !finite || !(0.0..=1.0).contains(&to.center[1]) {
             return;
         }
@@ -212,11 +213,25 @@ impl Camera {
             ..to
         };
         self.motion = Some(Motion::Ease { start: now, duration: duration.max(0.0), from, to, around });
-        self.advance(now);
+        if now.is_finite() {
+            self.advance(now);
+        }
+    }
+
+    /// Eases to `to` from the next frame, for callers without the frame
+    /// clock (the app state's own actions, such as reset to north).
+    pub fn ease_next(&mut self, to: Pose, duration: f64) {
+        self.ease_to(f64::NAN, to, duration, None);
     }
 
     /// Advances any motion to `now`. Returns whether it is still moving.
     pub fn advance(&mut self, now: f64) -> bool {
+        // An ease queued without the clock starts at its first frame.
+        if let Some(Motion::Ease { start, .. } | Motion::Fling { start, .. }) = &mut self.motion
+            && start.is_nan()
+        {
+            *start = now;
+        }
         let Some(motion) = self.motion else { return false };
         match motion {
             Motion::Fling { start, pan, zoom, anchor, done } => {

@@ -24,6 +24,8 @@
 
 #define CSK_FETCH_NOT_FOUND 5
 
+typedef struct CskApp CskApp;
+
 /**
  * Owns a response's headers and body until `csk_body_free`.
  */
@@ -132,6 +134,15 @@ typedef struct CskResponse {
 } CskResponse;
 
 typedef void (*CskRespond)(void *context, const struct CskResponse *response, struct CskBody *owner);
+
+/**
+ * Where shell updates go.
+ */
+typedef struct CskShellSink {
+  void *context;
+  void (*update)(void *context, const char *json);
+  void (*release)(void *context);
+} CskShellSink;
 
 /**
  * The camera, in degrees.
@@ -285,6 +296,39 @@ void csk_fetch_fail(struct CskFetch *token, int32_t code, const char *message);
  * The engine version, static.
  */
 const char *csk_version(void);
+
+/**
+ * The app state for `engine`, restored from its store. NULL (releasing
+ * `sink`) without an engine.
+ */
+struct CskApp *csk_app_new(const struct CskEngine *engine, struct CskShellSink sink);
+
+/**
+ * Publishes everything the shell shows, marked ready.
+ */
+void csk_app_start(const struct CskApp *app);
+
+/**
+ * A shell command, e.g. `act` with `{"ref": "#terOp", "op": "input", "value": 80}`.
+ */
+void csk_app_send(const struct CskApp *app, const char *command, const char *args_json);
+
+/**
+ * A shell query. Returns its JSON answer, to free with `csk_string_free`.
+ */
+char *csk_app_ask(const struct CskApp *app, const char *query, const char *args_json);
+
+/**
+ * Draws the app state into `map`, or detaches with NULL.
+ */
+void csk_app_set_map(const struct CskApp *app, const struct CskMap *map);
+
+void csk_app_free(struct CskApp *app);
+
+/**
+ * Frees a string the engine returned.
+ */
+void csk_string_free(char *text);
 
 /**
  * Creates a map presenting into `metal_layer` (a `CAMetalLayer *`, which

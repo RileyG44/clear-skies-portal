@@ -10,7 +10,7 @@ mod terrain;
 pub use layout::Uniforms;
 pub use render::{FRAME_FORMAT, Field, Frame, Pixels, Renderer};
 pub use surface::{Presented, Presenter, instance};
-pub use terrain::{Answer, FrameStats, SourceSpec, TILE, Terrain, TileId, TileKey, View};
+pub use terrain::{Answer, FrameStats, SourceSpec, TILE, Terrain, TileId, TileKey, View, ViewSample};
 /// The pinned wgpu, for surfaces made at the platform boundary.
 pub use wgpu;
 

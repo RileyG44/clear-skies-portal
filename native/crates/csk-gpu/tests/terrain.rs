@@ -126,4 +126,16 @@ fn rotated_fractional_view_registers_and_keeps_survey_priority() {
     assert!(second.composited < first.composited + 8, "{second:?} after {first:?}");
     // Unchanged view: nothing recomposites.
     assert_eq!(check(&mut terrain, &view).composited, 0);
+    // A view sample returns the drawn heights without blocking the frame.
+    terrain.request_sample();
+    terrain.render_offscreen(&gpu, &view, &uniforms).unwrap();
+    let sample = loop {
+        if let Some(sample) = terrain.take_sample(&gpu) {
+            break sample;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(1));
+    };
+    assert_eq!(sample.heights.len(), (sample.width * sample.height) as usize);
+    assert!(sample.width > sample.height && sample.heights.len() > 8000, "{}x{}", sample.width, sample.height);
+    assert!(sample.heights.iter().all(|h| h.is_finite()), "every sample has terrain");
 }

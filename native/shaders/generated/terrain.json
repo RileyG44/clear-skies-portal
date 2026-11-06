@@ -1,0 +1,1911 @@
+{
+ "maxLayers": 4,
+ "maxStops": 10,
+ "styleIds": {
+  "hs": 0,
+  "hsmulti": 1,
+  "slope": 2,
+  "aspect": 3,
+  "northness": 4,
+  "tint": 5,
+  "c2": 6,
+  "c5": 7,
+  "c10": 8,
+  "c25": 9,
+  "rem": 10,
+  "contour": 11
+ },
+ "blendIds": {
+  "normal": 0,
+  "multiply": 1,
+  "screen": 2,
+  "overlay": 3,
+  "soft-light": 4,
+  "hard-light": 5,
+  "darken": 6,
+  "lighten": 7,
+  "color": 8,
+  "luminosity": 9
+ },
+ "palettes": {
+  "default-hs": {
+   "name": "Classic",
+   "kinds": [
+    "shade"
+   ],
+   "stops": [
+    [
+     0,
+     "#000000"
+    ],
+    [
+     1,
+     "#ffffff"
+    ]
+   ],
+   "domain": [
+    0,
+    1
+   ]
+  },
+  "default-slope": {
+   "name": "Classic",
+   "kinds": [
+    "sequential"
+   ],
+   "domain": [
+    0,
+    90
+   ],
+   "stops": [
+    [
+     0,
+     "#f2f4ee"
+    ],
+    [
+     0.05555555555555555,
+     "#b1d28b"
+    ],
+    [
+     0.16666666666666666,
+     "#f6da6f"
+    ],
+    [
+     0.3333333333333333,
+     "#f09649"
+    ],
+    [
+     0.5,
+     "#d54650"
+    ],
+    [
+     0.6666666666666666,
+     "#762c69"
+    ],
+    [
+     1,
+     "#321948"
+    ]
+   ]
+  },
+  "default-aspect": {
+   "name": "Compass",
+   "kinds": [
+    "cyclic"
+   ],
+   "domain": [
+    0,
+    360
+   ],
+   "stops": [
+    [
+     0,
+     "#4d78c8"
+    ],
+    [
+     0.125,
+     "#3ba5b0"
+    ],
+    [
+     0.25,
+     "#57a765"
+    ],
+    [
+     0.375,
+     "#c9ad4f"
+    ],
+    [
+     0.5,
+     "#d96b52"
+    ],
+    [
+     0.625,
+     "#c45b82"
+    ],
+    [
+     0.75,
+     "#8d65bb"
+    ],
+    [
+     0.875,
+     "#5e77c5"
+    ],
+    [
+     1,
+     "#4d78c8"
+    ]
+   ]
+  },
+  "default-northness": {
+   "name": "Classic",
+   "kinds": [
+    "diverging"
+   ],
+   "domain": [
+    -1,
+    1
+   ],
+   "stops": [
+    [
+     0,
+     "#d6524e"
+    ],
+    [
+     0.5,
+     "#f7f3e0"
+    ],
+    [
+     1,
+     "#37895c"
+    ]
+   ]
+  },
+  "default-tint": {
+   "name": "Classic relief",
+   "kinds": [
+    "sequential"
+   ],
+   "domain": [
+    -500,
+    6000
+   ],
+   "shade": 1,
+   "stops": [
+    [
+     0,
+     "#162e48"
+    ],
+    [
+     0.07692307692307693,
+     "#28465f"
+    ],
+    [
+     0.12307692307692308,
+     "#466e46"
+    ],
+    [
+     0.2153846153846154,
+     "#808c5c"
+    ],
+    [
+     0.3230769230769231,
+     "#a08c6c"
+    ],
+    [
+     0.4461538461538462,
+     "#beb4aa"
+    ],
+    [
+     0.5692307692307692,
+     "#f5f6fa"
+    ],
+    [
+     1,
+     "#ffffff"
+    ]
+   ]
+  },
+  "default-contour": {
+   "name": "Classic",
+   "kinds": [
+    "lines"
+   ],
+   "domain": [
+    0,
+    1
+   ],
+   "stops": [
+    [
+     0,
+     "#966e50c8"
+    ],
+    [
+     1,
+     "#784628"
+    ]
+   ]
+  },
+  "lava": {
+   "name": "Lava river",
+   "kinds": [
+    "sequential",
+    "art"
+   ],
+   "stops": [
+    [
+     0,
+     "#fffbe8"
+    ],
+    [
+     0.07,
+     "#ffe680"
+    ],
+    [
+     0.18,
+     "#ffab3d"
+    ],
+    [
+     0.32,
+     "#f4643a"
+    ],
+    [
+     0.48,
+     "#d43f7e"
+    ],
+    [
+     0.64,
+     "#8a34c9"
+    ],
+    [
+     0.82,
+     "#3b33d6"
+    ],
+    [
+     1,
+     "#2229b4"
+    ]
+   ]
+  },
+  "ember": {
+   "name": "Ember",
+   "kinds": [
+    "sequential",
+    "art"
+   ],
+   "stops": [
+    [
+     0,
+     "#2a0810"
+    ],
+    [
+     0.16666666666666666,
+     "#6f1220"
+    ],
+    [
+     0.3333333333333333,
+     "#b8301c"
+    ],
+    [
+     0.5,
+     "#e8641c"
+    ],
+    [
+     0.6666666666666666,
+     "#ff9a4a"
+    ],
+    [
+     0.8333333333333334,
+     "#ffd2a6"
+    ],
+    [
+     1,
+     "#fbf2ea"
+    ]
+   ]
+  },
+  "glacier": {
+   "name": "Glacier",
+   "kinds": [
+    "sequential",
+    "art"
+   ],
+   "stops": [
+    [
+     0,
+     "#0a1519"
+    ],
+    [
+     0.2,
+     "#183238"
+    ],
+    [
+     0.4,
+     "#285c64"
+    ],
+    [
+     0.6,
+     "#3f9599"
+    ],
+    [
+     0.8,
+     "#73cfc9"
+    ],
+    [
+     1,
+     "#c9f7f1"
+    ]
+   ]
+  },
+  "aurora": {
+   "name": "Aurora",
+   "kinds": [
+    "sequential",
+    "art"
+   ],
+   "stops": [
+    [
+     0,
+     "#04071a"
+    ],
+    [
+     0.2,
+     "#1b1464"
+    ],
+    [
+     0.4,
+     "#0b6e8c"
+    ],
+    [
+     0.6,
+     "#18c29c"
+    ],
+    [
+     0.8,
+     "#b6f36b"
+    ],
+    [
+     1,
+     "#fff9c4"
+    ]
+   ]
+  },
+  "neon": {
+   "name": "Neon",
+   "kinds": [
+    "sequential",
+    "art"
+   ],
+   "stops": [
+    [
+     0,
+     "#0b0221"
+    ],
+    [
+     0.2,
+     "#3a0ca3"
+    ],
+    [
+     0.4,
+     "#7209b7"
+    ],
+    [
+     0.6,
+     "#f72585"
+    ],
+    [
+     0.8,
+     "#ff9e00"
+    ],
+    [
+     1,
+     "#ffe66d"
+    ]
+   ]
+  },
+  "magma": {
+   "name": "Magma",
+   "kinds": [
+    "sequential"
+   ],
+   "stops": [
+    [
+     0,
+     "#000004"
+    ],
+    [
+     0.125,
+     "#1c1044"
+    ],
+    [
+     0.25,
+     "#4f127b"
+    ],
+    [
+     0.375,
+     "#812581"
+    ],
+    [
+     0.5,
+     "#b5367a"
+    ],
+    [
+     0.625,
+     "#e55064"
+    ],
+    [
+     0.75,
+     "#fb8761"
+    ],
+    [
+     0.875,
+     "#fec287"
+    ],
+    [
+     1,
+     "#fcfdbf"
+    ]
+   ]
+  },
+  "plasma": {
+   "name": "Plasma",
+   "kinds": [
+    "sequential"
+   ],
+   "stops": [
+    [
+     0,
+     "#0d0887"
+    ],
+    [
+     0.125,
+     "#4c02a1"
+    ],
+    [
+     0.25,
+     "#7e03a8"
+    ],
+    [
+     0.375,
+     "#a92395"
+    ],
+    [
+     0.5,
+     "#cc4778"
+    ],
+    [
+     0.625,
+     "#e66c5c"
+    ],
+    [
+     0.75,
+     "#f89540"
+    ],
+    [
+     0.875,
+     "#fdc527"
+    ],
+    [
+     1,
+     "#f0f921"
+    ]
+   ]
+  },
+  "viridis": {
+   "name": "Viridis",
+   "kinds": [
+    "sequential"
+   ],
+   "stops": [
+    [
+     0,
+     "#440154"
+    ],
+    [
+     0.125,
+     "#472d7b"
+    ],
+    [
+     0.25,
+     "#3b528b"
+    ],
+    [
+     0.375,
+     "#2c728e"
+    ],
+    [
+     0.5,
+     "#21918c"
+    ],
+    [
+     0.625,
+     "#28ae80"
+    ],
+    [
+     0.75,
+     "#5ec962"
+    ],
+    [
+     0.875,
+     "#addc30"
+    ],
+    [
+     1,
+     "#fde725"
+    ]
+   ]
+  },
+  "turbo": {
+   "name": "Turbo",
+   "kinds": [
+    "sequential"
+   ],
+   "stops": [
+    [
+     0,
+     "#30123b"
+    ],
+    [
+     0.1111111111111111,
+     "#4662d7"
+    ],
+    [
+     0.2222222222222222,
+     "#36aaf9"
+    ],
+    [
+     0.3333333333333333,
+     "#1ae4b6"
+    ],
+    [
+     0.4444444444444444,
+     "#72fe5e"
+    ],
+    [
+     0.5555555555555556,
+     "#c8ef34"
+    ],
+    [
+     0.6666666666666666,
+     "#faba39"
+    ],
+    [
+     0.7777777777777778,
+     "#f66b19"
+    ],
+    [
+     0.8888888888888888,
+     "#ca2a04"
+    ],
+    [
+     1,
+     "#7a0403"
+    ]
+   ]
+  },
+  "hypsometric": {
+   "name": "Hypsometric",
+   "kinds": [
+    "sequential"
+   ],
+   "stops": [
+    [
+     0,
+     "#4f7d4a"
+    ],
+    [
+     0.16666666666666666,
+     "#93b46a"
+    ],
+    [
+     0.3333333333333333,
+     "#dcd896"
+    ],
+    [
+     0.5,
+     "#d7b37a"
+    ],
+    [
+     0.6666666666666666,
+     "#a8794e"
+    ],
+    [
+     0.8333333333333334,
+     "#8a6a58"
+    ],
+    [
+     1,
+     "#f3f1ee"
+    ]
+   ]
+  },
+  "desert": {
+   "name": "Desert",
+   "kinds": [
+    "sequential"
+   ],
+   "stops": [
+    [
+     0,
+     "#3b2a1e"
+    ],
+    [
+     0.2,
+     "#7d4f33"
+    ],
+    [
+     0.4,
+     "#c48650"
+    ],
+    [
+     0.6,
+     "#e9be7e"
+    ],
+    [
+     0.8,
+     "#f7e3b8"
+    ],
+    [
+     1,
+     "#fffaf0"
+    ]
+   ]
+  },
+  "forest": {
+   "name": "Forest",
+   "kinds": [
+    "sequential"
+   ],
+   "stops": [
+    [
+     0,
+     "#0e2419"
+    ],
+    [
+     0.25,
+     "#24563a"
+    ],
+    [
+     0.5,
+     "#4f8a4b"
+    ],
+    [
+     0.75,
+     "#9cc27a"
+    ],
+    [
+     1,
+     "#e6efc0"
+    ]
+   ]
+  },
+  "ocean": {
+   "name": "Ocean",
+   "kinds": [
+    "sequential"
+   ],
+   "stops": [
+    [
+     0,
+     "#03045e"
+    ],
+    [
+     0.2,
+     "#023e8a"
+    ],
+    [
+     0.4,
+     "#0077b6"
+    ],
+    [
+     0.6,
+     "#00b4d8"
+    ],
+    [
+     0.8,
+     "#90e0ef"
+    ],
+    [
+     1,
+     "#e6fbff"
+    ]
+   ]
+  },
+  "arctic": {
+   "name": "Arctic",
+   "kinds": [
+    "sequential",
+    "shade"
+   ],
+   "stops": [
+    [
+     0,
+     "#0b1d3a"
+    ],
+    [
+     0.25,
+     "#355c8c"
+    ],
+    [
+     0.5,
+     "#8fb3d9"
+    ],
+    [
+     0.75,
+     "#e8f1fa"
+    ],
+    [
+     1,
+     "#ffffff"
+    ]
+   ]
+  },
+  "sepia": {
+   "name": "Sepia",
+   "kinds": [
+    "sequential",
+    "shade"
+   ],
+   "stops": [
+    [
+     0,
+     "#22170e"
+    ],
+    [
+     0.25,
+     "#6b4c30"
+    ],
+    [
+     0.5,
+     "#b8956a"
+    ],
+    [
+     0.75,
+     "#e8d6b6"
+    ],
+    [
+     1,
+     "#fdf7ec"
+    ]
+   ]
+  },
+  "blueprint": {
+   "name": "Blueprint",
+   "kinds": [
+    "shade",
+    "sequential"
+   ],
+   "stops": [
+    [
+     0,
+     "#06204a"
+    ],
+    [
+     0.25,
+     "#123d7a"
+    ],
+    [
+     0.5,
+     "#3d74c2"
+    ],
+    [
+     0.75,
+     "#a8cdfa"
+    ],
+    [
+     1,
+     "#f4f9ff"
+    ]
+   ]
+  },
+  "swiss": {
+   "name": "Swiss",
+   "kinds": [
+    "shade"
+   ],
+   "stops": [
+    [
+     0,
+     "#3a3550"
+    ],
+    [
+     0.25,
+     "#7c7590"
+    ],
+    [
+     0.5,
+     "#c9c0bd"
+    ],
+    [
+     0.75,
+     "#efe7d6"
+    ],
+    [
+     1,
+     "#fffbf2"
+    ]
+   ]
+  },
+  "moonlight": {
+   "name": "Moonlight",
+   "kinds": [
+    "shade"
+   ],
+   "stops": [
+    [
+     0,
+     "#04060c"
+    ],
+    [
+     0.25,
+     "#151d31"
+    ],
+    [
+     0.5,
+     "#3c4c70"
+    ],
+    [
+     0.75,
+     "#9cadd2"
+    ],
+    [
+     1,
+     "#e9f0ff"
+    ]
+   ]
+  },
+  "copper": {
+   "name": "Copper",
+   "kinds": [
+    "shade",
+    "sequential"
+   ],
+   "stops": [
+    [
+     0,
+     "#1a0e08"
+    ],
+    [
+     0.25,
+     "#5a2f1a"
+    ],
+    [
+     0.5,
+     "#a8613a"
+    ],
+    [
+     0.75,
+     "#e3a571"
+    ],
+    [
+     1,
+     "#fff0dc"
+    ]
+   ]
+  },
+  "ink": {
+   "name": "Ink",
+   "kinds": [
+    "shade"
+   ],
+   "stops": [
+    [
+     0,
+     "#1c1430"
+    ],
+    [
+     0.6,
+     "#d9d6e4"
+    ],
+    [
+     1,
+     "#ffffff"
+    ]
+   ]
+  },
+  "glacier-shade": {
+   "name": "Ice shade",
+   "kinds": [
+    "shade"
+   ],
+   "stops": [
+    [
+     0,
+     "#04080a"
+    ],
+    [
+     0.25,
+     "#101c20"
+    ],
+    [
+     0.5,
+     "#283f44"
+    ],
+    [
+     0.75,
+     "#5f8589"
+    ],
+    [
+     1,
+     "#c4e4e4"
+    ]
+   ]
+  },
+  "ice-glow": {
+   "name": "Ice glow",
+   "kinds": [
+    "sequential",
+    "art"
+   ],
+   "stops": [
+    [
+     0,
+     "#1e8f9400"
+    ],
+    [
+     0.3,
+     "#1e8f9400"
+    ],
+    [
+     0.55,
+     "#2fa9ab55"
+    ],
+    [
+     0.78,
+     "#6cd8d2a8"
+    ],
+    [
+     1,
+     "#d8faf6c0"
+    ]
+   ]
+  },
+  "hue-wheel": {
+   "name": "Hue wheel",
+   "kinds": [
+    "cyclic"
+   ],
+   "stops": [
+    [
+     0,
+     "#ff4d4d"
+    ],
+    [
+     0.14285714285714285,
+     "#ffb24d"
+    ],
+    [
+     0.2857142857142857,
+     "#e8ff4d"
+    ],
+    [
+     0.42857142857142855,
+     "#4dff88"
+    ],
+    [
+     0.5714285714285714,
+     "#4dd2ff"
+    ],
+    [
+     0.7142857142857143,
+     "#6b4dff"
+    ],
+    [
+     0.8571428571428571,
+     "#ff4dd8"
+    ],
+    [
+     1,
+     "#ff4d4d"
+    ]
+   ]
+  },
+  "pastel-wheel": {
+   "name": "Pastel wheel",
+   "kinds": [
+    "cyclic"
+   ],
+   "stops": [
+    [
+     0,
+     "#f8b5b5"
+    ],
+    [
+     0.14285714285714285,
+     "#f8dcb0"
+    ],
+    [
+     0.2857142857142857,
+     "#e9f5b3"
+    ],
+    [
+     0.42857142857142855,
+     "#b8f0cc"
+    ],
+    [
+     0.5714285714285714,
+     "#b3dff5"
+    ],
+    [
+     0.7142857142857143,
+     "#c9b8f5"
+    ],
+    [
+     0.8571428571428571,
+     "#f2b8e6"
+    ],
+    [
+     1,
+     "#f8b5b5"
+    ]
+   ]
+  },
+  "cool-warm": {
+   "name": "Cool–warm",
+   "kinds": [
+    "diverging"
+   ],
+   "stops": [
+    [
+     0,
+     "#3b4cc0"
+    ],
+    [
+     0.25,
+     "#8db0fe"
+    ],
+    [
+     0.5,
+     "#f2f2f2"
+    ],
+    [
+     0.75,
+     "#f49a7b"
+    ],
+    [
+     1,
+     "#b40426"
+    ]
+   ]
+  },
+  "spectral": {
+   "name": "Spectral",
+   "kinds": [
+    "diverging",
+    "sequential"
+   ],
+   "stops": [
+    [
+     0,
+     "#9e0142"
+    ],
+    [
+     0.2,
+     "#f46d43"
+    ],
+    [
+     0.4,
+     "#fee08b"
+    ],
+    [
+     0.6,
+     "#e6f598"
+    ],
+    [
+     0.8,
+     "#66c2a5"
+    ],
+    [
+     1,
+     "#5e4fa2"
+    ]
+   ]
+  },
+  "ink-lines": {
+   "name": "Ink",
+   "kinds": [
+    "lines"
+   ],
+   "stops": [
+    [
+     0,
+     "#1d1d1f99"
+    ],
+    [
+     1,
+     "#1d1d1f"
+    ]
+   ]
+  },
+  "white-lines": {
+   "name": "White",
+   "kinds": [
+    "lines"
+   ],
+   "stops": [
+    [
+     0,
+     "#ffffffa0"
+    ],
+    [
+     1,
+     "#ffffff"
+    ]
+   ]
+  },
+  "gold-lines": {
+   "name": "Gold",
+   "kinds": [
+    "lines"
+   ],
+   "stops": [
+    [
+     0,
+     "#ffd27a99"
+    ],
+    [
+     1,
+     "#ffb627"
+    ]
+   ]
+  }
+ },
+ "styles": {
+  "hs": {
+   "label": "Hillshade",
+   "family": "shade",
+   "palette": "default-hs",
+   "unit": "shade",
+   "domain": [
+    0,
+    1
+   ]
+  },
+  "hsmulti": {
+   "label": "Multi-directional hillshade",
+   "family": "shade",
+   "palette": "default-hs",
+   "unit": "shade",
+   "domain": [
+    0,
+    1
+   ]
+  },
+  "tint": {
+   "label": "Elevation",
+   "family": "sequential",
+   "palette": "default-tint",
+   "unit": "m",
+   "domain": [
+    -500,
+    6000
+   ],
+   "auto": true,
+   "param": "shade"
+  },
+  "rem": {
+   "label": "Relative elevation",
+   "family": "sequential",
+   "palette": "lava",
+   "unit": "m",
+   "domain": [
+    0,
+    60
+   ],
+   "auto": true,
+   "param": "shade",
+   "hint": "Height above the lowest nearby ground. Rivers and valley floors glow."
+  },
+  "slope": {
+   "label": "Slope",
+   "family": "sequential",
+   "palette": "default-slope",
+   "unit": "deg",
+   "domain": [
+    0,
+    90
+   ]
+  },
+  "aspect": {
+   "label": "Aspect",
+   "family": "cyclic",
+   "palette": "default-aspect",
+   "unit": "deg",
+   "domain": [
+    0,
+    360
+   ]
+  },
+  "northness": {
+   "label": "North–south exposure",
+   "family": "diverging",
+   "palette": "default-northness",
+   "unit": "index",
+   "domain": [
+    -1,
+    1
+   ]
+  },
+  "c2": {
+   "label": "Contours · 2 ft",
+   "family": "lines",
+   "palette": "default-contour",
+   "unit": "line",
+   "domain": [
+    0,
+    1
+   ]
+  },
+  "c5": {
+   "label": "Contours · 5 ft",
+   "family": "lines",
+   "palette": "default-contour",
+   "unit": "line",
+   "domain": [
+    0,
+    1
+   ]
+  },
+  "c10": {
+   "label": "Contours · 10 ft",
+   "family": "lines",
+   "palette": "default-contour",
+   "unit": "line",
+   "domain": [
+    0,
+    1
+   ]
+  },
+  "c25": {
+   "label": "Contours · 25 ft",
+   "family": "lines",
+   "palette": "default-contour",
+   "unit": "line",
+   "domain": [
+    0,
+    1
+   ]
+  },
+  "contour": {
+   "label": "Contours · custom",
+   "family": "lines",
+   "palette": "default-contour",
+   "unit": "line",
+   "domain": [
+    0,
+    1
+   ],
+   "param": "interval",
+   "paramDefault": 20
+  }
+ },
+ "overlayStyles": [
+  "hs",
+  "hsmulti",
+  "tint",
+  "rem",
+  "slope",
+  "aspect",
+  "northness",
+  "contour"
+ ],
+ "blends": [
+  {
+   "id": "normal",
+   "label": "Normal"
+  },
+  {
+   "id": "multiply",
+   "label": "Multiply"
+  },
+  {
+   "id": "screen",
+   "label": "Screen"
+  },
+  {
+   "id": "overlay",
+   "label": "Overlay"
+  },
+  {
+   "id": "soft-light",
+   "label": "Soft light"
+  },
+  {
+   "id": "hard-light",
+   "label": "Hard light"
+  },
+  {
+   "id": "darken",
+   "label": "Darken"
+  },
+  {
+   "id": "lighten",
+   "label": "Lighten"
+  },
+  {
+   "id": "color",
+   "label": "Color"
+  },
+  {
+   "id": "luminosity",
+   "label": "Luminosity"
+  }
+ ],
+ "effectDefaults": {
+  "detail": 0,
+  "detailRadius": 6,
+  "reliefExag": 1,
+  "remRadius": 1500
+ },
+ "looks": [
+  {
+   "id": "classic",
+   "name": "Classic",
+   "blurb": "The standard grey hillshade.",
+   "opacity": 70,
+   "scene": {
+    "style": "hs",
+    "base": {
+     "style": "hs",
+     "palette": "default-hs",
+     "stops": null,
+     "reverse": false,
+     "opacity": 1,
+     "blend": "normal",
+     "auto": false,
+     "rangeMode": "separate",
+     "min": 0,
+     "max": 1,
+     "gamma": 1,
+     "steps": 0,
+     "param": 0,
+     "visible": true
+    },
+    "overlays": [],
+    "effects": {
+     "detail": 0,
+     "detailRadius": 6,
+     "reliefExag": 1,
+     "remRadius": 1500
+    }
+   }
+  },
+  {
+   "id": "lava-river",
+   "name": "Lava River",
+   "blurb": "Rivers glow gold over deep-blue uplands. Best over valleys and floodplains.",
+   "opacity": 100,
+   "scene": {
+    "style": "rem",
+    "base": {
+     "style": "rem",
+     "palette": "lava",
+     "stops": null,
+     "reverse": false,
+     "opacity": 1,
+     "blend": "normal",
+     "auto": true,
+     "rangeMode": "separate",
+     "min": 0,
+     "max": 60,
+     "gamma": 0.6,
+     "steps": 0,
+     "param": 0,
+     "visible": true
+    },
+    "overlays": [
+     {
+      "style": "hs",
+      "palette": "ink",
+      "stops": null,
+      "reverse": false,
+      "opacity": 0.8,
+      "blend": "multiply",
+      "auto": false,
+      "rangeMode": "separate",
+      "min": 0,
+      "max": 1,
+      "gamma": 1,
+      "steps": 0,
+      "param": 0,
+      "visible": true
+     }
+    ],
+    "effects": {
+     "detail": 0.4,
+     "detailRadius": 8,
+     "reliefExag": 1.8,
+     "remRadius": 3000
+    }
+   }
+  },
+  {
+   "id": "ember",
+   "name": "Ember",
+   "blurb": "Molten orange relief with hard sculpted light.",
+   "opacity": 100,
+   "scene": {
+    "style": "tint",
+    "base": {
+     "style": "tint",
+     "palette": "ember",
+     "stops": null,
+     "reverse": false,
+     "opacity": 1,
+     "blend": "normal",
+     "auto": true,
+     "rangeMode": "separate",
+     "min": -500,
+     "max": 6000,
+     "gamma": 1,
+     "steps": 0,
+     "param": 0,
+     "visible": true
+    },
+    "overlays": [
+     {
+      "style": "hs",
+      "palette": "default-hs",
+      "stops": null,
+      "reverse": false,
+      "opacity": 1,
+      "blend": "soft-light",
+      "auto": false,
+      "rangeMode": "separate",
+      "min": 0,
+      "max": 1,
+      "gamma": 1,
+      "steps": 0,
+      "param": 0,
+      "visible": true
+     }
+    ],
+    "effects": {
+     "detail": 1,
+     "detailRadius": 5,
+     "reliefExag": 3,
+     "remRadius": 1500
+    }
+   }
+  },
+  {
+   "id": "glacier",
+   "name": "Glacier",
+   "blurb": "Dark rock with high ground turned to glowing ice.",
+   "opacity": 100,
+   "scene": {
+    "style": "hs",
+    "base": {
+     "style": "hs",
+     "palette": "glacier-shade",
+     "stops": null,
+     "reverse": false,
+     "opacity": 1,
+     "blend": "normal",
+     "auto": false,
+     "rangeMode": "separate",
+     "min": 0,
+     "max": 1,
+     "gamma": 1.4,
+     "steps": 0,
+     "param": 0,
+     "visible": true
+    },
+    "overlays": [
+     {
+      "style": "tint",
+      "palette": "ice-glow",
+      "stops": null,
+      "reverse": false,
+      "opacity": 1,
+      "blend": "screen",
+      "auto": true,
+      "rangeMode": "separate",
+      "min": -500,
+      "max": 6000,
+      "gamma": 1,
+      "steps": 0,
+      "param": 0,
+      "visible": true
+     }
+    ],
+    "effects": {
+     "detail": 0.3,
+     "detailRadius": 6,
+     "reliefExag": 1.6,
+     "remRadius": 1500
+    }
+   }
+  },
+  {
+   "id": "swiss",
+   "name": "Swiss Relief",
+   "blurb": "Soft hypsometric color under warm cartographic shading.",
+   "opacity": 100,
+   "scene": {
+    "style": "tint",
+    "base": {
+     "style": "tint",
+     "palette": "hypsometric",
+     "stops": null,
+     "reverse": false,
+     "opacity": 1,
+     "blend": "normal",
+     "auto": true,
+     "rangeMode": "separate",
+     "min": -500,
+     "max": 6000,
+     "gamma": 1,
+     "steps": 0,
+     "param": 0,
+     "visible": true
+    },
+    "overlays": [
+     {
+      "style": "hsmulti",
+      "palette": "swiss",
+      "stops": null,
+      "reverse": false,
+      "opacity": 0.85,
+      "blend": "multiply",
+      "auto": false,
+      "rangeMode": "separate",
+      "min": 0,
+      "max": 1,
+      "gamma": 1,
+      "steps": 0,
+      "param": 0,
+      "visible": true
+     }
+    ],
+    "effects": {
+     "detail": 0.2,
+     "detailRadius": 6,
+     "reliefExag": 1.4,
+     "remRadius": 1500
+    }
+   }
+  },
+  {
+   "id": "aurora",
+   "name": "Aurora",
+   "blurb": "Floodplains in luminous green and teal over midnight hills.",
+   "opacity": 100,
+   "scene": {
+    "style": "rem",
+    "base": {
+     "style": "rem",
+     "palette": "aurora",
+     "stops": null,
+     "reverse": true,
+     "opacity": 1,
+     "blend": "normal",
+     "auto": true,
+     "rangeMode": "separate",
+     "min": 0,
+     "max": 60,
+     "gamma": 0.7,
+     "steps": 0,
+     "param": 0,
+     "visible": true
+    },
+    "overlays": [
+     {
+      "style": "hs",
+      "palette": "moonlight",
+      "stops": null,
+      "reverse": false,
+      "opacity": 0.9,
+      "blend": "soft-light",
+      "auto": false,
+      "rangeMode": "separate",
+      "min": 0,
+      "max": 1,
+      "gamma": 1,
+      "steps": 0,
+      "param": 0,
+      "visible": true
+     }
+    ],
+    "effects": {
+     "detail": 0.3,
+     "detailRadius": 8,
+     "reliefExag": 2,
+     "remRadius": 3000
+    }
+   }
+  },
+  {
+   "id": "missoula",
+   "name": "Missoula",
+   "blurb": "Ice Age flood channels glowing ember over dark scabland.",
+   "opacity": 100,
+   "scene": {
+    "style": "rem",
+    "base": {
+     "style": "rem",
+     "palette": "ember",
+     "stops": null,
+     "reverse": true,
+     "opacity": 1,
+     "blend": "normal",
+     "auto": true,
+     "rangeMode": "separate",
+     "min": 0,
+     "max": 60,
+     "gamma": 0.7,
+     "steps": 0,
+     "param": 0,
+     "visible": true
+    },
+    "overlays": [
+     {
+      "style": "hs",
+      "palette": "moonlight",
+      "stops": null,
+      "reverse": false,
+      "opacity": 0.9,
+      "blend": "soft-light",
+      "auto": false,
+      "rangeMode": "separate",
+      "min": 0,
+      "max": 1,
+      "gamma": 1,
+      "steps": 0,
+      "param": 0,
+      "visible": true
+     }
+    ],
+    "effects": {
+     "detail": 0.3,
+     "detailRadius": 8,
+     "reliefExag": 2,
+     "remRadius": 3000
+    }
+   }
+  },
+  {
+   "id": "neon-slope",
+   "name": "Neon Slope",
+   "blurb": "Steepness in electric color. Cliffs and scarps pop.",
+   "opacity": 100,
+   "scene": {
+    "style": "slope",
+    "base": {
+     "style": "slope",
+     "palette": "neon",
+     "stops": null,
+     "reverse": false,
+     "opacity": 1,
+     "blend": "normal",
+     "auto": false,
+     "rangeMode": "separate",
+     "min": 0,
+     "max": 45,
+     "gamma": 0.8,
+     "steps": 0,
+     "param": 0,
+     "visible": true
+    },
+    "overlays": [
+     {
+      "style": "hs",
+      "palette": "default-hs",
+      "stops": null,
+      "reverse": false,
+      "opacity": 0.7,
+      "blend": "soft-light",
+      "auto": false,
+      "rangeMode": "separate",
+      "min": 0,
+      "max": 1,
+      "gamma": 1,
+      "steps": 0,
+      "param": 0,
+      "visible": true
+     }
+    ],
+    "effects": {
+     "detail": 0.5,
+     "detailRadius": 5,
+     "reliefExag": 1.5,
+     "remRadius": 1500
+    }
+   }
+  },
+  {
+   "id": "midnight",
+   "name": "Midnight",
+   "blurb": "Moonlit multi-directional relief.",
+   "opacity": 100,
+   "scene": {
+    "style": "hsmulti",
+    "base": {
+     "style": "hsmulti",
+     "palette": "moonlight",
+     "stops": null,
+     "reverse": false,
+     "opacity": 1,
+     "blend": "normal",
+     "auto": false,
+     "rangeMode": "separate",
+     "min": 0,
+     "max": 1,
+     "gamma": 1.6,
+     "steps": 0,
+     "param": 0,
+     "visible": true
+    },
+    "overlays": [],
+    "effects": {
+     "detail": 0.4,
+     "detailRadius": 5,
+     "reliefExag": 2,
+     "remRadius": 1500
+    }
+   }
+  },
+  {
+   "id": "blueprint",
+   "name": "Blueprint",
+   "blurb": "Drafting-table relief with white contour lines.",
+   "opacity": 100,
+   "scene": {
+    "style": "hs",
+    "base": {
+     "style": "hs",
+     "palette": "blueprint",
+     "stops": null,
+     "reverse": false,
+     "opacity": 1,
+     "blend": "normal",
+     "auto": false,
+     "rangeMode": "separate",
+     "min": 0,
+     "max": 1,
+     "gamma": 1,
+     "steps": 0,
+     "param": 0,
+     "visible": true
+    },
+    "overlays": [
+     {
+      "style": "contour",
+      "palette": "white-lines",
+      "stops": null,
+      "reverse": false,
+      "opacity": 0.75,
+      "blend": "normal",
+      "auto": false,
+      "rangeMode": "separate",
+      "min": 0,
+      "max": 1,
+      "gamma": 1,
+      "steps": 0,
+      "param": 20,
+      "visible": true
+     }
+    ],
+    "effects": {
+     "detail": 0,
+     "detailRadius": 6,
+     "reliefExag": 1.3,
+     "remRadius": 1500
+    }
+   }
+  },
+  {
+   "id": "compass",
+   "name": "Compass Rose",
+   "blurb": "Every slope coloured by the way it faces.",
+   "opacity": 100,
+   "scene": {
+    "style": "aspect",
+    "base": {
+     "style": "aspect",
+     "palette": "hue-wheel",
+     "stops": null,
+     "reverse": false,
+     "opacity": 1,
+     "blend": "normal",
+     "auto": false,
+     "rangeMode": "separate",
+     "min": 0,
+     "max": 360,
+     "gamma": 1,
+     "steps": 0,
+     "param": 0,
+     "visible": true
+    },
+    "overlays": [
+     {
+      "style": "hs",
+      "palette": "default-hs",
+      "stops": null,
+      "reverse": false,
+      "opacity": 0.75,
+      "blend": "multiply",
+      "auto": false,
+      "rangeMode": "separate",
+      "min": 0,
+      "max": 1,
+      "gamma": 1,
+      "steps": 0,
+      "param": 0,
+      "visible": true
+     }
+    ],
+    "effects": {
+     "detail": 0.3,
+     "detailRadius": 5,
+     "reliefExag": 1.6,
+     "remRadius": 1500
+    }
+   }
+  },
+  {
+   "id": "topo",
+   "name": "Topographic",
+   "blurb": "Classic map colors, relief and index contours.",
+   "opacity": 100,
+   "scene": {
+    "style": "tint",
+    "base": {
+     "style": "tint",
+     "palette": "hypsometric",
+     "stops": null,
+     "reverse": false,
+     "opacity": 1,
+     "blend": "normal",
+     "auto": true,
+     "rangeMode": "separate",
+     "min": -500,
+     "max": 6000,
+     "gamma": 1,
+     "steps": 0,
+     "param": 0,
+     "visible": true
+    },
+    "overlays": [
+     {
+      "style": "hs",
+      "palette": "default-hs",
+      "stops": null,
+      "reverse": false,
+      "opacity": 0.6,
+      "blend": "multiply",
+      "auto": false,
+      "rangeMode": "separate",
+      "min": 0,
+      "max": 1,
+      "gamma": 1,
+      "steps": 0,
+      "param": 0,
+      "visible": true
+     },
+     {
+      "style": "contour",
+      "palette": "default-contour",
+      "stops": null,
+      "reverse": false,
+      "opacity": 0.9,
+      "blend": "normal",
+      "auto": false,
+      "rangeMode": "separate",
+      "min": 0,
+      "max": 1,
+      "gamma": 1,
+      "steps": 0,
+      "param": 40,
+      "visible": true
+     }
+    ],
+    "effects": {
+     "detail": 0,
+     "detailRadius": 6,
+     "reliefExag": 1.2,
+     "remRadius": 1500
+    }
+   }
+  }
+ ]
+}

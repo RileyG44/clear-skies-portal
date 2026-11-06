@@ -52,7 +52,7 @@ final class ShellModel {
         didSet {
             if case .panel(let id)? = oldValue, activeSheet != oldValue {
                 panel = nil
-                call("CSPNativeShell.closePanel(id)", ["id": id])
+                send("closePanel", ["id": id])
             }
             syncView()
         }
@@ -72,7 +72,7 @@ final class ShellModel {
     /// A short confirmation shown over the map, such as the scene applied.
     var notice: ShellNotice?
 
-    @ObservationIgnored weak var host: WebHost?
+    @ObservationIgnored weak var backend: (any ShellBackend)?
     @ObservationIgnored private var suggestTask: Task<Void, Never>?
     @ObservationIgnored private var lastView = ""
     @ObservationIgnored private let log = Logger(subsystem: Bundle.main.bundleIdentifier ?? "ClearSkies", category: "shell")
@@ -182,7 +182,7 @@ final class ShellModel {
         map = next
         if next.theme == "light" || next.theme == "dark" {
             UserDefaults.standard.set(next.theme, forKey: MapCanvasColor.preferenceKey)
-            host?.useMapCanvas(next.theme)
+            backend?.useMapCanvas(next.theme)
         }
         if mapBusy, !wasBusy, activeSheet != nil, presentedPanel != "mkBar" { activeSheet = nil }
     }
@@ -194,7 +194,7 @@ final class ShellModel {
         let key = "\(sheet)|\(page ?? "")|\(presentedPanel ?? "")"
         guard key != lastView, connected else { return }
         lastView = key
-        call("CSPNativeShell.setView({sheet, page, panel})",
+        send("setView",
              ["sheet": sheet, "page": page ?? NSNull(), "panel": presentedPanel ?? NSNull()])
     }
 
@@ -231,7 +231,7 @@ final class ShellModel {
     private func open(route: String) {
         if page?.route != route { page = nil }
         let sheet = activeSheet == nil ? "closed" : (detent == .expanded ? "large" : "medium")
-        call("CSPNativeShell.open(route); CSPNativeShell.setView({sheet, page: route, panel})",
+        send("open",
              ["route": route, "sheet": sheet, "panel": presentedPanel ?? NSNull()])
         lastView = "\(sheet)|\(route)|\(presentedPanel ?? "")"
         requested = (route, Date())
@@ -249,8 +249,7 @@ final class ShellModel {
         let defaults = UserDefaults.standard
         let detent: PresentationDetent = defaults.string(forKey: "cspDebugDetent") == "large" ? .expanded : .medium
         if let panel = defaults.string(forKey: "cspDebugPanel"), Self.toolPanels.values.contains(panel) {
-            call("const button = document.querySelector('#mapDock [aria-controls=\"' + panel + '\"]'); if (button) CSPNativeShell.tool(button.id)",
-                 ["panel": panel])
+            send("toolForPanel", ["panel": panel])
             self.detent = detent
             activeSheet = .panel(panel)
             return
@@ -280,7 +279,7 @@ final class ShellModel {
         if visibleRoute == "export", ref == "#snapshotCapture" || ref == "#snapshotSelect" {
             activeSheet = nil
         }
-        call("CSPNativeShell.act(ref, op, value)", ["ref": ref, "op": op.rawValue, "value": value ?? NSNull()])
+        send("act", ["ref": ref, "op": op.rawValue, "value": value ?? NSNull()])
     }
 
     /// Map tools whose web pop-up the app presents natively.
@@ -297,21 +296,21 @@ final class ShellModel {
         feedback += 1
         if let panel = Self.toolPanels[tool.tool] {
             if presentedPanel == panel { activeSheet = nil; return }
-            if panelOpen != panel { call("CSPNativeShell.tool(id)", ["id": tool.id]) }
+            if panelOpen != panel { send("tool", ["id": tool.id]) }
             // With no editable layer, Draw opens the layer creation page.
             // Wait for the real markup panel's state before presenting it.
             if panel == "mkBar" { return }
             detent = .medium
             activeSheet = .panel(panel)
         } else {
-            call("CSPNativeShell.tool(id)", ["id": tool.id])
+            send("tool", ["id": tool.id])
         }
     }
 
     /// Types a markup size into the web's own field and reports the web's
     /// verdict, so the app's field stays open until the value is accepted.
     func enterValue(_ ref: String, _ value: String, key: String, owner: String) async -> (accepted: Bool, message: String) {
-        let result = await evaluate("return CSPNativeShell.enterValue(ref, value, key, owner)",
+        let result = await evaluate("enterValue",
                                     ["ref": ref, "value": value, "key": key, "owner": owner]) as? [String: Any]
         guard let result else { return (false, "The size could not be set. Try again.") }
         return (result["accepted"] as? Bool == true, result["message"] as? String ?? "")
@@ -320,7 +319,7 @@ final class ShellModel {
     /// Selects a listed mark and, once the web confirms it is the selected
     /// mark, lowers the sheet and brings the mark into view above it.
     func selectMark(_ ref: String, fid: String) async -> Bool {
-        let result = await evaluate("return CSPNativeShell.selectMark(ref, fid, inset)",
+        let result = await evaluate("selectMark",
                                     ["ref": ref, "fid": fid, "inset": Double(mediumSheetHeight)]) as? [String: Any]
         let selected = result?["selected"] as? Bool == true
         if selected { detent = .medium }
@@ -331,7 +330,7 @@ final class ShellModel {
     /// selected mark shows above it. The mark itself never moves.
     func revealSelectedMark() {
         detent = .medium
-        call("window.CSPMarkup?.revealSelected?.(inset)", ["inset": Double(mediumSheetHeight)])
+        send("revealSelected", ["inset": Double(mediumSheetHeight)])
     }
 
     /// Shows the markup tools again while drawing continues on the map.
@@ -343,7 +342,7 @@ final class ShellModel {
         guard mode != map.mode else { return }
         let change = {
             self.feedback += 1
-            self.call("CSPNativeShell.setMode(mode)", ["mode": mode])
+            self.send("setMode", ["mode": mode])
         }
         if allowMarkupExit(change) { change() }
     }
@@ -371,7 +370,7 @@ final class ShellModel {
         if let destination = dock.firstIndex(where: { $0.id == target }) {
             dock.insert(tool, at: destination + (index > old ? 1 : 0))
         }
-        call("CSPNativeShell.moveTool(id, index)", ["id": id, "index": index])
+        send("moveTool", ["id": id, "index": index])
         feedback += 1
     }
 
@@ -391,7 +390,7 @@ final class ShellModel {
         if text.isEmpty { clearSuggestions(); return }
         suggestTask = Task { [weak self] in
             guard let self else { return }
-            if let matches = await self.evaluate("return CSPNativeShell.routeMatches(text)", ["text": text]) as? [[String: Any]] {
+            if let matches = await self.evaluate("routeMatches", ["text": text]) as? [[String: Any]] {
                 self.routeMatches = matches.compactMap { entry in
                     guard let route = entry["route"] as? String else { return nil }
                     return RouteMatch(route: route, keyword: entry["keyword"] as? String ?? "")
@@ -418,7 +417,7 @@ final class ShellModel {
 
     /// Place suggestions from the web client's geocoder, as the web field gets them.
     func fetchPlaces(_ text: String) async throws -> [PlaceSuggestion] {
-        let result = try await evaluateThrowing("return await CSPNativeShell.suggest(text)", ["text": text])
+        let result = try await ask("suggest", ["text": text])
         guard let places = result as? [[String: Any]] else { return [] }
         return places.compactMap { place in
             guard let index = (place["index"] as? NSNumber)?.intValue,
@@ -430,7 +429,7 @@ final class ShellModel {
 
     /// Looks up text as the Satellite page's field does, without page shortcuts.
     func searchText(_ text: String) {
-        call("CSPNativeShell.searchText(text)", ["text": text])
+        send("searchText", ["text": text])
         finishSearch()
     }
 
@@ -443,7 +442,7 @@ final class ShellModel {
     }
 
     func pick(_ place: PlaceSuggestion) {
-        call("CSPNativeShell.pick(index, version)", ["index": place.index, "version": place.version])
+        send("pick", ["index": place.index, "version": place.version])
         finishSearch()
     }
 
@@ -451,7 +450,7 @@ final class ShellModel {
         let text = query.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty else { return }
         Task {
-            let result = await evaluate("return CSPNativeShell.submit(text)", ["text": text]) as? [String: Any]
+            let result = await evaluate("submit", ["text": text]) as? [String: Any]
             if let route = result?["route"] as? String {
                 query = ""
                 clearSuggestions()
@@ -463,7 +462,7 @@ final class ShellModel {
     }
 
     func searchMapCenter() {
-        call("CSPNativeShell.searchMapCenter()")
+        send("searchMapCenter")
         finishSearch()
     }
 
@@ -478,7 +477,7 @@ final class ShellModel {
             searchText(text)
             show(route: "satellite")
         } else if hasLocation {
-            call("CSPNativeShell.searchSelected()")
+            send("searchSelected")
             clearSuggestions()
             feedback += 1
             show(route: "satellite")
@@ -496,12 +495,12 @@ final class ShellModel {
     func clearLocation() {
         query = ""
         clearSuggestions()
-        call("CSPNativeShell.clear()")
+        send("clear")
         feedback += 1
     }
 
     func locate() {
-        call("CSPNativeShell.locate()")
+        send("locate")
         feedback += 1
     }
 
@@ -513,7 +512,7 @@ final class ShellModel {
         Task {
             defer { shareBusy = false }
             do {
-                let result = try await evaluateThrowing("try { return {url: await ClearSkiesPortalBridge.shareURL()} } catch (error) { return {error: error.message} }") as? [String: Any]
+                let result = try await ask("shareURL") as? [String: Any]
                 if let message = result?["error"] as? String {
                     throw NSError(domain: "ClearSkiesShare", code: 1, userInfo: [NSLocalizedDescriptionKey: message])
                 }
@@ -521,11 +520,11 @@ final class ShellModel {
                       let url = URL(string: value) else {
                     throw NSError(domain: "Share link could not be created", code: 1)
                 }
-                guard let host else {
+                guard let backend else {
                     throw NSError(domain: "ClearSkiesShare", code: 4,
                         userInfo: [NSLocalizedDescriptionKey: "The map is not ready yet. Try again."])
                 }
-                try host.shareLocation(url)
+                try backend.shareLocation(url)
                 log.info("Presented map share sheet")
             } catch {
                 log.error("Map sharing failed: \(error.localizedDescription, privacy: .public)")
@@ -536,12 +535,12 @@ final class ShellModel {
     }
 
     func centerSelectedLocation() {
-        call("CSPNativeShell.centerSelected()")
+        send("centerSelected")
         feedback += 1
     }
 
     func copyCoordinates() {
-        call("CSPNativeShell.copyCoordinates()")
+        send("copyCoordinates")
         feedback += 1
     }
 
@@ -552,7 +551,7 @@ final class ShellModel {
         imageryBusy = true
         feedback += 1
         Task {
-            let result = await evaluate("return await CSPNativeShell.bestImagery()") as? [String: Any]
+            let result = await evaluate("bestImagery") as? [String: Any]
             imageryBusy = false
             if let text = result?["message"] as? String, !text.isEmpty {
                 notice = ShellNotice(id: (notice?.id ?? 0) + 1, text: text, applied: result?["applied"] as? Bool == true)
@@ -562,22 +561,17 @@ final class ShellModel {
 
     // MARK: - JavaScript
 
-    func call(_ body: String, _ arguments: [String: Any] = [:]) {
-        guard let webView = host?.webView else { return }
-        webView.callAsyncJavaScript(body, arguments: arguments, in: nil, in: .page) { [log] result in
-            if case .failure(let error) = result {
-                log.error("shell call failed: \(String(describing: error), privacy: .public)")
-            }
-        }
+    func send(_ command: String, _ arguments: [String: Any] = [:]) {
+        backend?.send(command, arguments)
     }
 
-    func evaluate(_ body: String, _ arguments: [String: Any] = [:]) async -> Any? {
-        try? await evaluateThrowing(body, arguments)
+    func evaluate(_ query: String, _ arguments: [String: Any] = [:]) async -> Any? {
+        try? await ask(query, arguments)
     }
 
-    func evaluateThrowing(_ body: String, _ arguments: [String: Any] = [:]) async throws -> Any? {
-        guard let webView = host?.webView else { return nil }
-        return try await webView.callAsyncJavaScript(body, arguments: arguments, in: nil, contentWorld: .page)
+    func ask(_ query: String, _ arguments: [String: Any] = [:]) async throws -> Any? {
+        guard let backend else { return nil }
+        return try await backend.ask(query, arguments)
     }
 }
 

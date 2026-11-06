@@ -138,3 +138,41 @@ for (const [name, spec] of Object.entries(shade.uniforms)) {
   }
 }
 fs.writeFileSync(path.join(output, "defaults.bin"), data);
+
+// Terrain looks for the native app state (csk-app): the palettes, styles,
+// blends and looks of lidar-render.js, normalized by its own functions, with
+// the shader's numeric ids. Content, not logic: the native app compiles them
+// with its own port of buildStack/uniformValues, pinned by the cases below.
+const R = require("../../lidar-render.js");
+const looks = R.LOOKS.map(look => ({id: look.id, name: look.name, blurb: look.blurb, opacity: look.opacity,
+  scene: R.normalizeScene(look.scene)}));
+fs.writeFileSync(path.join(output, "terrain.json"), JSON.stringify({
+  maxLayers: R.MAX_LAYERS, maxStops: R.MAX_STOPS,
+  styleIds: Object.fromEntries(Object.entries(shaders.STYLE_IDS).filter(([id]) => R.STYLES[id])),
+  blendIds: shaders.BLEND_IDS,
+  palettes: R.PALETTES, styles: R.STYLES, overlayStyles: R.OVERLAY_STYLES.filter(id => R.STYLES[id]),
+  blends: R.BLENDS, effectDefaults: R.EFFECT_DEFAULTS, looks,
+}, null, 1) + "\n");
+
+// Parity cases: every look applied, stacked with fitted ranges and drawn
+// with adjusted appearance, lighting and elevation bands.
+const view = {cssSize: [390, 844], dpr: 3, zoom: 13.4, centerMerc: [0.172, 0.359], bearing: 12};
+const fits = [{base: [312, 1648], "overlay:0": [0, 41], "overlay:1": [2, 9]},
+  {base: {land: [310, 1650], water: [-12, 0]}, "overlay:0": [0, 40]}];
+const cases = looks.map((look, index) => {
+  const applied = R.applyScene(R.emptyState(), look.scene, look.id);
+  const fitted = fits[index % fits.length];
+  const remFlatBase = index % 3 ? 0 : 287.5;
+  const stack = R.buildStack(applied.state, applied.style, fitted, {remFlatBase});
+  const input = {
+    style: applied.style, opacity: look.opacity / 100,
+    look: {brightness: 100 + index, contrast: 96 + 2 * index, saturation: 110 - index},
+    lighting: {azimuth: 300 + index, altitude: 40 + index, ambient: 0.1 + index / 100},
+    spectrum: index % 2 ? {} : {below: {enabled: true, level: 707.1, color: [0, 0.41, 0.51]}, bandAlpha: 0.35, bandFeather: 12.2,
+      spectrumOn: index % 4 === 0, level: 900, span: 400, spectrumAlpha: 0.5},
+  };
+  const values = shaders.uniformValues({terrain: {style: input.style, opacity: input.opacity, look: input.look,
+    lighting: input.lighting, stack}, spectrum: input.spectrum}, view);
+  return {look: look.id, fitted, remFlatBase, input, view, stack, values};
+});
+fs.writeFileSync(path.join(output, "terrain-cases.json"), JSON.stringify(cases) + "\n");
