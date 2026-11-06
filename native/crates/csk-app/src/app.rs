@@ -17,6 +17,8 @@ use crate::state::{AppState, Fitted, TerrainState};
 use crate::terrain::{Fit, Stack, catalog, fit_elevation, fit_range, fit_relative, stable_fit};
 
 const STATE_KEY: &str = "app.state.v1";
+/// The `.clearskies` document's type (UTType dev.riley.clearskies.view).
+pub const DOCUMENT_TYPE: &str = "clearskies.view";
 
 /// Receives `ShellUpdate` JSON, from any thread.
 pub type Publish = Arc<dyn Fn(String) + Send + Sync>;
@@ -37,6 +39,9 @@ struct Inner {
     /// Bearing last published (the dock's north button).
     bearing: f64,
     settled: bool,
+    /// The selected place, and how many times it has changed.
+    location: Option<shell::Location>,
+    location_version: u64,
 }
 
 /// The last place suggestions, numbered so a pick names the list it saw.
@@ -124,6 +129,8 @@ impl App {
             pose: None,
             bearing: 0.0,
             settled: false,
+            location: None,
+            location_version: 0,
         };
         Arc::new(Self {
             engine,
@@ -168,7 +175,7 @@ impl App {
         update.insert("groups".into(), shell::groups());
         update.insert("route".into(), json!(inner.route));
         update.insert("counts".into(), shell::counts(&inner.state));
-        update.insert("search".into(), shell::search());
+        update.insert("search".into(), shell::search(inner.location.as_ref(), inner.location_version));
         update.insert("map".into(), shell::map_state(&inner.state, inner.bearing));
         update.insert("dock".into(), shell::dock(&inner.state, inner.bearing));
         update.insert("status".into(), shell::status(&inner.state, &inner.fitted, lon, lat, zoom, inner.settled));
@@ -323,8 +330,29 @@ impl App {
                 };
                 drop(inner);
                 if let Some(place) = place {
+                    self.select(Some(shell::Location {
+                        lat: place.lat,
+                        lng: place.lng,
+                        label: shell::place_label(&place.primary, &place.secondary),
+                    }));
                     self.show_place(&place);
                 }
+                return;
+            }
+            "clear" => {
+                drop(inner);
+                self.select(None);
+                return;
+            }
+            "centerSelected" => {
+                let Some(l) = inner.location.clone() else { return };
+                drop(inner);
+                self.go_to(l.lat, l.lng, None, 0.0);
+                return;
+            }
+            "openDocument" => {
+                drop(inner);
+                self.open_document(args["text"].as_str().unwrap_or_default());
                 return;
             }
             "moveTool" => {
@@ -379,6 +407,84 @@ impl App {
         }
     }
 
+    /// Selects a place (search, a map tap) and publishes it.
+    fn select(&self, location: Option<shell::Location>) {
+        let mut inner = lock(&self.inner);
+        inner.location = location;
+        inner.location_version += 1;
+        let mut update = Object::new();
+        update.insert("search".into(), shell::search(inner.location.as_ref(), inner.location_version));
+        drop(inner);
+        self.send_update(update);
+    }
+
+    /// The view as a `.clearskies` document: the camera, the selected
+    /// place and everything the person chose. Opens in the app, offline.
+    fn document(&self) -> Value {
+        let inner = lock(&self.inner);
+        let camera = inner.pose.map(|p| {
+            let [lon, lat] = p.lon_lat();
+            json!({"lon": lon, "lat": lat, "zoom": p.zoom, "bearing": p.bearing})
+        });
+        json!({"type": DOCUMENT_TYPE, "version": 1, "camera": camera, "location": inner.location,
+            "state": inner.state})
+    }
+
+    /// Writes the view document for the share sheet; answers its file URL.
+    fn share(&self) -> Value {
+        let label = lock(&self.inner).location.as_ref().map(|l| l.label.clone()).unwrap_or_default();
+        let name: String = label
+            .chars()
+            .map(|c| if c.is_alphanumeric() || c == ' ' || c == '-' { c } else { ' ' })
+            .collect::<String>()
+            .split_whitespace()
+            .collect::<Vec<_>>()
+            .join(" ");
+        let name = if name.is_empty() { "Clear Skies view".to_owned() } else { name.chars().take(60).collect() };
+        let dir = std::env::temp_dir().join("share");
+        let path = dir.join(format!("{name}.clearskies"));
+        let written = std::fs::create_dir_all(&dir)
+            .and_then(|_| std::fs::write(&path, serde_json::to_vec_pretty(&self.document()).unwrap_or_default()));
+        match written {
+            Ok(()) => json!({"url": format!("file://{}", path.display())}),
+            Err(error) => json!({"error": format!("The view could not be saved: {error}")}),
+        }
+    }
+
+    /// Opens a `.clearskies` document: its choices, place and camera.
+    fn open_document(&self, text: &str) -> bool {
+        let Ok(doc) = serde_json::from_str::<Value>(text) else { return false };
+        if doc["type"] != DOCUMENT_TYPE || doc["version"].as_u64().is_none_or(|v| v > 1) {
+            return false;
+        }
+        let Ok(state) = serde_json::from_value::<AppState>(doc["state"].clone()) else { return false };
+        let location = serde_json::from_value::<Option<shell::Location>>(doc["location"].clone()).ok().flatten();
+        let mut inner = lock(&self.inner);
+        inner.state = state;
+        inner.fitted = Fitted::default();
+        inner.location = location;
+        inner.location_version += 1;
+        self.save(&inner);
+        let camera = &doc["camera"];
+        if let Some(map) = lock(&self.map).as_ref() {
+            map.set_sources(&sources(&inner.state.terrain.source));
+            if let (Some(lon), Some(lat), Some(zoom)) =
+                (camera["lon"].as_f64(), camera["lat"].as_f64(), camera["zoom"].as_f64())
+            {
+                let bearing = camera["bearing"].as_f64().unwrap_or(0.0);
+                map.camera(|c| c.ease_next(Pose::from_lon_lat(lon, lat, zoom, bearing), 0.8));
+            }
+        }
+        self.redraw(&inner);
+        let mut update = self.whole(&inner);
+        if let Some(page) = inner.view.page.as_deref().and_then(|p| shell::page(p, &inner.state, &inner.fitted)) {
+            update.insert("page".into(), page);
+        }
+        drop(inner);
+        self.send_update(update);
+        true
+    }
+
     /// Fits a place in view (its extent up to z13, else z12), as the web's
     /// place pick does.
     fn show_place(&self, place: &csk_engine::places::Place) {
@@ -400,11 +506,15 @@ impl App {
     /// place name is geocoded (zoom 11).
     async fn search_text(self: Arc<Self>, text: String) {
         match crate::coords::parse(&text) {
-            Ok(Some((lat, lng))) => self.go_to(lat, lng, None, 10.0),
+            Ok(Some((lat, lng))) => {
+                self.select(Some(shell::Location { lat, lng, label: text.clone() }));
+                self.go_to(lat, lng, None, 10.0);
+            }
             Ok(None) => {
                 if let Ok(found) = self.engine.places(&text, 1).await
                     && let Some(place) = found.first()
                 {
+                    self.select(Some(shell::Location { lat: place.lat, lng: place.lng, label: text.clone() }));
                     self.go_to(place.lat, place.lng, Some(11.0), 0.0);
                 }
             }
@@ -450,7 +560,7 @@ impl App {
             }
             "enterValue" => json!({"accepted": false, "message": "This size is no longer available."}),
             "selectMark" => json!({"selected": false}),
-            "shareURL" => json!({"error": "Sharing is not available yet in this build."}),
+            "shareURL" => self.share(),
             "bestImagery" => json!({"message": "", "applied": false}),
             _ => Value::Null,
         }
