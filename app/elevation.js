@@ -485,6 +485,7 @@ async function decodeElevationBlob(blob){
 }
 async function fetchElevation(url,signal){
   const isDnr=url.includes("/api/wadnr/elev/");
+  const target=elev32Url(url)||url;
   let pendingChecks=0;
   for(let attempt=0;attempt<3;attempt++){
     if(signal.aborted) throw new DOMException("Aborted","AbortError");
@@ -493,7 +494,7 @@ async function fetchElevation(url,signal){
     // A raw tile can wait its turn on the engine; abandoning it wastes the render.
     const timeout=setTimeout(abort,url.includes("/api/usgs/elev/")?30000:10000);
     try{
-      const response=await fetchOverviewResponse(url,controller.signal);
+      const response=await fetchOverviewResponse(target,controller.signal);
       if(isDnr&&response.status===202){
         const value=await response.json();dnrStatus=value.acquisition||dnrStatus;
         if(typeof scheduleTerrainStatus==="function")scheduleTerrainStatus();
@@ -515,7 +516,9 @@ async function fetchElevation(url,signal){
       if(response.headers.get("X-Coverage")==="none") return null;
       /* A canvas readback costs several milliseconds per tile, and a fast pan
          or zoom brings dozens at once. The drape workers decode it instead. */
-      const tile=await drapeWorkers.run({op:"elevation",blob:await response.blob()},signal);
+      const tile=(response.headers.get("Content-Type")||"").startsWith(ELEV32_MEDIA)
+        ?decodeElev32(await response.arrayBuffer())
+        :await drapeWorkers.run({op:"elevation",blob:await response.blob()},signal);
       let surveys=[];
       try{surveys=JSON.parse(decodeURIComponent(response.headers.get(isDnr?"X-DNR-Sources":url.includes("/api/oregon/elev/")?"X-Oregon-Sources":"X-USGS-Sources")||"[]"));}catch{}
       return ElevationTileCore.hasElevation(tile.grid)?{grid:tile.grid,width:tile.width,height:tile.height,surveys}:null;
@@ -533,6 +536,27 @@ async function fetchElevation(url,signal){
       if(signal.aborted)abort();
     });
   }
+}
+/* An engine that offers "elev32" (the built-in one) sends elevation as
+   float32 metres (application/vnd.clearskies.elev32, docs/native): the page
+   then skips the PNG decode and canvas readback entirely. The overview keeps
+   its PNG route, which falls back to AWS directly. */
+const ELEV32_MEDIA="application/vnd.clearskies.elev32";
+const ELEV32_ROUTES={"usgs/elev":"usgs/","elev/national":"national/","elev":""};
+function elev32Url(url){
+  if(typeof serverHealth==="undefined"||!serverHealth?.features?.includes("elev32"))return null;
+  const m=url.match(/\/api\/(usgs\/elev|elev\/national|elev)\/(\d+\/\d+\/\d+)\.png(\?.*)?$/);
+  return m?url.slice(0,m.index)+"/api/elev32/"+ELEV32_ROUTES[m[1]]+m[2]+(m[3]||""):null;
+}
+/* Checks the header and length as the engine's contract asks; the engine
+   validates the values. The samples are a zero-copy view when aligned. */
+function decodeElev32(buffer){
+  const view=new DataView(buffer),bad=()=>new Error("Invalid elev32 elevation tile");
+  if(buffer.byteLength<16||view.getUint32(0,false)!==0x43534532||view.getUint8(4)!==1||view.getUint8(5)!==0)throw bad();
+  const header=view.getUint16(6,true),width=view.getUint16(8,true),height=view.getUint16(10,true);
+  if(header<16||!width||!height||buffer.byteLength!==header+width*height*4)throw bad();
+  const grid=header%4===0?new Float32Array(buffer,header,width*height):new Float32Array(buffer.slice(header));
+  return {grid,width,height};
 }
 function waitElevationRetry(ms,signal){
   return new Promise((resolve,reject)=>{
