@@ -9,6 +9,7 @@
 /* Begin PBXBuildFile section */
 		02AE439DB9F4749CB063C1FE /* Pacifico.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 97F225C066396F78511098F8 /* Pacifico.ttf */; };
 		0AD40A5672A49C1545F87D1F /* MapChrome.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3998392FE27AB8CB5771647F /* MapChrome.swift */; };
+		0C948D0090EB673DB17473E4 /* PerfLog.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6C83296988120D67D7EDE624 /* PerfLog.swift */; };
 		0CF9CB1E988B8D5EAEC76534 /* EngineRuntime.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC69FA2695FCC2338567DE2B /* EngineRuntime.swift */; };
 		165C35C3C089F4E74C46F071 /* Pacifico-LICENSE.txt in Resources */ = {isa = PBXBuildFile; fileRef = 0350566BEA7804757BCE7FDE /* Pacifico-LICENSE.txt */; };
 		18B94D51D89D1BC34D3FF3F9 /* TransferJournal.swift in Sources */ = {isa = PBXBuildFile; fileRef = A532DD2BA138BEBFDBFA40C5 /* TransferJournal.swift */; };
@@ -63,6 +64,7 @@
 		C7B0D7E3FEBBA5F5D619A604 /* BackgroundDownloads.swift in Sources */ = {isa = PBXBuildFile; fileRef = BA25CB6E7CF9B0D9B60B835B /* BackgroundDownloads.swift */; };
 		CB8D9E0A5F68BDD8ABD1A66D /* EngineBackground.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7775FBEA2D2889ED0C1F74E1 /* EngineBackground.swift */; };
 		CC13F7BFA0171BACFEF1BE42 /* NetworkTransport.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6F0E2D26A12EDBED7F97D2FC /* NetworkTransport.swift */; };
+		CCC48BAA03C36F57CBEDFA8A /* PerfLog.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6C83296988120D67D7EDE624 /* PerfLog.swift */; };
 		CF1820EA26BFC726A92C46F9 /* EngineRuntime.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC69FA2695FCC2338567DE2B /* EngineRuntime.swift */; };
 		DC5497B0B19D031E97179977 /* ToolbarPanelContent.swift in Sources */ = {isa = PBXBuildFile; fileRef = D40250219A657D0A53237861 /* ToolbarPanelContent.swift */; };
 		E696343859942AC7A16D0FE5 /* TransferJournal.swift in Sources */ = {isa = PBXBuildFile; fileRef = A532DD2BA138BEBFDBFA40C5 /* TransferJournal.swift */; };
@@ -95,6 +97,7 @@
 		57FA85E29ADDE2D56E589C31 /* Inter-LICENSE.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = "Inter-LICENSE.txt"; sourceTree = "<group>"; };
 		6413F062BCDC8F91FC0CBC3D /* EngineProxy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EngineProxy.swift; sourceTree = "<group>"; };
 		656CE6D448A7190204A7F13B /* native-shell.js */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.javascript; path = "native-shell.js"; sourceTree = "<group>"; };
+		6C83296988120D67D7EDE624 /* PerfLog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PerfLog.swift; sourceTree = "<group>"; };
 		6ED1B58D57DFE1A43CECB322 /* Symbols.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Symbols.swift; sourceTree = "<group>"; };
 		6F0E2D26A12EDBED7F97D2FC /* NetworkTransport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NetworkTransport.swift; sourceTree = "<group>"; };
 		72D3C22A24200567FF62598A /* NativeShellBackend.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NativeShellBackend.swift; sourceTree = "<group>"; };
@@ -225,6 +228,7 @@
 			isa = PBXGroup;
 			children = (
 				9C82A8C5845C19F1CB043F14 /* NativeMapView.swift */,
+				6C83296988120D67D7EDE624 /* PerfLog.swift */,
 			);
 			path = Map;
 			sourceTree = "<group>";
@@ -488,6 +492,7 @@
 				918BA47207B557E04E7BD072 /* NativeMapView.swift in Sources */,
 				4C288CC40B7CCAE9412369D9 /* NativeShellBackend.swift in Sources */,
 				C4231FD3663CE6F23CD3E9CA /* NetworkTransport.swift in Sources */,
+				CCC48BAA03C36F57CBEDFA8A /* PerfLog.swift in Sources */,
 				70AA1626FF6E170E3E2BAE03 /* PortalWebView.swift in Sources */,
 				688D7112D165DC54281C3B01 /* RootView.swift in Sources */,
 				B9EDBD2489D7C2AD4812C03F /* ShellBackend.swift in Sources */,
@@ -523,6 +528,7 @@
 				2F26BB95E1C68C898D79FAE8 /* NativeMapView.swift in Sources */,
 				7C025BE81DA3E7F1767BEF19 /* NativeShellBackend.swift in Sources */,
 				CC13F7BFA0171BACFEF1BE42 /* NetworkTransport.swift in Sources */,
+				0C948D0090EB673DB17473E4 /* PerfLog.swift in Sources */,
 				7E55973A3558ACBB2A391563 /* RootView.swift in Sources */,
 				E97FDA3421CE55A44185ACE8 /* ShellBackend.swift in Sources */,
 				8713216243F6443818261C44 /* ShellModel.swift in Sources */,

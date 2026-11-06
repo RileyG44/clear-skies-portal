@@ -86,7 +86,14 @@ nonisolated final class MapRenderer: NSObject, @unchecked Sendable {
             link.isPaused = true
             return
         }
+        #if DEBUG
+        let began = CACurrentMediaTime()
+        #endif
         var frame = csk_map_frame(map, link.targetTimestamp)
+        #if DEBUG
+        PerfLog.shared?.frame(began: began, cost: CACurrentMediaTime() - began, presented: frame.presented,
+                              coverage: frame.coverage, inFlight: Int(frame.in_flight))
+        #endif
         if !frame.again { link.isPaused = true }
         let state = (frame.resident, frame.in_flight, Int(frame.coverage * 100), frame.failed)
         if state != logged {

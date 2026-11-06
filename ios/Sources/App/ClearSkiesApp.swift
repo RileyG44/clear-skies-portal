@@ -141,17 +141,21 @@ final class PortalModel {
         if let ref = UserDefaults.standard.string(forKey: "cspDebugAct") {
             backend.send("act", ["ref": ref, "op": "click"])
         }
-        // `-cspDebugCamera "39.5 -98.5 3.5"` moves the camera to a latitude,
-        // longitude and zoom once the map is up.
+        // `-cspDebugCamera "39.5 -98.5 3.5 [delay]"` moves the camera to a
+        // latitude, longitude and zoom once the map is up (after 3 s, or
+        // `delay` seconds).
         if let camera = UserDefaults.standard.string(forKey: "cspDebugCamera") {
             let parts = camera.split(separator: " ").compactMap { Double($0) }
-            if parts.count == 3 {
+            if parts.count >= 3 {
                 Task { @MainActor in
-                    try? await Task.sleep(for: .seconds(3))
+                    try? await Task.sleep(for: .seconds(parts.count > 3 ? parts[3] : 3))
+                    _ = PerfLog.shared
+                    PerfLog.shared?.mark("move")
                     backend.send("goTo", ["lat": parts[0], "lng": parts[1], "zoom": parts[2]])
                 }
             }
         }
+        _ = PerfLog.shared
         // `-cspDebugSearch "Mount Rainier"` submits a search, as typed.
         if let text = UserDefaults.standard.string(forKey: "cspDebugSearch") {
             let shell = shell
