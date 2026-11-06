@@ -21,7 +21,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
-use csk_engine::transport::{FetchError, FetchFuture, FetchRequest, FetchResponse, Transport};
+use csk_engine::transport::{FetchError, FetchFuture, FetchRequest, FetchResponse, RestoreFuture, Transport};
 use csk_engine::{Config, Engine, Request, Response};
 use tokio::sync::oneshot;
 
@@ -45,6 +45,9 @@ pub struct CskFetchRequest {
     /// Write the response body to this file path instead of returning it
     /// (complete with an empty body), or NULL.
     pub dest_path: *const c_char,
+    /// Only restore an existing system transfer or completed file. Never
+    /// start a network request; fail with CSK_FETCH_NOT_FOUND if absent.
+    pub restore_only: bool,
 }
 
 /// The platform's network.
@@ -57,6 +60,9 @@ pub struct CskTransport {
     pub cancel: extern "C" fn(context: *mut c_void, id: u64),
     /// The engine is gone; release `context`.
     pub release: extern "C" fn(context: *mut c_void),
+    /// Release a durable public GET archive after its consumer's commit.
+    /// May be NULL on platforms without a background download journal.
+    pub download_consumed: Option<extern "C" fn(context: *mut c_void, url: *const c_char)>,
 }
 
 /// Failure codes for `csk_fetch_fail`.
@@ -65,6 +71,7 @@ pub const CSK_FETCH_TIMEOUT: i32 = 1;
 pub const CSK_FETCH_CANCELLED: i32 = 2;
 pub const CSK_FETCH_TOO_LARGE: i32 = 3;
 pub const CSK_FETCH_OFFLINE: i32 = 4;
+pub const CSK_FETCH_NOT_FOUND: i32 = 5;
 
 /// An answer. `headers` is `Name: value` lines separated by `\n`.
 #[repr(C)]
@@ -128,7 +135,32 @@ impl Drop for CancelOnDrop {
 struct Bridge(Arc<Platform>);
 
 impl Transport for Bridge {
+    fn download_consumed(&self, url: &str) {
+        if let Some(callback) = self.0.t.download_consumed
+            && let Ok(url) = CString::new(url)
+        {
+            callback(self.0.t.context, url.as_ptr());
+        }
+    }
+
     fn fetch(&self, req: FetchRequest) -> FetchFuture {
+        self.fetch_request(req, false)
+    }
+
+    fn restore_download(&self, req: FetchRequest) -> RestoreFuture {
+        let pending = self.fetch_request(req, true);
+        Box::pin(async move {
+            match pending.await {
+                Ok(response) => Ok(Some(response)),
+                Err(FetchError::NotFound) => Ok(None),
+                Err(e) => Err(e),
+            }
+        })
+    }
+}
+
+impl Bridge {
+    fn fetch_request(&self, req: FetchRequest, restore_only: bool) -> FetchFuture {
         let platform = self.0.clone();
         Box::pin(async move {
             let (tx, rx) = oneshot::channel();
@@ -157,6 +189,7 @@ impl Transport for Bridge {
                     body: if req.body.is_empty() { std::ptr::null() } else { req.body.as_ptr() },
                     body_len: req.body.len(),
                     dest_path: dest.as_ref().map_or(std::ptr::null(), |d| d.as_ptr()),
+                    restore_only,
                 };
                 let token = Box::into_raw(Box::new(CskFetch { tx }));
                 (platform.t.fetch)(platform.t.context, token, id, &c);
@@ -376,6 +409,7 @@ pub unsafe extern "C" fn csk_fetch_fail(token: *mut CskFetch, code: i32, message
         CSK_FETCH_CANCELLED => FetchError::Cancelled,
         CSK_FETCH_TOO_LARGE => FetchError::TooLarge,
         CSK_FETCH_OFFLINE => FetchError::Offline,
+        CSK_FETCH_NOT_FOUND => FetchError::NotFound,
         _ => FetchError::Network(msg),
     };
     let _ = t.tx.send(Err(e));
@@ -425,7 +459,7 @@ mod tests {
     fn requests_round_trip_through_the_abi() {
         let dir = std::env::temp_dir().join(format!("csk-ffi-{}", std::process::id()));
         let cfg = CString::new(format!("{{\"cacheDir\":{:?}}}", dir.to_str().unwrap())).unwrap();
-        let t = CskTransport { context: std::ptr::null_mut(), fetch, cancel, release };
+        let t = CskTransport { context: std::ptr::null_mut(), fetch, cancel, release, download_consumed: None };
         // SAFETY: exercising the ABI as the platform does.
         unsafe {
             let e = csk_engine_new(cfg.as_ptr(), t);

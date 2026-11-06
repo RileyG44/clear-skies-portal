@@ -5,16 +5,13 @@ import Foundation
 /// HTTP/3, proxy settings, Low Data Mode and cellular policy. The engine
 /// keeps its own cache, so URLSession's is off. Body size is enforced while
 /// bytes arrive, not after.
-nonisolated final class NetworkTransport: NSObject, URLSessionDataDelegate, URLSessionDownloadDelegate, @unchecked Sendable {
+nonisolated final class NetworkTransport: NSObject, URLSessionDataDelegate, @unchecked Sendable {
     private struct Fetch {
         let token: OpaquePointer
         let maxBody: UInt64
-        /// Large downloads go straight to this file.
-        let dest: URL?
         var status = 0
         var headers = ""
         var body = Data()
-        var fileError: String?
     }
 
     private let lock = NSLock()
@@ -24,6 +21,12 @@ nonisolated final class NetworkTransport: NSObject, URLSessionDataDelegate, URLS
     private var tasks: [UInt64: URLSessionTask] = [:]
     private var ids: [Int: UInt64] = [:]
     private var session: URLSession!
+    private var background: [UInt64: UUID] = [:]
+
+    private final class Token: @unchecked Sendable {
+        let value: OpaquePointer
+        init(_ value: OpaquePointer) { self.value = value }
+    }
 
     override init() {
         super.init()
@@ -44,8 +47,10 @@ nonisolated final class NetworkTransport: NSObject, URLSessionDataDelegate, URLS
         session = URLSession(configuration: configuration, delegate: self, delegateQueue: queue)
     }
 
-    deinit {
-        session?.invalidateAndCancel()
+    func shutdown() {
+        session.invalidateAndCancel()
+        let pending = lock.withLock { let ids = Array(background.values); background.removeAll(); return ids }
+        for id in pending { BackgroundDownloads.shared.detach(id) }
     }
 
     private static let userAgent: String = {
@@ -55,6 +60,10 @@ nonisolated final class NetworkTransport: NSObject, URLSessionDataDelegate, URLS
     }()
 
     func fetch(token: OpaquePointer, id: UInt64, request: CskFetchRequest) {
+        guard !request.restore_only || request.dest_path != nil else {
+            csk_fetch_fail(token, CSK_FETCH_NOT_FOUND, "restore requires a file destination")
+            return
+        }
         guard let urlText = request.url.map({ String(cString: $0) }), let url = URL(string: urlText) else {
             csk_fetch_fail(token, CSK_FETCH_NETWORK, "invalid URL")
             return
@@ -76,16 +85,29 @@ nonisolated final class NetworkTransport: NSObject, URLSessionDataDelegate, URLS
         if let body = request.body, request.body_len > 0 {
             r.httpBody = Data(bytes: body, count: request.body_len)
         }
-        let dest = request.dest_path.map { URL(filePath: String(cString: $0)) }
-        if dest != nil {
-            // DNR archives can be large: bulk transfers use unmetered Wi-Fi.
+        if let path = request.dest_path {
             r.allowsCellularAccess = false
             r.allowsExpensiveNetworkAccess = false
             r.allowsConstrainedNetworkAccess = false
+            let uuid = UUID(), token = Token(token)
+            lock.withLock { background[id] = uuid }
+            BackgroundDownloads.shared.fetch(id: uuid, request: r, destination: URL(filePath: String(cString: path)),
+                                              maxBytes: request.max_body, restoreOnly: request.restore_only) { [weak self, token] result in
+                _ = self?.lock.withLock { self?.background.removeValue(forKey: id) }
+                switch result {
+                case .success(let reply):
+                    reply.headers.withCString { csk_fetch_complete(token.value, UInt16(clamping: reply.status), $0, nil, 0) }
+                case .failure(.cancelled): csk_fetch_fail(token.value, CSK_FETCH_CANCELLED, "cancelled")
+                case .failure(.tooLarge): csk_fetch_fail(token.value, CSK_FETCH_TOO_LARGE, "download too large")
+                case .failure(.notFound): csk_fetch_fail(token.value, CSK_FETCH_NOT_FOUND, "no durable download")
+                case .failure(.network(let message)): csk_fetch_fail(token.value, CSK_FETCH_NETWORK, message)
+                }
+            }
+            return
         }
-        let task: URLSessionTask = dest == nil ? session.dataTask(with: r) : session.downloadTask(with: r)
+        let task = session.dataTask(with: r)
         lock.withLock {
-            fetches[task.taskIdentifier] = Fetch(token: token, maxBody: request.max_body, dest: dest)
+            fetches[task.taskIdentifier] = Fetch(token: token, maxBody: request.max_body)
             tasks[id] = task
             ids[task.taskIdentifier] = id
         }
@@ -93,7 +115,8 @@ nonisolated final class NetworkTransport: NSObject, URLSessionDataDelegate, URLS
     }
 
     func cancel(id: UInt64) {
-        let task = lock.withLock { tasks[id] }
+        let (task, download) = lock.withLock { (tasks[id], background[id]) }
+        if let download { BackgroundDownloads.shared.detach(download) }
         task?.cancel()      // completion consumes the token
     }
 
@@ -140,47 +163,6 @@ nonisolated final class NetworkTransport: NSObject, URLSessionDataDelegate, URLS
         }
     }
 
-    private static func headerLines(_ response: URLResponse?) -> (Int, String) {
-        let http = response as? HTTPURLResponse
-        let lines = (http?.allHeaderFields ?? [:]).compactMap { key, value -> String? in
-            guard let name = key as? String else { return nil }
-            return "\(name): \(value)"
-        }.joined(separator: "\n")
-        return (http?.statusCode ?? 0, lines)
-    }
-
-    func urlSession(_ session: URLSession, downloadTask: URLSessionDownloadTask, didWriteData bytesWritten: Int64,
-                    totalBytesWritten: Int64, totalBytesExpectedToWrite: Int64) {
-        let limit = lock.withLock { fetches[downloadTask.taskIdentifier]?.maxBody } ?? .max
-        if UInt64(max(0, max(totalBytesWritten, totalBytesExpectedToWrite))) > limit, let f = take(downloadTask) {
-            csk_fetch_fail(f.token, CSK_FETCH_TOO_LARGE, "download too large")
-            downloadTask.cancel()
-        }
-    }
-
-    /// The file URLSession wrote is removed when this returns: move it now.
-    func urlSession(_ session: URLSession, downloadTask: URLSessionDownloadTask, didFinishDownloadingTo location: URL) {
-        let (status, headers) = Self.headerLines(downloadTask.response)
-        lock.withLock {
-            guard var f = fetches[downloadTask.taskIdentifier], let dest = f.dest else { return }
-            f.status = status
-            f.headers = headers
-            do {
-                let size = try location.resourceValues(forKeys: [.fileSizeKey]).fileSize ?? 0
-                guard UInt64(size) <= f.maxBody else {
-                    f.fileError = "download too large"
-                    fetches[downloadTask.taskIdentifier] = f
-                    return
-                }
-                try? FileManager.default.removeItem(at: dest)
-                try FileManager.default.moveItem(at: location, to: dest)
-            } catch {
-                f.fileError = error.localizedDescription
-            }
-            fetches[downloadTask.taskIdentifier] = f
-        }
-    }
-
     /// Redirects come back to the engine, which decides whether to follow
     /// (a snapshot image re-validates every hop against its allowlist).
     func urlSession(_ session: URLSession, task: URLSessionTask, willPerformHTTPRedirection response: HTTPURLResponse,
@@ -203,10 +185,6 @@ nonisolated final class NetworkTransport: NSObject, URLSessionDataDelegate, URLS
         }
         if let error {
             csk_fetch_fail(f.token, CSK_FETCH_NETWORK, String(describing: error))
-            return
-        }
-        if let fileError = f.fileError {
-            csk_fetch_fail(f.token, CSK_FETCH_NETWORK, fileError)
             return
         }
         f.headers.withCString { headers in

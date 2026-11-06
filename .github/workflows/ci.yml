@@ -52,6 +52,8 @@ jobs:
         run: |
           zsh -n ios/scripts/run-on-iphone.sh
           python3 -m unittest discover -s ios/scripts -p 'test_*.py' -v
+      - name: Test durable platform storage
+        run: swift test --package-path ios
 
   # The native core (docs/native): format, lint, the frozen goldens, and the
   # iPhone builds. rust-toolchain.toml pins the compiler and targets.

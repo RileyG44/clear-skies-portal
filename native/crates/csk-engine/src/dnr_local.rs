@@ -26,7 +26,7 @@ use serde_json::{Value, json};
 
 use crate::Engine;
 use crate::tiles::TILE_SIZE;
-use crate::transport::FetchRequest;
+use crate::transport::{FetchRequest, FetchResponse};
 use crate::usgs::catalog::encode_component;
 
 const HOST: &str = crate::dnr::HOST;
@@ -132,14 +132,24 @@ impl ProjSpec {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 struct Job {
     id: String,
     bbox: [f64; 4],
     dataset: i64,
     project: String,
     year: i32,
+    #[serde(skip, default = "Instant::now")]
     touched: Instant,
+}
+
+/// A dropped acquisition leaves only its platform-owned archive and journal.
+/// Process termination is handled by the startup staging sweep as well.
+struct Staging(PathBuf);
+impl Drop for Staging {
+    fn drop(&mut self) {
+        let _ = std::fs::remove_dir_all(&self.0);
+    }
 }
 
 #[derive(Debug, Clone, Default, Serialize)]
@@ -210,6 +220,14 @@ fn geometry(parts: &[[f64; 4]]) -> Value {
     }
 }
 
+fn download_url(dataset: i64, shape: &str) -> String {
+    format!(
+        "https://{HOST}/download?geojson={}&ids={}",
+        encode_component(shape),
+        encode_component(&dataset.to_string())
+    )
+}
+
 impl DnrLocal {
     pub fn open(dir: PathBuf, store: &csk_store::Store) -> Self {
         let _ = std::fs::create_dir_all(&dir);
@@ -259,7 +277,12 @@ impl DnrLocal {
                 }
             }
         }
-        Self { dir, state: Mutex::new(State { revision, ..State::default() }), files: Mutex::new(files) }
+        // Restore the admitted source request without needing the portal's
+        // catalogue or query again. Its background transfer may already be ready.
+        let pending: Option<String> =
+            store.read(|c| c.query_row("SELECT json FROM pinned.dnr_acquisition WHERE id = 1", [], |r| r.get(0))).ok();
+        let queue = pending.and_then(|text| serde_json::from_str::<Job>(&text).ok()).into_iter().collect();
+        Self { dir, state: Mutex::new(State { revision, queue, ..State::default() }), files: Mutex::new(files) }
     }
 
     pub fn files(&self) -> Vec<LocalFile> {
@@ -318,6 +341,10 @@ fn add_region(store: &csk_store::Store, dataset: i64, b: &[f64; 4]) {
 }
 
 impl Engine {
+    pub fn dnr_resume(self: &Arc<Self>) {
+        self.dnr_drain();
+    }
+
     /// Makes sure DNR elevation for this tile is local or on its way.
     pub async fn dnr_ensure(self: &Arc<Self>, z: u8, x: u32, y: u32) -> Ensure {
         let bbox = tile_lonlat(z, x, y);
@@ -415,7 +442,17 @@ impl Engine {
         let me = self.clone();
         tokio::spawn(async move {
             let id = job.id.clone();
-            let result = me.dnr_acquire(&job).await;
+            let recorded = me.store.write(|c| {
+                c.execute(
+                    "INSERT OR REPLACE INTO pinned.dnr_acquisition VALUES (1, ?1)",
+                    [serde_json::to_string(&job).unwrap_or_default()],
+                )
+            });
+            let result = match recorded {
+                Ok(_) => me.dnr_acquire(&job).await,
+                Err(e) => Err(e.to_string()),
+            };
+            let _ = me.store.write(|c| c.execute("DELETE FROM pinned.dnr_acquisition WHERE id = 1", []));
             {
                 let mut s = me.dnr_local.state.lock().unwrap_or_else(|e| e.into_inner());
                 s.active = None;
@@ -441,56 +478,50 @@ impl Engine {
             return Ok(());
         }
         let shape = geometry(&[job.bbox]).to_string();
-        let rows = self
+        let staging = local.dir.join(format!("staging-{}", now_ms()));
+        std::fs::create_dir_all(&staging).map_err(|e| e.to_string())?;
+        let _staging_owner = Staging(staging.clone());
+        let download_url = download_url(job.dataset, &shape);
+        let restored = self
             .upstream
-            .fetch(
-                FetchRequest::post_form(
-                    format!("https://{HOST}/query"),
-                    format!("geojson={}", encode_component(&shape)),
-                )
-                .timeout(Duration::from_secs(30))
-                .max_body(8 << 20),
+            .restore_download(
+                FetchRequest::get(&download_url).max_body(MAX_ARCHIVE as usize).to_file(staging.join("download.zip")),
             )
             .await
             .map_err(|e| e.to_string())?;
-        if rows.status != 200 {
-            return Err(format!("DNR download coverage HTTP {}", rows.status));
-        }
-        let rows: Value =
-            serde_json::from_slice(&rows.body).map_err(|_| "Invalid DNR download coverage response".to_owned())?;
-        if !rows.is_array() {
-            return Err("Invalid DNR download coverage response".into());
-        }
-        let Some(dataset) = rows
-            .as_array()
-            .and_then(|a| a.iter().find(|r| r["dataset_id"] == job.dataset && r["dataset_name"] == "DTM"))
-        else {
-            add_region(&self.store, job.dataset, &job.bbox);
-            return Ok(());
+        let output_bytes = if restored.is_some() {
+            // The archived query was admitted before the system task began.
+            // Bound extraction independently of its compressed size.
+            archive_output_size(&staging.join("download.zip"))?
+        } else {
+            match self.dnr_download_plan(job, &shape).await? {
+                Some(bytes) => bytes.saturating_mul(2),
+                None => {
+                    let _ = std::fs::remove_dir_all(&staging);
+                    return Ok(());
+                }
+            }
         };
-        let (Some(bytes), Some(files)) = (dataset["bytes"].as_u64(), dataset["files"].as_u64()) else {
-            return Err("DNR did not provide a download size and file count".into());
-        };
-        if bytes > MAX_ARCHIVE || files as usize > MAX_FILES {
-            return Err("DNR area exceeds the download budget; zoom in to a smaller area".into());
-        }
         let protected: u64 = local.files().iter().filter(|f| intersects(&f.bounds, &job.bbox)).map(|f| f.bytes).sum();
-        if protected.saturating_add(bytes) > MAX_STORE {
+        if restored.is_some() && protected.saturating_add(output_bytes) > MAX_STORE {
             return Err("DNR source preparation exceeds the local store budget".into());
         }
-        // The portal reports source bytes; staging holds the ZIP and its
-        // extracted TIFFs at once. Keep headroom for the rest of the app.
         let available = fs2::available_space(&local.dir).map_err(|e| e.to_string())?;
         let volume = fs2::total_space(&local.dir).map_err(|e| e.to_string())?;
         let reserve = (volume / 20).clamp(2 << 30, 8 << 30);
-        if available < bytes.saturating_mul(2).saturating_add(reserve) {
+        if available < output_bytes.saturating_add(reserve) {
+            let _ = std::fs::remove_dir_all(&staging);
             return Err("Not enough device storage to prepare this DNR area".into());
         }
-        let staging = local.dir.join(format!("staging-{}", now_ms()));
-        std::fs::create_dir_all(&staging).map_err(|e| e.to_string())?;
-        let outcome = self.dnr_stage(job, &shape, &staging, &known).await;
+        let outcome = self.dnr_stage(job, &shape, &staging, &known, restored).await;
         let _ = std::fs::remove_dir_all(&staging);
-        let added = outcome?;
+        let added = match outcome {
+            Ok(files) => files,
+            Err(e) => {
+                self.upstream.download_consumed(&download_url);
+                return Err(e);
+            }
+        };
         // One transaction publishes the files and the region.
         let revision = local.revision() + 1;
         let committed = self.store.write(|c| {
@@ -512,6 +543,7 @@ impl Engine {
             for f in &added {
                 let _ = std::fs::remove_file(local.path_of(f));
             }
+            self.upstream.download_consumed(&download_url);
             return Err(e.to_string());
         }
         {
@@ -523,47 +555,90 @@ impl Engine {
         }
         local.state.lock().unwrap_or_else(|e| e.into_inner()).revision = revision;
         self.dnr_evict(&job.bbox);
+        self.upstream.download_consumed(&download_url);
         Ok(())
     }
 
-    /// Download, extract, inspect, move into place. Returns new files.
+    /// Validate the portal estimate before starting a new transfer.
+    async fn dnr_download_plan(&self, job: &Job, shape: &str) -> Result<Option<u64>, String> {
+        let rows = self
+            .upstream
+            .fetch(
+                FetchRequest::post_form(
+                    format!("https://{HOST}/query"),
+                    format!("geojson={}", encode_component(shape)),
+                )
+                .timeout(Duration::from_secs(30))
+                .max_body(8 << 20),
+            )
+            .await
+            .map_err(|e| e.to_string())?;
+        if rows.status != 200 {
+            return Err(format!("DNR download coverage HTTP {}", rows.status));
+        }
+        let rows: Value =
+            serde_json::from_slice(&rows.body).map_err(|_| "Invalid DNR download coverage response".to_owned())?;
+        if !rows.is_array() {
+            return Err("Invalid DNR download coverage response".into());
+        }
+        let Some(dataset) = rows
+            .as_array()
+            .and_then(|a| a.iter().find(|r| r["dataset_id"] == job.dataset && r["dataset_name"] == "DTM"))
+        else {
+            add_region(&self.store, job.dataset, &job.bbox);
+            return Ok(None);
+        };
+        let (Some(bytes), Some(files)) = (dataset["bytes"].as_u64(), dataset["files"].as_u64()) else {
+            return Err("DNR did not provide a download size and file count".into());
+        };
+        if bytes > MAX_ARCHIVE || files as usize > MAX_FILES {
+            return Err("DNR area exceeds the download budget; zoom in to a smaller area".into());
+        }
+        let protected: u64 =
+            self.dnr_local.files().iter().filter(|f| intersects(&f.bounds, &job.bbox)).map(|f| f.bytes).sum();
+        if protected.saturating_add(bytes) > MAX_STORE {
+            return Err("DNR source preparation exceeds the local store budget".into());
+        }
+        Ok(Some(bytes))
+    }
+
     async fn dnr_stage(
         self: &Arc<Self>,
         job: &Job,
         shape: &str,
         staging: &Path,
         known: &[LocalFile],
+        restored: Option<FetchResponse>,
     ) -> Result<Vec<LocalFile>, String> {
         let local = &self.dnr_local;
-        // The download needs the website's session cookie.
-        let page = self
-            .upstream
-            .fetch(FetchRequest::get(format!("https://{HOST}/")).max_body(4 << 20))
-            .await
-            .map_err(|e| e.to_string())?;
-        if page.status != 200 {
-            return Err(format!("DNR session HTTP {}", page.status));
-        }
-        let cookie = page.cookies().join("; ");
         let zip_path = staging.join("download.zip");
-        local.set_active("downloading", 0, 0.0);
-        let url = format!(
-            "https://{HOST}/download?geojson={}&ids={}",
-            encode_component(shape),
-            encode_component(&job.dataset.to_string())
-        );
-        let r = self
-            .upstream
-            .fetch(
-                FetchRequest::get(url)
-                    .header("Cookie", cookie)
-                    .header("Referer", format!("https://{HOST}/"))
-                    .timeout(Duration::from_secs(3600))
-                    .max_body(MAX_ARCHIVE as usize)
-                    .to_file(&zip_path),
-            )
-            .await
-            .map_err(|e| format!("DNR elevation download: {e}"))?;
+        let r = if let Some(response) = restored {
+            response
+        } else {
+            // The download needs the website's session cookie.
+            let page = self
+                .upstream
+                .fetch(FetchRequest::get(format!("https://{HOST}/")).max_body(4 << 20))
+                .await
+                .map_err(|e| e.to_string())?;
+            if page.status != 200 {
+                return Err(format!("DNR session HTTP {}", page.status));
+            }
+            let cookie = page.cookies().join("; ");
+            local.set_active("downloading", 0, 0.0);
+            let url = download_url(job.dataset, shape);
+            self.upstream
+                .fetch(
+                    FetchRequest::get(url)
+                        .header("Cookie", cookie)
+                        .header("Referer", format!("https://{HOST}/"))
+                        .timeout(Duration::from_secs(3600))
+                        .max_body(MAX_ARCHIVE as usize)
+                        .to_file(&zip_path),
+                )
+                .await
+                .map_err(|e| format!("DNR elevation download: {e}"))?
+        };
         let media = r.header("content-type").unwrap_or("").to_ascii_lowercase();
         if r.status != 200 || !(media.contains("zip") || media.contains("octet-stream")) {
             return Err(format!("DNR elevation download HTTP {}", r.status));
@@ -961,6 +1036,22 @@ fn declared_vertical(g: &Geo, dataset: i64) -> Option<(f64, String)> {
     None
 }
 
+/// Inspect the central directory before admitting restored extraction. The
+/// archive already occupies disk; reserve only its bounded output from here.
+fn archive_output_size(path: &Path) -> Result<u64, String> {
+    let mut archive =
+        zip::ZipArchive::new(std::fs::File::open(path).map_err(|e| e.to_string())?).map_err(|e| e.to_string())?;
+    let mut bytes = 0u64;
+    for i in 0..archive.len() {
+        let entry = archive.by_index(i).map_err(|e| e.to_string())?;
+        bytes = bytes.checked_add(entry.size()).ok_or("DNR archive output size overflow")?;
+        if bytes > MAX_ARCHIVE {
+            return Err("DNR extracted data exceeds the acquisition budget".into());
+        }
+    }
+    Ok(bytes)
+}
+
 /// Extracts every TIFF in the archive not already held, with CRCs checked.
 fn extract(zip_path: &Path, dir: &Path, known: &[String]) -> Result<Vec<(String, PathBuf)>, String> {
     let file = std::fs::File::open(zip_path).map_err(|e| e.to_string())?;
@@ -1084,6 +1175,72 @@ mod tests {
         }
     }
 
+    struct RestoredArchive(Vec<u8>);
+    impl Transport for RestoredArchive {
+        fn fetch(&self, _: FetchRequest) -> FetchFuture {
+            panic!("restored ingestion must not contact the portal")
+        }
+        fn restore_download(&self, r: FetchRequest) -> crate::transport::RestoreFuture {
+            let bytes = self.0.clone();
+            Box::pin(async move {
+                std::fs::write(r.dest.unwrap(), bytes).unwrap();
+                Ok(Some(FetchResponse {
+                    status: 200,
+                    headers: vec![("Content-Type".into(), "application/zip".into())],
+                    body: vec![],
+                }))
+            })
+        }
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn admitted_acquisition_restores_without_portal_or_catalogue() {
+        let dir = tempfile::tempdir().unwrap();
+        let config = crate::Config {
+            cache_dir: dir.path().into(),
+            data_dir: None,
+            cache_budget: 1 << 20,
+            usgs_scope: Some(vec![]),
+        };
+        let bytes = archive(&[("offline.tif", include_bytes!("../../../fixtures/tiff/usgs-tiled-lzw-fp.tif"))]);
+        let engine = Engine::new(config.clone(), Arc::new(RestoredArchive(bytes.clone()))).unwrap();
+        let job = Job {
+            id: "offline".into(),
+            bbox: [-124.0, 46.0, -121.0, 49.0],
+            dataset: 1603,
+            project: "Offline".into(),
+            year: 2021,
+            touched: Instant::now(),
+        };
+        engine
+            .store
+            .write(|c| {
+                c.execute("INSERT INTO pinned.dnr_acquisition VALUES (1, ?1)", [serde_json::to_string(&job).unwrap()])
+            })
+            .unwrap();
+        drop(engine);
+        let engine = Engine::new(config, Arc::new(RestoredArchive(bytes))).unwrap();
+        let restored = engine.dnr_local.state.lock().unwrap().queue.pop().unwrap();
+        assert_eq!(restored.id, job.id);
+        // Exercise the exact restore and ingest boundary without depending on
+        // the test runner's available disk space or volume reserve.
+        let staging = engine.dnr_local.dir.join("staging-offline");
+        std::fs::create_dir(&staging).unwrap();
+        let response = engine
+            .upstream
+            .restore_download(
+                FetchRequest::get(download_url(job.dataset, &geometry(&[job.bbox]).to_string()))
+                    .to_file(staging.join("download.zip")),
+            )
+            .await
+            .unwrap()
+            .unwrap();
+        assert!(archive_output_size(&staging.join("download.zip")).unwrap() > 0);
+        let files = engine.dnr_stage(&restored, "{}", &staging, &[], Some(response)).await.unwrap();
+        assert_eq!(files.len(), 1);
+        assert_eq!(files[0].project, "Offline");
+    }
+
     #[tokio::test(flavor = "multi_thread")]
     async fn ingestion_validates_all_members_and_recovers_missing_sources() {
         let fixture = include_bytes!("../../../fixtures/tiff/usgs-tiled-lzw-fp.tif");
@@ -1107,13 +1264,13 @@ mod tests {
         };
         let staging = engine.dnr_local.dir.join("staging-test");
         std::fs::create_dir(&staging).unwrap();
-        assert!(engine.dnr_stage(&job, "{}", &staging, &[]).await.is_err());
+        assert!(engine.dnr_stage(&job, "{}", &staging, &[], None).await.is_err());
         assert!(std::fs::read_dir(&engine.dnr_local.dir).unwrap().all(|e| e.unwrap().path().is_dir()));
         drop(engine);
 
         let engine = Engine::new(config, Arc::new(Portal(archive(&[("valid.tif", fixture)])))).unwrap();
         std::fs::create_dir_all(&staging).unwrap();
-        let files = engine.dnr_stage(&job, "{}", &staging, &[]).await.unwrap();
+        let files = engine.dnr_stage(&job, "{}", &staging, &[], None).await.unwrap();
         let f = &files[0];
         assert_eq!(f.vertical_meters, US_FOOT);
         assert!(f.vertical_basis.contains("1607"));

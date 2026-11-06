@@ -130,6 +130,10 @@ CREATE TABLE IF NOT EXISTS pinned.dnr_download (
   id INTEGER PRIMARY KEY CHECK (id = 1),
   json TEXT NOT NULL
 );
+CREATE TABLE IF NOT EXISTS pinned.dnr_acquisition (
+  id INTEGER PRIMARY KEY CHECK (id = 1),
+  json TEXT NOT NULL
+);
 
 -- Download jobs: device-local progress, resumable after the app is killed.
 CREATE TABLE IF NOT EXISTS pinned.jobs (

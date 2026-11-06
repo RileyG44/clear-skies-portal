@@ -1,63 +1,17 @@
 import CSKEngine
 import Foundation
 import WebKit
-import os
 
-/// The engine built into the app (native/crates/csk-engine), answering the
-/// web client's same-origin /api requests in process: no server, no network
-/// hop to a desktop. Response bodies come straight from the engine's memory
-/// into WebKit without a copy.
+/// WebKit adapter. The app runtime owns the engine independently of a map.
 final class LocalEngine {
-    private let handle: OpaquePointer
+    private let runtime: EngineRuntime
+    private var handle: OpaquePointer { runtime.handle }
     private var running: [ObjectIdentifier: EngineRequest] = [:]
-    private static let log = Logger(subsystem: Bundle.main.bundleIdentifier ?? "ClearSkies", category: "engine")
-
-    /// Whether the page is told this engine is built in. It answers every
-    /// route the page uses once an engine is connected; capabilities it does
-    /// not have yet (such as Oregon) are left out of its health
-    /// `features`, so the page never asks for them.
     static let announced = true
 
-    /// Disposable engine data lives in Caches, which iOS may clear.
-    static var cacheDirectory: URL { URL.cachesDirectory.appending(path: "engine", directoryHint: .isDirectory) }
-    /// What the person made (markup) lives in Application Support: kept and backed up.
-    static var dataDirectory: URL {
-        URL.applicationSupportDirectory.appending(path: "engine", directoryHint: .isDirectory)
-    }
-
     init?() {
-        let config: [String: Any] = [
-            "cacheDir": Self.cacheDirectory.path(percentEncoded: false),
-            "dataDir": Self.dataDirectory.path(percentEncoded: false),
-            "cacheBudget": 4 << 30,
-        ]
-        guard let data = try? JSONSerialization.data(withJSONObject: config),
-              let json = String(data: data, encoding: .utf8) else { return nil }
-        Self.excludeOfflineFromBackup()
-        let transport = NetworkTransport()
-        let context = Unmanaged.passRetained(transport).toOpaque()
-        let csk = CskTransport(context: context, fetch: transportFetch, cancel: transportCancel, release: transportRelease)
-        guard let engine = json.withCString({ csk_engine_new($0, csk) }) else {
-            Self.log.error("the built-in engine did not start")
-            return nil
-        }
-        handle = engine
-        Self.log.notice("built-in engine \(String(cString: csk_version()), privacy: .public) started")
-    }
-
-    /// Offline areas live under dataDirectory/offline: kept (iOS does not
-    /// purge Application Support) but not backed up, since they can be
-    /// downloaded again.
-    private static func excludeOfflineFromBackup() {
-        var offline = dataDirectory.appending(path: "offline", directoryHint: .isDirectory)
-        try? FileManager.default.createDirectory(at: offline, withIntermediateDirectories: true)
-        var values = URLResourceValues()
-        values.isExcludedFromBackup = true
-        try? offline.setResourceValues(values)
-    }
-
-    isolated deinit {
-        csk_engine_free(handle)
+        guard let runtime = EngineRuntime.shared else { return nil }
+        self.runtime = runtime
     }
 
     func start(_ task: any WKURLSchemeTask) {
@@ -160,20 +114,4 @@ nonisolated private func engineRespond(_ context: UnsafeMutableRawPointer?, _ re
         body = Data()
     }
     Task { @MainActor in pending.deliver(status: status, headers: headers, body: body) }
-}
-
-nonisolated private func transportFetch(_ context: UnsafeMutableRawPointer?, _ token: OpaquePointer?, _ id: UInt64,
-                                        _ request: UnsafePointer<CskFetchRequest>?) {
-    guard let context, let token, let request else { return }
-    Unmanaged<NetworkTransport>.fromOpaque(context).takeUnretainedValue().fetch(token: token, id: id, request: request.pointee)
-}
-
-nonisolated private func transportCancel(_ context: UnsafeMutableRawPointer?, _ id: UInt64) {
-    guard let context else { return }
-    Unmanaged<NetworkTransport>.fromOpaque(context).takeUnretainedValue().cancel(id: id)
-}
-
-nonisolated private func transportRelease(_ context: UnsafeMutableRawPointer?) {
-    guard let context else { return }
-    Unmanaged<NetworkTransport>.fromOpaque(context).release()
 }

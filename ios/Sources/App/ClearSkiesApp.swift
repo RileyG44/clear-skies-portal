@@ -3,7 +3,9 @@ import UIKit
 
 @main
 struct ClearSkiesApp: App {
-    @State private var portal = PortalModel()
+    @UIApplicationDelegateAdaptor(EngineAppDelegate.self) private var appDelegate
+    @Environment(\.scenePhase) private var phase
+    @State private var portal: PortalModel?
 
     init() {
         // Launch is white in every theme: the system's LaunchBackground, this
@@ -20,7 +22,13 @@ struct ClearSkiesApp: App {
 
     var body: some Scene {
         WindowGroup {
-            RootView(portal: portal)
+            Group {
+                if let portal { RootView(portal: portal) }
+                else { Color.white.ignoresSafeArea() }
+            }
+            .onChange(of: phase, initial: true) { _, next in
+                if next == .active && portal == nil { portal = PortalModel() }
+            }
         }
     }
 }
