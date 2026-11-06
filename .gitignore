@@ -51,3 +51,8 @@ ios/**/xcuserdata/
 
 # Built from app/ by site.js (the engine) and scripts/assemble-site.py
 /app.js
+
+# Native core
+native/target/
+# Frozen TIFF goldens are source, not script output
+!native/fixtures/tiff/*.tif
