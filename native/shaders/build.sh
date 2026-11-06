@@ -1,12 +1,22 @@
 #!/bin/sh
+# Regenerates native/shaders/generated. CI requires the output to be unchanged.
 set -eu
 cd "$(dirname "$0")/.."
 scratch=$(mktemp -d)
 trap 'rm -rf "$scratch"' EXIT
-node shaders/extract.cjs "$scratch"
+rm -rf shaders/generated
 mkdir -p shaders/generated
-for program in fullscreen.vert shade.frag; do
-  glslangValidator --target-env vulkan1.1 -V "$scratch/$program" -o "$scratch/$program.spv"
-  cargo run --quiet -p csk-gpu --features shader-tools --bin shader-tool -- "$scratch/$program.spv" "shaders/generated/${program%.*}"
+cargo build --quiet -p csk-shader-tool
+tool=target/debug/csk-shader-tool
+# Shading programs extracted from the JS factory: GLSL -> SPIR-V -> WGSL + MSL.
+node shaders/extract.cjs "$scratch"
+for source in "$scratch"/*.vert "$scratch"/*.frag; do
+  name=$(basename "$source")
+  glslangValidator --quiet --target-env vulkan1.1 -V "$source" -o "$scratch/$name.spv"
+  $tool "$scratch/$name.spv" "shaders/generated/$name"
 done
-cp "$scratch/uniforms.json" "$scratch/defaults.bin" shaders/generated/
+# Native compute programs: WGSL is the source; MSL feeds the Metal comparator.
+for source in crates/csk-gpu/src/wgsl/*.wgsl; do
+  $tool "$source" "shaders/generated/$(basename "$source" .wgsl)"
+done
+cp "$scratch/layouts.json" "$scratch/defaults.bin" shaders/generated/

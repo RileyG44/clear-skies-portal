@@ -1,0 +1,14 @@
+[package]
+name = "csk-shader-tool"
+version = "0.1.0"
+description = "Offline shader translation for csk-gpu (SPIR-V/WGSL to WGSL and MSL)"
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+publish = false
+
+[dependencies]
+naga = { version = "=30.0.1", features = ["spv-in", "wgsl-in", "wgsl-out", "msl-out"] }
+
+[lints]
+workspace = true

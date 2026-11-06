@@ -293,6 +293,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "csk-shader-tool"
+version = "0.1.0"
+dependencies = [
+ "naga",
+]
+
+[[package]]
 name = "csk-store"
 version = "0.1.0"
 dependencies = [
