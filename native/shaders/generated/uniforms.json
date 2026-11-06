@@ -1,0 +1,230 @@
+{
+  "bytes": 1712,
+  "uniforms": {
+    "u_style": {
+      "offset": 0,
+      "type": "int",
+      "count": 1
+    },
+    "u_terrainOpacity": {
+      "offset": 16,
+      "type": "float",
+      "count": 1
+    },
+    "u_sunAzimuth": {
+      "offset": 32,
+      "type": "float",
+      "count": 1
+    },
+    "u_sunAltitude": {
+      "offset": 48,
+      "type": "float",
+      "count": 1
+    },
+    "u_ambient": {
+      "offset": 64,
+      "type": "float",
+      "count": 1
+    },
+    "u_lookSaturation": {
+      "offset": 80,
+      "type": "float",
+      "count": 1
+    },
+    "u_lookContrast": {
+      "offset": 96,
+      "type": "float",
+      "count": 1
+    },
+    "u_lookBrightness": {
+      "offset": 112,
+      "type": "float",
+      "count": 1
+    },
+    "u_spectrumOn": {
+      "offset": 128,
+      "type": "float",
+      "count": 1
+    },
+    "u_spectrumLevel": {
+      "offset": 144,
+      "type": "float",
+      "count": 1
+    },
+    "u_spectrumSpan": {
+      "offset": 160,
+      "type": "float",
+      "count": 1
+    },
+    "u_spectrumAlpha": {
+      "offset": 176,
+      "type": "float",
+      "count": 1
+    },
+    "u_spectrumLow": {
+      "offset": 192,
+      "type": "vec3",
+      "count": 1
+    },
+    "u_spectrumMid": {
+      "offset": 208,
+      "type": "vec3",
+      "count": 1
+    },
+    "u_spectrumHigh": {
+      "offset": 224,
+      "type": "vec3",
+      "count": 1
+    },
+    "u_belowOn": {
+      "offset": 240,
+      "type": "float",
+      "count": 1
+    },
+    "u_belowLevel": {
+      "offset": 256,
+      "type": "float",
+      "count": 1
+    },
+    "u_belowColor": {
+      "offset": 272,
+      "type": "vec3",
+      "count": 1
+    },
+    "u_aboveOn": {
+      "offset": 288,
+      "type": "float",
+      "count": 1
+    },
+    "u_aboveLevel": {
+      "offset": 304,
+      "type": "float",
+      "count": 1
+    },
+    "u_aboveColor": {
+      "offset": 320,
+      "type": "vec3",
+      "count": 1
+    },
+    "u_bandAlpha": {
+      "offset": 336,
+      "type": "float",
+      "count": 1
+    },
+    "u_bandFeather": {
+      "offset": 352,
+      "type": "float",
+      "count": 1
+    },
+    "u_outlineOn": {
+      "offset": 368,
+      "type": "float",
+      "count": 1
+    },
+    "u_outlineWidth": {
+      "offset": 384,
+      "type": "float",
+      "count": 1
+    },
+    "u_spectrumOpacity": {
+      "offset": 400,
+      "type": "float",
+      "count": 1
+    },
+    "u_centerMerc": {
+      "offset": 416,
+      "type": "vec2",
+      "count": 1
+    },
+    "u_zoom": {
+      "offset": 432,
+      "type": "float",
+      "count": 1
+    },
+    "u_bearingRad": {
+      "offset": 448,
+      "type": "float",
+      "count": 1
+    },
+    "u_cssSize": {
+      "offset": 464,
+      "type": "vec2",
+      "count": 1
+    },
+    "u_dpr": {
+      "offset": 480,
+      "type": "float",
+      "count": 1
+    },
+    "u_groundResOverride": {
+      "offset": 496,
+      "type": "float",
+      "count": 1
+    },
+    "u_stackOn": {
+      "offset": 512,
+      "type": "float",
+      "count": 1
+    },
+    "u_stackGradient": {
+      "offset": 528,
+      "type": "float",
+      "count": 1
+    },
+    "u_layerCount": {
+      "offset": 544,
+      "type": "float",
+      "count": 1
+    },
+    "u_layerA": {
+      "offset": 560,
+      "type": "vec4",
+      "count": 4
+    },
+    "u_layerB": {
+      "offset": 624,
+      "type": "vec4",
+      "count": 4
+    },
+    "u_layerC": {
+      "offset": 688,
+      "type": "vec4",
+      "count": 4
+    },
+    "u_layerD": {
+      "offset": 752,
+      "type": "vec4",
+      "count": 4
+    },
+    "u_layerPos": {
+      "offset": 816,
+      "type": "vec4",
+      "count": 12
+    },
+    "u_layerColors": {
+      "offset": 1008,
+      "type": "vec4",
+      "count": 40
+    },
+    "u_detail": {
+      "offset": 1648,
+      "type": "float",
+      "count": 1
+    },
+    "u_reliefExag": {
+      "offset": 1664,
+      "type": "float",
+      "count": 1
+    },
+    "u_remFlatBase": {
+      "offset": 1680,
+      "type": "float",
+      "count": 1
+    },
+    "u_remLandBase": {
+      "offset": 1696,
+      "type": "float",
+      "count": 1
+    }
+  }
+}

@@ -1,0 +1,47 @@
+{
+  "width": 65,
+  "height": 49,
+  "groundRes": 1.5,
+  "cases": [
+    {
+      "style": "hs",
+      "id": 0
+    },
+    {
+      "style": "hsmulti",
+      "id": 1
+    },
+    {
+      "style": "slope",
+      "id": 2
+    },
+    {
+      "style": "aspect",
+      "id": 3
+    },
+    {
+      "style": "northness",
+      "id": 4
+    },
+    {
+      "style": "tint",
+      "id": 5
+    },
+    {
+      "style": "c2",
+      "id": 6
+    },
+    {
+      "style": "c5",
+      "id": 7
+    },
+    {
+      "style": "c10",
+      "id": 8
+    },
+    {
+      "style": "c25",
+      "id": 9
+    }
+  ]
+}
