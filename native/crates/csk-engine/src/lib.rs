@@ -5,6 +5,7 @@
 //! Network access goes through a [`transport::Transport`] the platform
 //! provides (URLSession on iOS).
 
+pub mod analysis;
 pub mod areas;
 pub mod flight;
 pub mod markup;
@@ -71,6 +72,7 @@ pub struct Engine {
     pub tiles: Arc<Tiles>,
     pub user: Arc<UserStore>,
     pub downloads: areas::Downloads,
+    pub analysis: analysis::Analysis,
     /// Proxy fetches shared while in flight.
     proxy_flights: flight::Flights<String, Option<(Vec<u8>, String, bool)>>,
     started: Instant,
@@ -104,6 +106,7 @@ impl Engine {
             tiles,
             user,
             downloads: areas::Downloads::default(),
+            analysis: analysis::Analysis::default(),
             proxy_flights: flight::Flights::default(),
             started: Instant::now(),
         }))

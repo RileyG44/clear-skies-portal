@@ -105,12 +105,14 @@ struct CskEngine *csk_engine_new(const char *config_json, struct CskTransport tr
 void csk_engine_free(struct CskEngine *engine);
 
 /**
- * Answers one request (`url` may be absolute or a path with query).
- * Returns its id for `csk_engine_cancel`.
+ * Answers one request (`url` may be absolute or a path with query;
+ * `headers` is `Name: value` lines, or NULL). Returns its id for
+ * `csk_engine_cancel`.
  */
 uint64_t csk_engine_request(const struct CskEngine *engine,
                             const char *method,
                             const char *url,
+                            const char *headers,
                             const uint8_t *body,
                             size_t body_len,
                             void *context,
