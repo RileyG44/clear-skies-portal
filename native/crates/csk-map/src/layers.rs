@@ -34,8 +34,8 @@ enum Decoded {
 }
 
 /// Decodes a published tile to premultiplied RGBA. None if it is not a
-/// 256 px PNG or JPEG.
-pub fn decode(bytes: &[u8]) -> Option<Vec<u8>> {
+/// `side` px PNG or JPEG.
+pub fn decode(bytes: &[u8], side: u32) -> Option<Vec<u8>> {
     let mut rgba = if bytes.starts_with(&[0xff, 0xd8, 0xff]) {
         use zune_core::bytestream::ZCursor;
         use zune_core::colorspace::ColorSpace;
@@ -44,14 +44,14 @@ pub fn decode(bytes: &[u8]) -> Option<Vec<u8>> {
         let mut decoder = zune_jpeg::JpegDecoder::new_with_options(ZCursor::new(bytes), options);
         let pixels = decoder.decode().ok()?;
         let info = decoder.info()?;
-        (u32::from(info.width) == TILE && u32::from(info.height) == TILE).then_some(pixels)?
+        (u32::from(info.width) == side && u32::from(info.height) == side).then_some(pixels)?
     } else {
         let mut decoder = png::Decoder::new(std::io::Cursor::new(bytes));
         decoder.set_transformations(png::Transformations::normalize_to_color8() | png::Transformations::ALPHA);
         let mut reader = decoder.read_info().ok()?;
         let mut buffer = vec![0; reader.output_buffer_size()?];
         let frame = reader.next_frame(&mut buffer).ok()?;
-        if frame.width != TILE || frame.height != TILE {
+        if frame.width != side || frame.height != side {
             return None;
         }
         let pixels = &buffer[..frame.buffer_size()];
@@ -61,7 +61,7 @@ pub fn decode(bytes: &[u8]) -> Option<Vec<u8>> {
             _ => return None,
         }
     };
-    if rgba.len() != (TILE * TILE * 4) as usize {
+    if rgba.len() != (side * side * 4) as usize {
         return None;
     }
     csk_gpu::raster::premultiply(&mut rgba);
@@ -143,7 +143,10 @@ impl Layers {
                 && style.opacity > 0.0
                 && !self.rasters.contains_key(&layer)
             {
-                self.rasters.insert(layer, Raster::new(gpu, POOL_TILES, layer.max_zoom())?);
+                // Display-density exports are 4x the bytes a tile.
+                let pool = if layer.pixels() > TILE { POOL_TILES * 2 / 3 } else { POOL_TILES };
+                let raster = Raster::new(gpu, pool, layer.min_zoom(), layer.max_zoom(), layer.pixels())?;
+                self.rasters.insert(layer, raster);
             }
         }
         while let Ok((key, answer)) = self.rx.try_recv() {
@@ -204,7 +207,7 @@ impl Layers {
             let task = self.runtime.spawn(async move {
                 let TileId { z, x, y } = key.1;
                 let decoded = match engine.raster_tile(key.0, z, x, y).await {
-                    RasterAnswer::Image { bytes, lasting } => match decode(&bytes) {
+                    RasterAnswer::Image { bytes, lasting } => match decode(&bytes, key.0.pixels()) {
                         Some(rgba) => Decoded::Image(rgba, lasting),
                         // Undecodable bytes are not an answer to keep.
                         None => Decoded::Retry(Duration::from_secs(60)),
@@ -256,7 +259,7 @@ mod tests {
         let mut rgba = vec![0u8; (TILE * TILE * 4) as usize];
         rgba[..4].copy_from_slice(&[200, 100, 50, 128]);
         let png = csk_core::raster::png::encode_rgba(&rgba, TILE, TILE);
-        let out = decode(&png).unwrap();
+        let out = decode(&png, TILE).unwrap();
         assert_eq!(&out[..4], &[100, 50, 25, 128]);
     }
 }

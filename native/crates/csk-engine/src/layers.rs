@@ -1,5 +1,7 @@
 //! Raster map layers for the native map: the cartographic basemap (light and
-//! dark) and the cached USGS hydrography behind "Rivers & lakes". Tiles are
+//! dark) and the reference overlays of "Labels & reference" (app/overlays.js):
+//! cached tile services, and ArcGIS dynamic services exported one tile at a
+//! time in the tile's own Web Mercator bounds, at display density. Tiles are
 //! kept in the engine's store, so a map viewed once keeps drawing offline;
 //! after a failed refresh the kept tile is served and asked for again later.
 
@@ -23,20 +25,85 @@ pub enum RasterLayer {
     DarkBase,
     /// USGS The National Map hydrography cache (NHD), transparent PNG.
     Hydro,
+    /// Esri reference overlays.
+    Roads,
+    Places,
+    LightLabels,
+    DarkLabels,
+    /// USGS National Map trails (layers 37, 24), exported.
+    Trails,
+    /// USGS GNIS summits and landforms (layer 5), exported.
+    Peaks,
+    /// USGS GNIS named places (layer 3), exported.
+    Names,
 }
 
-impl RasterLayer {
-    pub const ALL: [RasterLayer; 3] = [RasterLayer::LightBase, RasterLayer::DarkBase, RasterLayer::Hydro];
+const ESRI: &str = "https://services.arcgisonline.com/ArcGIS/rest/services";
+const CARTO: &str = "https://carto.nationalmap.gov/arcgis/rest/services";
+/// Export tiles are drawn at twice the CSS tile size, as the web does on
+/// high-density screens (its ceiling of 3x would triple memory for little).
+pub const EXPORT_DENSITY: u32 = 2;
 
-    /// The finest level the service holds real tiles for (both caches stop
-    /// at z16; finer views stretch them).
+impl RasterLayer {
+    /// The finest level the service holds real tiles for; finer views
+    /// stretch them.
     pub fn max_zoom(self) -> u8 {
-        16
+        match self {
+            RasterLayer::LightBase
+            | RasterLayer::DarkBase
+            | RasterLayer::Hydro
+            | RasterLayer::LightLabels
+            | RasterLayer::DarkLabels => 16,
+            _ => 19,
+        }
+    }
+
+    /// Below this level the layer draws nothing.
+    pub fn min_zoom(self) -> u8 {
+        match self {
+            RasterLayer::Trails | RasterLayer::Peaks => 10,
+            RasterLayer::Names => 9,
+            _ => 0,
+        }
+    }
+
+    /// Tile side in pixels.
+    pub fn pixels(self) -> u32 {
+        if self.export().is_some() { 256 * EXPORT_DENSITY } else { 256 }
+    }
+
+    /// The dynamic service and its layers, for exported layers.
+    fn export(self) -> Option<(&'static str, &'static str)> {
+        match self {
+            RasterLayer::Trails => Some(("transportation", "37,24")),
+            RasterLayer::Peaks => Some(("geonames", "5")),
+            RasterLayer::Names => Some(("geonames", "3")),
+            _ => None,
+        }
     }
 
     fn url(self, z: u8, x: u32, y: u32) -> String {
+        if let Some((service, layers)) = self.export() {
+            // The tile's EPSG:3857 bounds: west, south, east, north.
+            let half = std::f64::consts::PI * 6_378_137.0;
+            let side = 2.0 * half / f64::from(1u32 << z);
+            let (west, north) = (f64::from(x) * side - half, half - f64::from(y) * side);
+            let px = self.pixels();
+            return format!(
+                "{CARTO}/{service}/MapServer/export?bbox={west},{},{},{north}&bboxSR=3857&imageSR=3857\
+                 &size={px},{px}&format=png32&transparent=true&dpi={}&f=image&layers=show:{layers}",
+                north - side,
+                west + side,
+                96 * EXPORT_DENSITY,
+            );
+        }
         // ArcGIS tile order is level/row/column.
         match self {
+            RasterLayer::Roads => format!("{ESRI}/Reference/World_Transportation/MapServer/tile/{z}/{y}/{x}"),
+            RasterLayer::Places => format!("{ESRI}/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}"),
+            RasterLayer::LightLabels => format!("{ESRI}/Canvas/World_Light_Gray_Reference/MapServer/tile/{z}/{y}/{x}"),
+            RasterLayer::DarkLabels => format!("{ESRI}/Canvas/World_Dark_Gray_Reference/MapServer/tile/{z}/{y}/{x}"),
+            RasterLayer::Trails | RasterLayer::Peaks | RasterLayer::Names => unreachable!("exported"),
             RasterLayer::LightBase => format!(
                 "https://services.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Light_Gray_Base/MapServer/tile/{z}/{y}/{x}"
             ),
@@ -54,6 +121,13 @@ impl RasterLayer {
             RasterLayer::LightBase => "light",
             RasterLayer::DarkBase => "dark",
             RasterLayer::Hydro => "hydro",
+            RasterLayer::Roads => "roads",
+            RasterLayer::Places => "places",
+            RasterLayer::LightLabels => "labels-light",
+            RasterLayer::DarkLabels => "labels-dark",
+            RasterLayer::Trails => "trails",
+            RasterLayer::Peaks => "peaks",
+            RasterLayer::Names => "names",
         };
         format!("layer:{name}:{z}/{x}/{y}")
     }
@@ -77,7 +151,7 @@ fn image(bytes: &[u8]) -> bool {
 
 impl Engine {
     pub async fn raster_tile(self: &Arc<Self>, layer: RasterLayer, z: u8, x: u32, y: u32) -> RasterAnswer {
-        if z > layer.max_zoom() || x >= 1 << z || y >= 1 << z {
+        if z > layer.max_zoom() || z < layer.min_zoom() || x >= 1 << z || y >= 1 << z {
             return RasterAnswer::Empty;
         }
         let key = layer.key(z, x, y);

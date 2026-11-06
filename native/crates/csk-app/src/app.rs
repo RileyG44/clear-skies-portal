@@ -87,11 +87,14 @@ fn draws(state: &AppState) -> Vec<Draw> {
     for id in state.layer_order.iter().rev() {
         match id.as_str() {
             "terrain" => out.push(Draw::Terrain),
-            "overlay:water" if state.water.on => out.push(Draw::Raster(
-                RasterLayer::Hydro,
-                RasterStyle { opacity: (state.water.opacity / 100.0).clamp(0.0, 1.0) as f32, muted: dark },
-            )),
-            _ => {}
+            overlay => {
+                let Some(o) = overlay.strip_prefix("overlay:") else { continue };
+                let state = state.overlay(o);
+                if let (true, Some((layer, muted))) = (state.on, crate::overlays::raster(o, dark)) {
+                    let opacity = (state.opacity / 100.0).clamp(0.0, 1.0) as f32;
+                    out.push(Draw::Raster(layer, RasterStyle { opacity, muted }));
+                }
+            }
         }
     }
     if !out.contains(&Draw::Terrain) {
@@ -347,9 +350,9 @@ impl App {
                     self.navigate(route);
                     return;
                 }
-                if r == "layer:terrain:edit" || r == "layer:overlay:water:edit" {
+                if let Some(id) = r.strip_prefix("layer:").and_then(|r| r.strip_suffix(":edit")) {
                     drop(inner);
-                    self.navigate(if r == "layer:terrain:edit" { "terrain" } else { "labels" });
+                    self.navigate(if id == "terrain" { "terrain" } else { "labels" });
                     return;
                 }
                 if !self.act(&mut inner, r, op, &args["value"]) {
@@ -677,6 +680,22 @@ impl App {
         if let Some(rest) = r.strip_prefix("layer:") {
             return act_layer(&mut inner.state, rest, value);
         }
+        // Labels & reference: an overlay's switch and, once on, its opacity.
+        if let Some(id) = r.strip_prefix("#ov_") {
+            if crate::overlays::info(id).is_none() {
+                return false;
+            }
+            let on = value.as_bool().unwrap_or(!inner.state.overlay(id).on);
+            inner.state.set_overlay(id, on);
+            return true;
+        }
+        if let Some(id) = r.strip_prefix("#ovOpacity_") {
+            let (Some(_), Some(v)) = (crate::overlays::info(id), v) else { return false };
+            let mut overlay = inner.state.overlay(id);
+            overlay.opacity = v.clamp(0.0, 100.0);
+            inner.state.overlays.insert(id.to_owned(), overlay);
+            return true;
+        }
         match (r, v) {
             ("#terStyle", _) => {
                 let style = value.as_str().unwrap_or_default().to_owned();
@@ -974,9 +993,24 @@ fn act_layer(state: &mut AppState, rest: &str, value: &Value) -> bool {
     }
     let v = number(value);
     match (id, what) {
-        ("overlay:water", "toggle") => state.water.on = value.as_bool().unwrap_or(!state.water.on),
-        ("overlay:water", "opacity") => state.water.opacity = v.unwrap_or(state.water.opacity).clamp(0.0, 100.0),
-        ("overlay:water", "reset") => state.water = AppState::default().water,
+        (overlay, "toggle") if overlay.starts_with("overlay:") => {
+            let o = &overlay["overlay:".len()..];
+            let on = value.as_bool().unwrap_or(!state.overlay(o).on);
+            state.set_overlay(o, on);
+        }
+        (overlay, "opacity") if overlay.starts_with("overlay:") => {
+            let o = &overlay["overlay:".len()..];
+            let mut s = state.overlay(o);
+            s.opacity = v.unwrap_or(s.opacity).clamp(0.0, 100.0);
+            state.overlays.insert(o.to_owned(), s);
+        }
+        (overlay, "reset") if overlay.starts_with("overlay:") => {
+            let o = &overlay["overlay:".len()..];
+            let fresh = AppState::default().overlays.get(o).copied();
+            let mut s = state.overlay(o);
+            s.opacity = fresh.map_or(crate::overlays::DEFAULT_OPACITY, |f| f.opacity);
+            state.overlays.insert(o.to_owned(), s);
+        }
         ("terrain", "toggle") => {
             let on = value.as_bool().unwrap_or(state.terrain.style == "off");
             let t = &mut state.terrain;

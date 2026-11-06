@@ -55,11 +55,29 @@ impl TerrainState {
     }
 }
 
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
 pub struct Overlay {
     pub on: bool,
     /// Percent.
     pub opacity: f64,
+}
+
+impl AppState {
+    /// An overlay's state: off at the default opacity until set.
+    pub fn overlay(&self, id: &str) -> Overlay {
+        self.overlays.get(id).copied().unwrap_or(Overlay { on: false, opacity: crate::overlays::DEFAULT_OPACITY })
+    }
+
+    /// Turns an overlay on or off; one turned on joins the top of the order.
+    pub fn set_overlay(&mut self, id: &str, on: bool) {
+        let mut overlay = self.overlay(id);
+        overlay.on = on;
+        self.overlays.insert(id.to_owned(), overlay);
+        let key = format!("overlay:{id}");
+        if on && !self.layer_order.contains(&key) {
+            self.layer_order.insert(0, key);
+        }
+    }
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -68,7 +86,8 @@ pub struct AppState {
     /// "", "light" or "dark".
     pub theme: String,
     pub terrain: TerrainState,
-    pub water: Overlay,
+    /// Reference overlays by id (overlays.rs), once the person has set them.
+    pub overlays: BTreeMap<String, Overlay>,
     /// Map layers, top first.
     pub layer_order: Vec<String>,
     /// Dock tool ids, in the person's order.
@@ -80,7 +99,7 @@ impl Default for AppState {
         Self {
             theme: String::new(),
             terrain: TerrainState::default(),
-            water: Overlay { on: true, opacity: LAUNCH_WATER_OPACITY },
+            overlays: BTreeMap::from([("water".into(), Overlay { on: true, opacity: LAUNCH_WATER_OPACITY })]),
             layer_order: vec!["overlay:water".into(), "terrain".into()],
             dock_order: Vec::new(),
         }

@@ -273,7 +273,8 @@ pub fn status(state: &AppState, fitted: &Fitted, lon: f64, lat: f64, zoom: f64, 
 }
 
 pub fn counts(state: &AppState) -> Value {
-    let layers = 1 + usize::from(state.water.on) + usize::from(state.terrain.style != "off");
+    let overlays = state.overlays.values().filter(|o| o.on).count();
+    let layers = 1 + overlays + usize::from(state.terrain.style != "off");
     json!({"layers": layers.to_string(), "terrain": "1"})
 }
 
@@ -596,7 +597,10 @@ const ADD_LAYERS: [(&str, &str); 8] = [
 /// A layer's title and detail in the layer list.
 pub fn layer_title(state: &AppState, id: &str) -> Option<(String, String)> {
     match id {
-        "overlay:water" => Some(("Rivers & lakes".into(), "Labels & reference · USGS NHD".into())),
+        id if id.starts_with("overlay:") => {
+            let info = crate::overlays::info(&id["overlay:".len()..])?;
+            Some((info.name.into(), format!("Labels & reference · {}", info.via)))
+        }
         "terrain" => {
             let t = &state.terrain;
             let title = catalog().style(&t.style).map_or("Terrain".to_string(), |s| s.label.clone());
@@ -611,12 +615,15 @@ pub fn layer_title(state: &AppState, id: &str) -> Option<(String, String)> {
 /// and where to add more.
 fn layers_page(state: &AppState) -> Value {
     let mut items = vec![json!({"kind": "header", "title": "Active layers"})];
-    let order: Vec<&String> = state.layer_order.iter().filter(|id| layer_title(state, id).is_some()).collect();
+    // Active layers: the terrain, and the overlays that are on.
+    let active = |id: &str| id.strip_prefix("overlay:").is_none_or(|o| state.overlay(o).on);
+    let order: Vec<&String> =
+        state.layer_order.iter().filter(|id| layer_title(state, id).is_some() && active(id)).collect();
     for (index, id) in order.iter().enumerate() {
         let (title, detail) = layer_title(state, id).expect("listed layer");
-        let (on, opacity) = match id.as_str() {
-            "overlay:water" => (state.water.on, state.water.opacity),
-            _ => (state.terrain.style != "off", state.terrain.opacity),
+        let (on, opacity) = match id.strip_prefix("overlay:") {
+            Some(o) => (state.overlay(o).on, state.overlay(o).opacity),
+            None => (state.terrain.style != "off", state.terrain.opacity),
         };
         let r = |what: &str| format!("layer:{id}:{what}");
         let opacity = opacity.round();
@@ -645,12 +652,42 @@ fn layers_page(state: &AppState) -> Value {
     json!({"route": "layers", "title": title, "description": description, "items": items})
 }
 
+/// Labels & reference: the reference overlays, each with its opacity once
+/// on, and where they come from.
+fn labels_page(state: &AppState) -> Value {
+    use crate::overlays::OVERLAYS;
+    let mut rows = Vec::new();
+    for o in &OVERLAYS {
+        let overlay = state.overlay(o.id);
+        rows.push(json!({"kind": "toggle", "ref": format!("#ov_{}", o.id), "title": o.name, "color": o.color,
+            "value": overlay.on}));
+        if overlay.on {
+            let value = overlay.opacity.round();
+            rows.push(json!({"kind": "slider", "ref": format!("#ovOpacity_{}", o.id), "title": "Opacity",
+                "disabled": false, "value": value, "min": 0, "max": 100, "step": 1, "display": format!("{value}%")}));
+        }
+    }
+    let on = OVERLAYS.iter().filter(|o| state.overlay(o.id).on).count();
+    let sources: Vec<Value> =
+        OVERLAYS.iter().map(|o| json!({"kind": "text", "style": "row", "title": o.name, "detail": o.via})).collect();
+    let items = vec![
+        json!({"kind": "group", "ref": "labels:layers", "pane": true, "title": "Reference layers",
+            "detail": if on == 0 { "None on".to_string() } else { format!("{on} on") }, "open": true, "items": rows}),
+        json!({"kind": "group", "ref": "labels:sources", "title": "About these layers", "items": [
+            {"kind": "disclosure", "ref": "labels:provenance", "title": "Sources & scale", "items": sources},
+        ]}),
+    ];
+    let (title, description) = route_info("labels").unwrap_or_default();
+    json!({"route": "labels", "title": title, "description": description, "items": items})
+}
+
 /// A page for `route`, from native state.
 pub fn page(route: &str, state: &AppState, fitted: &Fitted) -> Option<Value> {
     let (title, description) = route_info(route)?;
     Some(match route {
         "terrain" => terrain_page(state, fitted),
         "layers" => layers_page(state),
+        "labels" => labels_page(state),
         _ => json!({"route": route, "title": title, "description": description, "items": []}),
     })
 }

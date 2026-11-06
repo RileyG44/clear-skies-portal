@@ -200,7 +200,7 @@ fn raster_layers_draw_in_place_with_stand_ins() {
     use csk_gpu::{Layer, Raster, RasterStyle};
     let Some(gpu) = renderer() else { return };
     let mut terrain = Terrain::new(&gpu, 8).unwrap();
-    let mut raster = Raster::new(&gpu, 8, 16).unwrap();
+    let mut raster = Raster::new(&gpu, 8, 0, 16, TILE).unwrap();
     // The view centre sits in the middle of tile (12, 1000, 1500).
     let view =
         View { center: [1000.5 / 4096.0, 1500.5 / 4096.0], zoom: 12.0, bearing: 30.0, css: [512.0, 512.0], dpr: 1.0 };

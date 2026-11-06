@@ -15,7 +15,7 @@ use csk_core::resource::Reservation;
 use wgpu::util::DeviceExt;
 
 use crate::render::texture_bytes;
-use crate::terrain::{TILE, TileId, View};
+use crate::terrain::{TileId, View};
 use crate::{Error, Renderer};
 
 /// Empty answers kept as coverage, beyond the pool's resident tiles.
@@ -40,7 +40,10 @@ struct Record {
 
 pub struct Raster {
     identity: Arc<()>,
+    min_zoom: u8,
     max_zoom: u8,
+    /// Tile side in pixels (256, or more for display-density exports).
+    pixels: u32,
     records: HashMap<TileId, Record>,
     pool: wgpu::Texture,
     pool_view: wgpu::TextureView,
@@ -58,16 +61,19 @@ struct Quad {
 }
 
 impl Raster {
-    /// A layer whose pool holds `pool_tiles` tiles (256 KiB each), finest
-    /// published level `max_zoom`.
-    pub fn new(gpu: &Renderer, pool_tiles: u32, max_zoom: u8) -> Result<Self, Error> {
+    /// A layer whose pool holds `pool_tiles` tiles of `pixels` square,
+    /// drawn from level `min_zoom` and published to `max_zoom`.
+    pub fn new(gpu: &Renderer, pool_tiles: u32, min_zoom: u8, max_zoom: u8, pixels: u32) -> Result<Self, Error> {
+        if pixels == 0 || pixels > gpu.max_dimension() {
+            return Err(Error::Input("raster tile size"));
+        }
         if pool_tiles == 0 || pool_tiles > gpu.device.limits().max_texture_array_layers {
             return Err(Error::Input("raster pool exceeds device array limits"));
         }
-        let charge = Arc::new(gpu.budget.reserve(texture_bytes(TILE, TILE, 4) * pool_tiles as usize)?);
+        let charge = Arc::new(gpu.budget.reserve(texture_bytes(pixels, pixels, 4) * pool_tiles as usize)?);
         let pool = gpu.texture(
-            TILE,
-            TILE,
+            pixels,
+            pixels,
             pool_tiles,
             wgpu::TextureFormat::Rgba8Unorm,
             wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
@@ -78,7 +84,9 @@ impl Raster {
         });
         Ok(Self {
             identity: gpu.identity.clone(),
+            min_zoom,
             max_zoom,
+            pixels,
             records: HashMap::new(),
             pool,
             pool_view,
@@ -95,7 +103,15 @@ impl Raster {
 
     /// Tiles the view needs, nearest the centre first, one tile around.
     pub fn wanted(&self, view: &View) -> Vec<TileId> {
+        if self.level(view) < self.min_zoom {
+            return Vec::new();
+        }
         view.tiles_at(self.level(view), 1)
+    }
+
+    /// Tile side in pixels.
+    pub fn pixels(&self) -> u32 {
+        self.pixels
     }
 
     /// Whether the layer has answered for `tile` (an image or empty).
@@ -103,12 +119,12 @@ impl Raster {
         self.records.contains_key(&tile)
     }
 
-    /// Stores a tile: 256x256 premultiplied RGBA, row-major, top-down.
+    /// Stores a tile: `pixels` square premultiplied RGBA, row-major, top-down.
     pub fn insert(&mut self, gpu: &Renderer, tile: TileId, rgba: &[u8]) -> Result<(), Error> {
         if !Arc::ptr_eq(&self.identity, &gpu.identity) {
             return Err(Error::Input("raster belongs to another GPU device"));
         }
-        if rgba.len() != (TILE * TILE * 4) as usize {
+        if rgba.len() != (self.pixels * self.pixels * 4) as usize {
             return Err(Error::Input("raster tile shape"));
         }
         let layer = match self.records.remove(&tile).and_then(|r| r.layer) {
@@ -126,8 +142,12 @@ impl Raster {
                 aspect: wgpu::TextureAspect::All,
             },
             rgba,
-            wgpu::TexelCopyBufferLayout { offset: 0, bytes_per_row: Some(TILE * 4), rows_per_image: Some(TILE) },
-            wgpu::Extent3d { width: TILE, height: TILE, depth_or_array_layers: 1 },
+            wgpu::TexelCopyBufferLayout {
+                offset: 0,
+                bytes_per_row: Some(self.pixels * 4),
+                rows_per_image: Some(self.pixels),
+            },
+            wgpu::Extent3d { width: self.pixels, height: self.pixels, depth_or_array_layers: 1 },
         );
         self.records.insert(tile, Record { layer: Some(layer), used: self.frame });
         Ok(())
@@ -166,6 +186,9 @@ impl Raster {
     fn quads(&mut self, view: &View) -> Vec<Quad> {
         self.frame += 1;
         let z = self.level(view);
+        if z < self.min_zoom {
+            return Vec::new();
+        }
         let n = 1i64 << z;
         let b = view.bounds_at(z, 0, 0);
         let world = 256.0 * view.zoom.exp2();
