@@ -7,6 +7,7 @@
 //! [`contract::encode`] exactly as `research-contract.js` frames them.
 
 pub mod contract;
+pub mod fabric;
 pub mod glacial;
 pub mod terrain;
 

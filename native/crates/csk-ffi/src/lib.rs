@@ -28,7 +28,7 @@ use tokio::sync::oneshot;
 /// A request the platform should make.
 #[repr(C)]
 pub struct CskFetchRequest {
-    /// "GET" or "HEAD".
+    /// "GET", "HEAD" or "POST".
     pub method: *const c_char,
     pub url: *const c_char,
     /// Inclusive byte range, or -1 for none.
@@ -37,6 +37,11 @@ pub struct CskFetchRequest {
     pub timeout_ms: u32,
     /// Fail with `CSK_FETCH_TOO_LARGE` beyond this many body bytes.
     pub max_body: u64,
+    /// Extra headers, `Name: value` lines (may be empty).
+    pub headers: *const c_char,
+    /// Request body, or NULL.
+    pub body: *const u8,
+    pub body_len: usize,
 }
 
 /// The platform's network.
@@ -130,6 +135,13 @@ impl Transport for Bridge {
                 let method = CString::new(req.method.as_str()).expect("no NUL");
                 let url = CString::new(req.url.as_str()).map_err(|_| FetchError::Network("URL contains NUL".into()))?;
                 let (first, last) = req.range.map_or((-1, -1), |(a, b)| (a as i64, b as i64));
+                let headers: String = req
+                    .headers
+                    .iter()
+                    .filter(|(k, v)| !k.contains(['\n', ':', '\0']) && !v.contains(['\n', '\0']))
+                    .map(|(k, v)| format!("{k}: {v}\n"))
+                    .collect();
+                let headers = CString::new(headers).expect("filtered");
                 let c = CskFetchRequest {
                     method: method.as_ptr(),
                     url: url.as_ptr(),
@@ -137,6 +149,9 @@ impl Transport for Bridge {
                     range_last: last,
                     timeout_ms: req.timeout.as_millis().min(u128::from(u32::MAX)) as u32,
                     max_body: req.max_body as u64,
+                    headers: headers.as_ptr(),
+                    body: if req.body.is_empty() { std::ptr::null() } else { req.body.as_ptr() },
+                    body_len: req.body.len(),
                 };
                 let token = Box::into_raw(Box::new(CskFetch { tx }));
                 (platform.t.fetch)(platform.t.context, token, id, &c);

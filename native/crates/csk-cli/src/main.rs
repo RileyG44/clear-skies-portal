@@ -16,23 +16,43 @@ impl Transport for Ureq {
         let agent = self.0.clone();
         Box::pin(async move {
             tokio::task::spawn_blocking(move || {
-                let mut b = match req.method {
-                    Method::Get => agent.get(&req.url),
-                    Method::Head => agent.head(&req.url),
-                }
-                .config()
-                .timeout_global(Some(req.timeout))
-                .http_status_as_error(false)
-                .max_redirects(0)
-                .build();
-                b = b.header("User-Agent", "ClearSkies/native-dev");
-                if let Some((a, z)) = req.range {
-                    b = b.header("Range", format!("bytes={a}-{z}"));
-                }
-                let mut r = b.call().map_err(|e| match e {
+                let map_err = |e: ureq::Error| match e {
                     ureq::Error::Timeout(_) => FetchError::Timeout,
                     e => FetchError::Network(e.to_string()),
-                })?;
+                };
+                let mut headers: Vec<(String, String)> = vec![("User-Agent".into(), "ClearSkies/native-dev".into())];
+                if let Some((a, z)) = req.range {
+                    headers.push(("Range".into(), format!("bytes={a}-{z}")));
+                }
+                headers.extend(req.headers.iter().cloned());
+                let mut r = match req.method {
+                    Method::Post => {
+                        let mut b = agent
+                            .post(&req.url)
+                            .config()
+                            .timeout_global(Some(req.timeout))
+                            .http_status_as_error(false)
+                            .max_redirects(0)
+                            .build();
+                        for (k, v) in &headers {
+                            b = b.header(k, v);
+                        }
+                        b.send(&req.body[..]).map_err(map_err)?
+                    }
+                    m => {
+                        let base = if m == Method::Head { agent.head(&req.url) } else { agent.get(&req.url) };
+                        let mut b = base
+                            .config()
+                            .timeout_global(Some(req.timeout))
+                            .http_status_as_error(false)
+                            .max_redirects(0)
+                            .build();
+                        for (k, v) in &headers {
+                            b = b.header(k, v);
+                        }
+                        b.call().map_err(map_err)?
+                    }
+                };
                 let status = r.status().as_u16();
                 let headers = r
                     .headers()

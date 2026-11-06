@@ -9,6 +9,7 @@ use std::time::Duration;
 pub enum Method {
     Get,
     Head,
+    Post,
 }
 
 impl Method {
@@ -16,6 +17,7 @@ impl Method {
         match self {
             Self::Get => "GET",
             Self::Head => "HEAD",
+            Self::Post => "POST",
         }
     }
 }
@@ -29,11 +31,31 @@ pub struct FetchRequest {
     pub timeout: Duration,
     /// A larger body fails the fetch rather than filling memory.
     pub max_body: usize,
+    /// Extra request headers.
+    pub headers: Vec<(String, String)>,
+    /// Request body (POST).
+    pub body: Vec<u8>,
 }
 
 impl FetchRequest {
     pub fn get(url: impl Into<String>) -> Self {
-        Self { method: Method::Get, url: url.into(), range: None, timeout: Duration::from_secs(30), max_body: 32 << 20 }
+        Self {
+            method: Method::Get,
+            url: url.into(),
+            range: None,
+            timeout: Duration::from_secs(30),
+            max_body: 32 << 20,
+            headers: Vec::new(),
+            body: Vec::new(),
+        }
+    }
+    /// A form POST (`application/x-www-form-urlencoded`).
+    pub fn post_form(url: impl Into<String>, form: String) -> Self {
+        let mut r = Self::get(url);
+        r.method = Method::Post;
+        r.headers.push(("Content-Type".into(), "application/x-www-form-urlencoded".into()));
+        r.body = form.into_bytes();
+        r
     }
     pub fn range(mut self, first: u64, last: u64) -> Self {
         self.range = Some((first, last));

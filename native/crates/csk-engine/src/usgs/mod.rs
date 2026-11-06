@@ -429,6 +429,125 @@ impl Usgs {
     }
 }
 
+impl Usgs {
+    /// Nearest-neighbour samples of 1 m data on an `n × n` UTM grid from
+    /// (`min_e`, `min_n`) at `res` metres, rows northward: the newest
+    /// compatible survey per 10 km cell fills first. `None` with no coverage.
+    pub async fn sample_utm(
+        &self,
+        min_e: f64,
+        min_n: f64,
+        res: f64,
+        n: usize,
+        zone: i32,
+    ) -> Result<Option<(Vec<f64>, Vec<String>)>, SampleError> {
+        self.catalog.ensure().await.map_err(|e| SampleError::Catalog(e.to_string()))?;
+        let step = (n / 10).max(1);
+        let mut cells = Vec::new();
+        for a in (0..=n).step_by(step) {
+            for b in (0..=n).step_by(step) {
+                let c = Cell::of(min_e + a as f64 * res, min_n + b as f64 * res);
+                if !cells.contains(&c) {
+                    cells.push(c);
+                }
+            }
+        }
+        struct Src {
+            key: String,
+            tiff: Arc<Tiff>,
+            level: usize,
+            res: f64,
+            project: String,
+        }
+        let mut opened: Vec<Src> = Vec::new();
+        for cell in cells {
+            let cands = self.candidates(cell, zone).await.unwrap_or_default();
+            for c in cands.iter().take(3) {
+                let key = c.key();
+                if opened.iter().any(|o| o.key == key) {
+                    break;
+                }
+                let Ok(t) = self.cog.header(&key, c.size).await else { continue };
+                if let Some(epsg) = t.geo.epsg
+                    && epsg != 26900 + zone as u32
+                    && epsg != 32600 + zone as u32
+                {
+                    continue;
+                }
+                let base = t.geo.pixel_scale.first().copied().filter(|v| *v > 0.0).unwrap_or(1.0);
+                let level = finest_level(&t, base, res);
+                opened.push(Src { res: level_res(&t, base, level), key, tiff: t, level, project: c.project.clone() });
+                break;
+            }
+        }
+        if opened.is_empty() {
+            return Ok(None);
+        }
+        let js_round = |v: f64| (v + 0.5).floor();
+        let pixel = |o: &Src, i: usize, j: usize| {
+            let (ox, oy) = (
+                o.tiff.geo.tiepoint.get(3).copied().unwrap_or(0.0),
+                o.tiff.geo.tiepoint.get(4).copied().unwrap_or(0.0),
+            );
+            (
+                js_round((min_e + i as f64 * res - ox) / o.res) as i64,
+                js_round((oy - (min_n + j as f64 * res)) / o.res) as i64,
+            )
+        };
+        let mut grid = vec![f64::NAN; n * n];
+        for o in &opened {
+            let l = &o.tiff.levels[o.level];
+            let (bw, bh) = (i64::from(l.block_width), i64::from(l.block_height));
+            // Every block this source could fill, fetched together.
+            let mut wanted = BTreeSet::new();
+            for j in 0..n {
+                for i in 0..n {
+                    if grid[j * n + i].is_finite() {
+                        continue;
+                    }
+                    let (px, py) = pixel(o, i, j);
+                    if px >= 0 && py >= 0 && px < i64::from(l.width) && py < i64::from(l.height) {
+                        wanted.insert(((px / bw) as u32, (py / bh) as u32));
+                    }
+                }
+            }
+            let blocks: std::collections::HashMap<(u32, u32), Arc<[f32]>> =
+                join_all(wanted.iter().map(|&(tx, ty)| async move {
+                    ((tx, ty), self.cog.block(&o.key, &o.tiff, o.level, tx, ty).await)
+                }))
+                .await
+                .into_iter()
+                .filter_map(|(k, r)| r.ok().flatten().map(|b| (k, b)))
+                .collect();
+            for j in 0..n {
+                for i in 0..n {
+                    let k = j * n + i;
+                    if grid[k].is_finite() {
+                        continue;
+                    }
+                    let (px, py) = pixel(o, i, j);
+                    if px < 0 || py < 0 || px >= i64::from(l.width) || py >= i64::from(l.height) {
+                        continue;
+                    }
+                    let Some(b) = blocks.get(&((px / bw) as u32, (py / bh) as u32)) else { continue };
+                    let v = f64::from(b[((py % bh) * bw + px % bw) as usize]);
+                    if !v.is_finite() || v < -1e5 || o.tiff.geo.nodata.is_some_and(|nd| v == nd) {
+                        continue;
+                    }
+                    grid[k] = v;
+                }
+            }
+        }
+        let mut sources: Vec<String> = Vec::new();
+        for o in &opened {
+            if !sources.contains(&o.project) {
+                sources.push(o.project.clone());
+            }
+        }
+        Ok(Some((grid, sources)))
+    }
+}
+
 fn better(a: &Option<Sampled>, than: &Option<Sampled>) -> bool {
     match (a, than) {
         (Some(a), Some(b)) => a.coverage > b.coverage,
