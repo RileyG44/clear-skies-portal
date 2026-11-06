@@ -101,9 +101,9 @@ const pixels=page=>page.evaluate(()=>new Promise(resolve=>{
     // as the page's builder; it changes scheduling, not the drawing.
     const parity=await browser.newPage();await parity.goto(url+'/harness.html');
     const seasons=await parity.evaluate(async()=>{
-      const {buildMaple}=await import('./maple.js');const result=[];
+      const {buildMaple}=await import('./maple.js'),{SPECIES}=await import('./maple-species.js'),{BAKED}=await import('./maple-tree-vine.js');const result=[];
       for(const day of ['2026-01-15','2026-07-01','2026-11-05']){
-        const date=new Date(day+'T12:00:00'),expected=buildMaple(date,undefined,{treeOnly:true});
+        const date=new Date(day+'T12:00:00'),expected=buildMaple(date,SPECIES.vine,BAKED,{treeOnly:true});
         const actual=await new Promise((resolve,reject)=>{const w=new Worker('./startup-tree-worker.js',{type:'module'});w.onmessage=e=>{w.terminate();e.data.error?reject(Error(e.data.error)):resolve(e.data)};w.onerror=reject;w.postMessage(date.getTime())});
         const same=(a,b)=>a?.length===b?.length&&(!a||a.every((v,i)=>v===b[i]));
         if(!['seg','sty','bon','col','leafData'].every(k=>same(expected[k],actual.tree[k]))||!Object.keys(expected.bones).every(k=>same(expected.bones[k],actual.tree.bones[k])))throw Error('Worker drawing differs for '+day);

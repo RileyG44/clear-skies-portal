@@ -29,7 +29,7 @@ async function main(){
     assert.equal(destination({hash:"#engine=https%3A%2F%2Fengine.test"}),"map.html#engine=https%3A%2F%2Fengine.test","legacy engine links still open the map");
     assert.equal(destination({standalone:true}),"map.html","existing installed PWAs with a root start URL reach the map");
     assert.equal(destination({ios:true}),"map.html","existing iOS home-screen launches reach the map");
-    assert(landing.includes('--brand:Pacifico')&&landing.includes('font-weight:400'),"the landing wordmark uses bundled Pacifico Regular");
+    assert(landing.includes("--brand:Fraunces")&&landing.includes("family=Fraunces"),"the landing wordmark uses Fraunces");
     for(const name of ["index.html","download.html","explore.html"]){
       const html=read(name);
       assert(html.includes('href="map.html"'),`${name} links to the map`);

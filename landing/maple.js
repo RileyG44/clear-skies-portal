@@ -1,7 +1,8 @@
 /* ClearSkies sketchbook hero, seasonal variant.
-   A vine maple (Acer circinatum) in pen, ink and watercolour, a sprawling clump of
-   leaning stems as it grows in the woods around Maple Valley, Washington, over a soil
-   section of that ground (section-maple-valley.js). The tree is grown in three dimensions by
+   A maple in pen, ink and watercolour over a soil section of the ground around Maple
+   Valley, Washington (section-maple-valley.js): an open-grown bigleaf maple (Acer
+   macrophyllum) or a vine maple (Acer circinatum), whichever the page picked (see
+   maple-species.js). The tree is grown in three dimensions by
    maple-growth.js (buds competing for light, apical control, flowering forks, self-
    pruning, sag under load) and drawn here as seen from the front. The leaves, flowers,
    seed keys, grass and litter are drawn for one day of the year (see phenology.js), so the page shows
@@ -12,9 +13,9 @@
 import { KIND, DEG, lerp, clamp, smooth, mulberry32, canvasAPI, pack } from "./sketch-kit.js";
 import { drawSectionMV } from "./section-maple-valley.js";
 import { season as seasonOf } from "./phenology.js";
-import { growMaple, unpackMaple, TREE_SEED } from "./maple-growth.js";
-import { BAKED } from "./maple-tree.js";
+import { growMaple, unpackMaple } from "./maple-growth.js";
 import { leafAtlas } from "./maple-leaves.js";
+import { SPECIES } from "./maple-species.js";
 
 export const VIEW = { cx: 0.0, cy: 0.425, w: 1.32, h: 1.46 };
 
@@ -32,20 +33,23 @@ const mul = (a, k) => [a[0] * k[0], a[1] * k[1], a[2] * k[2]];
 const LIGHT = (() => { const x = -0.55, y = 0.83, l = Math.hypot(x, y); return [x / l, y / l]; })();
 
 /* ---------- the drawing for one date ---------- */
+// sp is a tree from maple-species.js; baked, its baked skeleton (the BAKED export of its
+// bake module), which the page imports for the one tree it draws.
 /* opts.treeOnly keeps the tree and what grows at its foot: no soil section, margin
    notes or labels. The marks are made exactly as for the page (the section still
    advances the pen's random stream) and then left out, so the tree is the same
    drawing; T.view frames what is left. */
-export function buildMaple(date = new Date(), seed = TREE_SEED, opts = {}) {
-  const S = seasonOf(date);
+export function buildMaple(date = new Date(), sp = SPECIES.bigleaf, baked = null, opts = {}) {
+  const seed = sp.seed, vine = sp.id === "vine";
+  const S = seasonOf(date, sp.id);
   const K = canvasAPI(seed + 7);
   const { R, line, poly, dashed, circle, bone, ROOT, label, seg, tag } = K;
   const { groundY, yBot, xR } = drawSectionMV(K, SEPIA);
   const sectionEnd = tag.length;
   const occ = [];   // what of the tree is solid enough to hide a bird behind it: blades and wood, as discs [x, y, r]
   // the tree is baked ahead of time (scripts/bake-maple.mjs); it is grown here only if
-  // the bake is stale or another seed is asked for
-  const G = unpackMaple(BAKED, seed) || growMaple(seed);
+  // the bake is stale or missing
+  const G = (baked && unpackMaple(baked, seed, sp.growth)) || growMaple(seed, sp.growth);
   const { n, X, Y, Z, Par, Kids, r, env, C } = G;
   const tNode = k => 0.13 + 0.5 * G.dist[k] / G.dmax;
 
@@ -110,7 +114,7 @@ export function buildMaple(date = new Date(), seed = TREE_SEED, opts = {}) {
     const q0 = norm3(cross3(d, ref)), q1 = cross3(d, q0);
     const tw = LR(-0.35, 0.35), q = h % 2 ? q0 : q1, o = h % 2 ? q1 : q0;
     const ax = norm3([q[0] * Math.cos(tw) + o[0] * Math.sin(tw), q[1] * Math.cos(tw) + o[1] * Math.sin(tw), q[2] * Math.cos(tw) + o[2] * Math.sin(tw)]);
-    const sz = LR(0.0068, 0.0105);   // vine maple: a blade a hand's breadth across, on a small tree
+    const sz = LR(sp.leafSize[0], sp.leafSize[1]);
     for (const side of [1, -1]) {
       // the stalk leaves the twig at about 50 degrees, leaning forward, and the leaf's
       // weight bends it down a little
@@ -150,7 +154,7 @@ export function buildMaple(date = new Date(), seed = TREE_SEED, opts = {}) {
   let tipY = 0;
   const leafy = out.length / Math.max(1, leaves.length);   // 0 bare .. 1 full canopy
   // limbs seen inside a leafy crown are in its shade: a deeper, warmer wash
-  const barkWash = mix([0.52, 0.53, 0.46], [0.4, 0.41, 0.34], leafy);   // vine maple bark: smooth, grey-green
+  const barkWash = mix(sp.bark[0], sp.bark[1], leafy);
   const wood = (k, f) => 1 - covAt(X[k], Y[k]) * (r[k] > 0.009 ? 0.45 : r[k] > 0.004 ? 0.7 : 0.88) * f;
   // a pen run whose width and ink are read from the node each point carries ([x, y, bone, node])
   const strand = (pts, w, ink, t0, t1, c) => {
@@ -418,7 +422,7 @@ export function buildMaple(date = new Date(), seed = TREE_SEED, opts = {}) {
   }
 
   /* ---------- foliage ----------
-     Every leaf is a whole vine maple blade from the leaf atlas (maple-leaves.js), stamped on
+     Every leaf is a whole blade from the leaf atlas (maple-leaves.js), stamped on
      the end of its stalk and laid back to front, so the near leaves overlap the far ones
      the way they do on the tree. The far side of the crown is drawn softer and paler with
      only a faint outline; the near side and the crown's edge get a firm outline and, where
@@ -468,7 +472,7 @@ export function buildMaple(date = new Date(), seed = TREE_SEED, opts = {}) {
   for (const k of tips) {
     const pf = fr(), pk = fr(), nkeys = 2 + Math.floor(fr() * 3), sway = fr() * 2 - 1;
     const b = boneOf[k], t = Math.min(0.95, tNode(k) + 0.1);
-    if (pf < 0.3 * S.flowers) {
+    if (pf < 0.3 * S.flowers && vine) {
       // a vine maple's flowers: a little drooping cluster, each flower red sepals round
       // a white centre
       const len = 0.005 + 0.004 * fr(), th = -Math.PI / 2 + 0.6 * sway, ex = X[k] + Math.cos(th) * len, ey = Y[k] + Math.sin(th) * len;
@@ -481,6 +485,18 @@ export function buildMaple(date = new Date(), seed = TREE_SEED, opts = {}) {
         line(fx, fy, fb, fx + 0.0004, fy, fb, R(2.2, 2.8), 0.85, t + 0.015, 0.01, [0.72, 0.2, 0.17, 2]);
         line(fx, fy, fb, fx + 0.0003, fy, fb, R(1.0, 1.3), 0.9, t + 0.025, 0.01, [0.96, 0.94, 0.88, 2.5]);
       }
+    } else if (pf < 0.3 * S.flowers) {
+      // a bigleaf's: a long yellow-green tassel
+      const len = 0.012 + 0.009 * fr(), pts = [];
+      let x = X[k], y = Y[k], th = -Math.PI / 2 + 0.5 * sway;
+      for (let i = 0; i <= 6; i++) { pts.push([x, y]); th += (-Math.PI / 2 - th) * 0.25; x += Math.cos(th) * len / 6; y += Math.sin(th) * len / 6; }
+      const fb = bone(b, X[k], Y[k], pts[6][0], pts[6][1], KIND.TWIG, 4.5, 0.15, len * 2, len);
+      poly(pts.map(p => [p[0], p[1], fb]), 0.8, 0.6, t, t + 0.02, [0.55, 0.6, 0.27, 2]);
+      for (let i = 1; i <= 6; i++) {
+        const p = pts[i], a = R(0, 6.28);
+        line(p[0], p[1], fb, p[0] + Math.cos(a) * 0.0014, p[1] + Math.sin(a) * 0.0014, fb, R(1.8, 2.6), 0.8, t + 0.01, 0.01, [0.8, 0.79, 0.3, 2]);
+      }
+      line(pts[1][0], pts[1][1], fb, pts[5][0], pts[5][1], fb, -0.009, 0.12, t + 0.03, 0.03, [0.88, 0.87, 0.5, 2.5]);
     }
     if (pk < 0.12 * S.keys) {
       const hidden = P > 0.5 && P < 2.9 ? 0.55 : 1;   // among summer leaves they are hard to see
@@ -489,7 +505,7 @@ export function buildMaple(date = new Date(), seed = TREE_SEED, opts = {}) {
         const sx = X[k] + Math.cos(sa) * sl, sy = Y[k] + Math.sin(sa) * sl;
         line(X[k], Y[k], b, sx, sy, b, 0.7, 0.55 * hidden, t, 0.01, [...S.keyColor, 2]);
         for (const w of [-1, 1]) {
-          const wa = sa + w * (1.4 + 0.15 * fr()), wl = 0.0042 + 0.0014 * fr();   // (a vine maple's keys spread nearly flat)
+          const [ws, wj, wl0, wlj] = sp.keyWing, wa = sa + w * (ws + wj * fr()), wl = wl0 + wlj * fr();
           line(sx, sy, b, sx + Math.cos(wa) * wl, sy + Math.sin(wa) * wl, b, 1.7, 0.75 * hidden, t + 0.01, 0.01, [...S.keyColor, 2]);
           if (j === 0) line(sx, sy, b, sx + Math.cos(wa) * wl, sy + Math.sin(wa) * wl, b, 0.6, 0.22 * hidden, t + 0.02, 0.01, [...PEN, 2]);
         }
@@ -693,7 +709,7 @@ export function buildMaple(date = new Date(), seed = TREE_SEED, opts = {}) {
       let x = R(-0.52, 0.52);
       if (Math.abs(x) > 0.38 && R(0, 1) < 0.6) x *= 0.6;          // most fall under the crown
       const y = groundY(x) + R(0.0004, 0.0045) + (Math.abs(x) < 0.05 ? 0.002 : 0);
-      const c = mul(mix([0.44, 0.34, 0.24], S.leaf(R(2.7, 3.6), R(0, 1)), S.litterFresh), [R(0.9, 1.08), R(0.9, 1.06), R(0.9, 1.06)]);
+      const c = mul(mix([0.44, 0.34, 0.24], S.leaf(R(2.7, 3.6), vine ? R(0, 1) : 0.5), S.litterFresh), [R(0.9, 1.08), R(0.9, 1.06), R(0.9, 1.06)]);
       const a = R(-0.35, 0.35), l = R(0.0045, 0.008);
       for (const o of [-0.5, 0, 0.5]) pl(x, y, ROOT, x + Math.cos(a + o) * l, y + Math.sin(a + o) * l * 0.45, ROOT, 1.9, R(0.55, 0.8), 0.24 + 0.06 * Math.abs(x), 0.01, c);
     }
@@ -794,7 +810,7 @@ export function buildMaple(date = new Date(), seed = TREE_SEED, opts = {}) {
       line(xd, y, ROOT, xd + 0.0045, y + s * 0.012, ROOT, 0.8, 0.6, ta + 0.04, 0.01, GRAPHITE);
     }
     dashed(0.03, top, xd - 0.016, top, 0.006, 0.006, 0.7, 0.45, ta, ta + 0.03, GRAPHITE);
-    label(xd + 0.014, (groundY(xd) + top) / 2, `${(top * 8).toFixed(1)} m &middot; canopy height`, { anchor: "c", rot: -90, t: 0.88, cls: "dim" });
+    label(xd + 0.014, (groundY(xd) + top) / 2, `${(top * sp.metres).toFixed(1)} m &middot; canopy height`, { anchor: "c", rot: -90, t: 0.88, cls: "dim" });
 
     // one lidar pulse: first return off the canopy (or, in winter, a limb), last return on bare earth
     const xr = LIDAR_X;
@@ -819,8 +835,8 @@ export function buildMaple(date = new Date(), seed = TREE_SEED, opts = {}) {
     // species note with a leader to the crown
     const lp = [[0.105, 1.062, ROOT], [0.075, 1.052, ROOT], [0.05, 1.034, ROOT], [0.036, top + 0.012, ROOT]];
     poly(lp, 0.75, 0.55, 0.84, 0.87, GRAPHITE);
-    label(0.112, 1.068, "<i>Acer circinatum</i><br>Vine maple, Maple Valley", { anchor: "l", t: 0.86, cls: "sp sp-l" });
-    label(-0.02, yBot - 0.03, "Fig. 1 &nbsp;Vine maple on Alderwood soil over Vashon till, Maple Valley, Washington", { anchor: "c", t: 0.97, cls: "cap" });
+    label(0.112, 1.068, sp.name, { anchor: "l", t: 0.86, cls: "sp sp-l" });
+    label(-0.02, yBot - 0.03, "Fig. 1 &nbsp;" + sp.caption, { anchor: "c", t: 0.97, cls: "cap" });
     label(-0.02, yBot - 0.062, `as it stands on ${S.label} &middot; ${S.note}`, { anchor: "c", t: 0.99, cls: "cap season" });
   }
 
@@ -837,7 +853,8 @@ export function buildMaple(date = new Date(), seed = TREE_SEED, opts = {}) {
   T.season = S;
   T.accent = accent;
   T.leaves = out.length;
-  T.leafAtlas = () => leafAtlas(seed + 1);
+  T.leafAtlas = () => leafAtlas(seed + 1, sp.outline);
+  T.species = sp.id;
   T.leafPen = PEN;
   {
     // where a crow can come down to forage: bare ground under the spread of the crown, clear of the trunk

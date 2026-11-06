@@ -24,10 +24,10 @@ export function prepareStartupTree(splash) {
     /* Module workers or OffscreenCanvas may be unavailable in an older host.
        Keep the same drawing, yielding between its CPU-heavy stages. */
     if (splash.done) return null;
-    const { buildMaple } = await import("./maple.js");
+    const [{ buildMaple }, { SPECIES }, { BAKED }] = await Promise.all([import("./maple.js"), import("./maple-species.js"), import("./maple-tree-vine.js")]);
     await yieldToMap();
     if (splash.done) return null;
-    const tree = buildMaple(date, undefined, { treeOnly: true });
+    const tree = buildMaple(date, SPECIES.vine, BAKED, { treeOnly: true });
     await yieldToMap();
     if (splash.done) return null;
     return { tree, atlas: tree.leafCount ? tree.leafAtlas() : null };

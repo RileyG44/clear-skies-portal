@@ -1,6 +1,7 @@
 /* The architecture of an open-grown maple, grown in three dimensions and then flattened
-   onto the page by maple.js. The page draws a vine maple (Acer circinatum, VINE below);
-   the bigleaf maple it began with (Acer macrophyllum, MAPLE) is kept as a second form.
+   onto the page by maple.js. It grows two forms, a bigleaf maple (Acer macrophyllum,
+   MAPLE below) and a vine maple (Acer circinatum, VINE); the page draws one of them on
+   each visit (see maple-species.js).
 
    It is a self-organising tree model in the manner of Palubicki et al. (2009), "Self-
    organizing tree models for image synthesis", reduced to what a drawing needs:
@@ -112,10 +113,9 @@ export const VINE = {
   shed: 0.1,
   sag: 2e-5
 };
-// the tree this page draws, and the seed it is grown from (picked from a run of seeds
-// for a full, even crown with no lone limb standing off its side)
-export const TREE = VINE;
-export const TREE_SEED = 20451160;
+// the default form and seed (the bigleaf); maple-species.js has both trees' seeds
+export const TREE = MAPLE;
+export const TREE_SEED = 20261104;
 
 /* the crown volume: a broad, irregular dome, a little heavier on one side. It draws the
    seed's first six numbers, so a baked tree can rebuild it without growing again */
