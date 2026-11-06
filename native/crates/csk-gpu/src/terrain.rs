@@ -20,7 +20,8 @@ use std::sync::Arc;
 use csk_core::resource::Reservation;
 use wgpu::util::DeviceExt;
 
-use crate::render::{FRAME_FORMAT, Frame, texture_bytes};
+use crate::derive::{Derive, Fields, Placement};
+use crate::render::{AuxViews, FRAME_FORMAT, Frame, texture_bytes};
 use crate::{Error, Renderer, Uniforms};
 
 /// Source tiles and store slots are 256 texels square.
@@ -32,14 +33,20 @@ const MAX_EMPTY: usize = 16_384;
 /// Samples in a view sample (about 96 x 96, shaped like the screen).
 const SAMPLES: f64 = 9216.0;
 
-/// A grid of the screen field's heights from one presented frame: what auto
-/// layers fit their colour ranges to. NaN where no terrain was drawn.
+/// A grid of the screen field from one presented frame: what auto layers fit
+/// their colour ranges to. Row-major, top-down; NaN where absent.
 #[derive(Clone, Debug, PartialEq)]
 pub struct ViewSample {
     pub view: View,
     pub width: u32,
     pub height: u32,
+    /// Drawn terrain, metres.
     pub heights: Vec<f32>,
+    /// The relative-elevation floor and land-only floor there, when derived.
+    pub base: Vec<f32>,
+    pub land_base: Vec<f32>,
+    /// Water geography: 0 land, 1 ocean, 2 inland water.
+    pub water: Vec<u8>,
 }
 
 /// A view sample on its way back from the GPU.
@@ -250,6 +257,11 @@ pub struct Terrain {
     /// Sample the next rendered frame.
     sample_next: bool,
     pending: Option<Pending>,
+    /// Derived fields of the store, the radii asked for, and a count that
+    /// changes whenever the store's terrain does.
+    derived: Fields,
+    radii: Derive,
+    generation: u64,
 }
 
 /// Whether a record's footprint overlaps display tile (z, x, y).
@@ -297,6 +309,9 @@ impl Terrain {
             stamp: 0,
             sample_next: false,
             pending: None,
+            derived: Fields::default(),
+            radii: Derive::default(),
+            generation: 0,
         })
     }
 
@@ -314,6 +329,17 @@ impl Terrain {
         if let Some(store) = &mut self.store {
             store.dirty.fill(true);
         }
+    }
+
+    /// The derived fields the appearance needs (Detail blur, REM floors).
+    pub fn set_derive(&mut self, radii: Derive) {
+        self.radii = radii;
+    }
+
+    /// Rebuilds the derived fields on the next frame (e.g. the water
+    /// geography that land-only floors read was installed).
+    pub fn invalidate_derived(&mut self) {
+        self.generation += 1;
     }
 
     pub fn resident_tiles(&self) -> usize {
@@ -616,6 +642,7 @@ impl Terrain {
             gpu.retain_until_done(old.charge);
         }
         self.store = Some(store);
+        self.generation += 1;
         Ok(shift)
     }
 
@@ -696,6 +723,7 @@ impl Terrain {
                 e.used = frame;
             }
         }
+        self.generation += 1;
         let store = self.store.as_mut().expect("store");
         let count = done.len();
         for (i, drawn) in done {
@@ -745,6 +773,14 @@ impl Terrain {
                 Some(ScreenField { view: texture.create_view(&Default::default()), texture, size: (w, h), charge });
         }
         let store = self.store.as_ref().expect("anchored");
+        let b = store.bounds;
+        let n = (1u64 << b.z) as f64;
+        let place = Placement {
+            size: (store.texture.width(), store.texture.height()),
+            merc_origin: [b.x0 as f64 / n, b.y0 as f64 / n],
+            merc_step: 1.0 / (n * f64::from(TILE)),
+        };
+        self.derived.update(gpu, &mut encoder, &store.view, self.generation, &place, self.radii)?;
         let field = self.field.as_ref().expect("field");
         // Screen pixel -> store texel (centres at integers), in f64 relative
         // to the store origin. Matches the shading program's camera model.
@@ -753,7 +789,6 @@ impl Terrain {
         let (sin, cos) = view.bearing.to_radians().sin_cos();
         let (sx, sy) = (view.css[0] / f64::from(w), view.css[1] / f64::from(h));
         let rotate = |a: f64, b: f64| (a * cos + b * sin, -a * sin + b * cos);
-        let n = (1u64 << z) as f64;
         let base_x = ((view.center[0] + shift as f64) * n - store.bounds.x0 as f64) * f64::from(TILE) - 0.5;
         let base_y = (view.center[1] * n - store.bounds.y0 as f64) * f64::from(TILE) - 0.5;
         let (ox, oy) = rotate((0.5 * sx - 0.5 * view.css[0]) * k, (0.5 * sy - 0.5 * view.css[1]) * k);
@@ -786,16 +821,35 @@ impl Terrain {
             pass.set_bind_group(0, &group, &[]);
             pass.dispatch_workgroups(w.div_ceil(16), h.div_ceil(16), 1);
         }
+        // Field pixel centre -> store coordinates (texel i spans [i, i+1)).
+        let corner = |o: f64, a: f64, b: f64| (o - 0.5 * a - 0.5 * b + 0.5) as f32;
+        let transform = [
+            axis_x.0 as f32,
+            axis_x.1 as f32,
+            0.0,
+            axis_y.0 as f32,
+            axis_y.1 as f32,
+            0.0,
+            corner(base_x + ox, axis_x.0, axis_y.0),
+            corner(base_y + oy, axis_x.1, axis_y.1),
+            1.0,
+        ];
+        let aux = AuxViews {
+            blur: self.derived.blur.as_ref().map(|a| a.view()),
+            base: self.derived.base.as_ref().map(|a| a.view()),
+            land_base: self.derived.land_base.as_ref().map(|a| a.view()),
+            transform,
+        };
         let mut uniforms = uniforms.clone();
         uniforms.set("u_cssSize", &[view.css[0] as f32, view.css[1] as f32])?;
         uniforms.set("u_dpr", &[view.dpr as f32])?;
         uniforms.set("u_zoom", &[view.zoom as f32])?;
         uniforms.set("u_centerMerc", &[view.center[0] as f32, view.center[1] as f32])?;
         uniforms.set("u_bearingRad", &[view.bearing.to_radians() as f32])?;
-        gpu.encode_shade(&mut encoder, &field.view, &uniforms, target, format);
+        gpu.encode_shade(&mut encoder, &field.view, &uniforms, &aux, target, format);
         let sampling = if self.sample_next && self.pending.is_none() {
             self.sample_next = false;
-            Some(Self::encode_sample(gpu, &mut encoder, &field.view, (w, h))?)
+            Some(Self::encode_sample(gpu, &mut encoder, &field.view, (w, h), &aux, &place)?)
         } else {
             None
         };
@@ -808,7 +862,7 @@ impl Terrain {
             });
             self.pending = Some(Pending { view: *view, size, buffer, ready, _charge: charge });
         }
-        gpu.retain_until_done((store.charge.clone(), field.charge.clone()));
+        gpu.retain_until_done((store.charge.clone(), field.charge.clone(), self.derived.charges()));
         let visible = view.bounds(0, shift);
         let (mut total, mut covered) = (0usize, 0usize);
         for wy in visible.y0..=visible.y1 {
@@ -858,16 +912,30 @@ impl Terrain {
             }
         }
         let pending = self.pending.take()?;
-        let heights = {
-            let Ok(bytes) = pending.buffer.slice(..).get_mapped_range() else { return None };
-            bytes
-                .chunks_exact(4)
-                .map(|b| f32::from_le_bytes(b.try_into().expect("4 bytes")))
-                .map(|v| if v.is_finite() && v > -1e20 { v } else { f32::NAN })
-                .collect()
+        let count = (pending.size.0 * pending.size.1) as usize;
+        let mut sample = ViewSample {
+            view: pending.view,
+            width: pending.size.0,
+            height: pending.size.1,
+            heights: Vec::with_capacity(count),
+            base: Vec::with_capacity(count),
+            land_base: Vec::with_capacity(count),
+            water: Vec::with_capacity(count),
         };
+        {
+            let Ok(bytes) = pending.buffer.slice(..).get_mapped_range() else { return None };
+            let clean = |v: f32| if v.is_finite() && v > -1e20 { v } else { f32::NAN };
+            for texel in bytes.chunks_exact(16) {
+                let v: [f32; 4] =
+                    std::array::from_fn(|i| f32::from_le_bytes(texel[i * 4..i * 4 + 4].try_into().expect("4 bytes")));
+                sample.heights.push(clean(v[0]));
+                sample.base.push(clean(v[1]));
+                sample.land_base.push(clean(v[2]));
+                sample.water.push(v[3] as u8);
+            }
+        }
         pending.buffer.unmap();
-        Some(ViewSample { view: pending.view, width: pending.size.0, height: pending.size.1, heights })
+        Some(sample)
     }
 
     #[allow(clippy::type_complexity)]
@@ -876,10 +944,12 @@ impl Terrain {
         encoder: &mut wgpu::CommandEncoder,
         field: &wgpu::TextureView,
         (w, h): (u32, u32),
+        aux: &AuxViews<'_>,
+        place: &Placement,
     ) -> Result<(wgpu::Buffer, (u32, u32), Arc<Reservation>), Error> {
         let scale = (SAMPLES / (f64::from(w) * f64::from(h))).sqrt().min(1.0);
         let size = (((f64::from(w) * scale).round() as u32).max(1), ((f64::from(h) * scale).round() as u32).max(1));
-        let bytes = u64::from(size.0) * u64::from(size.1) * 4;
+        let bytes = u64::from(size.0) * u64::from(size.1) * 16;
         let charge = Arc::new(gpu.budget.reserve(2 * bytes as usize + 4096)?);
         let storage = gpu.device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("view sample"),
@@ -893,8 +963,34 @@ impl Terrain {
             usage: wgpu::BufferUsages::MAP_READ | wgpu::BufferUsages::COPY_DST,
             mapped_at_creation: false,
         });
-        let mut grid = Vec::with_capacity(16);
+        let mut grid = Vec::with_capacity(96);
         for v in [size.0, size.1, 0, 0] {
+            grid.extend_from_slice(&v.to_le_bytes());
+        }
+        let scale = |a: Option<(&wgpu::TextureView, u32)>| a.map_or(0.0, |(_, f)| f as f32);
+        let t = aux.transform;
+        for v in [
+            scale(aux.base),
+            scale(aux.land_base),
+            place.merc_step as f32,
+            0.0,
+            place.merc_origin[0] as f32,
+            place.merc_origin[1] as f32,
+            0.0,
+            0.0,
+            t[0],
+            t[1],
+            t[2],
+            0.0,
+            t[3],
+            t[4],
+            t[5],
+            0.0,
+            t[6],
+            t[7],
+            t[8],
+            0.0,
+        ] {
             grid.extend_from_slice(&v.to_le_bytes());
         }
         let grid = gpu.device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
@@ -902,6 +998,7 @@ impl Terrain {
             contents: &grid,
             usage: wgpu::BufferUsages::UNIFORM,
         });
+        let water = gpu.water_view();
         let group = gpu.device.create_bind_group(&wgpu::BindGroupDescriptor {
             label: None,
             layout: &gpu.sample.1,
@@ -909,6 +1006,15 @@ impl Terrain {
                 wgpu::BindGroupEntry { binding: 0, resource: grid.as_entire_binding() },
                 wgpu::BindGroupEntry { binding: 1, resource: wgpu::BindingResource::TextureView(field) },
                 wgpu::BindGroupEntry { binding: 2, resource: storage.as_entire_binding() },
+                wgpu::BindGroupEntry {
+                    binding: 3,
+                    resource: wgpu::BindingResource::TextureView(aux.base.map_or(&gpu.empty_aux, |(v, _)| v)),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 4,
+                    resource: wgpu::BindingResource::TextureView(aux.land_base.map_or(&gpu.empty_aux, |(v, _)| v)),
+                },
+                wgpu::BindGroupEntry { binding: 5, resource: wgpu::BindingResource::TextureView(&water) },
             ],
         });
         {

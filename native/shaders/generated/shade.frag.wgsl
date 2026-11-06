@@ -786,7 +786,7 @@ fn cspRampAt_u0028_i1_u003b_f1_u003b(layer_1: ptr<function, i32>, t_1: ptr<funct
     var p0_: f32;
     var param_36: i32;
     var param_37: i32;
-    var phi_1586_: bool;
+    var phi_1583_: bool;
 
     let _e277: i32 = (*layer_1);
     let _e281: f32 = unnamed.u_layerA[_e277][3u];
@@ -795,16 +795,16 @@ fn cspRampAt_u0028_i1_u003b_f1_u003b(layer_1: ptr<function, i32>, t_1: ptr<funct
     base = (_e284 * 10i);
     let _e286: i32 = count;
     let _e287: bool = (_e286 <= 1i);
-    phi_1586_ = _e287;
+    phi_1583_ = _e287;
     if !(_e287) {
         let _e289: f32 = (*t_1);
         let _e290: i32 = (*layer_1);
         param_32 = _e290;
         param_33 = 0i;
         let _e291: f32 = cspStopPos_u0028_i1_u003b_i1_u003b((&param_32), (&param_33));
-        phi_1586_ = (_e289 <= _e291);
+        phi_1583_ = (_e289 <= _e291);
     }
-    let _e294: bool = phi_1586_;
+    let _e294: bool = phi_1583_;
     if _e294 {
         let _e295: i32 = base;
         let _e298: vec4<f32> = unnamed.u_layerColors[_e295];
@@ -1266,7 +1266,38 @@ fn cspLayerValue_u0028_i1_u003b_f1_u003b_struct_u002d_CspCtx_u002d_vi2_u002d_f1_
     return vec2<f32>(0f, 0f);
 }
 
-fn csp_landBase_u0028_vi2_u003b_f1_u003b(p: ptr<function, vec2<i32>>, v_1: ptr<function, f32>) -> bool {
+fn csk_isinf_u0028_f1_u003b(v_1: ptr<function, f32>) -> bool {
+    let _e265: f32 = (*v_1);
+    return ((bitcast<u32>(_e265) & 2147483647u) == 2139095040u);
+}
+
+fn csk_isnan_u0028_f1_u003b(v_2: ptr<function, f32>) -> bool {
+    let _e265: f32 = (*v_2);
+    return ((bitcast<u32>(_e265) & 2147483647u) > 2139095040u);
+}
+
+fn csk_ok_u0028_f1_u003b(v_3: ptr<function, f32>) -> bool {
+    var param_62: f32;
+    var param_63: f32;
+    var phi_246_: bool;
+
+    let _e267: f32 = (*v_3);
+    param_62 = _e267;
+    let _e268: bool = csk_isnan_u0028_f1_u003b((&param_62));
+    let _e269: bool = !(_e268);
+    phi_246_ = _e269;
+    if _e269 {
+        let _e270: f32 = (*v_3);
+        param_63 = _e270;
+        let _e271: bool = csk_isinf_u0028_f1_u003b((&param_63));
+        phi_246_ = !(_e271);
+    }
+    let _e274: bool = phi_246_;
+    let _e275: f32 = (*v_3);
+    return (_e274 && (_e275 > -100000000000000000000f));
+}
+
+fn csp_landBase_u0028_vi2_u003b_f1_u003b(p: ptr<function, vec2<i32>>, v_4: ptr<function, f32>) -> bool {
     var q_1: vec2<f32>;
     var b_5: vec2<i32>;
     var fr: vec2<f32>;
@@ -1275,81 +1306,84 @@ fn csp_landBase_u0028_vi2_u003b_f1_u003b(p: ptr<function, vec2<i32>>, v_1: ptr<f
     var w: f32;
     var y: i32;
     var x_1: i32;
-    var a_1: vec2<f32>;
+    var a_1: f32;
     var k_2: f32;
     var local_12: f32;
     var local_13: f32;
+    var param_64: f32;
 
-    (*v_1) = 0f;
-    let _e279: f32 = unnamed.csk_landBaseScale;
-    if (_e279 <= 0f) {
+    (*v_4) = 0f;
+    let _e280: f32 = unnamed.csk_landBaseScale;
+    if (_e280 <= 0f) {
         return false;
     }
-    let _e282: mat3x3<f32> = unnamed.csk_auxTransform;
-    let _e283: vec2<i32> = (*p);
-    let _e286: vec2<f32> = (vec2<f32>(_e283) + vec2(0.5f));
-    let _e293: f32 = unnamed.csk_landBaseScale;
-    q_1 = (((_e282 * vec3<f32>(_e286.x, _e286.y, 1f)).xy / vec2(_e293)) - vec2(0.5f));
-    let _e298: vec2<f32> = q_1;
-    b_5 = vec2<i32>(floor(_e298));
-    let _e301: vec2<f32> = q_1;
-    let _e302: vec2<i32> = b_5;
-    fr = (_e301 - vec2<f32>(_e302));
-    let _e305: vec2<u32> = textureDimensions(csk_landBase, 0i);
-    ts = vec2<i32>(_e305);
+    let _e283: mat3x3<f32> = unnamed.csk_auxTransform;
+    let _e284: vec2<i32> = (*p);
+    let _e287: vec2<f32> = (vec2<f32>(_e284) + vec2(0.5f));
+    let _e294: f32 = unnamed.csk_landBaseScale;
+    q_1 = (((_e283 * vec3<f32>(_e287.x, _e287.y, 1f)).xy / vec2(_e294)) - vec2(0.5f));
+    let _e299: vec2<f32> = q_1;
+    b_5 = vec2<i32>(floor(_e299));
+    let _e302: vec2<f32> = q_1;
+    let _e303: vec2<i32> = b_5;
+    fr = (_e302 - vec2<f32>(_e303));
+    let _e306: vec2<u32> = textureDimensions(csk_landBase, 0i);
+    ts = vec2<i32>(_e306);
     sum_1 = 0f;
     w = 0f;
     y = 0i;
     loop {
-        let _e307: i32 = y;
-        if (_e307 < 2i) {
+        let _e308: i32 = y;
+        if (_e308 < 2i) {
             x_1 = 0i;
             loop {
-                let _e309: i32 = x_1;
-                if (_e309 < 2i) {
-                    let _e311: vec2<i32> = b_5;
-                    let _e312: i32 = x_1;
-                    let _e313: i32 = y;
-                    let _e316: vec2<i32> = ts;
-                    let _e320: vec4<f32> = textureLoad(csk_landBase, clamp((_e311 + vec2<i32>(_e312, _e313)), vec2<i32>(0i, 0i), (_e316 - vec2(1i))), 0i);
-                    a_1 = _e320.xy;
-                    let _e322: i32 = x_1;
-                    if (_e322 == 0i) {
-                        let _e325: f32 = fr[0u];
-                        local_12 = (1f - _e325);
+                let _e310: i32 = x_1;
+                if (_e310 < 2i) {
+                    let _e312: vec2<i32> = b_5;
+                    let _e313: i32 = x_1;
+                    let _e314: i32 = y;
+                    let _e317: vec2<i32> = ts;
+                    let _e321: vec4<f32> = textureLoad(csk_landBase, clamp((_e312 + vec2<i32>(_e313, _e314)), vec2<i32>(0i, 0i), (_e317 - vec2(1i))), 0i);
+                    a_1 = _e321.x;
+                    let _e323: i32 = x_1;
+                    if (_e323 == 0i) {
+                        let _e326: f32 = fr[0u];
+                        local_12 = (1f - _e326);
                     } else {
-                        let _e328: f32 = fr[0u];
-                        local_12 = _e328;
+                        let _e329: f32 = fr[0u];
+                        local_12 = _e329;
                     }
-                    let _e329: f32 = local_12;
-                    let _e330: i32 = y;
-                    if (_e330 == 0i) {
-                        let _e333: f32 = fr[1u];
-                        local_13 = (1f - _e333);
+                    let _e330: f32 = local_12;
+                    let _e331: i32 = y;
+                    if (_e331 == 0i) {
+                        let _e334: f32 = fr[1u];
+                        local_13 = (1f - _e334);
                     } else {
-                        let _e336: f32 = fr[1u];
-                        local_13 = _e336;
+                        let _e337: f32 = fr[1u];
+                        local_13 = _e337;
                     }
-                    let _e337: f32 = local_13;
-                    k_2 = (_e329 * _e337);
-                    let _e340: f32 = a_1[1u];
+                    let _e338: f32 = local_13;
+                    k_2 = (_e330 * _e338);
+                    let _e340: f32 = a_1;
+                    param_64 = _e340;
+                    let _e341: bool = csk_ok_u0028_f1_u003b((&param_64));
                     let _e342: f32 = k_2;
-                    if ((_e340 > 0f) && (_e342 > 0f)) {
-                        let _e346: f32 = a_1[0u];
-                        let _e347: f32 = k_2;
-                        let _e349: f32 = sum_1;
-                        sum_1 = (_e349 + (_e346 * _e347));
-                        let _e351: f32 = k_2;
-                        let _e352: f32 = w;
-                        w = (_e352 + _e351);
+                    if (_e341 && (_e342 > 0f)) {
+                        let _e345: f32 = a_1;
+                        let _e346: f32 = k_2;
+                        let _e348: f32 = sum_1;
+                        sum_1 = (_e348 + (_e345 * _e346));
+                        let _e350: f32 = k_2;
+                        let _e351: f32 = w;
+                        w = (_e351 + _e350);
                     }
                     continue;
                 } else {
                     break;
                 }
                 continuing {
-                    let _e354: i32 = x_1;
-                    x_1 = (_e354 + 1i);
+                    let _e353: i32 = x_1;
+                    x_1 = (_e353 + 1i);
                 }
             }
             continue;
@@ -1357,21 +1391,21 @@ fn csp_landBase_u0028_vi2_u003b_f1_u003b(p: ptr<function, vec2<i32>>, v_1: ptr<f
             break;
         }
         continuing {
-            let _e356: i32 = y;
-            y = (_e356 + 1i);
+            let _e355: i32 = y;
+            y = (_e355 + 1i);
         }
     }
-    let _e358: f32 = w;
-    if (_e358 <= 0f) {
+    let _e357: f32 = w;
+    if (_e357 <= 0f) {
         return false;
     }
-    let _e360: f32 = sum_1;
-    let _e361: f32 = w;
-    (*v_1) = (_e360 / _e361);
+    let _e359: f32 = sum_1;
+    let _e360: f32 = w;
+    (*v_4) = (_e359 / _e360);
     return true;
 }
 
-fn csp_base_u0028_vi2_u003b_f1_u003b(p_1: ptr<function, vec2<i32>>, v_2: ptr<function, f32>) -> bool {
+fn csp_base_u0028_vi2_u003b_f1_u003b(p_1: ptr<function, vec2<i32>>, v_5: ptr<function, f32>) -> bool {
     var q_2: vec2<f32>;
     var b_6: vec2<i32>;
     var fr_1: vec2<f32>;
@@ -1380,81 +1414,84 @@ fn csp_base_u0028_vi2_u003b_f1_u003b(p_1: ptr<function, vec2<i32>>, v_2: ptr<fun
     var w_1: f32;
     var y_1: i32;
     var x_2: i32;
-    var a_2: vec2<f32>;
+    var a_2: f32;
     var k_3: f32;
     var local_14: f32;
     var local_15: f32;
+    var param_65: f32;
 
-    (*v_2) = 0f;
-    let _e279: f32 = unnamed.csk_baseScale;
-    if (_e279 <= 0f) {
+    (*v_5) = 0f;
+    let _e280: f32 = unnamed.csk_baseScale;
+    if (_e280 <= 0f) {
         return false;
     }
-    let _e282: mat3x3<f32> = unnamed.csk_auxTransform;
-    let _e283: vec2<i32> = (*p_1);
-    let _e286: vec2<f32> = (vec2<f32>(_e283) + vec2(0.5f));
-    let _e293: f32 = unnamed.csk_baseScale;
-    q_2 = (((_e282 * vec3<f32>(_e286.x, _e286.y, 1f)).xy / vec2(_e293)) - vec2(0.5f));
-    let _e298: vec2<f32> = q_2;
-    b_6 = vec2<i32>(floor(_e298));
-    let _e301: vec2<f32> = q_2;
-    let _e302: vec2<i32> = b_6;
-    fr_1 = (_e301 - vec2<f32>(_e302));
-    let _e305: vec2<u32> = textureDimensions(csk_base, 0i);
-    ts_1 = vec2<i32>(_e305);
+    let _e283: mat3x3<f32> = unnamed.csk_auxTransform;
+    let _e284: vec2<i32> = (*p_1);
+    let _e287: vec2<f32> = (vec2<f32>(_e284) + vec2(0.5f));
+    let _e294: f32 = unnamed.csk_baseScale;
+    q_2 = (((_e283 * vec3<f32>(_e287.x, _e287.y, 1f)).xy / vec2(_e294)) - vec2(0.5f));
+    let _e299: vec2<f32> = q_2;
+    b_6 = vec2<i32>(floor(_e299));
+    let _e302: vec2<f32> = q_2;
+    let _e303: vec2<i32> = b_6;
+    fr_1 = (_e302 - vec2<f32>(_e303));
+    let _e306: vec2<u32> = textureDimensions(csk_base, 0i);
+    ts_1 = vec2<i32>(_e306);
     sum_2 = 0f;
     w_1 = 0f;
     y_1 = 0i;
     loop {
-        let _e307: i32 = y_1;
-        if (_e307 < 2i) {
+        let _e308: i32 = y_1;
+        if (_e308 < 2i) {
             x_2 = 0i;
             loop {
-                let _e309: i32 = x_2;
-                if (_e309 < 2i) {
-                    let _e311: vec2<i32> = b_6;
-                    let _e312: i32 = x_2;
-                    let _e313: i32 = y_1;
-                    let _e316: vec2<i32> = ts_1;
-                    let _e320: vec4<f32> = textureLoad(csk_base, clamp((_e311 + vec2<i32>(_e312, _e313)), vec2<i32>(0i, 0i), (_e316 - vec2(1i))), 0i);
-                    a_2 = _e320.xy;
-                    let _e322: i32 = x_2;
-                    if (_e322 == 0i) {
-                        let _e325: f32 = fr_1[0u];
-                        local_14 = (1f - _e325);
+                let _e310: i32 = x_2;
+                if (_e310 < 2i) {
+                    let _e312: vec2<i32> = b_6;
+                    let _e313: i32 = x_2;
+                    let _e314: i32 = y_1;
+                    let _e317: vec2<i32> = ts_1;
+                    let _e321: vec4<f32> = textureLoad(csk_base, clamp((_e312 + vec2<i32>(_e313, _e314)), vec2<i32>(0i, 0i), (_e317 - vec2(1i))), 0i);
+                    a_2 = _e321.x;
+                    let _e323: i32 = x_2;
+                    if (_e323 == 0i) {
+                        let _e326: f32 = fr_1[0u];
+                        local_14 = (1f - _e326);
                     } else {
-                        let _e328: f32 = fr_1[0u];
-                        local_14 = _e328;
+                        let _e329: f32 = fr_1[0u];
+                        local_14 = _e329;
                     }
-                    let _e329: f32 = local_14;
-                    let _e330: i32 = y_1;
-                    if (_e330 == 0i) {
-                        let _e333: f32 = fr_1[1u];
-                        local_15 = (1f - _e333);
+                    let _e330: f32 = local_14;
+                    let _e331: i32 = y_1;
+                    if (_e331 == 0i) {
+                        let _e334: f32 = fr_1[1u];
+                        local_15 = (1f - _e334);
                     } else {
-                        let _e336: f32 = fr_1[1u];
-                        local_15 = _e336;
+                        let _e337: f32 = fr_1[1u];
+                        local_15 = _e337;
                     }
-                    let _e337: f32 = local_15;
-                    k_3 = (_e329 * _e337);
-                    let _e340: f32 = a_2[1u];
+                    let _e338: f32 = local_15;
+                    k_3 = (_e330 * _e338);
+                    let _e340: f32 = a_2;
+                    param_65 = _e340;
+                    let _e341: bool = csk_ok_u0028_f1_u003b((&param_65));
                     let _e342: f32 = k_3;
-                    if ((_e340 > 0f) && (_e342 > 0f)) {
-                        let _e346: f32 = a_2[0u];
-                        let _e347: f32 = k_3;
-                        let _e349: f32 = sum_2;
-                        sum_2 = (_e349 + (_e346 * _e347));
-                        let _e351: f32 = k_3;
-                        let _e352: f32 = w_1;
-                        w_1 = (_e352 + _e351);
+                    if (_e341 && (_e342 > 0f)) {
+                        let _e345: f32 = a_2;
+                        let _e346: f32 = k_3;
+                        let _e348: f32 = sum_2;
+                        sum_2 = (_e348 + (_e345 * _e346));
+                        let _e350: f32 = k_3;
+                        let _e351: f32 = w_1;
+                        w_1 = (_e351 + _e350);
                     }
                     continue;
                 } else {
                     break;
                 }
                 continuing {
-                    let _e354: i32 = x_2;
-                    x_2 = (_e354 + 1i);
+                    let _e353: i32 = x_2;
+                    x_2 = (_e353 + 1i);
                 }
             }
             continue;
@@ -1462,21 +1499,21 @@ fn csp_base_u0028_vi2_u003b_f1_u003b(p_1: ptr<function, vec2<i32>>, v_2: ptr<fun
             break;
         }
         continuing {
-            let _e356: i32 = y_1;
-            y_1 = (_e356 + 1i);
+            let _e355: i32 = y_1;
+            y_1 = (_e355 + 1i);
         }
     }
-    let _e358: f32 = w_1;
-    if (_e358 <= 0f) {
+    let _e357: f32 = w_1;
+    if (_e357 <= 0f) {
         return false;
     }
-    let _e360: f32 = sum_2;
-    let _e361: f32 = w_1;
-    (*v_2) = (_e360 / _e361);
+    let _e359: f32 = sum_2;
+    let _e360: f32 = w_1;
+    (*v_5) = (_e359 / _e360);
     return true;
 }
 
-fn csp_blur_u0028_vi2_u003b_f1_u003b(p_2: ptr<function, vec2<i32>>, v_3: ptr<function, f32>) -> bool {
+fn csp_blur_u0028_vi2_u003b_f1_u003b(p_2: ptr<function, vec2<i32>>, v_6: ptr<function, f32>) -> bool {
     var q_3: vec2<f32>;
     var b_7: vec2<i32>;
     var fr_2: vec2<f32>;
@@ -1485,81 +1522,84 @@ fn csp_blur_u0028_vi2_u003b_f1_u003b(p_2: ptr<function, vec2<i32>>, v_3: ptr<fun
     var w_2: f32;
     var y_2: i32;
     var x_3: i32;
-    var a_3: vec2<f32>;
+    var a_3: f32;
     var k_4: f32;
     var local_16: f32;
     var local_17: f32;
+    var param_66: f32;
 
-    (*v_3) = 0f;
-    let _e279: f32 = unnamed.csk_blurScale;
-    if (_e279 <= 0f) {
+    (*v_6) = 0f;
+    let _e280: f32 = unnamed.csk_blurScale;
+    if (_e280 <= 0f) {
         return false;
     }
-    let _e282: mat3x3<f32> = unnamed.csk_auxTransform;
-    let _e283: vec2<i32> = (*p_2);
-    let _e286: vec2<f32> = (vec2<f32>(_e283) + vec2(0.5f));
-    let _e293: f32 = unnamed.csk_blurScale;
-    q_3 = (((_e282 * vec3<f32>(_e286.x, _e286.y, 1f)).xy / vec2(_e293)) - vec2(0.5f));
-    let _e298: vec2<f32> = q_3;
-    b_7 = vec2<i32>(floor(_e298));
-    let _e301: vec2<f32> = q_3;
-    let _e302: vec2<i32> = b_7;
-    fr_2 = (_e301 - vec2<f32>(_e302));
-    let _e305: vec2<u32> = textureDimensions(csk_blur, 0i);
-    ts_2 = vec2<i32>(_e305);
+    let _e283: mat3x3<f32> = unnamed.csk_auxTransform;
+    let _e284: vec2<i32> = (*p_2);
+    let _e287: vec2<f32> = (vec2<f32>(_e284) + vec2(0.5f));
+    let _e294: f32 = unnamed.csk_blurScale;
+    q_3 = (((_e283 * vec3<f32>(_e287.x, _e287.y, 1f)).xy / vec2(_e294)) - vec2(0.5f));
+    let _e299: vec2<f32> = q_3;
+    b_7 = vec2<i32>(floor(_e299));
+    let _e302: vec2<f32> = q_3;
+    let _e303: vec2<i32> = b_7;
+    fr_2 = (_e302 - vec2<f32>(_e303));
+    let _e306: vec2<u32> = textureDimensions(csk_blur, 0i);
+    ts_2 = vec2<i32>(_e306);
     sum_3 = 0f;
     w_2 = 0f;
     y_2 = 0i;
     loop {
-        let _e307: i32 = y_2;
-        if (_e307 < 2i) {
+        let _e308: i32 = y_2;
+        if (_e308 < 2i) {
             x_3 = 0i;
             loop {
-                let _e309: i32 = x_3;
-                if (_e309 < 2i) {
-                    let _e311: vec2<i32> = b_7;
-                    let _e312: i32 = x_3;
-                    let _e313: i32 = y_2;
-                    let _e316: vec2<i32> = ts_2;
-                    let _e320: vec4<f32> = textureLoad(csk_blur, clamp((_e311 + vec2<i32>(_e312, _e313)), vec2<i32>(0i, 0i), (_e316 - vec2(1i))), 0i);
-                    a_3 = _e320.xy;
-                    let _e322: i32 = x_3;
-                    if (_e322 == 0i) {
-                        let _e325: f32 = fr_2[0u];
-                        local_16 = (1f - _e325);
+                let _e310: i32 = x_3;
+                if (_e310 < 2i) {
+                    let _e312: vec2<i32> = b_7;
+                    let _e313: i32 = x_3;
+                    let _e314: i32 = y_2;
+                    let _e317: vec2<i32> = ts_2;
+                    let _e321: vec4<f32> = textureLoad(csk_blur, clamp((_e312 + vec2<i32>(_e313, _e314)), vec2<i32>(0i, 0i), (_e317 - vec2(1i))), 0i);
+                    a_3 = _e321.x;
+                    let _e323: i32 = x_3;
+                    if (_e323 == 0i) {
+                        let _e326: f32 = fr_2[0u];
+                        local_16 = (1f - _e326);
                     } else {
-                        let _e328: f32 = fr_2[0u];
-                        local_16 = _e328;
+                        let _e329: f32 = fr_2[0u];
+                        local_16 = _e329;
                     }
-                    let _e329: f32 = local_16;
-                    let _e330: i32 = y_2;
-                    if (_e330 == 0i) {
-                        let _e333: f32 = fr_2[1u];
-                        local_17 = (1f - _e333);
+                    let _e330: f32 = local_16;
+                    let _e331: i32 = y_2;
+                    if (_e331 == 0i) {
+                        let _e334: f32 = fr_2[1u];
+                        local_17 = (1f - _e334);
                     } else {
-                        let _e336: f32 = fr_2[1u];
-                        local_17 = _e336;
+                        let _e337: f32 = fr_2[1u];
+                        local_17 = _e337;
                     }
-                    let _e337: f32 = local_17;
-                    k_4 = (_e329 * _e337);
-                    let _e340: f32 = a_3[1u];
+                    let _e338: f32 = local_17;
+                    k_4 = (_e330 * _e338);
+                    let _e340: f32 = a_3;
+                    param_66 = _e340;
+                    let _e341: bool = csk_ok_u0028_f1_u003b((&param_66));
                     let _e342: f32 = k_4;
-                    if ((_e340 > 0f) && (_e342 > 0f)) {
-                        let _e346: f32 = a_3[0u];
-                        let _e347: f32 = k_4;
-                        let _e349: f32 = sum_3;
-                        sum_3 = (_e349 + (_e346 * _e347));
-                        let _e351: f32 = k_4;
-                        let _e352: f32 = w_2;
-                        w_2 = (_e352 + _e351);
+                    if (_e341 && (_e342 > 0f)) {
+                        let _e345: f32 = a_3;
+                        let _e346: f32 = k_4;
+                        let _e348: f32 = sum_3;
+                        sum_3 = (_e348 + (_e345 * _e346));
+                        let _e350: f32 = k_4;
+                        let _e351: f32 = w_2;
+                        w_2 = (_e351 + _e350);
                     }
                     continue;
                 } else {
                     break;
                 }
                 continuing {
-                    let _e354: i32 = x_3;
-                    x_3 = (_e354 + 1i);
+                    let _e353: i32 = x_3;
+                    x_3 = (_e353 + 1i);
                 }
             }
             continue;
@@ -1567,17 +1607,17 @@ fn csp_blur_u0028_vi2_u003b_f1_u003b(p_2: ptr<function, vec2<i32>>, v_3: ptr<fun
             break;
         }
         continuing {
-            let _e356: i32 = y_2;
-            y_2 = (_e356 + 1i);
+            let _e355: i32 = y_2;
+            y_2 = (_e355 + 1i);
         }
     }
-    let _e358: f32 = w_2;
-    if (_e358 <= 0f) {
+    let _e357: f32 = w_2;
+    if (_e357 <= 0f) {
         return false;
     }
-    let _e360: f32 = sum_3;
-    let _e361: f32 = w_2;
-    (*v_3) = (_e360 / _e361);
+    let _e359: f32 = sum_3;
+    let _e360: f32 = w_2;
+    (*v_6) = (_e359 / _e360);
     return true;
 }
 
@@ -1595,28 +1635,28 @@ fn csp_height_u0028_vi2_u003b(p_3: ptr<function, vec2<i32>>) -> f32 {
 
 fn cspH_u0028_vi2_u003b(q_4: ptr<function, vec2<i32>>) -> f32 {
     var h: f32;
-    var param_62: vec2<i32>;
+    var param_67: vec2<i32>;
     var b_8: f32;
-    var param_63: vec2<i32>;
-    var param_64: f32;
-    var phi_1502_: bool;
+    var param_68: vec2<i32>;
+    var param_69: f32;
+    var phi_1499_: bool;
 
     let _e270: vec2<i32> = (*q_4);
-    param_62 = _e270;
-    let _e271: f32 = csp_height_u0028_vi2_u003b((&param_62));
+    param_67 = _e270;
+    let _e271: f32 = csp_height_u0028_vi2_u003b((&param_67));
     h = _e271;
     let _e273: f32 = unnamed.u_detail;
     let _e274: bool = (_e273 != 0f);
-    phi_1502_ = _e274;
+    phi_1499_ = _e274;
     if _e274 {
         let _e275: vec2<i32> = (*q_4);
-        param_63 = _e275;
-        let _e276: bool = csp_blur_u0028_vi2_u003b_f1_u003b((&param_63), (&param_64));
-        let _e277: f32 = param_64;
+        param_68 = _e275;
+        let _e276: bool = csp_blur_u0028_vi2_u003b_f1_u003b((&param_68), (&param_69));
+        let _e277: f32 = param_69;
         b_8 = _e277;
-        phi_1502_ = _e276;
+        phi_1499_ = _e276;
     }
-    let _e279: bool = phi_1502_;
+    let _e279: bool = phi_1499_;
     if _e279 {
         let _e281: f32 = unnamed.u_detail;
         let _e282: f32 = h;
@@ -1628,212 +1668,181 @@ fn cspH_u0028_vi2_u003b(q_4: ptr<function, vec2<i32>>) -> f32 {
     return _e288;
 }
 
-fn csk_isinf_u0028_f1_u003b(v_4: ptr<function, f32>) -> bool {
-    let _e265: f32 = (*v_4);
-    return ((bitcast<u32>(_e265) & 2147483647u) == 2139095040u);
-}
-
-fn csk_isnan_u0028_f1_u003b(v_5: ptr<function, f32>) -> bool {
-    let _e265: f32 = (*v_5);
-    return ((bitcast<u32>(_e265) & 2147483647u) > 2139095040u);
-}
-
-fn csk_ok_u0028_f1_u003b(v_6: ptr<function, f32>) -> bool {
-    var param_65: f32;
-    var param_66: f32;
-    var phi_246_: bool;
-
-    let _e267: f32 = (*v_6);
-    param_65 = _e267;
-    let _e268: bool = csk_isnan_u0028_f1_u003b((&param_65));
-    let _e269: bool = !(_e268);
-    phi_246_ = _e269;
-    if _e269 {
-        let _e270: f32 = (*v_6);
-        param_66 = _e270;
-        let _e271: bool = csk_isinf_u0028_f1_u003b((&param_66));
-        phi_246_ = !(_e271);
-    }
-    let _e274: bool = phi_246_;
-    let _e275: f32 = (*v_6);
-    return (_e274 && (_e275 > -100000000000000000000f));
-}
-
 fn csp_valid_u0028_vi2_u003b(p_4: ptr<function, vec2<i32>>) -> bool {
-    var param_67: vec2<i32>;
-    var param_68: f32;
+    var param_70: vec2<i32>;
+    var param_71: f32;
 
     let _e267: vec2<i32> = (*p_4);
-    param_67 = _e267;
-    let _e268: f32 = csp_height_u0028_vi2_u003b((&param_67));
-    param_68 = _e268;
-    let _e269: bool = csk_ok_u0028_f1_u003b((&param_68));
+    param_70 = _e267;
+    let _e268: f32 = csp_height_u0028_vi2_u003b((&param_70));
+    param_71 = _e268;
+    let _e269: bool = csk_ok_u0028_f1_u003b((&param_71));
     return _e269;
 }
 
 fn cspStack_u0028_vi2_u003b_f1_u003b_f1_u003b_f1_u003b_f1_u003b_vf2_u003b(p_5: ptr<function, vec2<i32>>, value_5: ptr<function, f32>, groundRes: ptr<function, f32>, cosB: ptr<function, f32>, sinB: ptr<function, f32>, merc_1: ptr<function, vec2<f32>>) -> vec4<f32> {
     var px: vec2<i32>;
     var py: vec2<i32>;
-    var param_69: vec2<i32>;
-    var param_70: vec2<i32>;
-    var param_71: vec2<i32>;
     var param_72: vec2<i32>;
     var param_73: vec2<i32>;
     var param_74: vec2<i32>;
     var param_75: vec2<i32>;
     var param_76: vec2<i32>;
+    var param_77: vec2<i32>;
+    var param_78: vec2<i32>;
+    var param_79: vec2<i32>;
     var c_7: CspCtx;
     var a_4: f32;
-    var param_77: vec2<i32>;
-    var b_9: f32;
-    var param_78: vec2<i32>;
-    var cc: f32;
-    var param_79: vec2<i32>;
-    var d_1: f32;
     var param_80: vec2<i32>;
-    var f: f32;
+    var b_9: f32;
     var param_81: vec2<i32>;
-    var g: f32;
+    var cc: f32;
     var param_82: vec2<i32>;
-    var q_5: f32;
+    var d_1: f32;
     var param_83: vec2<i32>;
-    var k_5: f32;
+    var f: f32;
     var param_84: vec2<i32>;
+    var g: f32;
+    var param_85: vec2<i32>;
+    var q_5: f32;
+    var param_86: vec2<i32>;
+    var k_5: f32;
+    var param_87: vec2<i32>;
     var dxS: f32;
     var dyS: f32;
     var zFactor: f32;
     var local_18: f32;
-    var param_85: f32;
-    var param_86: f32;
+    var param_88: f32;
+    var param_89: f32;
     var legacyBase: f32;
     var baseValue: f32;
-    var param_87: vec2<i32>;
-    var param_88: f32;
+    var param_90: vec2<i32>;
+    var param_91: f32;
     var local_19: f32;
     var landBase: f32;
     var landBaseValue: f32;
-    var param_89: vec2<i32>;
-    var param_90: f32;
+    var param_92: vec2<i32>;
+    var param_93: f32;
     var local_20: f32;
     var acc: vec4<f32>;
     var i: i32;
     var layer_5: vec4<f32>;
     var style_2: i32;
-    var param_91: f32;
+    var param_94: f32;
     var flags: i32;
     var v_7: vec2<f32>;
-    var param_92: i32;
-    var param_93: f32;
-    var param_94: CspCtx;
+    var param_95: i32;
+    var param_96: f32;
+    var param_97: CspCtx;
     var waterClass: u32;
     var local_21: u32;
-    var param_95: vec2<f32>;
+    var param_98: vec2<f32>;
     var colour: vec4<f32>;
     var local_22: vec4<f32>;
-    var param_96: i32;
-    var param_97: f32;
-    var param_98: vec2<f32>;
-    var local_23: vec4<f32>;
     var param_99: i32;
     var param_100: f32;
     var param_101: vec2<f32>;
+    var local_23: vec4<f32>;
     var param_102: i32;
     var param_103: f32;
-    var shade: f32;
-    var param_104: f32;
-    var param_105: f32;
+    var param_104: vec2<f32>;
+    var param_105: i32;
     var param_106: f32;
-    var alpha: f32;
-    var param_107: vec4<f32>;
-    var param_108: vec3<f32>;
+    var shade: f32;
+    var param_107: f32;
+    var param_108: f32;
     var param_109: f32;
-    var param_110: i32;
-    var straight_1: vec3<f32>;
+    var alpha: f32;
+    var param_110: vec4<f32>;
     var param_111: vec3<f32>;
-    var phi_2536_: bool;
-    var phi_2546_: bool;
-    var phi_2554_: bool;
-    var phi_2562_: bool;
-    var phi_2572_: bool;
-    var phi_2580_: bool;
-    var phi_2590_: bool;
-    var phi_2881_: bool;
-    var phi_2898_: bool;
-    var phi_2921_: bool;
+    var param_112: f32;
+    var param_113: i32;
+    var straight_1: vec3<f32>;
+    var param_114: vec3<f32>;
+    var phi_2533_: bool;
+    var phi_2543_: bool;
+    var phi_2551_: bool;
+    var phi_2559_: bool;
+    var phi_2569_: bool;
+    var phi_2577_: bool;
+    var phi_2587_: bool;
+    var phi_2878_: bool;
+    var phi_2895_: bool;
+    var phi_2918_: bool;
 
     px = vec2<i32>(1i, 0i);
     py = vec2<i32>(0i, 1i);
     let _e348: vec2<i32> = (*p_5);
     let _e349: vec2<i32> = px;
     let _e351: vec2<i32> = py;
-    param_69 = ((_e348 - _e349) - _e351);
-    let _e353: bool = csp_valid_u0028_vi2_u003b((&param_69));
-    phi_2536_ = _e353;
+    param_72 = ((_e348 - _e349) - _e351);
+    let _e353: bool = csp_valid_u0028_vi2_u003b((&param_72));
+    phi_2533_ = _e353;
     if _e353 {
         let _e354: vec2<i32> = (*p_5);
         let _e355: vec2<i32> = py;
-        param_70 = (_e354 - _e355);
-        let _e357: bool = csp_valid_u0028_vi2_u003b((&param_70));
-        phi_2536_ = _e357;
+        param_73 = (_e354 - _e355);
+        let _e357: bool = csp_valid_u0028_vi2_u003b((&param_73));
+        phi_2533_ = _e357;
     }
-    let _e359: bool = phi_2536_;
-    phi_2546_ = _e359;
+    let _e359: bool = phi_2533_;
+    phi_2543_ = _e359;
     if _e359 {
         let _e360: vec2<i32> = (*p_5);
         let _e361: vec2<i32> = px;
         let _e363: vec2<i32> = py;
-        param_71 = ((_e360 + _e361) - _e363);
-        let _e365: bool = csp_valid_u0028_vi2_u003b((&param_71));
-        phi_2546_ = _e365;
+        param_74 = ((_e360 + _e361) - _e363);
+        let _e365: bool = csp_valid_u0028_vi2_u003b((&param_74));
+        phi_2543_ = _e365;
     }
-    let _e367: bool = phi_2546_;
-    phi_2554_ = _e367;
+    let _e367: bool = phi_2543_;
+    phi_2551_ = _e367;
     if _e367 {
         let _e368: vec2<i32> = (*p_5);
         let _e369: vec2<i32> = px;
-        param_72 = (_e368 - _e369);
-        let _e371: bool = csp_valid_u0028_vi2_u003b((&param_72));
-        phi_2554_ = _e371;
+        param_75 = (_e368 - _e369);
+        let _e371: bool = csp_valid_u0028_vi2_u003b((&param_75));
+        phi_2551_ = _e371;
     }
-    let _e373: bool = phi_2554_;
-    phi_2562_ = _e373;
+    let _e373: bool = phi_2551_;
+    phi_2559_ = _e373;
     if _e373 {
         let _e374: vec2<i32> = (*p_5);
         let _e375: vec2<i32> = px;
-        param_73 = (_e374 + _e375);
-        let _e377: bool = csp_valid_u0028_vi2_u003b((&param_73));
-        phi_2562_ = _e377;
+        param_76 = (_e374 + _e375);
+        let _e377: bool = csp_valid_u0028_vi2_u003b((&param_76));
+        phi_2559_ = _e377;
     }
-    let _e379: bool = phi_2562_;
-    phi_2572_ = _e379;
+    let _e379: bool = phi_2559_;
+    phi_2569_ = _e379;
     if _e379 {
         let _e380: vec2<i32> = (*p_5);
         let _e381: vec2<i32> = px;
         let _e383: vec2<i32> = py;
-        param_74 = ((_e380 - _e381) + _e383);
-        let _e385: bool = csp_valid_u0028_vi2_u003b((&param_74));
-        phi_2572_ = _e385;
+        param_77 = ((_e380 - _e381) + _e383);
+        let _e385: bool = csp_valid_u0028_vi2_u003b((&param_77));
+        phi_2569_ = _e385;
     }
-    let _e387: bool = phi_2572_;
-    phi_2580_ = _e387;
+    let _e387: bool = phi_2569_;
+    phi_2577_ = _e387;
     if _e387 {
         let _e388: vec2<i32> = (*p_5);
         let _e389: vec2<i32> = py;
-        param_75 = (_e388 + _e389);
-        let _e391: bool = csp_valid_u0028_vi2_u003b((&param_75));
-        phi_2580_ = _e391;
+        param_78 = (_e388 + _e389);
+        let _e391: bool = csp_valid_u0028_vi2_u003b((&param_78));
+        phi_2577_ = _e391;
     }
-    let _e393: bool = phi_2580_;
-    phi_2590_ = _e393;
+    let _e393: bool = phi_2577_;
+    phi_2587_ = _e393;
     if _e393 {
         let _e394: vec2<i32> = (*p_5);
         let _e395: vec2<i32> = px;
         let _e397: vec2<i32> = py;
-        param_76 = ((_e394 + _e395) + _e397);
-        let _e399: bool = csp_valid_u0028_vi2_u003b((&param_76));
-        phi_2590_ = _e399;
+        param_79 = ((_e394 + _e395) + _e397);
+        let _e399: bool = csp_valid_u0028_vi2_u003b((&param_79));
+        phi_2587_ = _e399;
     }
-    let _e401: bool = phi_2590_;
+    let _e401: bool = phi_2587_;
     if !(_e401) {
         return vec4<f32>(0f, 0f, 0f, 0f);
     }
@@ -1854,46 +1863,46 @@ fn cspStack_u0028_vi2_u003b_f1_u003b_f1_u003b_f1_u003b_f1_u003b_vf2_u003b(p_5: p
         let _e418: vec2<i32> = (*p_5);
         let _e419: vec2<i32> = px;
         let _e421: vec2<i32> = py;
-        param_77 = ((_e418 - _e419) - _e421);
-        let _e423: f32 = cspH_u0028_vi2_u003b((&param_77));
+        param_80 = ((_e418 - _e419) - _e421);
+        let _e423: f32 = cspH_u0028_vi2_u003b((&param_80));
         a_4 = _e423;
         let _e424: vec2<i32> = (*p_5);
         let _e425: vec2<i32> = py;
-        param_78 = (_e424 - _e425);
-        let _e427: f32 = cspH_u0028_vi2_u003b((&param_78));
+        param_81 = (_e424 - _e425);
+        let _e427: f32 = cspH_u0028_vi2_u003b((&param_81));
         b_9 = _e427;
         let _e428: vec2<i32> = (*p_5);
         let _e429: vec2<i32> = px;
         let _e431: vec2<i32> = py;
-        param_79 = ((_e428 + _e429) - _e431);
-        let _e433: f32 = cspH_u0028_vi2_u003b((&param_79));
+        param_82 = ((_e428 + _e429) - _e431);
+        let _e433: f32 = cspH_u0028_vi2_u003b((&param_82));
         cc = _e433;
         let _e434: vec2<i32> = (*p_5);
         let _e435: vec2<i32> = px;
-        param_80 = (_e434 - _e435);
-        let _e437: f32 = cspH_u0028_vi2_u003b((&param_80));
+        param_83 = (_e434 - _e435);
+        let _e437: f32 = cspH_u0028_vi2_u003b((&param_83));
         d_1 = _e437;
         let _e438: vec2<i32> = (*p_5);
         let _e439: vec2<i32> = px;
-        param_81 = (_e438 + _e439);
-        let _e441: f32 = cspH_u0028_vi2_u003b((&param_81));
+        param_84 = (_e438 + _e439);
+        let _e441: f32 = cspH_u0028_vi2_u003b((&param_84));
         f = _e441;
         let _e442: vec2<i32> = (*p_5);
         let _e443: vec2<i32> = px;
         let _e445: vec2<i32> = py;
-        param_82 = ((_e442 - _e443) + _e445);
-        let _e447: f32 = cspH_u0028_vi2_u003b((&param_82));
+        param_85 = ((_e442 - _e443) + _e445);
+        let _e447: f32 = cspH_u0028_vi2_u003b((&param_85));
         g = _e447;
         let _e448: vec2<i32> = (*p_5);
         let _e449: vec2<i32> = py;
-        param_83 = (_e448 + _e449);
-        let _e451: f32 = cspH_u0028_vi2_u003b((&param_83));
+        param_86 = (_e448 + _e449);
+        let _e451: f32 = cspH_u0028_vi2_u003b((&param_86));
         q_5 = _e451;
         let _e452: vec2<i32> = (*p_5);
         let _e453: vec2<i32> = px;
         let _e455: vec2<i32> = py;
-        param_84 = ((_e452 + _e453) + _e455);
-        let _e457: f32 = cspH_u0028_vi2_u003b((&param_84));
+        param_87 = ((_e452 + _e453) + _e455);
+        let _e457: f32 = cspH_u0028_vi2_u003b((&param_87));
         k_5 = _e457;
         let _e458: f32 = cc;
         let _e459: f32 = f;
@@ -1940,19 +1949,19 @@ fn cspStack_u0028_vi2_u003b_f1_u003b_f1_u003b_f1_u003b_f1_u003b_vf2_u003b(p_5: p
             local_18 = -1f;
         } else {
             let _e545: f32 = c_7.dx;
-            param_85 = _e545;
+            param_88 = _e545;
             let _e547: f32 = c_7.dy;
-            param_86 = _e547;
-            let _e548: f32 = cspAspectOf_u0028_f1_u003b_f1_u003b((&param_85), (&param_86));
+            param_89 = _e547;
+            let _e548: f32 = cspAspectOf_u0028_f1_u003b_f1_u003b((&param_88), (&param_89));
             local_18 = _e548;
         }
         let _e549: f32 = local_18;
         c_7.aspect = _e549;
     }
     let _e551: vec2<i32> = (*p_5);
-    param_87 = _e551;
-    let _e552: bool = csp_base_u0028_vi2_u003b_f1_u003b((&param_87), (&param_88));
-    let _e553: f32 = param_88;
+    param_90 = _e551;
+    let _e552: bool = csp_base_u0028_vi2_u003b_f1_u003b((&param_90), (&param_91));
+    let _e553: f32 = param_91;
     baseValue = _e553;
     if _e552 {
         let _e554: f32 = baseValue;
@@ -1964,9 +1973,9 @@ fn cspStack_u0028_vi2_u003b_f1_u003b_f1_u003b_f1_u003b_f1_u003b_vf2_u003b(p_5: p
     let _e557: f32 = local_19;
     legacyBase = _e557;
     let _e558: vec2<i32> = (*p_5);
-    param_89 = _e558;
-    let _e559: bool = csp_landBase_u0028_vi2_u003b_f1_u003b((&param_89), (&param_90));
-    let _e560: f32 = param_90;
+    param_92 = _e558;
+    let _e559: bool = csp_landBase_u0028_vi2_u003b_f1_u003b((&param_92), (&param_93));
+    let _e560: f32 = param_93;
     landBaseValue = _e560;
     if _e559 {
         let _e561: f32 = landBaseValue;
@@ -1994,7 +2003,7 @@ fn cspStack_u0028_vi2_u003b_f1_u003b_f1_u003b_f1_u003b_f1_u003b_vf2_u003b(p_5: p
             style_2 = i32((_e577 + 0.5f));
             let _e580: i32 = i;
             let _e584: f32 = unnamed.u_layerC[_e580][0u];
-            param_91 = _e584;
+            param_94 = _e584;
             let _e585: i32 = i;
             let _e589: f32 = unnamed.u_layerC[_e585][1u];
             flags = i32((_e589 + 0.5f));
@@ -2003,13 +2012,13 @@ fn cspStack_u0028_vi2_u003b_f1_u003b_f1_u003b_f1_u003b_f1_u003b_vf2_u003b(p_5: p
             let _e596: f32 = legacyBase;
             c_7.base = select(_e596, _e595, ((_e592 & 2i) != 0i));
             let _e599: i32 = style_2;
-            param_92 = _e599;
-            let _e600: f32 = param_91;
-            param_93 = _e600;
+            param_95 = _e599;
+            let _e600: f32 = param_94;
+            param_96 = _e600;
             let _e601: CspCtx = c_7;
-            param_94 = _e601;
-            let _e602: vec2<f32> = cspLayerValue_u0028_i1_u003b_f1_u003b_struct_u002d_CspCtx_u002d_vi2_u002d_f1_u002d_f1_u002d_f1_u002d_f1_u002d_f1_u002d_f1_u002d_f1_u002d_f1_u002d_f11_u003b((&param_92), (&param_93), (&param_94));
-            let _e603: CspCtx = param_94;
+            param_97 = _e601;
+            let _e602: vec2<f32> = cspLayerValue_u0028_i1_u003b_f1_u003b_struct_u002d_CspCtx_u002d_vi2_u002d_f1_u002d_f1_u002d_f1_u002d_f1_u002d_f1_u002d_f1_u002d_f1_u002d_f1_u002d_f11_u003b((&param_95), (&param_96), (&param_97));
+            let _e603: CspCtx = param_97;
             c_7 = _e603;
             v_7 = _e602;
             let _e605: f32 = v_7[1u];
@@ -2019,16 +2028,16 @@ fn cspStack_u0028_vi2_u003b_f1_u003b_f1_u003b_f1_u003b_f1_u003b_vf2_u003b(p_5: p
             let _e607: i32 = style_2;
             let _e609: i32 = style_2;
             let _e611: bool = ((_e607 == 5i) || (_e609 == 10i));
-            phi_2881_ = _e611;
+            phi_2878_ = _e611;
             if _e611 {
                 let _e612: i32 = flags;
-                phi_2881_ = ((_e612 & 5i) != 0i);
+                phi_2878_ = ((_e612 & 5i) != 0i);
             }
-            let _e616: bool = phi_2881_;
+            let _e616: bool = phi_2878_;
             if _e616 {
                 let _e617: vec2<f32> = (*merc_1);
-                param_95 = _e617;
-                let _e618: u32 = cspWaterClass_u0028_vf2_u003b((&param_95));
+                param_98 = _e617;
+                let _e618: u32 = cspWaterClass_u0028_vf2_u003b((&param_98));
                 local_21 = _e618;
             } else {
                 local_21 = 0u;
@@ -2037,47 +2046,47 @@ fn cspStack_u0028_vi2_u003b_f1_u003b_f1_u003b_f1_u003b_f1_u003b_vf2_u003b(p_5: p
             waterClass = _e619;
             let _e620: u32 = waterClass;
             let _e621: bool = (_e620 == 1u);
-            phi_2898_ = _e621;
+            phi_2895_ = _e621;
             if _e621 {
                 let _e622: i32 = flags;
-                phi_2898_ = ((_e622 & 1i) != 0i);
+                phi_2895_ = ((_e622 & 1i) != 0i);
             }
-            let _e626: bool = phi_2898_;
+            let _e626: bool = phi_2895_;
             if _e626 {
                 let _e627: i32 = i;
                 let _e628: i32 = i;
-                param_96 = _e628;
+                param_99 = _e628;
                 let _e630: f32 = c_7.height;
-                param_97 = _e630;
+                param_100 = _e630;
                 let _e633: vec4<f32> = unnamed.u_layerC[_e627];
-                param_98 = _e633.zw;
-                let _e635: vec4<f32> = cspWaterColour_u0028_i1_u003b_f1_u003b_vf2_u003b((&param_96), (&param_97), (&param_98));
+                param_101 = _e633.zw;
+                let _e635: vec4<f32> = cspWaterColour_u0028_i1_u003b_f1_u003b_vf2_u003b((&param_99), (&param_100), (&param_101));
                 local_22 = _e635;
             } else {
                 let _e636: u32 = waterClass;
                 let _e637: bool = (_e636 == 2u);
-                phi_2921_ = _e637;
+                phi_2918_ = _e637;
                 if _e637 {
                     let _e638: i32 = flags;
-                    phi_2921_ = ((_e638 & 4i) != 0i);
+                    phi_2918_ = ((_e638 & 4i) != 0i);
                 }
-                let _e642: bool = phi_2921_;
+                let _e642: bool = phi_2918_;
                 if _e642 {
                     let _e643: i32 = i;
                     let _e644: i32 = i;
-                    param_99 = _e644;
+                    param_102 = _e644;
                     let _e646: f32 = c_7.height;
-                    param_100 = _e646;
+                    param_103 = _e646;
                     let _e649: vec4<f32> = unnamed.u_layerD[_e643];
-                    param_101 = _e649.xy;
-                    let _e651: vec4<f32> = cspPaletteRange_u0028_i1_u003b_f1_u003b_vf2_u003b((&param_99), (&param_100), (&param_101));
+                    param_104 = _e649.xy;
+                    let _e651: vec4<f32> = cspPaletteRange_u0028_i1_u003b_f1_u003b_vf2_u003b((&param_102), (&param_103), (&param_104));
                     local_23 = _e651;
                 } else {
                     let _e652: i32 = i;
-                    param_102 = _e652;
+                    param_105 = _e652;
                     let _e654: f32 = v_7[0u];
-                    param_103 = _e654;
-                    let _e655: vec4<f32> = cspPalette_u0028_i1_u003b_f1_u003b((&param_102), (&param_103));
+                    param_106 = _e654;
+                    let _e655: vec4<f32> = cspPalette_u0028_i1_u003b_f1_u003b((&param_105), (&param_106));
                     local_23 = _e655;
                 }
                 let _e656: vec4<f32> = local_23;
@@ -2087,21 +2096,21 @@ fn cspStack_u0028_vi2_u003b_f1_u003b_f1_u003b_f1_u003b_f1_u003b_vf2_u003b(p_5: p
             colour = _e657;
             let _e658: i32 = style_2;
             let _e660: i32 = style_2;
-            let _e663: f32 = param_91;
+            let _e663: f32 = param_94;
             if (((_e658 == 5i) || (_e660 == 10i)) && (_e663 > 0f)) {
                 let _e667: f32 = unnamed.u_ambient;
                 let _e669: f32 = unnamed.u_ambient;
                 let _e672: f32 = c_7.sdx;
-                param_104 = _e672;
+                param_107 = _e672;
                 let _e674: f32 = c_7.sdy;
-                param_105 = _e674;
+                param_108 = _e674;
                 let _e676: f32 = unnamed.u_sunAzimuth;
-                param_106 = _e676;
-                let _e677: f32 = cspDirectShade_u0028_f1_u003b_f1_u003b_f1_u003b((&param_104), (&param_105), (&param_106));
+                param_109 = _e676;
+                let _e677: f32 = cspDirectShade_u0028_f1_u003b_f1_u003b_f1_u003b((&param_107), (&param_108), (&param_109));
                 shade = (_e667 + ((1f - _e669) * _e677));
                 let _e680: vec4<f32> = colour;
                 let _e682: f32 = shade;
-                let _e685: f32 = param_91;
+                let _e685: f32 = param_94;
                 let _e689: vec3<f32> = min((_e680.xyz * mix(1f, (0.33f + (0.82f * _e682)), clamp(_e685, 0f, 1f))), vec3<f32>(1f, 1f, 1f));
                 colour[0u] = _e689.x;
                 colour[1u] = _e689.y;
@@ -2117,13 +2126,13 @@ fn cspStack_u0028_vi2_u003b_f1_u003b_f1_u003b_f1_u003b_f1_u003b_vf2_u003b(p_5: p
             }
             let _e708: f32 = layer_5[2u];
             let _e711: vec4<f32> = acc;
-            param_107 = _e711;
+            param_110 = _e711;
             let _e712: vec4<f32> = colour;
-            param_108 = _e712.xyz;
+            param_111 = _e712.xyz;
             let _e714: f32 = alpha;
-            param_109 = _e714;
-            param_110 = i32((_e708 + 0.5f));
-            let _e715: vec4<f32> = cspComposite_u0028_vf4_u003b_vf3_u003b_f1_u003b_i1_u003b((&param_107), (&param_108), (&param_109), (&param_110));
+            param_112 = _e714;
+            param_113 = i32((_e708 + 0.5f));
+            let _e715: vec4<f32> = cspComposite_u0028_vf4_u003b_vf3_u003b_f1_u003b_i1_u003b((&param_110), (&param_111), (&param_112), (&param_113));
             acc = _e715;
             continue;
         } else {
@@ -2140,8 +2149,8 @@ fn cspStack_u0028_vi2_u003b_f1_u003b_f1_u003b_f1_u003b_f1_u003b_vf2_u003b(p_5: p
     }
     let _e721: vec4<f32> = acc;
     let _e724: f32 = acc[3u];
-    param_111 = (_e721.xyz / vec3(_e724));
-    let _e727: vec3<f32> = cspApplyAppearance_u0028_vf3_u003b((&param_111));
+    param_114 = (_e721.xyz / vec3(_e724));
+    let _e727: vec3<f32> = cspApplyAppearance_u0028_vf3_u003b((&param_114));
     straight_1 = _e727;
     let _e728: vec3<f32> = straight_1;
     let _e730: f32 = acc[3u];
@@ -2309,9 +2318,9 @@ fn cspSpectrumColour_u0028_f1_u003b(value_6: ptr<function, f32>) -> vec4<f32> {
 fn main_1() {
     var size: vec2<i32>;
     var p_6: vec2<i32>;
-    var param_112: vec2<i32>;
+    var param_115: vec2<i32>;
     var value_7: f32;
-    var param_113: vec2<i32>;
+    var param_116: vec2<i32>;
     var cssOffset: vec2<f32>;
     var cosB_1: f32;
     var sinB_1: f32;
@@ -2322,41 +2331,41 @@ fn main_1() {
     var groundRes_1: f32;
     var local_27: f32;
     var spectrum: vec4<f32>;
-    var param_114: f32;
-    var terrain: vec4<f32>;
-    var param_115: vec2<i32>;
-    var param_116: f32;
     var param_117: f32;
-    var param_118: f32;
+    var terrain: vec4<f32>;
+    var param_118: vec2<i32>;
     var param_119: f32;
-    var param_120: vec2<f32>;
+    var param_120: f32;
+    var param_121: f32;
+    var param_122: f32;
+    var param_123: vec2<f32>;
     var px_1: vec2<i32>;
     var py_1: vec2<i32>;
     var allValid: bool;
-    var param_121: vec2<i32>;
-    var param_122: vec2<i32>;
-    var param_123: vec2<i32>;
     var param_124: vec2<i32>;
     var param_125: vec2<i32>;
     var param_126: vec2<i32>;
     var param_127: vec2<i32>;
     var param_128: vec2<i32>;
-    var a_9: f32;
     var param_129: vec2<i32>;
-    var b_10: f32;
     var param_130: vec2<i32>;
-    var c_8: f32;
     var param_131: vec2<i32>;
-    var d_3: f32;
+    var a_9: f32;
     var param_132: vec2<i32>;
-    var f_1: f32;
+    var b_10: f32;
     var param_133: vec2<i32>;
-    var g_1: f32;
+    var c_8: f32;
     var param_134: vec2<i32>;
-    var q_6: f32;
+    var d_3: f32;
     var param_135: vec2<i32>;
-    var k_6: f32;
+    var f_1: f32;
     var param_136: vec2<i32>;
+    var g_1: f32;
+    var param_137: vec2<i32>;
+    var q_6: f32;
+    var param_138: vec2<i32>;
+    var k_6: f32;
+    var param_139: vec2<i32>;
     var shaded: bool;
     var zFactor_1: f32;
     var res: f32;
@@ -2368,13 +2377,13 @@ fn main_1() {
     var dy_4: f32;
     var colour_1: vec4<f32>;
     var painted: bool;
-    var param_137: f32;
-    var param_138: f32;
-    var param_139: f32;
     var param_140: f32;
-    var northness: f32;
     var param_141: f32;
     var param_142: f32;
+    var param_143: f32;
+    var northness: f32;
+    var param_144: f32;
+    var param_145: f32;
     var amount: f32;
     var neutral: vec3<f32>;
     var target_1: vec3<f32>;
@@ -2388,13 +2397,13 @@ fn main_1() {
     var lineWidth_1: f32;
     var indexLine_1: bool;
     var shade_1: f32;
-    var param_143: f32;
-    var param_144: f32;
-    var param_145: f32;
     var param_146: f32;
-    var aspect_1: f32;
     var param_147: f32;
     var param_148: f32;
+    var param_149: f32;
+    var aspect_1: f32;
+    var param_150: f32;
+    var param_151: f32;
     var sum_4: f32;
     var total_1: f32;
     var index_1: i32;
@@ -2402,28 +2411,28 @@ fn main_1() {
     var s_6: f32;
     var weight_1: f32;
     var local_31: f32;
-    var param_149: f32;
-    var param_150: f32;
-    var param_151: f32;
-    var direct: f32;
-    var shade_2: f32;
-    var direct_1: f32;
     var param_152: f32;
     var param_153: f32;
     var param_154: f32;
+    var direct: f32;
+    var shade_2: f32;
+    var direct_1: f32;
+    var param_155: f32;
+    var param_156: f32;
+    var param_157: f32;
     var shade_3: f32;
     var straight_2: vec3<f32>;
     var local_32: vec3<f32>;
-    var param_155: vec3<f32>;
-    var phi_3222_: bool;
-    var phi_3232_: bool;
-    var phi_3240_: bool;
-    var phi_3248_: bool;
-    var phi_3258_: bool;
-    var phi_3266_: bool;
-    var phi_3276_: bool;
-    var phi_3346_: bool;
-    var phi_3353_: bool;
+    var param_158: vec3<f32>;
+    var phi_3219_: bool;
+    var phi_3229_: bool;
+    var phi_3237_: bool;
+    var phi_3245_: bool;
+    var phi_3255_: bool;
+    var phi_3263_: bool;
+    var phi_3273_: bool;
+    var phi_3343_: bool;
+    var phi_3350_: bool;
 
     let _e372: vec2<i32> = csp_size_u0028_();
     size = _e372;
@@ -2432,15 +2441,15 @@ fn main_1() {
     let _e379: vec2<i32> = size;
     p_6 = clamp(vec2<i32>(floor((_e373 * vec2<f32>(_e374)))), vec2<i32>(0i, 0i), (_e379 - vec2<i32>(1i, 1i)));
     let _e382: vec2<i32> = p_6;
-    param_112 = _e382;
-    let _e383: bool = csp_valid_u0028_vi2_u003b((&param_112));
+    param_115 = _e382;
+    let _e383: bool = csp_valid_u0028_vi2_u003b((&param_115));
     if !(_e383) {
         fragColor = vec4<f32>(0f, 0f, 0f, 0f);
         return;
     }
     let _e385: vec2<i32> = p_6;
-    param_113 = _e385;
-    let _e386: f32 = csp_height_u0028_vi2_u003b((&param_113));
+    param_116 = _e385;
+    let _e386: f32 = csp_height_u0028_vi2_u003b((&param_116));
     value_7 = _e386;
     let _e387: vec2<f32> = v_screenUv_1;
     let _e391: vec2<f32> = unnamed.u_cssSize;
@@ -2479,26 +2488,26 @@ fn main_1() {
     let _e453: f32 = local_27;
     groundRes_1 = _e453;
     let _e454: f32 = value_7;
-    param_114 = _e454;
-    let _e455: vec4<f32> = cspSpectrumColour_u0028_f1_u003b((&param_114));
+    param_117 = _e454;
+    let _e455: vec4<f32> = cspSpectrumColour_u0028_f1_u003b((&param_117));
     let _e457: f32 = unnamed.u_spectrumOpacity;
     spectrum = (_e455 * _e457);
     terrain = vec4<f32>(0f, 0f, 0f, 0f);
     let _e460: f32 = unnamed.u_stackOn;
     if (_e460 > 0.5f) {
         let _e462: vec2<i32> = p_6;
-        param_115 = _e462;
+        param_118 = _e462;
         let _e463: f32 = value_7;
-        param_116 = _e463;
+        param_119 = _e463;
         let _e464: f32 = groundRes_1;
-        param_117 = _e464;
+        param_120 = _e464;
         let _e465: f32 = cosB_1;
-        param_118 = _e465;
+        param_121 = _e465;
         let _e466: f32 = sinB_1;
-        param_119 = _e466;
+        param_122 = _e466;
         let _e467: vec2<f32> = merc_2;
-        param_120 = _e467;
-        let _e468: vec4<f32> = cspStack_u0028_vi2_u003b_f1_u003b_f1_u003b_f1_u003b_f1_u003b_vf2_u003b((&param_115), (&param_116), (&param_117), (&param_118), (&param_119), (&param_120));
+        param_123 = _e467;
+        let _e468: vec4<f32> = cspStack_u0028_vi2_u003b_f1_u003b_f1_u003b_f1_u003b_f1_u003b_vf2_u003b((&param_118), (&param_119), (&param_120), (&param_121), (&param_122), (&param_123));
         terrain = _e468;
     } else {
         let _e470: i32 = unnamed.u_style;
@@ -2508,135 +2517,135 @@ fn main_1() {
             let _e472: vec2<i32> = p_6;
             let _e473: vec2<i32> = px_1;
             let _e475: vec2<i32> = py_1;
-            param_121 = ((_e472 - _e473) - _e475);
-            let _e477: bool = csp_valid_u0028_vi2_u003b((&param_121));
-            phi_3222_ = _e477;
+            param_124 = ((_e472 - _e473) - _e475);
+            let _e477: bool = csp_valid_u0028_vi2_u003b((&param_124));
+            phi_3219_ = _e477;
             if _e477 {
                 let _e478: vec2<i32> = p_6;
                 let _e479: vec2<i32> = py_1;
-                param_122 = (_e478 - _e479);
-                let _e481: bool = csp_valid_u0028_vi2_u003b((&param_122));
-                phi_3222_ = _e481;
+                param_125 = (_e478 - _e479);
+                let _e481: bool = csp_valid_u0028_vi2_u003b((&param_125));
+                phi_3219_ = _e481;
             }
-            let _e483: bool = phi_3222_;
-            phi_3232_ = _e483;
+            let _e483: bool = phi_3219_;
+            phi_3229_ = _e483;
             if _e483 {
                 let _e484: vec2<i32> = p_6;
                 let _e485: vec2<i32> = px_1;
                 let _e487: vec2<i32> = py_1;
-                param_123 = ((_e484 + _e485) - _e487);
-                let _e489: bool = csp_valid_u0028_vi2_u003b((&param_123));
-                phi_3232_ = _e489;
+                param_126 = ((_e484 + _e485) - _e487);
+                let _e489: bool = csp_valid_u0028_vi2_u003b((&param_126));
+                phi_3229_ = _e489;
             }
-            let _e491: bool = phi_3232_;
-            phi_3240_ = _e491;
+            let _e491: bool = phi_3229_;
+            phi_3237_ = _e491;
             if _e491 {
                 let _e492: vec2<i32> = p_6;
                 let _e493: vec2<i32> = px_1;
-                param_124 = (_e492 - _e493);
-                let _e495: bool = csp_valid_u0028_vi2_u003b((&param_124));
-                phi_3240_ = _e495;
+                param_127 = (_e492 - _e493);
+                let _e495: bool = csp_valid_u0028_vi2_u003b((&param_127));
+                phi_3237_ = _e495;
             }
-            let _e497: bool = phi_3240_;
-            phi_3248_ = _e497;
+            let _e497: bool = phi_3237_;
+            phi_3245_ = _e497;
             if _e497 {
                 let _e498: vec2<i32> = p_6;
                 let _e499: vec2<i32> = px_1;
-                param_125 = (_e498 + _e499);
-                let _e501: bool = csp_valid_u0028_vi2_u003b((&param_125));
-                phi_3248_ = _e501;
+                param_128 = (_e498 + _e499);
+                let _e501: bool = csp_valid_u0028_vi2_u003b((&param_128));
+                phi_3245_ = _e501;
             }
-            let _e503: bool = phi_3248_;
-            phi_3258_ = _e503;
+            let _e503: bool = phi_3245_;
+            phi_3255_ = _e503;
             if _e503 {
                 let _e504: vec2<i32> = p_6;
                 let _e505: vec2<i32> = px_1;
                 let _e507: vec2<i32> = py_1;
-                param_126 = ((_e504 - _e505) + _e507);
-                let _e509: bool = csp_valid_u0028_vi2_u003b((&param_126));
-                phi_3258_ = _e509;
+                param_129 = ((_e504 - _e505) + _e507);
+                let _e509: bool = csp_valid_u0028_vi2_u003b((&param_129));
+                phi_3255_ = _e509;
             }
-            let _e511: bool = phi_3258_;
-            phi_3266_ = _e511;
+            let _e511: bool = phi_3255_;
+            phi_3263_ = _e511;
             if _e511 {
                 let _e512: vec2<i32> = p_6;
                 let _e513: vec2<i32> = py_1;
-                param_127 = (_e512 + _e513);
-                let _e515: bool = csp_valid_u0028_vi2_u003b((&param_127));
-                phi_3266_ = _e515;
+                param_130 = (_e512 + _e513);
+                let _e515: bool = csp_valid_u0028_vi2_u003b((&param_130));
+                phi_3263_ = _e515;
             }
-            let _e517: bool = phi_3266_;
-            phi_3276_ = _e517;
+            let _e517: bool = phi_3263_;
+            phi_3273_ = _e517;
             if _e517 {
                 let _e518: vec2<i32> = p_6;
                 let _e519: vec2<i32> = px_1;
                 let _e521: vec2<i32> = py_1;
-                param_128 = ((_e518 + _e519) + _e521);
-                let _e523: bool = csp_valid_u0028_vi2_u003b((&param_128));
-                phi_3276_ = _e523;
+                param_131 = ((_e518 + _e519) + _e521);
+                let _e523: bool = csp_valid_u0028_vi2_u003b((&param_131));
+                phi_3273_ = _e523;
             }
-            let _e525: bool = phi_3276_;
+            let _e525: bool = phi_3273_;
             allValid = _e525;
             let _e526: bool = allValid;
             if _e526 {
                 let _e527: vec2<i32> = p_6;
                 let _e528: vec2<i32> = px_1;
                 let _e530: vec2<i32> = py_1;
-                param_129 = ((_e527 - _e528) - _e530);
-                let _e532: f32 = csp_height_u0028_vi2_u003b((&param_129));
+                param_132 = ((_e527 - _e528) - _e530);
+                let _e532: f32 = csp_height_u0028_vi2_u003b((&param_132));
                 a_9 = _e532;
                 let _e533: vec2<i32> = p_6;
                 let _e534: vec2<i32> = py_1;
-                param_130 = (_e533 - _e534);
-                let _e536: f32 = csp_height_u0028_vi2_u003b((&param_130));
+                param_133 = (_e533 - _e534);
+                let _e536: f32 = csp_height_u0028_vi2_u003b((&param_133));
                 b_10 = _e536;
                 let _e537: vec2<i32> = p_6;
                 let _e538: vec2<i32> = px_1;
                 let _e540: vec2<i32> = py_1;
-                param_131 = ((_e537 + _e538) - _e540);
-                let _e542: f32 = csp_height_u0028_vi2_u003b((&param_131));
+                param_134 = ((_e537 + _e538) - _e540);
+                let _e542: f32 = csp_height_u0028_vi2_u003b((&param_134));
                 c_8 = _e542;
                 let _e543: vec2<i32> = p_6;
                 let _e544: vec2<i32> = px_1;
-                param_132 = (_e543 - _e544);
-                let _e546: f32 = csp_height_u0028_vi2_u003b((&param_132));
+                param_135 = (_e543 - _e544);
+                let _e546: f32 = csp_height_u0028_vi2_u003b((&param_135));
                 d_3 = _e546;
                 let _e547: vec2<i32> = p_6;
                 let _e548: vec2<i32> = px_1;
-                param_133 = (_e547 + _e548);
-                let _e550: f32 = csp_height_u0028_vi2_u003b((&param_133));
+                param_136 = (_e547 + _e548);
+                let _e550: f32 = csp_height_u0028_vi2_u003b((&param_136));
                 f_1 = _e550;
                 let _e551: vec2<i32> = p_6;
                 let _e552: vec2<i32> = px_1;
                 let _e554: vec2<i32> = py_1;
-                param_134 = ((_e551 - _e552) + _e554);
-                let _e556: f32 = csp_height_u0028_vi2_u003b((&param_134));
+                param_137 = ((_e551 - _e552) + _e554);
+                let _e556: f32 = csp_height_u0028_vi2_u003b((&param_137));
                 g_1 = _e556;
                 let _e557: vec2<i32> = p_6;
                 let _e558: vec2<i32> = py_1;
-                param_135 = (_e557 + _e558);
-                let _e560: f32 = csp_height_u0028_vi2_u003b((&param_135));
+                param_138 = (_e557 + _e558);
+                let _e560: f32 = csp_height_u0028_vi2_u003b((&param_138));
                 q_6 = _e560;
                 let _e561: vec2<i32> = p_6;
                 let _e562: vec2<i32> = px_1;
                 let _e564: vec2<i32> = py_1;
-                param_136 = ((_e561 + _e562) + _e564);
-                let _e566: f32 = csp_height_u0028_vi2_u003b((&param_136));
+                param_139 = ((_e561 + _e562) + _e564);
+                let _e566: f32 = csp_height_u0028_vi2_u003b((&param_139));
                 k_6 = _e566;
                 let _e568: i32 = unnamed.u_style;
                 let _e569: bool = (_e568 == 0i);
-                phi_3346_ = _e569;
+                phi_3343_ = _e569;
                 if !(_e569) {
                     let _e572: i32 = unnamed.u_style;
-                    phi_3346_ = (_e572 == 1i);
+                    phi_3343_ = (_e572 == 1i);
                 }
-                let _e575: bool = phi_3346_;
-                phi_3353_ = _e575;
+                let _e575: bool = phi_3343_;
+                phi_3350_ = _e575;
                 if !(_e575) {
                     let _e578: i32 = unnamed.u_style;
-                    phi_3353_ = (_e578 == 5i);
+                    phi_3350_ = (_e578 == 5i);
                 }
-                let _e581: bool = phi_3353_;
+                let _e581: bool = phi_3350_;
                 shaded = _e581;
                 let _e582: f32 = groundRes_1;
                 zFactor_1 = (1f + (0.024f * pow(max(_e582, 0f), 0.664f)));
@@ -2685,8 +2694,8 @@ fn main_1() {
                 if (_e642 == 2i) {
                     let _e644: f32 = dx_4;
                     let _e645: f32 = dy_4;
-                    param_137 = degrees(atan(length(vec2<f32>(_e644, _e645))));
-                    let _e650: vec3<f32> = cspSlopeColour_u0028_f1_u003b((&param_137));
+                    param_140 = degrees(atan(length(vec2<f32>(_e644, _e645))));
+                    let _e650: vec3<f32> = cspSlopeColour_u0028_f1_u003b((&param_140));
                     colour_1 = vec4<f32>(_e650.x, _e650.y, _e650.z, 1f);
                 } else {
                     let _e656: i32 = unnamed.u_style;
@@ -2697,12 +2706,12 @@ fn main_1() {
                             painted = false;
                         } else {
                             let _e663: f32 = dx_4;
-                            param_138 = _e663;
+                            param_141 = _e663;
                             let _e664: f32 = dy_4;
-                            param_139 = _e664;
-                            let _e665: f32 = cspAspectOf_u0028_f1_u003b_f1_u003b((&param_138), (&param_139));
-                            param_140 = _e665;
-                            let _e666: vec3<f32> = cspAspectColour_u0028_f1_u003b((&param_140));
+                            param_142 = _e664;
+                            let _e665: f32 = cspAspectOf_u0028_f1_u003b_f1_u003b((&param_141), (&param_142));
+                            param_143 = _e665;
+                            let _e666: vec3<f32> = cspAspectColour_u0028_f1_u003b((&param_143));
                             colour_1 = vec4<f32>(_e666.x, _e666.y, _e666.z, 1f);
                         }
                     } else {
@@ -2714,10 +2723,10 @@ fn main_1() {
                                 painted = false;
                             } else {
                                 let _e679: f32 = dx_4;
-                                param_141 = _e679;
+                                param_144 = _e679;
                                 let _e680: f32 = dy_4;
-                                param_142 = _e680;
-                                let _e681: f32 = cspAspectOf_u0028_f1_u003b_f1_u003b((&param_141), (&param_142));
+                                param_145 = _e680;
+                                let _e681: f32 = cspAspectOf_u0028_f1_u003b_f1_u003b((&param_144), (&param_145));
                                 northness = cos(radians(_e681));
                                 let _e684: f32 = northness;
                                 amount = abs(_e684);
@@ -2799,16 +2808,16 @@ fn main_1() {
                                     let _e771: f32 = unnamed.u_ambient;
                                     let _e773: f32 = unnamed.u_ambient;
                                     let _e775: f32 = dx_4;
-                                    param_143 = _e775;
+                                    param_146 = _e775;
                                     let _e776: f32 = dy_4;
-                                    param_144 = _e776;
+                                    param_147 = _e776;
                                     let _e778: f32 = unnamed.u_sunAzimuth;
-                                    param_145 = _e778;
-                                    let _e779: f32 = cspDirectShade_u0028_f1_u003b_f1_u003b_f1_u003b((&param_143), (&param_144), (&param_145));
+                                    param_148 = _e778;
+                                    let _e779: f32 = cspDirectShade_u0028_f1_u003b_f1_u003b_f1_u003b((&param_146), (&param_147), (&param_148));
                                     shade_1 = (_e771 + ((1f - _e773) * _e779));
                                     let _e782: f32 = value_7;
-                                    param_146 = _e782;
-                                    let _e783: vec3<f32> = cspTintColour_u0028_f1_u003b((&param_146));
+                                    param_149 = _e782;
+                                    let _e783: vec3<f32> = cspTintColour_u0028_f1_u003b((&param_149));
                                     let _e784: f32 = shade_1;
                                     let _e788: vec3<f32> = min((_e783 * (0.33f + (0.82f * _e784))), vec3<f32>(1f, 1f, 1f));
                                     colour_1 = vec4<f32>(_e788.x, _e788.y, _e788.z, 1f);
@@ -2816,10 +2825,10 @@ fn main_1() {
                                     let _e794: i32 = unnamed.u_style;
                                     if (_e794 == 1i) {
                                         let _e796: f32 = dx_4;
-                                        param_147 = _e796;
+                                        param_150 = _e796;
                                         let _e797: f32 = dy_4;
-                                        param_148 = _e797;
-                                        let _e798: f32 = cspAspectOf_u0028_f1_u003b_f1_u003b((&param_147), (&param_148));
+                                        param_151 = _e797;
+                                        let _e798: f32 = cspAspectOf_u0028_f1_u003b_f1_u003b((&param_150), (&param_151));
                                         aspect_1 = _e798;
                                         sum_4 = 0f;
                                         total_1 = 0f;
@@ -2846,12 +2855,12 @@ fn main_1() {
                                                 weight_1 = _e825;
                                                 let _e826: f32 = weight_1;
                                                 let _e827: f32 = dx_4;
-                                                param_149 = _e827;
+                                                param_152 = _e827;
                                                 let _e828: f32 = dy_4;
-                                                param_150 = _e828;
+                                                param_153 = _e828;
                                                 let _e829: f32 = az_2;
-                                                param_151 = _e829;
-                                                let _e830: f32 = cspDirectShade_u0028_f1_u003b_f1_u003b_f1_u003b((&param_149), (&param_150), (&param_151));
+                                                param_154 = _e829;
+                                                let _e830: f32 = cspDirectShade_u0028_f1_u003b_f1_u003b_f1_u003b((&param_152), (&param_153), (&param_154));
                                                 let _e832: f32 = sum_4;
                                                 sum_4 = (_e832 + (_e826 * _e830));
                                                 let _e834: f32 = weight_1;
@@ -2878,12 +2887,12 @@ fn main_1() {
                                         colour_1 = vec4<f32>(_e852.x, _e852.y, _e852.z, 1f);
                                     } else {
                                         let _e857: f32 = dx_4;
-                                        param_152 = _e857;
+                                        param_155 = _e857;
                                         let _e858: f32 = dy_4;
-                                        param_153 = _e858;
+                                        param_156 = _e858;
                                         let _e860: f32 = unnamed.u_sunAzimuth;
-                                        param_154 = _e860;
-                                        let _e861: f32 = cspDirectShade_u0028_f1_u003b_f1_u003b_f1_u003b((&param_152), (&param_153), (&param_154));
+                                        param_157 = _e860;
+                                        let _e861: f32 = cspDirectShade_u0028_f1_u003b_f1_u003b_f1_u003b((&param_155), (&param_156), (&param_157));
                                         direct_1 = _e861;
                                         let _e863: f32 = unnamed.u_ambient;
                                         let _e865: f32 = unnamed.u_ambient;
@@ -2903,8 +2912,8 @@ fn main_1() {
                     let _e878: f32 = colour_1[3u];
                     if (_e878 > 0f) {
                         let _e880: vec4<f32> = colour_1;
-                        param_155 = _e880.xyz;
-                        let _e882: vec3<f32> = cspApplyAppearance_u0028_vf3_u003b((&param_155));
+                        param_158 = _e880.xyz;
+                        let _e882: vec3<f32> = cspApplyAppearance_u0028_vf3_u003b((&param_158));
                         local_32 = _e882;
                     } else {
                         local_32 = vec3<f32>(0f, 0f, 0f);

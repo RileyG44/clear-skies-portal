@@ -106,8 +106,8 @@ bool csp_valid(ivec2 p){return csk_ok(csp_height(p));}
 int csp_rank(ivec2 p){return csp_valid(p)?1:0;}
 #define CSK_AUX(NAME,TEX,SCALE) bool NAME(ivec2 p,out float v){v=0.;if(SCALE<=0.)return false;\\
 vec2 q=(csk_auxTransform*vec3(vec2(p)+.5,1.)).xy/SCALE-.5;ivec2 b=ivec2(floor(q));vec2 fr=q-vec2(b);ivec2 ts=textureSize(TEX,0);float sum=0.,w=0.;\\
-for(int y=0;y<2;y++)for(int x=0;x<2;x++){vec2 a=texelFetch(TEX,clamp(b+ivec2(x,y),ivec2(0),ts-1),0).rg;float k=(x==0?1.-fr.x:fr.x)*(y==0?1.-fr.y:fr.y);\\
-if(a.g>0.&&k>0.){sum+=a.r*k;w+=k;}}if(w<=0.)return false;v=sum/w;return true;}
+for(int y=0;y<2;y++)for(int x=0;x<2;x++){float a=texelFetch(TEX,clamp(b+ivec2(x,y),ivec2(0),ts-1),0).r;float k=(x==0?1.-fr.x:fr.x)*(y==0?1.-fr.y:fr.y);\\
+if(csk_ok(a)&&k>0.){sum+=a*k;w+=k;}}if(w<=0.)return false;v=sum/w;return true;}
 CSK_AUX(csp_blur,csk_blur,csk_blurScale)
 CSK_AUX(csp_base,csk_base,csk_baseScale)
 CSK_AUX(csp_landBase,csk_landBase,csk_landBaseScale)
@@ -176,3 +176,8 @@ const cases = looks.map((look, index) => {
   return {look: look.id, fitted, remFlatBase, input, view, stack, values};
 });
 fs.writeFileSync(path.join(output, "terrain-cases.json"), JSON.stringify(cases) + "\n");
+
+// The display-only water geography (water-geography.js): its run-length
+// packing, decoded natively into the same RGBA16UI mask the shader reads.
+fs.writeFileSync(path.join(output, "water-mask.rle"), Buffer.from(require("../../water-geography-data.js"), "base64"));
+

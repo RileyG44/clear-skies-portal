@@ -845,7 +845,7 @@ metal::float4 cspRampAt_u0028_i1_u003b_f1_u003b(
     float p0_ = {};
     int param_36 = {};
     int param_37 = {};
-    bool phi_1586_ = {};
+    bool phi_1583_ = {};
     int _e277 = layer_1;
     float _e281 = unnamed.u_layerA.inner[_e277][3u];
     count = naga_f2i32(_e281 + 0.5);
@@ -853,16 +853,16 @@ metal::float4 cspRampAt_u0028_i1_u003b_f1_u003b(
     base = as_type<int>(as_type<uint>(_e284) * as_type<uint>(10));
     int _e286 = count;
     bool _e287 = _e286 <= 1;
-    phi_1586_ = _e287;
+    phi_1583_ = _e287;
     if (!(_e287)) {
         float _e289 = t_1;
         int _e290 = layer_1;
         param_32 = _e290;
         param_33 = 0;
         float _e291 = cspStopPos_u0028_i1_u003b_i1_u003b(param_32, param_33, unnamed);
-        phi_1586_ = _e289 <= _e291;
+        phi_1583_ = _e289 <= _e291;
     }
-    bool _e294 = phi_1586_;
+    bool _e294 = phi_1583_;
     if (_e294) {
         int _e295 = base;
         metal::float4 _e298 = unnamed.u_layerColors.inner[_e295];
@@ -1362,13 +1362,49 @@ metal::float2 cspLayerValue_u0028_i1_u003b_f1_u003b_struct_u002d_CspCtx_u002d_vi
     return metal::float2(0.0, 0.0);
 }
 
+bool csk_isinf_u0028_f1_u003b(
+    thread float& v_1
+) {
+    float _e265 = v_1;
+    return (as_type<uint>(_e265) & 2147483647u) == 2139095040u;
+}
+
+bool csk_isnan_u0028_f1_u003b(
+    thread float& v_2
+) {
+    float _e265 = v_2;
+    return (as_type<uint>(_e265) & 2147483647u) > 2139095040u;
+}
+
+bool csk_ok_u0028_f1_u003b(
+    thread float& v_3
+) {
+    float param_62 = {};
+    float param_63 = {};
+    bool phi_246_ = {};
+    float _e267 = v_3;
+    param_62 = _e267;
+    bool _e268 = csk_isnan_u0028_f1_u003b(param_62);
+    bool _e269 = !(_e268);
+    phi_246_ = _e269;
+    if (_e269) {
+        float _e270 = v_3;
+        param_63 = _e270;
+        bool _e271 = csk_isinf_u0028_f1_u003b(param_63);
+        phi_246_ = !(_e271);
+    }
+    bool _e274 = phi_246_;
+    float _e275 = v_3;
+    return _e274 && (_e275 > -100000000000000000000.0);
+}
+
 metal::int2 naga_f2i32(metal::float2 value) {
     return static_cast<metal::int2>(metal::clamp(value, -2147483600.0, 2147483500.0));
 }
 
 bool csp_landBase_u0028_vi2_u003b_f1_u003b(
     thread metal::int2& p,
-    thread float& v_1,
+    thread float& v_4,
     constant CskUniforms& unnamed,
     metal::texture2d<float, metal::access::sample> csk_landBase
 ) {
@@ -1380,25 +1416,26 @@ bool csp_landBase_u0028_vi2_u003b_f1_u003b(
     float w = {};
     int y = {};
     int x_1 = {};
-    metal::float2 a_1 = {};
+    float a_1 = {};
     float k_2 = {};
     float local_12 = {};
     float local_13 = {};
-    v_1 = 0.0;
-    float _e279 = unnamed.csk_landBaseScale;
-    if (_e279 <= 0.0) {
+    float param_64 = {};
+    v_4 = 0.0;
+    float _e280 = unnamed.csk_landBaseScale;
+    if (_e280 <= 0.0) {
         return false;
     }
-    metal::float3x3 _e282 = unnamed.csk_auxTransform;
-    metal::int2 _e283 = p;
-    metal::float2 _e286 = static_cast<metal::float2>(_e283) + metal::float2(0.5);
-    float _e293 = unnamed.csk_landBaseScale;
-    q_1 = ((_e282 * metal::float3(_e286.x, _e286.y, 1.0)).xy / metal::float2(_e293)) - metal::float2(0.5);
-    metal::float2 _e298 = q_1;
-    b_5 = naga_f2i32(metal::floor(_e298));
-    metal::float2 _e301 = q_1;
-    metal::int2 _e302 = b_5;
-    fr = _e301 - static_cast<metal::float2>(_e302);
+    metal::float3x3 _e283 = unnamed.csk_auxTransform;
+    metal::int2 _e284 = p;
+    metal::float2 _e287 = static_cast<metal::float2>(_e284) + metal::float2(0.5);
+    float _e294 = unnamed.csk_landBaseScale;
+    q_1 = ((_e283 * metal::float3(_e287.x, _e287.y, 1.0)).xy / metal::float2(_e294)) - metal::float2(0.5);
+    metal::float2 _e299 = q_1;
+    b_5 = naga_f2i32(metal::floor(_e299));
+    metal::float2 _e302 = q_1;
+    metal::int2 _e303 = b_5;
+    fr = _e302 - static_cast<metal::float2>(_e303);
     ts = static_cast<metal::int2>(metal::uint2(csk_landBase.get_width(0), csk_landBase.get_height(0)));
     sum_1 = 0.0;
     w = 0.0;
@@ -1409,12 +1446,12 @@ bool csp_landBase_u0028_vi2_u003b_f1_u003b(
         if (metal::all(loop_bound_2 == uint2(0u))) { break; }
         loop_bound_2 -= uint2(loop_bound_2.y == 0u, 1u);
         if (!loop_init_2) {
-            int _e356 = y;
-            y = as_type<int>(as_type<uint>(_e356) + as_type<uint>(1));
+            int _e355 = y;
+            y = as_type<int>(as_type<uint>(_e355) + as_type<uint>(1));
         }
         loop_init_2 = false;
-        int _e307 = y;
-        if (_e307 < 2) {
+        int _e308 = y;
+        if (_e308 < 2) {
             x_1 = 0;
             uint2 loop_bound_3 = uint2(4294967295u);
             bool loop_init_3 = true;
@@ -1422,47 +1459,49 @@ bool csp_landBase_u0028_vi2_u003b_f1_u003b(
                 if (metal::all(loop_bound_3 == uint2(0u))) { break; }
                 loop_bound_3 -= uint2(loop_bound_3.y == 0u, 1u);
                 if (!loop_init_3) {
-                    int _e354 = x_1;
-                    x_1 = as_type<int>(as_type<uint>(_e354) + as_type<uint>(1));
+                    int _e353 = x_1;
+                    x_1 = as_type<int>(as_type<uint>(_e353) + as_type<uint>(1));
                 }
                 loop_init_3 = false;
-                int _e309 = x_1;
-                if (_e309 < 2) {
-                    metal::int2 _e311 = b_5;
-                    int _e312 = x_1;
-                    int _e313 = y;
-                    metal::int2 _e316 = ts;
-                    metal::float4 _e320 = csk_landBase.read(metal::uint2(metal::clamp(as_type<metal::int2>(as_type<metal::uint2>(_e311) + as_type<metal::uint2>(metal::int2(_e312, _e313))), metal::int2(0, 0), as_type<metal::int2>(as_type<metal::uint2>(_e316) - as_type<metal::uint2>(metal::int2(1))))), 0);
-                    a_1 = _e320.xy;
-                    int _e322 = x_1;
-                    if (_e322 == 0) {
-                        float _e325 = fr[0u];
-                        local_12 = 1.0 - _e325;
+                int _e310 = x_1;
+                if (_e310 < 2) {
+                    metal::int2 _e312 = b_5;
+                    int _e313 = x_1;
+                    int _e314 = y;
+                    metal::int2 _e317 = ts;
+                    metal::float4 _e321 = csk_landBase.read(metal::uint2(metal::clamp(as_type<metal::int2>(as_type<metal::uint2>(_e312) + as_type<metal::uint2>(metal::int2(_e313, _e314))), metal::int2(0, 0), as_type<metal::int2>(as_type<metal::uint2>(_e317) - as_type<metal::uint2>(metal::int2(1))))), 0);
+                    a_1 = _e321.x;
+                    int _e323 = x_1;
+                    if (_e323 == 0) {
+                        float _e326 = fr[0u];
+                        local_12 = 1.0 - _e326;
                     } else {
-                        float _e328 = fr[0u];
-                        local_12 = _e328;
+                        float _e329 = fr[0u];
+                        local_12 = _e329;
                     }
-                    float _e329 = local_12;
-                    int _e330 = y;
-                    if (_e330 == 0) {
-                        float _e333 = fr[1u];
-                        local_13 = 1.0 - _e333;
+                    float _e330 = local_12;
+                    int _e331 = y;
+                    if (_e331 == 0) {
+                        float _e334 = fr[1u];
+                        local_13 = 1.0 - _e334;
                     } else {
-                        float _e336 = fr[1u];
-                        local_13 = _e336;
+                        float _e337 = fr[1u];
+                        local_13 = _e337;
                     }
-                    float _e337 = local_13;
-                    k_2 = _e329 * _e337;
-                    float _e340 = a_1[1u];
+                    float _e338 = local_13;
+                    k_2 = _e330 * _e338;
+                    float _e340 = a_1;
+                    param_64 = _e340;
+                    bool _e341 = csk_ok_u0028_f1_u003b(param_64);
                     float _e342 = k_2;
-                    if ((_e340 > 0.0) && (_e342 > 0.0)) {
-                        float _e346 = a_1[0u];
-                        float _e347 = k_2;
-                        float _e349 = sum_1;
-                        sum_1 = _e349 + (_e346 * _e347);
-                        float _e351 = k_2;
-                        float _e352 = w;
-                        w = _e352 + _e351;
+                    if (_e341 && (_e342 > 0.0)) {
+                        float _e345 = a_1;
+                        float _e346 = k_2;
+                        float _e348 = sum_1;
+                        sum_1 = _e348 + (_e345 * _e346);
+                        float _e350 = k_2;
+                        float _e351 = w;
+                        w = _e351 + _e350;
                     }
                     continue;
                 } else {
@@ -1474,19 +1513,19 @@ bool csp_landBase_u0028_vi2_u003b_f1_u003b(
             break;
         }
     }
-    float _e358 = w;
-    if (_e358 <= 0.0) {
+    float _e357 = w;
+    if (_e357 <= 0.0) {
         return false;
     }
-    float _e360 = sum_1;
-    float _e361 = w;
-    v_1 = _e360 / _e361;
+    float _e359 = sum_1;
+    float _e360 = w;
+    v_4 = _e359 / _e360;
     return true;
 }
 
 bool csp_base_u0028_vi2_u003b_f1_u003b(
     thread metal::int2& p_1,
-    thread float& v_2,
+    thread float& v_5,
     constant CskUniforms& unnamed,
     metal::texture2d<float, metal::access::sample> csk_base
 ) {
@@ -1498,25 +1537,26 @@ bool csp_base_u0028_vi2_u003b_f1_u003b(
     float w_1 = {};
     int y_1 = {};
     int x_2 = {};
-    metal::float2 a_2 = {};
+    float a_2 = {};
     float k_3 = {};
     float local_14 = {};
     float local_15 = {};
-    v_2 = 0.0;
-    float _e279 = unnamed.csk_baseScale;
-    if (_e279 <= 0.0) {
+    float param_65 = {};
+    v_5 = 0.0;
+    float _e280 = unnamed.csk_baseScale;
+    if (_e280 <= 0.0) {
         return false;
     }
-    metal::float3x3 _e282 = unnamed.csk_auxTransform;
-    metal::int2 _e283 = p_1;
-    metal::float2 _e286 = static_cast<metal::float2>(_e283) + metal::float2(0.5);
-    float _e293 = unnamed.csk_baseScale;
-    q_2 = ((_e282 * metal::float3(_e286.x, _e286.y, 1.0)).xy / metal::float2(_e293)) - metal::float2(0.5);
-    metal::float2 _e298 = q_2;
-    b_6 = naga_f2i32(metal::floor(_e298));
-    metal::float2 _e301 = q_2;
-    metal::int2 _e302 = b_6;
-    fr_1 = _e301 - static_cast<metal::float2>(_e302);
+    metal::float3x3 _e283 = unnamed.csk_auxTransform;
+    metal::int2 _e284 = p_1;
+    metal::float2 _e287 = static_cast<metal::float2>(_e284) + metal::float2(0.5);
+    float _e294 = unnamed.csk_baseScale;
+    q_2 = ((_e283 * metal::float3(_e287.x, _e287.y, 1.0)).xy / metal::float2(_e294)) - metal::float2(0.5);
+    metal::float2 _e299 = q_2;
+    b_6 = naga_f2i32(metal::floor(_e299));
+    metal::float2 _e302 = q_2;
+    metal::int2 _e303 = b_6;
+    fr_1 = _e302 - static_cast<metal::float2>(_e303);
     ts_1 = static_cast<metal::int2>(metal::uint2(csk_base.get_width(0), csk_base.get_height(0)));
     sum_2 = 0.0;
     w_1 = 0.0;
@@ -1527,12 +1567,12 @@ bool csp_base_u0028_vi2_u003b_f1_u003b(
         if (metal::all(loop_bound_4 == uint2(0u))) { break; }
         loop_bound_4 -= uint2(loop_bound_4.y == 0u, 1u);
         if (!loop_init_4) {
-            int _e356 = y_1;
-            y_1 = as_type<int>(as_type<uint>(_e356) + as_type<uint>(1));
+            int _e355 = y_1;
+            y_1 = as_type<int>(as_type<uint>(_e355) + as_type<uint>(1));
         }
         loop_init_4 = false;
-        int _e307 = y_1;
-        if (_e307 < 2) {
+        int _e308 = y_1;
+        if (_e308 < 2) {
             x_2 = 0;
             uint2 loop_bound_5 = uint2(4294967295u);
             bool loop_init_5 = true;
@@ -1540,47 +1580,49 @@ bool csp_base_u0028_vi2_u003b_f1_u003b(
                 if (metal::all(loop_bound_5 == uint2(0u))) { break; }
                 loop_bound_5 -= uint2(loop_bound_5.y == 0u, 1u);
                 if (!loop_init_5) {
-                    int _e354 = x_2;
-                    x_2 = as_type<int>(as_type<uint>(_e354) + as_type<uint>(1));
+                    int _e353 = x_2;
+                    x_2 = as_type<int>(as_type<uint>(_e353) + as_type<uint>(1));
                 }
                 loop_init_5 = false;
-                int _e309 = x_2;
-                if (_e309 < 2) {
-                    metal::int2 _e311 = b_6;
-                    int _e312 = x_2;
-                    int _e313 = y_1;
-                    metal::int2 _e316 = ts_1;
-                    metal::float4 _e320 = csk_base.read(metal::uint2(metal::clamp(as_type<metal::int2>(as_type<metal::uint2>(_e311) + as_type<metal::uint2>(metal::int2(_e312, _e313))), metal::int2(0, 0), as_type<metal::int2>(as_type<metal::uint2>(_e316) - as_type<metal::uint2>(metal::int2(1))))), 0);
-                    a_2 = _e320.xy;
-                    int _e322 = x_2;
-                    if (_e322 == 0) {
-                        float _e325 = fr_1[0u];
-                        local_14 = 1.0 - _e325;
+                int _e310 = x_2;
+                if (_e310 < 2) {
+                    metal::int2 _e312 = b_6;
+                    int _e313 = x_2;
+                    int _e314 = y_1;
+                    metal::int2 _e317 = ts_1;
+                    metal::float4 _e321 = csk_base.read(metal::uint2(metal::clamp(as_type<metal::int2>(as_type<metal::uint2>(_e312) + as_type<metal::uint2>(metal::int2(_e313, _e314))), metal::int2(0, 0), as_type<metal::int2>(as_type<metal::uint2>(_e317) - as_type<metal::uint2>(metal::int2(1))))), 0);
+                    a_2 = _e321.x;
+                    int _e323 = x_2;
+                    if (_e323 == 0) {
+                        float _e326 = fr_1[0u];
+                        local_14 = 1.0 - _e326;
                     } else {
-                        float _e328 = fr_1[0u];
-                        local_14 = _e328;
+                        float _e329 = fr_1[0u];
+                        local_14 = _e329;
                     }
-                    float _e329 = local_14;
-                    int _e330 = y_1;
-                    if (_e330 == 0) {
-                        float _e333 = fr_1[1u];
-                        local_15 = 1.0 - _e333;
+                    float _e330 = local_14;
+                    int _e331 = y_1;
+                    if (_e331 == 0) {
+                        float _e334 = fr_1[1u];
+                        local_15 = 1.0 - _e334;
                     } else {
-                        float _e336 = fr_1[1u];
-                        local_15 = _e336;
+                        float _e337 = fr_1[1u];
+                        local_15 = _e337;
                     }
-                    float _e337 = local_15;
-                    k_3 = _e329 * _e337;
-                    float _e340 = a_2[1u];
+                    float _e338 = local_15;
+                    k_3 = _e330 * _e338;
+                    float _e340 = a_2;
+                    param_65 = _e340;
+                    bool _e341 = csk_ok_u0028_f1_u003b(param_65);
                     float _e342 = k_3;
-                    if ((_e340 > 0.0) && (_e342 > 0.0)) {
-                        float _e346 = a_2[0u];
-                        float _e347 = k_3;
-                        float _e349 = sum_2;
-                        sum_2 = _e349 + (_e346 * _e347);
-                        float _e351 = k_3;
-                        float _e352 = w_1;
-                        w_1 = _e352 + _e351;
+                    if (_e341 && (_e342 > 0.0)) {
+                        float _e345 = a_2;
+                        float _e346 = k_3;
+                        float _e348 = sum_2;
+                        sum_2 = _e348 + (_e345 * _e346);
+                        float _e350 = k_3;
+                        float _e351 = w_1;
+                        w_1 = _e351 + _e350;
                     }
                     continue;
                 } else {
@@ -1592,19 +1634,19 @@ bool csp_base_u0028_vi2_u003b_f1_u003b(
             break;
         }
     }
-    float _e358 = w_1;
-    if (_e358 <= 0.0) {
+    float _e357 = w_1;
+    if (_e357 <= 0.0) {
         return false;
     }
-    float _e360 = sum_2;
-    float _e361 = w_1;
-    v_2 = _e360 / _e361;
+    float _e359 = sum_2;
+    float _e360 = w_1;
+    v_5 = _e359 / _e360;
     return true;
 }
 
 bool csp_blur_u0028_vi2_u003b_f1_u003b(
     thread metal::int2& p_2,
-    thread float& v_3,
+    thread float& v_6,
     constant CskUniforms& unnamed,
     metal::texture2d<float, metal::access::sample> csk_blur
 ) {
@@ -1616,25 +1658,26 @@ bool csp_blur_u0028_vi2_u003b_f1_u003b(
     float w_2 = {};
     int y_2 = {};
     int x_3 = {};
-    metal::float2 a_3 = {};
+    float a_3 = {};
     float k_4 = {};
     float local_16 = {};
     float local_17 = {};
-    v_3 = 0.0;
-    float _e279 = unnamed.csk_blurScale;
-    if (_e279 <= 0.0) {
+    float param_66 = {};
+    v_6 = 0.0;
+    float _e280 = unnamed.csk_blurScale;
+    if (_e280 <= 0.0) {
         return false;
     }
-    metal::float3x3 _e282 = unnamed.csk_auxTransform;
-    metal::int2 _e283 = p_2;
-    metal::float2 _e286 = static_cast<metal::float2>(_e283) + metal::float2(0.5);
-    float _e293 = unnamed.csk_blurScale;
-    q_3 = ((_e282 * metal::float3(_e286.x, _e286.y, 1.0)).xy / metal::float2(_e293)) - metal::float2(0.5);
-    metal::float2 _e298 = q_3;
-    b_7 = naga_f2i32(metal::floor(_e298));
-    metal::float2 _e301 = q_3;
-    metal::int2 _e302 = b_7;
-    fr_2 = _e301 - static_cast<metal::float2>(_e302);
+    metal::float3x3 _e283 = unnamed.csk_auxTransform;
+    metal::int2 _e284 = p_2;
+    metal::float2 _e287 = static_cast<metal::float2>(_e284) + metal::float2(0.5);
+    float _e294 = unnamed.csk_blurScale;
+    q_3 = ((_e283 * metal::float3(_e287.x, _e287.y, 1.0)).xy / metal::float2(_e294)) - metal::float2(0.5);
+    metal::float2 _e299 = q_3;
+    b_7 = naga_f2i32(metal::floor(_e299));
+    metal::float2 _e302 = q_3;
+    metal::int2 _e303 = b_7;
+    fr_2 = _e302 - static_cast<metal::float2>(_e303);
     ts_2 = static_cast<metal::int2>(metal::uint2(csk_blur.get_width(0), csk_blur.get_height(0)));
     sum_3 = 0.0;
     w_2 = 0.0;
@@ -1645,12 +1688,12 @@ bool csp_blur_u0028_vi2_u003b_f1_u003b(
         if (metal::all(loop_bound_6 == uint2(0u))) { break; }
         loop_bound_6 -= uint2(loop_bound_6.y == 0u, 1u);
         if (!loop_init_6) {
-            int _e356 = y_2;
-            y_2 = as_type<int>(as_type<uint>(_e356) + as_type<uint>(1));
+            int _e355 = y_2;
+            y_2 = as_type<int>(as_type<uint>(_e355) + as_type<uint>(1));
         }
         loop_init_6 = false;
-        int _e307 = y_2;
-        if (_e307 < 2) {
+        int _e308 = y_2;
+        if (_e308 < 2) {
             x_3 = 0;
             uint2 loop_bound_7 = uint2(4294967295u);
             bool loop_init_7 = true;
@@ -1658,47 +1701,49 @@ bool csp_blur_u0028_vi2_u003b_f1_u003b(
                 if (metal::all(loop_bound_7 == uint2(0u))) { break; }
                 loop_bound_7 -= uint2(loop_bound_7.y == 0u, 1u);
                 if (!loop_init_7) {
-                    int _e354 = x_3;
-                    x_3 = as_type<int>(as_type<uint>(_e354) + as_type<uint>(1));
+                    int _e353 = x_3;
+                    x_3 = as_type<int>(as_type<uint>(_e353) + as_type<uint>(1));
                 }
                 loop_init_7 = false;
-                int _e309 = x_3;
-                if (_e309 < 2) {
-                    metal::int2 _e311 = b_7;
-                    int _e312 = x_3;
-                    int _e313 = y_2;
-                    metal::int2 _e316 = ts_2;
-                    metal::float4 _e320 = csk_blur.read(metal::uint2(metal::clamp(as_type<metal::int2>(as_type<metal::uint2>(_e311) + as_type<metal::uint2>(metal::int2(_e312, _e313))), metal::int2(0, 0), as_type<metal::int2>(as_type<metal::uint2>(_e316) - as_type<metal::uint2>(metal::int2(1))))), 0);
-                    a_3 = _e320.xy;
-                    int _e322 = x_3;
-                    if (_e322 == 0) {
-                        float _e325 = fr_2[0u];
-                        local_16 = 1.0 - _e325;
+                int _e310 = x_3;
+                if (_e310 < 2) {
+                    metal::int2 _e312 = b_7;
+                    int _e313 = x_3;
+                    int _e314 = y_2;
+                    metal::int2 _e317 = ts_2;
+                    metal::float4 _e321 = csk_blur.read(metal::uint2(metal::clamp(as_type<metal::int2>(as_type<metal::uint2>(_e312) + as_type<metal::uint2>(metal::int2(_e313, _e314))), metal::int2(0, 0), as_type<metal::int2>(as_type<metal::uint2>(_e317) - as_type<metal::uint2>(metal::int2(1))))), 0);
+                    a_3 = _e321.x;
+                    int _e323 = x_3;
+                    if (_e323 == 0) {
+                        float _e326 = fr_2[0u];
+                        local_16 = 1.0 - _e326;
                     } else {
-                        float _e328 = fr_2[0u];
-                        local_16 = _e328;
+                        float _e329 = fr_2[0u];
+                        local_16 = _e329;
                     }
-                    float _e329 = local_16;
-                    int _e330 = y_2;
-                    if (_e330 == 0) {
-                        float _e333 = fr_2[1u];
-                        local_17 = 1.0 - _e333;
+                    float _e330 = local_16;
+                    int _e331 = y_2;
+                    if (_e331 == 0) {
+                        float _e334 = fr_2[1u];
+                        local_17 = 1.0 - _e334;
                     } else {
-                        float _e336 = fr_2[1u];
-                        local_17 = _e336;
+                        float _e337 = fr_2[1u];
+                        local_17 = _e337;
                     }
-                    float _e337 = local_17;
-                    k_4 = _e329 * _e337;
-                    float _e340 = a_3[1u];
+                    float _e338 = local_17;
+                    k_4 = _e330 * _e338;
+                    float _e340 = a_3;
+                    param_66 = _e340;
+                    bool _e341 = csk_ok_u0028_f1_u003b(param_66);
                     float _e342 = k_4;
-                    if ((_e340 > 0.0) && (_e342 > 0.0)) {
-                        float _e346 = a_3[0u];
-                        float _e347 = k_4;
-                        float _e349 = sum_3;
-                        sum_3 = _e349 + (_e346 * _e347);
-                        float _e351 = k_4;
-                        float _e352 = w_2;
-                        w_2 = _e352 + _e351;
+                    if (_e341 && (_e342 > 0.0)) {
+                        float _e345 = a_3;
+                        float _e346 = k_4;
+                        float _e348 = sum_3;
+                        sum_3 = _e348 + (_e345 * _e346);
+                        float _e350 = k_4;
+                        float _e351 = w_2;
+                        w_2 = _e351 + _e350;
                     }
                     continue;
                 } else {
@@ -1710,13 +1755,13 @@ bool csp_blur_u0028_vi2_u003b_f1_u003b(
             break;
         }
     }
-    float _e358 = w_2;
-    if (_e358 <= 0.0) {
+    float _e357 = w_2;
+    if (_e357 <= 0.0) {
         return false;
     }
-    float _e360 = sum_3;
-    float _e361 = w_2;
-    v_3 = _e360 / _e361;
+    float _e359 = sum_3;
+    float _e360 = w_2;
+    v_6 = _e359 / _e360;
     return true;
 }
 
@@ -1743,27 +1788,27 @@ float cspH_u0028_vi2_u003b(
     metal::texture2d<float, metal::access::sample> csk_blur
 ) {
     float h = {};
-    metal::int2 param_62 = {};
+    metal::int2 param_67 = {};
     float b_8 = {};
-    metal::int2 param_63 = {};
-    float param_64 = {};
-    bool phi_1502_ = {};
+    metal::int2 param_68 = {};
+    float param_69 = {};
+    bool phi_1499_ = {};
     metal::int2 _e270 = q_4;
-    param_62 = _e270;
-    float _e271 = csp_height_u0028_vi2_u003b(param_62, csk_field);
+    param_67 = _e270;
+    float _e271 = csp_height_u0028_vi2_u003b(param_67, csk_field);
     h = _e271;
     float _e273 = unnamed.u_detail;
     bool _e274 = _e273 != 0.0;
-    phi_1502_ = _e274;
+    phi_1499_ = _e274;
     if (_e274) {
         metal::int2 _e275 = q_4;
-        param_63 = _e275;
-        bool _e276 = csp_blur_u0028_vi2_u003b_f1_u003b(param_63, param_64, unnamed, csk_blur);
-        float _e277 = param_64;
+        param_68 = _e275;
+        bool _e276 = csp_blur_u0028_vi2_u003b_f1_u003b(param_68, param_69, unnamed, csk_blur);
+        float _e277 = param_69;
         b_8 = _e277;
-        phi_1502_ = _e276;
+        phi_1499_ = _e276;
     }
-    bool _e279 = phi_1502_;
+    bool _e279 = phi_1499_;
     if (_e279) {
         float _e281 = unnamed.u_detail;
         float _e282 = h;
@@ -1775,53 +1820,17 @@ float cspH_u0028_vi2_u003b(
     return _e288;
 }
 
-bool csk_isinf_u0028_f1_u003b(
-    thread float& v_4
-) {
-    float _e265 = v_4;
-    return (as_type<uint>(_e265) & 2147483647u) == 2139095040u;
-}
-
-bool csk_isnan_u0028_f1_u003b(
-    thread float& v_5
-) {
-    float _e265 = v_5;
-    return (as_type<uint>(_e265) & 2147483647u) > 2139095040u;
-}
-
-bool csk_ok_u0028_f1_u003b(
-    thread float& v_6
-) {
-    float param_65 = {};
-    float param_66 = {};
-    bool phi_246_ = {};
-    float _e267 = v_6;
-    param_65 = _e267;
-    bool _e268 = csk_isnan_u0028_f1_u003b(param_65);
-    bool _e269 = !(_e268);
-    phi_246_ = _e269;
-    if (_e269) {
-        float _e270 = v_6;
-        param_66 = _e270;
-        bool _e271 = csk_isinf_u0028_f1_u003b(param_66);
-        phi_246_ = !(_e271);
-    }
-    bool _e274 = phi_246_;
-    float _e275 = v_6;
-    return _e274 && (_e275 > -100000000000000000000.0);
-}
-
 bool csp_valid_u0028_vi2_u003b(
     thread metal::int2& p_4,
     metal::texture2d<float, metal::access::sample> csk_field
 ) {
-    metal::int2 param_67 = {};
-    float param_68 = {};
+    metal::int2 param_70 = {};
+    float param_71 = {};
     metal::int2 _e267 = p_4;
-    param_67 = _e267;
-    float _e268 = csp_height_u0028_vi2_u003b(param_67, csk_field);
-    param_68 = _e268;
-    bool _e269 = csk_ok_u0028_f1_u003b(param_68);
+    param_70 = _e267;
+    float _e268 = csp_height_u0028_vi2_u003b(param_70, csk_field);
+    param_71 = _e268;
+    bool _e269 = csk_ok_u0028_f1_u003b(param_71);
     return _e269;
 }
 
@@ -1841,165 +1850,165 @@ metal::float4 cspStack_u0028_vi2_u003b_f1_u003b_f1_u003b_f1_u003b_f1_u003b_vf2_u
 ) {
     metal::int2 px = {};
     metal::int2 py = {};
-    metal::int2 param_69 = {};
-    metal::int2 param_70 = {};
-    metal::int2 param_71 = {};
     metal::int2 param_72 = {};
     metal::int2 param_73 = {};
     metal::int2 param_74 = {};
     metal::int2 param_75 = {};
     metal::int2 param_76 = {};
+    metal::int2 param_77 = {};
+    metal::int2 param_78 = {};
+    metal::int2 param_79 = {};
     CspCtx c_7 = {};
     float a_4 = {};
-    metal::int2 param_77 = {};
-    float b_9 = {};
-    metal::int2 param_78 = {};
-    float cc = {};
-    metal::int2 param_79 = {};
-    float d_1 = {};
     metal::int2 param_80 = {};
-    float f = {};
+    float b_9 = {};
     metal::int2 param_81 = {};
-    float g = {};
+    float cc = {};
     metal::int2 param_82 = {};
-    float q_5 = {};
+    float d_1 = {};
     metal::int2 param_83 = {};
-    float k_5 = {};
+    float f = {};
     metal::int2 param_84 = {};
+    float g = {};
+    metal::int2 param_85 = {};
+    float q_5 = {};
+    metal::int2 param_86 = {};
+    float k_5 = {};
+    metal::int2 param_87 = {};
     float dxS = {};
     float dyS = {};
     float zFactor = {};
     float local_18 = {};
-    float param_85 = {};
-    float param_86 = {};
+    float param_88 = {};
+    float param_89 = {};
     float legacyBase = {};
     float baseValue = {};
-    metal::int2 param_87 = {};
-    float param_88 = {};
+    metal::int2 param_90 = {};
+    float param_91 = {};
     float local_19 = {};
     float landBase = {};
     float landBaseValue = {};
-    metal::int2 param_89 = {};
-    float param_90 = {};
+    metal::int2 param_92 = {};
+    float param_93 = {};
     float local_20 = {};
     metal::float4 acc = {};
     int i = {};
     metal::float4 layer_5 = {};
     int style_2 = {};
-    float param_91 = {};
+    float param_94 = {};
     int flags = {};
     metal::float2 v_7 = {};
-    int param_92 = {};
-    float param_93 = {};
-    CspCtx param_94 = {};
+    int param_95 = {};
+    float param_96 = {};
+    CspCtx param_97 = {};
     uint waterClass = {};
     uint local_21 = {};
-    metal::float2 param_95 = {};
+    metal::float2 param_98 = {};
     metal::float4 colour = {};
     metal::float4 local_22 = {};
-    int param_96 = {};
-    float param_97 = {};
-    metal::float2 param_98 = {};
-    metal::float4 local_23 = {};
     int param_99 = {};
     float param_100 = {};
     metal::float2 param_101 = {};
+    metal::float4 local_23 = {};
     int param_102 = {};
     float param_103 = {};
-    float shade = {};
-    float param_104 = {};
-    float param_105 = {};
+    metal::float2 param_104 = {};
+    int param_105 = {};
     float param_106 = {};
-    float alpha = {};
-    metal::float4 param_107 = {};
-    metal::float3 param_108 = {};
+    float shade = {};
+    float param_107 = {};
+    float param_108 = {};
     float param_109 = {};
-    int param_110 = {};
-    metal::float3 straight_1 = {};
+    float alpha = {};
+    metal::float4 param_110 = {};
     metal::float3 param_111 = {};
-    bool phi_2536_ = {};
-    bool phi_2546_ = {};
-    bool phi_2554_ = {};
-    bool phi_2562_ = {};
-    bool phi_2572_ = {};
-    bool phi_2580_ = {};
-    bool phi_2590_ = {};
-    bool phi_2881_ = {};
-    bool phi_2898_ = {};
-    bool phi_2921_ = {};
+    float param_112 = {};
+    int param_113 = {};
+    metal::float3 straight_1 = {};
+    metal::float3 param_114 = {};
+    bool phi_2533_ = {};
+    bool phi_2543_ = {};
+    bool phi_2551_ = {};
+    bool phi_2559_ = {};
+    bool phi_2569_ = {};
+    bool phi_2577_ = {};
+    bool phi_2587_ = {};
+    bool phi_2878_ = {};
+    bool phi_2895_ = {};
+    bool phi_2918_ = {};
     px = metal::int2(1, 0);
     py = metal::int2(0, 1);
     metal::int2 _e348 = p_5;
     metal::int2 _e349 = px;
     metal::int2 _e351 = py;
-    param_69 = as_type<metal::int2>(as_type<metal::uint2>(as_type<metal::int2>(as_type<metal::uint2>(_e348) - as_type<metal::uint2>(_e349))) - as_type<metal::uint2>(_e351));
-    bool _e353 = csp_valid_u0028_vi2_u003b(param_69, csk_field);
-    phi_2536_ = _e353;
+    param_72 = as_type<metal::int2>(as_type<metal::uint2>(as_type<metal::int2>(as_type<metal::uint2>(_e348) - as_type<metal::uint2>(_e349))) - as_type<metal::uint2>(_e351));
+    bool _e353 = csp_valid_u0028_vi2_u003b(param_72, csk_field);
+    phi_2533_ = _e353;
     if (_e353) {
         metal::int2 _e354 = p_5;
         metal::int2 _e355 = py;
-        param_70 = as_type<metal::int2>(as_type<metal::uint2>(_e354) - as_type<metal::uint2>(_e355));
-        bool _e357 = csp_valid_u0028_vi2_u003b(param_70, csk_field);
-        phi_2536_ = _e357;
+        param_73 = as_type<metal::int2>(as_type<metal::uint2>(_e354) - as_type<metal::uint2>(_e355));
+        bool _e357 = csp_valid_u0028_vi2_u003b(param_73, csk_field);
+        phi_2533_ = _e357;
     }
-    bool _e359 = phi_2536_;
-    phi_2546_ = _e359;
+    bool _e359 = phi_2533_;
+    phi_2543_ = _e359;
     if (_e359) {
         metal::int2 _e360 = p_5;
         metal::int2 _e361 = px;
         metal::int2 _e363 = py;
-        param_71 = as_type<metal::int2>(as_type<metal::uint2>(as_type<metal::int2>(as_type<metal::uint2>(_e360) + as_type<metal::uint2>(_e361))) - as_type<metal::uint2>(_e363));
-        bool _e365 = csp_valid_u0028_vi2_u003b(param_71, csk_field);
-        phi_2546_ = _e365;
+        param_74 = as_type<metal::int2>(as_type<metal::uint2>(as_type<metal::int2>(as_type<metal::uint2>(_e360) + as_type<metal::uint2>(_e361))) - as_type<metal::uint2>(_e363));
+        bool _e365 = csp_valid_u0028_vi2_u003b(param_74, csk_field);
+        phi_2543_ = _e365;
     }
-    bool _e367 = phi_2546_;
-    phi_2554_ = _e367;
+    bool _e367 = phi_2543_;
+    phi_2551_ = _e367;
     if (_e367) {
         metal::int2 _e368 = p_5;
         metal::int2 _e369 = px;
-        param_72 = as_type<metal::int2>(as_type<metal::uint2>(_e368) - as_type<metal::uint2>(_e369));
-        bool _e371 = csp_valid_u0028_vi2_u003b(param_72, csk_field);
-        phi_2554_ = _e371;
+        param_75 = as_type<metal::int2>(as_type<metal::uint2>(_e368) - as_type<metal::uint2>(_e369));
+        bool _e371 = csp_valid_u0028_vi2_u003b(param_75, csk_field);
+        phi_2551_ = _e371;
     }
-    bool _e373 = phi_2554_;
-    phi_2562_ = _e373;
+    bool _e373 = phi_2551_;
+    phi_2559_ = _e373;
     if (_e373) {
         metal::int2 _e374 = p_5;
         metal::int2 _e375 = px;
-        param_73 = as_type<metal::int2>(as_type<metal::uint2>(_e374) + as_type<metal::uint2>(_e375));
-        bool _e377 = csp_valid_u0028_vi2_u003b(param_73, csk_field);
-        phi_2562_ = _e377;
+        param_76 = as_type<metal::int2>(as_type<metal::uint2>(_e374) + as_type<metal::uint2>(_e375));
+        bool _e377 = csp_valid_u0028_vi2_u003b(param_76, csk_field);
+        phi_2559_ = _e377;
     }
-    bool _e379 = phi_2562_;
-    phi_2572_ = _e379;
+    bool _e379 = phi_2559_;
+    phi_2569_ = _e379;
     if (_e379) {
         metal::int2 _e380 = p_5;
         metal::int2 _e381 = px;
         metal::int2 _e383 = py;
-        param_74 = as_type<metal::int2>(as_type<metal::uint2>(as_type<metal::int2>(as_type<metal::uint2>(_e380) - as_type<metal::uint2>(_e381))) + as_type<metal::uint2>(_e383));
-        bool _e385 = csp_valid_u0028_vi2_u003b(param_74, csk_field);
-        phi_2572_ = _e385;
+        param_77 = as_type<metal::int2>(as_type<metal::uint2>(as_type<metal::int2>(as_type<metal::uint2>(_e380) - as_type<metal::uint2>(_e381))) + as_type<metal::uint2>(_e383));
+        bool _e385 = csp_valid_u0028_vi2_u003b(param_77, csk_field);
+        phi_2569_ = _e385;
     }
-    bool _e387 = phi_2572_;
-    phi_2580_ = _e387;
+    bool _e387 = phi_2569_;
+    phi_2577_ = _e387;
     if (_e387) {
         metal::int2 _e388 = p_5;
         metal::int2 _e389 = py;
-        param_75 = as_type<metal::int2>(as_type<metal::uint2>(_e388) + as_type<metal::uint2>(_e389));
-        bool _e391 = csp_valid_u0028_vi2_u003b(param_75, csk_field);
-        phi_2580_ = _e391;
+        param_78 = as_type<metal::int2>(as_type<metal::uint2>(_e388) + as_type<metal::uint2>(_e389));
+        bool _e391 = csp_valid_u0028_vi2_u003b(param_78, csk_field);
+        phi_2577_ = _e391;
     }
-    bool _e393 = phi_2580_;
-    phi_2590_ = _e393;
+    bool _e393 = phi_2577_;
+    phi_2587_ = _e393;
     if (_e393) {
         metal::int2 _e394 = p_5;
         metal::int2 _e395 = px;
         metal::int2 _e397 = py;
-        param_76 = as_type<metal::int2>(as_type<metal::uint2>(as_type<metal::int2>(as_type<metal::uint2>(_e394) + as_type<metal::uint2>(_e395))) + as_type<metal::uint2>(_e397));
-        bool _e399 = csp_valid_u0028_vi2_u003b(param_76, csk_field);
-        phi_2590_ = _e399;
+        param_79 = as_type<metal::int2>(as_type<metal::uint2>(as_type<metal::int2>(as_type<metal::uint2>(_e394) + as_type<metal::uint2>(_e395))) + as_type<metal::uint2>(_e397));
+        bool _e399 = csp_valid_u0028_vi2_u003b(param_79, csk_field);
+        phi_2587_ = _e399;
     }
-    bool _e401 = phi_2590_;
+    bool _e401 = phi_2587_;
     if (!(_e401)) {
         return metal::float4(0.0, 0.0, 0.0, 0.0);
     }
@@ -2020,46 +2029,46 @@ metal::float4 cspStack_u0028_vi2_u003b_f1_u003b_f1_u003b_f1_u003b_f1_u003b_vf2_u
         metal::int2 _e418 = p_5;
         metal::int2 _e419 = px;
         metal::int2 _e421 = py;
-        param_77 = as_type<metal::int2>(as_type<metal::uint2>(as_type<metal::int2>(as_type<metal::uint2>(_e418) - as_type<metal::uint2>(_e419))) - as_type<metal::uint2>(_e421));
-        float _e423 = cspH_u0028_vi2_u003b(param_77, csk_field, unnamed, csk_blur);
+        param_80 = as_type<metal::int2>(as_type<metal::uint2>(as_type<metal::int2>(as_type<metal::uint2>(_e418) - as_type<metal::uint2>(_e419))) - as_type<metal::uint2>(_e421));
+        float _e423 = cspH_u0028_vi2_u003b(param_80, csk_field, unnamed, csk_blur);
         a_4 = _e423;
         metal::int2 _e424 = p_5;
         metal::int2 _e425 = py;
-        param_78 = as_type<metal::int2>(as_type<metal::uint2>(_e424) - as_type<metal::uint2>(_e425));
-        float _e427 = cspH_u0028_vi2_u003b(param_78, csk_field, unnamed, csk_blur);
+        param_81 = as_type<metal::int2>(as_type<metal::uint2>(_e424) - as_type<metal::uint2>(_e425));
+        float _e427 = cspH_u0028_vi2_u003b(param_81, csk_field, unnamed, csk_blur);
         b_9 = _e427;
         metal::int2 _e428 = p_5;
         metal::int2 _e429 = px;
         metal::int2 _e431 = py;
-        param_79 = as_type<metal::int2>(as_type<metal::uint2>(as_type<metal::int2>(as_type<metal::uint2>(_e428) + as_type<metal::uint2>(_e429))) - as_type<metal::uint2>(_e431));
-        float _e433 = cspH_u0028_vi2_u003b(param_79, csk_field, unnamed, csk_blur);
+        param_82 = as_type<metal::int2>(as_type<metal::uint2>(as_type<metal::int2>(as_type<metal::uint2>(_e428) + as_type<metal::uint2>(_e429))) - as_type<metal::uint2>(_e431));
+        float _e433 = cspH_u0028_vi2_u003b(param_82, csk_field, unnamed, csk_blur);
         cc = _e433;
         metal::int2 _e434 = p_5;
         metal::int2 _e435 = px;
-        param_80 = as_type<metal::int2>(as_type<metal::uint2>(_e434) - as_type<metal::uint2>(_e435));
-        float _e437 = cspH_u0028_vi2_u003b(param_80, csk_field, unnamed, csk_blur);
+        param_83 = as_type<metal::int2>(as_type<metal::uint2>(_e434) - as_type<metal::uint2>(_e435));
+        float _e437 = cspH_u0028_vi2_u003b(param_83, csk_field, unnamed, csk_blur);
         d_1 = _e437;
         metal::int2 _e438 = p_5;
         metal::int2 _e439 = px;
-        param_81 = as_type<metal::int2>(as_type<metal::uint2>(_e438) + as_type<metal::uint2>(_e439));
-        float _e441 = cspH_u0028_vi2_u003b(param_81, csk_field, unnamed, csk_blur);
+        param_84 = as_type<metal::int2>(as_type<metal::uint2>(_e438) + as_type<metal::uint2>(_e439));
+        float _e441 = cspH_u0028_vi2_u003b(param_84, csk_field, unnamed, csk_blur);
         f = _e441;
         metal::int2 _e442 = p_5;
         metal::int2 _e443 = px;
         metal::int2 _e445 = py;
-        param_82 = as_type<metal::int2>(as_type<metal::uint2>(as_type<metal::int2>(as_type<metal::uint2>(_e442) - as_type<metal::uint2>(_e443))) + as_type<metal::uint2>(_e445));
-        float _e447 = cspH_u0028_vi2_u003b(param_82, csk_field, unnamed, csk_blur);
+        param_85 = as_type<metal::int2>(as_type<metal::uint2>(as_type<metal::int2>(as_type<metal::uint2>(_e442) - as_type<metal::uint2>(_e443))) + as_type<metal::uint2>(_e445));
+        float _e447 = cspH_u0028_vi2_u003b(param_85, csk_field, unnamed, csk_blur);
         g = _e447;
         metal::int2 _e448 = p_5;
         metal::int2 _e449 = py;
-        param_83 = as_type<metal::int2>(as_type<metal::uint2>(_e448) + as_type<metal::uint2>(_e449));
-        float _e451 = cspH_u0028_vi2_u003b(param_83, csk_field, unnamed, csk_blur);
+        param_86 = as_type<metal::int2>(as_type<metal::uint2>(_e448) + as_type<metal::uint2>(_e449));
+        float _e451 = cspH_u0028_vi2_u003b(param_86, csk_field, unnamed, csk_blur);
         q_5 = _e451;
         metal::int2 _e452 = p_5;
         metal::int2 _e453 = px;
         metal::int2 _e455 = py;
-        param_84 = as_type<metal::int2>(as_type<metal::uint2>(as_type<metal::int2>(as_type<metal::uint2>(_e452) + as_type<metal::uint2>(_e453))) + as_type<metal::uint2>(_e455));
-        float _e457 = cspH_u0028_vi2_u003b(param_84, csk_field, unnamed, csk_blur);
+        param_87 = as_type<metal::int2>(as_type<metal::uint2>(as_type<metal::int2>(as_type<metal::uint2>(_e452) + as_type<metal::uint2>(_e453))) + as_type<metal::uint2>(_e455));
+        float _e457 = cspH_u0028_vi2_u003b(param_87, csk_field, unnamed, csk_blur);
         k_5 = _e457;
         float _e458 = cc;
         float _e459 = f;
@@ -2106,19 +2115,19 @@ metal::float4 cspStack_u0028_vi2_u003b_f1_u003b_f1_u003b_f1_u003b_f1_u003b_vf2_u
             local_18 = -1.0;
         } else {
             float _e545 = c_7.dx;
-            param_85 = _e545;
+            param_88 = _e545;
             float _e547 = c_7.dy;
-            param_86 = _e547;
-            float _e548 = cspAspectOf_u0028_f1_u003b_f1_u003b(param_85, param_86);
+            param_89 = _e547;
+            float _e548 = cspAspectOf_u0028_f1_u003b_f1_u003b(param_88, param_89);
             local_18 = _e548;
         }
         float _e549 = local_18;
         c_7.aspect = _e549;
     }
     metal::int2 _e551 = p_5;
-    param_87 = _e551;
-    bool _e552 = csp_base_u0028_vi2_u003b_f1_u003b(param_87, param_88, unnamed, csk_base);
-    float _e553 = param_88;
+    param_90 = _e551;
+    bool _e552 = csp_base_u0028_vi2_u003b_f1_u003b(param_90, param_91, unnamed, csk_base);
+    float _e553 = param_91;
     baseValue = _e553;
     if (_e552) {
         float _e554 = baseValue;
@@ -2130,9 +2139,9 @@ metal::float4 cspStack_u0028_vi2_u003b_f1_u003b_f1_u003b_f1_u003b_f1_u003b_vf2_u
     float _e557 = local_19;
     legacyBase = _e557;
     metal::int2 _e558 = p_5;
-    param_89 = _e558;
-    bool _e559 = csp_landBase_u0028_vi2_u003b_f1_u003b(param_89, param_90, unnamed, csk_landBase);
-    float _e560 = param_90;
+    param_92 = _e558;
+    bool _e559 = csp_landBase_u0028_vi2_u003b_f1_u003b(param_92, param_93, unnamed, csk_landBase);
+    float _e560 = param_93;
     landBaseValue = _e560;
     if (_e559) {
         float _e561 = landBaseValue;
@@ -2169,7 +2178,7 @@ metal::float4 cspStack_u0028_vi2_u003b_f1_u003b_f1_u003b_f1_u003b_f1_u003b_vf2_u
             style_2 = naga_f2i32(_e577 + 0.5);
             int _e580 = i;
             float _e584 = unnamed.u_layerC.inner[_e580][0u];
-            param_91 = _e584;
+            param_94 = _e584;
             int _e585 = i;
             float _e589 = unnamed.u_layerC.inner[_e585][1u];
             flags = naga_f2i32(_e589 + 0.5);
@@ -2178,13 +2187,13 @@ metal::float4 cspStack_u0028_vi2_u003b_f1_u003b_f1_u003b_f1_u003b_f1_u003b_vf2_u
             float _e596 = legacyBase;
             c_7.base = ((_e592 & 2) != 0) ? _e595 : _e596;
             int _e599 = style_2;
-            param_92 = _e599;
-            float _e600 = param_91;
-            param_93 = _e600;
+            param_95 = _e599;
+            float _e600 = param_94;
+            param_96 = _e600;
             CspCtx _e601 = c_7;
-            param_94 = _e601;
-            metal::float2 _e602 = cspLayerValue_u0028_i1_u003b_f1_u003b_struct_u002d_CspCtx_u002d_vi2_u002d_f1_u002d_f1_u002d_f1_u002d_f1_u002d_f1_u002d_f1_u002d_f1_u002d_f1_u002d_f11_u003b(param_92, param_93, param_94, unnamed);
-            CspCtx _e603 = param_94;
+            param_97 = _e601;
+            metal::float2 _e602 = cspLayerValue_u0028_i1_u003b_f1_u003b_struct_u002d_CspCtx_u002d_vi2_u002d_f1_u002d_f1_u002d_f1_u002d_f1_u002d_f1_u002d_f1_u002d_f1_u002d_f1_u002d_f11_u003b(param_95, param_96, param_97, unnamed);
+            CspCtx _e603 = param_97;
             c_7 = _e603;
             v_7 = _e602;
             float _e605 = v_7[1u];
@@ -2194,16 +2203,16 @@ metal::float4 cspStack_u0028_vi2_u003b_f1_u003b_f1_u003b_f1_u003b_f1_u003b_vf2_u
             int _e607 = style_2;
             int _e609 = style_2;
             bool _e611 = (_e607 == 5) || (_e609 == 10);
-            phi_2881_ = _e611;
+            phi_2878_ = _e611;
             if (_e611) {
                 int _e612 = flags;
-                phi_2881_ = (_e612 & 5) != 0;
+                phi_2878_ = (_e612 & 5) != 0;
             }
-            bool _e616 = phi_2881_;
+            bool _e616 = phi_2878_;
             if (_e616) {
                 metal::float2 _e617 = merc_1;
-                param_95 = _e617;
-                uint _e618 = cspWaterClass_u0028_vf2_u003b(param_95, u_waterMask);
+                param_98 = _e617;
+                uint _e618 = cspWaterClass_u0028_vf2_u003b(param_98, u_waterMask);
                 local_21 = _e618;
             } else {
                 local_21 = 0u;
@@ -2212,47 +2221,47 @@ metal::float4 cspStack_u0028_vi2_u003b_f1_u003b_f1_u003b_f1_u003b_f1_u003b_vf2_u
             waterClass = _e619;
             uint _e620 = waterClass;
             bool _e621 = _e620 == 1u;
-            phi_2898_ = _e621;
+            phi_2895_ = _e621;
             if (_e621) {
                 int _e622 = flags;
-                phi_2898_ = (_e622 & 1) != 0;
+                phi_2895_ = (_e622 & 1) != 0;
             }
-            bool _e626 = phi_2898_;
+            bool _e626 = phi_2895_;
             if (_e626) {
                 int _e627 = i;
                 int _e628 = i;
-                param_96 = _e628;
+                param_99 = _e628;
                 float _e630 = c_7.height;
-                param_97 = _e630;
+                param_100 = _e630;
                 metal::float4 _e633 = unnamed.u_layerC.inner[_e627];
-                param_98 = _e633.zw;
-                metal::float4 _e635 = cspWaterColour_u0028_i1_u003b_f1_u003b_vf2_u003b(param_96, param_97, param_98, unnamed);
+                param_101 = _e633.zw;
+                metal::float4 _e635 = cspWaterColour_u0028_i1_u003b_f1_u003b_vf2_u003b(param_99, param_100, param_101, unnamed);
                 local_22 = _e635;
             } else {
                 uint _e636 = waterClass;
                 bool _e637 = _e636 == 2u;
-                phi_2921_ = _e637;
+                phi_2918_ = _e637;
                 if (_e637) {
                     int _e638 = flags;
-                    phi_2921_ = (_e638 & 4) != 0;
+                    phi_2918_ = (_e638 & 4) != 0;
                 }
-                bool _e642 = phi_2921_;
+                bool _e642 = phi_2918_;
                 if (_e642) {
                     int _e643 = i;
                     int _e644 = i;
-                    param_99 = _e644;
+                    param_102 = _e644;
                     float _e646 = c_7.height;
-                    param_100 = _e646;
+                    param_103 = _e646;
                     metal::float4 _e649 = unnamed.u_layerD.inner[_e643];
-                    param_101 = _e649.xy;
-                    metal::float4 _e651 = cspPaletteRange_u0028_i1_u003b_f1_u003b_vf2_u003b(param_99, param_100, param_101, unnamed);
+                    param_104 = _e649.xy;
+                    metal::float4 _e651 = cspPaletteRange_u0028_i1_u003b_f1_u003b_vf2_u003b(param_102, param_103, param_104, unnamed);
                     local_23 = _e651;
                 } else {
                     int _e652 = i;
-                    param_102 = _e652;
+                    param_105 = _e652;
                     float _e654 = v_7[0u];
-                    param_103 = _e654;
-                    metal::float4 _e655 = cspPalette_u0028_i1_u003b_f1_u003b(param_102, param_103, unnamed);
+                    param_106 = _e654;
+                    metal::float4 _e655 = cspPalette_u0028_i1_u003b_f1_u003b(param_105, param_106, unnamed);
                     local_23 = _e655;
                 }
                 metal::float4 _e656 = local_23;
@@ -2262,21 +2271,21 @@ metal::float4 cspStack_u0028_vi2_u003b_f1_u003b_f1_u003b_f1_u003b_f1_u003b_vf2_u
             colour = _e657;
             int _e658 = style_2;
             int _e660 = style_2;
-            float _e663 = param_91;
+            float _e663 = param_94;
             if (((_e658 == 5) || (_e660 == 10)) && (_e663 > 0.0)) {
                 float _e667 = unnamed.u_ambient;
                 float _e669 = unnamed.u_ambient;
                 float _e672 = c_7.sdx;
-                param_104 = _e672;
+                param_107 = _e672;
                 float _e674 = c_7.sdy;
-                param_105 = _e674;
+                param_108 = _e674;
                 float _e676 = unnamed.u_sunAzimuth;
-                param_106 = _e676;
-                float _e677 = cspDirectShade_u0028_f1_u003b_f1_u003b_f1_u003b(param_104, param_105, param_106, unnamed);
+                param_109 = _e676;
+                float _e677 = cspDirectShade_u0028_f1_u003b_f1_u003b_f1_u003b(param_107, param_108, param_109, unnamed);
                 shade = _e667 + ((1.0 - _e669) * _e677);
                 metal::float4 _e680 = colour;
                 float _e682 = shade;
-                float _e685 = param_91;
+                float _e685 = param_94;
                 metal::float3 _e689 = metal::min(_e680.xyz * metal::mix(1.0, 0.33 + (0.82 * _e682), metal::clamp(_e685, 0.0, 1.0)), metal::float3(1.0, 1.0, 1.0));
                 colour[0u] = _e689.x;
                 colour[1u] = _e689.y;
@@ -2292,13 +2301,13 @@ metal::float4 cspStack_u0028_vi2_u003b_f1_u003b_f1_u003b_f1_u003b_f1_u003b_vf2_u
             }
             float _e708 = layer_5[2u];
             metal::float4 _e711 = acc;
-            param_107 = _e711;
+            param_110 = _e711;
             metal::float4 _e712 = colour;
-            param_108 = _e712.xyz;
+            param_111 = _e712.xyz;
             float _e714 = alpha;
-            param_109 = _e714;
-            param_110 = naga_f2i32(_e708 + 0.5);
-            metal::float4 _e715 = cspComposite_u0028_vf4_u003b_vf3_u003b_f1_u003b_i1_u003b(param_107, param_108, param_109, param_110);
+            param_112 = _e714;
+            param_113 = naga_f2i32(_e708 + 0.5);
+            metal::float4 _e715 = cspComposite_u0028_vf4_u003b_vf3_u003b_f1_u003b_i1_u003b(param_110, param_111, param_112, param_113);
             acc = _e715;
             continue;
         } else {
@@ -2311,8 +2320,8 @@ metal::float4 cspStack_u0028_vi2_u003b_f1_u003b_f1_u003b_f1_u003b_f1_u003b_vf2_u
     }
     metal::float4 _e721 = acc;
     float _e724 = acc[3u];
-    param_111 = _e721.xyz / metal::float3(_e724);
-    metal::float3 _e727 = cspApplyAppearance_u0028_vf3_u003b(param_111, unnamed);
+    param_114 = _e721.xyz / metal::float3(_e724);
+    metal::float3 _e727 = cspApplyAppearance_u0028_vf3_u003b(param_114, unnamed);
     straight_1 = _e727;
     metal::float3 _e728 = straight_1;
     float _e730 = acc[3u];
@@ -2491,9 +2500,9 @@ void main_1(
 ) {
     metal::int2 size = {};
     metal::int2 p_6 = {};
-    metal::int2 param_112 = {};
+    metal::int2 param_115 = {};
     float value_7 = {};
-    metal::int2 param_113 = {};
+    metal::int2 param_116 = {};
     metal::float2 cssOffset = {};
     float cosB_1 = {};
     float sinB_1 = {};
@@ -2504,41 +2513,41 @@ void main_1(
     float groundRes_1 = {};
     float local_27 = {};
     metal::float4 spectrum = {};
-    float param_114 = {};
-    metal::float4 terrain = {};
-    metal::int2 param_115 = {};
-    float param_116 = {};
     float param_117 = {};
-    float param_118 = {};
+    metal::float4 terrain = {};
+    metal::int2 param_118 = {};
     float param_119 = {};
-    metal::float2 param_120 = {};
+    float param_120 = {};
+    float param_121 = {};
+    float param_122 = {};
+    metal::float2 param_123 = {};
     metal::int2 px_1 = {};
     metal::int2 py_1 = {};
     bool allValid = {};
-    metal::int2 param_121 = {};
-    metal::int2 param_122 = {};
-    metal::int2 param_123 = {};
     metal::int2 param_124 = {};
     metal::int2 param_125 = {};
     metal::int2 param_126 = {};
     metal::int2 param_127 = {};
     metal::int2 param_128 = {};
-    float a_9 = {};
     metal::int2 param_129 = {};
-    float b_10 = {};
     metal::int2 param_130 = {};
-    float c_8 = {};
     metal::int2 param_131 = {};
-    float d_3 = {};
+    float a_9 = {};
     metal::int2 param_132 = {};
-    float f_1 = {};
+    float b_10 = {};
     metal::int2 param_133 = {};
-    float g_1 = {};
+    float c_8 = {};
     metal::int2 param_134 = {};
-    float q_6 = {};
+    float d_3 = {};
     metal::int2 param_135 = {};
-    float k_6 = {};
+    float f_1 = {};
     metal::int2 param_136 = {};
+    float g_1 = {};
+    metal::int2 param_137 = {};
+    float q_6 = {};
+    metal::int2 param_138 = {};
+    float k_6 = {};
+    metal::int2 param_139 = {};
     bool shaded = {};
     float zFactor_1 = {};
     float res = {};
@@ -2550,13 +2559,13 @@ void main_1(
     float dy_4 = {};
     metal::float4 colour_1 = {};
     bool painted = {};
-    float param_137 = {};
-    float param_138 = {};
-    float param_139 = {};
     float param_140 = {};
-    float northness = {};
     float param_141 = {};
     float param_142 = {};
+    float param_143 = {};
+    float northness = {};
+    float param_144 = {};
+    float param_145 = {};
     float amount = {};
     metal::float3 neutral = {};
     metal::float3 target_1 = {};
@@ -2570,13 +2579,13 @@ void main_1(
     float lineWidth_1 = {};
     bool indexLine_1 = {};
     float shade_1 = {};
-    float param_143 = {};
-    float param_144 = {};
-    float param_145 = {};
     float param_146 = {};
-    float aspect_1 = {};
     float param_147 = {};
     float param_148 = {};
+    float param_149 = {};
+    float aspect_1 = {};
+    float param_150 = {};
+    float param_151 = {};
     float sum_4 = {};
     float total_1 = {};
     int index_1 = {};
@@ -2584,28 +2593,28 @@ void main_1(
     float s_6 = {};
     float weight_1 = {};
     float local_31 = {};
-    float param_149 = {};
-    float param_150 = {};
-    float param_151 = {};
-    float direct = {};
-    float shade_2 = {};
-    float direct_1 = {};
     float param_152 = {};
     float param_153 = {};
     float param_154 = {};
+    float direct = {};
+    float shade_2 = {};
+    float direct_1 = {};
+    float param_155 = {};
+    float param_156 = {};
+    float param_157 = {};
     float shade_3 = {};
     metal::float3 straight_2 = {};
     metal::float3 local_32 = {};
-    metal::float3 param_155 = {};
-    bool phi_3222_ = {};
-    bool phi_3232_ = {};
-    bool phi_3240_ = {};
-    bool phi_3248_ = {};
-    bool phi_3258_ = {};
-    bool phi_3266_ = {};
-    bool phi_3276_ = {};
-    bool phi_3346_ = {};
-    bool phi_3353_ = {};
+    metal::float3 param_158 = {};
+    bool phi_3219_ = {};
+    bool phi_3229_ = {};
+    bool phi_3237_ = {};
+    bool phi_3245_ = {};
+    bool phi_3255_ = {};
+    bool phi_3263_ = {};
+    bool phi_3273_ = {};
+    bool phi_3343_ = {};
+    bool phi_3350_ = {};
     metal::int2 _e372 = csp_size_u0028_(csk_field);
     size = _e372;
     metal::float2 _e373 = v_screenUv_1;
@@ -2613,15 +2622,15 @@ void main_1(
     metal::int2 _e379 = size;
     p_6 = metal::clamp(naga_f2i32(metal::floor(_e373 * static_cast<metal::float2>(_e374))), metal::int2(0, 0), as_type<metal::int2>(as_type<metal::uint2>(_e379) - as_type<metal::uint2>(metal::int2(1, 1))));
     metal::int2 _e382 = p_6;
-    param_112 = _e382;
-    bool _e383 = csp_valid_u0028_vi2_u003b(param_112, csk_field);
+    param_115 = _e382;
+    bool _e383 = csp_valid_u0028_vi2_u003b(param_115, csk_field);
     if (!(_e383)) {
         fragColor = metal::float4(0.0, 0.0, 0.0, 0.0);
         return;
     }
     metal::int2 _e385 = p_6;
-    param_113 = _e385;
-    float _e386 = csp_height_u0028_vi2_u003b(param_113, csk_field);
+    param_116 = _e385;
+    float _e386 = csp_height_u0028_vi2_u003b(param_116, csk_field);
     value_7 = _e386;
     metal::float2 _e387 = v_screenUv_1;
     metal::float2 _e391 = unnamed.u_cssSize;
@@ -2660,26 +2669,26 @@ void main_1(
     float _e453 = local_27;
     groundRes_1 = _e453;
     float _e454 = value_7;
-    param_114 = _e454;
-    metal::float4 _e455 = cspSpectrumColour_u0028_f1_u003b(param_114, unnamed);
+    param_117 = _e454;
+    metal::float4 _e455 = cspSpectrumColour_u0028_f1_u003b(param_117, unnamed);
     float _e457 = unnamed.u_spectrumOpacity;
     spectrum = _e455 * _e457;
     terrain = metal::float4(0.0, 0.0, 0.0, 0.0);
     float _e460 = unnamed.u_stackOn;
     if (_e460 > 0.5) {
         metal::int2 _e462 = p_6;
-        param_115 = _e462;
+        param_118 = _e462;
         float _e463 = value_7;
-        param_116 = _e463;
+        param_119 = _e463;
         float _e464 = groundRes_1;
-        param_117 = _e464;
+        param_120 = _e464;
         float _e465 = cosB_1;
-        param_118 = _e465;
+        param_121 = _e465;
         float _e466 = sinB_1;
-        param_119 = _e466;
+        param_122 = _e466;
         metal::float2 _e467 = merc_2;
-        param_120 = _e467;
-        metal::float4 _e468 = cspStack_u0028_vi2_u003b_f1_u003b_f1_u003b_f1_u003b_f1_u003b_vf2_u003b(param_115, param_116, param_117, param_118, param_119, param_120, csk_field, unnamed, csk_blur, csk_base, csk_landBase, u_waterMask);
+        param_123 = _e467;
+        metal::float4 _e468 = cspStack_u0028_vi2_u003b_f1_u003b_f1_u003b_f1_u003b_f1_u003b_vf2_u003b(param_118, param_119, param_120, param_121, param_122, param_123, csk_field, unnamed, csk_blur, csk_base, csk_landBase, u_waterMask);
         terrain = _e468;
     } else {
         int _e470 = unnamed.u_style;
@@ -2689,135 +2698,135 @@ void main_1(
             metal::int2 _e472 = p_6;
             metal::int2 _e473 = px_1;
             metal::int2 _e475 = py_1;
-            param_121 = as_type<metal::int2>(as_type<metal::uint2>(as_type<metal::int2>(as_type<metal::uint2>(_e472) - as_type<metal::uint2>(_e473))) - as_type<metal::uint2>(_e475));
-            bool _e477 = csp_valid_u0028_vi2_u003b(param_121, csk_field);
-            phi_3222_ = _e477;
+            param_124 = as_type<metal::int2>(as_type<metal::uint2>(as_type<metal::int2>(as_type<metal::uint2>(_e472) - as_type<metal::uint2>(_e473))) - as_type<metal::uint2>(_e475));
+            bool _e477 = csp_valid_u0028_vi2_u003b(param_124, csk_field);
+            phi_3219_ = _e477;
             if (_e477) {
                 metal::int2 _e478 = p_6;
                 metal::int2 _e479 = py_1;
-                param_122 = as_type<metal::int2>(as_type<metal::uint2>(_e478) - as_type<metal::uint2>(_e479));
-                bool _e481 = csp_valid_u0028_vi2_u003b(param_122, csk_field);
-                phi_3222_ = _e481;
+                param_125 = as_type<metal::int2>(as_type<metal::uint2>(_e478) - as_type<metal::uint2>(_e479));
+                bool _e481 = csp_valid_u0028_vi2_u003b(param_125, csk_field);
+                phi_3219_ = _e481;
             }
-            bool _e483 = phi_3222_;
-            phi_3232_ = _e483;
+            bool _e483 = phi_3219_;
+            phi_3229_ = _e483;
             if (_e483) {
                 metal::int2 _e484 = p_6;
                 metal::int2 _e485 = px_1;
                 metal::int2 _e487 = py_1;
-                param_123 = as_type<metal::int2>(as_type<metal::uint2>(as_type<metal::int2>(as_type<metal::uint2>(_e484) + as_type<metal::uint2>(_e485))) - as_type<metal::uint2>(_e487));
-                bool _e489 = csp_valid_u0028_vi2_u003b(param_123, csk_field);
-                phi_3232_ = _e489;
+                param_126 = as_type<metal::int2>(as_type<metal::uint2>(as_type<metal::int2>(as_type<metal::uint2>(_e484) + as_type<metal::uint2>(_e485))) - as_type<metal::uint2>(_e487));
+                bool _e489 = csp_valid_u0028_vi2_u003b(param_126, csk_field);
+                phi_3229_ = _e489;
             }
-            bool _e491 = phi_3232_;
-            phi_3240_ = _e491;
+            bool _e491 = phi_3229_;
+            phi_3237_ = _e491;
             if (_e491) {
                 metal::int2 _e492 = p_6;
                 metal::int2 _e493 = px_1;
-                param_124 = as_type<metal::int2>(as_type<metal::uint2>(_e492) - as_type<metal::uint2>(_e493));
-                bool _e495 = csp_valid_u0028_vi2_u003b(param_124, csk_field);
-                phi_3240_ = _e495;
+                param_127 = as_type<metal::int2>(as_type<metal::uint2>(_e492) - as_type<metal::uint2>(_e493));
+                bool _e495 = csp_valid_u0028_vi2_u003b(param_127, csk_field);
+                phi_3237_ = _e495;
             }
-            bool _e497 = phi_3240_;
-            phi_3248_ = _e497;
+            bool _e497 = phi_3237_;
+            phi_3245_ = _e497;
             if (_e497) {
                 metal::int2 _e498 = p_6;
                 metal::int2 _e499 = px_1;
-                param_125 = as_type<metal::int2>(as_type<metal::uint2>(_e498) + as_type<metal::uint2>(_e499));
-                bool _e501 = csp_valid_u0028_vi2_u003b(param_125, csk_field);
-                phi_3248_ = _e501;
+                param_128 = as_type<metal::int2>(as_type<metal::uint2>(_e498) + as_type<metal::uint2>(_e499));
+                bool _e501 = csp_valid_u0028_vi2_u003b(param_128, csk_field);
+                phi_3245_ = _e501;
             }
-            bool _e503 = phi_3248_;
-            phi_3258_ = _e503;
+            bool _e503 = phi_3245_;
+            phi_3255_ = _e503;
             if (_e503) {
                 metal::int2 _e504 = p_6;
                 metal::int2 _e505 = px_1;
                 metal::int2 _e507 = py_1;
-                param_126 = as_type<metal::int2>(as_type<metal::uint2>(as_type<metal::int2>(as_type<metal::uint2>(_e504) - as_type<metal::uint2>(_e505))) + as_type<metal::uint2>(_e507));
-                bool _e509 = csp_valid_u0028_vi2_u003b(param_126, csk_field);
-                phi_3258_ = _e509;
+                param_129 = as_type<metal::int2>(as_type<metal::uint2>(as_type<metal::int2>(as_type<metal::uint2>(_e504) - as_type<metal::uint2>(_e505))) + as_type<metal::uint2>(_e507));
+                bool _e509 = csp_valid_u0028_vi2_u003b(param_129, csk_field);
+                phi_3255_ = _e509;
             }
-            bool _e511 = phi_3258_;
-            phi_3266_ = _e511;
+            bool _e511 = phi_3255_;
+            phi_3263_ = _e511;
             if (_e511) {
                 metal::int2 _e512 = p_6;
                 metal::int2 _e513 = py_1;
-                param_127 = as_type<metal::int2>(as_type<metal::uint2>(_e512) + as_type<metal::uint2>(_e513));
-                bool _e515 = csp_valid_u0028_vi2_u003b(param_127, csk_field);
-                phi_3266_ = _e515;
+                param_130 = as_type<metal::int2>(as_type<metal::uint2>(_e512) + as_type<metal::uint2>(_e513));
+                bool _e515 = csp_valid_u0028_vi2_u003b(param_130, csk_field);
+                phi_3263_ = _e515;
             }
-            bool _e517 = phi_3266_;
-            phi_3276_ = _e517;
+            bool _e517 = phi_3263_;
+            phi_3273_ = _e517;
             if (_e517) {
                 metal::int2 _e518 = p_6;
                 metal::int2 _e519 = px_1;
                 metal::int2 _e521 = py_1;
-                param_128 = as_type<metal::int2>(as_type<metal::uint2>(as_type<metal::int2>(as_type<metal::uint2>(_e518) + as_type<metal::uint2>(_e519))) + as_type<metal::uint2>(_e521));
-                bool _e523 = csp_valid_u0028_vi2_u003b(param_128, csk_field);
-                phi_3276_ = _e523;
+                param_131 = as_type<metal::int2>(as_type<metal::uint2>(as_type<metal::int2>(as_type<metal::uint2>(_e518) + as_type<metal::uint2>(_e519))) + as_type<metal::uint2>(_e521));
+                bool _e523 = csp_valid_u0028_vi2_u003b(param_131, csk_field);
+                phi_3273_ = _e523;
             }
-            bool _e525 = phi_3276_;
+            bool _e525 = phi_3273_;
             allValid = _e525;
             bool _e526 = allValid;
             if (_e526) {
                 metal::int2 _e527 = p_6;
                 metal::int2 _e528 = px_1;
                 metal::int2 _e530 = py_1;
-                param_129 = as_type<metal::int2>(as_type<metal::uint2>(as_type<metal::int2>(as_type<metal::uint2>(_e527) - as_type<metal::uint2>(_e528))) - as_type<metal::uint2>(_e530));
-                float _e532 = csp_height_u0028_vi2_u003b(param_129, csk_field);
+                param_132 = as_type<metal::int2>(as_type<metal::uint2>(as_type<metal::int2>(as_type<metal::uint2>(_e527) - as_type<metal::uint2>(_e528))) - as_type<metal::uint2>(_e530));
+                float _e532 = csp_height_u0028_vi2_u003b(param_132, csk_field);
                 a_9 = _e532;
                 metal::int2 _e533 = p_6;
                 metal::int2 _e534 = py_1;
-                param_130 = as_type<metal::int2>(as_type<metal::uint2>(_e533) - as_type<metal::uint2>(_e534));
-                float _e536 = csp_height_u0028_vi2_u003b(param_130, csk_field);
+                param_133 = as_type<metal::int2>(as_type<metal::uint2>(_e533) - as_type<metal::uint2>(_e534));
+                float _e536 = csp_height_u0028_vi2_u003b(param_133, csk_field);
                 b_10 = _e536;
                 metal::int2 _e537 = p_6;
                 metal::int2 _e538 = px_1;
                 metal::int2 _e540 = py_1;
-                param_131 = as_type<metal::int2>(as_type<metal::uint2>(as_type<metal::int2>(as_type<metal::uint2>(_e537) + as_type<metal::uint2>(_e538))) - as_type<metal::uint2>(_e540));
-                float _e542 = csp_height_u0028_vi2_u003b(param_131, csk_field);
+                param_134 = as_type<metal::int2>(as_type<metal::uint2>(as_type<metal::int2>(as_type<metal::uint2>(_e537) + as_type<metal::uint2>(_e538))) - as_type<metal::uint2>(_e540));
+                float _e542 = csp_height_u0028_vi2_u003b(param_134, csk_field);
                 c_8 = _e542;
                 metal::int2 _e543 = p_6;
                 metal::int2 _e544 = px_1;
-                param_132 = as_type<metal::int2>(as_type<metal::uint2>(_e543) - as_type<metal::uint2>(_e544));
-                float _e546 = csp_height_u0028_vi2_u003b(param_132, csk_field);
+                param_135 = as_type<metal::int2>(as_type<metal::uint2>(_e543) - as_type<metal::uint2>(_e544));
+                float _e546 = csp_height_u0028_vi2_u003b(param_135, csk_field);
                 d_3 = _e546;
                 metal::int2 _e547 = p_6;
                 metal::int2 _e548 = px_1;
-                param_133 = as_type<metal::int2>(as_type<metal::uint2>(_e547) + as_type<metal::uint2>(_e548));
-                float _e550 = csp_height_u0028_vi2_u003b(param_133, csk_field);
+                param_136 = as_type<metal::int2>(as_type<metal::uint2>(_e547) + as_type<metal::uint2>(_e548));
+                float _e550 = csp_height_u0028_vi2_u003b(param_136, csk_field);
                 f_1 = _e550;
                 metal::int2 _e551 = p_6;
                 metal::int2 _e552 = px_1;
                 metal::int2 _e554 = py_1;
-                param_134 = as_type<metal::int2>(as_type<metal::uint2>(as_type<metal::int2>(as_type<metal::uint2>(_e551) - as_type<metal::uint2>(_e552))) + as_type<metal::uint2>(_e554));
-                float _e556 = csp_height_u0028_vi2_u003b(param_134, csk_field);
+                param_137 = as_type<metal::int2>(as_type<metal::uint2>(as_type<metal::int2>(as_type<metal::uint2>(_e551) - as_type<metal::uint2>(_e552))) + as_type<metal::uint2>(_e554));
+                float _e556 = csp_height_u0028_vi2_u003b(param_137, csk_field);
                 g_1 = _e556;
                 metal::int2 _e557 = p_6;
                 metal::int2 _e558 = py_1;
-                param_135 = as_type<metal::int2>(as_type<metal::uint2>(_e557) + as_type<metal::uint2>(_e558));
-                float _e560 = csp_height_u0028_vi2_u003b(param_135, csk_field);
+                param_138 = as_type<metal::int2>(as_type<metal::uint2>(_e557) + as_type<metal::uint2>(_e558));
+                float _e560 = csp_height_u0028_vi2_u003b(param_138, csk_field);
                 q_6 = _e560;
                 metal::int2 _e561 = p_6;
                 metal::int2 _e562 = px_1;
                 metal::int2 _e564 = py_1;
-                param_136 = as_type<metal::int2>(as_type<metal::uint2>(as_type<metal::int2>(as_type<metal::uint2>(_e561) + as_type<metal::uint2>(_e562))) + as_type<metal::uint2>(_e564));
-                float _e566 = csp_height_u0028_vi2_u003b(param_136, csk_field);
+                param_139 = as_type<metal::int2>(as_type<metal::uint2>(as_type<metal::int2>(as_type<metal::uint2>(_e561) + as_type<metal::uint2>(_e562))) + as_type<metal::uint2>(_e564));
+                float _e566 = csp_height_u0028_vi2_u003b(param_139, csk_field);
                 k_6 = _e566;
                 int _e568 = unnamed.u_style;
                 bool _e569 = _e568 == 0;
-                phi_3346_ = _e569;
+                phi_3343_ = _e569;
                 if (!(_e569)) {
                     int _e572 = unnamed.u_style;
-                    phi_3346_ = _e572 == 1;
+                    phi_3343_ = _e572 == 1;
                 }
-                bool _e575 = phi_3346_;
-                phi_3353_ = _e575;
+                bool _e575 = phi_3343_;
+                phi_3350_ = _e575;
                 if (!(_e575)) {
                     int _e578 = unnamed.u_style;
-                    phi_3353_ = _e578 == 5;
+                    phi_3350_ = _e578 == 5;
                 }
-                bool _e581 = phi_3353_;
+                bool _e581 = phi_3350_;
                 shaded = _e581;
                 float _e582 = groundRes_1;
                 zFactor_1 = 1.0 + (0.024 * metal::pow(metal::max(_e582, 0.0), 0.664));
@@ -2866,8 +2875,8 @@ void main_1(
                 if (_e642 == 2) {
                     float _e644 = dx_4;
                     float _e645 = dy_4;
-                    param_137 = ((metal::atan(metal::length(metal::float2(_e644, _e645)))) * 57.295779513082322865);
-                    metal::float3 _e650 = cspSlopeColour_u0028_f1_u003b(param_137);
+                    param_140 = ((metal::atan(metal::length(metal::float2(_e644, _e645)))) * 57.295779513082322865);
+                    metal::float3 _e650 = cspSlopeColour_u0028_f1_u003b(param_140);
                     colour_1 = metal::float4(_e650.x, _e650.y, _e650.z, 1.0);
                 } else {
                     int _e656 = unnamed.u_style;
@@ -2878,12 +2887,12 @@ void main_1(
                             painted = false;
                         } else {
                             float _e663 = dx_4;
-                            param_138 = _e663;
+                            param_141 = _e663;
                             float _e664 = dy_4;
-                            param_139 = _e664;
-                            float _e665 = cspAspectOf_u0028_f1_u003b_f1_u003b(param_138, param_139);
-                            param_140 = _e665;
-                            metal::float3 _e666 = cspAspectColour_u0028_f1_u003b(param_140);
+                            param_142 = _e664;
+                            float _e665 = cspAspectOf_u0028_f1_u003b_f1_u003b(param_141, param_142);
+                            param_143 = _e665;
+                            metal::float3 _e666 = cspAspectColour_u0028_f1_u003b(param_143);
                             colour_1 = metal::float4(_e666.x, _e666.y, _e666.z, 1.0);
                         }
                     } else {
@@ -2895,10 +2904,10 @@ void main_1(
                                 painted = false;
                             } else {
                                 float _e679 = dx_4;
-                                param_141 = _e679;
+                                param_144 = _e679;
                                 float _e680 = dy_4;
-                                param_142 = _e680;
-                                float _e681 = cspAspectOf_u0028_f1_u003b_f1_u003b(param_141, param_142);
+                                param_145 = _e680;
+                                float _e681 = cspAspectOf_u0028_f1_u003b_f1_u003b(param_144, param_145);
                                 northness = metal::cos(((_e681) * 0.017453292519943295474));
                                 float _e684 = northness;
                                 amount = metal::abs(_e684);
@@ -2980,16 +2989,16 @@ void main_1(
                                     float _e771 = unnamed.u_ambient;
                                     float _e773 = unnamed.u_ambient;
                                     float _e775 = dx_4;
-                                    param_143 = _e775;
+                                    param_146 = _e775;
                                     float _e776 = dy_4;
-                                    param_144 = _e776;
+                                    param_147 = _e776;
                                     float _e778 = unnamed.u_sunAzimuth;
-                                    param_145 = _e778;
-                                    float _e779 = cspDirectShade_u0028_f1_u003b_f1_u003b_f1_u003b(param_143, param_144, param_145, unnamed);
+                                    param_148 = _e778;
+                                    float _e779 = cspDirectShade_u0028_f1_u003b_f1_u003b_f1_u003b(param_146, param_147, param_148, unnamed);
                                     shade_1 = _e771 + ((1.0 - _e773) * _e779);
                                     float _e782 = value_7;
-                                    param_146 = _e782;
-                                    metal::float3 _e783 = cspTintColour_u0028_f1_u003b(param_146);
+                                    param_149 = _e782;
+                                    metal::float3 _e783 = cspTintColour_u0028_f1_u003b(param_149);
                                     float _e784 = shade_1;
                                     metal::float3 _e788 = metal::min(_e783 * (0.33 + (0.82 * _e784)), metal::float3(1.0, 1.0, 1.0));
                                     colour_1 = metal::float4(_e788.x, _e788.y, _e788.z, 1.0);
@@ -2997,10 +3006,10 @@ void main_1(
                                     int _e794 = unnamed.u_style;
                                     if (_e794 == 1) {
                                         float _e796 = dx_4;
-                                        param_147 = _e796;
+                                        param_150 = _e796;
                                         float _e797 = dy_4;
-                                        param_148 = _e797;
-                                        float _e798 = cspAspectOf_u0028_f1_u003b_f1_u003b(param_147, param_148);
+                                        param_151 = _e797;
+                                        float _e798 = cspAspectOf_u0028_f1_u003b_f1_u003b(param_150, param_151);
                                         aspect_1 = _e798;
                                         sum_4 = 0.0;
                                         total_1 = 0.0;
@@ -3036,12 +3045,12 @@ void main_1(
                                                 weight_1 = _e825;
                                                 float _e826 = weight_1;
                                                 float _e827 = dx_4;
-                                                param_149 = _e827;
+                                                param_152 = _e827;
                                                 float _e828 = dy_4;
-                                                param_150 = _e828;
+                                                param_153 = _e828;
                                                 float _e829 = az_2;
-                                                param_151 = _e829;
-                                                float _e830 = cspDirectShade_u0028_f1_u003b_f1_u003b_f1_u003b(param_149, param_150, param_151, unnamed);
+                                                param_154 = _e829;
+                                                float _e830 = cspDirectShade_u0028_f1_u003b_f1_u003b_f1_u003b(param_152, param_153, param_154, unnamed);
                                                 float _e832 = sum_4;
                                                 sum_4 = _e832 + (_e826 * _e830);
                                                 float _e834 = weight_1;
@@ -3064,12 +3073,12 @@ void main_1(
                                         colour_1 = metal::float4(_e852.x, _e852.y, _e852.z, 1.0);
                                     } else {
                                         float _e857 = dx_4;
-                                        param_152 = _e857;
+                                        param_155 = _e857;
                                         float _e858 = dy_4;
-                                        param_153 = _e858;
+                                        param_156 = _e858;
                                         float _e860 = unnamed.u_sunAzimuth;
-                                        param_154 = _e860;
-                                        float _e861 = cspDirectShade_u0028_f1_u003b_f1_u003b_f1_u003b(param_152, param_153, param_154, unnamed);
+                                        param_157 = _e860;
+                                        float _e861 = cspDirectShade_u0028_f1_u003b_f1_u003b_f1_u003b(param_155, param_156, param_157, unnamed);
                                         direct_1 = _e861;
                                         float _e863 = unnamed.u_ambient;
                                         float _e865 = unnamed.u_ambient;
@@ -3089,8 +3098,8 @@ void main_1(
                     float _e878 = colour_1[3u];
                     if (_e878 > 0.0) {
                         metal::float4 _e880 = colour_1;
-                        param_155 = _e880.xyz;
-                        metal::float3 _e882 = cspApplyAppearance_u0028_vf3_u003b(param_155, unnamed);
+                        param_158 = _e880.xyz;
+                        metal::float3 _e882 = cspApplyAppearance_u0028_vf3_u003b(param_158, unnamed);
                         local_32 = _e882;
                     } else {
                         local_32 = metal::float3(0.0, 0.0, 0.0);

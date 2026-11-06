@@ -32,9 +32,12 @@ pub struct Renderer {
     pub(crate) composite: (wgpu::ComputePipeline, wgpu::BindGroupLayout),
     pub(crate) resample: (wgpu::ComputePipeline, wgpu::BindGroupLayout),
     pub(crate) sample: (wgpu::ComputePipeline, wgpu::BindGroupLayout),
+    /// Derived-field passes (wgsl/derive.wgsl): rows, cols, erode, gauss.
+    pub(crate) derive: ([wgpu::ComputePipeline; 4], wgpu::BindGroupLayout),
     /// Absent derived fields bind a 1x1 invalid texture with scale zero.
-    empty_aux: wgpu::TextureView,
-    water: Mutex<wgpu::TextureView>,
+    pub(crate) empty_aux: wgpu::TextureView,
+    /// The water geography, once installed, with its charge.
+    water: Mutex<(wgpu::TextureView, Option<Reservation>)>,
     _resident: Reservation,
     pub adapter: wgpu::AdapterInfo,
 }
@@ -76,6 +79,18 @@ fn compute(
     source: &str,
     entries: &[wgpu::BindGroupLayoutEntry],
 ) -> (wgpu::ComputePipeline, wgpu::BindGroupLayout) {
+    let ([pipeline], layout) = programs(device, label, source, entries, ["main"]);
+    (pipeline, layout)
+}
+
+/// One pipeline per entry point of `source`, sharing one layout.
+fn programs<const N: usize>(
+    device: &wgpu::Device,
+    label: &str,
+    source: &str,
+    entries: &[wgpu::BindGroupLayoutEntry],
+    points: [&str; N],
+) -> ([wgpu::ComputePipeline; N], wgpu::BindGroupLayout) {
     let module = device.create_shader_module(wgpu::ShaderModuleDescriptor {
         label: Some(label),
         source: wgpu::ShaderSource::Wgsl(source.into()),
@@ -86,15 +101,17 @@ fn compute(
         bind_group_layouts: &[Some(&layout)],
         immediate_size: 0,
     });
-    let pipeline = device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
-        label: Some(label),
-        layout: Some(&pipeline_layout),
-        module: &module,
-        entry_point: Some("main"),
-        compilation_options: Default::default(),
-        cache: None,
+    let pipelines = points.map(|point| {
+        device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
+            label: Some(point),
+            layout: Some(&pipeline_layout),
+            module: &module,
+            entry_point: Some(point),
+            compilation_options: Default::default(),
+            cache: None,
+        })
     });
-    (pipeline, layout)
+    (pipelines, layout)
 }
 
 fn entry(binding: u32, visibility: wgpu::ShaderStages, ty: wgpu::BindingType) -> wgpu::BindGroupLayoutEntry {
@@ -106,6 +123,18 @@ fn sampled(dimension: wgpu::TextureViewDimension, sample_type: wgpu::TextureSamp
 }
 
 const FLOAT: wgpu::TextureSampleType = wgpu::TextureSampleType::Float { filterable: false };
+const UINT: wgpu::TextureSampleType = wgpu::TextureSampleType::Uint;
+
+/// Derived fields bound to one shading pass: each view with its downsample
+/// factor, and the field pixel centre -> store coordinate transform
+/// (column-major mat3).
+#[derive(Default)]
+pub(crate) struct AuxViews<'a> {
+    pub blur: Option<(&'a wgpu::TextureView, u32)>,
+    pub base: Option<(&'a wgpu::TextureView, u32)>,
+    pub land_base: Option<(&'a wgpu::TextureView, u32)>,
+    pub transform: [f32; 9],
+}
 
 fn storage(format: wgpu::TextureFormat) -> wgpu::BindingType {
     wgpu::BindingType::StorageTexture {
@@ -188,7 +217,23 @@ impl Renderer {
                 entry(0, c, buffer(wgpu::BufferBindingType::Uniform)),
                 entry(1, c, sampled(wgpu::TextureViewDimension::D2, FLOAT)),
                 entry(2, c, buffer(wgpu::BufferBindingType::Storage { read_only: false })),
+                entry(3, c, sampled(wgpu::TextureViewDimension::D2, FLOAT)),
+                entry(4, c, sampled(wgpu::TextureViewDimension::D2, FLOAT)),
+                entry(5, c, sampled(wgpu::TextureViewDimension::D2, UINT)),
             ],
+        );
+        let derive = programs(
+            &device,
+            "derive",
+            include_str!("wgsl/derive.wgsl"),
+            &[
+                entry(0, c, buffer(wgpu::BufferBindingType::Uniform)),
+                entry(1, c, sampled(wgpu::TextureViewDimension::D2, FLOAT)),
+                entry(2, c, storage(wgpu::TextureFormat::R32Float)),
+                entry(3, c, buffer(wgpu::BufferBindingType::Storage { read_only: false })),
+                entry(4, c, sampled(wgpu::TextureViewDimension::D2, UINT)),
+            ],
+            ["rows", "cols", "erode", "gauss"],
         );
         let tiny = |format, bytes: &[u8]| {
             device
@@ -209,8 +254,8 @@ impl Renderer {
                 )
                 .create_view(&Default::default())
         };
-        let empty_aux = tiny(wgpu::TextureFormat::Rg32Float, &[0; 8]);
-        let water = Mutex::new(tiny(wgpu::TextureFormat::Rgba8Uint, &[0; 4]));
+        let empty_aux = tiny(wgpu::TextureFormat::R32Float, &(-3.0e38f32).to_le_bytes());
+        let water = Mutex::new((tiny(wgpu::TextureFormat::Rgba16Uint, &[0; 8]), None));
         if let Some(error) = scope.pop().await {
             return Err(Error::Device(error.to_string()));
         }
@@ -227,6 +272,7 @@ impl Renderer {
             composite,
             resample,
             sample,
+            derive,
             empty_aux,
             water,
             _resident: resident,
@@ -301,16 +347,15 @@ impl Renderer {
         })
     }
 
-    /// Installs the global water-class mask (`water-geography.js` packing).
-    pub fn set_water_mask(&self, width: u32, height: u32, rgba: &[u8]) -> Result<(), Error> {
-        if width == 0
-            || height == 0
-            || width > self.max_dimension()
-            || height > self.max_dimension()
-            || rgba.len() != width as usize * height as usize * 4
-        {
+    /// Installs the water geography (`water::packed`), charged to the budget.
+    /// Until then every place is land.
+    pub fn install_water(&self, packed: &[u16]) -> Result<(), Error> {
+        let (width, height) = crate::water::TEXTURE;
+        if packed.len() != (width * height * 4) as usize {
             return Err(Error::Input("water-mask shape"));
         }
+        let charge = self.budget.reserve(texture_bytes(width, height, 8))?;
+        let bytes: Vec<u8> = packed.iter().flat_map(|v| v.to_le_bytes()).collect();
         let texture = self.device.create_texture_with_data(
             &self.queue,
             &wgpu::TextureDescriptor {
@@ -319,15 +364,19 @@ impl Renderer {
                 mip_level_count: 1,
                 sample_count: 1,
                 dimension: wgpu::TextureDimension::D2,
-                format: wgpu::TextureFormat::Rgba8Uint,
+                format: wgpu::TextureFormat::Rgba16Uint,
                 usage: wgpu::TextureUsages::TEXTURE_BINDING,
                 view_formats: &[],
             },
             Default::default(),
-            rgba,
+            &bytes,
         );
-        *self.water.lock().unwrap() = texture.create_view(&Default::default());
+        *self.water.lock().unwrap() = (texture.create_view(&Default::default()), Some(charge));
         Ok(())
+    }
+
+    pub(crate) fn water_view(&self) -> wgpu::TextureView {
+        self.water.lock().unwrap().0.clone()
     }
 
     fn shade_pipeline(&self, format: wgpu::TextureFormat) -> wgpu::RenderPipeline {
@@ -376,20 +425,32 @@ impl Renderer {
         encoder: &mut wgpu::CommandEncoder,
         field: &wgpu::TextureView,
         uniforms: &Uniforms,
+        aux: &AuxViews<'_>,
         target: &wgpu::TextureView,
         format: wgpu::TextureFormat,
     ) {
+        let mut uniforms = uniforms.clone();
+        let factor = |a: Option<(&wgpu::TextureView, u32)>| [a.map_or(0.0, |(_, f)| f as f32)];
+        for (name, value) in
+            [("csk_blurScale", aux.blur), ("csk_baseScale", aux.base), ("csk_landBaseScale", aux.land_base)]
+        {
+            uniforms.set(name, &factor(value)).expect("generated aux uniforms");
+        }
+        uniforms.set("csk_auxTransform", &aux.transform).expect("generated aux uniforms");
         let uniform = self.device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("ClearSkies appearance"),
             contents: uniforms.bytes(),
             usage: wgpu::BufferUsages::UNIFORM,
         });
-        let water = self.water.lock().unwrap().clone();
+        let water = self.water_view();
         let mut entries = vec![wgpu::BindGroupEntry { binding: 0, resource: uniform.as_entire_binding() }];
         for (name, spec) in layout::shade()["textures"].as_object().expect("shade layout") {
             let view = match name.as_str() {
                 "csk_field" => field,
                 "u_waterMask" => &water,
+                "csk_blur" => aux.blur.map_or(&self.empty_aux, |(v, _)| v),
+                "csk_base" => aux.base.map_or(&self.empty_aux, |(v, _)| v),
+                "csk_landBase" => aux.land_base.map_or(&self.empty_aux, |(v, _)| v),
                 _ => &self.empty_aux,
             };
             entries.push(wgpu::BindGroupEntry {
@@ -451,7 +512,8 @@ impl Renderer {
         self.poll()?;
         let frame = self.frame(field.width, field.height, uniforms.bytes().len())?;
         let mut encoder = self.device.create_command_encoder(&Default::default());
-        self.encode_shade(&mut encoder, &field.view, uniforms, &Self::frame_view(&frame), FRAME_FORMAT);
+        let aux = AuxViews::default();
+        self.encode_shade(&mut encoder, &field.view, uniforms, &aux, &Self::frame_view(&frame), FRAME_FORMAT);
         self.queue.submit([encoder.finish()]);
         self.retain_until_done((field.charge.clone(), frame.charge.clone()));
         Ok(frame)

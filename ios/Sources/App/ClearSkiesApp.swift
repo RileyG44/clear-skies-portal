@@ -63,6 +63,13 @@ final class PortalModel {
             shell.backend = backend
             ready = true
             backend.start()
+            #if DEBUG
+            // `-cspDebugAct look:missoula` runs one shell action at launch,
+            // for checking a state on a simulator that takes no touches.
+            if let ref = UserDefaults.standard.string(forKey: "cspDebugAct") {
+                backend.send("act", ["ref": ref, "op": "click"])
+            }
+            #endif
             return
         }
         native = nil

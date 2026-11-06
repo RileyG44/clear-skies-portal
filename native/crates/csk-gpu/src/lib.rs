@@ -2,11 +2,14 @@
 //! JS factory through glslang/SPIR-V/naga, shared by wgpu and raw Metal; tile
 //! composition and resampling are native compute programs (`src/wgsl`).
 
+mod derive;
 mod layout;
 mod render;
 mod surface;
 mod terrain;
+pub mod water;
 
+pub use derive::{Derive, WORLD_METRES};
 pub use layout::Uniforms;
 pub use render::{FRAME_FORMAT, Field, Frame, Pixels, Renderer};
 pub use surface::{Presented, Presenter, instance};
