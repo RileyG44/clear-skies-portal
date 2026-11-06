@@ -22,6 +22,8 @@
 
 #define CSK_FETCH_OFFLINE 4
 
+#define CSK_FETCH_NOT_FOUND 5
+
 /**
  * Owns a response's headers and body until `csk_body_free`.
  */
@@ -67,6 +69,11 @@ typedef struct CskFetchRequest {
    * (complete with an empty body), or NULL.
    */
   const char *dest_path;
+  /**
+   * Only restore an existing system transfer or completed file. Never
+   * start a network request; fail with CSK_FETCH_NOT_FOUND if absent.
+   */
+  bool restore_only;
 } CskFetchRequest;
 
 /**
@@ -89,6 +96,11 @@ typedef struct CskTransport {
    * The engine is gone; release `context`.
    */
   void (*release)(void *context);
+  /**
+   * Release a durable public GET archive after its consumer's commit.
+   * May be NULL on platforms without a background download journal.
+   */
+  void (*download_consumed)(void *context, const char *url);
 } CskTransport;
 
 /**

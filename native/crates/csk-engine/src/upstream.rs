@@ -59,6 +59,14 @@ impl Upstream {
         Self { transport, hosts: Mutex::default(), circuits: Mutex::default() }
     }
 
+    pub fn download_consumed(&self, url: &str) {
+        self.transport.download_consumed(url);
+    }
+
+    pub async fn restore_download(&self, req: FetchRequest) -> Result<Option<FetchResponse>, FetchError> {
+        self.transport.restore_download(req).await
+    }
+
     fn lane(&self, host: &str) -> Arc<Semaphore> {
         let mut hosts = self.hosts.lock().unwrap_or_else(|e| e.into_inner());
         hosts.entry(host.to_owned()).or_insert_with(|| Arc::new(Semaphore::new(lanes(host)))).clone()

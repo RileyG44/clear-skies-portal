@@ -131,6 +131,7 @@ impl Engine {
         });
         // A download the system stopped (the app was killed) carries on.
         areas::resume(self);
+        self.dnr_resume();
         dnr_routes::resume(self);
     }
 

@@ -36,6 +36,10 @@
 		FDB30D23ECE4D164644D5CAD /* EngineProxy.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6413F062BCDC8F91FC0CBC3D /* EngineProxy.swift */; };
 		FDFBD1B44164D4C45186E6C2 /* SiteSchemeHandler.swift in Sources */ = {isa = PBXBuildFile; fileRef = B18712F44EDED02F546FBB86 /* SiteSchemeHandler.swift */; };
 		FF3A75180645132EB27FB72E /* MarkupPanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = E844CFD67EFBF05405A8B472 /* MarkupPanel.swift */; };
+		B1611EDFD5585A94EE9DEB17 /* BackgroundDownloads.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB819562E935B01A21CB3FBD /* BackgroundDownloads.swift */; };
+		B3D25E73D7271C727058CB0C /* TransferJournal.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8A21C29706005824AEA99786 /* TransferJournal.swift */; };
+		7B1983BBBE1F5039D958EB65 /* EngineRuntime.swift in Sources */ = {isa = PBXBuildFile; fileRef = 575E87697E619264A5CD3E1F /* EngineRuntime.swift */; };
+		E8CA5D9DA654BEF81917FB17 /* EngineAppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 33F8664E80C97FBDF889F354 /* EngineAppDelegate.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -70,6 +74,10 @@
 		D40250219A657D0A53237861 /* ToolbarPanelContent.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ToolbarPanelContent.swift; sourceTree = "<group>"; };
 		E233CBDAC389F8BDE93C75D6 /* ClearSkies.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = ClearSkies.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		E844CFD67EFBF05405A8B472 /* MarkupPanel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MarkupPanel.swift; sourceTree = "<group>"; };
+		BB819562E935B01A21CB3FBD /* BackgroundDownloads.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BackgroundDownloads.swift; sourceTree = "<group>"; };
+		8A21C29706005824AEA99786 /* TransferJournal.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TransferJournal.swift; sourceTree = "<group>"; };
+		575E87697E619264A5CD3E1F /* EngineRuntime.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EngineRuntime.swift; sourceTree = "<group>"; };
+		33F8664E80C97FBDF889F354 /* EngineAppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EngineAppDelegate.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXGroup section */
@@ -131,6 +139,10 @@
 		74F4BB143886C97D186EB37B /* Engine */ = {
 			isa = PBXGroup;
 			children = (
+				BB819562E935B01A21CB3FBD /* BackgroundDownloads.swift */,
+				8A21C29706005824AEA99786 /* TransferJournal.swift */,
+				575E87697E619264A5CD3E1F /* EngineRuntime.swift */,
+				33F8664E80C97FBDF889F354 /* EngineAppDelegate.swift */,
 				82F37E26101933DE0ABE065D /* LocalEngine.swift */,
 				6F0E2D26A12EDBED7F97D2FC /* NetworkTransport.swift */,
 			);
@@ -340,6 +352,10 @@
 				C5A8DD5A2BBBBF9EA6C339CE /* ItemList.swift in Sources */,
 				7D975955FCB40C65FE63D13E /* ItemRows.swift in Sources */,
 				5D04D08A745F73F15EB7C49C /* LidarViews.swift in Sources */,
+				B1611EDFD5585A94EE9DEB17 /* BackgroundDownloads.swift in Sources */,
+				B3D25E73D7271C727058CB0C /* TransferJournal.swift in Sources */,
+				7B1983BBBE1F5039D958EB65 /* EngineRuntime.swift in Sources */,
+				E8CA5D9DA654BEF81917FB17 /* EngineAppDelegate.swift in Sources */,
 				CAF08CB27D6EC66EAD78B5FA /* LocalEngine.swift in Sources */,
 				7D50214CB292E03CCFE41EE4 /* LocationService.swift in Sources */,
 				0AD40A5672A49C1545F87D1F /* MapChrome.swift in Sources */,

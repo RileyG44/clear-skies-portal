@@ -133,15 +133,26 @@ pub enum FetchError {
     TooLarge,
     #[error("offline")]
     Offline,
+    #[error("no durable download to restore")]
+    NotFound,
 }
 
 pub type FetchFuture = Pin<Box<dyn Future<Output = Result<FetchResponse, FetchError>> + Send>>;
+pub type RestoreFuture = Pin<Box<dyn Future<Output = Result<Option<FetchResponse>, FetchError>> + Send>>;
 
 /// Dropping the returned future must cancel the request. Redirects are not
 /// followed: the engine sees the 3xx and decides (a snapshot re-validates
 /// every hop against its allowlist).
 pub trait Transport: Send + Sync + 'static {
     fn fetch(&self, req: FetchRequest) -> FetchFuture;
+    /// Reattach a system-owned transfer or deliver its durable completed file.
+    /// Never starts a new network request. `None` means there is no saved work.
+    fn restore_download(&self, _req: FetchRequest) -> RestoreFuture {
+        Box::pin(async { Ok(None) })
+    }
+    /// A public archive GET has been committed or rejected by its consumer.
+    /// Platforms may release their durable completed-download copy now.
+    fn download_consumed(&self, _url: &str) {}
 }
 
 #[cfg(test)]
