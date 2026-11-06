@@ -275,6 +275,7 @@ export function startCrow(title, opts = {}) {
   }
 
   function arrive() {
+    if (state === "stopped") return;
     if (document.hidden) return schedule();
     perch = choosePerch(); if (!perch) return;
     const P = perchAt(), vw = innerWidth, vh = innerHeight, L = size();
@@ -293,6 +294,7 @@ export function startCrow(title, opts = {}) {
   }
 
   function leave() {
+    if (state === "stopped") return;
     if (state === "leave" || state === "away") return;
     if (state === "arrive" && fly.t < 0) { perch = fly.from; state = "perch"; }   // still crouched to fly
     const vw = innerWidth, vh = innerHeight, L = size();
@@ -549,9 +551,16 @@ export function startCrow(title, opts = {}) {
     } else if (e && e.clientX !== undefined) pointer = [e.clientX, e.clientY];
     if (state === "away") schedule(); else leave();
   }
-  for (const ev of ["pointermove", "pointerdown", "wheel", "keydown", "touchstart"]) addEventListener(ev, wake, { passive: true });
-  addEventListener("scroll", wake, { passive: true });
-  document.addEventListener("visibilitychange", () => { if (document.hidden) { if (state === "away") clearTimeout(timer); } else if (state === "away") schedule(); });
+  // (every listener goes with the crow when it is stopped)
+  const ac = new AbortController(), on = { passive: true, signal: ac.signal };
+  for (const ev of ["pointermove", "pointerdown", "wheel", "keydown", "touchstart", "scroll"]) addEventListener(ev, wake, on);
+  document.addEventListener("visibilitychange", () => { if (document.hidden) { if (state === "away") clearTimeout(timer); } else if (state === "away") schedule(); }, on);
   schedule();
-  return { get state() { return state; }, get perch() { return perch; }, arrive: () => { clearTimeout(timer); if (state === "away") arrive(); }, leave };
+  // when the page is done with the crow: no more timers, frames or listeners, and its canvas gone
+  function stop() {
+    if (state === "stopped") return;
+    state = "stopped"; ac.abort(); clearTimeout(timer); cancelAnimationFrame(raf); raf = 0;
+    cv.width = cv.height = 0; cv.remove();
+  }
+  return { get state() { return state; }, get perch() { return perch; }, arrive: () => { clearTimeout(timer); if (state === "away") arrive(); }, leave, stop };
 }

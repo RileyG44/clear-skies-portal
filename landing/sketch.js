@@ -1043,6 +1043,7 @@ export function createSketch(canvas, layer, opts = {}) {
 
   let view = { w: 1, h: 1, scale: 1, dpr: 1, left: 0, top: 0 };
   function layout() {
+    if (dead) return;
     const r = canvas.getBoundingClientRect(), dpr = Math.min(2, devicePixelRatio || 1);
     const w = Math.max(1, r.width), h = Math.max(1, r.height);
     const scale = Math.min(h / VIEW.h, w / VIEW.w);
@@ -1067,11 +1068,13 @@ export function createSketch(canvas, layer, opts = {}) {
     const r = canvas.getBoundingClientRect();
     return [VIEW.cx + (cx - r.left - r.width / 2) / view.scale, VIEW.cy - (cy - r.top - r.height / 2) / view.scale];
   };
+  // (every listener is let go when the sketch is destroyed)
+  const ac = new AbortController(), on = { passive: true, signal: ac.signal };
   addEventListener("pointermove", e => {
     const [x, y] = toTree(e.clientX, e.clientY);
     ptr.x = x; ptr.y = y; ptr.in = Math.abs(x - VIEW.cx) < VIEW.w / 2 + 0.1 && y > -0.05 && y < 1.1; ptr.fresh = true;
-  }, { passive: true });
-  addEventListener("pointerdown", e => { const [x, y] = toTree(e.clientX, e.clientY); ptr.x = ptr.px = x; ptr.y = ptr.py = y; }, { passive: true });
+  }, on);
+  addEventListener("pointerdown", e => { const [x, y] = toTree(e.clientX, e.clientY); ptr.x = ptr.px = x; ptr.y = ptr.py = y; }, on);
 
   function render() { renderer.render(scene, cam); }
   function updateLabels(draw) { T.labels.forEach((l, i) => els[i].classList.toggle("on", draw >= l.t)); }
@@ -1079,6 +1082,7 @@ export function createSketch(canvas, layer, opts = {}) {
   if (reduce) for (const f of fall) { f.t = 3 + Math.random() * 6; falling(0); }
   pose();
   let raf = 0, last = 0, start = 0, visible = true, draw = reduce ? 1.2 : 0;
+  let dead = false;   // destroyed (see destroy below)
   function frame(now) {
     raf = requestAnimationFrame(frame);
     if (!start) { start = now; last = now; ptr.px = ptr.x; ptr.py = ptr.y; }
@@ -1097,18 +1101,32 @@ export function createSketch(canvas, layer, opts = {}) {
     }
     physics(dt); if (draw > 1) falling(dt); pose(); updateLabels(draw); render();
   }
-  function play() { if (!raf && visible && !document.hidden) { last = performance.now(); raf = requestAnimationFrame(frame); } }
+  function play() { if (!raf && !dead && visible && !document.hidden) { last = performance.now(); raf = requestAnimationFrame(frame); } }
   function pause() { cancelAnimationFrame(raf); raf = 0; }
-  addEventListener("resize", layout);
-  new ResizeObserver(layout).observe(canvas);
+  addEventListener("resize", layout, on);
+  const ro = new ResizeObserver(layout); ro.observe(canvas);
   layout();
+  let io = null;
   if (reduce) { updateLabels(1.2); render(); }
   else {
-    new IntersectionObserver(es => { visible = es[0].isIntersecting; visible ? play() : pause(); }).observe(canvas);
-    document.addEventListener("visibilitychange", () => document.hidden ? pause() : play());
+    io = new IntersectionObserver(es => { visible = es[0].isIntersecting; visible ? play() : pause(); }); io.observe(canvas);
+    document.addEventListener("visibilitychange", () => document.hidden ? pause() : play(), on);
     play();
   }
+  /* when the page is done with the drawing: stop the loop, let go of every listener and
+     observer, free the GPU's buffers, shaders and textures, and give up the WebGL
+     context itself. The canvas cannot be drawn on again; a new sketch needs a new one. */
+  function destroy() {
+    if (dead) return; dead = true;
+    pause(); visible = false;
+    ac.abort(); ro.disconnect(); if (io) io.disconnect();
+    scene.traverse(o => { if (o.isMesh) { o.geometry.dispose(); o.material.dispose(); } });
+    tex.dispose(); if (leafU) leafU.uAtlas0.value.dispose();
+    renderer.renderLists.dispose(); renderer.dispose(); renderer.forceContextLoss();
+    for (const el of els) el.remove();
+  }
   return {
+    destroy, get destroyed() { return dead; },
     params: P, angles: ang, poseOf: b => [TX[b], TY[b], A[b]], strokes: T.count, bones: n, anchors, pageY, relayout: () => layout(),
     // a point of the drawing in viewport pixels, and the pixels in one drawing unit
     toPage(x, y) { const r = canvas.getBoundingClientRect(); return [r.left + r.width / 2 + (x - VIEW.cx) * view.scale, r.top + r.height / 2 - (y - VIEW.cy) * view.scale]; },

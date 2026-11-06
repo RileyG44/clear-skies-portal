@@ -1,17 +1,22 @@
-/* The seasonal calendar of a bigleaf maple (Acer macrophyllum) in its home range,
-   the low and middle west slope of the Cascades and the Puget lowland.
+/* The seasonal calendar of the maple page's trees, a bigleaf maple (Acer macrophyllum)
+   and a vine maple (Acer circinatum), in their home range: the low and middle west
+   slope of the Cascades and the Puget lowland. They keep the same calendar; they
+   differ in their flowers, their keys and the colours they turn.
 
    Everything is worked out from the visitor's own date, so nothing is fetched. The
    page passes `?date=YYYY-MM-DD` to preview another day.
 
    The calendar is a single "phase" number that runs through the year:
      < 0     dormant: bare limbs, moss and licorice fern green in the winter rain
-     0..0.45 bud break: yellow-green flower tassels hang before the leaves open
+     0..0.45 bud break: bigleaf hangs yellow-green flower tassels before its leaves
+             open; vine maple opens little red-and-white flowers with its first leaves
      0.45..1 leaf-out: new leaves expand, bright yellow-green
      1..1.75 summer: full canopy, deep green, seed keys filling
      1.75..2.2 late summer: the green dulls, keys ripen to tan
-     2.2..2.75 turning: yellow, then gold
-     2.75..3.3 leaf fall: gold, ochre and tan, the ground covered in leaves
+     2.2..2.75 turning: bigleaf yellow, then gold; vine maple orange, and scarlet where
+             the sun reaches
+     2.75..3.3 leaf fall: bigleaf gold, ochre and tan; vine maple scarlet, crimson and
+             orange; the ground covered in leaves
      3.3..3.9 the last leaves
      > 3.9  bare again
    Each leaf adds its own offset to the phase, so trees turn and drop unevenly. */
@@ -66,41 +71,84 @@ export function leafColor(A) {
   return LEAF[LEAF.length - 1][1].slice();
 }
 
-/* Samaras ("seed keys"): green in early summer, tan by autumn, grey-brown through
-   the winter until the last ones blow off in spring. */
-function keyColor(P) {
+/* A vine maple's leaf at leaf phase A, and how much sun it gets (0 deep in the crown's
+   shade, 1 on its sunny face). In shade it turns butter yellow and orange; in the sun it
+   goes orange, then scarlet and crimson. The same leaves are a little bronzed when they
+   open in the sun. */
+const VINE_SHADE = [
+  [0.10, [0.70, 0.66, 0.30]],   // just out of the bud, yellow-green
+  [0.45, [0.62, 0.74, 0.27]],   // new leaf, lime
+  [0.95, [0.42, 0.62, 0.22]],   // spring green
+  [1.35, [0.28, 0.49, 0.18]],   // summer green
+  [1.85, [0.33, 0.47, 0.19]],   // late-summer olive
+  [2.2, [0.55, 0.58, 0.21]],    // first yellowing
+  [2.5, [0.86, 0.75, 0.25]],    // butter yellow
+  [2.8, [0.9, 0.6, 0.2]],       // orange-gold
+  [3.05, [0.84, 0.46, 0.2]],    // orange
+  [3.3, [0.66, 0.42, 0.25]],    // tan
+  [3.7, [0.5, 0.35, 0.21]]      // brown
+];
+const VINE_SUN = [
+  [0.10, [0.72, 0.52, 0.3]],    // opening bronzed
+  [0.45, [0.64, 0.68, 0.28]],
+  [0.95, [0.44, 0.6, 0.22]],
+  [1.35, [0.3, 0.48, 0.18]],
+  [1.85, [0.4, 0.45, 0.19]],    // a red blush on the edges by late summer
+  [2.2, [0.68, 0.45, 0.18]],    // bronzing
+  [2.5, [0.9, 0.44, 0.15]],     // orange
+  [2.8, [0.84, 0.22, 0.12]],    // scarlet
+  [3.05, [0.68, 0.15, 0.13]],   // crimson
+  [3.3, [0.56, 0.24, 0.18]],    // dull red-brown
+  [3.7, [0.48, 0.3, 0.2]]       // brown
+];
+const track = (T, A) => {
+  if (A <= T[0][0]) return T[0][1].slice();
+  for (let i = 1; i < T.length; i++) if (A <= T[i][0]) return mix(T[i - 1][1], T[i][1], (A - T[i - 1][0]) / (T[i][0] - T[i - 1][0]));
+  return T[T.length - 1][1].slice();
+};
+export function vineLeafColor(A, sun = 0.5) {
+  return mix(track(VINE_SHADE, A), track(VINE_SUN, A), smooth(0.2, 0.85, sun));
+}
+
+/* Samaras ("seed keys"): green in early summer (a vine maple's are rosy red), tan by
+   autumn, grey-brown through the winter until the last ones blow off in spring. */
+function keyColor(P, vine) {
+  const young = vine ? [0.74, 0.36, 0.3] : [0.5, 0.62, 0.27];
   if (P < 0) return mix([0.56, 0.47, 0.36], [0.5, 0.44, 0.37], smooth(-0.95, -0.1, P));
-  if (P < 1.4) return mix([0.66, 0.7, 0.32], [0.5, 0.62, 0.27], smooth(0.5, 1.4, P));
-  if (P < 2.6) return mix([0.5, 0.62, 0.27], [0.72, 0.6, 0.38], smooth(1.6, 2.6, P));
+  if (P < 1.4) return mix(vine ? [0.7, 0.5, 0.36] : [0.66, 0.7, 0.32], young, smooth(0.5, 1.4, P));
+  if (P < 2.6) return mix(young, [0.72, 0.6, 0.38], smooth(1.6, 2.6, P));
   return mix([0.72, 0.6, 0.38], [0.58, 0.48, 0.36], smooth(2.6, 4, P));
 }
 
 const MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
 
-export function season(date = new Date()) {
+// species: "bigleaf" or "vine"
+export function season(date = new Date(), species = "bigleaf") {
+  const vine = species === "vine";
   const doy = dayOfYear(date), P = phaseOf(doy);
   // the wet season: October rains through May; moss and licorice fern answer to it
   const wet = doy < 150 ? 1 - smooth(130, 190, doy) : smooth(265, 300, doy);
   const note =
     P < -0.2 ? "bare limbs and seed keys" :
     P < 0.05 ? "buds swelling" :
-    P < 0.45 ? "flower tassels out, first leaves" :
+    P < 0.45 ? (vine ? "red-and-white flowers, first leaves" : "flower tassels out, first leaves") :
     P < 1.0 ? "new leaves, bright yellow-green" :
     P < 1.75 ? "full canopy, deep green" :
     P < 2.2 ? "late-summer green, keys ripening" :
-    P < 2.75 ? "leaves turning yellow and gold" :
-    P < 3.3 ? "gold and tan, leaves falling" :
+    P < 2.75 ? (vine ? "leaves turning orange and scarlet" : "leaves turning yellow and gold") :
+    P < 3.3 ? (vine ? "scarlet and orange, leaves falling" : "gold and tan, leaves falling") :
     P < 3.9 ? "the last leaves coming down" : "bare limbs and seed keys";
   return {
     date, doy, P,
     label: `${date.getDate()} ${MONTHS[date.getMonth()]}`,
     note,
-    leaf: leafColor,
-    // how many flower tassels hang (0..1)
+    // a leaf's colour from its phase and (for a vine maple) the sun it gets
+    leaf: vine ? vineLeafColor : leafColor,
+    // how many flower tassels (bigleaf) or clusters (vine maple) are out (0..1)
     flowers: bump(P, -0.05, 0.12, 0.38, 0.62),
     // seed keys on the tree (0..1) and their colour
     keys: P > 0.45 ? smooth(0.45, 0.9, P) : P < 0.1 ? 0.75 * (1 - smooth(-0.6, 0.05, P)) + 0.05 : 0,
-    keyColor: keyColor(P),
+    keyColor: keyColor(P, vine),
     // licorice fern fronds on the mossy limbs: up with the autumn rain, withered by July
     fern: doy < 200 ? 1 - smooth(150, 185, doy) : smooth(282, 312, doy),
     // moss: vivid in the wet season, dull and gold-green in the August drought
