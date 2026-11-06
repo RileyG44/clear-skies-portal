@@ -5,7 +5,7 @@
 #   build_native.sh <repository root> <output directory>
 #
 # Reads Xcode's PLATFORM_NAME, ARCHS and CONFIGURATION. Debug builds use the
-# `app-dev` profile (optimised, incremental) because unoptimised raster code
+# `app-dev` profile (optimised, without fat LTO) because unoptimised raster code
 # is too slow to judge the map with; Release uses the full LTO profile.
 set -euo pipefail
 root=$1 out=$2

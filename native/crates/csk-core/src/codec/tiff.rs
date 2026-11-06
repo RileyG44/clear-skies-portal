@@ -95,6 +95,44 @@ pub struct Geo {
     pub citation: String,
     /// GDAL_NODATA (42113).
     pub nodata: Option<f64>,
+    /// Every GeoKey (GeoKeyDirectoryTag 34735), resolved.
+    pub keys: Vec<(u16, GeoValue)>,
+    /// ModelTransformationTag (34264), when present.
+    pub transformation: Vec<f64>,
+}
+
+/// A GeoKey's value.
+#[derive(Debug, Clone, PartialEq)]
+pub enum GeoValue {
+    Short(u16),
+    Doubles(Vec<f64>),
+    Ascii(String),
+}
+
+impl Geo {
+    pub fn key(&self, id: u16) -> Option<&GeoValue> {
+        self.keys.iter().find(|(k, _)| *k == id).map(|(_, v)| v)
+    }
+    pub fn short(&self, id: u16) -> Option<u16> {
+        match self.key(id)? {
+            GeoValue::Short(v) => Some(*v),
+            GeoValue::Doubles(d) => d.first().map(|v| *v as u16),
+            GeoValue::Ascii(_) => None,
+        }
+    }
+    pub fn double(&self, id: u16) -> Option<f64> {
+        match self.key(id)? {
+            GeoValue::Doubles(d) => d.first().copied(),
+            GeoValue::Short(v) => Some(f64::from(*v)),
+            GeoValue::Ascii(_) => None,
+        }
+    }
+    pub fn ascii(&self, id: u16) -> Option<&str> {
+        match self.key(id)? {
+            GeoValue::Ascii(s) => Some(s),
+            _ => None,
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -241,6 +279,12 @@ impl<S: Source + ?Sized> Reader<'_, S> {
         )
     }
 
+    /// ASCII with NULs kept, so GeoKey offsets stay aligned.
+    fn raw_text(&self, e: Entry) -> Option<String> {
+        let raw = self.src.bytes(e.at, usize::try_from(e.count.min(MAX_VALUES)).ok()?)?;
+        Some(raw.iter().map(|&b| char::from(b)).collect())
+    }
+
     fn text(&self, e: Entry) -> Option<String> {
         let raw = self.src.bytes(e.at, usize::try_from(e.count.min(MAX_VALUES)).ok()?)?;
         Some(raw.iter().filter(|&&b| b != 0).map(|&b| char::from(b)).collect())
@@ -374,7 +418,31 @@ fn read_geo<S: Source + ?Sized>(r: &Reader<'_, S>, tag: &impl Fn(u16) -> Option<
         Some(e) => parse_nodata(&r.text(e)?),
         None => None,
     };
-    Some(Geo { pixel_scale: nums(33550)?, tiepoint: nums(33922)?, epsg, citation, nodata })
+    let doubles = nums(34736)?;
+    let ascii = tag(34737).map(|e| r.raw_text(e)).unwrap_or(Some(String::new()))?;
+    let mut resolved = Vec::new();
+    for k in keys.get(4..).unwrap_or_default().chunks_exact(4) {
+        let (id, loc, count, off) = (k[0] as u16, k[1] as u16, k[2] as usize, k[3] as usize);
+        let v = match loc {
+            0 => GeoValue::Short(k[3] as u16),
+            34736 => GeoValue::Doubles(doubles.get(off..off + count).unwrap_or_default().to_vec()),
+            34737 => {
+                let s: String = ascii.chars().skip(off).take(count).collect();
+                GeoValue::Ascii(s.trim_end_matches(['|', '\0']).to_owned())
+            }
+            _ => continue,
+        };
+        resolved.push((id, v));
+    }
+    Some(Geo {
+        pixel_scale: nums(33550)?,
+        tiepoint: nums(33922)?,
+        epsg,
+        citation,
+        nodata,
+        keys: resolved,
+        transformation: nums(34264)?,
+    })
 }
 
 #[cfg(test)]

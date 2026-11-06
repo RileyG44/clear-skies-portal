@@ -9,4 +9,4 @@ pub mod predictor;
 pub mod tiff;
 
 pub use block::{DecodeError, decode_block};
-pub use tiff::{Geo, Level, Source, Tiff, TiffError, Windows, parse};
+pub use tiff::{Geo, GeoValue, Level, Source, Tiff, TiffError, Windows, parse};

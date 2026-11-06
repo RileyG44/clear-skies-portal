@@ -62,6 +62,11 @@ typedef struct CskFetchRequest {
    */
   const uint8_t *body;
   size_t body_len;
+  /**
+   * Write the response body to this file path instead of returning it
+   * (complete with an empty body), or NULL.
+   */
+  const char *dest_path;
 } CskFetchRequest;
 
 /**

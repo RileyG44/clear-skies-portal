@@ -256,14 +256,14 @@ html[data-ui-theme="dark"] #cspStartup{background:#111416;color:#ebebeb}
   },true);
 })();
 </script>
-<script type="importmap">{"imports":{"three":"./vendor/three.module.min.js?build=2026-11-06a"}}</script>
-<link rel="modulepreload" href="startup-tree.js?build=2026-11-06a">
+<script type="importmap">{"imports":{"three":"./vendor/three.module.min.js?build=2026-11-06b"}}</script>
+<link rel="modulepreload" href="startup-tree.js?build=2026-11-06b">
 <link rel="modulepreload" href="sketch.js">
 <!-- Prepare the optional drawing during parse; only create its GL context
      once the map has requested its first tiles. Nothing here holds the map. -->
 <script type="module" async>
 var unavailable=function(error){window.CSPBoot.splash.skipTree();console.warn("Start-up tree unavailable",error);return null};
-var drawing=import("./startup-tree.js?build=2026-11-06a").then(function(m){m.prepareStartupTree(window.CSPBoot.splash);return m}).catch(unavailable);
+var drawing=import("./startup-tree.js?build=2026-11-06b").then(function(m){m.prepareStartupTree(window.CSPBoot.splash);return m}).catch(unavailable);
 var start=function(){drawing.then(function(m){if(m)return m.drawStartupTree(window.CSPBoot.splash)}).catch(unavailable)};
 if(window.CSPBoot.done)setTimeout(start,0);else document.documentElement.addEventListener("csp:ready",function(){setTimeout(start,0)},{once:true});
 </script>
@@ -278,10 +278,10 @@ if(window.CSPBoot.done)setTimeout(start,0);else document.documentElement.addEven
   <a id="cspStartupRetry" href="?reload=2026-10-24n">Reload portal</a>
 </section>
 <link rel="preload" href="vendor/fonts/pacifico-regular.ttf" as="font" type="font/ttf" crossorigin>
-<link rel="stylesheet" href="vendor/leaflet.css?build=2026-11-06a">
-<link rel="stylesheet" href="ui-base.css?build=2026-11-06a">
-<link rel="stylesheet" href="ui-theme.css?build=2026-11-06a">
-<link rel="stylesheet" href="ui-system.css?build=2026-11-06a">
+<link rel="stylesheet" href="vendor/leaflet.css?build=2026-11-06b">
+<link rel="stylesheet" href="ui-base.css?build=2026-11-06b">
+<link rel="stylesheet" href="ui-theme.css?build=2026-11-06b">
+<link rel="stylesheet" href="ui-system.css?build=2026-11-06b">
 <!-- inert until the loading cover is gone: hidden controls must not take focus. -->
 <div id="app" inert>
   <div id="side">
@@ -1081,8 +1081,8 @@ if(window.CSPBoot.done)setTimeout(start,0);else document.documentElement.addEven
 </div>
 <div id="paneLive" role="status" aria-live="polite"></div>
 
-<script src="vendor/leaflet.js?build=2026-11-06a"></script>
-<script src="vendor/leaflet-rotate.umd.min.js?build=2026-11-06a"></script>
+<script src="vendor/leaflet.js?build=2026-11-06b"></script>
+<script src="vendor/leaflet-rotate.umd.min.js?build=2026-11-06b"></script>
 <script>
 /* leaflet-rotate wraps Renderer.onAdd(map) and reads map._rotate, but Leaflet's
    Canvas and SVG renderers call Renderer.prototype.onAdd.call(this) with no
@@ -1094,40 +1094,40 @@ if(window.CSPBoot.done)setTimeout(start,0);else document.documentElement.addEven
   L.Renderer.prototype.onAdd=function(map){return onAdd.call(this,map||this._map)};
 })();
 </script>
-<script src="ui-icons.js?build=2026-11-06a"></script>
-<script src="version.js?build=2026-11-06a"></script>
-<script src="mosaic-core.js?build=2026-11-06a"></script>
-<script src="png-stream.js?build=2026-11-06a"></script>
-<script src="terrain-core.js?build=2026-11-06a"></script>
-<script src="terrain-raster.js?build=2026-11-06a"></script>
-<script src="elevation-bands.js?build=2026-11-06a"></script>
-<script src="elevation-tile-core.js?build=2026-11-06a"></script>
-<script src="terrain-drape-core.js?build=2026-11-06a"></script>
-<script src="terrain-drape-pool.js?build=2026-11-06a"></script>
-<script src="public-terrain.js?build=2026-11-06a"></script>
-<script src="tile-pipeline.js?build=2026-11-06a"></script>
-<script src="water-geography-data.js?build=2026-11-06a"></script>
-<script src="water-geography.js?build=2026-11-06a"></script>
-<script src="gpu-terrain-shaders.js?build=2026-11-06a"></script>
-<script src="lidar-render.js?build=2026-11-06a"></script>
-<script src="lidar-studio.js?build=2026-11-06a"></script>
-<script src="analysis-layers.js?build=2026-11-06a"></script>
-<script src="share-state.js?build=2026-11-06a"></script>
-<script src="coordinates.js?build=2026-11-06a"></script>
-<script src="location-search.js?build=2026-11-06a"></script>
-<script src="gpu-terrain-store.js?build=2026-11-06a"></script>
-<script src="gpu-terrain-engine.js?build=2026-11-06a"></script>
-<script src="gpu-terrain-layer.js?build=2026-11-06a"></script>
-<script src="gpu-terrain-3d-cache.js?build=2026-11-06a"></script>
-<script src="gpu-terrain-3d-renderer.js?build=2026-11-06a"></script>
-<script src="gpu-terrain-3d-layer.js?build=2026-11-06a"></script>
-<script src="wa-archaeology.js?build=2026-11-06a"></script>
-<script src="research-contract.js?build=2026-11-06a"></script>
-<script src="point-cloud-core.js?build=2026-11-06a"></script>
-<script src="point-cloud-viewer.js?build=2026-11-06a"></script>
-<script src="app.js?build=2026-11-06a"></script>
-<script src="markup-3d.js?build=2026-11-06a"></script>
-<script src="markup.js?build=2026-11-06a"></script>
-<script src="ui-system.js?build=2026-11-06a"></script>
+<script src="ui-icons.js?build=2026-11-06b"></script>
+<script src="version.js?build=2026-11-06b"></script>
+<script src="mosaic-core.js?build=2026-11-06b"></script>
+<script src="png-stream.js?build=2026-11-06b"></script>
+<script src="terrain-core.js?build=2026-11-06b"></script>
+<script src="terrain-raster.js?build=2026-11-06b"></script>
+<script src="elevation-bands.js?build=2026-11-06b"></script>
+<script src="elevation-tile-core.js?build=2026-11-06b"></script>
+<script src="terrain-drape-core.js?build=2026-11-06b"></script>
+<script src="terrain-drape-pool.js?build=2026-11-06b"></script>
+<script src="public-terrain.js?build=2026-11-06b"></script>
+<script src="tile-pipeline.js?build=2026-11-06b"></script>
+<script src="water-geography-data.js?build=2026-11-06b"></script>
+<script src="water-geography.js?build=2026-11-06b"></script>
+<script src="gpu-terrain-shaders.js?build=2026-11-06b"></script>
+<script src="lidar-render.js?build=2026-11-06b"></script>
+<script src="lidar-studio.js?build=2026-11-06b"></script>
+<script src="analysis-layers.js?build=2026-11-06b"></script>
+<script src="share-state.js?build=2026-11-06b"></script>
+<script src="coordinates.js?build=2026-11-06b"></script>
+<script src="location-search.js?build=2026-11-06b"></script>
+<script src="gpu-terrain-store.js?build=2026-11-06b"></script>
+<script src="gpu-terrain-engine.js?build=2026-11-06b"></script>
+<script src="gpu-terrain-layer.js?build=2026-11-06b"></script>
+<script src="gpu-terrain-3d-cache.js?build=2026-11-06b"></script>
+<script src="gpu-terrain-3d-renderer.js?build=2026-11-06b"></script>
+<script src="gpu-terrain-3d-layer.js?build=2026-11-06b"></script>
+<script src="wa-archaeology.js?build=2026-11-06b"></script>
+<script src="research-contract.js?build=2026-11-06b"></script>
+<script src="point-cloud-core.js?build=2026-11-06b"></script>
+<script src="point-cloud-viewer.js?build=2026-11-06b"></script>
+<script src="app.js?build=2026-11-06b"></script>
+<script src="markup-3d.js?build=2026-11-06b"></script>
+<script src="markup.js?build=2026-11-06b"></script>
+<script src="ui-system.js?build=2026-11-06b"></script>
 </body>
 </html>

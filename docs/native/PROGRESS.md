@@ -54,7 +54,9 @@ Plan: [ARCHITECTURE.md](ARCHITECTURE.md). Phases have exit gates, not dates.
 |---|---|
 | Catalogue, coverage, status | **Done.** `/api/wadnr/coverage` from the portal's project and hillshade-layer lists (7-day cache, stale on failure, 30 s retry); `/api/wadnr/status` truthfully reports no local rasters. |
 | Hillshade export and file query | **Done.** `/api/wadnr/export` (dpi kept at the tile-cache scale, 256 px fallback offline, failures retryable) and `POST /api/wadnr/query`. The transport now carries POST bodies and headers. |
-| Acquisition and ingest (§4.4) | Not started: ZIP64 central directory, zran/staging, strip decoder, DNR projections, tiled TIFF writer, elevation tiles, `/api/wadnr/elev`, `/api/wadnr/warm`. |
+| Acquisition and ingest (§4.4) | **Started.** Direct portal session + file download, ZIP64/CRC-checked extraction, staged publication and recovery, and in-place reads of existing tiled/multi-level TIFFs. `/api/wadnr/elev` and `/api/elev32/wadnr` provide actual valid-pixel coverage and source metadata. `/api/wadnr/warm{,/status,/stop}` has owned cancellation and a durable per-cell cursor, resumed at app relaunch. Limits: 2 GiB archive/output each, 32 rasters/acquisition, 6 GiB prepared store; disk admission preserves the architecture reserve. iOS bulk transfers use unmetered Wi-Fi. Background URLSession, zran, strip transcoding and a unified memory/storage governor remain open. |
+| DNR projections and vertical units | **Started.** LCC 1/2 and Transverse Mercator from GeoKeys, WA State Plane and UTM EPSG codes; independent proj4js points agree to millimetres. Unsupported projections fail closed. Vertical units require file metadata or a documented survey rule (1543 correction; King County East 2021 dataset 1603, metadata 1607). No unit inference from terrain ratios or horizontal units. The general PROJ bake-off and datum transformations remain open. |
+| DNR validation | **Done (spot and focused faults).** Earlier direct CLI and iOS simulator acquisitions returned King County East 2021 at 0.457 m spacing; 1,024 comparisons with USGS had a -0.003 m median difference (not an accuracy claim). Added deterministic checks cover CRC corruption, archive paths, all-members-before-publish validation, missing-source/index reconciliation, vertical metadata, method checks, cancellation ownership and job resume. |
 | Bundled catalogue | **Done.** A 71 KB zstd snapshot of the default scope (69 projects; `csk-cli EXPORT-CATALOG`) seeds the catalogue on first launch: 1 m tiles come at once (first tile 1.6 s cold, was 13 s+) while the archive is listed again in the background. A seeded catalogue serves coverage but never a final "no coverage", since a project may have been published since the snapshot. |
 
 ## Findings while porting
@@ -67,3 +69,25 @@ Plan: [ARCHITECTURE.md](ARCHITECTURE.md). Phases have exit gates, not dates.
 - `cog.js:decodeTile` reads uncompressed and predictor-2 samples as
   little-endian regardless of the file's byte order, and skips predictor 2
   for samples wider than 8 bits. No current USGS product is affected.
+
+## Next implementation priorities
+
+1. Durable platform background transfers and scheduling, with the existing journals
+   as the authority; memory-pressure handling and shared storage admission.
+2. Complete the remaining source/codec paths (Oregon, LERC, strip transcoding),
+   keeping unsupported data retryable and provenance explicit.
+3. Native GPU/shader pipeline and map integration, following the adopted wgpu /
+   Metal comparison; continue science and sync work without adding a hidden WebView.
+
+Current DNR pass: Rust tests, format and clippy, elevation recovery/loading tests,
+route inventory, `npm run check`, and the iOS simulator build pass. A repeated
+interactive simulator check was unavailable because the device tool returned
+"Remote daemon is unavailable"; the earlier real acquisition evidence above is
+kept separate from these current checks.
+
+DNR survey evidence: metadata dataset [1607](https://lidarportal.dnr.wa.gov/download?ids=1607),
+`king_county_east_2021_survey_QA_report.zip`,
+`WGS_QA_king_county_east_2021.pdf` PDF page 3 and
+`ger_king_county_east_2021_lidar_report.pdf` PDF page 6 declare US survey feet,
+NAVD88 and GEOID18. The raster's horizontal projection continues to come from
+its own GeoKeys (the general survey report labels a different State Plane zone).

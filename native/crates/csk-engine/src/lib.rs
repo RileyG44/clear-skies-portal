@@ -8,6 +8,8 @@
 pub mod analysis;
 pub mod areas;
 pub mod dnr;
+pub mod dnr_local;
+pub mod dnr_routes;
 pub mod flight;
 pub mod markup;
 pub mod national;
@@ -75,6 +77,8 @@ pub struct Engine {
     pub downloads: areas::Downloads,
     pub analysis: analysis::Analysis,
     pub dnr: dnr::Dnr,
+    pub dnr_local: dnr_local::DnrLocal,
+    pub dnr_warm: dnr_routes::Warm,
     /// Proxy fetches shared while in flight.
     proxy_flights: flight::Flights<String, Option<(Vec<u8>, String, bool)>>,
     started: Instant,
@@ -82,7 +86,8 @@ pub struct Engine {
 
 /// Features the web client may use (`/api/health` → `features`). Only what
 /// this engine really answers is listed.
-pub const FEATURES: &[&str] = &["overview-elevation", "elev32", "built-in", "markup", "wadnr-dpi"];
+pub const FEATURES: &[&str] =
+    &["overview-elevation", "elev32", "built-in", "markup", "wadnr-dpi", "wadnr-elevation", "wadnr-job-cancel"];
 
 impl Engine {
     pub fn new(config: Config, transport: Arc<dyn Transport>) -> Result<Arc<Self>, EngineError> {
@@ -102,6 +107,7 @@ impl Engine {
         let cog = CogReader::new(store.clone(), upstream.clone(), Usgs::s3_origin());
         let usgs = Arc::new(Usgs::new(catalog, cog));
         let tiles = Tiles::new(store.clone(), upstream.clone(), usgs);
+        let dnr_local = dnr_local::DnrLocal::open(data_dir.join("offline").join("dnr"), &store);
         Ok(Arc::new(Self {
             store,
             upstream,
@@ -110,6 +116,8 @@ impl Engine {
             downloads: areas::Downloads::default(),
             analysis: analysis::Analysis::default(),
             dnr: dnr::Dnr::default(),
+            dnr_local,
+            dnr_warm: dnr_routes::Warm::default(),
             proxy_flights: flight::Flights::default(),
             started: Instant::now(),
         }))
@@ -123,6 +131,7 @@ impl Engine {
         });
         // A download the system stopped (the app was killed) carries on.
         areas::resume(self);
+        dnr_routes::resume(self);
     }
 
     pub async fn handle(self: &Arc<Self>, req: Request) -> Response {

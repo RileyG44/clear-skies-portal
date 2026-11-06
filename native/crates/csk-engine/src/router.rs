@@ -219,12 +219,9 @@ pub async fn handle(engine: &Arc<Engine>, req: Request) -> Response {
                 post(Response::new(405, "text/plain", Vec::new()))
             };
         }
-        "/api/wadnr/warm" | "/api/wadnr/warm/stop" if req.method == "POST" => {
-            return Response::json(
-                501,
-                &json!({"error": "WA DNR downloads are not available in the built-in engine yet."}),
-            );
-        }
+        "/api/wadnr/warm" if req.method == "POST" => return crate::dnr_routes::warm_start(engine, &req),
+        "/api/wadnr/warm/stop" if req.method == "POST" => return crate::dnr_routes::warm_stop(engine, &req),
+        "/api/wadnr/warm" | "/api/wadnr/warm/stop" => return post(Response::new(405, "text/plain", Vec::new())),
         "/api/terrain/analyze" => {
             return if req.method == "POST" {
                 crate::analysis::analyze(engine, &req).await
@@ -271,18 +268,21 @@ async fn route(engine: &Arc<Engine>, req: &Request) -> Response {
         "/api/wadnr/coverage" => return crate::dnr::coverage(engine, req).await,
         "/api/wadnr/status" => return crate::dnr::status(engine),
         "/api/wadnr/export" => return crate::dnr::export(engine, req).await,
-        "/api/wadnr/warm/status" => {
-            return Response::json(
-                200,
-                &json!({"running": false, "total": 0, "done": 0, "bytes": 0, "error": null, "acquisition": engine.dnr_status()}),
-            );
-        }
+        "/api/wadnr/warm/status" => return crate::dnr_routes::warm_status(engine),
         "/api/3dep" => return crate::proxies::dep(engine, req).await,
         "/api/snow" => return crate::proxies::snow(engine, req).await,
         "/api/firms" => return crate::proxies::firms(engine, req).await,
         "/api/reference/nhd" => return crate::proxies::hydro(engine, req).await,
         "/api/snapshot/image" => return crate::proxies::snapshot(engine, req).await,
         _ => {}
+    }
+    if p.starts_with("/api/wadnr/elev/") || p.starts_with("/api/elev32/wadnr/") {
+        let float32 = p.starts_with("/api/elev32/");
+        let (prefix, suffix) = if float32 { ("/api/elev32/wadnr/", "") } else { ("/api/wadnr/elev/", ".png") };
+        let Some((z, x, y)) = tile_coords(p, prefix, suffix, 18) else {
+            return Response::json(400, &json!({"error": "bad DNR elevation tile path"}));
+        };
+        return crate::dnr_routes::elevation(engine, req, z, x, y, float32).await;
     }
     if let Some(rest) = p.strip_prefix("/api/usgs/tile/") {
         return styled(engine, rest).await;

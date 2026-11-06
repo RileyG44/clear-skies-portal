@@ -5,6 +5,8 @@
 //! Phase 1's PROJ / proj4rs bake-off replaces the UTM series for datum-aware
 //! work; these stay as the reference the goldens were frozen from.
 
+pub mod proj;
+
 use std::f64::consts::{FRAC_PI_2, FRAC_PI_4, PI};
 
 const A: f64 = 6_378_137.0;

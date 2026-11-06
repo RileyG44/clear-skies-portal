@@ -3,9 +3,8 @@
 //! bounding boxes are candidates, never pixel provenance; a failed lookup
 //! is unknown coverage, never "none".
 //!
-//! Direct acquisition and ingest of DNR rasters (ARCHITECTURE.md §4.4) is
-//! the next part of phase 4; until then `status` truthfully reports no
-//! local rasters and health does not offer `wadnr-elevation`.
+//! Direct acquisition, ingestion and elevation tiles live in `dnr_local`
+//! and `dnr_routes`.
 
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
@@ -181,10 +180,9 @@ impl Engine {
         }
     }
 
-    /// Local DNR rasters (none until acquisition lands).
+    /// Local DNR rasters and acquisition.
     pub fn dnr_status(&self) -> Value {
-        json!({"revision": 0, "files": 0, "cachedBounds": [], "bytes": 0, "maxBytes": 0,
-               "archive": {"available": false}, "active": null, "queued": 0})
+        self.dnr_local.status()
     }
 }
 

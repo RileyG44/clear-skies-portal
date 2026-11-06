@@ -110,6 +110,27 @@ CREATE TABLE IF NOT EXISTS pinned.refs (
 ) WITHOUT ROWID;
 CREATE INDEX IF NOT EXISTS pinned.refs_key ON refs(key);
 
+-- Prepared WA DNR rasters and the areas already checked per dataset.
+CREATE TABLE IF NOT EXISTS pinned.dnr_files (
+  key TEXT PRIMARY KEY,
+  json TEXT NOT NULL,
+  added INTEGER NOT NULL,
+  used INTEGER NOT NULL
+) WITHOUT ROWID;
+CREATE TABLE IF NOT EXISTS pinned.dnr_regions (
+  dataset INTEGER NOT NULL,
+  w REAL NOT NULL, s REAL NOT NULL, e REAL NOT NULL, n REAL NOT NULL
+);
+CREATE INDEX IF NOT EXISTS pinned.dnr_regions_ds ON dnr_regions(dataset);
+CREATE TABLE IF NOT EXISTS pinned.dnr_state (
+  id INTEGER PRIMARY KEY CHECK (id = 1),
+  revision INTEGER NOT NULL
+);
+CREATE TABLE IF NOT EXISTS pinned.dnr_download (
+  id INTEGER PRIMARY KEY CHECK (id = 1),
+  json TEXT NOT NULL
+);
+
 -- Download jobs: device-local progress, resumable after the app is killed.
 CREATE TABLE IF NOT EXISTS pinned.jobs (
   id TEXT PRIMARY KEY,
