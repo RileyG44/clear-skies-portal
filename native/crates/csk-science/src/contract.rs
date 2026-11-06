@@ -154,6 +154,15 @@ impl Request {
         }
         Value::Object(o)
     }
+
+    /// Peak transient bytes, including morphology's physically padded closing.
+    pub fn scratch_bytes(&self) -> usize {
+        if self.product == "moraine" {
+            crate::moraine::scratch_bytes(self.width, self.height, self.resolution)
+        } else {
+            self.width * self.height * 256 + (1 << 20)
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -240,6 +249,7 @@ fn run_glacial(req: &Request, grid: &[f32], p: &str) -> Result<(Product, &'stati
         "glacial" => {
             (glacial::glacial_margin(grid, w, h, cell, Radius::square(radius)), "Possible glacial-margin morphology")
         }
+        "moraine" => (crate::moraine::analyze(grid, w, h, cell), "Moraine leads (Beta)"),
         "flood" => {
             (glacial::flood_channel(grid, w, h, cell, Radius::square(radius)), "Possible flood-channel morphology")
         }
@@ -335,7 +345,7 @@ mod tests {
                 100.0 - (x * x + y * y).sqrt()
             })
             .collect();
-        for p in TERRAIN_PRODUCTS {
+        for p in PRODUCTS {
             let r = Request::new(&Raw {
                 product: p,
                 scale: "fine",

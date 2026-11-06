@@ -27,14 +27,14 @@ struct Frames(LruCache<String, Arc<Frame>>, usize);
 
 pub struct Analysis {
     cache: Mutex<Frames>,
-    running: Semaphore,
+    running: Arc<Semaphore>,
 }
 
 impl Default for Analysis {
     fn default() -> Self {
         Self {
             cache: Mutex::new(Frames(LruCache::new(NonZeroUsize::new(256).expect("nonzero")), 0)),
-            running: Semaphore::new(2),
+            running: Arc::new(Semaphore::new(2)),
         }
     }
 }
@@ -120,13 +120,13 @@ pub async fn analyze(engine: &Arc<Engine>, req: &Request) -> Response {
         response.reservation = Some(reservation);
         return response;
     }
-    let Ok(_permit) = engine.analysis.running.acquire().await else {
+    let Ok(permit) = engine.analysis.running.clone().acquire_owned().await else {
         return bad(503, "terrain analysis engine is busy");
     };
     // Covers input conversion, product intermediates (including solar horizon
     // planes and drainage queues) and encoded output. It stays with the worker
     // even when its async caller is cancelled.
-    let estimate = request.width * request.height * 256 + (1 << 20);
+    let estimate = request.scratch_bytes();
     let mut reservation = match engine.memory.reserve(estimate) {
         Ok(r) => r,
         Err(_) => {
@@ -140,6 +140,10 @@ pub async fn analyze(engine: &Arc<Engine>, req: &Request) -> Response {
     };
     let grid: Vec<f32> = req.body.chunks_exact(4).map(|c| f32::from_le_bytes([c[0], c[1], c[2], c[3]])).collect();
     let result = tokio::task::spawn_blocking(move || {
+        // spawn_blocking continues after its async caller is cancelled. Keep
+        // the CPU slot with the worker for its complete lifetime, just as the
+        // memory reservation stays with it.
+        let _permit = permit;
         let body = contract::run(&request, &grid)
             .map(|(p, label, notice)| contract::encode(&p, request.width, request.height, label, notice.as_ref()))?;
         drop(grid);
@@ -204,7 +208,11 @@ mod tests {
         assert_eq!(e.handle(ask("svf", "application/octet-stream")).await.get("X-Cache"), Some("HIT"));
         assert_eq!(e.handle(ask("svf", "text/plain")).await.status, 415);
         assert_eq!(e.handle(ask("nope", "application/octet-stream")).await.status, 400);
-        assert_eq!(e.handle(ask("moraine", "application/octet-stream")).await.status, 501);
+        let moraine = e.handle(ask("moraine", "application/octet-stream")).await;
+        assert_eq!(moraine.status, 200);
+        assert_eq!(&moraine.body[..4], b"CSPA");
+        assert_eq!(e.handle(ask("moraine", "application/octet-stream")).await.get("X-Cache"), Some("HIT"));
+        drop(moraine);
         e.analysis.purge_memory();
         assert_eq!(e.memory.stats().used, r.body.capacity());
         drop(r);
@@ -216,5 +224,13 @@ mod tests {
         assert_eq!(e.memory.stats().used, 0);
         e.memory.set_limit(256 << 20);
         assert_eq!(e.handle(ask("svf", "application/octet-stream")).await.status, 200);
+        e.analysis.purge_memory();
+        e.memory.set_limit(1024);
+        let refused = e.handle(ask("moraine", "application/octet-stream")).await;
+        assert_eq!(refused.status, 503);
+        assert_eq!(refused.get("Retry-After"), Some("2"));
+        assert_eq!(e.memory.stats().used, 0);
+        e.memory.set_limit(256 << 20);
+        assert_eq!(e.handle(ask("moraine", "application/octet-stream")).await.status, 200);
     }
 }

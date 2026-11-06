@@ -9,6 +9,7 @@
 pub mod contract;
 pub mod fabric;
 pub mod glacial;
+pub mod moraine;
 pub mod terrain;
 
 /// A product's output.

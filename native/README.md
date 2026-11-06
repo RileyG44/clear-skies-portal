@@ -18,4 +18,9 @@ first use.
   `goldens.json` from ground truth and records whether today's `cog.js`
   matches each case. The committed files are the contract: regenerate only
   to add cases, and check that existing block hashes do not change.
+- `fixtures/moraine/` — 13 frozen JavaScript analysis cases, including the
+  maximum grid size, missing terrain and confounders. `generate.cjs` records
+  input float32 grids and complete CSPA reference frames together; native tests
+  compare every raster bit and metadata field. Regenerate only for a deliberate
+  scientific-contract change.
 - `inventory/routes.js` — writes `docs/native/ROUTES.md`.
