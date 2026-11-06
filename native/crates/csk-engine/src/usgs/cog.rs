@@ -9,6 +9,7 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use csk_core::codec::{self, Tiff, TiffError, Windows};
+use csk_core::resource::{Budget, Samples};
 use csk_store::{Kind, Store};
 use lru::LruCache;
 
@@ -46,14 +47,15 @@ pub enum ReadError {
 }
 
 type BlockKey = (Arc<str>, usize, u32);
-type BlockResult = Result<Option<Arc<[f32]>>, ReadError>;
+type BlockResult = Result<Option<Arc<Samples>>, ReadError>;
 
 pub struct CogReader {
     store: Arc<Store>,
     upstream: Arc<Upstream>,
     base_url: String,
     headers: Mutex<LruCache<Arc<str>, Arc<Tiff>>>,
-    blocks: Mutex<LruCache<BlockKey, Arc<[f32]>>>,
+    blocks: Mutex<LruCache<BlockKey, Arc<Samples>>>,
+    memory: Arc<Budget>,
     header_flights: Flights<Arc<str>, Result<Arc<Tiff>, ReadError>>,
     block_flights: Flights<BlockKey, BlockResult>,
 }
@@ -66,7 +68,17 @@ impl CogReader {
     }
     /// `base_url` is the bucket origin, e.g. `https://prd-tnm.s3.amazonaws.com`.
     pub fn new(store: Arc<Store>, upstream: Arc<Upstream>, base_url: impl Into<String>) -> Arc<Self> {
+        Self::with_memory(store, upstream, base_url, Budget::new(256 << 20))
+    }
+
+    pub fn with_memory(
+        store: Arc<Store>,
+        upstream: Arc<Upstream>,
+        base_url: impl Into<String>,
+        memory: Arc<Budget>,
+    ) -> Arc<Self> {
         Arc::new(Self {
+            memory,
             store,
             upstream,
             base_url: base_url.into(),
@@ -191,7 +203,7 @@ impl CogReader {
         level: usize,
         tx: u32,
         ty: u32,
-    ) -> Result<Option<Arc<[f32]>>, ReadError> {
+    ) -> Result<Option<Arc<Samples>>, ReadError> {
         let lv = &tiff.levels[level];
         let idx = ty * lv.blocks_across() + tx;
         let bk: BlockKey = (Arc::from(key), level, idx);
@@ -210,22 +222,48 @@ impl CogReader {
         let out = self
             .block_flights
             .run(bk.clone(), move || async move {
-                let raw = me.range(&k.0, off, off + count - 1).await?;
+                let level = &t.levels[k.1];
+                let samples = u64::from(level.block_width)
+                    * u64::from(level.block_height)
+                    * u64::from(level.samples_per_pixel.max(1));
+                let output = samples
+                    .checked_mul(4)
+                    .filter(|v| *v <= 32 << 20)
+                    .ok_or_else(|| ReadError::Decode("decoded block exceeds 32 MiB".into()))?
+                    as usize;
+                let scratch = samples
+                    .checked_mul(u64::from(level.bits_per_sample).div_ceil(8))
+                    .and_then(|v| v.checked_add(count))
+                    .filter(|v| *v <= 64 << 20)
+                    .ok_or_else(|| ReadError::Decode("decode scratch exceeds 64 MiB".into()))?
+                    as usize;
+                let mut reservation = match me.memory.reserve(output + scratch) {
+                    Ok(r) => r,
+                    Err(_) => {
+                        me.purge_memory();
+                        me.memory.reserve(output + scratch).map_err(|e| ReadError::Decode(e.to_string()))?
+                    }
+                };
+                let last =
+                    off.checked_add(count - 1).ok_or_else(|| ReadError::Decode("block offset overflow".into()))?;
+                let raw = me.range(&k.0, off, last).await?;
                 let px = tokio::task::spawn_blocking(move || {
-                    codec::decode_block(&raw, &t.levels[k.1], t.little_endian)
-                        .map_err(|e| ReadError::Decode(e.to_string()))
+                    let px = codec::decode_block(&raw, &t.levels[k.1], t.little_endian)
+                        .map_err(|e| ReadError::Decode(e.to_string()))?;
+                    drop(raw);
+                    reservation.shrink(output);
+                    Ok::<_, ReadError>(Arc::new(Samples::admitted(px, reservation)))
                 })
                 .await
                 .map_err(|_| ReadError::Stopped)??;
-                let px: Arc<[f32]> = px.into();
                 let mut cache = me.blocks.lock().unwrap_or_else(|e| e.into_inner());
                 cache.put(k, px.clone());
                 // DNR blocks may be much larger than USGS's 256² blocks.
                 // A count limit alone is not a memory budget.
-                let mut bytes: usize = cache.iter().map(|(_, b)| std::mem::size_of_val(b.as_ref())).sum();
+                let mut bytes: usize = cache.iter().map(|(_, b)| b.len() * 4).sum();
                 while bytes > BLOCK_BYTES {
                     let Some((_, b)) = cache.pop_lru() else { break };
-                    bytes -= std::mem::size_of_val(b.as_ref());
+                    bytes -= b.len() * 4;
                 }
                 Ok(Some(px))
             })

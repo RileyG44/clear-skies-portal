@@ -19,7 +19,11 @@ const CACHE_BYTES: usize = 64 << 20;
 const ENGINE_LABEL: &str = "built-in";
 
 /// Frames by request key, and their total bytes.
-struct Frames(LruCache<String, Arc<Vec<u8>>>, usize);
+struct Frame {
+    body: Vec<u8>,
+    _reservation: csk_core::resource::Reservation,
+}
+struct Frames(LruCache<String, Arc<Frame>>, usize);
 
 pub struct Analysis {
     cache: Mutex<Frames>,
@@ -42,19 +46,19 @@ impl Analysis {
         cache.1 = 0;
     }
 
-    fn get(&self, key: &str) -> Option<Arc<Vec<u8>>> {
+    fn get(&self, key: &str) -> Option<Arc<Frame>> {
         self.cache.lock().unwrap_or_else(|e| e.into_inner()).0.get(key).cloned()
     }
 
-    fn put(&self, key: String, frame: Arc<Vec<u8>>) {
+    fn put(&self, key: String, frame: Arc<Frame>) {
         let mut c = self.cache.lock().unwrap_or_else(|e| e.into_inner());
-        c.1 += frame.len();
+        c.1 += frame.body.len();
         if let Some((_, old)) = c.0.push(key, frame) {
-            c.1 -= old.len();
+            c.1 -= old.body.len();
         }
         while c.1 > CACHE_BYTES {
             match c.0.pop_lru() {
-                Some((_, f)) => c.1 -= f.len(),
+                Some((_, f)) => c.1 -= f.body.len(),
                 None => break,
             }
         }
@@ -105,28 +109,58 @@ pub async fn analyze(engine: &Arc<Engine>, req: &Request) -> Response {
         request.options_json()
     );
     if let Some(frame) = engine.analysis.get(&key) {
-        return Response::new(200, contract::MIME, frame.to_vec())
+        let reservation = match engine.memory.reserve(frame.body.len()) {
+            Ok(r) => r,
+            Err(_) => return bad(503, "terrain analysis is waiting for memory").header("Retry-After", "2"),
+        };
+        let mut response = Response::new(200, contract::MIME, frame.body.clone())
             .header("X-Cache", "HIT")
             .header("X-CSP-Analysis-Engine", ENGINE_LABEL)
             .header("Cache-Control", "no-store");
+        response.reservation = Some(reservation);
+        return response;
     }
     let Ok(_permit) = engine.analysis.running.acquire().await else {
         return bad(503, "terrain analysis engine is busy");
     };
+    // Covers input conversion, product intermediates (including solar horizon
+    // planes and drainage queues) and encoded output. It stays with the worker
+    // even when its async caller is cancelled.
+    let estimate = request.width * request.height * 256 + (1 << 20);
+    let mut reservation = match engine.memory.reserve(estimate) {
+        Ok(r) => r,
+        Err(_) => {
+            engine.analysis.purge_memory();
+            engine.tiles.usgs.cog.purge_memory();
+            match engine.memory.reserve(estimate) {
+                Ok(r) => r,
+                Err(_) => return bad(503, "terrain analysis is waiting for memory").header("Retry-After", "2"),
+            }
+        }
+    };
     let grid: Vec<f32> = req.body.chunks_exact(4).map(|c| f32::from_le_bytes([c[0], c[1], c[2], c[3]])).collect();
     let result = tokio::task::spawn_blocking(move || {
-        contract::run(&request, &grid)
-            .map(|(p, label, notice)| contract::encode(&p, request.width, request.height, label, notice.as_ref()))
+        let body = contract::run(&request, &grid)
+            .map(|(p, label, notice)| contract::encode(&p, request.width, request.height, label, notice.as_ref()))?;
+        drop(grid);
+        reservation.shrink(body.capacity());
+        Ok::<_, RunError>(Frame { body, _reservation: reservation })
     })
     .await;
     match result {
         Ok(Ok(frame)) => {
+            let response_reservation = match engine.memory.reserve(frame.body.len()) {
+                Ok(r) => r,
+                Err(_) => return bad(503, "terrain analysis is waiting for memory").header("Retry-After", "2"),
+            };
             let frame = Arc::new(frame);
             engine.analysis.put(key, frame.clone());
-            Response::new(200, contract::MIME, frame.to_vec())
+            let mut response = Response::new(200, contract::MIME, frame.body.clone())
                 .header("X-Cache", "MISS")
                 .header("X-CSP-Analysis-Engine", ENGINE_LABEL)
-                .header("Cache-Control", "no-store")
+                .header("Cache-Control", "no-store");
+            response.reservation = Some(response_reservation);
+            response
         }
         Ok(Err(RunError::Invalid(m))) => bad(422, &m),
         // Not yet native: the page computes it in its own worker instead.
@@ -171,5 +205,16 @@ mod tests {
         assert_eq!(e.handle(ask("svf", "text/plain")).await.status, 415);
         assert_eq!(e.handle(ask("nope", "application/octet-stream")).await.status, 400);
         assert_eq!(e.handle(ask("moraine", "application/octet-stream")).await.status, 501);
+        e.analysis.purge_memory();
+        assert_eq!(e.memory.stats().used, r.body.capacity());
+        drop(r);
+        assert_eq!(e.memory.stats().used, 0);
+        e.memory.set_limit(1024);
+        let refused = e.handle(ask("svf", "application/octet-stream")).await;
+        assert_eq!(refused.status, 503);
+        assert_eq!(refused.get("Retry-After"), Some("2"));
+        assert_eq!(e.memory.stats().used, 0);
+        e.memory.set_limit(256 << 20);
+        assert_eq!(e.handle(ask("svf", "application/octet-stream")).await.status, 200);
     }
 }

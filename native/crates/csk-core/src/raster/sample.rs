@@ -7,6 +7,7 @@
 use std::sync::Arc;
 
 use crate::geo::{self, TileBounds};
+use crate::resource::Samples;
 
 /// Exact projections are made every `LATTICE_STEP` grid points and
 /// interpolated between, as GDAL's approximate transformer does. The error
@@ -129,7 +130,7 @@ pub struct BlockRaster {
     pub block_width: u32,
     pub block_height: u32,
     /// Blocks in row-major block order; `None` where not fetched or empty.
-    pub blocks: Vec<Option<Arc<[f32]>>>,
+    pub blocks: Vec<Option<Arc<Samples>>>,
     /// Upper-left corner of the upper-left pixel, in the source CRS.
     pub origin_x: f64,
     pub origin_y: f64,
@@ -268,7 +269,7 @@ mod tests {
                         b[(y * bw + x) as usize] = plane(e, n) as f32;
                     }
                 }
-                blocks.push(Some(Arc::from(b)));
+                blocks.push(Some(Arc::new(Samples::from(b))));
             }
         }
         let r = BlockRaster {

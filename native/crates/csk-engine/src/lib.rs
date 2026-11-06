@@ -29,6 +29,7 @@ use csk_store::{Kind, Store, UserStore};
 use serde::Deserialize;
 use serde_json::json;
 
+pub use csk_core::resource::Reservation as MemoryReservation;
 pub use router::{Request, Response};
 use tiles::Tiles;
 use transport::{FetchRequest, Transport};
@@ -71,6 +72,7 @@ pub enum EngineError {
 }
 
 pub struct Engine {
+    pub memory: Arc<csk_core::resource::Budget>,
     pub work: Arc<work::Work>,
     pub store: Arc<Store>,
     pub upstream: Arc<Upstream>,
@@ -106,11 +108,13 @@ impl Engine {
         let scope =
             config.usgs_scope.unwrap_or_else(|| usgs::catalog::DEFAULT_SCOPE.iter().map(|s| (*s).to_owned()).collect());
         let catalog = Catalog::new(store.clone(), upstream.clone(), scope);
-        let cog = CogReader::new(store.clone(), upstream.clone(), Usgs::s3_origin());
+        let memory = csk_core::resource::Budget::new(256 << 20);
+        let cog = CogReader::with_memory(store.clone(), upstream.clone(), Usgs::s3_origin(), memory.clone());
         let usgs = Arc::new(Usgs::new(catalog, cog));
         let tiles = Tiles::new(store.clone(), upstream.clone(), usgs);
         let dnr_local = dnr_local::DnrLocal::open(data_dir.join("offline").join("dnr"), &store);
         Ok(Arc::new(Self {
+            memory,
             work: Arc::default(),
             store,
             upstream,
@@ -146,6 +150,7 @@ impl Engine {
         let stats = self.store.stats().unwrap_or_default();
         let catalog = &self.tiles.usgs.catalog;
         let meta = catalog.meta();
+        let memory = self.memory.stats();
         Response::json(
             200,
             &json!({
@@ -157,6 +162,7 @@ impl Engine {
                                 "pinnedEntries": stats.pinned_entries, "pinnedBytes": stats.pinned_bytes},
                 "nationalCircuit": self.upstream.circuit_state(DEP_HOST),
                 "uptimeSec": self.started.elapsed().as_secs(),
+                "memoryBudget": {"limit": memory.limit, "used": memory.used, "peak": memory.peak},
                 "features": FEATURES,
                 "usgsCatalog": {
                     "complete": catalog.complete(),

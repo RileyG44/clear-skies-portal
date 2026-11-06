@@ -929,7 +929,7 @@ impl Engine {
                     failure = Some(e.to_string());
                 }
             }
-            let blocks: HashMap<(u32, u32), Arc<[f32]>> =
+            let blocks: HashMap<(u32, u32), Arc<csk_core::resource::Samples>> =
                 fetched.into_iter().filter_map(|(k, r)| r.ok().flatten().map(|b| (k, b))).collect();
             let at = |cx: i64, cy: i64| -> f64 {
                 if cx < 0 || cy < 0 || cx >= i64::from(lv.width) || cy >= i64::from(lv.height) {
