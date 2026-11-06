@@ -15,7 +15,7 @@ use std::sync::{Arc, Mutex, MutexGuard};
 
 use csk_engine::Engine;
 use csk_engine::elevation::TerrainSource;
-use csk_gpu::{Derive, Presented, Presenter, Renderer, TILE, Terrain, Uniforms, View, ViewSample};
+use csk_gpu::{Derive, Marker, Presented, Presenter, Renderer, TILE, Terrain, Uniforms, View, ViewSample};
 
 pub use camera::{Camera, Pose};
 pub use layers::Draw;
@@ -58,6 +58,8 @@ struct Scene {
     terrain: Terrain,
     loader: loader::Loader,
     layers: layers::Layers,
+    /// Drawn above every layer.
+    markers: Vec<Marker>,
     uniforms: Uniforms,
     /// The last presented view; `None` forces the next frame.
     shown: Option<View>,
@@ -122,6 +124,7 @@ impl Map {
             terrain,
             loader,
             layers,
+            markers: Vec::new(),
             uniforms: Uniforms::default(),
             shown: None,
             coverage: 0.0,
@@ -179,6 +182,21 @@ impl Map {
         (self.wake)();
     }
 
+    /// The markers drawn over the map (the selected place).
+    pub fn set_markers(&self, markers: Vec<Marker>) {
+        let mut scene = lock(&self.scene);
+        scene.markers = markers;
+        scene.shown = None;
+        drop(scene);
+        (self.wake)();
+    }
+
+    /// The longitude and latitude under a screen point (CSS px).
+    pub fn lon_lat_at(&self, point: [f64; 2]) -> [f64; 2] {
+        let merc = self.read_camera(|c| c.unproject(point));
+        Pose { center: [merc[0].rem_euclid(1.0), merc[1].clamp(0.0, 1.0)], zoom: 0.0, bearing: 0.0 }.lon_lat()
+    }
+
     /// Replaces the appearance: the shading parameters and the derived
     /// fields they read.
     pub fn set_appearance(&self, uniforms: Uniforms, derive: Derive) {
@@ -214,8 +232,20 @@ impl Map {
 
     fn draw(&self, view: View, animating: bool) -> Result<(FrameResult, Option<ViewSample>), csk_gpu::Error> {
         let mut scene = lock(&self.scene);
-        let Scene { gpu, presenter, terrain, loader, layers, uniforms, shown, coverage, sampled, fresh, water } =
-            &mut *scene;
+        let Scene {
+            gpu,
+            presenter,
+            terrain,
+            loader,
+            layers,
+            markers,
+            uniforms,
+            shown,
+            coverage,
+            sampled,
+            fresh,
+            water,
+        } = &mut *scene;
         let mut changed = loader.update(gpu, terrain, &view);
         let drawn = layers.update(gpu, &view)?;
         if let Some(mask) = lock(water).take() {
@@ -241,7 +271,9 @@ impl Map {
         if settle {
             terrain.request_sample();
         }
-        match presenter.present(gpu, terrain, &view, uniforms, &mut layers.frame())? {
+        let mut frame = layers.frame();
+        frame.push(csk_gpu::Layer::Markers(markers));
+        match presenter.present(gpu, terrain, &view, uniforms, &mut frame)? {
             Presented::Shown(stats) => {
                 *shown = Some(view);
                 *coverage = stats.coverage;

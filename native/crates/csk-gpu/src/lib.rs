@@ -4,6 +4,7 @@
 
 mod derive;
 mod layout;
+mod marker;
 pub mod raster;
 mod render;
 mod surface;
@@ -12,6 +13,7 @@ pub mod water;
 
 pub use derive::{Derive, WORLD_METRES};
 pub use layout::Uniforms;
+pub use marker::Marker;
 pub use raster::{Raster, RasterStyle};
 pub use render::{FRAME_FORMAT, Field, Frame, Pixels, Renderer};
 pub use surface::{Presented, Presenter, instance};

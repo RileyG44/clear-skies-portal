@@ -147,11 +147,12 @@ final class NativeMapView: UIView, UIGestureRecognizerDelegate {
         pan.maximumNumberOfTouches = 2
         let pinch = UIPinchGestureRecognizer(target: self, action: #selector(pinch(_:)))
         let rotate = UIRotationGestureRecognizer(target: self, action: #selector(rotate(_:)))
-        let zoomIn = UITapGestureRecognizer(target: self, action: #selector(zoomIn(_:)))
-        zoomIn.numberOfTapsRequired = 2
-        let zoomOut = UITapGestureRecognizer(target: self, action: #selector(zoomOut(_:)))
-        zoomOut.numberOfTouchesRequired = 2
-        for recognizer in [pan, pinch, rotate, zoomIn, zoomOut] as [UIGestureRecognizer] {
+        // As on the web map: a tap selects the place under it, and a double
+        // tap selects it and searches imagery there (no double-tap zoom).
+        let select = UITapGestureRecognizer(target: self, action: #selector(selectPlace(_:)))
+        let search = UITapGestureRecognizer(target: self, action: #selector(searchPlace(_:)))
+        search.numberOfTapsRequired = 2
+        for recognizer in [pan, pinch, rotate, select, search] as [UIGestureRecognizer] {
             recognizer.delegate = self
             addGestureRecognizer(recognizer)
         }
@@ -216,7 +217,9 @@ final class NativeMapView: UIView, UIGestureRecognizerDelegate {
 
     func gestureRecognizer(_ g: UIGestureRecognizer,
                            shouldRecognizeSimultaneouslyWith other: UIGestureRecognizer) -> Bool {
-        !(g is UITapGestureRecognizer) && !(other is UITapGestureRecognizer)
+        // Taps pair only with each other (the first tap of a double tap
+        // selects at once); camera gestures combine freely.
+        (g is UITapGestureRecognizer) == (other is UITapGestureRecognizer)
     }
 
     override func touchesBegan(_ touches: Set<UITouch>, with event: UIEvent?) {
@@ -264,18 +267,14 @@ final class NativeMapView: UIView, UIGestureRecognizerDelegate {
         csk_map_rotate(map, degrees, centroid.x, centroid.y)
     }
 
-    @objc private func zoomIn(_ g: UITapGestureRecognizer) {
-        zoomBy(1, at: g.location(in: self))
+    @objc private func selectPlace(_ g: UITapGestureRecognizer) {
+        let point = g.location(in: self)
+        backend.send("selectPoint", ["x": point.x, "y": point.y])
     }
 
-    @objc private func zoomOut(_ g: UITapGestureRecognizer) {
-        zoomBy(-1, at: g.location(in: self))
-    }
-
-    private func zoomBy(_ levels: Double, at point: CGPoint) {
-        guard let map else { return }
-        var target = csk_map_camera(map)
-        target.zoom += levels
-        csk_map_ease_around(map, now, target, 0.3, point.x, point.y)
+    @objc private func searchPlace(_ g: UITapGestureRecognizer) {
+        let point = g.location(in: self)
+        backend.send("selectPoint", ["x": point.x, "y": point.y])
+        backend.send("searchSelected", [:])
     }
 }
