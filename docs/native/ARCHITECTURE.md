@@ -153,8 +153,9 @@ Each has a replacement: a bounded native executor, resumable jobs, adjustable al
 
 ### 4.2 Data path
 
-- **End state:** URLSession bytes or cached bytes → Rust validates and decodes the block → budgeted float32 grid plus validity, rank and provenance → render queue → wgpu texture upload → resident `R32Float` height plus rank/validity → height-field pass → shading pass.
+- **End state:** URLSession bytes or cached bytes → Rust validates and decodes the block → budgeted float32 grid plus validity, rank and provenance → render queue → wgpu upload into a 256×256 `R32Float` tile pool → composited once into a world-anchored terrain store at the display level → per frame, one resample pass into the screen field and one shading pass.
   - There's no PNG and no inter-process hop. Upload staging copies still exist and are counted; nobody claims "zero copy" without measuring it.
+  - **Revised 2026-11-06 (native design, not a WebGL port).** The web engine recomposites a screen-sized height field from per-tile quads on every view change and re-runs its derived-field filters each time. Natively, tiles are composited into the store when they arrive, under the same loading rules (rank order, no-data reveals lower ranks, a source's coverage hides its stale finer and coarser records); panning re-anchors the store by copying the overlap and composites only newly exposed slots. Derived fields (detail blur, REM base) are computed in the store's world space when it changes, so their radii are fixed in metres and independent of bearing, not re-derived per frame. The shading program stays generated from `gpu-terrain-shaders.js` (R11).
 - **Transition:** the same engine, then `SiteSchemeHandler` serves `/api/elev32/...` to the WebView. Its client decodes in `terrain-drape-worker.js` and transfers ArrayBuffers instead of cloning them.
 
 ### 4.3 The transition elevation format (`application/vnd.clearskies.elev32`)
@@ -335,7 +336,7 @@ Shipped in #97 ahead of phase 0:
 
 | Risk | Settled by |
 |---|---|
-| wgpu overhead on the height→shade two-pass design | Phase-0 spike: same scene in wgpu and raw Metal; split CPU submit, GPU time, compile hitches and energy |
+| wgpu overhead on the resample→shade frame (§4.2) | Phase-0 spike: same scene in wgpu and raw Metal; split CPU submit, GPU time, compile hitches and energy |
 | iOS refuses or shortens background time for ingest | Phase-0/5 grant measurements; the design degrades to foreground plus `BGProcessingTask` |
 | DNR licence forbids a mirror | Phase-0 terms check; the direct path is a release requirement either way |
 | zran dependency (`inflatePrime`) or checkpoint correctness | Phase 4; temp-file staging is the first implementation |

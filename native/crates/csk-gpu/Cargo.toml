@@ -11,14 +11,6 @@ csk-core = { path = "../csk-core" }
 wgpu = { version = "=30.0.1", default-features = false, features = ["std", "parking_lot", "metal", "vulkan", "wgsl"] }
 thiserror = "2"
 serde_json = "1"
-naga = { version = "=30.0.1", optional = true, features = ["spv-in", "wgsl-in", "wgsl-out", "msl-out"] }
-
-[features]
-shader-tools = ["dep:naga"]
-
-[[bin]]
-name = "shader-tool"
-required-features = ["shader-tools"]
 
 [dev-dependencies]
 pollster = "0.4"

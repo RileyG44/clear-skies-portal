@@ -1,5 +1,5 @@
 use csk_core::resource::Budget;
-use csk_gpu::{Input, Renderer, Uniforms};
+use csk_gpu::{Renderer, Uniforms};
 
 fn renderer(budget: std::sync::Arc<Budget>) -> Option<Renderer> {
     match pollster::block_on(Renderer::new(budget)) {
@@ -24,13 +24,11 @@ fn native_styles_match_frozen_javascript_and_release_resources() {
     let (w, h) = (cases["width"].as_u64().unwrap() as u32, cases["height"].as_u64().unwrap() as u32);
     let raw = std::fs::read(root.join("heights.f32")).unwrap();
     let heights: Vec<_> = raw.chunks_exact(4).map(|b| f32::from_le_bytes(b.try_into().unwrap())).collect();
-    let ranks = vec![3; heights.len()];
-    let input = Input { width: w, height: h, heights: &heights, ranks: &ranks, aux: [None; 3], water: None };
     budget.set_limit(1);
-    assert!(renderer.upload(&input).is_err());
-    assert_eq!(budget.stats().used, 0);
+    assert!(renderer.field(w, h, &heights).is_err());
     budget.set_limit(32 << 20);
-    let field = renderer.upload(&input).unwrap();
+    let idle = budget.stats().used;
+    let field = renderer.field(w, h, &heights).unwrap();
     for case in cases["cases"].as_array().unwrap() {
         let mut uniforms = Uniforms::default();
         uniforms.set("u_style", &[case["id"].as_u64().unwrap() as f32]).unwrap();
@@ -50,21 +48,21 @@ fn native_styles_match_frozen_javascript_and_release_resources() {
         }
         assert!(max <= 1, "{} maximum channel error {max}", case["style"]);
     }
-    // A nonfinite height stays transparent even with a positive source rank.
+    // Nonfinite and sentinel heights stay transparent.
     let mut invalid = heights.clone();
     for (i, value) in [f32::NAN, f32::INFINITY, f32::NEG_INFINITY, -3e38].into_iter().enumerate() {
         invalid[10 * w as usize + 10 + i] = value;
     }
-    let bad_field = renderer.upload(&Input { heights: &invalid, ..input }).unwrap();
+    let bad_field = renderer.field(w, h, &invalid).unwrap();
     let frame = renderer.render(&bad_field, &Uniforms::default()).unwrap();
     let rgba = renderer.readback(&frame).unwrap();
     for x in 10..14 {
         assert_eq!(rgba[(10 * w as usize + x) * 4 + 3], 0);
     }
-    assert!(budget.stats().used > 0);
+    assert!(budget.stats().used > idle);
     drop((rgba, frame, field, bad_field));
     renderer.poll().unwrap();
-    assert_eq!(budget.stats().used, 0);
+    assert_eq!(budget.stats().used, idle);
 }
 
 #[test]

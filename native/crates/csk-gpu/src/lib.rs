@@ -1,11 +1,14 @@
-//! Native terrain renderer. Shader sources come from the authoritative JS
-//! factory through glslang/SPIR-V/naga, shared by wgpu and raw Metal.
+//! Native terrain renderer. The shading program comes from the authoritative
+//! JS factory through glslang/SPIR-V/naga, shared by wgpu and raw Metal; tile
+//! composition and resampling are native compute programs (`src/wgsl`).
 
+mod layout;
 mod render;
-mod uniforms;
+mod terrain;
 
-pub use render::{Field, Frame, Input, Pixels, Renderer, WaterMask};
-pub use uniforms::Uniforms;
+pub use layout::Uniforms;
+pub use render::{FRAME_FORMAT, Field, Frame, Pixels, Renderer};
+pub use terrain::{FrameStats, SourceSpec, TILE, Terrain, TileId, TileKey, View};
 
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
