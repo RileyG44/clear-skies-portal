@@ -446,7 +446,8 @@ function setCollapsed(on){
   sideEl.addEventListener("pointercancel",stop,{passive:true});
   /* Tap the map beside the sheet. Pointerdown on the map, not a document
      click, so it cannot be swallowed by Leaflet's own handlers. */
-  document.getElementById("map").addEventListener("pointerdown",()=>{
+  document.getElementById("map").addEventListener("pointerdown",event=>{
+    if(event.target.closest("button,a,input,select,textarea,.leaflet-control,#mapReadout,#mapDock,#sideToggleDock,#pointCloudPanel,#mkBar,#ctl")) return;
     if(compact()&&!document.body.classList.contains("collapsed")) setCollapsed(true);
   },{capture:true,passive:true});
 })();

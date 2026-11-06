@@ -3261,20 +3261,6 @@ body.csp-redesign .csp-layer-source-meta{color:var(--ink-3);font-size:11px;line-
    scrolls with the workspace, including the preset carousel. */
 body.csp-redesign #panes .lidar-studio{display:block;margin:0;padding:0;border:0}
 .csp-glass body.csp-redesign.csp-redesign[data-csp-route="terrain"] #cspWorkspace{background:var(--ui-sunken)}
-/* Phone: the open LiDAR page is one sunken surface, the same colour the
-   workspace already uses behind its cards. That fill used to stop at the
-   workspace box, so the glass sheet (and the map through it) showed as a
-   different band above the title and below the last card. Cards stay
-   --ui-surface. The collapsed search capsule is excluded. */
-@media (max-width:760px){
-  .csp-glass body.csp-redesign.csp-redesign[data-csp-route="terrain"][data-csp-view="detail"]:not(.collapsed) #side{
-    background:var(--ui-sunken);-webkit-backdrop-filter:none;backdrop-filter:none;
-  }
-  .csp-glass body.csp-redesign.csp-redesign[data-csp-route="terrain"][data-csp-view="detail"]:not(.collapsed) #side::before{display:none}
-  .csp-glass body.csp-redesign.csp-redesign[data-csp-route="terrain"] #cspWorkspace,
-  .csp-glass body.csp-redesign.csp-redesign[data-csp-route="terrain"] #cspWorkspaceHeader,
-  .csp-glass body.csp-redesign.csp-redesign[data-csp-route="terrain"] #cspWorkspaceScroll{background:var(--ui-sunken)}
-}
 .csp-glass body.csp-redesign.csp-redesign #cspWorkspace #panes .pane[data-pane="terrain"] > .pane-b{
   display:grid;gap:14px;padding:0!important;border:0;border-radius:0;background:transparent;box-shadow:none;min-width:0;
 }
@@ -3725,7 +3711,70 @@ body.csp-redesign .ls-layer-label .menu-section-title{margin:0}
   .csp-glass body.csp-redesign.csp-redesign #side{--r-card:12px}
 }
 
-@keyframes csp-phone-push{from{opacity:.3;transform:translate3d(48px,0,0)}to{opacity:1;transform:none}}
+@keyframes csp-phone-push{from{opacity:1;transform:translate3d(100%,0,0)}to{opacity:1;transform:none}}
 @media(max-width:760px) and (orientation:portrait){
   .csp-glass body.csp-redesign.csp-redesign #cspWorkspace.csp-route-enter > :is(#cspWorkspaceHeader,#cspWorkspaceScroll){animation:csp-phone-push .35s var(--spring) both}
+}
+
+/* Native phone chrome. Keep the title/subtitle inside one compact navigation
+   bar and retain the same glass through home and pushed pages. */
+.csp-close-menu{display:none}
+@media(max-width:760px) and (orientation:portrait){
+  .csp-glass body.csp-redesign.csp-redesign #side,
+  .csp-glass body.csp-redesign.csp-redesign:not(.collapsed) #side{
+    border-radius:32px 32px max(32px,calc(var(--screen-radius,36px) - 4px)) max(32px,calc(var(--screen-radius,36px) - 4px));
+    padding-top:0;
+    transition:height .35s var(--spring),transform .35s var(--spring),opacity .24s ease;
+  }
+  .csp-glass body.csp-redesign.csp-redesign:not(.collapsed) :is(#cspWorkspace,#cspWorkspaceHeader,#cspWorkspaceScroll){background:transparent}
+  .csp-glass body.csp-redesign.csp-redesign #mapDock{transition:none}
+  .csp-glass body.csp-redesign.csp-redesign #mapDock .map-tool[data-divider="true"]::after{
+    content:"";position:absolute;bottom:-1px;left:12px;right:12px;height:.5px;background:var(--glass-edge);
+  }
+  .csp-glass body.csp-redesign.csp-redesign #mapDock[data-columns="2"]{
+    background:none!important;box-shadow:none!important;-webkit-backdrop-filter:none;backdrop-filter:none;
+  }
+  .csp-glass body.csp-redesign.csp-redesign #mapDock[data-columns="2"]::before,
+  .csp-glass body.csp-redesign.csp-redesign #mapDock[data-columns="2"]::after{
+    content:"";position:absolute;top:0;bottom:0;width:48px;z-index:-1;border-radius:999px;
+    background:var(--lg-control);background-image:var(--lg-sheen);box-shadow:var(--lg-rim);
+    -webkit-backdrop-filter:var(--lg-filter);backdrop-filter:var(--lg-filter);pointer-events:none;
+  }
+  .csp-glass body.csp-redesign.csp-redesign #mapDock[data-columns="2"]::before{left:0}
+  .csp-glass body.csp-redesign.csp-redesign #mapDock[data-columns="2"]::after{right:0}
+  .csp-glass body.csp-redesign.csp-redesign #cspGrabber::before{display:none}
+  .csp-glass body.csp-redesign.csp-redesign #cspGrabber{height:18px;width:80px}
+  .csp-glass body.csp-redesign.csp-redesign .csp-close-menu{
+    display:grid;place-items:center;flex:none;width:44px;height:44px;min-height:44px;padding:0;
+    color:var(--ui-text);border:0;border-radius:50%;background:var(--sheet-field);box-shadow:var(--sheet-field-rim);
+  }
+  .csp-glass body.csp-redesign.csp-redesign .csp-close-menu svg{width:17px;height:17px}
+  .csp-glass body.csp-redesign.csp-redesign.collapsed #cspSearchClose{display:none}
+  .csp-glass body.csp-redesign.csp-redesign:not(.collapsed) #cspNav .search-row{grid-template-columns:minmax(0,1fr) 44px 44px;gap:8px}
+  .csp-glass body.csp-redesign.csp-redesign:not(.collapsed) #cspNav #cspSearchClose{grid-column:3;grid-row:1}
+  .csp-glass body.csp-redesign.csp-redesign #cspWorkspaceHeader{
+    display:grid;grid-template-columns:44px minmax(0,1fr) 44px;grid-template-rows:auto auto;align-items:center;
+    gap:1px 4px;padding:0 12px 8px;min-height:52px;border-bottom:.5px solid var(--glass-edge);
+  }
+  .csp-glass body.csp-redesign.csp-redesign #cspBack{grid-column:1;grid-row:1/3;font-size:0;width:44px;height:44px;margin:0;padding:0;justify-content:center;background:none;border:0}
+  .csp-glass body.csp-redesign.csp-redesign #cspBack img{width:20px;height:20px}
+  .csp-glass body.csp-redesign.csp-redesign #cspWorkspaceTitle{grid-column:2;grid-row:1;align-self:end;font-size:15px;font-weight:600;line-height:1.35;text-align:center;margin:0}
+  .csp-glass body.csp-redesign.csp-redesign #cspWorkspaceDescription{grid-column:2;grid-row:2;align-self:start;font-size:11px;line-height:1.35;text-align:center;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin:0}
+  .csp-glass body.csp-redesign.csp-redesign #cspPageClose{grid-column:3;grid-row:1/3;background:transparent;box-shadow:none}
+  .csp-glass body.csp-redesign.csp-redesign #mapReadout{visibility:visible;max-height:var(--map-info-space,464px)}
+  .csp-glass body.csp-redesign.csp-redesign #mapInfoContent{max-height:max(0px,calc(var(--map-info-space,464px) - 44px))}
+  .csp-glass body.csp-redesign.csp-redesign #mapReadout.sheet-compact{left:4px;width:calc(100% - 8px)}
+  .csp-glass body.csp-redesign.csp-redesign #mapReadout.sheet-compact #cursorSource{display:none}
+  .csp-glass body.csp-redesign.csp-redesign #mapReadout.sheet-compact:is([data-terrain-state="ready"],[data-terrain-state="off"]) .map-info-terrain{display:none}
+  .csp-glass body.csp-redesign.csp-redesign #mapReadout.sheet-compact .cursor-location{display:flex;flex-wrap:wrap;gap:2px 12px}
+  .csp-glass body.csp-redesign.csp-redesign #mapReadout.sheet-compact #cursorBasis{flex-basis:100%}
+  .csp-glass body.csp-redesign.csp-redesign:not(.collapsed) #loc svg{display:none}
+  .csp-glass body.csp-redesign.csp-redesign:not(.collapsed) #loc::before{content:"";width:17px;height:17px;background:currentColor;-webkit-mask:url("vendor/icons/navigation.svg") center/contain no-repeat;mask:url("vendor/icons/navigation.svg") center/contain no-repeat}
+}
+@media(prefers-reduced-motion:reduce){
+  .csp-glass body.csp-redesign.csp-redesign #side{transition:none!important}
+}
+
+@media(max-width:760px) and (orientation:portrait){
+  .csp-glass body.csp-redesign.csp-redesign:has(#mapReadout.sheet-compact) #mapDock{opacity:0;pointer-events:none}
 }

@@ -41,12 +41,12 @@ const base=process.argv[2]||'http://127.0.0.1:8765/';
       assert(await page.locator('#cspSettingsNav').evaluate(el=>el.parentElement.hidden),'utilities move into the native scrolling App group');
       await step();await page.waitForTimeout(90);let mid=await state();
       if(reduced) assert.equal(mid.opacity,0,'Reduce Motion hides without a spatial transition');
-      else assert(mid.opacity>0&&mid.opacity<1,`toolbar fades out rather than snapping: ${JSON.stringify(mid)}`);
+      else assert(mid.opacity<1,`toolbar follows the rising sheet: ${JSON.stringify(mid)}`);
       await page.waitForTimeout(350);let settled=await state();
       assert.equal(settled.opacity,0);assert(settled.inert&&settled.hidden==='true','hidden tools leave keyboard and accessibility navigation');
       await step();await page.waitForTimeout(90);mid=await state();
       if(reduced){assert.equal(mid.opacity,1);assert(['none','matrix(1, 0, 0, 1, 0, 0)'].includes(mid.transform))}
-      else assert(mid.opacity>0&&mid.opacity<1,`toolbar eases back in: ${JSON.stringify(mid)}`);
+      else assert(mid.opacity>=0&&mid.opacity<1,`toolbar follows the lowering sheet: ${JSON.stringify(mid)}`);
       await page.waitForTimeout(350);settled=await state();
       assert.equal(settled.opacity,1);assert(!settled.inert&&settled.hidden===null);
       if(!reduced){

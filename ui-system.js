@@ -1223,7 +1223,7 @@ let routesShown=0;
 workspace.addEventListener("animationend",event=>{if(event.target===workspaceScroll) workspace.classList.remove("csp-route-enter")});
 function activateRoute(key,options={}){
   const route=ROUTES[key];if(!route) return;
-  if(routesShown++&&key!==currentRoute){
+  if(routesShown++&&(key!==currentRoute||(compactShell.matches&&document.body.dataset.cspView==="nav"&&!options.stayOnNav))){
     workspace.classList.remove("csp-route-enter");void workspace.offsetWidth;workspace.classList.add("csp-route-enter");
   }
   currentRoute=key;overlayGroup=route.overlayGroup||null;
@@ -1232,7 +1232,7 @@ function activateRoute(key,options={}){
   document.body.classList.toggle("csp-grouped-menus",key!=="terrain");
   if(compactShell.matches&&!options.stayOnNav) document.body.dataset.cspView="detail";
   $$(".csp-nav-button[data-route]").forEach(button=>button.setAttribute("aria-current",button.dataset.route===key?"page":"false"));
-  $("#cspWorkspaceTitle").textContent=phoneHome.matches?PHONE_ROUTES[key][0]:route.title;const descriptionEl=$("#cspWorkspaceDescription");descriptionEl.textContent=route.description;descriptionEl.hidden=!route.description;
+  $("#cspWorkspaceTitle").textContent=phoneHome.matches?PHONE_ROUTES[key][0]:route.title;const descriptionEl=$("#cspWorkspaceDescription");descriptionEl.textContent=phoneHome.matches?PHONE_ROUTES[key][1]:route.description;descriptionEl.hidden=!route.description;
   $$(".pane",panes).forEach(pane=>pane.classList.toggle("csp-route-hidden",!route.panes.includes(pane.dataset.pane)));
   filterResearch(route.researchMode);
   annotateOverlayGroups();
@@ -1532,10 +1532,12 @@ const sheetPixels=variable=>{
 const setSheetStyle=(element,name,value)=>{
   if(element.style.getPropertyValue(name)!==value) element.style.setProperty(name,value);
 };
+let sheetLimits=null;
 const placeSheetTools=()=>{
   if(!sheetTools) return;
   if(!sheetMode()){
     document.body.style.removeProperty("--sheet-medium");
+    document.body.style.removeProperty("--sheet-large");
     delete sheetTools.dataset.columns;sheetTools.style.removeProperty("--csp-dock-rows");return;
   }
   const appHeight=$("#app").clientHeight,top=sheetTools.offsetTop;
@@ -1544,13 +1546,17 @@ const placeSheetTools=()=>{
   const singleHeight=count*48+Math.max(0,count-1);
   const columns=appHeight-4-top-singleHeight-12<200?2:1;
   const rows=Math.ceil(count/columns),dockHeight=rows*48+Math.max(0,rows-1);
+  $$(".map-tool",sheetTools).filter(button=>!button.hidden).forEach((button,index)=>{
+    button.dataset.divider=String(index%rows!==rows-1&&index!==count-1);
+  });
   const medium=Math.max(160,Math.min(ideal,appHeight-4-top-dockHeight-12));
   sheetTools.dataset.columns=String(columns);
   setSheetStyle(sheetTools,"--csp-dock-rows",String(rows));
   setSheetStyle(document.body,"--sheet-medium",`${Math.round(medium)}px`);
+  sheetLimits={medium,large:sheetPixels("--sheet-large"),top,appHeight};
 };
-// No sheet-size observer: detent animations and finger movement need no extra
-// layout reads or writes. Recompute only when the viewport or tools change.
+// Recompute detent limits only when the viewport or tools change. The sheet
+// observer below follows animation progress without recomputing these limits.
 const sheetToolsObserver=new ResizeObserver(placeSheetTools);
 sheetToolsObserver.observe($("#app"));
 new MutationObserver(placeSheetTools).observe(sheetTools,{attributes:true,subtree:true,attributeFilter:["hidden"],childList:true});
@@ -1561,10 +1567,77 @@ const syncSheetTools=(progress=null)=>{
   if(!sheetTools) return;
   const dragProgress=sheetTools.style.getPropertyValue("--csp-dock-hide");
   if(progress===null&&dragProgress!=="") progress=Number(dragProgress);
-  const hidden=sheetMode()&&(progress===null?currentDetent()==="large":progress>=.99);
+  const hidden=sheetMode()&&(readout?.classList.contains("sheet-compact")||(progress===null?currentDetent()==="large":progress>=.99));
   if(sheetTools.inert!==hidden) sheetTools.inert=hidden;
+  sheetTools.style.pointerEvents=hidden?"none":"auto";
   if(hidden) sheetTools.setAttribute("aria-hidden","true");else sheetTools.removeAttribute("aria-hidden");
 };
+// ResizeObserver supplies the already computed height. Both finger movement
+// and a detent spring use that same progress; there is no second fade clock.
+const readout=$("#mapReadout");
+const trackSheetHeight=height=>{
+  if(!sheetMode()||!sheetLimits) return;
+  const {medium,large,top,appHeight}=sheetLimits;
+  const span=Math.max(1,Math.min(120,(large-medium)*.5));
+  const progress=isCollapsed()?0:Math.max(0,Math.min(1,(height-medium)/span));
+  setSheetStyle(sheetTools,"--csp-dock-hide",progress.toFixed(3));
+  syncSheetTools(progress);
+  if(readout){
+    const room=isCollapsed()?420:Math.max(44,appHeight-4-height-top-8);
+    setSheetStyle(readout,"--map-info-space",`${Math.round(room)}px`);
+    readout.classList.toggle("sheet-compact",!isCollapsed()&&room<230&&readout.classList.contains("expanded"));
+  }
+};
+new ResizeObserver(entries=>trackSheetHeight(entries[0].borderBoxSize?.[0]?.blockSize??entries[0].contentRect.height)).observe(side);
+if(readout)new MutationObserver(()=>{
+  if(!sheetMode()||!sheetLimits) return;
+  const expanded=readout.classList.contains("expanded");
+  const base=sheetLimits.appHeight-sheetPixels("--safe-top");
+  const height=expanded?Math.max(base*.84,Math.min(base*.9,sheetLimits.appHeight-4-sheetLimits.top-112)):base*.9;
+  setSheetStyle(document.body,"--sheet-large",`${Math.round(height)}px`);
+  sheetLimits.large=height;
+  trackSheetHeight(side.offsetHeight);
+}).observe(readout,{attributes:true,attributeFilter:["class"]});
+const closeMenu=event=>{
+  event?.stopPropagation();
+  const input=document.activeElement;
+  if(event?.currentTarget?.id==="cspSearchClose"&&event.currentTarget.dataset.keyboard==="true"){
+    $("#q").blur();delete event.currentTarget.dataset.keyboard;return;
+  }
+  if(input?.matches("#q,#cspSatQuery")){input.blur();return}
+  goToDetent("peek");
+};
+for(const [id,parent] of [["cspSearchClose",$(".search-row",nav)],["cspPageClose",$("#cspWorkspaceHeader")]]){
+  const button=document.createElement("button");button.type="button";button.id=id;button.className="csp-close-menu";
+  button.setAttribute("aria-label","Close menu");button.title="Close menu";
+  button.innerHTML='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>';
+  button.addEventListener("pointerdown",()=>{button.dataset.keyboard=String(!!document.activeElement?.matches("#q,#cspSatQuery"))});
+  button.addEventListener("click",closeMenu);parent.append(button);
+}
+// A leading-edge swipe pops the current page without closing the menu.
+let edgePan=null;
+workspace.addEventListener("touchstart",event=>{
+  if(!sheetMode()||isCollapsed()||event.touches.length!==1)return;
+  const t=event.touches[0],left=side.getBoundingClientRect().left;
+  if(t.clientX-left<=24)edgePan={x:t.clientX,y:t.clientY};
+},{passive:true});
+workspace.addEventListener("touchmove",event=>{
+  if(!edgePan||event.touches.length!==1)return;
+  const t=event.touches[0],dx=t.clientX-edgePan.x,dy=t.clientY-edgePan.y;
+  if(Math.abs(dy)>Math.max(12,Math.abs(dx))){edgePan=null;return}
+  if(dx>8){event.preventDefault();workspace.style.transform=`translate3d(${Math.max(0,dx)}px,0,0)`}
+},{passive:false});
+workspace.addEventListener("touchend",event=>{
+  const pan=edgePan;edgePan=null;workspace.style.transform="";if(!pan)return;
+  const t=event.changedTouches[0];if(t&&t.clientX-pan.x>60&&Math.abs(t.clientY-pan.y)<60)document.body.dataset.cspView="nav";
+});
+workspace.addEventListener("touchcancel",()=>{edgePan=null;workspace.style.transform=""});
+const syncSearchClose=()=>{
+  const keyboard=document.activeElement===$("#q"),button=$("#cspSearchClose");
+  button.setAttribute("aria-label",keyboard?"Dismiss keyboard":"Close menu");button.title=keyboard?"Dismiss keyboard":"Close menu";
+  button.querySelector("path").setAttribute("d",keyboard?"M4 3h16v10H4z M7 6h1m3 0h1m3 0h1M7 10h10m-9 7 4 4 4-4":"m6 9 6 6 6-6");
+};
+$("#q").addEventListener("focus",syncSearchClose);$("#q").addEventListener("blur",syncSearchClose);
 const syncGrabber=()=>{
   grabber.setAttribute("aria-label",peeking()?"Show panel":"Resize panel");
   grabber.setAttribute("aria-expanded",String(currentDetent()==="large"));
@@ -1634,6 +1707,8 @@ if(sheetMode()&&!isCollapsed()){
   };
   const begin=(x,y,target,source)=>{
     gesture={x,y,startH:side.getBoundingClientRect().height,from:currentDetent(),target,source,
+             header:!!target.closest(".csp-wordmark,.searchbox,#cspWorkspaceHeader"),
+             keyboard:!!document.activeElement?.matches("#q,#cspSatQuery"),
              onGrabber:target===grabber,scroller:scrollerFor(target),mode:null,samples:[{y,t:performance.now()}]};
   };
   // Returns true while the sheet owns the gesture, so the caller can stop the
@@ -1653,6 +1728,7 @@ if(sheetMode()&&!isCollapsed()){
       }
     }
     if(g.mode!=="sheet") return false;
+    if(g.header&&g.keyboard){document.activeElement?.blur();return true}
     const {peek,large}=g.limits;
     let height=g.startH-dy;
     // rubber-band past either end instead of stopping dead
@@ -1690,6 +1766,9 @@ if(sheetMode()&&!isCollapsed()){
     suppressNextClick();
     const first=g.samples[0],last=g.samples[g.samples.length-1];
     const velocity=last.t>first.t?(last.y-first.y)/(last.t-first.t):0; // px per ms, positive = down
+    if(g.header&&g.keyboard){side.style.height="";settleTools();return}
+    const lastMove=g.samples[g.samples.length-1];
+    if(g.header&&lastMove.y-g.y>80){goToDetent("peek");settleTools();return}
     const height=side.getBoundingClientRect().height;
     // Project the release speed forward, as UIKit does for sheets: a moderate
     // flick carries one detent, a hard one carries two, a slow drag stays

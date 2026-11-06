@@ -33,6 +33,7 @@ const base=process.argv[2]||'http://127.0.0.1:8765/';
       assert(Math.abs(g.dockTop-g.infoTop)<1,`info aligns with toolbar at ${width}x${height}, installed=${installed}: ${JSON.stringify(g)}`);
       await page.locator('#mapReadout .map-info-toggle').click();await page.waitForTimeout(400);
       assert(Math.abs((await geometry()).infoTop-g.dockTop)<1,'expanded info keeps the shared top edge');
+      await page.locator('#mapReadout .map-info-toggle').click();await page.waitForTimeout(300);
       await page.locator('#q').click();await page.waitForTimeout(550);
       g=await geometry();assert(g.gap>=11,`medium sheet clears the entire dock: ${JSON.stringify(g)}`);
       // Extra live controls (e.g. a rotated map's compass) must fit as well.
