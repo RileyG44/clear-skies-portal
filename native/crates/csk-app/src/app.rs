@@ -118,17 +118,19 @@ fn draws(state: &AppState) -> Vec<Draw> {
 
 /// The selected place's dot (search.js setLoc: radius 7, weight 2, the
 /// appearance's location-dot colour, fill at 55%).
-fn markers(location: Option<&shell::Location>) -> Vec<csk_gpu::Marker> {
+fn markers(location: Option<&shell::Location>, appearance: &crate::appearance::Appearance) -> Vec<csk_gpu::Marker> {
     location
         .map(|l| {
             let at = Pose::from_lon_lat(l.lng, l.lat, 0.0, 0.0).center;
-            let white = [1.0, 1.0, 1.0];
+            let rgb = crate::terrain::parse_hex(appearance.location_dot.as_deref().unwrap_or("#ffffff"))
+                .unwrap_or([1.0; 4])
+                .map(|v| v as f32);
             vec![csk_gpu::Marker {
                 at,
                 radius: 7.0,
                 stroke: 2.0,
-                fill: [white[0], white[1], white[2], 0.55],
-                line: [white[0], white[1], white[2], 1.0],
+                fill: [rgb[0], rgb[1], rgb[2], 0.55],
+                line: [rgb[0], rgb[1], rgb[2], 1.0],
             }]
         })
         .unwrap_or_default()
@@ -200,7 +202,7 @@ impl App {
             let (uniforms, derive) = self.appearance(&inner);
             map.set_appearance(uniforms, derive);
             map.set_layers(draws(&inner.state));
-            map.set_markers(markers(inner.location.as_ref()));
+            map.set_markers(markers(inner.location.as_ref(), &inner.state.appearance));
             let lighting = inner.state.terrain.lighting;
             drop(inner);
             *lock(&self.map) = Some(map.clone());
@@ -214,7 +216,7 @@ impl App {
     fn whole(&self, inner: &Inner) -> Object<String, Value> {
         let (lon, lat, zoom) = self.where_(inner);
         let mut update = Object::new();
-        update.insert("appearance".into(), shell::appearance());
+        update.insert("appearance".into(), inner.state.appearance.update());
         update.insert("groups".into(), shell::groups());
         update.insert("route".into(), json!(inner.route));
         update.insert("counts".into(), shell::counts(&inner.state));
@@ -303,6 +305,7 @@ impl App {
             let (uniforms, derive) = self.appearance(inner);
             map.set_appearance(uniforms, derive);
             map.set_layers(draws(&inner.state));
+            map.set_markers(markers(inner.location.as_ref(), &inner.state.appearance));
         }
     }
 
@@ -316,6 +319,7 @@ impl App {
     fn changed(&self, inner: &Inner) -> Object<String, Value> {
         let (lon, lat, zoom) = self.where_(inner);
         let mut update = Object::new();
+        update.insert("appearance".into(), inner.state.appearance.update());
         update.insert("counts".into(), shell::counts(&inner.state));
         update.insert("map".into(), shell::map_state(&inner.state, inner.bearing));
         update.insert("dock".into(), shell::dock(&inner.state, inner.bearing));
@@ -507,7 +511,7 @@ impl App {
         inner.location = location;
         inner.location_version += 1;
         if let Some(map) = lock(&self.map).as_ref() {
-            map.set_markers(markers(inner.location.as_ref()));
+            map.set_markers(markers(inner.location.as_ref(), &inner.state.appearance));
         }
         let mut update = Object::new();
         update.insert("search".into(), shell::search(inner.location.as_ref(), inner.location_version));
@@ -566,7 +570,7 @@ impl App {
         let camera = &doc["camera"];
         if let Some(map) = lock(&self.map).as_ref() {
             map.set_sources(&sources(&inner.state.terrain.source));
-            map.set_markers(markers(inner.location.as_ref()));
+            map.set_markers(markers(inner.location.as_ref(), &inner.state.appearance));
             if let (Some(lon), Some(lat), Some(zoom)) =
                 (camera["lon"].as_f64(), camera["lat"].as_f64(), camera["zoom"].as_f64())
             {
@@ -681,6 +685,9 @@ impl App {
 
     /// Applies an action on a control. Returns whether anything changed.
     fn act(&self, inner: &mut Inner, r: &str, op: &str, value: &Value) -> bool {
+        if r.starts_with("appearance:") {
+            return inner.state.appearance.act(r, value);
+        }
         if r.starts_with("#elev") {
             let changed = inner.state.elevation.act(r, value);
             for (id, on) in [
@@ -1137,6 +1144,16 @@ impl Listener for MapEvents {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn marker_uses_the_appearance_color_at_the_web_opacity() {
+        let mut a = crate::appearance::Appearance::default();
+        a.act("appearance:locationDot", &json!("#ff9f0a"));
+        let location = shell::Location { lat: 47.0, lng: -122.0, label: "Selected".into() };
+        let m = markers(Some(&location), &a);
+        assert_eq!(m.len(), 1);
+        assert_eq!(m[0].fill, [1.0, 159.0 / 255.0, 10.0 / 255.0, 0.55]);
+        assert_eq!(m[0].line[3], 1.0);
+    }
     #[test]
     fn elevation_layers_use_the_uppermost_shared_surface_and_real_opacity() {
         let mut state = AppState::default();

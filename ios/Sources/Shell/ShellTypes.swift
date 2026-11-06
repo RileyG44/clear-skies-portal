@@ -347,6 +347,7 @@ nonisolated struct NativeAppearance: Decodable, Hashable, Sendable {
     var track: String? = nil
     var button: String? = nil
     var fontColor: String? = nil
+    var locationDot: String? = nil
     var font: String = "system"
     var textSize: Double = 1
 }

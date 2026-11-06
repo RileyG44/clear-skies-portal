@@ -4,6 +4,7 @@
 //! map draws what this state compiles to.
 
 pub mod app;
+pub mod appearance;
 pub mod coords;
 pub mod elevation;
 pub mod overlays;

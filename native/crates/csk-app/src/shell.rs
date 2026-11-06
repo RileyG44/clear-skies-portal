@@ -282,11 +282,6 @@ pub fn counts(state: &AppState) -> Value {
     json!({"layers": layers.to_string(), "terrain": "1"})
 }
 
-pub fn appearance() -> Value {
-    json!({"toggle": null, "track": null, "button": null, "font": "system", "fontColor": null, "locationDot": null,
-        "textSize": 1, "preset": "meadow"})
-}
-
 /// The selected place: where search or a map tap put it.
 #[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct Location {
@@ -719,6 +714,7 @@ pub fn page(route: &str, state: &AppState, fitted: &Fitted) -> Option<Value> {
         "terrain" => terrain_page(state, fitted),
         "layers" => layers_page(state),
         "elevation" => crate::elevation::page(&state.elevation),
+        "appearance" => crate::appearance::page(&state.appearance),
         "labels" | "geology" | "conditions" | "past" => {
             let group = crate::overlays::Group::for_route(route)?;
             overlay_page(route, group, state)
