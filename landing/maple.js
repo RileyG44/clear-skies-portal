@@ -9,7 +9,7 @@
 
    It shares the stroke renderer and bone physics in sketch.js: every mark is pinned to
    a bone, branches are damped springs, and the cursor brushes the twigs it touches. */
-import { KIND, DEG, lerp, clamp, smooth, mulberry32, canvasAPI, pack } from "./sketch.js";
+import { KIND, DEG, lerp, clamp, smooth, mulberry32, canvasAPI, pack } from "./sketch-kit.js";
 import { drawSectionMV } from "./section-maple-valley.js";
 import { season as seasonOf } from "./phenology.js";
 import { growMaple, unpackMaple, TREE_SEED } from "./maple-growth.js";

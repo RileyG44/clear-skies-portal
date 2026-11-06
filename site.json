@@ -14,10 +14,10 @@
     "research-contract.js", "research-analysis.js", "research-worker.js", "point-cloud-core.js", "point-cloud-viewer.js",
     "point-cloud-catalog.json", "maxar-catalog.json", "nadi1-cordilleran.json", "version.js",
     "sw.js", "manifest.json", "icon-180.png", "icon-192.png", "icon-512.png", "public-terrain.js",
-    "public-terrain-worker.js", "startup-tree.js", "site.json"
+    "public-terrain-worker.js", "startup-tree.js", "startup-tree-worker.js", "site.json"
   ],
   "tree": [
-    "sketch.js", "maple.js", "maple-growth.js", "maple-tree.js", "maple-leaves.js", "phenology.js", "section-maple-valley.js"
+    "sketch.js", "sketch-kit.js", "maple.js", "maple-growth.js", "maple-tree.js", "maple-leaves.js", "phenology.js", "section-maple-valley.js"
   ],
   "app": [
     "app/config.js", "app/map.js", "app/search.js", "app/results.js", "app/snapshot.js",
@@ -78,6 +78,6 @@
     "scenes.js",
     "section-maple-valley.js",
     "site.css",
-    "sketch.js"
+    "sketch.js", "sketch-kit.js"
   ]
 }

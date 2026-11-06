@@ -6,7 +6,7 @@
 /* Bump this on every deploy. Keeping the build literal here, plus a versioned
    page-script URL, prevents an older worker from serving a stale version.js
    while a newer HTML shell is already live. */
-const CSP_BUILD = "2026-11-05r";
+const CSP_BUILD = "2026-11-05t";
 const SHELL = `clear-skies-shell-${CSP_BUILD}`;
 const POTREE = `clear-skies-potree-${CSP_BUILD}`;
 /* Survives a shell update. The page writes "dark" or "light" here so the
@@ -69,10 +69,36 @@ async function themedDocument(response,theme){
   return new Response(html.includes("window.CSPBoot")?recolorShell(html,theme):html,{status:response.status||200,statusText:response.statusText||"",headers});
 }
 
+/* NHD exports that miss CloudFront's origin timeout come back as an HTML
+   gateway page with no Access-Control-Allow-Origin. Answering that from the
+   page logs a CORS error. Fetch it here and, on any miss, return a 1 px PNG
+   the map already treats as "no detail". Other cross-origin imagery stays
+   on the network. Cold renders measured near 9.4 s; the gateway page follows
+   at about 10.2 s, so give up before that page exists. */
+/* Literal bytes: the startup tests evaluate this file in a Node VM, which has
+   no atob. This is the same 1 px PNG the engine uses for a quiet miss. */
+const HYDRO_SENTINEL=new Uint8Array([137,80,78,71,13,10,26,10,0,0,0,13,73,72,68,82,0,0,0,1,0,0,0,1,8,6,0,0,0,31,21,196,137,0,0,0,11,73,68,65,84,120,218,99,100,96,0,0,0,6,0,2,48,129,208,47,0,0,0,0,73,69,78,68,174,66,96,130]);
+function hydroQuietResponse(){
+  return new Response(HYDRO_SENTINEL,{status:200,headers:{"Content-Type":"image/png","Cache-Control":"no-store"}});
+}
+function hydroExportResponse(request){
+  const controller=new AbortController();
+  const timer=setTimeout(()=>controller.abort(),9800);
+  return fetch(request,{signal:controller.signal}).then(response=>{
+    const type=response.headers.get("content-type")||"";
+    if(response.ok&&/^image\//i.test(type)) return response;
+    return hydroQuietResponse();
+  }).catch(()=>hydroQuietResponse()).finally(()=>clearTimeout(timer));
+}
+
 self.addEventListener("fetch", e => {
   const req = e.request;
   if (req.method !== "GET") return;
   const url = new URL(req.url);
+  if(url.hostname==="hydro.nationalmap.gov"&&url.pathname==="/arcgis/rest/services/nhd/MapServer/export"){
+    e.respondWith(hydroExportResponse(req));
+    return;
+  }
   if (url.origin !== self.location.origin) return;   // tiles and STAC go straight out
   if (url.pathname.startsWith("/api/")) return;      // never serve stale data
 

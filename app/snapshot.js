@@ -55,11 +55,15 @@ async function snapshotBitmap(url,cache){
        not worth a second try through the proxy. */
     const fetchBlob=async target=>{
       const controller=new AbortController();
-      const timer=/^https:\/\/hydro\.nationalmap\.gov\//i.test(url)?setTimeout(()=>controller.abort(),15000):null;
+      const hydro=/hydro\.nationalmap\.gov|\/api\/reference\/nhd\?/i.test(url);
+      const timer=hydro?setTimeout(()=>controller.abort(),referenceDetailDeadline()):null;
       try{
         const r=await fetch(target,{cache:"force-cache",signal:controller.signal});
         if(r.status===404||r.status===204) return null;
-        if(!r.ok) throw new Error(`image HTTP ${r.status}`);return await r.blob();
+        if(!r.ok) throw new Error(`image HTTP ${r.status}`);
+        const blob=await r.blob();
+        if(hydro&&blob.size>0&&blob.size<80) throw new Error("reference detail unavailable");
+        return blob;
       }finally{if(timer)clearTimeout(timer)}
     };
     let blob;

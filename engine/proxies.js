@@ -2,13 +2,41 @@
    that installed and offline clients read from the engine's cache. */
 "use strict";
 const {send} = require("./http.js");
-const {isPng} = require("./images.js");
+const {isPng,TRANSPARENT} = require("./images.js");
 const {TILE_MS,cached,upstream,limitedUpstream,terrainAborted} = require("./upstream.js");
 const {TTL_TILE,key,cacheGet,cachePut} = require("./tile-cache.js");
 const {validMercBbox,DEP_RULES,exportPixels} = require("./params.js");
 
 const TTL_FIRMS  = 20*60*1000;
 const TTL_SNOW   = 2*3600*1000;       // NOHRSC publishes four analyses per day
+/* Cold NHD renders often finish just under 10 s. CloudFront's gateway page
+   follows at about 10.2 s and carries no Access-Control-Allow-Origin. Stay
+   under that, and answer the browser with a 1 px PNG instead of the page. */
+const HYDRO_EXPORT_MS=9800;
+const HYDRO_EXPORT_KEYS=["bbox","bboxSR","imageSR","size","format","transparent","dpi","f","layers"];
+
+function hydroExportPath(value){
+  let target;
+  try{ target=new URL(value) }
+  catch(e){ return null }
+  if(target.protocol!=="https:"||target.username||target.password||target.port&&target.port!=="443") return null;
+  if(target.hostname!=="hydro.nationalmap.gov") return null;
+  if(target.pathname!=="/arcgis/rest/services/nhd/MapServer/export") return null;
+  const next=new URL("https://hydro.nationalmap.gov/arcgis/rest/services/nhd/MapServer/export");
+  for(const key of HYDRO_EXPORT_KEYS){
+    const item=target.searchParams.get(key);
+    if(!item||item.length>200) return null;
+    next.searchParams.set(key,item);
+  }
+  if(next.searchParams.get("bboxSR")!=="3857"||next.searchParams.get("imageSR")!=="3857") return null;
+  if(next.searchParams.get("format")!=="png32"||next.searchParams.get("f")!=="image") return null;
+  if(next.searchParams.get("transparent")!=="true") return null;
+  if(!/^\d{2,3}$/.test(next.searchParams.get("dpi"))) return null;
+  if(!/^\d{2,4},\d{2,4}$/.test(next.searchParams.get("size"))) return null;
+  if(!/^show:\d+(?:,\d+)*$/.test(next.searchParams.get("layers"))) return null;
+  if(!/^-?\d+(\.\d+)?(?:,-?\d+(\.\d+)?){3}$/.test(next.searchParams.get("bbox"))) return null;
+  return next.pathname+next.search;
+}
 
 const routes={
   /* ---- 3DEP terrain tiles (cached, so warmed areas work offline) ---- */
@@ -110,6 +138,30 @@ const routes={
     }
     return send(res,204,"image/png",Buffer.alloc(0),
                 {"X-Cache":"ERROR","X-CSP-Error":"upstream","Cache-Control":"no-store","Retry-After":"2"});
+  },
+  /* NHD feature exports. The public host renders on demand and, under load,
+     CloudFront answers with an HTML gateway page that has no CORS header.
+     A browser image request then logs a CORS error. This route is same-origin
+     for the local engine: a real PNG on success, and the 1 px sentinel (which
+     the map treats as "no detail") when the render does not come back in time.
+     The query is rebuilt from an allowlist so this cannot proxy anything else. */
+  "/api/reference/nhd":async(req,res,{u,signal})=>{
+    if(req.method!=="GET")
+      return send(res,405,"application/json",Buffer.from('{"error":"method not allowed"}'),{"Allow":"GET"});
+    const path=hydroExportPath(u.searchParams.get("url"));
+    if(!path) return send(res,400,"application/json",Buffer.from('{"error":"bad reference export"}'));
+    const quiet=()=>send(res,200,"image/png",TRANSPARENT,{"Cache-Control":"no-store","X-CSP-Error":"upstream"});
+    let upstreamResult=null;
+    try{
+      upstreamResult=await limitedUpstream("hydro:"+path,{
+        host:"hydro.nationalmap.gov", hostname:"hydro.nationalmap.gov", path, method:"GET",
+        headers:{"User-Agent":"clear-skies-portal","Accept":"image/png"},
+        __timeout:HYDRO_EXPORT_MS
+      },null,signal);
+    }catch(error){ if(terrainAborted(error)) return; upstreamResult=null }
+    if(upstreamResult&&upstreamResult.status===200&&isPng(upstreamResult.body)&&upstreamResult.body.length>TRANSPARENT.length)
+      return send(res,200,"image/png",upstreamResult.body,{"Cache-Control":"public, max-age=86400"});
+    return quiet();
   },
 };
 
