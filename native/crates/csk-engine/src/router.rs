@@ -211,8 +211,9 @@ pub async fn handle(engine: &Arc<Engine>, req: Request) -> Response {
         }
     };
     match p {
-        "/api/usgs/warm" => return post(crate::areas::start(engine, &req)),
-        "/api/usgs/warm/stop" => return post(crate::areas::stop(engine)),
+        "/api/usgs/warm" if req.method == "POST" => return crate::areas::start(engine, &req),
+        "/api/usgs/warm/stop" if req.method == "POST" => return crate::areas::stop(engine),
+        "/api/usgs/warm" | "/api/usgs/warm/stop" => return post(Response::new(405, "text/plain", Vec::new())),
         "/api/usgs/check" if req.method == "POST" => return crate::areas::fresh(engine, &req).await,
         "/api/wadnr/query" => {
             return if req.method == "POST" {
@@ -609,5 +610,51 @@ mod tests {
         assert_eq!(tile_coords("/api/elev/23/0/0.png", "/api/elev/", ".png", 22), None);
         assert_eq!(tile_coords("/api/elev32/13/1310/2862", "/api/elev32/", "", 22), Some((13, 1310, 2862)));
         assert_eq!(tile_coords("/api/elev/13/-1/0.png", "/api/elev/", ".png", 22), None);
+    }
+
+    #[tokio::test]
+    async fn wrong_download_methods_cannot_start_or_stop_jobs() {
+        use crate::transport::{FetchError, FetchFuture, FetchRequest, Transport};
+        struct Offline;
+        impl Transport for Offline {
+            fn fetch(&self, _: FetchRequest) -> FetchFuture {
+                Box::pin(async { Err(FetchError::Offline) })
+            }
+        }
+        let dir = tempfile::tempdir().unwrap();
+        let engine = Engine::new(
+            crate::Config {
+                cache_dir: dir.path().into(),
+                data_dir: None,
+                cache_budget: 1 << 20,
+                usgs_scope: Some(vec![]),
+            },
+            Arc::new(Offline),
+        )
+        .unwrap();
+        engine.work.set_allowed(false);
+        let body = br#"{"bbox":[-121.8,46.8,-121.7,46.9],"z0":10,"z1":10}"#.to_vec();
+        for method in ["GET", "HEAD", "PUT", "DELETE"] {
+            let r = engine.handle(Request::new(method, "/api/usgs/warm", body.clone()).unwrap()).await;
+            assert_eq!(r.status, 405);
+            assert_eq!(r.get("Allow"), Some("POST"));
+            assert!(!engine.downloads.status().running);
+            assert_eq!(
+                engine
+                    .store
+                    .read(|c| c.query_row("SELECT COUNT(*) FROM pinned.jobs", [], |r| r.get::<_, i64>(0)))
+                    .unwrap(),
+                0
+            );
+        }
+        assert_eq!(engine.handle(Request::new("POST", "/api/usgs/warm", body).unwrap()).await.status, 200);
+        assert!(engine.downloads.status().running);
+        for method in ["GET", "HEAD", "PUT", "DELETE"] {
+            assert_eq!(engine.handle(Request::new(method, "/api/usgs/warm/stop", vec![]).unwrap()).await.status, 405);
+            assert!(engine.downloads.status().running);
+        }
+        assert_eq!(engine.handle(Request::new("POST", "/api/usgs/warm/stop", vec![]).unwrap()).await.status, 200);
+        assert!(!engine.downloads.status().running);
+        engine.work.shutdown();
     }
 }
