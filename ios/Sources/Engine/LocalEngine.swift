@@ -67,12 +67,17 @@ final class LocalEngine {
         running[ObjectIdentifier(task)] = pending
         let context = Unmanaged.passRetained(pending).toOpaque()
         let body = request.httpBody ?? Data()
+        let headers = (request.allHTTPHeaderFields ?? [:])
+            .filter { !$0.key.contains("\n") && !$0.value.contains("\n") }
+            .map { "\($0.key): \($0.value)" }.joined(separator: "\n")
         let id = url.absoluteString.withCString { target in
             (request.httpMethod ?? "GET").withCString { method in
-                body.withUnsafeBytes { raw in
-                    csk_engine_request(handle, method, target,
-                                       raw.baseAddress?.assumingMemoryBound(to: UInt8.self), raw.count,
-                                       context, engineRespond)
+                headers.withCString { headerLines in
+                    body.withUnsafeBytes { raw in
+                        csk_engine_request(handle, method, target, headerLines,
+                                           raw.baseAddress?.assumingMemoryBound(to: UInt8.self), raw.count,
+                                           context, engineRespond)
+                    }
                 }
             }
         }

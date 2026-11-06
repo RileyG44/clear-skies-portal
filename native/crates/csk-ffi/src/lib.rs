@@ -245,13 +245,15 @@ impl Drop for Responder {
     }
 }
 
-/// Answers one request (`url` may be absolute or a path with query).
-/// Returns its id for `csk_engine_cancel`.
+/// Answers one request (`url` may be absolute or a path with query;
+/// `headers` is `Name: value` lines, or NULL). Returns its id for
+/// `csk_engine_cancel`.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn csk_engine_request(
     engine: *const CskEngine,
     method: *const c_char,
     url: *const c_char,
+    headers: *const c_char,
     body: *const u8,
     body_len: usize,
     context: *mut c_void,
@@ -264,14 +266,14 @@ pub unsafe extern "C" fn csk_engine_request(
         return 0;
     };
     // SAFETY: per the contract above.
-    let (m, u) = unsafe { (str_arg(method).unwrap_or("GET"), str_arg(url)) };
+    let (m, u, hdrs) = unsafe { (str_arg(method).unwrap_or("GET"), str_arg(url), str_arg(headers).unwrap_or("")) };
     let payload = if body.is_null() || body_len == 0 {
         Vec::new()
     } else {
         // SAFETY: body points at body_len readable bytes for this call.
         unsafe { std::slice::from_raw_parts(body, body_len) }.to_vec()
     };
-    let Some(req) = u.and_then(|u| Request::new(m, u, payload)) else {
+    let Some(req) = u.and_then(|u| Request::new(m, u, payload)).map(|r| r.with_header_lines(hdrs)) else {
         responder.send(Response::text(400, "invalid URL encoding"));
         return 0;
     };
@@ -411,7 +413,16 @@ mod tests {
             let ask = |path: &CStr| {
                 let (tx, rx) = mpsc::channel::<Option<(u16, String)>>();
                 let ctx = Box::into_raw(Box::new(tx)).cast();
-                csk_engine_request(e, c"GET".as_ptr(), path.as_ptr(), std::ptr::null(), 0, ctx, respond);
+                csk_engine_request(
+                    e,
+                    c"GET".as_ptr(),
+                    path.as_ptr(),
+                    std::ptr::null(),
+                    std::ptr::null(),
+                    0,
+                    ctx,
+                    respond,
+                );
                 rx.recv_timeout(Duration::from_secs(10)).unwrap()
             };
             let (status, headers) = ask(c"/api/health").unwrap();

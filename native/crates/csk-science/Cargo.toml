@@ -1,0 +1,13 @@
+[package]
+name = "csk-science"
+version = "0.1.0"
+description = "ClearSkies scientific products: terrain analysis and glacial research screening"
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+serde_json = { version = "1", features = ["preserve_order"] }
+
+[lints]
+workspace = true

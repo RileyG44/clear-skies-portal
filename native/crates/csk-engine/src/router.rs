@@ -20,6 +20,8 @@ pub struct Request {
     pub path: String,
     /// Query pairs, percent-decoded.
     pub query: Vec<(String, String)>,
+    /// Header names lower-cased.
+    pub headers: Vec<(String, String)>,
     pub body: Vec<u8>,
 }
 
@@ -40,7 +42,21 @@ impl Request {
                 (dec(k), dec(v))
             })
             .collect();
-        Some(Self { method: method.to_ascii_uppercase(), path, query, body })
+        Some(Self { method: method.to_ascii_uppercase(), path, query, headers: Vec::new(), body })
+    }
+
+    /// Adds headers from `Name: value` lines.
+    pub fn with_header_lines(mut self, lines: &str) -> Self {
+        self.headers = lines
+            .lines()
+            .filter_map(|l| l.split_once(':'))
+            .map(|(k, v)| (k.trim().to_ascii_lowercase(), v.trim().to_owned()))
+            .collect();
+        self
+    }
+
+    pub fn header(&self, name: &str) -> Option<&str> {
+        self.headers.iter().find(|(k, _)| k.eq_ignore_ascii_case(name)).map(|(_, v)| v.as_str())
     }
 
     pub fn param(&self, name: &str) -> Option<&str> {
@@ -196,6 +212,13 @@ pub async fn handle(engine: &Arc<Engine>, req: Request) -> Response {
         "/api/usgs/warm" => return post(crate::areas::start(engine, &req)),
         "/api/usgs/warm/stop" => return post(crate::areas::stop(engine)),
         "/api/usgs/check" if req.method == "POST" => return crate::areas::fresh(engine, &req).await,
+        "/api/terrain/analyze" => {
+            return if req.method == "POST" {
+                crate::analysis::analyze(engine, &req).await
+            } else {
+                post(Response::new(405, "text/plain", Vec::new()))
+            };
+        }
         // WA DNR areas arrive with the DNR source (phase 4).
         "/api/warm" | "/api/warm/stop" if req.method == "POST" => {
             return Response::json(
