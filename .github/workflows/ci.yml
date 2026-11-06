@@ -88,6 +88,11 @@ jobs:
           cargo build --locked --profile app-dev -p csk-ffi --target aarch64-apple-ios-sim
       - name: The checked-in C header matches the ABI
         run: git diff --exit-code -- crates/csk-ffi/include/csk.h
+      - name: Generated shaders match the JS shader factories
+        run: |
+          brew install --quiet glslang
+          sh shaders/build.sh
+          git diff --exit-code -- shaders/generated
 
   # The engine often runs on a Windows desktop, not the Mac: run the whole
   # suite there too, including the real server, worker pool and disk cache.

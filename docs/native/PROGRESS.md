@@ -71,6 +71,13 @@ Plan: [ARCHITECTURE.md](ARCHITECTURE.md). Phases have exit gates, not dates.
 | DNR validation | **Done (spot and focused faults).** Earlier direct CLI and iOS simulator acquisitions returned King County East 2021 at 0.457 m spacing; 1,024 comparisons with USGS had a -0.003 m median difference (not an accuracy claim). Added deterministic checks cover CRC corruption, archive paths, all-members-before-publish validation, missing-source/index reconciliation, vertical metadata, method checks, cancellation ownership and job resume. |
 | Bundled catalogue | **Done.** A 71 KB zstd snapshot of the default scope (69 projects; `csk-cli EXPORT-CATALOG`) seeds the catalogue on first launch: 1 m tiles come at once (first tile 1.6 s cold, was 13 s+) while the archive is listed again in the background. A seeded catalogue serves coverage but never a final "no coverage", since a project may have been published since the snapshot. |
 
+## Phase 7 — Native 2D
+
+| Item | State |
+|---|---|
+| Shader toolchain (R11) | **Done.** `native/shaders/extract.cjs` takes the fragment and vertex programs from the authoritative `gpu-terrain-shaders.js` factory at build time; glslang compiles them to SPIR-V and `shader-tool` (naga) emits WGSL for wgpu and MSL for the raw-Metal comparator from the same module. Both outputs are re-validated; the uniform block layout is compared between SPIR-V and WGSL (explicit scalar padding, since naga's WGSL writer drops member gaps). GLSL `isnan`/`isinf` become IEEE bit tests because naga cannot emit them. Every source rewrite must match or extraction fails. Generated output is checked in and CI regenerates it and requires no diff. |
+| Height-field shading (`csk-gpu`) | **Started.** wgpu renderer with resident `R32Float` heights, `R8Uint` ranks, optional auxiliary (height, validity) fields and water mask. Uploaded fields survive appearance changes; uniforms are a generated binary layout with typed, finite, shape-checked setters. Every texture, upload, frame and readback is charged to the shared engine memory budget and released only after the GPU finishes with it. On Apple M2 (Metal) all ten terrain styles match frozen `terrain-raster.js` references within 1/255 per channel; non-finite heights stay transparent with a positive rank. No CAMetalLayer presentation, tile scene or gestures yet; the raw-Metal comparator has shaders but no host. |
+
 ## Findings while porting
 
 - `cog.js:parseTiff` reports `complete: true` for a single-directory file
@@ -84,8 +91,9 @@ Plan: [ARCHITECTURE.md](ARCHITECTURE.md). Phases have exit gates, not dates.
 
 ## Next implementation priorities
 
-1. Integrate GPU resources and measured metadata/SQLite allowances with memory
-   admission; calibrate physical-device background grants and storage peaks.
+1. Measured metadata/SQLite and GPU driver allowances in memory admission
+   (frame resources are already charged); calibrate physical-device background
+   grants and storage peaks.
 2. Complete the remaining source/codec paths (LAZ, strip transcoding),
    keeping unsupported data retryable and provenance explicit.
 3. Native GPU/shader pipeline and map integration, following the adopted wgpu /
