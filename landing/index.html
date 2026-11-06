@@ -16,6 +16,17 @@
   if((n.userAgentData&&n.userAgentData.mobile)||/Android|iPhone|iPad|iPod|Mobile/i.test(ua)||(n.platform==="MacIntel"&&n.maxTouchPoints>1)){
     document.documentElement.classList.add("mobile");
   }
+  /* the map's service worker serves these modules from its cache for one build. When a
+     deploy's new worker takes over while this page ran on the old worker's files and the
+     drawing failed to start (no __shutdown yet), reload once onto the new files */
+  var sw=n.serviceWorker;
+  if(sw&&sw.controller)sw.addEventListener("controllerchange",function(){
+    try{
+      if(window.__shutdown||sessionStorage.getItem("csp-landing-reload"))return;
+      sessionStorage.setItem("csp-landing-reload","1");
+    }catch(e){return}
+    location.reload();
+  });
 })();
 </script>
 <meta name="description" content="ClearSkies pairs the newest free satellite imagery with LiDAR terrain. Free on Windows, macOS and the web, with no account and no API key.">
@@ -47,6 +58,7 @@
 }
 *{box-sizing:border-box}
 html,body{margin:0;min-height:100%}
+html{background:var(--paper)}
 body{background:var(--paper);color:var(--ink);font-family:var(--hand);-webkit-font-smoothing:antialiased;overflow-x:hidden}
 a{color:inherit}
 :focus-visible{outline:2px dashed var(--emerald);outline-offset:5px;border-radius:6px}
@@ -55,7 +67,9 @@ a{color:inherit}
 .paper{position:fixed;inset:0;z-index:-1;pointer-events:none;background-color:var(--paper)}
 
 /* an e-ink panel's full refresh as the page arrives: one black flash, one white, then the page */
-.refresh{position:fixed;inset:0;z-index:20;pointer-events:none;opacity:0}
+/* absolute, not fixed: Safari tints its toolbars from a fixed element along the screen
+   edge, and would keep this black flash there. It covers the first screen, then goes. */
+.refresh{position:absolute;top:0;left:0;width:100%;height:100lvh;z-index:20;pointer-events:none;opacity:0}
 @media (prefers-reduced-motion:no-preference){
   .refresh{animation:refresh .62s steps(1,end) .05s both}
   @keyframes refresh{0%{opacity:1;background:#1d1e20}22%{opacity:1;background:#c9cac5}38%{opacity:1;background:#f1f1ed}62%{opacity:.55;background:#fff}100%{opacity:0}}
@@ -156,7 +170,7 @@ a{color:inherit}
   </filter>
 </svg>
 <div class="paper" aria-hidden="true"></div>
-<div class="refresh" aria-hidden="true"></div>
+<div class="refresh" aria-hidden="true" onanimationend="this.remove()"></div>
 
 <!-- GitHub link hidden for now (Riley, 2026-11-05); restore to bring it back:
 <nav class="nav inked" aria-label="Main">
