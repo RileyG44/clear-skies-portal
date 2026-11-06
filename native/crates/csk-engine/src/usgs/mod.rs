@@ -240,6 +240,7 @@ impl Usgs {
     }
 
     async fn sample(&self, spec: &TileSpec, plan: Plan) -> Result<Option<Sampled>, SampleError> {
+        let _scratch = self.cog.reserve_scratch(spec.n() * spec.n() * 24).map_err(|_| SampleError::Read(1))?;
         let foot = spec.utm_footprint();
         let zone = spec.zone;
         let ground = spec.ground_res;
@@ -347,6 +348,16 @@ impl Usgs {
         }
 
         // Every block the footprint touches, from every source, at once.
+        let pointer_bytes: usize = opened
+            .iter()
+            .map(|o| {
+                let l = &o.tiff.levels[o.level];
+                l.blocks_across() as usize
+                    * l.blocks_down() as usize
+                    * std::mem::size_of::<Option<Arc<csk_core::resource::Samples>>>()
+            })
+            .sum();
+        let _pointers = self.cog.reserve_scratch(pointer_bytes).map_err(|_| SampleError::Read(1))?;
         let mut rasters: Vec<BlockRaster> = opened
             .iter()
             .map(|o| {
@@ -392,6 +403,7 @@ impl Usgs {
 
         let spec2 = *spec;
         let filled = tokio::task::spawn_blocking(move || {
+            let (_scratch, _pointers) = (_scratch, _pointers);
             let (e, n) = spec2.utm_grid();
             let refs: Vec<&BlockRaster> = rasters.iter().collect();
             sample::fill(&e, &n, &refs)
@@ -441,6 +453,7 @@ impl Usgs {
         n: usize,
         zone: i32,
     ) -> Result<Option<(Vec<f64>, Vec<String>)>, SampleError> {
+        let _scratch = self.cog.reserve_scratch(n * n * 16).map_err(|_| SampleError::Read(1))?;
         self.catalog.ensure().await.map_err(|e| SampleError::Catalog(e.to_string()))?;
         let step = (n / 10).max(1);
         let mut cells = Vec::new();

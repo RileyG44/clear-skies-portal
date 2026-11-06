@@ -52,6 +52,19 @@ pub struct Reservation {
     bytes: usize,
 }
 impl Reservation {
+    pub fn grow_to(&mut self, bytes: usize) -> Result<(), Unavailable> {
+        let additional = bytes.saturating_sub(self.bytes);
+        let mut stats = self.budget.0.lock().unwrap_or_else(|e| e.into_inner());
+        let available = stats.limit.saturating_sub(stats.used);
+        if additional > available {
+            return Err(Unavailable { needed: additional, available });
+        }
+        stats.used += additional;
+        stats.peak = stats.peak.max(stats.used);
+        self.bytes += additional;
+        Ok(())
+    }
+
     pub fn shrink(&mut self, bytes: usize) {
         assert!(bytes <= self.bytes);
         self.budget.0.lock().unwrap_or_else(|e| e.into_inner()).used -= self.bytes - bytes;
