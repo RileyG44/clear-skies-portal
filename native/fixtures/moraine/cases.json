@@ -1,0 +1,80 @@
+[
+  {
+    "name": "arc",
+    "width": 200,
+    "height": 200,
+    "resolution": 5
+  },
+  {
+    "name": "arc-coarse",
+    "width": 200,
+    "height": 200,
+    "resolution": 12.03125
+  },
+  {
+    "name": "fault-step",
+    "width": 200,
+    "height": 200,
+    "resolution": 5
+  },
+  {
+    "name": "rolling-hills",
+    "width": 200,
+    "height": 200,
+    "resolution": 5
+  },
+  {
+    "name": "dunes",
+    "width": 200,
+    "height": 200,
+    "resolution": 5
+  },
+  {
+    "name": "hummocky-belt",
+    "width": 200,
+    "height": 200,
+    "resolution": 5
+  },
+  {
+    "name": "ring",
+    "width": 200,
+    "height": 200,
+    "resolution": 5
+  },
+  {
+    "name": "branched",
+    "width": 200,
+    "height": 200,
+    "resolution": 5
+  },
+  {
+    "name": "missing-data",
+    "width": 200,
+    "height": 200,
+    "resolution": 5
+  },
+  {
+    "name": "flat",
+    "width": 33,
+    "height": 29,
+    "resolution": 5
+  },
+  {
+    "name": "tiny-spacing",
+    "width": 33,
+    "height": 29,
+    "resolution": 0.01
+  },
+  {
+    "name": "minimum-view",
+    "width": 3,
+    "height": 3,
+    "resolution": 100
+  },
+  {
+    "name": "maximum-view",
+    "width": 1024,
+    "height": 512,
+    "resolution": 5
+  }
+]

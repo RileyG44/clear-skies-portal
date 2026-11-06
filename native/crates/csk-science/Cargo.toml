@@ -9,5 +9,8 @@ rust-version.workspace = true
 [dependencies]
 serde_json = { version = "1", features = ["preserve_order"] }
 
+[dev-dependencies]
+miniz_oxide = "0.8"
+
 [lints]
 workspace = true

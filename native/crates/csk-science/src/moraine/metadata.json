@@ -1,0 +1,82 @@
+{
+  "config": {
+    "minLengthM": 150,
+    "minProminenceM": 1,
+    "minElongation": 2,
+    "strongProminenceM": 3,
+    "highArcScore": 0.6,
+    "deadStraightArcScore": 0.1,
+    "maxStraightBendRad": 0.17453292519943295,
+    "minStraightChordRatio": 0.97,
+    "minKettleCount": 2,
+    "minKettleDensityPerKm": 1,
+    "minKettleDensityPerKm2": 20,
+    "minApronFlatFraction": 0.65,
+    "minProfileAsymmetry": 0.25,
+    "minValleyCrossingScore": 0.6,
+    "arcWeight": 0.3,
+    "kettleWeight": 0.25,
+    "apronFlatWeight": 0.1,
+    "apronAsymmetryWeight": 0.1,
+    "valleyCrossingWeight": 0.15,
+    "prominenceWeight": 0.1,
+    "deadStraightPenalty": 0.25,
+    "likelyScore": 0.55,
+    "possibleScore": 0.25,
+    "minLikelySignals": 2,
+    "minPossibleSignals": 1,
+    "allowLikely": true
+  },
+  "featureMetadata": {
+    "algorithm": "glacial-segment-features-v1",
+    "units": "metres, square metres, degrees, and dimensionless fractions",
+    "sideConvention": "+1 is (-tangentY,tangentX), the right side in east/south raster coordinates; -1 is the opposite; ties or no evidence use 0",
+    "approximations": {
+      "profiles": "Equal weight per ordered skeleton vertex; tangent spans up to two neighbours each way. Snap to the highest bilinear sample within +/- half mean width along the normal, at at most half-cell spacing. Shoulders are +/- mean width from that crest, with width floored to one cell. Missing profiles or shoulders at/above the crest are skipped.",
+      "asymmetry": "Median absolute difference / sum of the two half-prominence crossing distances; steep side is the shorter flank, using the median signed distance difference.",
+      "halfWidth": "First half-prominence crossings of the linearly shoulder-detrended profile, sampled at at most half-cell spacing and interpolated; profiles without both crossings are skipped.",
+      "neighbourhoods": "LRM and annular TPI use a square box radius ceil(mean width / cell spacing), floored to one cell and capped at the view size; TPI excludes an inner radius floor(outer / 3).",
+      "kettles": "With a view context, priority-flood fills the DEM using 8-connected drainage to view edges and no-data cells. Count 8-connected components of fill depth >0.5 m with area <5000 m2; connected submerged basins remain one depression. Without context, retain TPI < -0.5 m seeds grown through TPI <0, with the legacy exterior spill-rim depth >0.5 m and edge/no-data rejection. Densities are count per km of skeleton and per km2 of segment area.",
+      "dilation": "The polygon is the union of segment raster cells; centroid inclusion uses that footprint or Euclidean distance to pixel centres <= one mean width. Pixel-centre dilation has a subcell boundary approximation.",
+      "apron": "Each apron is a nearest-skeleton side ribbon outside the segment, extending min(segment length, 300 m) beyond a half-mean-width edge, clipped to the view and endpoint normals. Only pixels no higher than the nearest skeleton elevation are downslope samples; slopes <3 degrees count as flat. Return the flatter side's fraction.",
+      "valley": "PCA major axis of the view's lowest-quartile elevation band approximates drainage. Score is local skeleton transversality times band anisotropy times centroid elevation affinity; subtract positive prominence to approximate underlying floor. No flow routing is performed.",
+      "statistics": "Finite segment pixels only; linear-interpolated p95-p05 relief and mean absolute LRM. Unavailable prominence returns NaN; other unavailable measurements return zero and cannot supply positive morphological evidence.",
+      "context": "An immutable DEM view shares slope, low-band PCA, filledGrid and depressionBlobs once, and LRM/TPI rasters per distinct width-derived radius. Depression centroids include fractional x/y and a nearest-cell centroidIndex; maxDepthM is maximum fill depth. opts.cellMetres supplies square cell spacing; when absent, areaM2 is numerically pixelCount (area in cells, assuming unit spacing), and the 5000 cutoff is in cells. opts.segments prewarms radii; others are cached on first use. Recreate the context after changing the DEM."
+    }
+  },
+  "screeningNotice": {
+    "id": "glacial-moraine-leads-beta-v3",
+    "observationalOnly": true,
+    "diagnostic": false,
+    "scoreIsProbability": false,
+    "interpretation": "Experimental leads based on moraine-like ridges and hummocky belts; terrain shape does not establish glacial origin.",
+    "cannotDetermine": [
+      "glacial origin",
+      "ice limit",
+      "age",
+      "advance or retreat phase",
+      "subsurface continuity"
+    ],
+    "commonConfounders": [
+      "river terraces",
+      "fault scarps",
+      "landslides",
+      "shorelines",
+      "dunes",
+      "roads",
+      "quarries",
+      "DEM seams",
+      "modern earthworks"
+    ],
+    "corroboration": [
+      "surficial geology",
+      "stratigraphy",
+      "sedimentology",
+      "chronology",
+      "imagery",
+      "field observations"
+    ],
+    "warning": "Beta: experimental terrain-shape leads. Landslides and other look-alikes can appear. Compare with Glacial margin and check mapped geology or field evidence.",
+    "beta": true
+  }
+}
