@@ -183,6 +183,21 @@ impl Map {
         (self.wake)();
     }
 
+    /// Replaces a vector layer's shapes, drawn where the layer order names
+    /// it (None removes them).
+    pub fn set_vector(&self, id: &'static str, shapes: Option<Arc<csk_gpu::Shapes>>) {
+        let mut scene = lock(&self.scene);
+        scene.layers.set_vector(id, shapes);
+        scene.shown = None;
+        drop(scene);
+        (self.wake)();
+    }
+
+    /// The camera's current view, for hit-testing what it shows.
+    pub fn view(&self) -> View {
+        self.read_camera(|c| c.view())
+    }
+
     /// The map's GPU, for offscreen work (look previews) that must not
     /// hold the scene.
     pub fn gpu(&self) -> Arc<Renderer> {

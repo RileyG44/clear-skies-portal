@@ -11,6 +11,7 @@ pub mod dnr;
 pub mod dnr_local;
 pub mod dnr_routes;
 pub mod elevation;
+pub mod features;
 pub mod flight;
 pub mod layers;
 pub mod markup;

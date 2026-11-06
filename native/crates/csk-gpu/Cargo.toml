@@ -11,6 +11,7 @@ csk-core = { path = "../csk-core" }
 wgpu = { version = "=30.0.1", default-features = false, features = ["std", "parking_lot", "metal", "vulkan", "wgsl"] }
 thiserror = "2"
 serde_json = "1"
+lyon_tessellation = "1.0.23"
 
 [dev-dependencies]
 pollster = "0.4"

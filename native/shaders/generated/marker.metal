@@ -18,6 +18,8 @@ struct Marker {
     float stroke;
     metal::float4 fill;
     metal::float4 line;
+    metal::float2 dash;
+    metal::float2 pad;
 };
 typedef Marker type_3[1];
 struct Varying {
@@ -71,13 +73,21 @@ fragment fragment_Output fragment_(
 , constant _mslBufferSizes& _buffer_sizes [[buffer(30)]]
 ) {
     const Varying in = { position, varyings_1.offset, varyings_1.index };
+    float ring = {};
     Marker m_1 = markers[in.index];
     float d = metal::length(in.offset);
     float _e7 = metal::fwidth(d);
     float aa = metal::max(_e7, 0.001);
     float inside = 1.0 - metal::smoothstep(m_1.radius - aa, m_1.radius + aa, d);
-    float ring = 1.0 - metal::smoothstep((m_1.stroke * 0.5) - aa, (m_1.stroke * 0.5) + aa, metal::abs(d - m_1.radius));
+    ring = 1.0 - metal::smoothstep((m_1.stroke * 0.5) - aa, (m_1.stroke * 0.5) + aa, metal::abs(d - m_1.radius));
+    if (m_1.dash.x > 0.0) {
+        float along = (metal::atan2(in.offset.x, -(in.offset.y)) + 3.1415927) * m_1.radius;
+        float t = metal::fmod(along, m_1.dash.x + m_1.dash.y);
+        float _e52 = ring;
+        ring = _e52 * (1.0 - metal::smoothstep(m_1.dash.x - aa, m_1.dash.x + aa, t));
+    }
     metal::float4 fill = metal::float4(m_1.fill.xyz * m_1.fill.w, m_1.fill.w) * inside;
-    metal::float4 line = metal::float4(m_1.line.xyz * m_1.line.w, m_1.line.w) * ring;
+    float _e80 = ring;
+    metal::float4 line = metal::float4(m_1.line.xyz * m_1.line.w, m_1.line.w) * _e80;
     return fragment_Output { line + (fill * (1.0 - line.w)) };
 }

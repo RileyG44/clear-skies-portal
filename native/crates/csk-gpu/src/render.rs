@@ -32,7 +32,9 @@ pub struct Renderer {
     raster_sampler: wgpu::Sampler,
     marker_module: wgpu::ShaderModule,
     marker_layout: wgpu::BindGroupLayout,
-    /// Overlay programs (raster, marker) by name and target format.
+    vector_module: wgpu::ShaderModule,
+    vector_layout: wgpu::BindGroupLayout,
+    /// Overlay programs (raster, marker, vector) by name and target format.
     overlay_pipelines: Mutex<HashMap<(&'static str, wgpu::TextureFormat), wgpu::RenderPipeline>>,
     shade_vertex: wgpu::ShaderModule,
     shade_fragment: wgpu::ShaderModule,
@@ -276,6 +278,18 @@ impl Renderer {
                 entry(1, vf, buffer(wgpu::BufferBindingType::Storage { read_only: true })),
             ],
         });
+        let vector_module = device.create_shader_module(wgpu::ShaderModuleDescriptor {
+            label: Some("vector"),
+            source: wgpu::ShaderSource::Wgsl(include_str!("wgsl/vector.wgsl").into()),
+        });
+        let vector_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+            label: Some("vector"),
+            entries: &[
+                entry(0, vf, buffer(wgpu::BufferBindingType::Uniform)),
+                entry(1, wgpu::ShaderStages::VERTEX, buffer(wgpu::BufferBindingType::Storage { read_only: true })),
+                entry(2, vf, buffer(wgpu::BufferBindingType::Storage { read_only: true })),
+            ],
+        });
         let tiny = |format, bytes: &[u8]| {
             device
                 .create_texture_with_data(
@@ -313,6 +327,8 @@ impl Renderer {
             raster_sampler,
             marker_module,
             marker_layout,
+            vector_module,
+            vector_layout,
             overlay_pipelines: Mutex::new(HashMap::new()),
             shade_vertex,
             shade_fragment,
@@ -477,6 +493,11 @@ impl Renderer {
     /// The marker program for a target format, and its layout.
     pub(crate) fn marker_pipeline(&self, format: wgpu::TextureFormat) -> (wgpu::RenderPipeline, wgpu::BindGroupLayout) {
         (self.overlay_pipeline("marker", &self.marker_module, &self.marker_layout, format), self.marker_layout.clone())
+    }
+
+    /// The vector layer program for a target format, and its layout.
+    pub(crate) fn vector_pipeline(&self, format: wgpu::TextureFormat) -> (wgpu::RenderPipeline, wgpu::BindGroupLayout) {
+        (self.overlay_pipeline("vector", &self.vector_module, &self.vector_layout, format), self.vector_layout.clone())
     }
 
     /// A full-frame overlay program (`vertex`/`fragment` entry points)

@@ -1,4 +1,5 @@
-//! Point markers drawn over the map: the selected place's dot.
+//! Point markers drawn over the map: the selected place's dot and vector
+//! layers' points.
 
 use wgpu::util::DeviceExt;
 
@@ -14,6 +15,8 @@ pub struct Marker {
     /// Straight RGBA, 0..=1.
     pub fill: [f32; 4],
     pub line: [f32; 4],
+    /// Ring dash and gap along the circumference, CSS px; zero is solid.
+    pub dash: [f32; 2],
 }
 
 impl Marker {
@@ -38,10 +41,11 @@ pub(crate) fn draw(
     if markers.is_empty() {
         return;
     }
-    let mut data = Vec::with_capacity(markers.len() * 48);
+    let mut data = Vec::with_capacity(markers.len() * 64);
     for m in markers {
         let [x, y] = m.screen(view);
-        for v in [x as f32, y as f32, m.radius, m.stroke].into_iter().chain(m.fill).chain(m.line) {
+        let tail = [m.dash[0], m.dash[1], 0.0, 0.0];
+        for v in [x as f32, y as f32, m.radius, m.stroke].into_iter().chain(m.fill).chain(m.line).chain(tail) {
             data.extend_from_slice(&v.to_le_bytes());
         }
     }

@@ -1,4 +1,4 @@
-// Point markers (the selected place): a filled, outlined circle per
+// Point markers (the selected place, vector points): a filled, outlined circle per
 // instance, anti-aliased by its distance field, composited "over" in
 // premultiplied alpha. Positions are CSS pixels on the screen, computed in
 // f64 on the CPU.
@@ -16,6 +16,9 @@ struct Marker {
     // Straight (unpremultiplied) RGBA.
     fill: vec4<f32>,
     line: vec4<f32>,
+    // Ring dash and gap along the circumference (CSS px); zero is solid.
+    dash: vec2<f32>,
+    pad: vec2<f32>,
 }
 
 @group(0) @binding(0) var<uniform> frame: Frame;
@@ -48,7 +51,13 @@ fn fragment(in: Varying) -> @location(0) vec4<f32> {
     // About one device pixel of smoothing, in CSS px.
     let aa = max(fwidth(d), 1e-3);
     let inside = 1.0 - smoothstep(m.radius - aa, m.radius + aa, d);
-    let ring = 1.0 - smoothstep(m.stroke * 0.5 - aa, m.stroke * 0.5 + aa, abs(d - m.radius));
+    var ring = 1.0 - smoothstep(m.stroke * 0.5 - aa, m.stroke * 0.5 + aa, abs(d - m.radius));
+    if m.dash.x > 0.0 {
+        // Arc length from the top, clockwise.
+        let along = (atan2(in.offset.x, -in.offset.y) + 3.14159265) * m.radius;
+        let t = along % (m.dash.x + m.dash.y);
+        ring *= 1.0 - smoothstep(m.dash.x - aa, m.dash.x + aa, t);
+    }
     let fill = vec4<f32>(m.fill.rgb * m.fill.a, m.fill.a) * inside;
     let line = vec4<f32>(m.line.rgb * m.line.a, m.line.a) * ring;
     // The ring over the fill.

@@ -224,3 +224,66 @@ fn raster_layers_draw_in_place_with_stand_ins() {
     raster.insert_empty(TileId { z: 12, x: 1000, y: 1500 });
     assert_eq!(centre(&mut terrain, &mut raster).0, vec![0, 0, 0, 0], "an empty answer hides the stand-in");
 }
+
+/// Vector layers: a filled, outlined area, a dashed line and a point land
+/// where the camera puts them at zoom 18 with the map turned, fills under
+/// lines, lines at their screen width, all at the layer's opacity.
+#[test]
+fn vector_layers_draw_in_place_at_screen_widths() {
+    use csk_gpu::{Geometry, Layer, Marker, Point, Shape, Shapes, Style, Vector, vector::tessellate};
+    let Some(gpu) = renderer() else { return };
+    let mut terrain = Terrain::new(&gpu, 8).unwrap();
+    // Far from the mesh origin, so precision near the view centre matters.
+    let centre = [0.1712345678, 0.3456789012];
+    let view = View { center: centre, zoom: 18.0, bearing: 90.0, css: [256.0, 256.0], dpr: 1.0 };
+    let world = 256.0 * 2f64.powi(18);
+    let px = |dx: f64, dy: f64| [centre[0] + dx / world, centre[1] + dy / world];
+    let red = Style { fill: [1.0, 0.0, 0.0, 1.0], line: [0.0, 1.0, 0.0, 1.0], width: 4.0, dash: [0.0; 2] };
+    let blue = Style { fill: [0.0; 4], line: [0.0, 0.0, 1.0, 1.0], width: 6.0, dash: [10.0, 10.0] };
+    let far = [centre[0] + 0.01, centre[1] + 0.01];
+    let shapes = Shapes {
+        styles: vec![red, blue],
+        shapes: vec![
+            // A 60 px square centred on the view; a far shape moves the origin.
+            Shape {
+                geometry: Geometry::Area(vec![vec![
+                    px(-30.0, -30.0),
+                    px(30.0, -30.0),
+                    px(30.0, 30.0),
+                    px(-30.0, 30.0),
+                ]]),
+                style: 0,
+                feature: 0,
+            },
+            Shape { geometry: Geometry::Line(vec![far, [far[0] + 1e-6, far[1]]]), style: 0, feature: 1 },
+            // A dashed line 80 px north on the map, running east-west.
+            Shape { geometry: Geometry::Line(vec![px(-100.0, -80.0), px(100.0, -80.0)]), style: 1, feature: 2 },
+        ],
+        points: vec![Point {
+            marker: Marker {
+                at: px(0.0, 60.0),
+                radius: 6.0,
+                stroke: 2.0,
+                fill: [1.0, 1.0, 0.0, 1.0],
+                line: [1.0; 4],
+                dash: [0.0; 2],
+            },
+            feature: 3,
+        }],
+    };
+    let vector = Vector::new(&gpu, &tessellate(&shapes)).unwrap();
+    let (frame, _) =
+        terrain.render_offscreen_layers(&gpu, &view, &Uniforms::default(), &mut [Layer::Vector(&vector, 0.5)]).unwrap();
+    let pixels = gpu.readback(&frame).unwrap();
+    let at = |x: usize, y: usize| pixels[(y * 256 + x) * 4..(y * 256 + x) * 4 + 4].to_vec();
+    // Turned 90° clockwise: map north is screen east, map east screen south.
+    assert_eq!(at(128, 128), vec![128, 0, 0, 128], "fill at half opacity");
+    // Half-opacity green over the half-opacity red fill.
+    assert_eq!(at(128, 128 - 30), vec![64, 128, 0, 191], "outline over the fill, on the edge");
+    assert_eq!(at(128, 128 - 34), vec![0, 0, 0, 0], "a 4 px outline ends 2 px out");
+    // The line runs down the screen from y = 28; 10 px dashes, 10 px gaps.
+    assert_eq!(at(128 + 80, 128 + 5), vec![0, 0, 128, 128], "dash");
+    assert_eq!(at(128 + 80, 128 + 15), vec![0, 0, 0, 0], "gap");
+    assert_eq!(at(128 + 84, 128 + 5), vec![0, 0, 0, 0], "a 6 px line ends 3 px out");
+    assert_eq!(at(128 - 60, 128), vec![128, 128, 0, 128], "point fill");
+}

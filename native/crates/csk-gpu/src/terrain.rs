@@ -89,6 +89,8 @@ pub enum Layer<'a> {
     Terrain,
     Raster(&'a mut crate::raster::Raster, crate::raster::RasterStyle),
     Markers(&'a [crate::marker::Marker]),
+    /// A vector layer at an opacity.
+    Vector(&'a crate::vector::Vector, f32),
 }
 
 /// The map camera. Bearing is clockwise in degrees; Web Mercator in [0,1].
@@ -863,6 +865,7 @@ impl Terrain {
                     Layer::Terrain => gpu.shade(&mut pass, &field.view, &uniforms, &aux, format),
                     Layer::Raster(raster, style) => raster.draw(gpu, &mut pass, view, format, *style),
                     Layer::Markers(markers) => crate::marker::draw(gpu, &mut pass, view, format, markers),
+                    Layer::Vector(vector, opacity) => vector.draw(gpu, &mut pass, view, format, *opacity),
                 }
             }
         }

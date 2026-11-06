@@ -9,6 +9,7 @@ pub mod raster;
 mod render;
 mod surface;
 mod terrain;
+pub mod vector;
 pub mod water;
 
 pub use derive::{Derive, WORLD_METRES};
@@ -18,6 +19,7 @@ pub use raster::{Raster, RasterStyle};
 pub use render::{FRAME_FORMAT, Field, Frame, Pixels, Renderer};
 pub use surface::{Presented, Presenter, instance};
 pub use terrain::{Answer, FrameStats, Layer, SourceSpec, TILE, Terrain, TileId, TileKey, View, ViewSample};
+pub use vector::{Geometry, Mesh, Point, Shape, Shapes, Style, Vector};
 /// The pinned wgpu, for surfaces made at the platform boundary.
 pub use wgpu;
 

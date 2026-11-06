@@ -1,6 +1,7 @@
-//! Raster map layers: which tiles each visible layer needs, fetched through
-//! the engine (which keeps them for offline use), decoded off the render
-//! thread, and drawn in layer order with the terrain.
+//! Map layers: raster layers (which tiles each visible layer needs, fetched
+//! through the engine, which keeps them for offline use, decoded off the
+//! render thread) and vector layers (shapes from the app, tessellated off
+//! the render thread), drawn in layer order with the terrain.
 
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
@@ -9,7 +10,7 @@ use std::time::{Duration, Instant};
 
 use csk_engine::Engine;
 use csk_engine::layers::{RasterAnswer, RasterLayer};
-use csk_gpu::{Raster, RasterStyle, Renderer, TILE, TileId, View};
+use csk_gpu::{Raster, RasterStyle, Renderer, Shapes, TILE, TileId, Vector, View};
 
 use crate::loader::Wake;
 
@@ -24,6 +25,15 @@ const REFRESH_STALE: Duration = Duration::from_secs(60);
 pub enum Draw {
     Terrain,
     Raster(RasterLayer, RasterStyle),
+    /// A vector layer set with [`Layers::set_vector`], at an opacity.
+    Vector(&'static str, f32),
+}
+
+/// A vector layer: the newest shapes' revision, and its mesh once built.
+#[derive(Default)]
+struct VectorSlot {
+    revision: u64,
+    drawn: Option<Vector>,
 }
 
 /// A decoded answer: premultiplied 256x256 RGBA, nothing, or not yet.
@@ -69,6 +79,8 @@ pub fn decode(bytes: &[u8], side: u32) -> Option<Vec<u8>> {
 }
 
 type Key = (RasterLayer, TileId);
+/// A layer's tessellated shapes and the revision they were built for.
+type Built = (&'static str, u64, csk_gpu::Mesh);
 
 pub struct Layers {
     runtime: tokio::runtime::Handle,
@@ -81,6 +93,8 @@ pub struct Layers {
     stale: HashSet<Key>,
     tx: mpsc::Sender<(Key, Decoded)>,
     rx: mpsc::Receiver<(Key, Decoded)>,
+    vectors: HashMap<&'static str, VectorSlot>,
+    meshes: (mpsc::Sender<Built>, mpsc::Receiver<Built>),
 }
 
 impl Layers {
@@ -97,7 +111,26 @@ impl Layers {
             stale: HashSet::new(),
             tx,
             rx,
+            vectors: HashMap::new(),
+            meshes: mpsc::channel(),
         }
+    }
+
+    /// Replaces a vector layer's shapes (None removes the layer). They are
+    /// tessellated on the runtime; until then the previous shapes draw.
+    pub fn set_vector(&mut self, id: &'static str, shapes: Option<Arc<Shapes>>) {
+        let Some(shapes) = shapes else {
+            self.vectors.remove(id);
+            return;
+        };
+        let slot = self.vectors.entry(id).or_default();
+        slot.revision += 1;
+        let (revision, tx, wake) = (slot.revision, self.meshes.0.clone(), self.wake.clone());
+        self.runtime.spawn_blocking(move || {
+            if tx.send((id, revision, csk_gpu::vector::tessellate(&shapes))).is_ok() {
+                wake();
+            }
+        });
     }
 
     pub fn in_flight(&self) -> usize {
@@ -173,6 +206,14 @@ impl Layers {
                 }
             }
         }
+        while let Ok((id, revision, mesh)) = self.meshes.1.try_recv() {
+            // Only the newest shapes of a layer still set are kept.
+            let Some(slot) = self.vectors.get_mut(id) else { continue };
+            if slot.revision == revision {
+                slot.drawn = Some(Vector::new(gpu, &mesh)?);
+                changed = true;
+            }
+        }
         let mut wanted = Vec::new();
         for (&layer, raster) in &self.rasters {
             wanted.extend(raster.wanted(view).into_iter().map(|t| (layer, t)));
@@ -234,6 +275,11 @@ impl Layers {
                 Draw::Raster(layer, style) => {
                     if let Some(raster) = rasters.remove(&layer) {
                         out.push(csk_gpu::Layer::Raster(raster, style));
+                    }
+                }
+                Draw::Vector(id, opacity) => {
+                    if let Some(vector) = self.vectors.get(id).and_then(|v| v.drawn.as_ref()) {
+                        out.push(csk_gpu::Layer::Vector(vector, opacity));
                     }
                 }
             }

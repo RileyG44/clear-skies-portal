@@ -132,6 +132,7 @@ fn markers(location: Option<&shell::Location>, appearance: &crate::appearance::A
                 stroke: 2.0,
                 fill: [rgb[0], rgb[1], rgb[2], 0.55],
                 line: [rgb[0], rgb[1], rgb[2], 1.0],
+                dash: [0.0; 2],
             }]
         })
         .unwrap_or_default()
