@@ -129,6 +129,10 @@ function setMapInfoExpanded(expanded){
   $(".map-info-toggle",readoutRoot).setAttribute("aria-label",expanded?"Hide map info":"Show map info");
   content.hidden=!expanded;content.inert=!expanded;
   content.setAttribute("aria-hidden",String(!expanded));
+  // Compact or clear the tile before the morph measures its target, so the
+  // animation and the hit target share one width. A class observer that ran
+  // after this measurement cancelled the animation and could run again.
+  readoutRoot.dispatchEvent(new CustomEvent("csp:map-info-fit"));
   const after=readoutRoot.getBoundingClientRect();
   const reduced=matchMedia("(prefers-reduced-motion: reduce)").matches||document.documentElement.classList.contains("csp-reduce-motion");
   if(!reduced&&readoutRoot.animate&&before.width&&after.width){

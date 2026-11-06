@@ -406,9 +406,9 @@ function setCollapsed(on){
   restoreScenePanelPosition();
   setTimeout(()=>{reflowMap();restoreScenePanelPosition()},380);
 }
-/* The sidebar is a sheet on a phone, so it answers the gestures a sheet
-   answers: swipe it back toward its own edge to dismiss, or tap the map beside
-   it. Without these the only way out was a 44px button in the far corner.
+/* The phone sheet dismisses the way the native one does: the close control
+   and a downward header drag. A sideways swipe still pops a pushed page, or
+   dismisses from home. A tap on the map does not close it.
 
    touch-action:pan-y on #side (see the stylesheet) is what makes this safe -
    the browser keeps vertical scrolling and only the horizontal axis is ours,
@@ -441,15 +441,9 @@ function setCollapsed(on){
       else setCollapsed(true);
     }
   },{passive:true});
-  const stop=()=>{tracking=false};
+  const stop=()=>{tracking:false};
   sideEl.addEventListener("pointerup",stop,{passive:true});
   sideEl.addEventListener("pointercancel",stop,{passive:true});
-  /* Tap the map beside the sheet. Pointerdown on the map, not a document
-     click, so it cannot be swallowed by Leaflet's own handlers. */
-  document.getElementById("map").addEventListener("pointerdown",event=>{
-    if(event.target.closest("button,a,input,select,textarea,.leaflet-control,#mapReadout,#mapDock,#sideToggleDock,#pointCloudPanel,#mkBar,#ctl")) return;
-    if(compact()&&!document.body.classList.contains("collapsed")) setCollapsed(true);
-  },{capture:true,passive:true});
 })();
 $("#sideToggle").setAttribute("aria-controls","side");
 $("#sideToggle").setAttribute("aria-expanded","true");

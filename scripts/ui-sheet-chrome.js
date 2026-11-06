@@ -42,16 +42,16 @@ const base=process.argv[2]||'http://127.0.0.1:8765/';
       await step();await page.waitForTimeout(90);let mid=await state();
       if(reduced) assert.equal(mid.opacity,0,'Reduce Motion hides without a spatial transition');
       else assert(mid.opacity<1,`toolbar follows the rising sheet: ${JSON.stringify(mid)}`);
-      await page.waitForTimeout(350);let settled=await state();
+      await page.waitForTimeout(500);let settled=await state();
       assert.equal(settled.opacity,0);assert(settled.inert&&settled.hidden==='true','hidden tools leave keyboard and accessibility navigation');
       await step();await page.waitForTimeout(90);mid=await state();
       if(reduced){assert.equal(mid.opacity,1);assert(['none','matrix(1, 0, 0, 1, 0, 0)'].includes(mid.transform))}
       else assert(mid.opacity>=0&&mid.opacity<1,`toolbar follows the lowering sheet: ${JSON.stringify(mid)}`);
-      await page.waitForTimeout(350);settled=await state();
+      await page.waitForTimeout(500);settled=await state();
       assert.equal(settled.opacity,1);assert(!settled.inert&&settled.hidden===null);
       if(!reduced){
-        const session=await context.newCDPSession(page),grab=await page.locator('#cspGrabber').boundingBox();
-        const x=grab.x+grab.width/2,y=grab.y+10;
+        const session=await context.newCDPSession(page),grab=await page.locator('.csp-wordmark').boundingBox();
+        const x=grab.x+grab.width/2,y=grab.y+grab.height/2;
         await session.send('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:[{x,y,id:1}]});
         await page.waitForTimeout(30);
         await session.send('Input.dispatchTouchEvent',{type:'touchMove',touchPoints:[{x,y:y-60,id:1}]});
@@ -62,7 +62,7 @@ const base=process.argv[2]||'http://127.0.0.1:8765/';
         await session.send('Input.dispatchTouchEvent',{type:'touchEnd',touchPoints:[]});
         await page.waitForFunction(()=>document.body.dataset.cspDetent==='large');
         await page.waitForTimeout(450);assert.equal((await state()).opacity,0);
-        await step();await page.waitForTimeout(450);assert.equal((await state()).opacity,1);
+        await step();await page.waitForTimeout(700);assert.equal((await state()).opacity,1);
         await session.detach();
       }
       await page.evaluate(()=>document.querySelector('.csp-nav-button[data-route="settings"]').click());

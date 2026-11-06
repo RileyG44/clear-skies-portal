@@ -575,8 +575,8 @@ assert(index.indexOf('World_Light_Gray_Base')<index.indexOf('World_Dark_Gray_Bas
   assert(/horizontal=Math\.abs\(dx\)>Math\.abs\(dy\)/.test(index),
          "the dismiss gesture must commit to one axis rather than re-deciding mid-drag");
   assert(/horizontal&&dx<-56/.test(index),"a swipe back toward the edge must dismiss the sidebar");
-  assert(/getElementById\("map"\)\.addEventListener\("pointerdown"/.test(index),
-         "tapping the map beside the sheet must dismiss it");
+  assert(!/getElementById\("map"\)\.addEventListener\("pointerdown"[\s\S]{0,500}setCollapsed\(true\)/.test(index),
+         "a map tap must leave the phone sheet up; the close control and a header drag dismiss it");
   /* 44pt is the minimum for a control you aim at, not a floor for every line of
      a dense scrolling list. Applying it wholesale inflated the panes to twice
      the visible height and left 10.5px labels stranded in oversized boxes. The

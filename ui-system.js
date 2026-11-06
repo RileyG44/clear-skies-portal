@@ -1506,8 +1506,8 @@ syncAllRangeFills();
    on and a slow drag lands where it is let go. Past the ends it rubber-bands.
 
    Closing and opening still go through the existing toggle, so every other
-   close path (tapping the map, the back swipe, the point-cloud viewer) lands
-   on peek. A phone on its side uses the leading-edge card instead and keeps
+   close path (the close control, the header drag, the point-cloud viewer)
+   lands on peek. A phone on its side uses the leading-edge card instead and keeps
    hide-and-toggle, because a peek strip would cover most of its height. */
 const phoneSheet=matchMedia("(max-width:760px)");
 const peekLayout=matchMedia("(max-width:760px) and (orientation:portrait)");
@@ -1549,10 +1549,12 @@ const placeSheetTools=()=>{
   $$(".map-tool",sheetTools).filter(button=>!button.hidden).forEach((button,index)=>{
     button.dataset.divider=String(index%rows!==rows-1&&index!==count-1);
   });
-  const medium=Math.max(160,Math.min(ideal,appHeight-4-top-dockHeight-12));
+  const medium=Math.round(Math.max(160,Math.min(ideal,appHeight-4-top-dockHeight-12)));
   sheetTools.dataset.columns=String(columns);
   setSheetStyle(sheetTools,"--csp-dock-rows",String(rows));
-  setSheetStyle(document.body,"--sheet-medium",`${Math.round(medium)}px`);
+  setSheetStyle(document.body,"--sheet-medium",`${medium}px`);
+  // Keep the limit that the fade compares against equal to the CSS pixel
+  // height. A fractional limit leaves the dock a hair scaled down at rest.
   sheetLimits={medium,large:sheetPixels("--sheet-large"),top,appHeight};
 };
 // Recompute detent limits only when the viewport or tools change. The sheet
@@ -1577,27 +1579,80 @@ const syncSheetTools=(progress=null)=>{
 const readout=$("#mapReadout");
 const trackSheetHeight=height=>{
   if(!sheetMode()||!sheetLimits) return;
-  const {medium,large,top,appHeight}=sheetLimits;
+  const {medium,large}=sheetLimits;
   const span=Math.max(1,Math.min(120,(large-medium)*.5));
-  const progress=isCollapsed()?0:Math.max(0,Math.min(1,(height-medium)/span));
+  let progress=isCollapsed()?0:Math.max(0,Math.min(1,(height-medium)/span));
+  // A subpixel of leftover sheet height otherwise leaves the dock scaled.
+  if(progress<0.01) progress=0;
+  else if(progress>0.99) progress=1;
   setSheetStyle(sheetTools,"--csp-dock-hide",progress.toFixed(3));
   syncSheetTools(progress);
-  if(readout){
-    const room=isCollapsed()?420:Math.max(44,appHeight-4-height-top-8);
-    setSheetStyle(readout,"--map-info-space",`${Math.round(room)}px`);
-    readout.classList.toggle("sheet-compact",!isCollapsed()&&room<230&&readout.classList.contains("expanded"));
-  }
+  fitMapInfo(height);
+};
+// The narrow and compact tiles are measured once per open, with the height
+// cap lifted. Later frames only compare the narrow tile with the gap above
+// the unreserved sheet, then give the compact tile the gap the reserve leaves.
+let fittingInfo=false,narrowInfo=0,compactInfo=0;
+const setSheetLarge=px=>{
+  const rounded=Math.round(px);
+  if(!sheetLimits||Math.round(sheetLimits.large)===rounded) return;
+  setSheetStyle(document.body,"--sheet-large",`${rounded}px`);
+  sheetLimits.large=px;
+};
+const readoutHeight=()=>{
+  const content=$("#mapInfoContent");
+  return content?content.scrollHeight+readout.offsetHeight-content.offsetHeight:readout.offsetHeight;
+};
+const fitMapInfo=height=>{
+  if(fittingInfo||!readout||!sheetMode()||!sheetLimits) return;
+  fittingInfo=true;
+  try{
+    const {top,appHeight,medium}=sheetLimits;
+    const base=appHeight-sheetPixels("--safe-top");
+    const fullLarge=base*.9;
+    // Decide from the unreserved detent. Applying the reserve must not
+    // change the gap used for this choice, or the sheet oscillates.
+    const deciding=isCollapsed()?0:(document.body.dataset.cspDetent==="large"||height>medium+80)?fullLarge:height;
+    const decisionRoom=isCollapsed()?420:Math.max(44,appHeight-4-deciding-top-8);
+    const expanded=readout.classList.contains("expanded")&&!isCollapsed();
+    if(!expanded){
+      narrowInfo=0;compactInfo=0;
+      readout.classList.remove("sheet-compact");
+      setSheetLarge(fullLarge);
+      setSheetStyle(readout,"--map-info-space",`${Math.round(decisionRoom)}px`);
+      return;
+    }
+    if(!narrowInfo){
+      readout.classList.remove("sheet-compact");
+      setSheetStyle(readout,"--map-info-space","480px");
+      narrowInfo=readoutHeight();
+    }
+    const compact=narrowInfo>decisionRoom+1;
+    if(!compact){
+      compactInfo=0;
+      readout.classList.remove("sheet-compact");
+      setSheetLarge(fullLarge);
+      setSheetStyle(readout,"--map-info-space",`${Math.round(decisionRoom)}px`);
+      return;
+    }
+    if(!compactInfo){
+      readout.classList.add("sheet-compact");
+      setSheetStyle(readout,"--map-info-space","480px");
+      compactInfo=readoutHeight();
+    }else readout.classList.add("sheet-compact");
+    const reserve=readout.getBoundingClientRect().top+compactInfo+8;
+    const large=Math.max(base*.84,Math.min(fullLarge,appHeight-4-reserve));
+    setSheetLarge(large);
+    // The cap is the gap the shortened sheet leaves, not the 90% gap that
+    // forced compact mode. Otherwise the tile stays clipped to the button.
+    const space=Math.max(44,appHeight-4-large-top-8);
+    setSheetStyle(readout,"--map-info-space",`${Math.round(space)}px`);
+  }finally{fittingInfo=false}
 };
 new ResizeObserver(entries=>trackSheetHeight(entries[0].borderBoxSize?.[0]?.blockSize??entries[0].contentRect.height)).observe(side);
-if(readout)new MutationObserver(()=>{
-  if(!sheetMode()||!sheetLimits) return;
-  const expanded=readout.classList.contains("expanded");
-  const base=sheetLimits.appHeight-sheetPixels("--safe-top");
-  const height=expanded?Math.max(base*.84,Math.min(base*.9,sheetLimits.appHeight-4-sheetLimits.top-112)):base*.9;
-  setSheetStyle(document.body,"--sheet-large",`${Math.round(height)}px`);
-  sheetLimits.large=height;
-  trackSheetHeight(side.offsetHeight);
-}).observe(readout,{attributes:true,attributeFilter:["class"]});
+// readout.js dispatches this after the expanded class and content visibility
+// change, and before it samples the animation's target box.
+readout?.addEventListener("csp:map-info-fit",()=>fitMapInfo(side.offsetHeight));
 const closeMenu=event=>{
   event?.stopPropagation();
   const input=document.activeElement;
@@ -1615,23 +1670,52 @@ for(const [id,parent] of [["cspSearchClose",$(".search-row",nav)],["cspPageClose
   button.addEventListener("click",closeMenu);parent.append(button);
 }
 // A leading-edge swipe pops the current page without closing the menu.
+// The home list stays mounted underneath, and the page follows the finger
+// until release completes or cancels on the same 0.35s curve.
 let edgePan=null;
+const releaseEdge=complete=>{
+  const reduced=matchMedia("(prefers-reduced-motion:reduce)").matches||document.documentElement.classList.contains("csp-reduce-motion");
+  let settled=false;
+  const finish=()=>{
+    if(settled) return;
+    settled=true;
+    workspace.removeEventListener("transitionend",onEnd);
+    workspace.style.transition="";
+    workspace.style.transform="";
+    document.body.classList.remove("csp-edge-pop");
+    if(complete) document.body.dataset.cspView="nav";
+  };
+  const onEnd=event=>{if(event.target===workspace&&event.propertyName==="transform") finish()};
+  if(!document.body.classList.contains("csp-edge-pop")){finish();return}
+  workspace.style.transition=reduced?"none":"transform .35s var(--spring)";
+  workspace.style.transform=complete?"translate3d(100%,0,0)":"translate3d(0,0,0)";
+  if(reduced){finish();return}
+  workspace.addEventListener("transitionend",onEnd);
+  setTimeout(finish,450);
+};
 workspace.addEventListener("touchstart",event=>{
-  if(!sheetMode()||isCollapsed()||event.touches.length!==1)return;
+  if(!sheetMode()||isCollapsed()||document.body.dataset.cspView!=="detail"||event.touches.length!==1)return;
   const t=event.touches[0],left=side.getBoundingClientRect().left;
   if(t.clientX-left<=24)edgePan={x:t.clientX,y:t.clientY};
 },{passive:true});
 workspace.addEventListener("touchmove",event=>{
   if(!edgePan||event.touches.length!==1)return;
   const t=event.touches[0],dx=t.clientX-edgePan.x,dy=t.clientY-edgePan.y;
-  if(Math.abs(dy)>Math.max(12,Math.abs(dx))){edgePan=null;return}
-  if(dx>8){event.preventDefault();workspace.style.transform=`translate3d(${Math.max(0,dx)}px,0,0)`}
+  if(Math.abs(dy)>Math.max(12,Math.abs(dx))){edgePan=null;releaseEdge(false);return}
+  if(dx>8){
+    event.preventDefault();
+    document.body.classList.add("csp-edge-pop");
+    workspace.style.transition="none";
+    workspace.style.transform=`translate3d(${Math.max(0,dx)}px,0,0)`;
+  }
 },{passive:false});
 workspace.addEventListener("touchend",event=>{
-  const pan=edgePan;edgePan=null;workspace.style.transform="";if(!pan)return;
-  const t=event.changedTouches[0];if(t&&t.clientX-pan.x>60&&Math.abs(t.clientY-pan.y)<60)document.body.dataset.cspView="nav";
+  const pan=edgePan;edgePan=null;if(!pan)return;
+  const t=event.changedTouches[0];
+  const dx=t?t.clientX-pan.x:0,dy=t?Math.abs(t.clientY-pan.y):99;
+  releaseEdge(dx>60&&dy<60);
 });
-workspace.addEventListener("touchcancel",()=>{edgePan=null;workspace.style.transform=""});
+workspace.addEventListener("touchcancel",()=>{if(!edgePan)return;edgePan=null;releaseEdge(false)});
 const syncSearchClose=()=>{
   const keyboard=document.activeElement===$("#q"),button=$("#cspSearchClose");
   button.setAttribute("aria-label",keyboard?"Dismiss keyboard":"Close menu");button.title=keyboard?"Dismiss keyboard":"Close menu";
@@ -1656,6 +1740,15 @@ const goToDetent=detent=>{
   if(!isCollapsed()) toggleSheet();
 };
 setDetent("medium");
+const sheetActions=document.createElement("div");
+sheetActions.className="csp-sheet-actions";
+for(const [label,detent] of [["Expand","large"],["Collapse","medium"],["Close","peek"]]){
+  const button=document.createElement("button");
+  button.type="button";button.textContent=label;
+  button.addEventListener("click",()=>goToDetent(detent));
+  sheetActions.append(button);
+}
+side.append(sheetActions);
 document.addEventListener("csp:dnr-select",()=>{if(phoneSheet.matches) goToDetent("peek")});
 document.addEventListener("csp:dnr-download",()=>{if(phoneSheet.matches) goToDetent("peek")});
 /* setCollapsed() makes the whole panel inert, which is right when it is hidden
@@ -1719,8 +1812,9 @@ if(sheetMode()&&!isCollapsed()){
     if(g.mode===null){
       if(Math.abs(dx)<8&&Math.abs(dy)<8) return false;
       if(Math.abs(dx)>Math.abs(dy)||(!g.onGrabber&&g.target.closest(OWN_GESTURE))){g.mode="none";return false}
-      if(g.onGrabber||g.from!=="large") g.mode="sheet";
-      // at large, the content scrolls until it is at its top and pulled down
+      if(g.onGrabber||g.header||g.from!=="large") g.mode="sheet";
+      // at large, the content scrolls until it is at its top and pulled down.
+      // The header always moves the sheet, including the rubber-band above large.
       else g.mode=dy>0&&(!g.scroller||g.scroller.scrollTop<=0)?"sheet":"none";
       if(g.mode==="sheet"){
         g.limits=detentHeights();
@@ -1768,7 +1862,16 @@ if(sheetMode()&&!isCollapsed()){
     const velocity=last.t>first.t?(last.y-first.y)/(last.t-first.t):0; // px per ms, positive = down
     if(g.header&&g.keyboard){side.style.height="";settleTools();return}
     const lastMove=g.samples[g.samples.length-1];
-    if(g.header&&lastMove.y-g.y>80){goToDetent("peek");settleTools();return}
+    const down=lastMove.y-g.y;
+    // Home dismisses past 80px, or on a short flick faster than 300px/s.
+    // A pushed page steps one detent: large to medium, then medium to close.
+    if(g.header&&(down>80||(down>24&&velocity>0.3))){
+      const page=!!g.target.closest("#cspWorkspaceHeader");
+      const home=!page&&document.body.dataset.cspView!=="detail"&&!!g.target.closest(".csp-wordmark,.searchbox");
+      if(page) goToDetent(g.from==="large"?"medium":"peek");
+      else if(home) goToDetent("peek");
+      if(page||home){settleTools();return}
+    }
     const height=side.getBoundingClientRect().height;
     // Project the release speed forward, as UIKit does for sheets: a moderate
     // flick carries one detent, a hard one carries two, a slow drag stays
@@ -1800,11 +1903,14 @@ if(sheetMode()&&!isCollapsed()){
   },{passive:false});
   side.addEventListener("touchend",()=>{if(gesture?.source==="touch") end()});
   side.addEventListener("touchcancel",()=>{if(gesture?.source==="touch") end()});
-  /* Mouse (a narrow desktop window, or testing): the grabber and the peek
-     strip drag; content does not, because a mouse has a wheel for it. */
+  /* Mouse (a narrow desktop window, or testing): the grabber, the peek
+     strip and the sheet header drag. Content does not, because a mouse
+     has a wheel for it. The header is included because the grabber is not
+     a hit target; a downward header drag is the mouse dismiss. */
   side.addEventListener("pointerdown",event=>{
     if(event.pointerType!=="mouse"||!active()) return;
-    if(event.target!==grabber&&!peeking()) return;
+    const header=!!event.target.closest(".csp-wordmark,.searchbox,#cspWorkspaceHeader");
+    if(event.target!==grabber&&!peeking()&&!header) return;
     begin(event.clientX,event.clientY,event.target,"mouse");
   });
   side.addEventListener("pointermove",event=>{
@@ -1826,7 +1932,7 @@ if(sheetMode()&&!isCollapsed()){
     openSheet("medium");
   });
   side.addEventListener("focusin",event=>{
-    if(peeking()&&event.target.closest("#q")) openSheet("large");
+    if(sheetMode()&&event.target.closest("#q,#cspSatQuery")&&currentDetent()!=="large") openSheet("large");
   });
   /* The search capsule takes two taps, as in Maps: the first opens the sheet
      with no keyboard; the next, with the sheet open, focuses the field. A tap
@@ -1861,15 +1967,27 @@ if(sheetMode()&&!isCollapsed()){
       if(performance.now()<until&&document.activeElement===input) requestAnimationFrame(pin);
     };
     requestAnimationFrame(pin);
+    requestAnimationFrame(syncKeyboardInset);
   };
   q.addEventListener("focus",()=>focusSearch(q));
   side.addEventListener("focusin",event=>{if(event.target.id==="cspSatQuery") focusSearch(event.target)});
+  const syncKeyboardInset=()=>{
+    const vv=window.visualViewport;
+    const focused=!!document.activeElement?.matches("#q,#cspSatQuery,input,textarea");
+    const covered=vv?Math.max(0,window.innerHeight-vv.height-vv.offsetTop):0;
+    const inset=sheetMode()&&focused?Math.max(0,covered-sheetPixels("--safe-bottom")):0;
+    if(inset) setSheetStyle(document.body,"--sheet-keyboard",`${Math.round(inset)}px`);
+    else document.body.style.removeProperty("--sheet-keyboard");
+  };
+  window.visualViewport?.addEventListener("resize",syncKeyboardInset);
   window.visualViewport?.addEventListener("scroll",()=>{
+    syncKeyboardInset();
     if(sheetMode()&&document.activeElement?.matches("#q,#cspSatQuery")&&window.scrollY) window.scrollTo(0,0);
   });
+  document.addEventListener("focusout",()=>requestAnimationFrame(syncKeyboardInset));
   /* With the keyboard up, a tap anywhere outside the search row dismisses it.
-     A tap on the map also lowers the sheet back to the capsule (the existing
-     map handler does that). */
+     The sheet stays where it is; the close control and a header drag are what
+     lower it. */
   document.addEventListener("pointerdown",event=>{
     if(!sheetMode()||!document.activeElement?.matches("#q,#cspSatQuery")) return;
     if(event.target.closest(".search-row,#ac,.csp-sat-field")) return;

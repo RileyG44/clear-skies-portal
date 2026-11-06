@@ -33,7 +33,7 @@ const base = process.argv[2] || 'http://127.0.0.1:8765/';
   ok('loads at the search capsule', s.collapsed && s.h===52, JSON.stringify(s));
   await page.tap('#map', {position:{x:200,y:30}}); await page.waitForTimeout(700);
   s = await st();
-  ok('tap map collapses to peek', s.collapsed && s.h===52 && s.bottom<=844, JSON.stringify(s));
+  ok('a map tap leaves the search capsule up', s.collapsed && s.h===52 && s.bottom<=844, JSON.stringify(s));
   ok('peek is usable (not inert), search in view', !s.inert && s.qVisible);
   ok('sidebar toggle hidden on portrait phone', !s.toggleShown);
   ok('rows below strip hidden from AT', s.navHidden==='hidden');
@@ -53,8 +53,10 @@ const base = process.argv[2] || 'http://127.0.0.1:8765/';
   s = await st(); ok('second search tap opens large and keeps focus', !s.collapsed && s.detent==='large' && s.active==='q', JSON.stringify(s));
   await page.evaluate(()=>document.activeElement.blur());
 
-  await page.tap('#map', {position:{x:200,y:30}}); await page.waitForTimeout(700);
-  s = await st(); ok('tap map returns to peek', s.collapsed && s.h===52, JSON.stringify(s));
+  await page.tap('#map', {position:{x:200,y:30}}); await page.waitForTimeout(400);
+  s = await st(); ok('a map tap leaves the open sheet up', !s.collapsed && s.detent==='large', JSON.stringify(s));
+  await page.locator('#cspSearchClose').click(); await page.waitForTimeout(700);
+  s = await st(); ok('close returns to peek', s.collapsed && s.h===52, JSON.stringify(s));
 
   // drag up from the peek strip (not the grabber): start on the strip's lower part
   let box = await (await page.$('#side')).boundingBox();
@@ -64,8 +66,8 @@ const base = process.argv[2] || 'http://127.0.0.1:8765/';
   await page.mouse.up(); await page.waitForTimeout(700);
   s = await st(); ok('drag up from peek opens', !s.collapsed && (s.detent==='medium'||s.detent==='large'), JSON.stringify(s));
 
-  // drag the grabber down -> peek
-  box = await (await page.$('#cspGrabber')).boundingBox(); x=box.x+box.width/2; y=box.y+box.height/2;
+  // drag the home header down -> peek
+  box = await (await page.$('.csp-wordmark')).boundingBox(); x=box.x+box.width/2; y=box.y+box.height/2;
   await page.mouse.move(x,y); await page.mouse.down();
   for (let i=1;i<=14;i++) await page.mouse.move(x, y + i*50);
   await page.mouse.up(); await page.waitForTimeout(700);
@@ -82,7 +84,7 @@ const base = process.argv[2] || 'http://127.0.0.1:8765/';
   await page.tap('#q');await page.waitForTimeout(600);
   await page.focus('#cspGrabber');await page.keyboard.press('ArrowDown'); await page.waitForTimeout(600);
   s = await st(); ok('search reopens the sheet and grabber ArrowDown reaches medium', !s.collapsed && s.detent==='medium', JSON.stringify(s));
-  await page.tap('#cspGrabber'); await page.waitForTimeout(600);
+  await page.evaluate(()=>document.getElementById('cspGrabber').click()); await page.waitForTimeout(600);
   s = await st(); ok('tap grabber again goes large', !s.collapsed && s.detent==='large', JSON.stringify(s));
 
   // keyboard
@@ -99,7 +101,7 @@ const base = process.argv[2] || 'http://127.0.0.1:8765/';
 
   // detail page peek shows the title
   await page.click('.csp-nav-button[data-route="terrain"]'); await page.waitForTimeout(500);
-  await page.tap('#map', {position:{x:200,y:30}}); await page.waitForTimeout(700);
+  await page.locator('#cspPageClose').click(); await page.waitForTimeout(700);
   const title = await page.evaluate(()=>{const t=document.getElementById('cspWorkspaceTitle').getBoundingClientRect(), r=document.getElementById('side').getBoundingClientRect(); return {inside:t.top>=r.top&&t.bottom<=r.bottom+1, text:document.getElementById('cspWorkspaceTitle').textContent}});
   ok('detail page capsule keeps search and hides the title until reopened', !title.inside&&s.qVisible, JSON.stringify(title));
   await ctx.close();
@@ -153,7 +155,7 @@ const base = process.argv[2] || 'http://127.0.0.1:8765/';
   s=await st(); ok('drag down on content at medium -> peek', s.detent==='peek', JSON.stringify(s));
   // fast flick up from peek (short distance, high speed) -> opens
   let side=await (await page.$('#side')).boundingBox();
-  await touch(side.x+side.width/2, side.y+side.height-20, 0, -90, 60, 4);
+  await touch(side.x+side.width/2, side.y+side.height-20, 0, -150, 40, 3);
   s=await st(); ok('quick flick up from peek opens', s.detent!=='peek', JSON.stringify(s));
   // slow small nudge from medium down does not collapse
   row=await (await page.$('.csp-nav-button[data-route="layers"]')).boundingBox();
@@ -187,8 +189,8 @@ const base = process.argv[2] || 'http://127.0.0.1:8765/';
   const after=await slider.evaluate(e=>+e.value); const sAfter=await st();
   ok('slider drag changes the value, not the sheet', after!==before && sAfter.detent===sBefore.detent, `value ${before}->${after}, ${sBefore.detent}->${sAfter.detent}`);
   // rubber band past large returns to large
-  const g=await (await page.$('#cspGrabber')).boundingBox();
-  await touch(g.x+g.width/2,g.y+g.height/2,0,-200,300);
+  const g=await page.evaluate(()=>{const r=document.getElementById('cspWorkspaceHeader').getBoundingClientRect();return {x:r.x+r.width/2,y:r.y+Math.max(8,r.height/2)}});
+  await touch(g.x,g.y,0,-200,300);
   s=await st(); ok('dragging past large rubber-bands back to large', s.detent==='large' && s.top>=50, JSON.stringify(s));
 
   // flicks: a hard flick carries two detents, a slow drag settles where it ends
@@ -197,8 +199,8 @@ const base = process.argv[2] || 'http://127.0.0.1:8765/';
   let sb2=await (await page.$('#side')).boundingBox();
   await touch(sb2.x+sb2.width/2, sb2.y+40, 0, -260, 0, 3);
   ok('hard flick up from peek -> large', await d()==='large');
-  let gb=await (await page.$('#cspGrabber')).boundingBox();
-  await touch(gb.x+gb.width/2, gb.y+10, 0, 260, 0, 3);
+  let gb=await (await page.$('.csp-wordmark')).boundingBox();
+  await touch(gb.x+gb.width/2, gb.y+gb.height/2, 0, 260, 0, 3);
   ok('hard flick down from large -> peek', await d()==='peek');
   sb2=await (await page.$('#side')).boundingBox();
   await touch(sb2.x+sb2.width/2, sb2.y+40, 0, -330, 900, 20);
