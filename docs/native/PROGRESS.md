@@ -4,7 +4,7 @@ Plan: [ARCHITECTURE.md](ARCHITECTURE.md). Phases have exit gates, not dates.
 
 ## Drumlin demo — 6 Nov 2026
 
-The required demo work in [DEMO-PLAN.md](DEMO-PLAN.md), Steps A–D, is implemented:
+The demo work in [DEMO-PLAN.md](DEMO-PLAN.md), Steps A–D, was implemented first:
 
 - A stable native raster catalogue now covers Labels & reference, Geology &
   hazards and snow conditions. ArcGIS exports use tile-aligned Web Mercator
@@ -24,21 +24,46 @@ The required demo work in [DEMO-PLAN.md](DEMO-PLAN.md), Steps A–D, is implemen
   and dock tools carry a plain explanation; the Layers dock shares the layer
   page's active controls, and the engine dock reports stored map-data bytes.
 
-Step E (optional native PNG snapshot/Photos export) is deferred. Export and
-Capture explicitly say they are not in this build; no export settings or Photos
-permission are advertised. Satellite imagery, analysis, markup, 3D, point clouds,
-vector/live alerts and past-landscape reconstructions remain unsupported in this
-demo. No hidden WebView is used for them.
+Since then (same day), every reference layer draws natively and Export works:
 
-Verification: 15 csk-app unit tests plus terrain shader parity pass, the three
-engine raster URL/cache/day tests pass, relevant app/engine clippy with warnings
-as errors and Rust formatting pass, as do `npm run check` and `git diff --check`.
-The Drumlin ARM64 iOS Simulator Debug build passes. Simulator checks were
-attempted only after implementation commits three and six, with one simulator;
-the device launcher returned **Remote daemon is unavailable** before installation
-in both batches. Runtime UI and live overlay verification of this revision are
-therefore still pending. Each batch shut down the simulator. Builds use two jobs
-and reuse `/tmp/dd-drumlin` and the existing Rust cache; no cache wipe is needed.
+- **Vector layers** (`csk-gpu::vector`, `csk-map` layers): shapes tessellated
+  once off the render thread (lyon) into local-unit meshes; fills under lines;
+  lines widened on screen with round joins, SVG's miter limit of 4, dashes in
+  CSS px; points through the marker program (dashed rings); view centre sent as
+  a high/low pair so positions stay exact at z18; antimeridian copies; a CPU
+  hit test for taps. GPU tests check widths, dashes, fills and the miter limit.
+- **Past landscapes** (ice limits, flood extent, Pleistocene lakes, NADI-1 ice
+  with its 25–10.5 ka slider, WA archaeology generated from wa-archaeology.js)
+  and **Live conditions** (NWS alerts by view, level and type; USGS earthquakes
+  by age and magnitude; volcano status; NIFC fires) with the web's live-alert
+  controls, refresh on their age limits and when the view leaves what was
+  fetched, a failed refresh keeping the last copy. Tapping an alert, quake,
+  volcano, fire or archaeology marker opens its details with the official link.
+  No overlay is a "not in this build" row any more.
+- **Export image**: 1×–32×, whole view or a selected area (a movable, resizable
+  rectangle), Include map info (a SwiftUI card composited at up to 8×), progress
+  and Cancel, the PNG to the share sheet. Views carry an export flag so terrain
+  and raster layers fetch one level finer per doubling of density. The export
+  borrows the live map's scene (the map pauses), renders screen-sized blocks with
+  a cropped margin and streams the PNG band by band. No seams at 8× over 32
+  blocks; an 8× export of a cold area takes ~11 min, bound by elevation source
+  throughput (raising request concurrency made it slower).
+- **Fixed on the simulator**: vector layers built before the map attached never
+  reached it; line spikes at coarse zooms; a first-launch abort when the surface
+  could not be configured under load (now retried next frame).
+- **Measured against the current app** on one simulator, same look, cold area:
+  a 0.8 s camera move ran 49–60 fps (worst frame 36–54 ms) against 6–23 fps
+  (worst 108–583 ms); the screen was covered in ~4 s against ~8 s. Debug builds
+  take `-cspDebugPerf`, `-cspDebugCamera "lat lng zoom [delay]"`,
+  `-cspDebugActLater` and `-cspDebugSendLater` for these checks.
+
+Still to build: Satellite imagery (STAC search across Planetary Computer, Earth
+Search, Copernicus and NISAR, scene tiles as dynamic raster layers, the double
+tap's best imagery), Draw & annotate, Terrain analysis screens, 3D and point
+clouds. Performance follow-ups: simplified vector levels for wide views (a
+nationwide fire layer is ~1M line vertices), raster pools that grow on demand
+(each reserves 25–64 MiB up front; the engine panel now shows working memory),
+and prefetching an export's next block.
 
 TestFlight was not run. Riley must create the App Store Connect record for
 `dev.riley.Drumlin` before any future requested upload. ClearSkies target, scheme,
