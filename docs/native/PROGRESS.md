@@ -57,13 +57,26 @@ Since then (same day), every reference layer draws natively and Export works:
   take `-cspDebugPerf`, `-cspDebugCamera "lat lng zoom [delay]"`,
   `-cspDebugActLater` and `-cspDebugSendLater` for these checks.
 
-Still to build: Satellite imagery (STAC search across Planetary Computer, Earth
-Search, Copernicus and NISAR, scene tiles as dynamic raster layers, the double
-tap's best imagery), Draw & annotate, Terrain analysis screens, 3D and point
-clouds. Performance follow-ups: simplified vector levels for wide views (a
-nationwide fire layer is ~1M line vertices), raster pools that grow on demand
-(each reserves 25–64 MiB up front; the engine panel now shows working memory),
-and prefetching an export's next block.
+- **Satellite imagery**: the engine searches Planetary Computer, Earth Search,
+  Copernicus and NISAR at a point together and adds NASA GIBS daily layers;
+  scene tiles (TileJSON or titiler COGs, colour-tuned and sharpened as the web
+  does, known imagery hosts only) draw as scene layers just above the terrain.
+  The page has place and map-centre search, time/cloud/type filters, the best
+  clear image (bestPhoto), results by source, result options and estimated next
+  acquisitions; the imagery button and double tap show the best clear image;
+  Displayed on map has opacity, Reset and the source link. Reference imagery:
+  Esri World Imagery (display only, never stored), Sentinel-2 cloudless (EOX)
+  and Maxar Open Data coverage footprints.
+- **Performance**: raster pools start at 16 tiles and grow on demand (they
+  reserved 25–64 MiB each up front); vector meshes carry simplified levels for
+  wide views (live NIFC perimeters: 4.0M triangle indices at full detail, 75k up
+  to zoom 4), drawn at the coarsest level within a pixel.
+
+Still to build: Terrain analysis screens (the analyses run natively; the page,
+the view grid, colour palettes, blend modes and the result layer stack remain),
+Draw & annotate (the markup store and routes are native; drawing, editing and
+the markup panel remain), 3D and point clouds. Prefetching an export's next
+block is a possible speed-up; exports are bound by elevation source throughput.
 
 TestFlight was not run. Riley must create the App Store Connect record for
 `dev.riley.Drumlin` before any future requested upload. ClearSkies target, scheme,
