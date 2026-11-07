@@ -13,6 +13,7 @@ pub mod dnr_routes;
 pub mod elevation;
 pub mod features;
 pub mod flight;
+pub mod imagery;
 pub mod layers;
 pub mod markup;
 pub mod national;
@@ -93,6 +94,8 @@ pub struct Engine {
     /// Proxy fetches shared while in flight.
     proxy_flights: flight::Flights<String, Option<(Vec<u8>, String, bool)>>,
     layer_flights: flight::Flights<String, Option<Vec<u8>>>,
+    /// Scene TileJSON documents resolved recently (imagery.rs).
+    tilejson: imagery::TileJsonCache,
     started: Instant,
 }
 
@@ -165,6 +168,7 @@ impl Engine {
             oregon: oregon::Oregon::default(),
             proxy_flights: flight::Flights::default(),
             layer_flights: flight::Flights::default(),
+            tilejson: imagery::TileJsonCache::default(),
             started: Instant::now(),
         }))
     }

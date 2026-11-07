@@ -25,8 +25,26 @@ const REFRESH_STALE: Duration = Duration::from_secs(60);
 pub enum Draw {
     Terrain,
     Raster(RasterLayer, RasterStyle),
+    /// A satellite scene set with [`Layers::set_scene`].
+    Scene(u32, RasterStyle),
     /// A vector layer set with [`Layers::set_vector`], at an opacity.
     Vector(&'static str, f32),
+}
+
+/// A satellite scene's tiles: a template with `{z}`, `{x}` and `{y}` on an
+/// imagery host, the finest level it holds and the tile side it sends.
+#[derive(Clone, Debug, PartialEq)]
+pub struct SceneTiles {
+    pub template: Arc<str>,
+    pub max_zoom: u8,
+    pub pixels: u32,
+}
+
+/// What a raster pool draws: a catalogue layer or a scene.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+enum Pool {
+    Layer(RasterLayer),
+    Scene(u32),
 }
 
 /// A vector layer: the newest shapes' revision, and the mesh of that
@@ -79,7 +97,7 @@ pub fn decode(bytes: &[u8], side: u32) -> Option<Vec<u8>> {
     Some(rgba)
 }
 
-type Key = (RasterLayer, TileId);
+type Key = (Pool, TileId);
 /// A layer's tessellated shapes and the revision they were built for.
 type Built = (&'static str, u64, csk_gpu::Mesh);
 
@@ -88,7 +106,8 @@ pub struct Layers {
     engine: Arc<Engine>,
     wake: Wake,
     pub order: Vec<Draw>,
-    rasters: HashMap<RasterLayer, Raster>,
+    rasters: HashMap<Pool, Raster>,
+    scenes: HashMap<u32, SceneTiles>,
     in_flight: HashMap<Key, tokio::task::AbortHandle>,
     later: HashMap<Key, Instant>,
     stale: HashSet<Key>,
@@ -107,6 +126,7 @@ impl Layers {
             wake,
             order: vec![Draw::Terrain],
             rasters: HashMap::new(),
+            scenes: HashMap::new(),
             in_flight: HashMap::new(),
             later: HashMap::new(),
             stale: HashSet::new(),
@@ -115,6 +135,28 @@ impl Layers {
             vectors: HashMap::new(),
             meshes: mpsc::channel(),
         }
+    }
+
+    /// Sets a scene's tiles (None removes it). New tiles replace what the
+    /// scene drew before.
+    pub fn set_scene(&mut self, id: u32, tiles: Option<SceneTiles>) {
+        if self.scenes.get(&id) == tiles.as_ref() {
+            return;
+        }
+        self.rasters.remove(&Pool::Scene(id));
+        self.in_flight.retain(|(pool, _), task| {
+            let kept = *pool != Pool::Scene(id);
+            if !kept {
+                task.abort();
+            }
+            kept
+        });
+        self.later.retain(|(pool, _), _| *pool != Pool::Scene(id));
+        self.stale.retain(|(pool, _)| *pool != Pool::Scene(id));
+        match tiles {
+            Some(tiles) => self.scenes.insert(id, tiles),
+            None => self.scenes.remove(&id),
+        };
     }
 
     /// Replaces a vector layer's shapes (None removes the layer). They are
@@ -151,10 +193,11 @@ impl Layers {
     /// Sets the layer order (bottom first). Layers no longer drawn free
     /// their pools.
     pub fn set_order(&mut self, order: Vec<Draw>) {
-        let used: HashSet<RasterLayer> = order
+        let used: HashSet<Pool> = order
             .iter()
             .filter_map(|d| match d {
-                Draw::Raster(layer, style) if style.opacity > 0.0 => Some(*layer),
+                Draw::Raster(layer, style) if style.opacity > 0.0 => Some(Pool::Layer(*layer)),
+                Draw::Scene(id, style) if style.opacity > 0.0 => Some(Pool::Scene(*id)),
                 _ => None,
             })
             .collect();
@@ -175,14 +218,22 @@ impl Layers {
         let now = Instant::now();
         let mut changed = false;
         for draw in &self.order {
-            if let Draw::Raster(layer, style) = *draw
-                && style.opacity > 0.0
-                && !self.rasters.contains_key(&layer)
-            {
-                // Display-density exports are 4x the bytes a tile.
-                let pool = if layer.pixels() > TILE { POOL_TILES * 2 / 3 } else { POOL_TILES };
-                let raster = Raster::new(gpu, pool, layer.min_zoom(), layer.max_zoom(), layer.pixels())?;
-                self.rasters.insert(layer, raster);
+            // A pool's tiles: (min, max) zoom, side, and sharp.
+            let (pool, spec) = match *draw {
+                Draw::Raster(layer, style) if style.opacity > 0.0 => {
+                    (Pool::Layer(layer), ((layer.min_zoom(), layer.max_zoom()), layer.pixels(), layer.sharp()))
+                }
+                Draw::Scene(id, style) if style.opacity > 0.0 => {
+                    let Some(tiles) = self.scenes.get(&id) else { continue };
+                    (Pool::Scene(id), ((0, tiles.max_zoom), tiles.pixels, false))
+                }
+                _ => continue,
+            };
+            if let std::collections::hash_map::Entry::Vacant(slot) = self.rasters.entry(pool) {
+                let ((min, max), pixels, sharp) = spec;
+                // Display-density tiles are 4x the bytes a tile.
+                let tiles = if pixels > TILE { POOL_TILES * 2 / 3 } else { POOL_TILES };
+                slot.insert(Raster::new(gpu, tiles, min, max, pixels, sharp)?);
             }
         }
         while let Ok((key, answer)) = self.rx.try_recv() {
@@ -230,7 +281,7 @@ impl Layers {
             kept
         });
         self.later.retain(|key, at| keep.contains(key) && *at > now);
-        let mut busy: HashMap<RasterLayer, usize> = HashMap::new();
+        let mut busy: HashMap<Pool, usize> = HashMap::new();
         for (layer, _) in self.in_flight.keys() {
             *busy.entry(*layer).or_default() += 1;
         }
@@ -248,10 +299,20 @@ impl Layers {
             }
             *count += 1;
             let (engine, tx, wake) = (self.engine.clone(), self.tx.clone(), self.wake.clone());
+            let scene = match key.0 {
+                Pool::Scene(id) => self.scenes.get(&id).cloned(),
+                Pool::Layer(_) => None,
+            };
+            let pixels = self.rasters[&key.0].pixels();
             let task = self.runtime.spawn(async move {
                 let TileId { z, x, y } = key.1;
-                let decoded = match engine.raster_tile(key.0, z, x, y).await {
-                    RasterAnswer::Image { bytes, lasting } => match decode(&bytes, key.0.pixels()) {
+                let answer = match (key.0, scene) {
+                    (Pool::Layer(layer), _) => engine.raster_tile(layer, z, x, y).await,
+                    (Pool::Scene(_), Some(tiles)) => engine.scene_tile(&tiles.template, z, x, y).await,
+                    (Pool::Scene(_), None) => RasterAnswer::Empty,
+                };
+                let decoded = match answer {
+                    RasterAnswer::Image { bytes, lasting } => match decode(&bytes, pixels) {
                         Some(rgba) => Decoded::Image(rgba, lasting),
                         // Undecodable bytes are not an answer to keep.
                         None => Decoded::Retry(Duration::from_secs(60)),
@@ -270,13 +331,18 @@ impl Layers {
 
     /// The frame's layers, bottom first, for [`csk_gpu::Terrain::render`].
     pub fn frame(&mut self) -> Vec<csk_gpu::Layer<'_>> {
-        let mut rasters: HashMap<RasterLayer, &mut Raster> = self.rasters.iter_mut().map(|(k, v)| (*k, v)).collect();
+        let mut rasters: HashMap<Pool, &mut Raster> = self.rasters.iter_mut().map(|(k, v)| (*k, v)).collect();
         let mut out = Vec::with_capacity(self.order.len());
         for draw in &self.order {
             match *draw {
                 Draw::Terrain => out.push(csk_gpu::Layer::Terrain),
                 Draw::Raster(layer, style) => {
-                    if let Some(raster) = rasters.remove(&layer) {
+                    if let Some(raster) = rasters.remove(&Pool::Layer(layer)) {
+                        out.push(csk_gpu::Layer::Raster(raster, style));
+                    }
+                }
+                Draw::Scene(id, style) => {
+                    if let Some(raster) = rasters.remove(&Pool::Scene(id)) {
                         out.push(csk_gpu::Layer::Raster(raster, style));
                     }
                 }

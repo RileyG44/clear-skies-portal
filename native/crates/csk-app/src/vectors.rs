@@ -31,6 +31,8 @@ pub enum Source {
     Volcanoes,
     /// NIFC/WFIGS perimeters and incidents (`loadFires`).
     Fires,
+    /// The bundled Maxar Open Data index (`loadMaxarFootprints`).
+    Maxar(&'static [u8]),
 }
 
 /// A line-width slider (`lineWidth`).
@@ -78,6 +80,7 @@ pub struct Spec {
 }
 
 const NADI1: &[u8] = include_bytes!("../../../../nadi1-cordilleran.json");
+const MAXAR: &[u8] = include_bytes!("../../../../maxar-catalog.json");
 const ARCHAEOLOGY: &[u8] = include_bytes!("../../../shaders/generated/wa-archaeology.json");
 
 pub const SPECS: &[Spec] = &[
@@ -158,6 +161,7 @@ pub const SPECS: &[Spec] = &[
         interactive: true,
     },
     Spec { id: "fires", source: Source::Fires, ttl: TEN_MINUTES, line_width: None, slice: None, interactive: true },
+    Spec { id: "maxarvhr", source: Source::Maxar(MAXAR), ttl: MONTH, line_width: None, slice: None, interactive: true },
 ];
 
 pub fn spec(id: &str) -> Option<&'static Spec> {
@@ -219,6 +223,39 @@ fn geometries(g: &Value, out: &mut Vec<Geo>) {
     }
 }
 
+/// The Maxar index's footprints as features: each a rectangle with its
+/// event's title, dates, licence and collection.
+pub fn parse_maxar(bytes: &[u8]) -> Option<Vec<Feature>> {
+    let v: Value = serde_json::from_slice(bytes).ok()?;
+    let mut out = Vec::new();
+    for event in v["events"].as_array()? {
+        let mut props = Object::new();
+        for key in ["title", "start", "end", "url"] {
+            props.insert(key.into(), event[key].clone());
+        }
+        let title = event["title"].as_str().or(event["id"].as_str()).unwrap_or("Maxar Open Data");
+        props.insert("title".into(), json!(title));
+        props.insert("license".into(), event.get("license").or(v.get("license")).cloned().unwrap_or(Value::Null));
+        for b in event["footprints"].as_array().into_iter().flatten() {
+            let b: Vec<f64> = b.as_array().into_iter().flatten().filter_map(Value::as_f64).collect();
+            let [west, south, east, north] = b[..] else { continue };
+            let ring: Vec<[f64; 2]> = [[west, south], [east, south], [east, north], [west, north]]
+                .iter()
+                .filter_map(|c| mercator(&json!(c)))
+                .collect();
+            if ring.len() == 4 {
+                out.push(Feature {
+                    geometry: Geo::Areas(vec![vec![ring]]),
+                    props: props.clone(),
+                    depth: None,
+                    part: 0,
+                });
+            }
+        }
+    }
+    Some(out)
+}
+
 /// The features of a GeoJSON FeatureCollection. None if it is not one.
 pub fn parse(bytes: &[u8], part: u8) -> Option<Vec<Feature>> {
     let v: Value = serde_json::from_slice(bytes).ok()?;
@@ -278,7 +315,7 @@ const FIRE_INCIDENTS: &str =
 pub fn request(spec: &Spec, alerts: &Alerts, view: Option<&View>) -> (Vec<String>, Option<[f64; 4]>) {
     match spec.source {
         Source::Url(url) => (vec![url.into()], None),
-        Source::Bundled(_) => (Vec::new(), None),
+        Source::Bundled(_) | Source::Maxar(_) => (Vec::new(), None),
         Source::Nws => {
             // Beyond the screen, so ordinary pans stay inside the answer.
             let bounds = view.filter(|_| alerts.viewport).map(|v| view_bounds(v, 0.35));
@@ -447,6 +484,8 @@ fn area_style(id: &str, f: &Feature, width: Option<f64>) -> Style {
         "waice" => style("#7ed9ee", width.unwrap_or(2.25), 0.95, None, [0.0; 2]),
         "waflood" => style("#25a9c4", 1.4, 0.95, Some(("#36c4de", 0.44)), [0.0; 2]),
         "paleolakes" => style("#5c9df2", width.unwrap_or(1.2), 0.95, Some(("#69b7ff", 0.42)), [0.0; 2]),
+        // Leaflet's default path: 3 px #3388ff, no fill.
+        "maxarvhr" => style("#3388ff", 3.0, 1.0, None, [0.0; 2]),
         // Fire perimeters.
         _ => style("#f85149", 2.0, 1.0, Some(("#f85149", 0.22)), [0.0; 2]),
     }
@@ -715,6 +754,27 @@ pub fn details(id: &str, f: &Feature) -> (String, Vec<Value>) {
                 row("Discovered", num(p, "FireDiscoveryDateTime").map(utc).unwrap_or_default()),
             ],
         ),
+        "maxarvhr" => {
+            // Both ends of an event's extent (maxarWhen): its collections
+            // carry pre-event archive alongside the post-event collect.
+            let day = |key: &str| text(p, key).get(..10).unwrap_or("").to_owned();
+            let (start, end) = (day("start"), day("end"));
+            let when = match (start.is_empty(), end.is_empty()) {
+                (false, false) if start != end => format!("{start} to {end}"),
+                (false, _) => start,
+                (true, false) => end,
+                (true, true) => "Date not published".into(),
+            };
+            (
+                or("title", "Maxar Open Data"),
+                vec![
+                    row("Imagery", when),
+                    hint("12–20 inch optical, Cloud-Optimised GeoTIFF"),
+                    row("Licence", "CC-BY-NC-4.0 — non-commercial use only"),
+                    link("Open the STAC collection", text(p, "url")),
+                ],
+            )
+        }
         "waarchaeology" => {
             let uncertainty = num(p, "uncertaintyMi")
                 .map_or(String::new(), |u| if u < 1.0 { format!("±{u:.1} mi") } else { format!("±{u:.0} mi") });

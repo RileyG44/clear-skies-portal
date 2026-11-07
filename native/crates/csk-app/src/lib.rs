@@ -11,6 +11,7 @@ pub mod export;
 pub mod overlays;
 pub mod preview;
 pub mod render;
+pub mod satellite;
 pub mod shell;
 pub mod state;
 pub mod terrain;

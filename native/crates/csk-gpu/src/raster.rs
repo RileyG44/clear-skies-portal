@@ -44,6 +44,7 @@ pub struct Raster {
     max_zoom: u8,
     /// Tile side in pixels (256, or more for display-density exports).
     pixels: u32,
+    sharp: bool,
     records: HashMap<TileId, Record>,
     pool: wgpu::Texture,
     pool_view: wgpu::TextureView,
@@ -63,7 +64,16 @@ struct Quad {
 impl Raster {
     /// A layer whose pool holds `pool_tiles` tiles of `pixels` square,
     /// drawn from level `min_zoom` and published to `max_zoom`.
-    pub fn new(gpu: &Renderer, pool_tiles: u32, min_zoom: u8, max_zoom: u8, pixels: u32) -> Result<Self, Error> {
+    /// A layer of `pixels`-square tiles between `min_zoom` and `max_zoom`;
+    /// `sharp` layers draw one level finer on high-density screens.
+    pub fn new(
+        gpu: &Renderer,
+        pool_tiles: u32,
+        min_zoom: u8,
+        max_zoom: u8,
+        pixels: u32,
+        sharp: bool,
+    ) -> Result<Self, Error> {
         if pixels == 0 || pixels > gpu.max_dimension() {
             return Err(Error::Input("raster tile size"));
         }
@@ -87,6 +97,7 @@ impl Raster {
             min_zoom,
             max_zoom,
             pixels,
+            sharp,
             records: HashMap::new(),
             pool,
             pool_view,
@@ -102,6 +113,8 @@ impl Raster {
         // snapshotLayerZoom); a screen draws the map's own zoom.
         let zoom = if view.export {
             view.zoom + view.dpr.max(1.0).log2() - (f64::from(self.pixels) / f64::from(crate::TILE)).log2()
+        } else if self.sharp && view.dpr >= 1.5 {
+            view.zoom + 1.0
         } else {
             view.zoom
         };

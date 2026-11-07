@@ -126,7 +126,7 @@ fn sources(preference: &str) -> Vec<TerrainSource> {
 
 /// The map's layers, bottom first: the pinned reference basemap in the
 /// map theme, then the person's order (kept top first).
-fn draws(state: &AppState) -> Vec<Draw> {
+fn draws(state: &AppState, fitted: &Fitted) -> Vec<Draw> {
     let dark = state.theme == "dark";
     let mut out = Vec::new();
     if let Some(base) = RasterLayer::by_id(if dark { "dark" } else { "light" }) {
@@ -164,7 +164,25 @@ fn draws(state: &AppState) -> Vec<Draw> {
     if !out.contains(&Draw::Terrain) {
         out.insert(out.len().min(1), Draw::Terrain);
     }
+    // The shown scene: just above the terrain, under the overlays above it,
+    // over the reference mosaics beneath.
+    if let Some(shown) = fitted.sat.shown.as_ref().filter(|s| s.drawing == Some(Ok(())))
+        && let Some(at) = out.iter().position(|d| *d == Draw::Terrain)
+    {
+        let opacity = (shown.opacity / 100.0).clamp(0.0, 1.0) as f32;
+        out.insert(at + 1, Draw::Scene(SCENE, RasterStyle { opacity, muted: false }));
+    }
     out
+}
+
+/// The map's id for the shown satellite scene.
+const SCENE: u32 = 1;
+
+/// The finest level a scene's tiles hold (scenes.js `imageryNativeZoom`).
+fn native_zoom(scene: &csk_engine::imagery::Scene) -> u8 {
+    scene.native_max.unwrap_or_else(|| {
+        scene.gsd.filter(|g| *g > 0.0).map_or(19, |g| (156_543.033_92 / g).log2().ceil().clamp(6.0, 20.0) as u8)
+    })
 }
 
 /// The selected place's dot (search.js setLoc: radius 7, weight 2, the
@@ -276,7 +294,7 @@ impl App {
             map.set_sources(&sources(&inner.state.terrain.source));
             let (uniforms, derive) = self.appearance(&inner);
             map.set_appearance(uniforms, derive);
-            map.set_layers(draws(&inner.state));
+            map.set_layers(draws(&inner.state, &inner.fitted));
             map.set_markers(markers(inner.location.as_ref(), &inner.state.appearance));
             let lighting = inner.state.terrain.lighting;
             drop(inner);
@@ -309,7 +327,7 @@ impl App {
         update.insert("counts".into(), shell::counts(&inner.state));
         update.insert("search".into(), shell::search(inner.location.as_ref(), inner.location_version));
         update.insert("map".into(), shell::map_state(&inner.state, &inner.fitted, inner.bearing));
-        update.insert("dock".into(), shell::dock(&inner.state, inner.bearing));
+        update.insert("dock".into(), shell::dock(&inner.state, &inner.fitted, inner.bearing));
         update.insert("status".into(), shell::status(&inner.state, &inner.fitted, lon, lat, zoom, inner.settled));
         self.panel_update(inner, &mut update);
         update
@@ -407,7 +425,7 @@ impl App {
         if let Some(map) = lock(&self.map).as_ref() {
             let (uniforms, derive) = self.appearance(inner);
             map.set_appearance(uniforms, derive);
-            map.set_layers(draws(&inner.state));
+            map.set_layers(draws(&inner.state, &inner.fitted));
             map.set_markers(markers(inner.location.as_ref(), &inner.state.appearance));
         }
         self.sync_vectors(&inner.state);
@@ -517,6 +535,117 @@ impl App {
         update
     }
 
+    /// Searches satellite scenes at a point, replacing the last search; the
+    /// page follows as the catalogues answer.
+    fn start_scene_search(&self, inner: &mut Inner, lat: f64, lng: f64, label: String) {
+        let Some(runtime) = lock(&self.runtime).clone() else { return };
+        let sat = &mut inner.fitted.sat;
+        sat.at = Some((lat, lng, label));
+        sat.searching = true;
+        sat.found = None;
+        sat.version += 1;
+        let (token, prefs, engine, me) =
+            (sat.version, inner.state.satellite.clone(), self.engine.clone(), self.me.clone());
+        runtime.spawn(async move {
+            let found = engine.search_scenes(lat, lng, prefs.window(), prefs.cloud).await;
+            if let Some(app) = me.upgrade() {
+                app.scenes_found(token, found);
+            }
+        });
+    }
+
+    fn scenes_found(&self, token: u64, found: csk_engine::imagery::Found) {
+        let mut inner = lock(&self.inner);
+        let sat = &mut inner.fitted.sat;
+        if sat.version != token {
+            return;
+        }
+        sat.found = Some(found);
+        sat.searching = false;
+        sat.version += 1;
+        let update = self.changed(&inner);
+        drop(inner);
+        self.send_update(update);
+    }
+
+    /// Waits for the search at `(lat, lng)` (starting one if none runs
+    /// there), and answers what it found.
+    async fn scenes_at(self: &Arc<Self>, lat: f64, lng: f64, label: String) -> Option<csk_engine::imagery::Found> {
+        {
+            let mut inner = lock(&self.inner);
+            let here =
+                inner.fitted.sat.at.as_ref().is_some_and(|(a, b, _)| (a - lat).abs() < 1e-9 && (b - lng).abs() < 1e-9);
+            if !here || (!inner.fitted.sat.searching && inner.fitted.sat.found.is_none()) {
+                self.start_scene_search(&mut inner, lat, lng, label);
+            }
+        }
+        for _ in 0..600 {
+            {
+                let inner = lock(&self.inner);
+                let sat = &inner.fitted.sat;
+                let here = sat.at.as_ref().is_some_and(|(a, b, _)| (a - lat).abs() < 1e-9 && (b - lng).abs() < 1e-9);
+                if !here {
+                    return None;
+                }
+                if !sat.searching {
+                    return sat.found.clone();
+                }
+            }
+            tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+        }
+        None
+    }
+
+    /// Shows a scene on the map once its tiles resolve.
+    fn show_scene(&self, inner: &mut Inner, scene: csk_engine::imagery::Scene) {
+        let Some(runtime) = lock(&self.runtime).clone() else { return };
+        let opacity = inner.fitted.sat.shown.as_ref().map_or(100.0, |s| s.opacity);
+        inner.fitted.sat.shown = Some(crate::satellite::Shown { scene: scene.clone(), opacity, drawing: None });
+        let (engine, me) = (self.engine.clone(), self.me.clone());
+        runtime.spawn(async move {
+            let template = engine.scene_template(&scene).await;
+            if let Some(app) = me.upgrade() {
+                app.scene_ready(&scene, template);
+            }
+        });
+    }
+
+    fn scene_ready(&self, scene: &csk_engine::imagery::Scene, template: Option<String>) {
+        let mut inner = lock(&self.inner);
+        let Some(shown) =
+            inner.fitted.sat.shown.as_mut().filter(|s| s.scene.id == scene.id && s.scene.source == scene.source)
+        else {
+            return;
+        };
+        match template {
+            Some(template) => {
+                if let Some(map) = lock(&self.map).as_ref() {
+                    map.set_scene(
+                        SCENE,
+                        Some(csk_map::SceneTiles {
+                            pixels: csk_engine::imagery::tile_pixels(&template),
+                            template: template.into(),
+                            max_zoom: native_zoom(scene),
+                        }),
+                    );
+                }
+                shown.drawing = Some(Ok(()));
+            }
+            None => shown.drawing = Some(Err("This scene has no imagery the map can draw.".into())),
+        }
+        self.redraw(&inner);
+        let update = self.changed(&inner);
+        drop(inner);
+        self.send_update(update);
+    }
+
+    fn clear_scene(&self, inner: &mut Inner) {
+        inner.fitted.sat.shown = None;
+        if let Some(map) = lock(&self.map).as_ref() {
+            map.set_scene(SCENE, None);
+        }
+    }
+
     /// Brings vector overlays in line with the state: fetches what is due
     /// (missing, older than its age limit, asked for other parameters, or a
     /// view query the view has left), and redraws shapes whose features or
@@ -553,7 +682,7 @@ impl App {
                 _ => false,
             };
             let old = now - slot.fetched >= spec.ttl.as_millis() as i64;
-            let bundled = matches!(spec.source, crate::vectors::Source::Bundled(_));
+            let bundled = matches!(spec.source, crate::vectors::Source::Bundled(_) | crate::vectors::Source::Maxar(_));
             let due = slot.features.is_none() || slot.param != param || left || (old && !bundled);
             if due && !slot.loading && !(slot.error && slot.features.is_none() && !old && slot.param == param && !left)
             {
@@ -579,9 +708,12 @@ impl App {
                     let parsed = tokio::task::spawn_blocking(move || {
                         let mut features = Vec::new();
                         let mut any = false;
-                        if let crate::vectors::Source::Bundled(bytes) = source
-                            && let Some(parsed) = crate::vectors::parse(bytes, 0)
-                        {
+                        let bundled = match source {
+                            crate::vectors::Source::Bundled(bytes) => crate::vectors::parse(bytes, 0),
+                            crate::vectors::Source::Maxar(bytes) => crate::vectors::parse_maxar(bytes),
+                            _ => None,
+                        };
+                        if let Some(parsed) = bundled {
                             features = parsed;
                             any = true;
                         }
@@ -707,8 +839,12 @@ impl App {
                 (None, _, true) => "Unavailable".to_string(),
                 (None, _, _) => continue,
                 (Some(features), _, _) => {
-                    let live =
-                        !matches!(spec.source, crate::vectors::Source::Url(_) | crate::vectors::Source::Bundled(_));
+                    let live = !matches!(
+                        spec.source,
+                        crate::vectors::Source::Url(_)
+                            | crate::vectors::Source::Bundled(_)
+                            | crate::vectors::Source::Maxar(_)
+                    );
                     if !live {
                         if slot.stale { "Showing the last copy kept".to_string() } else { continue }
                     } else {
@@ -731,10 +867,10 @@ impl App {
 
     /// The topmost interactive vector feature under a screen point, with
     /// its layer.
-    fn feature_at(&self, state: &AppState, at: [f64; 2]) -> Option<(String, Vec<Value>)> {
+    fn feature_at(&self, state: &AppState, fitted: &Fitted, at: [f64; 2]) -> Option<(String, Vec<Value>)> {
         let view = lock(&self.map).as_ref()?.view();
         let vectors = lock(&self.vectors);
-        for draw in draws(state).iter().rev() {
+        for draw in draws(state, fitted).iter().rev() {
             let Draw::Vector(id, _) = draw else { continue };
             if !crate::vectors::spec(id).is_some_and(|s| s.interactive) {
                 continue;
@@ -764,7 +900,7 @@ impl App {
         self.panel_update(inner, &mut update);
         update.insert("counts".into(), shell::counts(&inner.state));
         update.insert("map".into(), shell::map_state(&inner.state, &inner.fitted, inner.bearing));
-        update.insert("dock".into(), shell::dock(&inner.state, inner.bearing));
+        update.insert("dock".into(), shell::dock(&inner.state, &inner.fitted, inner.bearing));
         update.insert("status".into(), shell::status(&inner.state, &inner.fitted, lon, lat, zoom, inner.settled));
         if let Some(page) = inner.view.page.as_deref().and_then(|p| shell::page(p, &inner.state, &inner.fitted)) {
             update.insert("page".into(), page);
@@ -821,6 +957,8 @@ impl App {
                     let group = id.strip_prefix("overlay:").and_then(crate::overlays::find).map(|o| o.group);
                     self.navigate(if id.starts_with("elevation-") {
                         "elevation"
+                    } else if id == "scene" {
+                        "satellite"
                     } else {
                         group.map_or("terrain", |g| g.route())
                     });
@@ -905,7 +1043,7 @@ impl App {
                 let Some(map) = lock(&self.map).clone() else { return };
                 // A live alert, fire or archaeology marker shows what it is,
                 // as the web's pop-ups do, instead of selecting a place.
-                if let Some(details) = self.feature_at(&inner.state, [x, y]) {
+                if let Some(details) = self.feature_at(&inner.state, &inner.fitted, [x, y]) {
                     inner.feature = Some(details);
                     inner.view.panel = Some(FEATURE_PANEL.into());
                     let mut update = Object::new();
@@ -923,6 +1061,19 @@ impl App {
             "clear" => {
                 drop(inner);
                 self.select(None);
+                return;
+            }
+            "searchSelected" => {
+                let Some(l) = inner.location.clone() else { return };
+                self.start_scene_search(&mut inner, l.lat, l.lng, l.label);
+                self.changed(&inner)
+            }
+            "searchMapCenter" => {
+                let Some(map) = lock(&self.map).clone() else { return };
+                drop(inner);
+                let view = map.view();
+                let [lng, lat] = Pose { center: view.center, zoom: view.zoom, bearing: 0.0 }.lon_lat();
+                self.select(Some(shell::Location { lat, lng, label: format!("{lat:.5}, {lng:.5}") }));
                 return;
             }
             "snapshotArea" => {
@@ -980,7 +1131,7 @@ impl App {
             }
             "moveTool" => {
                 let (Some(id), Some(index)) = (args["id"].as_str(), args["index"].as_u64()) else { return };
-                let mut order: Vec<String> = shell::dock(&inner.state, inner.bearing)
+                let mut order: Vec<String> = shell::dock(&inner.state, &inner.fitted, inner.bearing)
                     .as_array()
                     .map(|tools| tools.iter().filter_map(|t| t["id"].as_str().map(str::to_owned)).collect())
                     .unwrap_or_default();
@@ -990,7 +1141,7 @@ impl App {
                 inner.state.dock_order = order;
                 self.save(&inner);
                 let mut update = Object::new();
-                update.insert("dock".into(), shell::dock(&inner.state, inner.bearing));
+                update.insert("dock".into(), shell::dock(&inner.state, &inner.fitted, inner.bearing));
                 update
             }
             _ => return,
@@ -1033,6 +1184,9 @@ impl App {
     /// Selects a place (search, a map tap) and publishes it.
     fn select(&self, location: Option<shell::Location>) {
         let mut inner = lock(&self.inner);
+        if let Some(l) = &location {
+            self.start_scene_search(&mut inner, l.lat, l.lng, l.label.clone());
+        }
         inner.location = location;
         inner.location_version += 1;
         if let Some(map) = lock(&self.map).as_ref() {
@@ -1189,7 +1343,32 @@ impl App {
             "enterValue" => json!({"accepted": false, "message": "This size is no longer available."}),
             "selectMark" => json!({"selected": false}),
             "shareURL" => self.share(),
-            "bestImagery" => json!({"message": "", "applied": false}),
+            "bestImagery" => {
+                // search.js cspSearchBestImagery: the best clear photo here.
+                let Some(l) = lock(&self.inner).location.clone() else {
+                    return json!({"applied": false, "message": "Select a place on the map first."});
+                };
+                let Some(found) = self.scenes_at(l.lat, l.lng, l.label).await else {
+                    return json!({"applied": false, "message": ""});
+                };
+                let mut inner = lock(&self.inner);
+                let pool = crate::satellite::pool(&found, &inner.state.satellite);
+                let Some(pick) = crate::satellite::best_photo(&pool).cloned() else {
+                    let message = if found.scenes.is_empty() {
+                        "No imagery found here. Widen the date range or cloud filter."
+                    } else {
+                        "No clear true-color scene here. Widen the date range or cloud filter."
+                    };
+                    return json!({"applied": false, "message": message});
+                };
+                self.show_scene(&mut inner, pick.clone());
+                let update = self.changed(&inner);
+                drop(inner);
+                self.send_update(update);
+                let cloud = pick.cloud.map_or(String::new(), |c| format!(" · {c:.0}% cloud"));
+                json!({"applied": true, "message": format!("Loading {} · {} · {}{cloud}", pick.label,
+                    &pick.date[..pick.date.len().min(10)], crate::satellite::res(pick.gsd))})
+            }
             _ => Value::Null,
         }
     }
@@ -1253,8 +1432,79 @@ impl App {
         if let Some(rest) = r.strip_prefix("studio:") {
             return self.act_studio(inner, rest, op, value);
         }
+        // The shown scene, in the layer list and its panel.
+        match r {
+            "layer:scene:toggle" if value.as_bool() != Some(true) => {
+                self.clear_scene(inner);
+                return true;
+            }
+            "layer:scene:reset" | "#ctlReset" => {
+                self.clear_scene(inner);
+                return true;
+            }
+            "layer:scene:opacity" | "#op" => {
+                let (Some(v), Some(shown)) = (v, inner.fitted.sat.shown.as_mut()) else { return false };
+                shown.opacity = v.clamp(0.0, 100.0);
+                return true;
+            }
+            _ => {}
+        }
         if let Some(rest) = r.strip_prefix("layer:") {
             return act_layer(&mut inner.state, rest, value);
+        }
+        // Satellite imagery: the search filters re-search; the list's only
+        // re-list.
+        let sat = &mut inner.state.satellite;
+        let research = match r {
+            "#days" => {
+                let Some(d) = v.map(|d| d as u32).filter(|d| crate::satellite::DAYS.iter().any(|(x, _)| x == d)) else {
+                    return false;
+                };
+                sat.days = d;
+                true
+            }
+            "#cloud" => {
+                let Some(c) = v.filter(|c| crate::satellite::CLOUD.iter().any(|(x, _)| x == c)) else { return false };
+                sat.cloud = c;
+                true
+            }
+            "#vis" => {
+                let Some(vis) = value.as_str().filter(|x| crate::satellite::VIS.iter().any(|(k, _)| k == x)) else {
+                    return false;
+                };
+                sat.vis = vis.to_owned();
+                return true;
+            }
+            "#sort" => {
+                sat.sort = if value.as_str() == Some("gsd") { "gsd" } else { "date" }.into();
+                return true;
+            }
+            "#viewable" => {
+                sat.viewable = value.as_bool().unwrap_or(!sat.viewable);
+                return true;
+            }
+            "#groupSrc" => {
+                sat.group_source = value.as_bool().unwrap_or(!sat.group_source);
+                return true;
+            }
+            _ => false,
+        };
+        if research {
+            if let Some((lat, lng, label)) = inner.fitted.sat.at.clone() {
+                self.start_scene_search(inner, lat, lng, label);
+            }
+            return true;
+        }
+        if let Some(rest) = r.strip_prefix("scene:") {
+            let mut parts = rest.split(':').filter_map(|p| p.parse::<u64>().ok());
+            let (Some(version), Some(index)) = (parts.next(), parts.next()) else { return false };
+            let sat = &inner.fitted.sat;
+            let scene = (sat.version == version)
+                .then(|| sat.found.as_ref().and_then(|f| f.scenes.get(index as usize)).cloned())
+                .flatten();
+            let Some(scene) = scene else { return false };
+            self.show_scene(inner, scene);
+            return true;
         }
         // An overlay's switch and, once on, its opacity. Overlays with no
         // native layer cannot be turned on.
@@ -1485,7 +1735,7 @@ impl App {
             inner.bearing = pose.bearing;
             let mut update = Object::new();
             update.insert("map".into(), shell::map_state(&inner.state, &inner.fitted, inner.bearing));
-            update.insert("dock".into(), shell::dock(&inner.state, inner.bearing));
+            update.insert("dock".into(), shell::dock(&inner.state, &inner.fitted, inner.bearing));
             drop(inner);
             self.send_update(update);
         }
@@ -1846,7 +2096,7 @@ mod tests {
         state.normalize();
         assert!(act_layer(&mut state, "elevation-bands:opacity", &json!(77)));
         assert_eq!(state.elevation.band_alpha, 77.0);
-        let layers = draws(&state);
+        let layers = draws(&state, &Fitted::default());
         assert_eq!(layers.iter().filter(|l| **l == Draw::Terrain).count(), 1);
         assert_eq!(layers.last(), Some(&Draw::Terrain));
         let p = shell::page("layers", &state, &Fitted::default()).unwrap();

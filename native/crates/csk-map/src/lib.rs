@@ -19,7 +19,7 @@ use csk_engine::elevation::TerrainSource;
 use csk_gpu::{Derive, Marker, Presented, Presenter, Renderer, TILE, Terrain, Uniforms, View, ViewSample};
 
 pub use camera::{Camera, Pose};
-pub use layers::Draw;
+pub use layers::{Draw, SceneTiles};
 pub use loader::Wake;
 
 /// What the map tells the app state, always outside the map's locks so the
@@ -182,6 +182,16 @@ impl Map {
     pub fn set_layers(&self, order: Vec<Draw>) {
         let mut scene = lock(&self.scene);
         scene.layers.set_order(order);
+        scene.shown = None;
+        drop(scene);
+        (self.wake)();
+    }
+
+    /// Sets a satellite scene's tiles, drawn where the layer order names it
+    /// (None removes them).
+    pub fn set_scene(&self, id: u32, tiles: Option<SceneTiles>) {
+        let mut scene = lock(&self.scene);
+        scene.layers.set_scene(id, tiles);
         scene.shown = None;
         drop(scene);
         (self.wake)();

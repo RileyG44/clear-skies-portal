@@ -140,6 +140,7 @@ impl AppState {
     pub fn normalize(&mut self) {
         self.alerts.normalize();
         self.export.normalize();
+        self.satellite.normalize();
         self.line_widths.retain(|id, _| crate::vectors::spec(id).is_some_and(|s| s.line_width.is_some()));
         self.slices.retain(|id, _| crate::vectors::spec(id).is_some_and(|s| s.slice.is_some()));
         self.elevation.normalize();
@@ -209,6 +210,7 @@ pub struct AppState {
     /// Time-sliced overlays' slices, once set.
     pub slices: BTreeMap<String, f64>,
     pub export: crate::export::ExportPrefs,
+    pub satellite: crate::satellite::SatPrefs,
 }
 
 impl Default for AppState {
@@ -225,6 +227,7 @@ impl Default for AppState {
             line_widths: BTreeMap::new(),
             slices: BTreeMap::new(),
             export: crate::export::ExportPrefs::default(),
+            satellite: crate::satellite::SatPrefs::default(),
         }
     }
 }
@@ -245,6 +248,8 @@ pub struct Fitted {
     pub vector_status: BTreeMap<String, String>,
     /// The view an export would save, and an export under way.
     pub export: crate::export::ExportView,
+    /// The last scene search and the scene shown on the map.
+    pub sat: crate::satellite::SatView,
 }
 
 #[cfg(test)]

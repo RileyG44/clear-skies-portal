@@ -174,6 +174,15 @@ final class PortalModel {
                 backend.send(command, arguments)
             }
         }
+        // `-cspDebugBestImagery YES` runs the imagery button once the map has
+        // drawn (after 10 s), on the selected place.
+        if UserDefaults.standard.bool(forKey: "cspDebugBestImagery") {
+            let shell = shell
+            Task { @MainActor in
+                try? await Task.sleep(for: .seconds(10))
+                shell.applyBestImagery()
+            }
+        }
         // `-cspDebugSearch "Mount Rainier"` submits a search, as typed.
         if let text = UserDefaults.standard.string(forKey: "cspDebugSearch") {
             let shell = shell

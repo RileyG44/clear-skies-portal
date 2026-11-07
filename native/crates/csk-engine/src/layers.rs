@@ -53,12 +53,18 @@ pub struct Spec {
     /// Tile side in pixels as the service sends it.
     pub pixels: u32,
     pub ttl: Duration,
+    /// Tiles may be kept for offline use. Display-only imagery (Esri World
+    /// Imagery's terms: not cached or re-served) is fetched every time.
+    pub kept: bool,
+    /// Imagery drawn one level finer on high-density screens (the web's
+    /// `sharp` tiles), so a photograph is not softened by the screen.
+    pub sharp: bool,
 }
 
 const EXPORT_PX: u32 = 256 * EXPORT_DENSITY;
 
 const fn tiles(id: &'static str, url: &'static str, max_zoom: u8) -> Spec {
-    Spec { id, source: Source::Tiles(url), min_zoom: 0, max_zoom, pixels: 256, ttl: MONTH }
+    Spec { id, source: Source::Tiles(url), min_zoom: 0, max_zoom, pixels: 256, ttl: MONTH, kept: true, sharp: false }
 }
 
 const fn export(id: &'static str, endpoint: &'static str, layers: &'static str, zoom: (u8, u8)) -> Spec {
@@ -69,6 +75,8 @@ const fn export(id: &'static str, endpoint: &'static str, layers: &'static str, 
         max_zoom: zoom.1,
         pixels: EXPORT_PX,
         ttl: MONTH,
+        kept: true,
+        sharp: false,
     }
 }
 
@@ -83,6 +91,8 @@ const fn snow(id: &'static str, layers: &'static str) -> Spec {
         max_zoom: 14,
         pixels: EXPORT_PX,
         ttl: SIX_HOURS,
+        kept: true,
+        sharp: false,
     }
 }
 
@@ -186,6 +196,26 @@ pub static CATALOGUE: &[Spec] = &[
         max_zoom: 8,
         pixels: 256,
         ttl: MONTH,
+        kept: true,
+        sharp: false,
+    },
+    // Imagery: reference mosaics drawn beneath a selected scene.
+    Spec {
+        kept: false,
+        sharp: true,
+        ..tiles(
+            "imagery",
+            "https://services.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
+            19,
+        )
+    },
+    Spec {
+        sharp: true,
+        ..tiles(
+            "s2cloudless",
+            "https://tiles.maps.eox.at/wmts/1.0.0/s2cloudless-2024_3857/default/GoogleMapsCompatible/{z}/{y}/{x}.jpg",
+            16,
+        )
     },
 ];
 
@@ -261,6 +291,11 @@ impl RasterLayer {
         self.0.pixels
     }
 
+    /// Drawn one level finer on high-density screens.
+    pub fn sharp(self) -> bool {
+        self.0.sharp
+    }
+
     /// The tile's address at `now` (which picks a daily product's day).
     pub fn url_at(self, z: u8, x: u32, y: u32, now: SystemTime) -> String {
         let fill =
@@ -318,7 +353,7 @@ pub enum RasterAnswer {
     Retry { after: Duration },
 }
 
-fn image(bytes: &[u8]) -> bool {
+pub(crate) fn image(bytes: &[u8]) -> bool {
     bytes.starts_with(&[0x89, b'P', b'N', b'G']) || bytes.starts_with(&[0xff, 0xd8, 0xff])
 }
 
@@ -329,6 +364,9 @@ impl Engine {
         }
         let now = SystemTime::now();
         let key = layer.key_at(z, x, y, now);
+        if !layer.spec().kept {
+            return self.display_tile(layer, z, x, y, now).await;
+        }
         if let Ok(Some(hit)) = self.store.get(&key, layer.spec().ttl) {
             return if hit.body.is_empty() {
                 RasterAnswer::Empty
@@ -366,11 +404,44 @@ impl Engine {
     }
 }
 
+impl Engine {
+    /// A display-only tile: fetched for the screen, never written to the
+    /// store, so it is neither kept offline nor served again.
+    async fn display_tile(
+        self: &Arc<Self>,
+        layer: RasterLayer,
+        z: u8,
+        x: u32,
+        y: u32,
+        now: SystemTime,
+    ) -> RasterAnswer {
+        let fetch = FetchRequest::get(layer.url_at(z, x, y, now)).timeout(TIMEOUT).max_body(4 << 20);
+        let me = self.clone();
+        let fetched = self
+            .layer_flights
+            .run(layer.key_at(z, x, y, now), move || async move {
+                let r = me.upstream.fetch(fetch).await.ok()?;
+                match r.status {
+                    200 if image(&r.body) => Some(r.body),
+                    404 => Some(Vec::new()),
+                    _ => None,
+                }
+            })
+            .await
+            .flatten();
+        match fetched {
+            Some(bytes) if bytes.is_empty() => RasterAnswer::Empty,
+            Some(bytes) => RasterAnswer::Image { bytes, lasting: true },
+            None => RasterAnswer::Retry { after: Duration::from_secs(5) },
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
 
-    const IDS: [&str; 21] = [
+    const IDS: [&str; 23] = [
         "light",
         "dark",
         "hydro",
@@ -392,6 +463,8 @@ mod tests {
         "vs30",
         "snowdepth",
         "swe",
+        "imagery",
+        "s2cloudless",
     ];
 
     #[test]

@@ -95,7 +95,8 @@ impl Shapes {
                     }
                 }
                 Geometry::Area(rings) => {
-                    if style.fill[3] > 0.0 && contains(rings, merc) {
+                    // Inside counts even unfilled: an outline marks an area.
+                    if contains(rings, merc) {
                         return Some(shape.feature);
                     }
                     if lined && rings.iter().any(|r| near_line(r, merc, reach(style.width), true)) {

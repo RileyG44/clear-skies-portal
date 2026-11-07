@@ -54,12 +54,13 @@ pub fn route_info(route: &str) -> Option<(String, String)> {
 }
 
 /// The map dock, in the person's order.
-pub fn dock(state: &AppState, bearing: f64) -> Value {
+pub fn dock(state: &AppState, fitted: &Fitted, bearing: f64) -> Value {
     let dark = state.theme == "dark";
     let mut tools = vec![
         json!({"ref": "#mapModeToggle", "id": "mapModeToggle", "tool": "mapMode", "title": "Map view: 2D map"}),
         json!({"ref": "#quickDraw", "id": "quickDraw", "tool": "draw", "title": "Draw on the map"}),
-        json!({"ref": "#mapInfoToggle", "id": "mapInfoToggle", "tool": "scene", "title": "Show displayed imagery controls", "hidden": true}),
+        json!({"ref": "#mapInfoToggle", "id": "mapInfoToggle", "tool": "scene", "title": "Show displayed imagery controls",
+            "hidden": fitted.sat.shown.is_none()}),
         json!({"ref": "#terrainSourceToggle", "id": "terrainSourceToggle", "tool": "terrain-source", "title": "Show layers"}),
         json!({"ref": "#snapshot", "id": "snapshot", "tool": "snapshot", "title": "Save current map viewport as an image"}),
         json!({"ref": "#mapTheme", "id": "mapTheme", "tool": "theme",
@@ -618,8 +619,29 @@ pub fn layer_title(state: &AppState, id: &str) -> Option<(String, String)> {
 
 /// The Map layers page: the person's layers top first, the pinned basemap,
 /// and where to add more.
-fn layers_page(state: &AppState) -> Value {
+fn layers_page(state: &AppState, fitted: &Fitted) -> Value {
     let mut items = vec![json!({"kind": "header", "title": "Active layers"})];
+    // The shown scene: drawn just above the terrain, not saved with the order.
+    if let Some(shown) = &fitted.sat.shown {
+        let s = &shown.scene;
+        let state_text = match &shown.drawing {
+            None => "Loading imagery",
+            Some(Ok(())) => "Satellite imagery",
+            Some(Err(_)) => "Cannot draw this scene",
+        };
+        let opacity = shown.opacity.round();
+        items.push(json!({
+            "kind": "layer", "ref": "layer:scene:card", "id": "scene", "title": s.label,
+            "detail": format!("{} · {}", &s.date[..s.date.len().min(10)], state_text),
+            "edit": {"ref": "layer:scene:edit"},
+            "toggle": {"ref": "layer:scene:toggle", "value": true},
+            "opacity": {"ref": "layer:scene:opacity", "value": opacity, "display": format!("{opacity}%")},
+            "actions": [
+                {"ref": "layer:scene:edit", "action": "edit", "title": format!("Edit {}", s.label)},
+                {"ref": "layer:scene:reset", "action": "reset", "title": format!("Remove {}", s.label)},
+            ],
+        }));
+    }
     // Active layers: the terrain, and the overlays that are on.
     let active = |id: &str| match id {
         "elevation-spectrum" => state.elevation.on,
@@ -844,6 +866,7 @@ pub fn panel_for_tool(tool: &str) -> Option<&'static str> {
         "terrainSourceToggle" => Some("terrainSourcePanel"),
         "serverToggle" => Some("serverPanel"),
         "mapModeToggle" => Some("mapModePanel"),
+        "mapInfoToggle" => Some("ctl"),
         _ => None,
     }
 }
@@ -858,7 +881,7 @@ pub struct Usage {
 pub fn panel(id: &str, state: &AppState, fitted: &Fitted, usage: Usage) -> Option<Value> {
     let (title, items) = match id {
         "terrainSourcePanel" => {
-            let p = layers_page(state);
+            let p = layers_page(state, fitted);
             let rows: Vec<Value> =
                 p["items"].as_array()?.iter().take_while(|r| r["title"] != "Add layers").cloned().collect();
             ("Layers", rows)
@@ -874,6 +897,7 @@ pub fn panel(id: &str, state: &AppState, fitted: &Fitted, usage: Usage) -> Optio
         ),
         "mkBar" => ("Draw & annotate", unavailable("markup")?["items"].as_array()?.clone()),
         "snapshotPanel" => ("Export image", crate::export::items(&state.export, &fitted.export)),
+        "ctl" => ("Displayed on map", crate::satellite::panel(&fitted.sat)),
         "mapModePanel" => (
             "Map view",
             vec![hint("3D and point-cloud views aren't in this build yet. The map uses the native 2D terrain view.")],
@@ -888,10 +912,18 @@ pub fn page(route: &str, state: &AppState, fitted: &Fitted) -> Option<Value> {
     route_info(route)?;
     Some(match route {
         "terrain" => terrain_page(state, fitted),
-        "layers" => layers_page(state),
+        "layers" => layers_page(state, fitted),
         "elevation" => crate::elevation::page(&state.elevation),
         "appearance" => crate::appearance::page(&state.appearance),
         "settings" => settings_page(state, fitted),
+        "satellite" => {
+            let (title, description) = route_info(route)?;
+            let reference = overlay_page(route, crate::overlays::Group::Imagery, state, fitted)["items"][0].clone();
+            let now =
+                std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |d| d.as_secs() as i64);
+            json!({"route": route, "title": title, "description": description,
+                "items": crate::satellite::page(&state.satellite, &fitted.sat, reference, now)})
+        }
         "export" => {
             let (title, description) = route_info(route)?;
             json!({"route": route, "title": title, "description": description,
@@ -919,7 +951,7 @@ mod tests {
         let mut state = AppState::default();
         state.set_overlay("snowdepth", true);
         let p = panel("terrainSourcePanel", &state, &Fitted::default(), Usage::default()).unwrap();
-        let expected = layers_page(&state);
+        let expected = layers_page(&state, &Fitted::default());
         let rows: Vec<Value> =
             expected["items"].as_array().unwrap().iter().take_while(|r| r["title"] != "Add layers").cloned().collect();
         assert_eq!(p["items"], json!(rows));
@@ -941,7 +973,7 @@ mod tests {
             let p = page(route["key"].as_str().unwrap(), &state, &Fitted::default()).unwrap();
             assert!(!p["items"].as_array().unwrap().is_empty(), "{route}");
         }
-        for route in ["satellite", "analyze", "markup"] {
+        for route in ["analyze", "markup"] {
             let p = page(route, &state, &Fitted::default()).unwrap();
             assert_eq!(p["items"][0]["style"], "hint");
             assert!(p["items"][0]["title"].as_str().unwrap().contains("isn't in this build yet"));

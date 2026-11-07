@@ -10,10 +10,12 @@ pub enum Group {
     Geology,
     Conditions,
     Past,
+    /// Reference imagery & coverage, on the Satellite imagery page.
+    Imagery,
 }
 
 impl Group {
-    pub const ALL: [Group; 4] = [Group::Labels, Group::Geology, Group::Conditions, Group::Past];
+    pub const ALL: [Group; 5] = [Group::Labels, Group::Geology, Group::Conditions, Group::Past, Group::Imagery];
 
     /// The web's group name (the layer list's detail).
     pub fn name(self) -> &'static str {
@@ -22,6 +24,7 @@ impl Group {
             Group::Geology => "Geology & hazards",
             Group::Conditions => "Conditions",
             Group::Past => "Past landscapes",
+            Group::Imagery => "Imagery",
         }
     }
 
@@ -32,6 +35,7 @@ impl Group {
             Group::Geology => "geology",
             Group::Conditions => "conditions",
             Group::Past => "past",
+            Group::Imagery => "satellite",
         }
     }
 
@@ -42,6 +46,7 @@ impl Group {
             Group::Geology => "Geology layers",
             Group::Conditions => "Conditions layers",
             Group::Past => "Past landscape layers",
+            Group::Imagery => "Reference imagery & coverage",
         }
     }
 
@@ -119,7 +124,7 @@ const fn vector(base: Info, opacity: f64, note: &'static str) -> Info {
     Info { raster: None, vector: true, default_opacity: opacity, note: Some(note), ..base }
 }
 
-use Group::{Conditions, Geology, Labels, Past};
+use Group::{Conditions, Geology, Imagery, Labels, Past};
 
 pub static OVERLAYS: &[Info] = &[
     // Labels & reference.
@@ -230,6 +235,25 @@ pub static OVERLAYS: &[Info] = &[
         96.0,
         "A public-safe research index, not Washington's protected inventory. Every marker states its precision, \
          uncertainty, access limits, and source.",
+    ),
+    // Imagery: reference mosaics beneath a selected scene, and coverage.
+    layer(
+        info("imagery", "Satellite imagery", "Esri", "#7d8f6a", Imagery),
+        DEFAULT_OPACITY,
+        "Best-available global mosaic, sub-metre over most populated land. Display only under Esri's terms: not \
+         cached or re-served.",
+    ),
+    layer(
+        info("s2cloudless", "Sentinel-2 cloudless", "EOX", "#6a86a8", Imagery),
+        DEFAULT_OPACITY,
+        "Cloud-free 33 ft composite for 2024, complete over all land. Coarser than the Esri mosaic but never \
+         cloudy and never missing.",
+    ),
+    vector(
+        info("maxarvhr", "Maxar VHR coverage", "Maxar Open Data", "#c88fb0", Imagery),
+        DEFAULT_OPACITY,
+        "Outlines where 12–20 inch disaster imagery exists. Tap one for its dates and the download collection. \
+         Licensed CC-BY-NC-4.0 — non-commercial use only.",
     ),
     // Conditions: active fires (app/map-menu.js), from the live-alert controls.
     Info {
