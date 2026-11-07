@@ -38,6 +38,9 @@ struct Record {
     used: u64,
 }
 
+/// Tiles a pool starts with before it grows.
+const INITIAL_TILES: u32 = 16;
+
 pub struct Raster {
     identity: Arc<()>,
     min_zoom: u8,
@@ -49,8 +52,11 @@ pub struct Raster {
     pool: wgpu::Texture,
     pool_view: wgpu::TextureView,
     free: Vec<u32>,
+    /// Layers the pool holds now, and the most it may grow to.
+    capacity: u32,
+    limit: u32,
     frame: u64,
-    _charge: Arc<Reservation>,
+    charge: Reservation,
 }
 
 /// One tile to draw: CSS-pixel rectangle about the view centre (unrotated),
@@ -80,18 +86,12 @@ impl Raster {
         if pool_tiles == 0 || pool_tiles > gpu.device.limits().max_texture_array_layers {
             return Err(Error::Input("raster pool exceeds device array limits"));
         }
-        let charge = Arc::new(gpu.budget.reserve(texture_bytes(pixels, pixels, 4) * pool_tiles as usize)?);
-        let pool = gpu.texture(
-            pixels,
-            pixels,
-            pool_tiles,
-            wgpu::TextureFormat::Rgba8Unorm,
-            wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
-        );
-        let pool_view = pool.create_view(&wgpu::TextureViewDescriptor {
-            dimension: Some(wgpu::TextureViewDimension::D2Array),
-            ..Default::default()
-        });
+        // The pool starts small and grows as tiles arrive, up to
+        // `pool_tiles`: most layers draw far fewer tiles than they may hold.
+        let capacity = INITIAL_TILES.min(pool_tiles);
+        let charge = gpu.budget.reserve(texture_bytes(pixels, pixels, 4) * capacity as usize)?;
+        let pool = Self::pool(gpu, pixels, capacity);
+        let pool_view = Self::array_view(&pool);
         Ok(Self {
             identity: gpu.identity.clone(),
             min_zoom,
@@ -101,10 +101,59 @@ impl Raster {
             records: HashMap::new(),
             pool,
             pool_view,
-            free: (0..pool_tiles).rev().collect(),
+            free: (0..capacity).rev().collect(),
+            capacity,
+            limit: pool_tiles,
             frame: 0,
-            _charge: charge,
+            charge,
         })
+    }
+
+    fn pool(gpu: &Renderer, pixels: u32, layers: u32) -> wgpu::Texture {
+        gpu.texture(
+            pixels,
+            pixels,
+            layers,
+            wgpu::TextureFormat::Rgba8Unorm,
+            wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST | wgpu::TextureUsages::COPY_SRC,
+        )
+    }
+
+    fn array_view(pool: &wgpu::Texture) -> wgpu::TextureView {
+        pool.create_view(&wgpu::TextureViewDescriptor {
+            dimension: Some(wgpu::TextureViewDimension::D2Array),
+            ..Default::default()
+        })
+    }
+
+    /// Doubles the pool (up to its limit), copying the tiles it holds on
+    /// the GPU. False when it is full or the memory budget refuses.
+    fn grow(&mut self, gpu: &Renderer) -> bool {
+        let next = (self.capacity * 2).min(self.limit);
+        if next <= self.capacity
+            || self.charge.grow_to(texture_bytes(self.pixels, self.pixels, 4) * next as usize).is_err()
+        {
+            return false;
+        }
+        let pool = Self::pool(gpu, self.pixels, next);
+        let mut encoder =
+            gpu.device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: Some("raster grow") });
+        encoder.copy_texture_to_texture(
+            self.pool.as_image_copy(),
+            pool.as_image_copy(),
+            wgpu::Extent3d { width: self.pixels, height: self.pixels, depth_or_array_layers: self.capacity },
+        );
+        gpu.queue.submit([encoder.finish()]);
+        self.pool_view = Self::array_view(&pool);
+        self.pool = pool;
+        self.free.extend((self.capacity..next).rev());
+        self.capacity = next;
+        true
+    }
+
+    /// Tiles the pool holds now, and may grow to.
+    pub fn capacity(&self) -> (u32, u32) {
+        (self.capacity, self.limit)
     }
 
     /// The published level the view draws at.
@@ -151,6 +200,7 @@ impl Raster {
             Some(layer) => layer,
             None => match self.free.pop() {
                 Some(layer) => layer,
+                None if self.grow(gpu) => self.free.pop().expect("grown pool has room"),
                 None => self.evict()?,
             },
         };

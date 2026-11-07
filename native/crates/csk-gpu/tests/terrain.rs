@@ -353,3 +353,35 @@ fn vector_lines_keep_within_their_miter_limit() {
     }
     assert!(lit > 100, "the line draws");
 }
+
+/// A raster pool starts small and grows as tiles arrive, keeping the tiles
+/// it held: a tile stored before the pool grew still draws its own colour.
+#[test]
+fn raster_pools_grow_and_keep_their_tiles() {
+    use csk_gpu::{Layer, Raster, RasterStyle};
+    let Some(gpu) = renderer() else { return };
+    let mut terrain = Terrain::new(&gpu, 8).unwrap();
+    let mut raster = Raster::new(&gpu, 40, 0, 16, TILE, false).unwrap();
+    assert_eq!(raster.capacity(), (16, 40));
+    let solid = |rgba: [u8; 4]| rgba.repeat((TILE * TILE) as usize);
+    // The tile under the view centre first, then 25 others far away.
+    raster.insert(&gpu, TileId { z: 12, x: 1000, y: 1500 }, &solid([0, 200, 0, 255])).unwrap();
+    for i in 0..25 {
+        raster.insert(&gpu, TileId { z: 12, x: 2000 + i, y: 100 }, &solid([200, 0, 0, 255])).unwrap();
+    }
+    assert_eq!(raster.capacity(), (32, 40));
+    let view = View {
+        center: [1000.5 / 4096.0, 1500.5 / 4096.0],
+        zoom: 12.0,
+        bearing: 0.0,
+        css: [64.0, 64.0],
+        dpr: 1.0,
+        export: false,
+    };
+    let style = RasterStyle { opacity: 1.0, muted: false };
+    let (frame, _) = terrain
+        .render_offscreen_layers(&gpu, &view, &Uniforms::default(), &mut [Layer::Raster(&mut raster, style)])
+        .unwrap();
+    let pixels = gpu.readback(&frame).unwrap();
+    assert_eq!(&pixels[(32 * 64 + 32) * 4..(32 * 64 + 32) * 4 + 4], &[0, 200, 0, 255]);
+}
