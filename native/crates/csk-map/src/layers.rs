@@ -29,11 +29,12 @@ pub enum Draw {
     Vector(&'static str, f32),
 }
 
-/// A vector layer: the newest shapes' revision, and its mesh once built.
+/// A vector layer: the newest shapes' revision, and the mesh of that
+/// revision once built.
 #[derive(Default)]
 struct VectorSlot {
     revision: u64,
-    drawn: Option<Vector>,
+    drawn: Option<(u64, Vector)>,
 }
 
 /// A decoded answer: premultiplied 256x256 RGBA, nothing, or not yet.
@@ -133,8 +134,10 @@ impl Layers {
         });
     }
 
+    /// Tiles requested and vector shapes still tessellating.
     pub fn in_flight(&self) -> usize {
-        self.in_flight.len()
+        let meshing = self.vectors.values().filter(|v| v.drawn.as_ref().is_none_or(|(r, _)| *r != v.revision)).count();
+        self.in_flight.len() + meshing
     }
 
     fn wake_at(&self, after: Duration) {
@@ -210,7 +213,7 @@ impl Layers {
             // Only the newest shapes of a layer still set are kept.
             let Some(slot) = self.vectors.get_mut(id) else { continue };
             if slot.revision == revision {
-                slot.drawn = Some(Vector::new(gpu, &mesh)?);
+                slot.drawn = Some((revision, Vector::new(gpu, &mesh)?));
                 changed = true;
             }
         }
@@ -278,7 +281,7 @@ impl Layers {
                     }
                 }
                 Draw::Vector(id, opacity) => {
-                    if let Some(vector) = self.vectors.get(id).and_then(|v| v.drawn.as_ref()) {
+                    if let Some((_, vector)) = self.vectors.get(id).and_then(|v| v.drawn.as_ref()) {
                         out.push(csk_gpu::Layer::Vector(vector, opacity));
                     }
                 }

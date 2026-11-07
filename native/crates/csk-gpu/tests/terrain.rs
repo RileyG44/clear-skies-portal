@@ -61,7 +61,8 @@ fn rotated_fractional_view_registers_and_keeps_survey_priority() {
     let mut terrain = Terrain::new(&gpu, 96).unwrap();
     let survey = SourceSpec { authoritative_coverage: true, ..Default::default() };
     terrain.set_sources(HashMap::from([(NATIONAL, SourceSpec::default()), (SURVEY, survey)]));
-    let mut view = View { center: [0.170_31, 0.360_77], zoom: 15.3, bearing: 20.0, css: [300.0, 200.0], dpr: 2.0 };
+    let mut view =
+        View { center: [0.170_31, 0.360_77], zoom: 15.3, bearing: 20.0, css: [300.0, 200.0], dpr: 2.0, export: false };
     assert_eq!(view.level(), 16);
     let plane = Plane([view.center[0] * f64::from(1u32 << 24), view.center[1] * f64::from(1u32 << 24)]);
     let mut surveyed = Vec::new();
@@ -148,7 +149,8 @@ fn derived_floor_stays_under_terrain_and_samples_classify_water() {
     gpu.install_water(&csk_gpu::water::packed().unwrap()).unwrap();
     let mut terrain = Terrain::new(&gpu, 64).unwrap();
     terrain.set_sources(HashMap::from([(NATIONAL, SourceSpec::default())]));
-    let view = View { center: [0.250_83, 0.347_82], zoom: 12.6, bearing: 15.0, css: [240.0, 180.0], dpr: 1.0 };
+    let view =
+        View { center: [0.250_83, 0.347_82], zoom: 12.6, bearing: 15.0, css: [240.0, 180.0], dpr: 1.0, export: false };
     let z = view.level();
     for tile in view.wanted() {
         let mut heights = Vec::with_capacity((TILE * TILE) as usize);
@@ -202,8 +204,14 @@ fn raster_layers_draw_in_place_with_stand_ins() {
     let mut terrain = Terrain::new(&gpu, 8).unwrap();
     let mut raster = Raster::new(&gpu, 8, 0, 16, TILE).unwrap();
     // The view centre sits in the middle of tile (12, 1000, 1500).
-    let view =
-        View { center: [1000.5 / 4096.0, 1500.5 / 4096.0], zoom: 12.0, bearing: 30.0, css: [512.0, 512.0], dpr: 1.0 };
+    let view = View {
+        center: [1000.5 / 4096.0, 1500.5 / 4096.0],
+        zoom: 12.0,
+        bearing: 30.0,
+        css: [512.0, 512.0],
+        dpr: 1.0,
+        export: false,
+    };
     let solid = |rgba: [u8; 4]| rgba.repeat((TILE * TILE) as usize);
     let style = RasterStyle { opacity: 0.5, muted: false };
     let centre = |terrain: &mut Terrain, raster: &mut Raster| {
@@ -235,7 +243,7 @@ fn vector_layers_draw_in_place_at_screen_widths() {
     let mut terrain = Terrain::new(&gpu, 8).unwrap();
     // Far from the mesh origin, so precision near the view centre matters.
     let centre = [0.1712345678, 0.3456789012];
-    let view = View { center: centre, zoom: 18.0, bearing: 90.0, css: [256.0, 256.0], dpr: 1.0 };
+    let view = View { center: centre, zoom: 18.0, bearing: 90.0, css: [256.0, 256.0], dpr: 1.0, export: false };
     let world = 256.0 * 2f64.powi(18);
     let px = |dx: f64, dy: f64| [centre[0] + dx / world, centre[1] + dy / world];
     let red = Style { fill: [1.0, 0.0, 0.0, 1.0], line: [0.0, 1.0, 0.0, 1.0], width: 4.0, dash: [0.0; 2] };
@@ -297,7 +305,7 @@ fn vector_lines_keep_within_their_miter_limit() {
     let Some(gpu) = renderer() else { return };
     let mut terrain = Terrain::new(&gpu, 8).unwrap();
     let centre = [0.25, 0.4];
-    let view = View { center: centre, zoom: 4.0, bearing: 0.0, css: [256.0, 256.0], dpr: 1.0 };
+    let view = View { center: centre, zoom: 4.0, bearing: 0.0, css: [256.0, 256.0], dpr: 1.0, export: false };
     let world = 256.0 * 16.0;
     // A deterministic random walk of sub-pixel steps around the centre.
     let mut seed = 0x2545_f491_4f6c_dd1du64;

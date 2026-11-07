@@ -50,6 +50,17 @@ struct Inner {
 /// The panel showing a tapped vector feature.
 const FEATURE_PANEL: &str = "featurePanel";
 
+/// An image export running on its own thread.
+struct ExportJob {
+    cancel: std::sync::atomic::AtomicBool,
+    /// The map info card the platform draws for it, when asked for.
+    card: Option<Arc<csk_map::export::Card>>,
+}
+
+fn now_ms() -> i64 {
+    std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |d| d.as_millis() as i64)
+}
+
 /// The last place suggestions, numbered so a pick names the list it saw.
 #[derive(Default)]
 struct Suggestions {
@@ -86,6 +97,8 @@ pub struct App {
     runtime: Mutex<Option<tokio::runtime::Handle>>,
     /// Vector overlays by id. Locked after `inner` when both are held.
     vectors: Mutex<std::collections::HashMap<&'static str, VectorSlot>>,
+    /// The image export under way.
+    export_job: Mutex<Option<Arc<ExportJob>>>,
     inner: Mutex<Inner>,
     suggestions: Mutex<Suggestions>,
     /// The lighting the published look previews were drawn with.
@@ -216,6 +229,7 @@ impl App {
             me: me.clone(),
             runtime: Mutex::new(None),
             vectors: Mutex::default(),
+            export_job: Mutex::new(None),
             inner: Mutex::new(inner),
             suggestions: Mutex::default(),
             previews: Mutex::new(None),
@@ -294,7 +308,7 @@ impl App {
         update.insert("route".into(), json!(inner.route));
         update.insert("counts".into(), shell::counts(&inner.state));
         update.insert("search".into(), shell::search(inner.location.as_ref(), inner.location_version));
-        update.insert("map".into(), shell::map_state(&inner.state, inner.bearing));
+        update.insert("map".into(), shell::map_state(&inner.state, &inner.fitted, inner.bearing));
         update.insert("dock".into(), shell::dock(&inner.state, inner.bearing));
         update.insert("status".into(), shell::status(&inner.state, &inner.fitted, lon, lat, zoom, inner.settled));
         self.panel_update(inner, &mut update);
@@ -307,7 +321,12 @@ impl App {
                 let (title, items) = inner.feature.clone()?;
                 return Some(json!({"id": FEATURE_PANEL, "title": title, "items": items}));
             }
-            shell::panel(id, &inner.state, self.engine.store.stats().map_or(0, |s| s.bytes))
+            let memory = self.engine.memory.stats();
+            let usage = shell::Usage {
+                cache: self.engine.store.stats().map_or(0, |s| s.bytes),
+                memory: (memory.used, memory.limit),
+            };
+            shell::panel(id, &inner.state, &inner.fitted, usage)
         });
         update.insert("panelOpen".into(), json!(inner.view.panel));
         update.insert("panel".into(), panel.unwrap_or(Value::Null));
@@ -392,6 +411,110 @@ impl App {
             map.set_markers(markers(inner.location.as_ref(), &inner.state.appearance));
         }
         self.sync_vectors(&inner.state);
+    }
+
+    /// Starts exporting `rect` (CSS px of the view) at the chosen
+    /// resolution, on its own thread. Refusals and outcomes go in the
+    /// export view's message.
+    fn start_export(&self, inner: &mut Inner, rect: [f64; 4]) {
+        if lock(&self.export_job).is_some() {
+            return;
+        }
+        let Some(map) = lock(&self.map).clone() else { return };
+        let card = inner.state.export.readout.then(|| Arc::new(csk_map::export::Card::default()));
+        let request =
+            csk_map::export::Request { view: map.view(), rect, scale: inner.state.export.scale, card: card.clone() };
+        if let Some(reason) = request.refused() {
+            inner.fitted.export.message = Some((reason.into(), true));
+            return;
+        }
+        let job = Arc::new(ExportJob { cancel: std::sync::atomic::AtomicBool::new(false), card });
+        *lock(&self.export_job) = Some(job.clone());
+        inner.fitted.export.running = Some((0, 1));
+        inner.fitted.export.message = None;
+        if job.card.is_some() {
+            // The card at the export's scale, up to 8x (a larger card would
+            // be an enlargement of the same text).
+            let mut update = Object::new();
+            update.insert("exportCard".into(), json!({"scale": request.scale.min(8.0)}));
+            self.send_update(update);
+        }
+        let me = self.me.clone();
+        std::thread::Builder::new()
+            .name("ClearSkies export".into())
+            .spawn(move || {
+                let path = std::env::temp_dir().join(crate::export::file_name(now_ms()));
+                let progress = |done: u32, total: u32| {
+                    if let Some(app) = me.upgrade() {
+                        app.export_progress(done, total);
+                    }
+                };
+                let result = map.export(&request, &path, &progress, &job.cancel);
+                if let Some(app) = me.upgrade() {
+                    app.export_done(result, &path);
+                }
+            })
+            .ok();
+    }
+
+    fn export_progress(&self, done: u32, total: u32) {
+        let mut inner = lock(&self.inner);
+        let percent = |r: Option<(u32, u32)>| r.map(|(d, t)| d * 100 / t.max(1));
+        let next = Some((done, total));
+        if percent(inner.fitted.export.running) == percent(next) {
+            return;
+        }
+        inner.fitted.export.running = next;
+        let update = self.export_update(&inner);
+        drop(inner);
+        self.send_update(update);
+    }
+
+    fn export_done(&self, result: Result<csk_map::export::Summary, csk_map::export::Error>, path: &std::path::Path) {
+        *lock(&self.export_job) = None;
+        let mut inner = lock(&self.inner);
+        inner.fitted.export.running = None;
+        let mut update = Object::new();
+        inner.fitted.export.message = Some(match result {
+            Ok(summary) => {
+                update.insert("shareFile".into(), json!(path.to_string_lossy()));
+                let mut text = format!(
+                    "Saved {} × {} px.",
+                    shell::group_digits(i64::from(summary.width)),
+                    shell::group_digits(i64::from(summary.height))
+                );
+                if summary.partial > 0 {
+                    text.push_str(" Some areas were still loading and may be less detailed.");
+                }
+                (text, false)
+            }
+            Err(error) => {
+                let _ = std::fs::remove_file(path);
+                match error {
+                    csk_map::export::Error::Cancelled => ("Export cancelled.".into(), false),
+                    error => (format!("The image could not be saved: {error}."), true),
+                }
+            }
+        });
+        update.extend(self.export_update(&inner));
+        drop(inner);
+        self.send_update(update);
+    }
+
+    /// The export controls wherever they show: the panel and the page.
+    fn export_update(&self, inner: &Inner) -> Object<String, Value> {
+        let mut update = Object::new();
+        self.panel_update(inner, &mut update);
+        if let Some(page) = inner
+            .view
+            .page
+            .as_deref()
+            .filter(|p| *p == "export")
+            .and_then(|p| shell::page(p, &inner.state, &inner.fitted))
+        {
+            update.insert("page".into(), page);
+        }
+        update
     }
 
     /// Brings vector overlays in line with the state: fetches what is due
@@ -640,7 +763,7 @@ impl App {
         update.insert("appearance".into(), inner.state.appearance.update());
         self.panel_update(inner, &mut update);
         update.insert("counts".into(), shell::counts(&inner.state));
-        update.insert("map".into(), shell::map_state(&inner.state, inner.bearing));
+        update.insert("map".into(), shell::map_state(&inner.state, &inner.fitted, inner.bearing));
         update.insert("dock".into(), shell::dock(&inner.state, inner.bearing));
         update.insert("status".into(), shell::status(&inner.state, &inner.fitted, lon, lat, zoom, inner.settled));
         if let Some(page) = inner.view.page.as_deref().and_then(|p| shell::page(p, &inner.state, &inner.fitted)) {
@@ -725,7 +848,10 @@ impl App {
                 self.changed(&inner)
             }
             "toolForPanel" => {
-                let Some(id) = args["panel"].as_str().filter(|id| shell::panel(id, &inner.state, 0).is_some()) else {
+                let Some(id) = args["panel"]
+                    .as_str()
+                    .filter(|id| shell::panel(id, &inner.state, &inner.fitted, shell::Usage::default()).is_some())
+                else {
                     return;
                 };
                 inner.view.panel = Some(id.into());
@@ -797,6 +923,40 @@ impl App {
             "clear" => {
                 drop(inner);
                 self.select(None);
+                return;
+            }
+            "snapshotArea" => {
+                // The selected rectangle (CSS px on the map), to save.
+                let rect = ["x0", "y0", "x1", "y1"].map(|k| args[k].as_f64().unwrap_or(f64::NAN));
+                inner.fitted.export.selecting = false;
+                let css = inner.fitted.export.css;
+                let rect = [
+                    rect[0].min(rect[2]).max(0.0),
+                    rect[1].min(rect[3]).max(0.0),
+                    rect[0].max(rect[2]).min(css[0]),
+                    rect[1].max(rect[3]).min(css[1]),
+                ];
+                if rect.iter().all(|v| v.is_finite()) && rect[2] - rect[0] >= 4.0 && rect[3] - rect[1] >= 4.0 {
+                    self.start_export(&mut inner, rect);
+                    inner.view.panel = Some("snapshotPanel".into());
+                }
+                self.changed(&inner)
+            }
+            "snapshotSelectCancel" => {
+                inner.fitted.export.selecting = false;
+                self.changed(&inner)
+            }
+            "exportCard" => {
+                // The map info card the platform drew, as a PNG file.
+                let path = args["path"].as_str().map(std::path::PathBuf::from);
+                drop(inner);
+                if let Some(path) = path {
+                    let card = lock(&self.export_job).as_ref().and_then(|j| j.card.clone());
+                    if let (Some(card), Ok(bytes)) = (card, std::fs::read(&path)) {
+                        card.put_png(&bytes);
+                    }
+                    let _ = std::fs::remove_file(path);
+                }
                 return;
             }
             "goTo" => {
@@ -1106,6 +1266,38 @@ impl App {
             inner.state.set_overlay(id, on);
             return true;
         }
+        // Export image.
+        match r {
+            "#snapshotScale" => {
+                let Some(scale) = v.filter(|s| crate::export::SCALES.contains(s)) else { return false };
+                inner.state.export.scale = scale;
+                inner.fitted.export.message = None;
+                return true;
+            }
+            "#snapshotReadout" => {
+                inner.state.export.readout = value.as_bool().unwrap_or(!inner.state.export.readout);
+                return true;
+            }
+            "#snapshotCapture" => {
+                let css = lock(&self.map).as_ref().map_or(inner.fitted.export.css, |m| m.view().css);
+                self.start_export(inner, [0.0, 0.0, css[0], css[1]]);
+                return true;
+            }
+            "#snapshotSelect" => {
+                // The map shows the selection; the sheet steps aside.
+                inner.fitted.export.selecting = true;
+                inner.fitted.export.message = None;
+                inner.view.panel = None;
+                return true;
+            }
+            "#snapshotCancel" => {
+                if let Some(job) = lock(&self.export_job).as_ref() {
+                    job.cancel.store(true, std::sync::atomic::Ordering::Relaxed);
+                }
+                return true;
+            }
+            _ => {}
+        }
         // The live-alert controls: feed switches are their overlays' own.
         let feed = match r {
             "#alertNws" => Some("weatheralerts"),
@@ -1280,12 +1472,19 @@ impl App {
         let mut inner = lock(&self.inner);
         inner.pose = Some(pose);
         inner.settled = false;
+        let css = lock(&self.map).as_ref().map(|m| m.view().css);
+        let export = &mut inner.fitted.export;
+        export.zoom = pose.zoom;
+        export.lat = pose.lon_lat()[1];
+        if let Some(css) = css {
+            export.css = css;
+        }
         // The dock's north button and the bearing in map state.
         let shows = |b: f64| b.abs() >= 0.5;
         if shows(pose.bearing) != shows(inner.bearing) || (pose.bearing - inner.bearing).abs() >= 0.5 {
             inner.bearing = pose.bearing;
             let mut update = Object::new();
-            update.insert("map".into(), shell::map_state(&inner.state, inner.bearing));
+            update.insert("map".into(), shell::map_state(&inner.state, &inner.fitted, inner.bearing));
             update.insert("dock".into(), shell::dock(&inner.state, inner.bearing));
             drop(inner);
             self.send_update(update);

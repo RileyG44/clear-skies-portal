@@ -36,6 +36,7 @@
 		648E8C9F3B9D80963407B266 /* Inter.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 31F1DF520F5757709F6401FF /* Inter.ttf */; };
 		688D7112D165DC54281C3B01 /* RootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AD9CF122C30D300F9A9C44C6 /* RootView.swift */; };
 		6A3359D141D3FCC14CC5228E /* NativeAppearance.swift in Sources */ = {isa = PBXBuildFile; fileRef = B8F2FF76EE46EFDE0E50BFEF /* NativeAppearance.swift */; };
+		6B6E3360F8177A3D3DE74491 /* SnapshotSelection.swift in Sources */ = {isa = PBXBuildFile; fileRef = 74DAD8F266A5808EF3CA1517 /* SnapshotSelection.swift */; };
 		6C14F7E3B1E463ECCFC912B4 /* NativeAppearance.swift in Sources */ = {isa = PBXBuildFile; fileRef = B8F2FF76EE46EFDE0E50BFEF /* NativeAppearance.swift */; };
 		6D752DC0C27F7694BEF11237 /* ShellModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2A4A72C6139D21E905AD227E /* ShellModel.swift */; };
 		70AA1626FF6E170E3E2BAE03 /* PortalWebView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BA5DCF6800A6917F660FDBF8 /* PortalWebView.swift */; };
@@ -54,6 +55,7 @@
 		91D609663C61C38F235BFFA4 /* Symbols.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6ED1B58D57DFE1A43CECB322 /* Symbols.swift */; };
 		ABE48556CBB654BFC921C7F0 /* Inter-LICENSE.txt in Resources */ = {isa = PBXBuildFile; fileRef = 57FA85E29ADDE2D56E589C31 /* Inter-LICENSE.txt */; };
 		B1621A5248C6B796C465EE45 /* EngineBackground.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7775FBEA2D2889ED0C1F74E1 /* EngineBackground.swift */; };
+		B23961C7ECD96868790940FC /* SnapshotSelection.swift in Sources */ = {isa = PBXBuildFile; fileRef = 74DAD8F266A5808EF3CA1517 /* SnapshotSelection.swift */; };
 		B9EDBD2489D7C2AD4812C03F /* ShellBackend.swift in Sources */ = {isa = PBXBuildFile; fileRef = 982659C7A878B0DB0E700C3E /* ShellBackend.swift */; };
 		C356FA2FFFE4A00326F814C4 /* ItemCards.swift in Sources */ = {isa = PBXBuildFile; fileRef = 41FA309B2DF96C4DA8E97CDA /* ItemCards.swift */; };
 		C4231FD3663CE6F23CD3E9CA /* NetworkTransport.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6F0E2D26A12EDBED7F97D2FC /* NetworkTransport.swift */; };
@@ -101,6 +103,7 @@
 		6ED1B58D57DFE1A43CECB322 /* Symbols.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Symbols.swift; sourceTree = "<group>"; };
 		6F0E2D26A12EDBED7F97D2FC /* NetworkTransport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NetworkTransport.swift; sourceTree = "<group>"; };
 		72D3C22A24200567FF62598A /* NativeShellBackend.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NativeShellBackend.swift; sourceTree = "<group>"; };
+		74DAD8F266A5808EF3CA1517 /* SnapshotSelection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SnapshotSelection.swift; sourceTree = "<group>"; };
 		7775FBEA2D2889ED0C1F74E1 /* EngineBackground.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EngineBackground.swift; sourceTree = "<group>"; };
 		8AD77D5E47288EE71BDAFB8C /* EngineSettings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EngineSettings.swift; sourceTree = "<group>"; };
 		9358789AB8DD0FAAA8287FBE /* ItemRows.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ItemRows.swift; sourceTree = "<group>"; };
@@ -294,6 +297,7 @@
 			isa = PBXGroup;
 			children = (
 				3998392FE27AB8CB5771647F /* MapChrome.swift */,
+				74DAD8F266A5808EF3CA1517 /* SnapshotSelection.swift */,
 			);
 			path = Map;
 			sourceTree = "<group>";
@@ -499,6 +503,7 @@
 				6D752DC0C27F7694BEF11237 /* ShellModel.swift in Sources */,
 				F619D6162621933589AD9F56 /* ShellTypes.swift in Sources */,
 				FDFBD1B44164D4C45186E6C2 /* SiteSchemeHandler.swift in Sources */,
+				B23961C7ECD96868790940FC /* SnapshotSelection.swift in Sources */,
 				91D609663C61C38F235BFFA4 /* Symbols.swift in Sources */,
 				DC5497B0B19D031E97179977 /* ToolbarPanelContent.swift in Sources */,
 				2154D725841995B822656419 /* ToolsSheet.swift in Sources */,
@@ -533,6 +538,7 @@
 				E97FDA3421CE55A44185ACE8 /* ShellBackend.swift in Sources */,
 				8713216243F6443818261C44 /* ShellModel.swift in Sources */,
 				56518BA9202F95A9F56298D5 /* ShellTypes.swift in Sources */,
+				6B6E3360F8177A3D3DE74491 /* SnapshotSelection.swift in Sources */,
 				44246373CCBDF5784D6392E7 /* Symbols.swift in Sources */,
 				5A1BEC2D125EB0B5079987F7 /* ToolbarPanelContent.swift in Sources */,
 				C5D94A91EB11E27F76A63025 /* ToolsSheet.swift in Sources */,

@@ -75,9 +75,9 @@ pub fn dock(state: &AppState, bearing: f64) -> Value {
     Value::Array(tools)
 }
 
-pub fn map_state(state: &AppState, bearing: f64) -> Value {
-    json!({"mode": "2d", "theme": state.theme, "pointCloud": false, "terrain3d": false, "selecting": false,
-        "drawing": false, "bearing": bearing})
+pub fn map_state(state: &AppState, fitted: &Fitted, bearing: f64) -> Value {
+    json!({"mode": "2d", "theme": state.theme, "pointCloud": false, "terrain3d": false,
+        "selecting": fitted.export.selecting, "exportScale": state.export.scale, "drawing": false, "bearing": bearing})
 }
 
 pub(crate) fn group_digits(n: i64) -> String {
@@ -847,7 +847,15 @@ pub fn panel_for_tool(tool: &str) -> Option<&'static str> {
         _ => None,
     }
 }
-pub fn panel(id: &str, state: &AppState, cache_bytes: u64) -> Option<Value> {
+/// What the engine panel reports: stored map data, and working memory in
+/// use of its limit (bytes).
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct Usage {
+    pub cache: u64,
+    pub memory: (usize, usize),
+}
+
+pub fn panel(id: &str, state: &AppState, fitted: &Fitted, usage: Usage) -> Option<Value> {
     let (title, items) = match id {
         "terrainSourcePanel" => {
             let p = layers_page(state);
@@ -859,14 +867,13 @@ pub fn panel(id: &str, state: &AppState, cache_bytes: u64) -> Option<Value> {
             "Terrain engine",
             vec![
                 json!({"kind":"text","style":"row","title":"Terrain engine built into this app"}),
-                json!({"kind":"text","style":"row","title":"Stored map data","detail":format!("{:.1} MiB",cache_bytes as f64 / 1048576.0)}),
+                json!({"kind":"text","style":"row","title":"Stored map data","detail":format!("{:.1} MiB",usage.cache as f64 / 1048576.0)}),
+                json!({"kind":"text","style":"row","title":"Working memory","detail":format!("{:.0} of {:.0} MiB",
+                    usage.memory.0 as f64 / 1048576.0, usage.memory.1 as f64 / 1048576.0)}),
             ],
         ),
-        "mkBar" | "snapshotPanel" => {
-            let route = if id == "mkBar" { "markup" } else { "export" };
-            let p = unavailable(route)?;
-            (if id == "mkBar" { "Draw & annotate" } else { "Export image" }, p["items"].as_array()?.clone())
-        }
+        "mkBar" => ("Draw & annotate", unavailable("markup")?["items"].as_array()?.clone()),
+        "snapshotPanel" => ("Export image", crate::export::items(&state.export, &fitted.export)),
         "mapModePanel" => (
             "Map view",
             vec![hint("3D and point-cloud views aren't in this build yet. The map uses the native 2D terrain view.")],
@@ -885,6 +892,11 @@ pub fn page(route: &str, state: &AppState, fitted: &Fitted) -> Option<Value> {
         "elevation" => crate::elevation::page(&state.elevation),
         "appearance" => crate::appearance::page(&state.appearance),
         "settings" => settings_page(state, fitted),
+        "export" => {
+            let (title, description) = route_info(route)?;
+            json!({"route": route, "title": title, "description": description,
+                "items": crate::export::items(&state.export, &fitted.export)})
+        }
         "labels" | "geology" | "conditions" | "past" => {
             let group = crate::overlays::Group::for_route(route)?;
             overlay_page(route, group, state, fitted)
@@ -906,16 +918,19 @@ mod tests {
     fn dock_panels_share_live_layer_controls_and_show_hints_for_unfinished_tools() {
         let mut state = AppState::default();
         state.set_overlay("snowdepth", true);
-        let p = panel("terrainSourcePanel", &state, 0).unwrap();
+        let p = panel("terrainSourcePanel", &state, &Fitted::default(), Usage::default()).unwrap();
         let expected = layers_page(&state);
         let rows: Vec<Value> =
             expected["items"].as_array().unwrap().iter().take_while(|r| r["title"] != "Add layers").cloned().collect();
         assert_eq!(p["items"], json!(rows));
-        for tool in ["quickDraw", "snapshot", "mapModeToggle"] {
-            let p = panel(panel_for_tool(tool).unwrap(), &state, 0).unwrap();
+        for tool in ["quickDraw", "mapModeToggle"] {
+            let p = panel(panel_for_tool(tool).unwrap(), &state, &Fitted::default(), Usage::default()).unwrap();
             assert_eq!(p["items"][0]["style"], "hint");
         }
-        let p = panel("serverPanel", &state, 10485760).unwrap();
+        // The snapshot tool opens the Export page's own controls.
+        let p = panel("snapshotPanel", &state, &Fitted::default(), Usage::default()).unwrap();
+        assert_eq!(p["items"], page("export", &state, &Fitted::default()).unwrap()["items"]);
+        let p = panel("serverPanel", &state, &Fitted::default(), Usage { cache: 10485760, memory: (0, 0) }).unwrap();
         assert_eq!(p["items"][1]["detail"], "10.0 MiB");
     }
     #[test]
@@ -926,7 +941,7 @@ mod tests {
             let p = page(route["key"].as_str().unwrap(), &state, &Fitted::default()).unwrap();
             assert!(!p["items"].as_array().unwrap().is_empty(), "{route}");
         }
-        for route in ["satellite", "analyze", "markup", "export"] {
+        for route in ["satellite", "analyze", "markup"] {
             let p = page(route, &state, &Fitted::default()).unwrap();
             assert_eq!(p["items"][0]["style"], "hint");
             assert!(p["items"][0]["title"].as_str().unwrap().contains("isn't in this build yet"));

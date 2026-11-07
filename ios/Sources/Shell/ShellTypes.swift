@@ -251,6 +251,8 @@ struct MapState: Decodable, Hashable {
     var pointCloud = false
     var terrain3d = false
     var selecting = false
+    /// Export image's output pixels per point, for the area selection.
+    var exportScale: Double = 2
     var drawing = false
     var markup: MarkupStatus?
     var bearing: Double = 0
@@ -352,6 +354,10 @@ nonisolated struct NativeAppearance: Decodable, Hashable, Sendable {
     var textSize: Double = 1
 }
 
+struct ExportCardRequest: Decodable, Hashable {
+    let scale: Double
+}
+
 struct ShellUpdate: Decodable {
     var resetMenuLayout: Bool?
     var appearance: NativeAppearance?
@@ -369,9 +375,13 @@ struct ShellUpdate: Decodable {
     var page: ShellPage?
     var panel: ShellPanel??
     var openRoute: String?
+    /// A finished export to hand to the share sheet (a file path).
+    var shareFile: String?
+    /// An export asks for the map info card at this scale.
+    var exportCard: ExportCardRequest?
 
     enum Key: String, CodingKey {
-        case groups, ready, route, counts, search, map, dock, status, panelOpen, page, panel, openRoute, images, imageKeys, appearance, resetMenuLayout
+        case groups, ready, route, counts, search, map, dock, status, panelOpen, page, panel, openRoute, images, imageKeys, appearance, resetMenuLayout, shareFile, exportCard
     }
 
     init(from decoder: Decoder) throws {
@@ -392,6 +402,8 @@ struct ShellUpdate: Decodable {
         page = try container.decodeIfPresent(ShellPage.self, forKey: .page)
         if container.contains(.panel) { panel = .some(try container.decodeIfPresent(ShellPanel.self, forKey: .panel)) }
         openRoute = try container.decodeIfPresent(String.self, forKey: .openRoute)
+        shareFile = try container.decodeIfPresent(String.self, forKey: .shareFile)
+        exportCard = try container.decodeIfPresent(ExportCardRequest.self, forKey: .exportCard)
     }
 }
 
@@ -417,7 +429,7 @@ extension SearchState {
 
 extension MapState {
     enum Key: String, CodingKey {
-        case mode, theme, pointCloud, terrain3d, selecting, drawing, markup, bearing
+        case mode, theme, pointCloud, terrain3d, selecting, exportScale, drawing, markup, bearing
     }
 
     init(from decoder: Decoder) throws {
@@ -427,6 +439,7 @@ extension MapState {
         pointCloud = try container.decodeIfPresent(Bool.self, forKey: .pointCloud) ?? false
         terrain3d = try container.decodeIfPresent(Bool.self, forKey: .terrain3d) ?? false
         selecting = try container.decodeIfPresent(Bool.self, forKey: .selecting) ?? false
+        exportScale = try container.decodeIfPresent(Double.self, forKey: .exportScale) ?? 2
         drawing = try container.decodeIfPresent(Bool.self, forKey: .drawing) ?? false
         markup = try container.decodeIfPresent(MarkupStatus.self, forKey: .markup)
         bearing = try container.decodeIfPresent(Double.self, forKey: .bearing) ?? 0

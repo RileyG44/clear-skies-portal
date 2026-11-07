@@ -72,7 +72,7 @@ fn wrap_bearing(b: f64) -> f64 {
 impl Camera {
     pub fn new(pose: Pose, css: [f64; 2], dpr: f64) -> Self {
         let mut camera = Self {
-            view: View { center: pose.center, zoom: pose.zoom, bearing: pose.bearing, css, dpr },
+            view: View { center: pose.center, zoom: pose.zoom, bearing: pose.bearing, css, dpr, export: false },
             min_zoom: 0.0,
             max_zoom: 22.0,
             motion: None,

@@ -12,6 +12,7 @@ csk-core = { path = "../csk-core" }
 csk-engine = { path = "../csk-engine" }
 csk-gpu = { path = "../csk-gpu" }
 png = "0.18.1"
+thiserror = "2"
 tokio = { version = "1", features = ["rt", "time"] }
 zune-core = "0.5.3"
 zune-jpeg = "0.5.15"

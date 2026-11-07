@@ -50,6 +50,8 @@
 	<false/>
 	<key>NSLocationWhenInUseUsageDescription</key>
 	<string>Drumlin moves the map to where you are when you tap Locate.</string>
+	<key>NSPhotoLibraryAddUsageDescription</key>
+	<string>Drumlin saves exported map images to Photos only when you choose Save Image.</string>
 	<key>UIAppFonts</key>
 	<array>
 		<string>Inter.ttf</string>

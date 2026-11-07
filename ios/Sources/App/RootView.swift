@@ -57,6 +57,12 @@ struct RootView: View {
                 MapChrome(toolbarHideProgress: toolbarVisibility.progress)
                     .padding(.bottom, portal.homeInset)
                     .opacity(portal.ready ? 1 : 0)
+                if portal.native != nil, portal.shell.map.selecting {
+                    // Export image's area selection, in the map's own points.
+                    SnapshotSelection()
+                        .transition(.opacity)
+                        .zIndex(1)
+                }
                 // White until the page's own white start-up screen has painted
                 // under it; that screen holds the map until it is whole.
                 if (!portal.ready && !portal.splashUp) || portal.startupFailure != nil {

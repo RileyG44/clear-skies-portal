@@ -98,7 +98,14 @@ impl Raster {
 
     /// The published level the view draws at.
     pub fn level(&self, view: &View) -> u8 {
-        (view.zoom.round().clamp(0.0, 30.0) as u8).min(self.max_zoom)
+        // An export asks for one tile pixel per output pixel (snapshot.js
+        // snapshotLayerZoom); a screen draws the map's own zoom.
+        let zoom = if view.export {
+            view.zoom + view.dpr.max(1.0).log2() - (f64::from(self.pixels) / f64::from(crate::TILE)).log2()
+        } else {
+            view.zoom
+        };
+        (zoom.round().clamp(0.0, 30.0) as u8).min(self.max_zoom)
     }
 
     /// Tiles the view needs, nearest the centre first, one tile around.

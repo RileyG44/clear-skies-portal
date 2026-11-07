@@ -160,6 +160,33 @@ final class ShellModel {
             if panel == nil, presentedPanel != nil, panelOpen == nil { activeSheet = nil }
         }
         if let route = update.openRoute { show(route: route) }
+        if let path = update.shareFile { shareExport(URL(fileURLWithPath: path)) }
+        if let card = update.exportCard { drawExportCard(scale: card.scale) }
+    }
+
+    /// Hands a finished export to the share sheet (Save Image, AirDrop, Files).
+    private func shareExport(_ url: URL) {
+        do {
+            try backend?.shareLocation(url)
+        } catch {
+            log.error("Export sharing failed: \(error.localizedDescription, privacy: .public)")
+        }
+    }
+
+    /// Draws the map info card an export asked for, at its scale, and gives
+    /// it to the app state as a PNG file.
+    private func drawExportCard(scale: Double) {
+        guard let info = status.mapInfo else { return }
+        let renderer = ImageRenderer(content: ExportInfoCard(info: info, showsDistance: scale <= 8).environment(self))
+        renderer.scale = scale
+        guard let data = renderer.uiImage?.pngData() else { return }
+        let url = FileManager.default.temporaryDirectory.appending(path: "csp-export-card-\(UUID().uuidString).png")
+        do {
+            try data.write(to: url, options: .atomic)
+            send("exportCard", ["path": url.path])
+        } catch {
+            log.error("Export card could not be written: \(error.localizedDescription, privacy: .public)")
+        }
     }
 
     /// The web can change page itself, from a row inside a page ("Add

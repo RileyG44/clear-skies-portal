@@ -156,6 +156,24 @@ final class PortalModel {
             }
         }
         _ = PerfLog.shared
+        // `-cspDebugActLater "#snapshotCapture"` runs one action once the map
+        // has drawn (after 8 s); `-cspDebugSendLater 'tool {"id":"serverToggle"}'`
+        // sends any command with JSON arguments then.
+        if let ref = UserDefaults.standard.string(forKey: "cspDebugActLater") {
+            Task { @MainActor in
+                try? await Task.sleep(for: .seconds(8))
+                backend.send("act", ["ref": ref, "op": "click"])
+            }
+        }
+        if let line = UserDefaults.standard.string(forKey: "cspDebugSendLater"),
+           let space = line.firstIndex(of: " "),
+           let arguments = try? JSONSerialization.jsonObject(with: Data(line[space...].utf8)) as? [String: Any] {
+            let command = String(line[..<space])
+            Task { @MainActor in
+                try? await Task.sleep(for: .seconds(8))
+                backend.send(command, arguments)
+            }
+        }
         // `-cspDebugSearch "Mount Rainier"` submits a search, as typed.
         if let text = UserDefaults.standard.string(forKey: "cspDebugSearch") {
             let shell = shell

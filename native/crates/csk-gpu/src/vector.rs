@@ -433,7 +433,7 @@ mod tests {
     use super::*;
 
     fn view() -> View {
-        View { center: [0.5, 0.5], zoom: 10.0, bearing: 0.0, css: [400.0, 400.0], dpr: 2.0 }
+        View { center: [0.5, 0.5], zoom: 10.0, bearing: 0.0, css: [400.0, 400.0], dpr: 2.0, export: false }
     }
 
     fn square(c: [f64; 2], half: f64) -> Vec<[f64; 2]> {

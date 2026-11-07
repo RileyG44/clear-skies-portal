@@ -8,6 +8,7 @@
 //! link, which may otherwise pause while nothing changes.
 
 pub mod camera;
+pub mod export;
 pub mod layers;
 pub mod loader;
 
@@ -70,6 +71,8 @@ struct Scene {
     /// The water geography, decoded on the runtime, until installed. A
     /// failure is reported by the next frame; places then draw as land.
     water: Arc<Mutex<Option<Decoded>>>,
+    /// An export is drawing with this scene: the live view waits.
+    exporting: bool,
 }
 
 pub struct Map {
@@ -90,7 +93,7 @@ fn worst_slots(css: [f64; 2], dpr: f64) -> u32 {
     across * across
 }
 
-fn lock<T>(m: &Mutex<T>) -> MutexGuard<'_, T> {
+pub(crate) fn lock<T>(m: &Mutex<T>) -> MutexGuard<'_, T> {
     m.lock().unwrap_or_else(|e| e.into_inner())
 }
 
@@ -132,6 +135,7 @@ impl Map {
             sampled: None,
             fresh: false,
             water,
+            exporting: false,
         };
         Ok(Self {
             camera: Mutex::new(camera),
@@ -198,6 +202,32 @@ impl Map {
         self.read_camera(|c| c.view())
     }
 
+    /// Exports a rectangle of the view as a PNG at `path` (export.rs),
+    /// drawing what the map draws now. Blocks the caller; run it off the
+    /// UI and render threads.
+    pub fn export(
+        &self,
+        request: &export::Request,
+        path: &std::path::Path,
+        progress: &dyn Fn(u32, u32),
+        cancel: &std::sync::atomic::AtomicBool,
+    ) -> Result<export::Summary, export::Error> {
+        /// Gives the scene back to the live view however the export ends.
+        struct Lent<'a>(&'a Map);
+        impl Drop for Lent<'_> {
+            fn drop(&mut self) {
+                let mut scene = lock(&self.0.scene);
+                scene.exporting = false;
+                scene.shown = None;
+                drop(scene);
+                (self.0.wake)();
+            }
+        }
+        lock(&self.scene).exporting = true;
+        let _lent = Lent(self);
+        export::run(self, request, path, progress, cancel)
+    }
+
     /// The map's GPU, for offscreen work (look previews) that must not
     /// hold the scene.
     pub fn gpu(&self) -> Arc<Renderer> {
@@ -254,6 +284,10 @@ impl Map {
 
     fn draw(&self, view: View, animating: bool) -> Result<(FrameResult, Option<ViewSample>), csk_gpu::Error> {
         let mut scene = lock(&self.scene);
+        if scene.exporting {
+            // The scene is lent to an export; it redraws the view after.
+            return Ok((FrameResult { coverage: scene.coverage, ..FrameResult::default() }, None));
+        }
         let Scene {
             gpu,
             presenter,
@@ -267,6 +301,7 @@ impl Map {
             sampled,
             fresh,
             water,
+            ..
         } = &mut *scene;
         let mut changed = loader.update(gpu, terrain, &view);
         let drawn = layers.update(gpu, &view)?;

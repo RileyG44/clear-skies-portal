@@ -138,6 +138,7 @@ targets:
             LSItemContentTypes: [dev.riley.clearskies.view]
         LSSupportsOpeningDocumentsInPlace: false
         NSLocationWhenInUseUsageDescription: Drumlin moves the map to where you are when you tap Locate.
+        NSPhotoLibraryAddUsageDescription: Drumlin saves exported map images to Photos only when you choose Save Image.
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: $(DRUMLIN_BUNDLE_ID)

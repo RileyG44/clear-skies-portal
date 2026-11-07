@@ -101,6 +101,9 @@ pub struct View {
     pub bearing: f64,
     pub css: [f64; 2],
     pub dpr: f64,
+    /// An export: sources at the detail its pixel density asks for, rather
+    /// than a screen's (at most one level finer).
+    pub export: bool,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -119,9 +122,17 @@ impl Bounds {
 }
 
 impl View {
-    /// Display tile level: one finer on high-density screens.
+    /// Display tile level: one finer on high-density screens; for an
+    /// export, one finer per doubling of its density.
     pub fn level(&self) -> u8 {
-        (self.zoom.round() + if self.dpr >= 1.5 { 1.0 } else { 0.0 }).clamp(0.0, 22.0) as u8
+        let finer = if self.export {
+            self.dpr.max(1.0).log2()
+        } else if self.dpr >= 1.5 {
+            1.0
+        } else {
+            0.0
+        };
+        (self.zoom + finer).round().clamp(0.0, 22.0) as u8
     }
 
     pub fn device_size(&self) -> (u32, u32) {
@@ -1088,7 +1099,7 @@ mod tests {
 
     #[test]
     fn bounds_cover_the_rotated_view() {
-        let view = View { center: [0.5, 0.5], zoom: 10.0, bearing: 0.0, css: [512.0, 256.0], dpr: 1.0 };
+        let view = View { center: [0.5, 0.5], zoom: 10.0, bearing: 0.0, css: [512.0, 256.0], dpr: 1.0, export: false };
         let b = view.bounds(0, 0);
         assert_eq!((b.z, b.x0, b.x1, b.y0, b.y1), (10, 511, 512, 511, 512));
         let turned = View { bearing: 90.0, ..view };

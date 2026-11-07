@@ -799,7 +799,7 @@ mod tests {
 
     #[test]
     fn view_bounds_pad_and_requests_follow_the_view() {
-        let view = View { center: [0.5, 0.5], zoom: 2.0, bearing: 0.0, css: [256.0, 256.0], dpr: 2.0 };
+        let view = View { center: [0.5, 0.5], zoom: 2.0, bearing: 0.0, css: [256.0, 256.0], dpr: 2.0, export: false };
         let b = view_bounds(&view, 0.0);
         // A 256 px view of a 1,024 px world spans 45° of longitude each way.
         assert!((b[0] + 45.0).abs() < 1e-9 && (b[2] - 45.0).abs() < 1e-9 && b[1] < 0.0 && b[3] > 0.0);

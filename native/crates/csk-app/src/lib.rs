@@ -7,6 +7,7 @@ pub mod app;
 pub mod appearance;
 pub mod coords;
 pub mod elevation;
+pub mod export;
 pub mod overlays;
 pub mod preview;
 pub mod render;

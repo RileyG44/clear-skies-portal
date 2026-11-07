@@ -567,6 +567,39 @@ struct TerrainStatusCapsule: View {
     }
 }
 
+/// The map info card drawn into an export ("Include map info"): where the
+/// view is, its elevation, source and colour keys, on a solid card so it
+/// reads over any map.
+struct ExportInfoCard: View {
+    let info: MapInfoState
+    /// The scale bar matches the image only when the card is drawn at the
+    /// export's own scale.
+    let showsDistance: Bool
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(info.basis).portalFont(.caption2).foregroundStyle(.secondary)
+                Text(info.coordinates).portalFont(.caption, weight: .medium, digits: true)
+                Text(info.elevation).portalFont(.caption, digits: true)
+                if !info.source.isEmpty {
+                    Text(info.source).portalFont(.caption2).foregroundStyle(.secondary)
+                }
+            }
+            if showsDistance, let distance = info.distance {
+                MapDistanceKeyView(distance: distance)
+            }
+            ForEach(Array(info.keys.enumerated()), id: \.offset) { _, key in
+                MapInfoKeyView(key: key)
+            }
+        }
+        .foregroundStyle(PortalPrimary())
+        .padding(12)
+        .frame(width: 240, alignment: .leading)
+        .background(RoundedRectangle(cornerRadius: 14).fill(Color(uiColor: .systemBackground).opacity(0.94)))
+    }
+}
+
 private struct CompactLabelStyle: LabelStyle {
     func makeBody(configuration: Configuration) -> some View {
         HStack(alignment: .firstTextBaseline, spacing: 4) { configuration.icon; configuration.title }

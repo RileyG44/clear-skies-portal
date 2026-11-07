@@ -312,6 +312,7 @@ dependencies = [
  "csk-engine",
  "csk-gpu",
  "png",
+ "thiserror",
  "tokio",
  "zune-core",
  "zune-jpeg",
